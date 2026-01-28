@@ -8,5 +8,12 @@ Follow these rules when contributing to the repo.
 
 
 
+
+4. Before committing, run the pre-commit hooks defined in `.pre-commit-config.yaml`:
+   - Install once per machine: `pip install pre-commit && pre-commit install`
+   - Optionally check everything: `pre-commit run --all-files`
+   This ensures formatting (Black, isort) and linting (Ruff) pass locally before you open a PR.
+
 References:
 1. [Github Best Practices](https://dev.to/pwd9000/github-repository-best-practices-23ck)
+2. [pre-commit](https://pre-commit.com/)
