@@ -1,0 +1,7 @@
+# This is a CODEOWNERS file. It assigns responsibility for code review to specific users or teams.
+
+# Global owners for the entire repository
+*       @The-School-of-AI/llm-repo-owners
+
+# Owners for specific folders
+
