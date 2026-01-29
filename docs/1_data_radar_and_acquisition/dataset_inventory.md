@@ -27,7 +27,7 @@
 * **Benchmark Safety (0–5):** 5
 * **Domain Value (0–5):** 5 (General)
 * **Distillation:** No (Annotated)
-* **Freshness:** 2024
+* **Freshness:** 2025
 
 ---
 
@@ -59,7 +59,7 @@
 * **Benchmark Safety (0–5):** 4
 * **Domain Value (0–5):** 5 (Efficiency)
 * **Distillation:** No
-* **Freshness:** 2023
+* **Freshness:** 2023 (update in 2025)
 
 ---
 
@@ -251,7 +251,7 @@
 * **Benchmark Safety (0–5):** 4
 * **Domain Value (0–5):** 5 (General)
 * **Distillation:** No
-* **Freshness:** 2023
+* **Freshness:** 2023 (updated in 2025)
 
 ---
 
@@ -283,7 +283,7 @@
 * **Benchmark Safety (0–5):** 2
 * **Domain Value (0–5):** 3 (Legacy)
 * **Distillation:** No
-* **Freshness:** 2019
+* **Freshness:** 2019(2022)
 
 ---
 
@@ -315,7 +315,7 @@
 * **Benchmark Safety (0–5):** 3
 * **Domain Value (0–5):** 4 (Reasoning)
 * **Distillation:** Yes
-* **Freshness:** 2024
+* **Freshness:** 2025
 
 ---
 
@@ -347,7 +347,7 @@
 * **Benchmark Safety (0–5):** 5
 * **Domain Value (0–5):** 5 (Coding)
 * **Distillation:** No
-* **Freshness:** 2023
+* **Freshness:** 2024
 
 ---
 
@@ -411,4 +411,4 @@
 * **Benchmark Safety (0–5):** 2
 * **Domain Value (0–5):** 5 (Reasoning)
 * **Distillation:** No
-* **Freshness:** 2023
+* **Freshness:** 2023 (updated in 2025)
