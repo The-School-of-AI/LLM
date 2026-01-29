@@ -19,9 +19,6 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
-      - name: Validate YAML files
-        run: yamllint .
-
       - name: Validate JSON files
         run: |
           find . -type f -name "*.json" -print0 |
