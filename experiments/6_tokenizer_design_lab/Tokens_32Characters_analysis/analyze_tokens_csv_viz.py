@@ -1,12 +1,9 @@
 import json
-import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from collections import Counter
-import sys
-import os
 
 # Configuration
 OUTPUT_DIR = Path('tokenizer_less_than_32')
@@ -42,7 +39,8 @@ def decode_bpe_token(token):
     try:
         bytes_list = [byte_decoder.get(c, ord(c)) for c in token]
         return bytes(bytes_list).decode('utf-8', errors='replace')
-    except:
+    except Exception as e:
+        print(f"Error decoding token {token}: {e}")
         return token
 
 def classify_decoded_token(decoded):
