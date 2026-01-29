@@ -42,6 +42,11 @@
    - Before committing, run the pre-commit hooks defined in `.pre-commit-config.yaml`:
      - Install once per machine: `pip install pre-commit && pre-commit install`
      - Optionally check everything: `pre-commit run --all-files`. This ensures formatting (Black, isort) and linting (Ruff) pass locally before you open a PR.
+     - If there are any issues found while running pre-commit hooks locally vs running on CI then please execute the below set of commands in order to debug and run (also if pre-commit config has changed then one might have to clean the environment using below commands and then try git commit again) -
+       - pre-commit clean
+       - rm -rf ~/.cache/pre-commit
+       - pre-commit install
+       - pre-commit run --all-files
 
 8. **Request and respond to reviews**
    - Add at least two reviewers.
