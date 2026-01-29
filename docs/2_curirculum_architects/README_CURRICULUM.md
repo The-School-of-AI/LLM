@@ -286,7 +286,7 @@ Where:
 - `decay(b, s)` = exponential decay for easy bands as *s* increases
 - `floor_constraint(b, s)` = minimum exposure to prevent capability gaps
 
-I should clarify — this specific **formula structure** is a synthesis I created based on common patterns across multiple papers, not a single source. Let me break down the components and their origins:
+this specific **formula structure** is a synthesis I created based on common patterns across multiple papers, not a single source:
 
 ---
 
@@ -445,9 +445,6 @@ When all bands are adjusted and normalized to sum to 100%, B0 might end up at ~1
 2. **SmolLM2-360M** → proxy for 3B stage  
 3. **SmolLM2-1.7B** → proxy for 8B stage
 4. **Qwen2.5-3B or Llama-3.2-3B** → proxy for 70B stage
-
----
-Got it — here’s a README-ready version with the **same concise length**, but now explicitly tying the **growth factor formulation to concepts and references**.
 
 ---
 
