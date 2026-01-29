@@ -8,4 +8,6 @@ rules:
   truthy:
     allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
     check-keys: false
+  empty-lines:
+    max-spaces: -1
   new-line-at-end-of-file: disable
