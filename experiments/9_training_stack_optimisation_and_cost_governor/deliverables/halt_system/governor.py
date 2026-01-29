@@ -254,7 +254,9 @@ def main():
                             },
                         )
                         write_halt(halt_file)
-                        print(f"HALT: throughput collapse detected. Incident: {incident_path}")
+                        print(
+                            f"HALT: throughput collapse detected. Incident: {incident_path}"
+                        )
                         return
 
             if metrics_state["window_tokens"] >= 1_000_000:

@@ -196,7 +196,7 @@ def generate_text(
     """
     model_engine.eval()
 
-    print(f"\nGenerating text from prompt: \"{prompt}\"")
+    print(f'\nGenerating text from prompt: "{prompt}"')
 
     # Tokenize prompt
     inputs = tokenizer(prompt, return_tensors="pt")
@@ -226,7 +226,7 @@ def generate_text(
 
     # Extract generated portion
     generated_text = (
-        full_output[len(input_text):].strip()
+        full_output[len(input_text) :].strip()
         if len(full_output) > len(input_text)
         else ""
     )
