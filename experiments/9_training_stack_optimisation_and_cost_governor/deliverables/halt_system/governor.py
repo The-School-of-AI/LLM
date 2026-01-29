@@ -83,16 +83,29 @@ def should_halt_for_cost(metrics_state, triggers, expected_cost):
     actual_cost = metrics_state["window_cost_sum"] / metrics_state["window_cost_count"]
     drift = ((actual_cost - expected_cost) / expected_cost) * 100
     if drift > triggers["cost_drift_percent"]:
-        return True, {"actual_cost_per_1m": actual_cost, "expected_cost_per_1m": expected_cost, "drift_percent": drift}
+        return True, {
+            "actual_cost_per_1m": actual_cost,
+            "expected_cost_per_1m": expected_cost,
+            "drift_percent": drift,
+        }
     return False, None
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Training cost governor and HALT controller")
+    parser = argparse.ArgumentParser(
+        description="Training cost governor and HALT controller"
+    )
     parser.add_argument("--metrics", required=True, help="Path to metrics JSONL")
     parser.add_argument("--budget", required=True, help="Path to budget YAML")
-    parser.add_argument("--poll_s", type=float, default=2.0, help="Polling interval seconds")
-    parser.add_argument("--stall_timeout_s", type=float, default=300.0, help="No-metrics timeout seconds")
+    parser.add_argument(
+        "--poll_s", type=float, default=2.0, help="Polling interval seconds"
+    )
+    parser.add_argument(
+        "--stall_timeout_s",
+        type=float,
+        default=300.0,
+        help="No-metrics timeout seconds",
+    )
     args = parser.parse_args()
 
     budget = parse_simple_yaml(args.budget)
@@ -181,7 +194,10 @@ def main():
                     {
                         "ts": utc_now(),
                         "trigger": "token_budget_exceeded",
-                        "details": {"total_tokens": metrics_state["total_tokens"], "token_budget": token_budget},
+                        "details": {
+                            "total_tokens": metrics_state["total_tokens"],
+                            "token_budget": token_budget,
+                        },
                     },
                 )
                 write_halt(halt_file)
@@ -195,7 +211,9 @@ def main():
                 else:
                     metrics_state["data_starve_count"] = 0
 
-                if metrics_state["data_starve_count"] >= triggers.get("data_starvation_window_steps", 999999):
+                if metrics_state["data_starve_count"] >= triggers.get(
+                    "data_starvation_window_steps", 999999
+                ):
                     incident_path = write_incident(
                         incident_dir,
                         {
@@ -217,12 +235,16 @@ def main():
                         metrics_state["baseline_tokens_per_s"] = sorted_samples[mid]
                 else:
                     baseline = metrics_state["baseline_tokens_per_s"]
-                    if tokens_per_s < baseline * triggers.get("throughput_collapse_ratio", 0.0):
+                    if tokens_per_s < baseline * triggers.get(
+                        "throughput_collapse_ratio", 0.0
+                    ):
                         metrics_state["throughput_below"] += 1
                     else:
                         metrics_state["throughput_below"] = 0
 
-                    if metrics_state["throughput_below"] >= triggers.get("throughput_collapse_window_steps", 999999):
+                    if metrics_state["throughput_below"] >= triggers.get(
+                        "throughput_collapse_window_steps", 999999
+                    ):
                         incident_path = write_incident(
                             incident_dir,
                             {
@@ -237,10 +259,14 @@ def main():
 
             if metrics_state["window_tokens"] >= 1_000_000:
                 if payload.get("cost_per_1m_tokens") is not None:
-                    metrics_state["window_cost_sum"] += float(payload["cost_per_1m_tokens"])
+                    metrics_state["window_cost_sum"] += float(
+                        payload["cost_per_1m_tokens"]
+                    )
                     metrics_state["window_cost_count"] += 1
 
-                halt_cost, details = should_halt_for_cost(metrics_state, triggers, expected_cost)
+                halt_cost, details = should_halt_for_cost(
+                    metrics_state, triggers, expected_cost
+                )
                 if halt_cost:
                     incident_path = write_incident(
                         incident_dir,
