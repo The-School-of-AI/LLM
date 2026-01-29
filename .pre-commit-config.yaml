@@ -22,4 +22,3 @@ repos:
     hooks:
       - id: check-json
       - id: check-yaml
-      
