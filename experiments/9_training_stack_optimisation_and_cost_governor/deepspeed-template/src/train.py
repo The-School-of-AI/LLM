@@ -5,11 +5,23 @@ This module contains training, evaluation, and inference functions
 for training language models with DeepSpeed optimization.
 """
 
+import os
+import time
 import torch
 from tqdm import tqdm
 
 
-def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=10):
+def train_epoch(
+    model_engine,
+    train_loader,
+    epoch,
+    max_steps=None,
+    log_interval=10,
+    metrics_logger=None,
+    halt_file=None,
+    halt_checkpoint_dir=None,
+    halt_tag="halt",
+):
     """
     Train the model for one epoch.
     
@@ -26,10 +38,19 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
     model_engine.train()
     total_loss = 0
     steps = 0
+    prev_step_end = time.perf_counter()
     
     progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}")
     
     for i, batch in enumerate(progress_bar):
+        if halt_file and os.path.exists(halt_file):
+            if halt_checkpoint_dir:
+                model_engine.save_checkpoint(halt_checkpoint_dir, tag=halt_tag)
+            return (total_loss / steps) if steps else 0.0, True
+
+        step_start = time.perf_counter()
+        data_wait_s = step_start - prev_step_end
+
         # Move batch to device
         input_ids = batch["input_ids"].to(model_engine.device)
         attention_mask = batch["attention_mask"].to(model_engine.device)
@@ -59,6 +80,25 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
         # Log periodically
         if i % log_interval == 0:
             print(f"Epoch {epoch}, Step {i}, Loss: {loss.item():.4f}")
+
+        # Metrics logging
+        step_end = time.perf_counter()
+        step_time_s = step_end - step_start
+        tokens = int(input_ids.numel())
+        tokens_per_s = tokens / step_time_s if step_time_s > 0 else 0.0
+        if metrics_logger is not None:
+            metrics_logger.log(
+                {
+                    "step": i,
+                    "tokens": tokens,
+                    "tokens_per_s": tokens_per_s,
+                    "data_wait_s": data_wait_s,
+                    "step_time_s": step_time_s,
+                    "loss": float(loss.item()),
+                    "nan": bool(torch.isnan(loss).item()),
+                }
+            )
+        prev_step_end = step_end
         
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
@@ -67,7 +107,7 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
     avg_loss = total_loss / steps
     print(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
     
-    return avg_loss
+    return avg_loss, False
 
 
 def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
