@@ -21,3 +21,10 @@ jobs:
 
       - name: Run hooks
         run: pre-commit run --all-files
+
+      - name: Validate YAML files
+        run: yamllint .
+
+      - name: Validate JSON files
+        run: |
+          find . -name "*.json" -print0 | xargs -0 -n 1 python -m json.tool > /dev/null
