@@ -4,10 +4,14 @@ rules:
   line-length:
     max: 120
     level: warning
+
   document-start: disable
+
   truthy:
     allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
     check-keys: false
-  empty-lines:
+
+  trailing-spaces:
     max-spaces: -1
+
   new-line-at-end-of-file: disable
