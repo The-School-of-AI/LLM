@@ -1,0 +1,27 @@
+version: 1
+halt_file: HALT
+incident_dir: incidents
+checkpoint_dir: checkpoints
+
+triggers:
+  nan_detected: true
+  throughput_collapse_ratio: 0.5
+  throughput_collapse_window_steps: 200
+  data_starvation_ratio: 0.1
+  data_starvation_window_steps: 200
+  cost_drift_percent: 5
+  cost_drift_window_1m_tokens: 2
+
+stages:
+  1:
+    name: 1B Dense
+    token_budget: 20000000000
+  2:
+    name: 3B MoE-small
+    token_budget: 40000000000
+  3:
+    name: 8B Dense-deep
+    token_budget: 100000000000
+  4:
+    name: 70B MoE-large
+    token_budget: 240000000000

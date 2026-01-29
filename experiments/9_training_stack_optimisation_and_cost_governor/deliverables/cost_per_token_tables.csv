@@ -1,0 +1,5 @@
+stage,model_phase,token_budget,expected_cost_per_1m_tokens_usd,actual_cost_per_1m_tokens_usd,drift_percent,notes
+1,1B Dense,20000000000,TBD,TBD,TBD,Requires Team 13 GPU pricing + tokens/sec
+2,3B MoE-small,40000000000,TBD,TBD,TBD,Requires Team 13 GPU pricing + tokens/sec
+3,8B Dense-deep,100000000000,TBD,TBD,TBD,Requires Team 13 GPU pricing + tokens/sec
+4,70B MoE-large,240000000000,TBD,TBD,TBD,Requires Team 13 GPU pricing + tokens/sec

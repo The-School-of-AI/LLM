@@ -1,0 +1,68 @@
+========================================================================
+  DEEPSPEED ZERO-2 FULL TRAINING VALIDATION SUMMARY
+========================================================================
+
+  [FAIL]  checkpoint/optimizer_state_ok
+  [FAIL]  checkpoint/params_restored
+  [FAIL]  checkpoint/zero2_resume
+  [PASS]  gradient/experts_receive_grad
+  [FAIL]  gradient/gate_deterministic
+  [PASS]  gradient/gate_receives_grad
+  [PASS]  gradient/reversible_correct
+  [PASS]  gradient/zero_alignment_ok
+  [PASS]  health/no_infs
+  [PASS]  health/no_loss_spikes
+  [PASS]  health/no_nans
+  [FAIL]  loss/aux_ratio_bounded
+  [PASS]  loss/aux_stable
+  [PASS]  loss/below_random_chance
+  [PASS]  loss/decreasing
+  [PASS]  loss/not_diverging
+  [PASS]  loss/strong_learning_signal
+  [PASS]  moe/dense_baseline_learns
+  [PASS]  moe/dispatch_correctness
+  [FAIL]  moe/gate_avoids_ghosts
+  [PASS]  moe/ghost_below_random
+  [PASS]  moe/ghost_model_learns
+  [PASS]  moe/memory_savings
+  [PASS]  perf/moe_fraction_reasonable
+  [PASS]  perf/throughput_stable
+  [PASS]  routing/load_balanced
+  [PASS]  routing/no_expert_collapse
+  [PASS]  routing/no_token_dropping
+  [PASS]  routing/null_rate_healthy
+  [PASS]  routing/null_rate_not_collapsed
+  [PASS]  zero/cross_rank_consistent
+  [PASS]  zero/no_nan_params
+
+  Score: 26/32
+
+  FAILURES DETECTED
+
+------------------------------------------------------------------------
+  KEY STATISTICS
+------------------------------------------------------------------------
+
+  Final null_rate (avg last 20): 0.3734
+  Avg MoE dispatch time: 6.46 ms (0.1% of step)
+  Avg expert max/min ratio: 1.12
+  Avg dropped token fraction: 0.0000
+  Loss first 20 avg: 9.3445
+  Loss last 20 avg:  0.1283
+  NTP loss (last 20):  0.0194 (random chance = 8.3178)
+  NTP gap from random: -8.2984
+
+  Last step expert counts: [93,81,73,77]
+  Max cross-rank param norm spread: 0.000000
+
+------------------------------------------------------------------------
+  THROUGHPUT BASELINE
+------------------------------------------------------------------------
+
+  Steady-state tok/s (steps 10-250):
+    Mean:  634
+    Min:   315
+    Max:   643
+    Std:   22
+    CV:    3.42%
+  Warmup tok/s (steps 0-10): 636

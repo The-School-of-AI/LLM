@@ -26,11 +26,13 @@ Usage:
 """
 
 import argparse
+import os
 import torch
 import deepspeed
 from transformers import AutoModelForCausalLM
 
 from src.data import get_dataloaders, get_tokenizer
+from src.monitoring import MetricsLogger
 from src.train import train_epoch, evaluate, generate_text, save_checkpoint
 
 
@@ -96,6 +98,38 @@ def parse_args():
         type=int,
         default=10,
         help="Log every N steps"
+    )
+
+    # Monitoring / HALT arguments
+    parser.add_argument(
+        "--metrics_path",
+        type=str,
+        default=None,
+        help="Path to metrics JSONL output"
+    )
+    parser.add_argument(
+        "--stage",
+        type=int,
+        default=1,
+        help="Training stage (1-4) for metrics"
+    )
+    parser.add_argument(
+        "--halt_file",
+        type=str,
+        default=None,
+        help="Path to HALT file for emergency shutdown"
+    )
+    parser.add_argument(
+        "--halt_checkpoint_dir",
+        type=str,
+        default=None,
+        help="Directory for HALT checkpoint output"
+    )
+    parser.add_argument(
+        "--halt_tag",
+        type=str,
+        default="halt",
+        help="Checkpoint tag to use on HALT"
     )
     
     # DeepSpeed arguments
@@ -202,19 +236,30 @@ def main():
     # Step 4: Training
     # ========================================
     print("\n[4/5] Training...")
+    metrics_logger = None
+    if args.metrics_path:
+        os.makedirs(os.path.dirname(args.metrics_path) or ".", exist_ok=True)
+        metrics_logger = MetricsLogger(args.metrics_path, stage=args.stage)
     for epoch in range(args.num_epochs):
         print(f"\n{'='*80}")
         print(f"Epoch {epoch + 1}/{args.num_epochs}")
         print(f"{'='*80}")
         
         # Train
-        train_loss = train_epoch(
+        train_loss, halted = train_epoch(
             model_engine,
             train_loader,
             epoch,
             max_steps=args.max_train_steps,
-            log_interval=args.log_interval
+            log_interval=args.log_interval,
+            metrics_logger=metrics_logger,
+            halt_file=args.halt_file,
+            halt_checkpoint_dir=args.halt_checkpoint_dir,
+            halt_tag=args.halt_tag,
         )
+        if halted:
+            print("HALT detected. Exiting training loop.")
+            break
         
         # Evaluate on validation set
         print("\nEvaluating on validation set...")
