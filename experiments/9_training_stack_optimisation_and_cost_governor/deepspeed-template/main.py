@@ -188,7 +188,7 @@ def main():
     print(f"CUDA Available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"CUDA Devices: {torch.cuda.device_count()}")
-    print(f"\nConfiguration:")
+    print("\nConfiguration:")
     print(f"  Model: {args.model_name}")
     print(f"  DeepSpeed Config: {args.deepspeed_config}")
     print(f"  Batch Size: {args.batch_size}")
@@ -229,7 +229,7 @@ def main():
         model=model,
         model_parameters=model.parameters()
     )
-    print(f"  DeepSpeed engine initialized")
+    print("  DeepSpeed engine initialized")
     print(f"  Device: {model_engine.device}")
     
     # ========================================
@@ -287,7 +287,7 @@ def main():
     # Test text generation
     if args.test_generation:
         print("\nTesting text generation...")
-        result = generate_text(
+        generate_text(
             model_engine,
             tokenizer,
             prompt=args.generation_prompt
