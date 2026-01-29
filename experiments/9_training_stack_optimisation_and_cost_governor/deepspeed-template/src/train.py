@@ -104,7 +104,7 @@ def train_epoch(
         if max_steps is not None and i >= max_steps:
             break
     
-    avg_loss = total_loss / steps
+    avg_loss = total_loss / steps if steps else 0.0
     print(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
     
     return avg_loss, False
@@ -157,8 +157,12 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
             if max_steps is not None and i >= max_steps:
                 break
     
-    avg_loss = total_loss / steps
-    avg_perplexity = total_perplexity / steps
+    if steps == 0:
+        avg_loss = 0.0
+        avg_perplexity = float("inf")
+    else:
+        avg_loss = total_loss / steps
+        avg_perplexity = total_perplexity / steps
     
     print(f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}")
     

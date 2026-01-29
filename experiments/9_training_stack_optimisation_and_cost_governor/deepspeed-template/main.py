@@ -27,8 +27,9 @@ Usage:
 
 import argparse
 import os
-import torch
+
 import deepspeed
+import torch
 from transformers import AutoModelForCausalLM
 
 from src.data import get_dataloaders, get_tokenizer
@@ -163,7 +164,6 @@ def parse_args():
     parser.add_argument(
         "--test_generation",
         action="store_true",
-        default=True,
         help="Test text generation after training"
     )
     parser.add_argument(
