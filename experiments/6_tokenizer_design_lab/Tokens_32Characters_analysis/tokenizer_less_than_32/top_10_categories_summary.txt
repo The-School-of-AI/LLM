@@ -1,0 +1,81 @@
+TOP 10 CATEGORIES PER MODEL (< 32 chars)
+==================================================
+
+MODEL: ByteDance
+--------------------
+Latin (ASCII): 79,783 (51.99%)
+Chinese: 50,943 (33.20%)
+Cyrillic: 8,349 (5.44%)
+Punctuation/Symbols: 2,676 (1.74%)
+Arabic: 2,456 (1.60%)
+Whitespace: 2,125 (1.38%)
+Greek: 1,323 (0.86%)
+Other: 1,308 (0.85%)
+Latin Extended: 828 (0.54%)
+Korean: 609 (0.40%)
+
+MODEL: DeepSeek
+--------------------
+Latin (ASCII): 70,008 (55.36%)
+Chinese: 35,277 (27.90%)
+Cyrillic: 5,183 (4.10%)
+Arabic: 3,140 (2.48%)
+Punctuation/Symbols: 2,916 (2.31%)
+Whitespace: 1,736 (1.37%)
+Thai: 1,218 (0.96%)
+Digits: 1,110 (0.88%)
+Other: 982 (0.78%)
+Korean: 808 (0.64%)
+
+MODEL: GPT-OSS
+--------------------
+Latin (ASCII): 131,676 (66.42%)
+Cyrillic: 14,041 (7.08%)
+Arabic: 7,961 (4.02%)
+Chinese: 6,749 (3.40%)
+Other: 5,285 (2.67%)
+Punctuation/Symbols: 5,227 (2.64%)
+Whitespace: 3,932 (1.98%)
+Devanagari: 3,894 (1.96%)
+Hebrew: 2,321 (1.17%)
+Bengali: 2,056 (1.04%)
+
+MODEL: Mistral
+--------------------
+Latin (ASCII): 86,832 (67.01%)
+Arabic: 9,361 (7.22%)
+Cyrillic: 7,569 (5.84%)
+Korean: 3,758 (2.90%)
+Punctuation/Symbols: 3,469 (2.68%)
+Chinese: 3,438 (2.65%)
+Whitespace: 2,793 (2.16%)
+Other: 2,263 (1.75%)
+Devanagari: 1,492 (1.15%)
+Greek: 1,438 (1.11%)
+
+MODEL: OLMo
+--------------------
+Latin (ASCII): 88,357 (89.00%)
+Punctuation/Symbols: 5,586 (5.63%)
+Whitespace: 1,575 (1.59%)
+Digits: 1,110 (1.12%)
+Chinese: 787 (0.79%)
+Cyrillic: 683 (0.69%)
+Latin Extended: 329 (0.33%)
+Other: 227 (0.23%)
+Korean: 191 (0.19%)
+Japanese (Hiragana): 85 (0.09%)
+
+MODEL: Qwen
+--------------------
+Latin (ASCII): 91,967 (61.33%)
+Chinese: 25,331 (16.89%)
+Punctuation/Symbols: 5,592 (3.73%)
+Other: 5,154 (3.44%)
+Cyrillic: 4,068 (2.71%)
+Arabic: 3,606 (2.40%)
+Korean: 3,267 (2.18%)
+Hebrew: 3,138 (2.09%)
+Thai: 2,562 (1.71%)
+Whitespace: 2,072 (1.38%)
+
