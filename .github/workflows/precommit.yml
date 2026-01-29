@@ -19,9 +19,6 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
-      - name: Run hooks
-        run: pre-commit run --all-files
-
       - name: Validate YAML files
         run: yamllint .
 
@@ -31,3 +28,7 @@ jobs:
           while IFS= read -r -d '' file; do
           python -m json.tool "$file" > /dev/null
           done
+      
+      - name: Run hooks
+        run: pre-commit run --all-files
+          
