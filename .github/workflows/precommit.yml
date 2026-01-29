@@ -28,6 +28,6 @@ jobs:
           while IFS= read -r -d '' file; do
           python -m json.tool "$file" > /dev/null
           done
-      
+
       - name: Run hooks
         run: pre-commit run --all-files
