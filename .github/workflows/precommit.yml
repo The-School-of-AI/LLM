@@ -27,4 +27,7 @@ jobs:
 
       - name: Validate JSON files
         run: |
-          find . -name "*.json" -print0 | xargs -0 -n 1 python -m json.tool > /dev/null
+          find . -type f -name "*.json" -print0 |
+          while IFS= read -r -d '' file; do
+          python -m json.tool "$file" > /dev/null
+          done
