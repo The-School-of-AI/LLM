@@ -30,11 +30,10 @@ import os
 
 import deepspeed
 import torch
-from transformers import AutoModelForCausalLM
-
 from src.data import get_dataloaders, get_tokenizer
 from src.monitoring import MetricsLogger
 from src.train import evaluate, generate_text, save_checkpoint, train_epoch
+from transformers import AutoModelForCausalLM
 
 
 def parse_args():
