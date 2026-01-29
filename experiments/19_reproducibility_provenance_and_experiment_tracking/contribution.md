@@ -39,6 +39,9 @@
 7. **Run checks before requesting review**
    - Run pre-commit hooks locally (formatting and linting).
    - Ensure notebooks/scripts do not use hard-coded, machine-specific paths.
+   - Before committing, run the pre-commit hooks defined in `.pre-commit-config.yaml`:
+     - Install once per machine: `pip install pre-commit && pre-commit install`
+     - Optionally check everything: `pre-commit run --all-files`. This ensures formatting (Black, isort) and linting (Ruff) pass locally before you open a PR.
 
 8. **Request and respond to reviews**
    - Add at least two reviewers.
@@ -58,3 +61,4 @@ file_path = Path("experiments/tokenizer/selection/ds_tokenizer.json")
 ## References
 
 1. [Github Best Practices](https://dev.to/pwd9000/github-repository-best-practices-23ck)
+2. [pre-commit](https://pre-commit.com/)
