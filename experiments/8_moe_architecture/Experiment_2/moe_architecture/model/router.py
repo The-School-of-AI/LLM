@@ -487,6 +487,9 @@ class NullExpertRouter(nn.Module):
 
         self.router = nn.Linear(config.hidden_size, self.num_real + 1, bias=True)
 
+        # Biases for real experts only (DeepSeek-V3 style)
+        self.register_buffer('expert_bias', torch.zeros(self.num_real))
+
         self.register_buffer('expert_counts', torch.zeros(self.num_real + config.num_null_experts))
         self.register_buffer('total_tokens', torch.tensor(0, dtype=torch.long))
 
@@ -517,6 +520,9 @@ class NullExpertRouter(nn.Module):
         logits = self.router(hidden_states)  # [B, S, N+1]
         real_logits = logits[..., :self.num_real]
         null_logit = logits[..., self.num_real:self.num_real + 1]
+
+        # Apply bias to real experts only (null untouched)
+        real_logits = real_logits + self.expert_bias.view(1, 1, -1)
 
         if self.num_null_copies > 0:
             null_logits = null_logit.expand(batch_size, seq_len, self.num_null_copies)
@@ -577,7 +583,41 @@ class NullExpertRouter(nn.Module):
         self.total_tokens.add_(flat_indices.numel())
 
     def update_expert_bias(self) -> Dict:
-        return {'updated': False}
+        if self.total_tokens == 0:
+            return {'updated': False}
+
+        utilization = self.expert_counts / self.total_tokens.float()
+        real_util = utilization[:self.num_real]
+        target = 1.0 / max(self.num_real, 1)
+
+        adjustments = torch.zeros_like(self.expert_bias)
+
+        with torch.no_grad():
+            overloaded = real_util > target * 1.1
+            underloaded = real_util < target * 0.9
+            adjustments[overloaded] = -self.router_config.bias_update_speed
+            adjustments[underloaded] = self.router_config.bias_update_speed
+            self.expert_bias.add_(adjustments)
+            self.expert_bias.clamp_(
+                self.router_config.bias_clamp_min,
+                self.router_config.bias_clamp_max
+            )
+
+        metrics = {
+            'updated': True,
+            'utilization': utilization.cpu().tolist(),
+            'adjustments': adjustments.cpu().tolist(),
+            'dead_experts': (real_util < 0.01).sum().item(),
+            'overloaded_experts': (real_util > target * 2).sum().item(),
+            'max_utilization': real_util.max().item() if real_util.numel() > 0 else 0.0,
+            'min_utilization': real_util.min().item() if real_util.numel() > 0 else 0.0,
+            'load_balance_cv': (real_util.std() / real_util.mean()).item() if real_util.numel() > 0 else 0.0,
+        }
+
+        self.expert_counts.zero_()
+        self.total_tokens.zero_()
+
+        return metrics
 
     def get_routing_entropy(self) -> float:
         if self.total_tokens == 0:

@@ -23,6 +23,42 @@ import math
 from model.config import MoEModelConfig, AttentionConfig
 
 
+def _compute_inv_freq(base: float, dim: int, device: torch.device) -> torch.Tensor:
+    return 1.0 / (base ** (torch.arange(0, dim, 2, device=device).float() / dim))
+
+
+def _compute_yarn_inv_freq(
+    base: float,
+    dim: int,
+    device: torch.device,
+    factor: float,
+    beta_fast: float,
+    beta_slow: float,
+    old_context_len: int,
+) -> Tuple[torch.Tensor, float]:
+    inv_freq_extrapolation = _compute_inv_freq(base, dim, device)
+    inv_freq_interpolation = inv_freq_extrapolation / factor
+
+    half_dim = inv_freq_extrapolation.shape[0]
+    idx = torch.arange(half_dim, device=device, dtype=torch.float32)
+
+    def _dim_from_rot(n_rot: float) -> float:
+        return (
+            dim
+            * math.log(old_context_len / (n_rot * 2.0 * math.pi))
+            / (2.0 * math.log(base))
+        )
+
+    low = max(int(math.floor(_dim_from_rot(beta_fast))), 0)
+    high = min(int(math.ceil(_dim_from_rot(beta_slow))), half_dim - 1)
+    span = max(high - low, 1e-3)
+    ramp = ((idx - low) / span).clamp_(0, 1)
+
+    inv_freq = inv_freq_interpolation * ramp + inv_freq_extrapolation * (1.0 - ramp)
+    attention_rescale_factor = 0.1 * math.log(factor) + 1.0
+    return inv_freq, attention_rescale_factor
+
+
 class RotaryEmbedding(nn.Module):
     """
     Rotary Position Embedding (RoPE).
@@ -39,17 +75,19 @@ class RotaryEmbedding(nn.Module):
         dim: int,
         max_position_embeddings: int = 4096,
         base: float = 10000.0,
+        rope_scaling: Optional[dict] = None,
         device: Optional[torch.device] = None
     ):
         super().__init__()
         self.dim = dim
         self.max_position_embeddings = max_position_embeddings
         self.base = base
+        self.rope_scaling = rope_scaling
+        self.attention_rescale_factor = 1.0
         
         # Compute inverse frequencies
-        inv_freq = 1.0 / (
-            base ** (torch.arange(0, dim, 2, device=device).float() / dim)
-        )
+        inv_freq, attention_factor = self._get_inv_freq_and_scale(device)
+        self.attention_rescale_factor = attention_factor
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         
         # Build cache
@@ -75,8 +113,35 @@ class RotaryEmbedding(nn.Module):
         # to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
         
-        self.register_buffer("cos_cached", emb.cos().to(dtype), persistent=False)
-        self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
+        cos = emb.cos()
+        sin = emb.sin()
+        if self.attention_rescale_factor != 1.0:
+            cos = cos * self.attention_rescale_factor
+            sin = sin * self.attention_rescale_factor
+        self.register_buffer("cos_cached", cos.to(dtype), persistent=False)
+        self.register_buffer("sin_cached", sin.to(dtype), persistent=False)
+
+    def _get_inv_freq_and_scale(self, device: Optional[torch.device]) -> Tuple[torch.Tensor, float]:
+        if not self.rope_scaling:
+            return _compute_inv_freq(self.base, self.dim, device), 1.0
+        rope_type = self.rope_scaling.get("rope_type") or self.rope_scaling.get("type")
+        if rope_type != "yarn":
+            return _compute_inv_freq(self.base, self.dim, device), 1.0
+
+        factor = float(self.rope_scaling.get("factor", 1.0))
+        beta_fast = float(self.rope_scaling.get("beta_fast", 32))
+        beta_slow = float(self.rope_scaling.get("beta_slow", 1))
+        old_ctx = int(
+            self.rope_scaling.get(
+                "original_max_position_embeddings", self.max_position_embeddings
+            )
+        )
+        inv_freq, attention_factor = _compute_yarn_inv_freq(
+            self.base, self.dim, device, factor, beta_fast, beta_slow, old_ctx
+        )
+        if "attention_factor" in self.rope_scaling:
+            attention_factor = float(self.rope_scaling["attention_factor"])
+        return inv_freq, attention_factor
     
     def forward(
         self,
@@ -138,9 +203,13 @@ def apply_rotary_pos_emb(
         Rotated query and key tensors
     """
     # Reshape cos/sin for broadcasting
-    # [seq_len, head_dim] -> [1, 1, seq_len, head_dim]
-    cos = cos.unsqueeze(0).unsqueeze(0)
-    sin = sin.unsqueeze(0).unsqueeze(0)
+    # [seq_len, head_dim] -> [batch, 1, seq_len, head_dim]
+    if position_ids is not None:
+        cos = cos[position_ids].unsqueeze(1)
+        sin = sin[position_ids].unsqueeze(1)
+    else:
+        cos = cos.unsqueeze(0).unsqueeze(0)
+        sin = sin.unsqueeze(0).unsqueeze(0)
     
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
@@ -224,7 +293,8 @@ class GQAttention(nn.Module):
         self.rotary_emb = RotaryEmbedding(
             self.head_dim,
             max_position_embeddings=config.max_position_embeddings,
-            base=self.attention_config.rope_theta
+            base=self.attention_config.rope_theta,
+            rope_scaling=self.attention_config.rope_scaling,
         )
         
         # ============================================================
@@ -472,7 +542,8 @@ class GatedSparseAttention(nn.Module):
         self.rotary_emb = RotaryEmbedding(
             self.head_dim,
             max_position_embeddings=config.max_position_embeddings,
-            base=self.attention_config.rope_theta
+            base=self.attention_config.rope_theta,
+            rope_scaling=self.attention_config.rope_scaling,
         )
 
         # Dropout
