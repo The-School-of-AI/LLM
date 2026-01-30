@@ -1,0 +1,25 @@
+# MoE Dashboard Requirements
+# ==========================
+
+# Core
+streamlit>=1.28.0
+plotly>=5.18.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# API Backend (optional)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+websockets>=12.0
+pydantic>=2.5.0
+
+# Monitoring integrations (optional)
+redis>=5.0.0
+prometheus-client>=0.19.0
+
+# ML integrations (optional)
+wandb>=0.16.0
+tensorboard>=2.15.0
+
+# Development
+python-dotenv>=1.0.0

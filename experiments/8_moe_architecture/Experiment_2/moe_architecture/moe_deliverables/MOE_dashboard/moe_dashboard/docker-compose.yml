@@ -1,0 +1,110 @@
+# MoE Dashboard - Production Setup
+# ==================================
+# Full monitoring stack with Grafana, Prometheus, and Streamlit dashboard
+#
+# Usage:
+#   docker-compose up -d
+#
+# Access:
+#   - Streamlit Dashboard: http://localhost:8501
+#   - Grafana:             http://localhost:3000 (admin/admin)
+#   - Prometheus:          http://localhost:9090
+#   - FastAPI Backend:     http://localhost:8000
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # Streamlit Dashboard (Primary UI)
+  # ===========================================
+  dashboard:
+    build: .
+    container_name: moe-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - API_URL=http://api:8000
+    depends_on:
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================================
+  # FastAPI Backend (REST + WebSocket)
+  # ===========================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: moe-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: uvicorn fastapi_backend:app --host 0.0.0.0 --port 8000
+
+  # ===========================================
+  # Redis (Real-time Data Store)
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: moe-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # ===========================================
+  # Prometheus (Metrics Collection)
+  # ===========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: moe-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+
+  # ===========================================
+  # Grafana (Production Dashboards)
+  # ===========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: moe-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana_dashboard.json:/var/lib/grafana/dashboards/moe_dashboard.json
+      - ./grafana_provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    name: moe-network
