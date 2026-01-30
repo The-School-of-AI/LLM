@@ -7,7 +7,6 @@ for training language models.
 
 from typing import Tuple
 
-import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
