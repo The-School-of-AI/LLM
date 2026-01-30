@@ -470,6 +470,13 @@ where difficulty (d_b) and capacity (c_s) are continuous quantities. The exponen
 
 ---
 
+### Rejection Strategy
+
+Some of the data rejection strategy that can be considered based on the heuristics and also followed by OLMo, DeepSeek, Qwen, and LLaMA:
+- **Length**: Reject if <50 words or >100K words (prevents fragments and scraped dumps)
+- **Language**: FastText language detection with confidence >0.8 (OLMo/DeepSeek standard)
+- **Repetition**: Reject if gzip compression ratio <0.4
+- **Token Threshold**: Minimum 200 tokens (~4K characters)
 
 
 
