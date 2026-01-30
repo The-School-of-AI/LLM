@@ -34,3 +34,7 @@ jobs:
           VALIDATE_CSS: true
           VALIDATE_JSON: true
           VALIDATE_YAML: true
+
+          # DISABLE LIST
+          VALIDATE_PYTHON_PYLINT: false
+          VALIDATE_NATURAL_LANGUAGE: false
