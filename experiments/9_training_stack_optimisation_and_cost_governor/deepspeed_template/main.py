@@ -31,6 +31,7 @@ import deepspeed
 import torch
 from src.data import get_dataloaders, get_tokenizer
 from src.train import evaluate, generate_text, save_checkpoint, train_epoch
+from src.utils import set_seed
 from transformers import AutoModelForCausalLM
 
 
@@ -83,6 +84,12 @@ def parse_args():
     parser.add_argument(
         "--log_interval", type=int, default=10, help="Log every N steps"
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility",
+    )
 
     # DeepSpeed arguments
     parser.add_argument(
@@ -129,6 +136,9 @@ def main():
     """Main training pipeline."""
     args = parse_args()
 
+    # Set random seed for reproducibility
+    set_seed(args.seed)
+
     print("=" * 80)
     print("DeepSpeed Training Template")
     print("=" * 80)
@@ -143,6 +153,7 @@ def main():
     print(f"  Batch Size: {args.batch_size}")
     print(f"  Max Length: {args.max_length}")
     print(f"  Epochs: {args.num_epochs}")
+    print(f"  Random Seed: {args.seed}")
     print("=" * 80)
 
     # ========================================

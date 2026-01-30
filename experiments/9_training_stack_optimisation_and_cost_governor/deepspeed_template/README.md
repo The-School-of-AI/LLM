@@ -5,19 +5,28 @@ A modular and well-structured template for training language models using DeepSp
 ## 📁 Project Structure
 
 ```
-Deepspeed-Template/
+deepspeed_template/
 ├── config/
 │   └── deepspeed/
 │       ├── zero-2.json          # ZeRO Stage 2 configuration
 │       └── zero-3.json          # ZeRO Stage 3 configuration
 ├── src/
-│   └── train.py                 # Training, evaluation, and generation functions
+│   ├── __init__.py              # Package initialization
+│   ├── data.py                  # Data loading and tokenization utilities
+│   ├── train.py                 # Training, evaluation, and generation functions
+│   └── utils.py                 # General utilities (seed setting, etc.)
+├── test/
+│   ├── __init__.py              # Test package initialization
+│   ├── test_training_cpu.py    # CPU-only tests (no GPU required)
+│   └── test_training.py         # Full training tests (GPU required)
 ├── assets/
 │   └── images/                  # Training verification screenshots
 ├── main.py                      # Main entry point
-├── requirements.txt             # Python dependencies
-├── pyproject.toml              # Project configuration
-└── README.md
+├── requirements.txt             # Python dependencies (legacy)
+├── pyproject.toml               # Project configuration (uv package manager)
+├── uv.lock                      # Dependency lock file
+├── .gitignore                   # Git ignore patterns
+└── README.md                    # This file
 ```
 
 ## ✅ Verified Training Results
@@ -51,6 +60,9 @@ This template has been tested and verified on AWS g4dn.12xlarge instances (4x Te
 - **Text Generation**: Test your model with custom prompts
 - **Checkpoint Support**: Save and load model checkpoints
 - **Multi-GPU Support**: Tested on 4x Tesla T4 GPUs (AWS g4dn.12xlarge)
+- **Reproducibility**: Configurable random seed for reproducible experiments
+- **Data Loading**: Pre-built tokenization and data loading utilities
+- **Comprehensive Testing**: CPU and GPU test suites for validation
 
 ## 📋 Requirements
 
@@ -131,8 +143,82 @@ deepspeed --num_gpus=4 main.py \
     --num_epochs 3 \
     --batch_size 16 \
     --max_length 256 \
+    --seed 42 \
     --save_checkpoint \
     --output_dir ./my_checkpoints
+```
+
+## 🧪 Running Tests
+
+The project includes a comprehensive test suite to validate functionality.
+
+### CPU-Only Tests (No GPU Required)
+
+These tests validate core functionality without requiring CUDA/GPU:
+
+```bash
+# Run all CPU tests
+pytest test/test_training_cpu.py -v
+
+# Or run directly
+python test/test_training_cpu.py
+```
+
+**What CPU tests validate:**
+- ✓ Configuration file validity (ZeRO-2 and ZeRO-3)
+- ✓ Module imports and dependencies
+- ✓ Tokenizer loading and functionality
+- ✓ Model loading
+- ✓ CPU forward pass
+- ✓ Utility functions (seed reproducibility)
+- ✓ ZeRO configuration details
+
+### Full Training Tests (GPU Required)
+
+These tests require NVIDIA GPU with CUDA support:
+
+```bash
+# Run all GPU tests
+pytest test/test_training.py -v
+
+# Or run directly
+python test/test_training.py
+```
+
+**What GPU tests validate:**
+- ✓ DeepSpeed engine initialization (ZeRO Stage 2 & 3)
+- ✓ Training loop execution
+- ✓ Evaluation loop execution
+- ✓ Forward/backward passes on GPU
+- ✓ Checkpoint saving and loading
+- ✓ Memory efficiency with ZeRO optimization
+- ✓ Multi-GPU distributed training
+
+> **⚠️ Important**: Tests in `test_training.py` will be automatically skipped if CUDA is not available. Make sure you have:
+> - NVIDIA GPU(s) with CUDA support
+> - CUDA Toolkit installed (11.8+ or 12.x)
+> - Compatible NVIDIA drivers
+> - PyTorch with CUDA support
+
+### Run All Tests
+
+```bash
+# Run both CPU and GPU tests (GPU tests will skip if CUDA unavailable)
+pytest test/ -v
+
+# Run with detailed output
+pytest test/ -v --tb=short
+
+# Run specific test
+pytest test/test_training.py::TestZeRoConfiguration::test_zero_stage2_config_exists -v
+```
+
+### Install Test Dependencies
+
+Make sure pytest is installed:
+
+```bash
+uv add pytest
 ```
 
 ## ⚙️ Configuration Options
@@ -147,6 +233,7 @@ deepspeed --num_gpus=4 main.py \
 | `--batch_size` | `8` | Training batch size |
 | `--max_length` | `128` | Maximum sequence length |
 | `--num_epochs` | `1` | Number of training epochs |
+| `--seed` | `42` | Random seed for reproducibility |
 | `--deepspeed_config` | `config/deepspeed/zero-2.json` | DeepSpeed config path |
 | `--save_checkpoint` | `False` | Save checkpoint after training |
 | `--output_dir` | `./checkpoints` | Checkpoint output directory |
@@ -194,19 +281,34 @@ deepspeed --num_gpus=4 main.py \
 
 ## 🔧 Module Details
 
+### `src/data.py`
+
+Data loading and tokenization utilities:
+- `get_tokenizer()`: Loads and configures tokenizer from HuggingFace
+- `get_dataloaders()`: Creates train/eval/test dataloaders with tokenization
+- `tokenize_function()`: Tokenizes text examples for language modeling
+- Supports HuggingFace datasets with automatic filtering and batching
+
 ### `src/train.py`
 
-Contains all training and inference logic:
+Training and inference logic:
 - `train_epoch()`: Trains model for one epoch with progress tracking
 - `evaluate()`: Evaluates model and computes loss and perplexity
 - `generate_text()`: Generates text from prompts with configurable sampling
 - `save_checkpoint()`: Saves model checkpoints using DeepSpeed
 - `load_checkpoint()`: Loads model checkpoints
 
+### `src/utils.py`
+
+General utility functions:
+- `set_seed()`: Sets random seeds across all libraries (Python, NumPy, PyTorch) for reproducibility
+- Ensures deterministic behavior for consistent experimental results
+
 ### `main.py`
 
 Main orchestration script that handles:
 - Command-line argument parsing
+- Random seed initialization for reproducibility
 - Data loading with HuggingFace datasets
 - Tokenizer initialization
 - Model loading from HuggingFace Hub
@@ -216,7 +318,28 @@ Main orchestration script that handles:
 - Text generation testing
 - Checkpoint management
 
-> **Note**: Data loading utilities are imported from `src.data` in the main script. You'll need to implement these modules or modify the imports based on your data loading requirements.
+### `test/`
+
+Comprehensive test suite for validation:
+
+#### `test_training_cpu.py`
+CPU-only tests that don't require GPU:
+- Configuration file validation
+- Module import checks
+- Tokenizer and model loading
+- CPU-based forward passes
+- Utility function validation
+
+#### `test_training.py`
+Full training tests requiring GPU:
+- DeepSpeed initialization (ZeRO Stage 2 & 3)
+- Training and evaluation loops
+- GPU forward/backward passes
+- Checkpoint operations
+- Memory efficiency validation
+- Multi-GPU distributed training
+
+> **Note**: GPU tests use `@pytest.mark.skipif(not torch.cuda.is_available())` to automatically skip when CUDA is unavailable.
 
 ## 📊 Understanding ZeRO Stages
 
@@ -303,36 +426,76 @@ deepspeed main.py \
 ```bash
 # Make sure all dependencies are installed
 uv sync
-
-# Or install individually
-uv pip install deepspeed transformers datasets torch tqdm
 ```
+
+### Test Failures
+
+If tests are failing:
+
+**CPU Tests Failing:**
+```bash
+# Ensure all dependencies are installed
+uv sync
+uv pip install pytest
+
+# Check Python version (requires Python 3.8+)
+python --version
+```
+
+**GPU Tests Skipping/Failing:**
+```bash
+# Verify CUDA is available
+nvidia-smi
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+
+# Check PyTorch CUDA installation
+python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA version: {torch.version.cuda}')"
+
+# Reinstall PyTorch with CUDA support if needed
+uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+```
+
+> **Note**: GPU tests are automatically skipped if CUDA is not available. This is expected behavior on CPU-only machines.
 
 ## 📝 Customization
 
 ### Using Your Own Dataset
 
-The current implementation requires data loading utilities. You'll need to create a `src/data/` module with the following functions:
+The template includes data loading utilities in `src/data.py`. To use your own dataset, modify the `get_dataloaders()` function:
 
 ```python
-# src/data/__init__.py
-from .dataloader import get_tokenizer, get_dataloaders
-
-# src/data/dataloader.py
-from transformers import AutoTokenizer
-from datasets import load_dataset
-
-def get_tokenizer(model_name):
-    """Load and configure tokenizer."""
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    return tokenizer
-
+# src/data.py
 def get_dataloaders(dataset_name, dataset_config, tokenizer, batch_size, max_length):
     """Create train/eval/test dataloaders."""
+    
+    # Option 1: Load from HuggingFace (already implemented)
+    dataset = load_dataset(dataset_name, dataset_config)
+    
+    # Option 2: Load from local files
+    from datasets import Dataset
+    import pandas as pd
+    
+    df = pd.read_csv("your_data.csv")
+    dataset = Dataset.from_pandas(df)
+    
+    # Option 3: Load from custom source
     # Your custom data loading logic here
-    pass
+    
+    # Then tokenize and create dataloaders
+    tokenized = dataset.map(lambda x: tokenize_function(x, tokenizer, max_length))
+    # ... rest of the function
+```
+
+### Ensuring Reproducibility
+
+To ensure reproducible experiments across runs, always set the seed:
+
+```bash
+# All runs with the same seed will produce identical results
+deepspeed main.py --seed 42 --deepspeed_config config/deepspeed/zero-2.json
+
+# Different seeds for different experimental runs
+deepspeed main.py --seed 123 --deepspeed_config config/deepspeed/zero-2.json
 ```
 
 ### Adding Custom Metrics
@@ -359,11 +522,19 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
 
 Feel free to customize this template for your specific needs. Key areas to extend:
 
-- Implement data loading utilities in `src/data/` (currently not included)
+- Customize data loading in `src/data.py` for your specific datasets
 - Add custom training strategies in `src/train.py`
 - Create new DeepSpeed configurations in `config/deepspeed/`
 - Add evaluation metrics and monitoring
 - Implement additional model architectures
+- Extend utilities in `src/utils.py`
+- Add new test cases in `test/` directory
+
+**When contributing:**
+1. Run CPU tests to ensure basic functionality: `pytest test/test_training_cpu.py -v`
+2. If you have GPU access, run full tests: `pytest test/test_training.py -v`
+3. Add tests for new features you implement
+4. Update documentation in this README
 
 ## 📄 License
 
