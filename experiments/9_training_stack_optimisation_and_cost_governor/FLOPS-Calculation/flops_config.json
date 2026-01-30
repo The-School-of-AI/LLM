@@ -1,0 +1,79 @@
+{
+  "hardware": {
+    "num_gpus": 8,
+    "price_per_gpu_hour": 2.50,
+    "mfu": 0.30,
+    "quantization": "all",
+    "tflops_per_gpu": {
+      "bf16": 989.0,
+      "fp8": 1979.0,
+      "nvfp4": 3500.0
+    }
+  },
+  "stages": [
+    {
+      "name": "1B Dense Seed",
+      "description": "Dense Decoder-Only",
+      "total_tokens": 20000000000.0,
+      "architecture": {
+        "vocab_size": 50257,
+        "hidden_size": 2048,
+        "intermediate_size": 5632,
+        "num_layers": 18,
+        "num_heads": 16,
+        "num_experts": 0,
+        "top_k_experts": 0,
+        "null_expert_prob": 0.0,
+        "sequence_length": 4096
+      }
+    },
+    {
+      "name": "3B MoE (Small)",
+      "description": "Sparse MoE (Small)",
+      "total_tokens": 40000000000.0,
+      "architecture": {
+        "vocab_size": 50257,
+        "hidden_size": 1280,
+        "intermediate_size": 3840,
+        "num_layers": 24,
+        "num_heads": 16,
+        "num_experts": 8,
+        "top_k_experts": 2,
+        "null_expert_prob": 0.0,
+        "sequence_length": 4096
+      }
+    },
+    {
+      "name": "8B MoE (Mid)",
+      "description": "Sparse MoE (Mid-Scale)",
+      "total_tokens": 100000000000.0,
+      "architecture": {
+        "vocab_size": 50257,
+        "hidden_size": 2176,
+        "intermediate_size": 5802,
+        "num_layers": 24,
+        "num_heads": 32,
+        "num_experts": 8,
+        "top_k_experts": 2,
+        "null_expert_prob": 0.0,
+        "sequence_length": 4096
+      }
+    },
+    {
+      "name": "70B MoE (Opt)",
+      "description": "MoE with Null Expert Strategy",
+      "total_tokens": 240000000000.0,
+      "architecture": {
+        "vocab_size": 64000,
+        "hidden_size": 2176,
+        "intermediate_size": 5802,
+        "num_layers": 24,
+        "num_heads": 32,
+        "num_experts": 80,
+        "top_k_experts": 2,
+        "null_expert_prob": 0.0,
+        "sequence_length": 4096
+      }
+    }
+  ]
+}
