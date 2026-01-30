@@ -7,18 +7,18 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  statuses: write
+  security-events: write
 
 jobs:
   super-lint:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Run Super-Linter (scoped)
+      - name: Run Super-Linter
         uses: super-linter/super-linter@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,7 +26,7 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DISABLE_ERRORS: false
 
-          # Language / docs only
+          # ✅ ALLOW-LIST ONLY
           VALIDATE_MARKDOWN: true
           VALIDATE_PYTHON: true
           VALIDATE_JAVASCRIPT_ES: true
@@ -34,24 +34,3 @@ jobs:
           VALIDATE_CSS: true
           VALIDATE_JSON: true
           VALIDATE_YAML: true
-
-          # Explicitly disable infra/security
-          VALIDATE_CHECKOV: false
-          VALIDATE_GITHUB_ACTIONS: false
-          VALIDATE_DOCKERFILE: false
-          VALIDATE_TERRAFORM: false
-
-      - name: Comment lint fix instructions on PR
-        if: failure()
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: lint-failure
-          message: |
-            ❌ **Lint checks failed**
-
-            ### 🔧 Fix locally
-            ```bash
-            pre-commit run --all-files
-            ```
-
-            📌 See inline annotations on this PR for details.
