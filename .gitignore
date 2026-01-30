@@ -133,5 +133,5 @@ logs/
 /outputs
 /logs
 
-*.pt 
+*.pt
 *.pth

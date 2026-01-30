@@ -6,7 +6,6 @@ Follow these rules when contributing to the repo.
 
 3. Reviewers can also add screenshots during review. This helps others understand the results and approve faster when full testing is not required.
 
-
-
 References:
+
 1. [Github Best Practices](https://dev.to/pwd9000/github-repository-best-practices-23ck)

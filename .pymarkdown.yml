@@ -1,0 +1,6 @@
+# PyMarkdown configuration
+
+rules:
+  MD013: false   # Line length
+  MD036: false   # Emphasis used as heading
+  MD041: false   # First line must be top-level heading

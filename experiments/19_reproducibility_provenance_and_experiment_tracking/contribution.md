@@ -1,5 +1,5 @@
 # Follow these rules when contributing to the repo
-  
+
 ## How to create a pull request
 
 1. **Start from an issue**

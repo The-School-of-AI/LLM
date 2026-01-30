@@ -1,29 +1,32 @@
-minimum_pre_commit_version: 2.20.0
-
 repos:
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
+  # -------------------------
+  # General hygiene
+  # -------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-      - id: black
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+  # -------------------------
+  # Markdown / Docs
+  # -------------------------
+  - repo: https://github.com/jackdewinter/pymarkdown
+    rev: v0.9.18
     hooks:
-      - id: isort
-        args: ["--profile=black"]
+    - id: pymarkdown
+      files: ^(README\.md|docs/.*\.md)$
+      exclude: ^(docs/.*/README\.md)$
 
+  # -------------------------
+  # Python
+  # -------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+    rev: v0.14.14
     hooks:
       - id: ruff
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: check-json
-  
-  - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
-    hooks:
-      - id: yamllint
-        args: [-c, .yamllint]
+        args: ["--fix"]
+      - id: ruff-format
