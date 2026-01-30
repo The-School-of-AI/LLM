@@ -24,20 +24,27 @@ class DataBucketer:
             r"\bmethodology\b", r"\bsynthesis\b", r"\bdialectic\b"
         ]
         
-        # Code indicators
+        # Code indicators (stricter)
         self.code_markers = [
-            r"```", r"def\s+", r"class\s+", r"function\s+", r"var\s+", 
-            r"const\s+", r"import\s+", r"return\s+"
+            r"```", r"def\s+[a-zA-Z_]\w*\(", r"class\s+[A-Z]\w*[:\(\{]", 
+            r"function\s+\w+\(", r"var\s+\w+\s*=", r"const\s+\w+\s*=", 
+            r"import\s+[\w\.]+", r"return\s+[\w\.]+"
         ]
 
     def _analyze_structure(self, text: str) -> Dict[str, Any]:
         """Analyzes structural properties of the text."""
-        # Handle potential indentation or whitespace on empty lines for robust paragraph splitting
-        paragraphs = [p for p in re.split(r'\n\s*\n', text) if p.strip()]
+        # Split by double newline, but filter for "substantial" paragraphs (more than just a list item)
+        raw_paragraphs = [p for p in re.split(r'\n\s*\n', text) if p.strip()]
         
+        # Consider a paragraph substantial if it has > 5 words OR ends with sentence punctuation
+        paragraphs = []
+        for p in raw_paragraphs:
+            words_in_p = len(p.split())
+            if words_in_p > 5 or re.search(r'[.!?]["\']?$', p.strip()):
+                paragraphs.append(p)
+
         # Remove citations like [1], [2] to avoid splitting sentences on them if they match, 
         # but simplified sentence split is usually okay.
-        # Improve sentence splitting to not split on abbreviations (simplified)
         sentences = [s for s in re.split(r'[.!?]+', text) if s.strip()]
         words = text.split()
         
@@ -84,7 +91,7 @@ class DataBucketer:
         rationale.append(f"Reasoning density: {reasoning_density:.2f}, Abstraction density: {abstraction_density:.2f}")
 
         # --- HEURISTIC DECISION TREE ---
-        # Start from highest complexity and fall through (conservative approach requires meeting strict criteria for high bands)
+        # Start from highest complexity and fall through
         
         # Flags
         if metrics["word_count"] > 2000 and reasoning_density < 0.5:
@@ -94,36 +101,38 @@ class DataBucketer:
              return BucketingResult(band="B0", rationale=["Too short"], flags=["short_content"])
 
         # B5: PhD
-        # Requirements: High abstraction, novel synthesis (hard to detect), very low redundancy.
-        # Proxy: Very high abstraction density, significant length, complex sentence structure.
+        # Requirements: High abstraction, novel synthesis, very low redundancy.
         if (abstraction_density > 1.5 and reasoning_density > 1.5 and 
             metrics["avg_sentence_len"] > 14 and metrics["paragraph_count"] >= 3):
             return BucketingResult("B5", rationale + ["High abstraction & reasoning density, complex structure"], flags)
 
         # B4: Graduate
         # Requirements: Formal reasoning, long dependency chains.
-        # Proxy: High reasoning density, high sentence length, structured.
         if (reasoning_density > 1.0 and metrics["avg_sentence_len"] > 12 and 
             metrics["paragraph_count"] >= 2):
             return BucketingResult("B4", rationale + ["Significant reasoning markers, long sentences"], flags)
 
         # B3: Undergraduate
         # Requirements: Multi-step explanations, code/tutorials.
-        # Proxy: Moderate reasoning, code presence, enumerated lists.
-        if (code_count > 2) or (reasoning_density > 0.5 and metrics["has_enumerated_list"]):
-            reason = "Code presence" if code_count > 2 else "Reasoning with structured steps"
+        # Stricter code requirement: Must be substantial to count alone, or mixed with reasoning
+        # Stricter reasoning: Enumerated lists alone aren't enough without high reasoning density
+        if (code_count > 2) or (reasoning_density > 0.8 and metrics["has_enumerated_list"]):
+            reason = "Significant code presence" if code_count > 2 else "Reasoning with structured steps"
             return BucketingResult("B3", rationale + [reason], flags)
             
         # B2: High School
         # Requirements: Structured knowledge, implicit reasoning.
-        # Proxy: Multi-paragraph, moderate sentence length.
-        if metrics["paragraph_count"] > 1 and metrics["avg_sentence_len"] > 10:
+        # Added: Must have substantial paragraph length to avoid listicles
+        if metrics["paragraph_count"] > 1 and metrics["avg_paragraph_len"] > 15 and metrics["avg_sentence_len"] > 10:
             return BucketingResult("B2", rationale + ["Structured multi-paragraph text, moderate complexity"], flags)
 
         # B1: Primary
         # Requirements: Fluent everyday language, common knowledge.
-        # Proxy: Standard sentence length, but simple structure.
+        # Fallback for structured but simpler text
         if metrics["word_count"] > 20:
+             # Check if it might be B2 candidate by vocabulary/length but missed structure
+            if metrics["avg_sentence_len"] > 15:
+                 return BucketingResult("B2", rationale + ["Dense sentence structure"], flags)
             return BucketingResult("B1", rationale + ["Fluent text, simple structure"], flags)
 
         # B0: Nursery
