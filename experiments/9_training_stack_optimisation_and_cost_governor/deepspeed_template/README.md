@@ -5,23 +5,24 @@ A modular and well-structured template for training language models using DeepSp
 ## 📁 Project Structure
 
 ```
-Template/
+Deepspeed-Template/
 ├── config/
 │   └── deepspeed/
 │       ├── zero-2.json          # ZeRO Stage 2 configuration
 │       └── zero-3.json          # ZeRO Stage 3 configuration
 ├── src/
-│   ├── data/
-│   │   ├── __init__.py
-│   │   └── dataloader.py        # Dataset and DataLoader utilities
 │   └── train.py                 # Training, evaluation, and generation functions
+├── assets/
+│   └── images/                  # Training verification screenshots
 ├── main.py                      # Main entry point
+├── requirements.txt             # Python dependencies
+├── pyproject.toml              # Project configuration
 └── README.md
 ```
 
 ## ✅ Verified Training Results
 
-This template has been tested and verified on a 4x Tesla T4 GPU setup. Below are proofs of successful training:
+This template has been tested and verified on AWS g4dn.12xlarge instances (4x Tesla T4 GPUs, 16GB each). Below are proofs of successful training:
 
 ### Training in Progress
 ![Training Progress](assets/images/Actually-training.png)
@@ -31,9 +32,17 @@ This template has been tested and verified on a 4x Tesla T4 GPU setup. Below are
 ![GPU Utilization](assets/images/consuming-all-gpu-zero2.png)
 *nvidia-smi output showing all 4 GPUs being utilized effectively with distributed memory allocation*
 
+### Hardware Configuration
+
+**Tested on**: AWS g4dn.12xlarge instance
+- **GPUs**: 4x NVIDIA Tesla T4 (16GB each)
+- **Total GPU Memory**: 64GB
+- **vCPUs**: 48
+- **RAM**: 192GB
+
 ## 🚀 Features
 
-- **Modular Design**: Separate modules for data loading, training, and configuration
+- **Modular Design**: Separate modules for training and configuration
 - **ZeRO Stage 2**: Optimizer state partitioning with CPU offload
 - **ZeRO Stage 3**: Full model parallelism (optimizer + parameters + gradients)
 - **Mixed Precision Training**: FP16 for faster training and reduced memory
@@ -41,47 +50,82 @@ This template has been tested and verified on a 4x Tesla T4 GPU setup. Below are
 - **Progress Tracking**: Built-in progress bars and logging
 - **Text Generation**: Test your model with custom prompts
 - **Checkpoint Support**: Save and load model checkpoints
-- **AWS Ready**: Pre-configured scripts for g4dn.12xlarge (4x T4 GPUs)
-
-## ☁️ Running on AWS
-
-**Quick Start**: See [QUICK_START_AWS.md](QUICK_START_AWS.md) for copy-paste instructions!
-
-**Detailed Guide**: See [aws_setup_g4dn.md](aws_setup_g4dn.md) for complete setup instructions.
-
-```bash
-# On AWS g4dn.12xlarge instance:
-./run_on_g4dn.sh 1    # Quick test
-./run_on_g4dn.sh 2    # Production training
-```
+- **Multi-GPU Support**: Tested on 4x Tesla T4 GPUs (AWS g4dn.12xlarge)
 
 ## 📋 Requirements
 
+### System Requirements
+
+**CUDA Toolkit** is required for DeepSpeed to run. Make sure you have:
+- NVIDIA GPU(s) with CUDA support
+- CUDA Toolkit 11.8+ or 12.x installed
+- Compatible NVIDIA drivers
+
+To verify CUDA is available:
 ```bash
-pip install torch torchvision
-pip install deepspeed
-pip install transformers datasets
-pip install tqdm
+nvidia-smi
+nvcc --version
 ```
+
+### Python Dependencies
+
+This project uses [uv](https://github.com/astral-sh/uv) for fast and reliable Python package management.
+
+#### Install uv (if not already installed)
+
+```bash
+pip install uv
+```
+
+#### Install dependencies
+
+```bash
+uv sync
+```
+
+Or install individually:
+
+```bash
+uv pip install torch>=2.0.0 torchvision>=0.15.0
+uv pip install deepspeed>=0.12.0
+uv pip install transformers>=4.35.0 datasets>=2.14.0
+uv pip install tqdm>=4.65.0
+```
+
+> **Note**: The project includes `pyproject.toml` and `uv.lock` for dependency management. DeepSpeed requires CUDA toolkit to be installed on your system for GPU acceleration.
 
 ## 🎯 Quick Start
 
-### Basic Training (ZeRO Stage 2)
+### Multi-GPU Training (ZeRO Stage 2)
+
+Uses all available GPUs:
 
 ```bash
-python main.py --deepspeed_config config/deepspeed/zero-2.json
+deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json
+```
+
+Or specify number of GPUs:
+
+```bash
+deepspeed --num_gpus=4 main.py --deepspeed_config config/deepspeed/zero-2.json
 ```
 
 ### Advanced Training (ZeRO Stage 3)
 
 ```bash
-python main.py --deepspeed_config config/deepspeed/zero-3.json
+deepspeed main.py --deepspeed_config config/deepspeed/zero-3.json
+```
+
+### Single GPU Training (for testing)
+
+```bash
+python main.py --deepspeed_config config/deepspeed/zero-2.json
 ```
 
 ### Custom Configuration
 
 ```bash
-python main.py \
+deepspeed --num_gpus=4 main.py \
     --deepspeed_config config/deepspeed/zero-2.json \
     --model_name distilgpt2 \
     --num_epochs 3 \
@@ -150,32 +194,29 @@ python main.py \
 
 ## 🔧 Module Details
 
-### `src/data/dataloader.py`
-
-Handles all data loading and preprocessing:
-- `get_tokenizer()`: Loads and configures tokenizer
-- `preprocess_function()`: Tokenizes text data
-- `WikiTextDataset`: Custom Dataset class
-- `get_dataloaders()`: Creates train/eval/test dataloaders
-
 ### `src/train.py`
 
-Contains all training logic:
-- `train_epoch()`: Trains model for one epoch
-- `evaluate()`: Evaluates model and computes perplexity
-- `generate_text()`: Generates text from prompts
-- `save_checkpoint()`: Saves model checkpoints
+Contains all training and inference logic:
+- `train_epoch()`: Trains model for one epoch with progress tracking
+- `evaluate()`: Evaluates model and computes loss and perplexity
+- `generate_text()`: Generates text from prompts with configurable sampling
+- `save_checkpoint()`: Saves model checkpoints using DeepSpeed
 - `load_checkpoint()`: Loads model checkpoints
 
 ### `main.py`
 
-Main orchestration script:
-- Argument parsing
-- Data loading
-- Model initialization
-- DeepSpeed initialization
-- Training loop
-- Evaluation and text generation
+Main orchestration script that handles:
+- Command-line argument parsing
+- Data loading with HuggingFace datasets
+- Tokenizer initialization
+- Model loading from HuggingFace Hub
+- DeepSpeed engine initialization
+- Training loop execution
+- Validation and test set evaluation
+- Text generation testing
+- Checkpoint management
+
+> **Note**: Data loading utilities are imported from `src.data` in the main script. You'll need to implement these modules or modify the imports based on your data loading requirements.
 
 ## 📊 Understanding ZeRO Stages
 
@@ -207,7 +248,7 @@ GPU 1: [Model Part 2] [Optimizer Part 2] [Gradients Part 2]
 
 ## 🎓 Example Workflows
 
-### 1. Quick Test Run
+### 1. Quick Test Run (Single GPU)
 
 ```bash
 # Train for 1 epoch with limited steps
@@ -217,11 +258,11 @@ python main.py \
     --max_eval_steps 20
 ```
 
-### 2. Full Training with Checkpointing
+### 2. Full Training with Checkpointing (Multi-GPU)
 
 ```bash
-# Train and save checkpoint
-python main.py \
+# Train and save checkpoint on 4 GPUs
+deepspeed --num_gpus=4 main.py \
     --deepspeed_config config/deepspeed/zero-3.json \
     --num_epochs 5 \
     --batch_size 16 \
@@ -229,11 +270,11 @@ python main.py \
     --output_dir ./checkpoints/run1
 ```
 
-### 3. Custom Model Training
+### 3. Custom Model Training (Multi-GPU)
 
 ```bash
-# Train a different model
-python main.py \
+# Train a different model on all available GPUs
+deepspeed main.py \
     --model_name gpt2 \
     --deepspeed_config config/deepspeed/zero-3.json \
     --batch_size 4 \
@@ -261,26 +302,37 @@ python main.py \
 
 ```bash
 # Make sure all dependencies are installed
-pip install -r requirements.txt
+uv sync
 
 # Or install individually
-pip install deepspeed transformers datasets torch tqdm
+uv pip install deepspeed transformers datasets torch tqdm
 ```
 
 ## 📝 Customization
 
 ### Using Your Own Dataset
 
-Edit `src/data/dataloader.py` and modify the `get_dataloaders()` function:
+The current implementation requires data loading utilities. You'll need to create a `src/data/` module with the following functions:
 
 ```python
-def get_dataloaders(
-    dataset_name="your_dataset",
-    dataset_config="your_config",
-    # ... rest of arguments
-):
-    dataset = load_dataset(dataset_name, dataset_config)
-    # Your custom preprocessing
+# src/data/__init__.py
+from .dataloader import get_tokenizer, get_dataloaders
+
+# src/data/dataloader.py
+from transformers import AutoTokenizer
+from datasets import load_dataset
+
+def get_tokenizer(model_name):
+    """Load and configure tokenizer."""
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    return tokenizer
+
+def get_dataloaders(dataset_name, dataset_config, tokenizer, batch_size, max_length):
+    """Create train/eval/test dataloaders."""
+    # Your custom data loading logic here
+    pass
 ```
 
 ### Adding Custom Metrics
@@ -307,10 +359,11 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
 
 Feel free to customize this template for your specific needs. Key areas to extend:
 
-- Add more datasets in `src/data/`
-- Implement custom training strategies in `src/train.py`
+- Implement data loading utilities in `src/data/` (currently not included)
+- Add custom training strategies in `src/train.py`
 - Create new DeepSpeed configurations in `config/deepspeed/`
 - Add evaluation metrics and monitoring
+- Implement additional model architectures
 
 ## 📄 License
 
