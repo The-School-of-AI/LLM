@@ -1,8 +1,9 @@
-import dataclasses
-from typing import List, Optional
-import json
 import argparse
+import dataclasses
+import json
 import sys
+from typing import Optional
+
 
 @dataclasses.dataclass
 class TrainingStage:
@@ -67,9 +68,13 @@ class TrainingStage:
         derived_experts = None
         if solve_for == "num_experts":
             if target_total_params is None:
-                raise ValueError("target_total_params must be set when solve_for='num_experts'.")
+                raise ValueError(
+                    "target_total_params must be set when solve_for='num_experts'."
+                )
             if num_moe_layers <= 0:
-                raise ValueError("num_moe_layers must be > 0 when solve_for='num_experts'.")
+                raise ValueError(
+                    "num_moe_layers must be > 0 when solve_for='num_experts'."
+                )
             base_params = (
                 embedding_params
                 + lm_head_params
@@ -77,12 +82,18 @@ class TrainingStage:
                 + dense_layers * ffn_params_dense
             )
             per_expert_per_layer = ffn_params_per_expert + hidden
-            derived_experts = (target_total_params - base_params) / (num_moe_layers * per_expert_per_layer)
+            derived_experts = (target_total_params - base_params) / (
+                num_moe_layers * per_expert_per_layer
+            )
             if derived_experts < 1:
-                raise ValueError("target_total_params is too small for the given architecture.")
+                raise ValueError(
+                    "target_total_params is too small for the given architecture."
+                )
             experts = int(round(derived_experts))
             if experts < 1:
-                raise ValueError("Derived num_experts is < 1; check target_total_params.")
+                raise ValueError(
+                    "Derived num_experts is < 1; check target_total_params."
+                )
             if top_k > experts:
                 raise ValueError("top_k_experts cannot exceed derived num_experts.")
             router_params = hidden * experts
@@ -91,10 +102,14 @@ class TrainingStage:
             num_moe_layers = layers if num_moe_layers == 0 else num_moe_layers
         elif solve_for == "num_experts_from_per_expert":
             if target_total_params is None or target_params_per_expert is None:
-                raise ValueError("target_total_params and target_params_per_expert must be set when solve_for='num_experts_from_per_expert'.")
+                raise ValueError(
+                    "target_total_params and target_params_per_expert must be set when solve_for='num_experts_from_per_expert'."
+                )
             experts = int(round(target_total_params / target_params_per_expert))
             if experts < 1:
-                raise ValueError("Derived num_experts is < 1; check target_total_params/target_params_per_expert.")
+                raise ValueError(
+                    "Derived num_experts is < 1; check target_total_params/target_params_per_expert."
+                )
             if top_k > experts:
                 raise ValueError("top_k_experts cannot exceed derived num_experts.")
             router_params = hidden * experts
@@ -113,7 +128,7 @@ class TrainingStage:
             + dense_layers * ffn_params_dense
             + num_moe_layers * total_ffn_params_moe
         )
-        
+
         # 5. Active Calculation (Pre-Null Logic)
         active_non_embed_params = (
             layers * attn_params_per_layer
@@ -128,18 +143,23 @@ class TrainingStage:
         # Null Path (null_prob): Skips FFN entirely (only Attn + Embeddings active)
         # Note: Null path still pays for Attention? Usually yes (Mixture of Depths style).
         # If Null expert means "skip FFN", then active is just Attn.
-        
+
         params_null_path = (
             embedding_params
             + layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
             + lm_head_params
         )
-        
-        effective_active_params = (1 - null_prob) * active_params_base + null_prob * params_null_path
+
+        effective_active_params = (
+            1 - null_prob
+        ) * active_params_base + null_prob * params_null_path
         effective_active_non_embed_params = (
-            (1 - null_prob) * active_non_embed_params
-            + null_prob * (layers * attn_params_per_layer + dense_layers * ffn_params_dense + lm_head_params)
+            1 - null_prob
+        ) * active_non_embed_params + null_prob * (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + lm_head_params
         )
 
         return {
@@ -151,7 +171,7 @@ class TrainingStage:
             "num_moe_layers": num_moe_layers,
             "dense_layers": dense_layers,
             "num_experts": experts,
-            "derived_num_experts": derived_experts
+            "derived_num_experts": derived_experts,
         }
 
     def calculate_flops(self, params: Optional[dict] = None) -> float:
@@ -161,7 +181,7 @@ class TrainingStage:
         """
         params = params or self.calculate_params()
         arch = self.architecture
-        
+
         # 1. Fetch Architecture Vars
         N_linear = params["active_non_embed_params"]
         L = arch.get("num_layers", 24)
@@ -171,31 +191,30 @@ class TrainingStage:
             raise ValueError("sequence_length must be > 0.")
         if self.total_tokens <= 0:
             raise ValueError("total_tokens must be > 0.")
-        
+
         # 2. Calculate FLOPs per Sequence (Exact formula from Image)
         # Term 1: Linear Matrix Muls (FFN + Projections)
         # Formula: 6 * seq_len * num_params
         flops_per_seq_linear = 6 * S * N_linear
-        
+
         # Term 2: Attention Mechanism (Quadratic)
         # Formula: 12 * num_layers * hidden_size * seq_len^2
-        flops_per_seq_attn = 12 * L * H * (S ** 2)
-        
+        flops_per_seq_attn = 12 * L * H * (S**2)
+
         flops_per_seq_total = flops_per_seq_linear + flops_per_seq_attn
-        
+
         # 3. Scale to Total Training Tokens
         # Number of sequences = Total Tokens / Sequence Length
         num_sequences = self.total_tokens / S
-        
-        total_flops = flops_per_seq_total * num_sequences
-        
-        return total_flops
 
+        total_flops = flops_per_seq_total * num_sequences
+
+        return total_flops
 
 
 def load_config(config_path: str):
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             return json.load(f)
     except FileNotFoundError:
         print(f"Error: Config file '{config_path}' not found.")
@@ -204,13 +223,21 @@ def load_config(config_path: str):
         print(f"Error parsing JSON file: {exc}")
         sys.exit(1)
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Calculate training FLOPs and duration.")
-    parser.add_argument("--config", type=str, default="experiments/9_training_stack_optimisation_and_cost_governor/FLOPS-Calculation/flops_config.json", help="Path to JSON config file")
+    parser = argparse.ArgumentParser(
+        description="Calculate training FLOPs and duration."
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="experiments/9_training_stack_optimisation_and_cost_governor/FLOPS-Calculation/flops_config.json",
+        help="Path to JSON config file",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
-    
+
     # --- Configuration ---
     # Strict key access - will raise KeyError if config is missing
     try:
@@ -221,42 +248,57 @@ def main():
         precision_specs = hardware["tflops_per_gpu"]
         selected_quantization = hardware.get("quantization", "all").lower()
         tflops_mode = hardware.get("tflops_mode", "dense")
-        
+
         stages = []
         for stage_conf in config["stages"]:
-            stages.append(TrainingStage(
-                name=stage_conf["name"],
-                total_tokens=float(stage_conf["total_tokens"]),
-                architecture=stage_conf["architecture"],
-                description=stage_conf.get("description", "") # Description is optional
-            ))
-            
+            stages.append(
+                TrainingStage(
+                    name=stage_conf["name"],
+                    total_tokens=float(stage_conf["total_tokens"]),
+                    architecture=stage_conf["architecture"],
+                    description=stage_conf.get(
+                        "description", ""
+                    ),  # Description is optional
+                )
+            )
+
     except KeyError as e:
         print(f"Error: Missing required configuration key: {e}")
         print("Please ensure flops_config.json contains all necessary fields.")
         sys.exit(1)
 
-    print("="*112)
+    print("=" * 112)
     print("ERA V4 Training Compute & Schedule Calculator (Architecture-Aware)")
-    print(f"Cluster: {NUM_GPUS}x NVIDIA GPUs | MFU: {MFU*100}% | Price/GPU/Hr: ${PRICE_PER_GPU_HOUR}")
+    print(
+        f"Cluster: {NUM_GPUS}x NVIDIA GPUs | MFU: {MFU*100}% | Price/GPU/Hr: ${PRICE_PER_GPU_HOUR}"
+    )
     print(f"TFLOPs Mode: {tflops_mode}")
     if selected_quantization != "all":
         print(f"Selected Quantization: {selected_quantization.upper()}")
-    print("="*112)
+    print("=" * 112)
     print("\nNOTE: Parameters are calculated dynamically from architecture specs.")
-    
+
     # Iterate through defined precisions (e.g., bf16, fp8, nvfp4) or filter by selection
     for precision, peak_tflops in precision_specs.items():
-        if selected_quantization != "all" and precision.lower() != selected_quantization:
+        if (
+            selected_quantization != "all"
+            and precision.lower() != selected_quantization
+        ):
             continue
-            
+
         effective_flops_per_sec = NUM_GPUS * (peak_tflops * 1e12) * MFU
-        
-        print("-"*112)
-        print(f"--- Precision: {precision.upper()} (Peak/GPU: {peak_tflops} TFLOPS) ---")
-        print(f"Effective Cluster Performance: {effective_flops_per_sec/1e15:.2f} PFLOPS")
+
+        print("-" * 112)
+        print(
+            f"--- Precision: {precision.upper()} (Peak/GPU: {peak_tflops} TFLOPS) ---"
+        )
+        print(
+            f"Effective Cluster Performance: {effective_flops_per_sec/1e15:.2f} PFLOPS"
+        )
         print(f"{'-'*112}")
-        print(f"{'Stage':<20} | {'Total Params':<15} | {'Active Params':<15} | {'ZettaFLOPs':<12} | {'Days':<10} | {'Cost ($)':<12}")
+        print(
+            f"{'Stage':<20} | {'Total Params':<15} | {'Active Params':<15} | {'ZettaFLOPs':<12} | {'Days':<10} | {'Cost ($)':<12}"
+        )
         print(f"{'-'*112}")
 
         total_flops = 0.0
@@ -271,7 +313,7 @@ def main():
                 sys.exit(1)
             stage_seconds = stage_flops / effective_flops_per_sec
             stage_days = stage_seconds / (24 * 3600)
-            
+
             # Cost = Hours * Num_GPUs * Price
             stage_hours = stage_seconds / 3600
             stage_cost = stage_hours * NUM_GPUS * PRICE_PER_GPU_HOUR
@@ -280,16 +322,23 @@ def main():
             total_seconds += stage_seconds
 
             if params.get("derived_num_experts") is not None:
-                print(f"  (Derived num_experts for {stage.name}: {params['num_experts']} from target_total_params)")
-            print(f"{stage.name:<20} | {params['total_params']/1e9:<5.2f} B          | {params['active_params']/1e9:<5.2f} B          | {stage_flops/1e21:<10.2f}   | {stage_days:<10.2f} | ${stage_cost:,.2f}")
+                print(
+                    f"  (Derived num_experts for {stage.name}: {params['num_experts']} from target_total_params)"
+                )
+            print(
+                f"{stage.name:<20} | {params['total_params']/1e9:<5.2f} B          | {params['active_params']/1e9:<5.2f} B          | {stage_flops/1e21:<10.2f}   | {stage_days:<10.2f} | ${stage_cost:,.2f}"
+            )
 
         total_days = total_seconds / (24 * 3600)
         total_hours = total_seconds / 3600
         total_cost = total_hours * NUM_GPUS * PRICE_PER_GPU_HOUR
-        
+
         print(f"{'-'*112}")
-        print(f"{'TOTAL':<20} | {'-':<15} | {'-':<15} | {total_flops/1e21:<10.2f}   | {total_days:<10.2f} | ${total_cost:,.2f}")
+        print(
+            f"{'TOTAL':<20} | {'-':<15} | {'-':<15} | {total_flops/1e21:<10.2f}   | {total_days:<10.2f} | ${total_cost:,.2f}"
+        )
         print(f"{'='*112}\n")
+
 
 if __name__ == "__main__":
     main()
