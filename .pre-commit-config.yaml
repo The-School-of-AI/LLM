@@ -12,17 +12,17 @@ repos:
       - id: check-added-large-files
 
   # -------------------------
-  # Markdown / Docs
+  # Markdown / Docs (controlled)
   # -------------------------
   - repo: https://github.com/jackdewinter/pymarkdown
     rev: v0.9.18
     hooks:
-    - id: pymarkdown
-      files: ^(README\.md|docs/.*\.md)$
-      exclude: ^(docs/.*/README\.md)$
+      - id: pymarkdown
+        files: ^(README\.md|docs/.*\.md)$
+        exclude: ^docs/.*/README\.md$
 
   # -------------------------
-  # Python
+  # Python (modern, fast)
   # -------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.14

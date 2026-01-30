@@ -13,20 +13,22 @@ permissions:
 jobs:
   super-lint:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Run Super-Linter
+        id: lint
         uses: super-linter/super-linter@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: main
           VALIDATE_ALL_CODEBASE: false
-          DISABLE_ERRORS: false
 
-          # ✅ ALLOW-LIST ONLY
+          # Allow-list only
           VALIDATE_MARKDOWN: true
           VALIDATE_PYTHON: true
           VALIDATE_JAVASCRIPT_ES: true
@@ -35,6 +37,38 @@ jobs:
           VALIDATE_JSON: true
           VALIDATE_YAML: true
 
-          # DISABLE LIST
+          # Disabled to reduce noise
           VALIDATE_PYTHON_PYLINT: false
           VALIDATE_NATURAL_LANGUAGE: false
+
+      - name: Comment lint fix instructions on PR
+        if: failure()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: lint-failure
+          message: |
+            ❌ **Lint checks failed**
+
+            Please fix the issues locally and push updates.
+
+            **Run locally:**
+            ```bash
+            pre-commit run --all-files
+            ```
+
+            **Python:**
+            ```bash
+            ruff check . --fix
+            ruff format .
+            ```
+
+            **Docs:**
+            ```bash
+            pymarkdown scan .
+            ```
+
+            Then:
+            ```bash
+            git commit -am "fix: address lint issues"
+            git push
+            ```
