@@ -1,19 +1,25 @@
 """
-Test suite for validating training loop and DeepSpeed ZeRO configuration.
+GPU-accelerated test suite for validating training loop and DeepSpeed ZeRO configuration.
+
+⚠️  REQUIRES: CUDA-enabled GPU (tests will be skipped if CUDA is not available)
 
 This test suite validates:
-1. Training loop functionality
+1. Training loop functionality with GPU acceleration
 2. ZeRO Stage 2 and Stage 3 configurations
-3. Model forward/backward passes
+3. Model forward/backward passes on GPU
 4. Checkpoint saving/loading
-5. DeepSpeed engine initialization
+5. DeepSpeed engine initialization with CUDA
+6. Memory efficiency of ZeRO optimization
 
 Usage:
-    # Run all tests
-    pytest test_training.py -v
+    # Run all tests (requires CUDA)
+    pytest test_training_gpu.py -v
 
     # Run specific test
-    pytest test_training.py::test_zero_stage2_config -v
+    pytest test_training_gpu.py::test_zero_stage2_config -v
+    
+Note: Most tests use @pytest.mark.skipif to automatically skip when CUDA is unavailable.
+For CPU-only testing, use test_training_cpu.py instead.
 """
 
 import json
@@ -494,7 +500,7 @@ def test_summary():
     print("  ✓ Memory efficiency")
     print("  ✓ Import compatibility")
     print("  ✓ Seed reproducibility")
-    print("\nRun with: pytest test_training.py -v")
+    print("\nRun with: pytest test_training_gpu.py -v")
     print("=" * 80 + "\n")
 
 
