@@ -1,33 +1,28 @@
 name: Lint Code Base
-
 on:
   pull_request:
-    branches: [ main ]
-
+    branches: [main]
 permissions:
   contents: read
   pull-requests: write
+  statuses: write
   security-events: write
-
 jobs:
   super-lint:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Run Super-Linter
         id: lint
         uses: super-linter/super-linter@v6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
           DEFAULT_BRANCH: main
           VALIDATE_ALL_CODEBASE: false
           DISABLE_ERRORS: false
-
       - name: Comment lint fix instructions on PR
         if: failure()
         uses: marocchino/sticky-pull-request-comment@v2
