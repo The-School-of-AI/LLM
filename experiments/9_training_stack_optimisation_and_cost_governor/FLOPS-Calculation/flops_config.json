@@ -4,6 +4,7 @@
     "price_per_gpu_hour": 2.50,
     "mfu": 0.30,
     "quantization": "all",
+    "tflops_mode": "dense",
     "tflops_per_gpu": {
       "bf16": 989.0,
       "fp8": 1979.0,
@@ -66,12 +67,14 @@
       "architecture": {
         "vocab_size": 64000,
         "hidden_size": 2176,
-        "intermediate_size": 5802,
+        "intermediate_size": 49152,
         "num_layers": 24,
         "num_heads": 32,
-        "num_experts": 80,
+        "num_experts": 9,
         "top_k_experts": 2,
         "null_expert_prob": 0.0,
+        "num_moe_layers": 24,
+        "tie_embeddings": true,
         "sequence_length": 4096
       }
     }

@@ -42,6 +42,11 @@ Define your training stages. All parameters (Layers, Hidden Size, Experts, etc.)
       "num_layers": 24,
       "num_experts": 80,      // Total Experts
       "top_k_experts": 2,     // Active Experts per token
+      "num_moe_layers": 24,   // Optional: MoE layers out of total layers
+      "tie_embeddings": true, // Optional: LM head tied to embeddings
+      "target_total_params": 70000000000, // Optional: solve to hit total params
+      "target_params_per_expert": 8000000000, // Optional: target total/experts
+      "solve_for": "num_experts_from_per_expert", // Optional: "num_experts" or "num_experts_from_per_expert"
       "sequence_length": 4096
     }
   }
@@ -59,7 +64,7 @@ $$
 
 **Per-Sequence FLOPs:**
 ```python
-Linear_Term    = 6 * Sequence_Length * Active_Params
+Linear_Term    = 6 * Sequence_Length * Active_NonEmbedding_Params
 Attention_Term = 12 * Num_Layers * Hidden_Size * (Sequence_Length^2)
 Total_Per_Seq  = Linear_Term + Attention_Term
 ```
@@ -70,6 +75,7 @@ Total_Per_Seq  = Linear_Term + Attention_Term
 - **MoE Models**:
     - `Total Params`: Includes weights from **all** experts.
     - `Active Params`: Includes weights from only the **Top-K** experts selected per token.
+- **Embeddings** are counted for parameter totals but excluded from linear FLOPs.
 
 ### 3. Cost Calculation
 ```python
