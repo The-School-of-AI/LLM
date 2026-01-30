@@ -1,4 +1,8 @@
+# Contribution Guidelines
+
 Follow these rules when contributing to the repo.
+
+## Scope
 
 1. The main branch is protected. Create a pull request in your assigned folder. Treat these folders as temporary spaces for early experiments. If you plan to share code across folders or change the structure, discuss it with the team first.
 
