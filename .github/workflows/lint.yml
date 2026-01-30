@@ -28,7 +28,7 @@ jobs:
           DEFAULT_BRANCH: main
           VALIDATE_ALL_CODEBASE: false
 
-          # Allow-list only
+          # ✅ ALLOW-LIST ONLY (no false flags anywhere)
           VALIDATE_MARKDOWN: true
           VALIDATE_PYTHON: true
           VALIDATE_JAVASCRIPT_ES: true
@@ -36,10 +36,6 @@ jobs:
           VALIDATE_CSS: true
           VALIDATE_JSON: true
           VALIDATE_YAML: true
-
-          # Disabled to reduce noise
-          VALIDATE_PYTHON_PYLINT: false
-          VALIDATE_NATURAL_LANGUAGE: false
 
       - name: Comment lint fix instructions on PR
         if: failure()
@@ -62,7 +58,7 @@ jobs:
             ruff format .
             ```
 
-            **Docs:**
+            **Docs / Markdown:**
             ```bash
             pymarkdown scan .
             ```
