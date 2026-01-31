@@ -8,14 +8,15 @@ This tool classifies dataset records into **B0-B5 curriculum bands** based on to
 # Install dependencies
 pip install -r requirements.txt
 
-# Classify your dataset
+# Classify your dataset (with local tokenizer)
 python classify_curriculum_bands.py \
     --input your_dataset.jsonl \
     --output classified_dataset.jsonl \
-    --text-field text
+    --text-field text \
+    --local-tokenizer <path>\tokenizer
 
 # Or try the example
-python example_usage.py
+python example_usage.py --local-tokenizer <path>\tokenizer
 ```
 
 ## Core Concept: Token ID vs Frequency
@@ -24,9 +25,6 @@ python example_usage.py
 In BPE tokenizers, **token IDs are inversely related to frequency**:
 - **High frequency tokens** → **Low token IDs** (0, 1, 2, 3...)
 - **Low frequency tokens** → **High token IDs** (10000, 20000, 50000...)
-
-token_id ↑  ⇒ frequency ↓  ⇒ complexity ↑
-
 
 ### Why This Works
 BPE tokenizers build vocabulary by:
@@ -87,10 +85,19 @@ pip install transformers torch numpy tqdm matplotlib
 ### Basic Usage
 
 ```bash
+# With local tokenizer (recommended)
 python classify_curriculum_bands.py \
     --input dataset.jsonl \
     --output classified_dataset.jsonl \
-    --text-field text
+    --text-field text \
+    --local-tokenizer <path>\tokenizer
+
+# With HuggingFace model (alternative)
+python classify_curriculum_bands.py \
+    --input dataset.jsonl \
+    --output classified_dataset.jsonl \
+    --text-field text \
+    --model-id meta-llama/Llama-3.3-70B-Instruct
 ```
 
 ### Command Line Arguments
@@ -109,7 +116,8 @@ python classify_curriculum_bands.py \
     --input my_dataset.jsonl \
     --output my_dataset_classified.jsonl \
     --text-field content \
-    --format jsonl
+    --format jsonl \
+    --local-tokenizer <path>\tokenizer
 ```
 
 ## Input Format
@@ -164,7 +172,13 @@ Each record is enhanced with classification metadata:
 The classifier uses three metrics to determine band:
 1. **Average token ID**: Mean of all token IDs in the text
 2. **Maximum token ID**: Highest token ID in the text
-3. **95th percentile**: 95th percentile of token IDs
+3. **95th percentile (p95)**: 95% threshold - 95% of token IDs are below this value
+
+**What is p95?**
+- **p95 = 95% threshold** (or 95% cutoff)
+- Meaning: 95% of token IDs are below this value; only 5% are above it
+- **Example**: If p95 = 8000, then 95% of tokens have IDs ≤ 8000, and 5% have IDs > 8000
+- **Why it's useful**: Captures high-end outliers (rare tokens) that might push max ID very high, giving a more stable measure than just the maximum
 
 A record is assigned to the **highest band** (most difficult) that it qualifies for based on these thresholds.
 
@@ -173,7 +187,12 @@ A record is assigned to the **highest band** (most difficult) that it qualifies 
 ```python
 from classify_curriculum_bands import CurriculumBandClassifier
 
-# Initialize classifier
+# Initialize classifier with local tokenizer (recommended)
+classifier = CurriculumBandClassifier(
+    local_tokenizer_path="<path>\\tokenizer"
+)
+
+# Or with HuggingFace model
 classifier = CurriculumBandClassifier(
     model_id="meta-llama/Llama-3.3-70B-Instruct"
 )
@@ -241,10 +260,10 @@ band_counts = classifier.process_dataset(
 Use `calibrate_thresholds.py` to automatically determine optimal thresholds:
 
 ```bash
-# With local tokenizer
-python calibrate_thresholds.py --local-tokenizer path/to/tokenizer
+# With local tokenizer (recommended)
+python calibrate_thresholds.py --local-tokenizer <path>\tokenizer
 
-# With HuggingFace model
+# With HuggingFace model (alternative)
 python calibrate_thresholds.py
 ```
 
@@ -296,21 +315,21 @@ TOKEN_ID_THRESHOLDS = {
 
 ### Using Different Tokenizers
 
-#### Local Tokenizer
+#### Local Tokenizer (Recommended)
 ```python
 classifier = CurriculumBandClassifier(
-    local_tokenizer_path="path/to/local/tokenizer"
+    local_tokenizer_path="<path>\\tokenizer"
 )
 ```
 
-#### HuggingFace Model
+#### HuggingFace Model (Alternative)
 ```python
 classifier = CurriculumBandClassifier(
     model_id="meta-llama/Llama-3.3-70B-Instruct"  # Or any other model
 )
 ```
 
-**Note**: When switching tokenizers, always recalibrate thresholds using `calibrate_thresholds.py`.
+**Note**: When switching tokenizers, always recalibrate thresholds using `calibrate_thresholds.py --local-tokenizer <path>\tokenizer`.
 
 ## Visualization
 
