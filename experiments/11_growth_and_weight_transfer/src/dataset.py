@@ -126,6 +126,73 @@ class StreamingTextDataset(IterableDataset):
             }
 
 
+class TinyShakespeareDataset(Dataset):
+    """
+    TinyShakespeare dataset - downloads ~1MB of Shakespeare text.
+    Uses simple character-level encoding (no tokenizer needed).
+    """
+    
+    URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+    
+    def __init__(
+        self,
+        max_length: int = 512,
+        vocab_size: int = 49152,
+        cache_dir: str = "./data",
+    ):
+        self.max_length = max_length
+        self.vocab_size = vocab_size
+        self.cache_dir = cache_dir
+        
+        # Download and load text
+        self.text = self._load_text()
+        
+        # Create character-to-index mapping
+        self.chars = sorted(list(set(self.text)))
+        self.char_to_idx = {c: i for i, c in enumerate(self.chars)}
+        
+        # Create samples (sliding window)
+        self.samples = []
+        stride = max_length // 2  # 50% overlap
+        for i in range(0, len(self.text) - max_length, stride):
+            self.samples.append(self.text[i:i + max_length])
+        
+        print(f"  📚 Loaded TinyShakespeare: {len(self.text):,} chars, {len(self.samples):,} samples")
+    
+    def _load_text(self) -> str:
+        """Download or load cached text."""
+        import os
+        import urllib.request
+        
+        os.makedirs(self.cache_dir, exist_ok=True)
+        cache_path = os.path.join(self.cache_dir, "tiny_shakespeare.txt")
+        
+        if not os.path.exists(cache_path):
+            print(f"  ⬇️  Downloading TinyShakespeare...")
+            urllib.request.urlretrieve(self.URL, cache_path)
+        
+        with open(cache_path, "r", encoding="utf-8") as f:
+            return f.read()
+    
+    def __len__(self) -> int:
+        return len(self.samples)
+    
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        text = self.samples[idx]
+        
+        # Simple character-level encoding: use ASCII value mod vocab_size
+        # This ensures we stay within vocab bounds
+        input_ids = torch.tensor(
+            [ord(c) % self.vocab_size for c in text],
+            dtype=torch.long
+        )
+        
+        return {
+            "input_ids": input_ids,
+            "labels": input_ids.clone(),
+        }
+
+
 class DummyDataset(Dataset):
     """
     Dummy dataset for quick testing without downloading data.
@@ -188,6 +255,18 @@ def get_dataloader(
             max_length=max_length,
             vocab_size=kwargs.get("vocab_size", 49152),
             num_samples=kwargs.get("num_samples", 10000),
+        )
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+        )
+    
+    elif dataset_name == "tiny_shakespeare" or dataset_name == "shakespeare":
+        dataset = TinyShakespeareDataset(
+            max_length=max_length,
+            vocab_size=kwargs.get("vocab_size", 49152),
         )
         return DataLoader(
             dataset,

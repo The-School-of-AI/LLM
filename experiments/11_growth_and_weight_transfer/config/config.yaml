@@ -51,8 +51,8 @@ training:
 
 # Dataset Configuration
 data:
-  dataset_name: "dummy"  # Options: "dummy", "tinystories", or HF dataset name
-  num_samples: 50000  # For dummy dataset
+  dataset_name: "tiny_shakespeare"  # Options: "dummy", "tiny_shakespeare", "tinystories"
+  num_samples: 50000  # For dummy dataset only
   
 # Growth Configuration
 growth:
