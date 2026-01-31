@@ -26,14 +26,27 @@ MATH_SYMBOLS = set("=<>±*/^∑√≈≠≤≥")
 VOWELS = re.compile(r"[aeiouy]+", re.I)
 
 CODE_TOKENS = {
-    "{", "}", "(", ")", "[", "]", ";", "::", "==", "!=", "<=", ">=",
-    "+=", "-=", "*=", "/=", "->", "=>"
+    "{",
+    "}",
+    "(",
+    ")",
+    "[",
+    "]",
+    ";",
+    "::",
+    "==",
+    "!=",
+    "<=",
+    ">=",
+    "+=",
+    "-=",
+    "*=",
+    "/=",
+    "->",
+    "=>",
 }
 
-RE_CITATION = re.compile(
-    r"\[\d+\]|\([A-Z][a-z]+ et al\.,? \d{4}\)|doi:|arxiv:",
-    re.I
-)
+RE_CITATION = re.compile(r"\[\d+\]|\([A-Z][a-z]+ et al\.,? \d{4}\)|doi:|arxiv:", re.I)
 
 RE_REFERENCES_HEADER = re.compile(r"^\s*(references|bibliography)\s*$", re.I | re.M)
 
@@ -41,6 +54,7 @@ RE_REFERENCES_HEADER = re.compile(r"^\s*(references|bibliography)\s*$", re.I | r
 # ------------------------
 # Helpers
 # ------------------------
+
 
 def simple_tokenize(text: str) -> List[str]:
     return re.findall(r"\w+|[^\w\s]", text)
@@ -55,11 +69,12 @@ def split_sentences(text: str) -> List[str]:
 # Feature extractors
 # ------------------------
 
+
 def extract_basic_shape(text: str) -> Dict:
     return {
         "char_count": len(text),
         "line_count": text.count("\n") + 1,
-        "paragraph_count": len([p for p in text.split("\n\n") if p.strip()])
+        "paragraph_count": len([p for p in text.split("\n\n") if p.strip()]),
     }
 
 
@@ -76,8 +91,8 @@ def extract_sentence_stats(text: str) -> Dict:
         "sentence_len_avg": mean(lengths),
         "sentence_len_std": pstdev(lengths) if len(lengths) > 1 else 0.0,
         "sentence_len_max": max(lengths),
-        "sentence_len_p95": p95
-    }    
+        "sentence_len_p95": p95,
+    }
 
 
 def extract_structural(text: str, tokens: List[str]) -> Dict:
@@ -93,7 +108,7 @@ def extract_structural(text: str, tokens: List[str]) -> Dict:
         "code_block_count": code_blocks,
         "inline_code_ratio": len(RE_INLINE_CODE.findall(text)) / max(len(tokens), 1),
         "json_like_ratio": len(RE_JSON_LIKE.findall(text)) / max(len(tokens), 1),
-        "math_symbol_ratio": math_count / max(len(tokens), 1)
+        "math_symbol_ratio": math_count / max(len(tokens), 1),
     }
 
 
@@ -127,7 +142,7 @@ def extract_semantic_flags(text: str) -> Dict:
         "has_step_markers": bool(RE_STEPS.search(text)),
         "has_agent_markers": bool(RE_AGENT.search(text)),
         "has_api_terms": bool(RE_API.search(text)),
-        "has_pedagogy_markers": bool(RE_PEDAGOGY.search(text))
+        "has_pedagogy_markers": bool(RE_PEDAGOGY.search(text)),
     }
 
 
@@ -160,9 +175,7 @@ def compute_flesch_kincaid(text: str, tokens: List[str], sentence_count: int) ->
     syllables = sum(count_syllables(w) for w in words)
 
     return (
-        0.39 * (len(words) / sentence_count)
-        + 11.8 * (syllables / len(words))
-        - 15.59
+        0.39 * (len(words) / sentence_count) + 11.8 * (syllables / len(words)) - 15.59
     )
 
 
@@ -171,11 +184,7 @@ def compute_code_token_ratio(tokens: List[str]) -> float:
         return 0.0
 
     code_like = sum(
-        1 for t in tokens
-        if (
-           t in CODE_TOKENS
-            or (t.isidentifier() and "_" in t)
-        )
+        1 for t in tokens if (t in CODE_TOKENS or (t.isidentifier() and "_" in t))
     )
 
     return code_like / len(tokens)
@@ -192,7 +201,7 @@ def compute_repetition_score(tokens: List[str], n: int = 5) -> float:
     if len(tokens) < n:
         return 0.0
 
-    ngrams = [tuple(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
+    ngrams = [tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
     total = len(ngrams)
     unique = len(set(ngrams))
 
@@ -200,10 +209,10 @@ def compute_repetition_score(tokens: List[str], n: int = 5) -> float:
     return 1.0 - (unique / total)
 
 
-
 # ------------------------
 # Main entry point
 # ------------------------
+
 
 def extract_document_features(text: str) -> Dict:
     tokens = simple_tokenize(text)
@@ -217,9 +226,7 @@ def extract_document_features(text: str) -> Dict:
     sentence_stats = extract_sentence_stats(text)
     features.update(sentence_stats)
     features["flesch_kincaid_grade"] = compute_flesch_kincaid(
-        text,
-        tokens,
-        sentence_stats.get("sentence_count", 1)
+        text, tokens, sentence_stats.get("sentence_count", 1)
     )
 
     features["gzip_compression_ratio"] = extract_compression_ratio(text)
@@ -233,10 +240,9 @@ def extract_document_features(text: str) -> Dict:
     features["is_code_heavy"] = features.get("code_block_count", 0) >= 2
     features["is_math_heavy"] = features.get("math_symbol_ratio", 0) >= 0.01
     features["is_long_form"] = features.get("doc_token_count", 0) >= 1500
-    features["is_potential_cot"] = (
-        features.get("has_reasoning_markers") or features.get("has_step_markers")
-    )
+    features["is_potential_cot"] = features.get(
+        "has_reasoning_markers"
+    ) or features.get("has_step_markers")
     features["is_agentic_like"] = features.get("has_agent_markers")
-
 
     return features
