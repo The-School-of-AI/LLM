@@ -84,6 +84,8 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     device = get_device(config.get("device", "auto"))
     torch.manual_seed(config.get("seed", 42))
     print(f"\n🖥️  Device: {device}")
+    print(f"📚 Dataset: {config['data']['dataset_name']}")
+    print(f"📊 Total steps: {config['training']['phase1_steps'] + config['training']['phase2_steps'] + config['training']['phase3_steps'] + config['training']['phase4_steps']}")
     
     # Initialize WandB if requested
     wandb_run = None
