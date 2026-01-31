@@ -492,6 +492,15 @@ python -m experiments.run_experiments --experiments step7_yarn --steps 10000
 python -m experiments.run_experiments --steps 10000 --output-dir ./results
 ```
 
+### Run with gpt tokenizer with WikiText-2 Data
+```bash
+python training/train_wikitext2_gpt2.py --max-steps 50 --seq-length 256 --batch-size 2
+or
+
+python training/train_wikitext2_gpt2.py --max-tokens 200000 --max-steps 20
+
+```
+
 ### Generated Report
 
 The experiment runner generates a comparison report:
