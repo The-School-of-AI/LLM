@@ -3,7 +3,6 @@ ERA V4 Training Compute & Schedule Calculator (Architecture-Aware)
 Cluster: 8x NVIDIA GPUs | MFU: 30.0% | Price/GPU/Hr: $2.5
 TFLOPs Mode: dense
 ================================================================================================================
-
 NOTE: Parameters are calculated dynamically from architecture specs.
 ----------------------------------------------------------------------------------------------------------------
 --- Precision: BF16 (Peak/GPU: 989.0 TFLOPS) ---
