@@ -1,264 +1,347 @@
 # Dataset Download Tool
 
-A flexible tool to download HuggingFace datasets to local storage and/or upload to S3 with comprehensive timing tracking.
+A flexible tool to download HuggingFace datasets (Sangraha & IndicCorp V2) to local storage and/or AWS S3 with comprehensive timing tracking.
 
-## Features
+## 📋 Features
 
 ✅ **Multiple Storage Modes**: Download to local, S3, or both  
 ✅ **Test & Full Modes**: Test with limited data or download complete datasets  
+✅ **Runtime Configuration**: Override settings via command-line arguments  
 ✅ **Comprehensive Timing**: Track time for each step and total execution  
 ✅ **Progress Tracking**: Real-time progress with record counts  
 ✅ **Error Handling**: Graceful error handling with detailed logging  
-✅ **Flexible Configuration**: YAML-based configuration for easy customization
+✅ **Flexible Configuration**: YAML-based configuration with CLI overrides
 
-## Installation
+## 🚀 Quick Start
+
+### Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Configuration
-
-### Storage Modes
-
-Edit `config.yml` to set your storage preference:
-
-```yaml
-storage:
-  mode: local       # Options: local | s3 | both
-  local_dir: ./data/downloaded_datasets
-```
-
-- **`local`**: Download datasets to local filesystem only
-- **`s3`**: Upload datasets to S3 only (requires AWS credentials)
-- **`both`**: Download locally AND upload to S3
-
-### Download Modes
-
-#### Test Mode (Limited Download)
-For testing with a subset of data:
-
-```yaml
-mode: test        # Use test limits defined below
-
-datasets:
-  sangraha:
-    repo: ai4bharat/sangraha
-    subset: synthetic
-    split: train
-    test_limit:
-      type: percent
-      value: 1        # Download only 1% of data
-    s3_path: sangraha
-    local_path: sangraha
-```
-
-**Test Limit Types:**
-- `type: percent` - Download a percentage of the dataset
-- `type: rows` - Download a specific number of rows
-- `type: none` - Download the entire dataset (ignores mode setting)
-
-#### Full Mode (Complete Download)
-For downloading entire datasets:
-
-```yaml
-mode: full        # Download complete datasets
-
-datasets:
-  sangraha:
-    repo: ai4bharat/sangraha
-    subset: synthetic
-    split: train
-    test_limit:
-      type: none      # Download full dataset
-    s3_path: sangraha
-    local_path: sangraha
-```
-
-**Note**: When `mode: full`, all test limits are ignored (except `type: none` which is always respected).
-
-### AWS Configuration
-
-If using S3 storage, configure your AWS settings:
-
-```yaml
-aws:
-  region: us-east-1
-  s3_bucket: my-llm-datasets
-  s3_prefix: hf
-```
-
-Make sure you have AWS credentials configured:
-```bash
-aws configure
-# OR set environment variables
-export AWS_ACCESS_KEY_ID=your_key
-export AWS_SECRET_ACCESS_KEY=your_secret
-```
-
-## Dataset Configuration Examples
-
-### Example 1: Percentage-based Limit
-```yaml
-sangraha:
-  repo: ai4bharat/sangraha
-  subset: synthetic
-  split: train
-  test_limit:
-    type: percent
-    value: 1        # 1% for testing
-  s3_path: sangraha
-  local_path: sangraha
-```
-
-### Example 2: Row-based Limit
-```yaml
-indiccorp_v2:
-  repo: ai4bharat/IndicCorpV2
-  name: hin_Deva
-  split: train
-  test_limit:
-    type: rows
-    value: 50000    # First 50,000 rows
-  s3_path: indiccorp_v2/hin
-  local_path: indiccorp_v2/hin
-```
-
-### Example 3: Full Dataset
-```yaml
-dolma:
-  repo: allenai/dolma
-  name: v1_6-sample
-  split: train
-  test_limit:
-    type: none      # Download everything
-  s3_path: dolma/v1_6_sample
-  local_path: dolma/v1_6_sample
-```
-
-## Usage
-
-### Run the Download Script
+### Basic Usage
 
 ```bash
-python download.py
+# Download test data locally
+python download.py --storage local --mode test
+
+# Upload to S3
+python download.py --storage s3 --s3-bucket YOUR-BUCKET --mode test
+
+# Download locally AND upload to S3
+python download.py --storage both --s3-bucket YOUR-BUCKET --mode test
 ```
 
-### Output Example
+## 📚 Datasets
 
-```
-🔧 Configuration:
-   Storage mode: local
-   Local directory: ./data/downloaded_datasets
-   Mode: full
-   S3 bucket: my-llm-datasets/hf
-   Start time: 2026-01-31 13:16:00
+This tool downloads two high-quality Indic language datasets:
 
-============================================================
-🚀 Processing dataset: sangraha
-============================================================
-📥 Loading from: ai4bharat/sangraha
-   Subset/Config: synthetic
-   ⏱️  Load time: 2.34s
-📊 Processing records (shard size: 10,000)...
-💾 Saved locally: ./data/downloaded_datasets/sangraha/part-00000.jsonl
-   ⏱️  Save time: 0.45s
-   Progress: 10,000 records processed
-💾 Saved locally: ./data/downloaded_datasets/sangraha/part-00001.jsonl
-   ⏱️  Save time: 0.43s
-   Progress: 20,000 records processed
+### 1. **Sangraha** - AI4Bharat Synthetic Dataset
+- **Languages**: Hindi (Devanagari), Hindi (Latin), Tamil
+- **Test Mode**: 10,000 rows per language (30,000 total)
+- **Full Mode**: Complete dataset (~50 GB)
+- **Source**: [ai4bharat/sangraha](https://huggingface.co/datasets/ai4bharat/sangraha)
 
-✅ Completed sangraha
-   Total records: 25,432
-   Total shards: 3
-   ⏱️  Dataset time: 5m 23.45s
+### 2. **IndicCorp V2** - Hindi Corpus
+- **Language**: Hindi (Devanagari)
+- **Test Mode**: 50,000 rows
+- **Full Mode**: Complete dataset (~200 GB)
+- **Source**: [ai4bharat/IndicCorpV2](https://huggingface.co/datasets/ai4bharat/IndicCorpV2)
 
-============================================================
-📊 SUMMARY
-============================================================
-✅ sangraha:
-   Records: 25,432
-   Shards: 3
-   Time: 5m 23.45s
-✅ indiccorp_v2:
-   Records: 1,234,567
-   Shards: 124
-   Time: 2h 15m 34.12s
+## 🎯 Command-Line Options
 
-============================================================
-⏱️  TOTAL TIME: 2h 20m 57.57s
-   End time: 2026-01-31 15:36:57
-============================================================
-🎉 All datasets processed!
-============================================================
+### Available Arguments
+
+| Argument | Description | Example |
+|----------|-------------|---------|
+| `--storage` | Storage mode: `local`, `s3`, or `both` | `--storage both` |
+| `--s3-bucket` | S3 bucket name | `--s3-bucket my-bucket` |
+| `--region` | AWS region | `--region us-east-1` |
+| `--mode` | Download mode: `test` or `full` | `--mode full` |
+| `--config` | Config file path | `--config custom.yml` |
+
+### Usage Examples
+
+#### Test Mode Examples
+
+```bash
+# Test data locally only
+python download.py --storage local --mode test
+
+# Test data to S3 only
+python download.py --storage s3 --s3-bucket ai4bharat-data --mode test
+
+# Test data to both local and S3
+python download.py --storage both --s3-bucket ai4bharat-data --mode test
 ```
 
-## Timing Features
+#### Full Mode Examples
 
-The script tracks timing at multiple levels:
+```bash
+# Full datasets locally (⚠️ ~250 GB)
+python download.py --storage local --mode full
 
-1. **Load Time**: Time to load dataset from HuggingFace
-2. **Save Time**: Time to save each shard (local/S3)
-3. **Dataset Time**: Total time per dataset
-4. **Total Time**: Complete execution time
+# Full datasets to S3 (recommended)
+python download.py --storage s3 --s3-bucket ai4bharat-data --mode full
 
-All times are formatted as:
-- `< 60s`: `23.45s`
-- `< 1h`: `5m 23.45s`
-- `≥ 1h`: `2h 15m 34.12s`
+# Full datasets to both (⚠️ requires lots of disk space)
+python download.py --storage both --s3-bucket ai4bharat-data --mode full
+```
 
-## File Structure
+#### Advanced Examples
 
-After running, your local directory will look like:
+```bash
+# Custom region
+python download.py --storage s3 --s3-bucket my-bucket --region us-west-2 --mode test
+
+# Use custom config file
+python download.py --config prod-config.yml --mode full
+
+# See all options
+python download.py --help
+```
+
+## 📁 Output Structure
+
+### Local Storage
 
 ```
 ./data/downloaded_datasets/
 ├── sangraha/
-│   ├── part-00000.jsonl
-│   ├── part-00001.jsonl
-│   └── part-00002.jsonl
-├── indiccorp_v2/
-│   └── hin/
+│   ├── hin_Deva/
+│   │   ├── part-00000.jsonl
+│   │   └── part-00001.jsonl
+│   ├── hin_Latn/
+│   │   ├── part-00000.jsonl
+│   │   └── part-00001.jsonl
+│   └── tam_Taml/
 │       ├── part-00000.jsonl
-│       └── ...
-└── dolma/
-    └── v1_6_sample/
+│       └── part-00001.jsonl
+└── indiccorp_v2/
+    └── hin/
         ├── part-00000.jsonl
-        └── ...
+        ├── part-00001.jsonl
+        ├── part-00002.jsonl
+        ├── part-00003.jsonl
+        ├── part-00004.jsonl
+        └── part-00005.jsonl
 ```
 
-## Tips
+### S3 Storage
 
-### For Testing
-1. Set `mode: test`
-2. Use small `test_limit` values
-3. Use `storage.mode: local` to avoid S3 costs
+```
+s3://YOUR-BUCKET/
+└── hf/
+    ├── sangraha/
+    │   ├── hin_Deva/
+    │   ├── hin_Latn/
+    │   └── tam_Taml/
+    └── indiccorp_v2/
+        └── hin/
+```
 
-### For Production
-1. Set `mode: full`
-2. Set all `test_limit.type: none`
-3. Use `storage.mode: both` for redundancy
-4. Monitor disk space and S3 costs
+## ⚙️ Configuration
 
-### Performance
-- Each shard contains 10,000 records
-- Adjust `shard_size` in code if needed
-- Use streaming mode for large datasets (already enabled)
+### config.yml
 
-## Troubleshooting
+```yaml
+# Storage configuration
+storage:
+  mode: local       # local | s3 | both
+  local_dir: ./data/downloaded_datasets
+  
+aws:
+  region: us-east-1
+  s3_bucket: my-llm-datasets
+  s3_prefix: hf
 
-**Issue**: AWS credentials not found  
-**Solution**: Run `aws configure` or set environment variables
+# Mode: 'test' applies limits below, 'full' downloads entire datasets
+mode: test        # test | full
 
-**Issue**: Out of disk space  
-**Solution**: Increase disk space or use `storage.mode: s3`
+datasets:
+  sangraha:
+    repo: ai4bharat/sangraha
+    subset: synthetic
+    languages:
+      - hin_Deva
+      - hin_Latn
+      - tam_Taml
+    test_limit:
+      type: rows
+      value: 10000
 
-**Issue**: Dataset not found  
-**Solution**: Check repo name and subset/name in config
+  indiccorp_v2:
+    repo: ai4bharat/IndicCorpV2
+    name: indiccorp_v2
+    split: hin_Deva
+    test_limit:
+      type: rows
+      value: 50000
+```
 
-**Issue**: Slow downloads  
-**Solution**: Check internet connection, use smaller test limits first
+**Note**: Command-line arguments override config.yml values.
 
-## License
+## 🔧 AWS Setup
 
-MIT
+### 1. Configure AWS Credentials
+
+```bash
+aws configure
+```
+
+Enter:
+- AWS Access Key ID
+- AWS Secret Access Key
+- Default region (e.g., `us-east-1`)
+- Default output format (`json`)
+
+### 2. Create S3 Bucket (if needed)
+
+```bash
+aws s3 mb s3://YOUR-BUCKET-NAME --region us-east-1
+```
+
+### 3. Verify Access
+
+```bash
+aws s3 ls s3://YOUR-BUCKET-NAME/
+```
+
+## 📊 Expected Output
+
+```
+============================================================
+🚀 Dataset Download Tool
+============================================================
+🔧 Using storage mode from command line: local
+🔧 Using download mode from command line: test
+
+⚙️  Mode: test
+💾 Storage: local
+📁 Local dir: ./data/downloaded_datasets
+
+============================================================
+🚀 Processing: sangraha
+============================================================
+  📥 Loading Sangraha dataset...
+  🌐 Language: hin_Deva
+  💾 Saved: ./data/downloaded_datasets\sangraha/hin_Deva\part-00000.jsonl
+  📊 Progress: 10,000 records
+  ✅ hin_Deva: 10,000 records, 2 shards
+  🌐 Language: hin_Latn
+  💾 Saved: ./data/downloaded_datasets\sangraha/hin_Latn\part-00000.jsonl
+  ✅ hin_Latn: 10,000 records, 2 shards
+  🌐 Language: tam_Taml
+  💾 Saved: ./data/downloaded_datasets\sangraha/tam_Taml\part-00000.jsonl
+  ✅ tam_Taml: 10,000 records, 2 shards
+⏱️  Time: 59.02s
+
+============================================================
+🚀 Processing: indiccorp_v2
+============================================================
+  📥 Loading IndicCorp V2 (split: hin_Deva)...
+  💾 Saved: ./data/downloaded_datasets\indiccorp_v2/hin\part-00000.jsonl
+  📊 Progress: 10,000 records
+  💾 Saved: ./data/downloaded_datasets\indiccorp_v2/hin\part-00001.jsonl
+  📊 Progress: 20,000 records
+  ✅ Total: 50,000 records, 6 shards
+⏱️  Time: 7.66s
+
+============================================================
+📊 SUMMARY
+============================================================
+✅ sangraha: 59.02s
+✅ indiccorp_v2: 7.66s
+
+⏱️  TOTAL TIME: 66.68s
+============================================================
+🎉 Done!
+```
+
+## 💡 Recommended Workflows
+
+### Workflow 1: Test First, Then Full
+
+```bash
+# 1. Test with small data locally
+python download.py --storage local --mode test
+
+# 2. Verify data
+dir .\data\downloaded_datasets
+
+# 3. Upload test data to S3
+aws s3 sync .\data\downloaded_datasets s3://YOUR-BUCKET/Testing/
+
+# 4. Download full datasets to S3 (when ready)
+python download.py --storage s3 --s3-bucket YOUR-BUCKET --mode full
+```
+
+### Workflow 2: Direct to S3
+
+```bash
+# Download full datasets directly to S3 (no local storage needed)
+python download.py --storage s3 --s3-bucket YOUR-BUCKET --mode full
+```
+
+### Workflow 3: Local Backup + S3
+
+```bash
+# Download and backup to both local and S3
+python download.py --storage both --s3-bucket YOUR-BUCKET --mode full
+```
+
+## 📈 Data Sizes
+
+### Test Mode
+- **Sangraha**: ~5 MB (30,000 records)
+- **IndicCorp V2**: ~10 MB (50,000 records)
+- **Total**: ~15 MB
+- **Time**: ~1-2 minutes
+
+### Full Mode
+- **Sangraha**: ~50 GB (all languages, complete dataset)
+- **IndicCorp V2**: ~200 GB (Hindi complete corpus)
+- **Total**: ~250 GB
+- **Time**: Several hours (depends on internet speed)
+
+## 🐛 Troubleshooting
+
+### Error: "Unable to locate credentials"
+```bash
+# Configure AWS credentials
+aws configure
+```
+
+### Error: "Invalid bucket name"
+- Bucket names cannot contain slashes or special characters
+- Use only lowercase letters, numbers, hyphens, and dots
+- Example: `my-bucket-name` ✅, `my-bucket/path` ❌
+
+### Error: "Access Denied"
+- Check IAM permissions for S3 access
+- Ensure bucket policy allows PutObject
+
+### Slow Downloads
+- Use `--storage s3` to skip local storage
+- Check internet connection
+- Consider running on AWS EC2 for faster S3 uploads
+
+## 📝 Additional Resources
+
+- **AWS S3 Guide**: See `AWS_S3_GUIDE.md` for detailed AWS setup
+- **HuggingFace Datasets**: https://huggingface.co/docs/datasets/
+- **Sangraha Dataset**: https://huggingface.co/datasets/ai4bharat/sangraha
+- **IndicCorp V2**: https://huggingface.co/datasets/ai4bharat/IndicCorpV2
+
+## 🆘 Support
+
+For issues or questions:
+1. Check the troubleshooting section above
+2. Review `AWS_S3_GUIDE.md` for AWS-specific issues
+3. Verify your config.yml is properly formatted
+4. Check AWS credentials and permissions
+
+## 📄 License
+
+MIT License - Feel free to use and modify as needed.
