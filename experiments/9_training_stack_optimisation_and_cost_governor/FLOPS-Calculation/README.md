@@ -89,3 +89,9 @@ Total_Per_Seq  = Linear_Term + Attention_Term
 ```python
 Cost = (Total_FLOPs / Effective_Cluster_PFLOPS) * Price_Per_GPU_Hour * Num_GPUs
 ```
+
+### 4. Null Expert Probability
+The `null_expert_prob` defines the fraction of tokens that skip the MoE layer (e.g., due to low router confidence or auxiliary-free load balancing).
+- **How to determine**:
+  1. **Design Choice**: Set a target (e.g., `0.1` for 10% drop rate) to enforce efficiency.
+  2. **Profiling**: Run a small ~1B model benchmark, log the router's assignment distribution, and use the observed drop rate.
