@@ -1,0 +1,414 @@
+"""
+LLM Architecture Configuration
+==============================
+
+Centralized configuration for all model components.
+Supports dynamic component selection via config flags.
+
+Target: 1B Parameter Model
+Inspired by: Qwen3 1.7B, SmolLM2, LLaMA 3, DeepSeek V3
+"""
+
+from dataclasses import dataclass, field
+from typing import Optional, Literal, List, Dict, Any
+from enum import Enum
+import json
+import yaml
+from pathlib import Path
+
+
+class AttentionType(Enum):
+    """Available attention mechanisms."""
+    GROUPED_QUERY = "grouped_query"      # GQA (default, like Qwen3/LLaMA3)
+    GATED_SPARSE = "gated_sparse"        # GSA from paper 2601.15305v1
+    DEEPSEEK_SPARSE = "deepseek_sparse"  # DeepSeek V3 MLA
+
+
+class PositionEmbeddingType(Enum):
+    """Position embedding types."""
+    ROPE = "rope"           # Standard RoPE
+    YARN = "yarn"           # YaRN for extended context
+    ALIBI = "alibi"         # ALiBi (alternative)
+
+
+class FFNType(Enum):
+    """Feed-forward network types."""
+    SWIGLU = "swiglu"       # SwiGLU (default)
+    GELU = "gelu"           # Standard GELU
+    MOE = "moe"             # Mixture of Experts
+
+
+class ConnectionType(Enum):
+    """Layer connection types."""
+    RESIDUAL = "residual"   # Standard residual
+    MHC = "mhc"             # Manifold Hyper-Connections (2512.24880)
+
+
+@dataclass
+class AttentionConfig:
+    """Configuration for attention mechanisms."""
+    
+    # Attention type selection
+    attention_type: AttentionType = AttentionType.GROUPED_QUERY
+    
+    # Common attention params
+    num_attention_heads: int = 16
+    num_key_value_heads: int = 4  # For GQA, set equal to num_attention_heads for MHA
+    head_dim: int = 64
+    attention_dropout: float = 0.0
+    attention_bias: bool = False  # Modern LLMs don't use bias
+    
+    # GSA specific (Gated Sparse Attention)
+    gsa_num_slots: int = 64       # Number of memory slots
+    gsa_slot_dim: int = 64        # Dimension per slot
+    gsa_num_gating_heads: int = 4
+    gsa_temperature: float = 1.0
+    gsa_sparse_topk: int = 32     # Top-k sparse selection
+    
+    # DeepSeek Sparse Attention specific
+    ds_compressed_dim: int = 512      # Compressed KV dimension
+    ds_rope_head_dim: int = 32        # RoPE dimension for decoupled attention
+    ds_num_shared_experts: int = 1
+    ds_q_lora_rank: int = 0           # 0 = no LoRA compression
+
+
+@dataclass
+class PositionConfig:
+    """Configuration for position embeddings."""
+    
+    position_type: PositionEmbeddingType = PositionEmbeddingType.ROPE
+    
+    # RoPE params
+    rope_theta: float = 10000.0
+    rope_scaling_factor: float = 1.0
+    
+    # YaRN specific params (for extended context)
+    yarn_scale: float = 1.0
+    yarn_original_max_position: int = 4096
+    yarn_beta_fast: float = 32.0
+    yarn_beta_slow: float = 1.0
+    yarn_mscale: float = 1.0
+    yarn_mscale_all_dim: float = 0.0
+
+
+@dataclass
+class FFNConfig:
+    """Configuration for feed-forward networks."""
+    
+    ffn_type: FFNType = FFNType.SWIGLU
+    intermediate_size: int = 4096  # Usually 4x hidden_size for SwiGLU: 8/3 * hidden
+    ffn_dropout: float = 0.0
+    ffn_bias: bool = False
+    
+    # MoE specific
+    moe_num_experts: int = 8
+    moe_num_experts_per_tok: int = 2
+    moe_aux_loss_coef: float = 0.01
+
+
+@dataclass
+class ConnectionConfig:
+    """Configuration for layer connections."""
+    
+    connection_type: ConnectionType = ConnectionType.RESIDUAL
+    
+    # mHC specific (Manifold Hyper-Connections)
+    mhc_expansion_rate: float = 4.0
+    mhc_num_connections: int = 2
+    mhc_use_dynamic_weights: bool = True
+    mhc_manifold_dim: int = 64
+
+
+@dataclass
+class HeadConfig:
+    """Configuration for output heads."""
+    
+    # Multi-token prediction (DeepSeek style)
+    use_multi_token_prediction: bool = False
+    num_predict_tokens: int = 1  # >1 enables multi-token prediction
+    mtp_loss_weight: float = 0.3  # Weight for auxiliary MTP loss
+    
+    # Tie embeddings
+    tie_word_embeddings: bool = True
+
+
+@dataclass
+class ModelConfig:
+    """
+    Complete model configuration.
+    
+    Default: ~1B parameter dense model similar to Qwen3/SmolLM2
+    """
+    
+    # Model identification
+    model_name: str = "LLM-1B-Base"
+    model_version: str = "1.0.0"
+    
+    # Core architecture
+    vocab_size: int = 50304  # Divisible by 64 for efficiency
+    hidden_size: int = 2048
+    num_hidden_layers: int = 24
+    max_position_embeddings: int = 4096
+    
+    # Normalization
+    rms_norm_eps: float = 1e-6
+    use_pre_norm: bool = True  # Pre-LayerNorm (modern standard)
+    
+    # Initialization
+    initializer_range: float = 0.02
+    
+    # Dropout
+    hidden_dropout: float = 0.0
+    
+    # Component configs
+    attention: AttentionConfig = field(default_factory=AttentionConfig)
+    position: PositionConfig = field(default_factory=PositionConfig)
+    ffn: FFNConfig = field(default_factory=FFNConfig)
+    connection: ConnectionConfig = field(default_factory=ConnectionConfig)
+    head: HeadConfig = field(default_factory=HeadConfig)
+    
+    # Precision
+    dtype: str = "bfloat16"  # bfloat16, float16, float32
+    
+    def __post_init__(self):
+        """Validate and adjust configuration."""
+        # Ensure head_dim consistency
+        if self.attention.head_dim * self.attention.num_attention_heads != self.hidden_size:
+            self.attention.head_dim = self.hidden_size // self.attention.num_attention_heads
+            
+        # Ensure intermediate_size is set properly for SwiGLU
+        if self.ffn.ffn_type == FFNType.SWIGLU and self.ffn.intermediate_size == 0:
+            # SwiGLU optimal: hidden_size * 8/3, rounded to multiple of 256
+            self.ffn.intermediate_size = int(self.hidden_size * 8 / 3)
+            self.ffn.intermediate_size = ((self.ffn.intermediate_size + 255) // 256) * 256
+            
+    @property
+    def num_parameters(self) -> int:
+        """Estimate total parameters."""
+        # Embedding
+        embed_params = self.vocab_size * self.hidden_size
+        
+        # Per layer
+        # Attention: Q, K, V, O projections
+        attn_params = 4 * self.hidden_size * self.hidden_size
+        # FFN: gate, up, down for SwiGLU
+        ffn_params = 3 * self.hidden_size * self.ffn.intermediate_size
+        # Norms
+        norm_params = 2 * self.hidden_size
+        
+        layer_params = attn_params + ffn_params + norm_params
+        total_layer_params = layer_params * self.num_hidden_layers
+        
+        # LM head (tied with embeddings if enabled)
+        head_params = 0 if self.head.tie_word_embeddings else embed_params
+        
+        # Final norm
+        final_norm = self.hidden_size
+        
+        return embed_params + total_layer_params + head_params + final_norm
+    
+    @property
+    def num_parameters_billions(self) -> float:
+        """Parameters in billions."""
+        return self.num_parameters / 1e9
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        def enum_to_str(obj):
+            if isinstance(obj, Enum):
+                return obj.value
+            elif isinstance(obj, dict):
+                return {k: enum_to_str(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [enum_to_str(item) for item in obj]
+            elif hasattr(obj, '__dataclass_fields__'):
+                return {k: enum_to_str(v) for k, v in obj.__dict__.items()}
+            return obj
+            
+        return enum_to_str(self.__dict__)
+    
+    def save(self, path: str):
+        """Save configuration to file."""
+        path = Path(path)
+        data = self.to_dict()
+        
+        if path.suffix == '.json':
+            with open(path, 'w') as f:
+                json.dump(data, f, indent=2)
+        elif path.suffix in ['.yaml', '.yml']:
+            with open(path, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False)
+        else:
+            raise ValueError(f"Unsupported format: {path.suffix}")
+            
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ModelConfig':
+        """Create from dictionary."""
+        # Convert string enums back
+        if 'attention' in data:
+            if 'attention_type' in data['attention']:
+                data['attention']['attention_type'] = AttentionType(data['attention']['attention_type'])
+            data['attention'] = AttentionConfig(**data['attention'])
+            
+        if 'position' in data:
+            if 'position_type' in data['position']:
+                data['position']['position_type'] = PositionEmbeddingType(data['position']['position_type'])
+            data['position'] = PositionConfig(**data['position'])
+            
+        if 'ffn' in data:
+            if 'ffn_type' in data['ffn']:
+                data['ffn']['ffn_type'] = FFNType(data['ffn']['ffn_type'])
+            data['ffn'] = FFNConfig(**data['ffn'])
+            
+        if 'connection' in data:
+            if 'connection_type' in data['connection']:
+                data['connection']['connection_type'] = ConnectionType(data['connection']['connection_type'])
+            data['connection'] = ConnectionConfig(**data['connection'])
+            
+        if 'head' in data:
+            data['head'] = HeadConfig(**data['head'])
+            
+        return cls(**data)
+    
+    @classmethod
+    def load(cls, path: str) -> 'ModelConfig':
+        """Load configuration from file."""
+        path = Path(path)
+        
+        if path.suffix == '.json':
+            with open(path, 'r') as f:
+                data = json.load(f)
+        elif path.suffix in ['.yaml', '.yml']:
+            with open(path, 'r') as f:
+                data = yaml.safe_load(f)
+        else:
+            raise ValueError(f"Unsupported format: {path.suffix}")
+            
+        return cls.from_dict(data)
+
+
+# =============================================================================
+# Preset Configurations
+# =============================================================================
+
+def get_1b_base_config() -> ModelConfig:
+    """1B base model - dense, standard architecture."""
+    return ModelConfig(
+        model_name="LLM-1B-Base",
+        vocab_size=50304,
+        hidden_size=2048,
+        num_hidden_layers=24,
+        max_position_embeddings=4096,
+        attention=AttentionConfig(
+            attention_type=AttentionType.GROUPED_QUERY,
+            num_attention_heads=16,
+            num_key_value_heads=4,
+        ),
+        ffn=FFNConfig(
+            ffn_type=FFNType.SWIGLU,
+            intermediate_size=5504,  # ~2.7x hidden for SwiGLU
+        ),
+    )
+
+
+def get_1b_gsa_config() -> ModelConfig:
+    """1B model with Gated Sparse Attention."""
+    config = get_1b_base_config()
+    config.model_name = "LLM-1B-GSA"
+    config.attention.attention_type = AttentionType.GATED_SPARSE
+    config.attention.gsa_num_slots = 64
+    config.attention.gsa_sparse_topk = 32
+    return config
+
+
+def get_1b_deepseek_config() -> ModelConfig:
+    """1B model with DeepSeek V3 Sparse Attention."""
+    config = get_1b_base_config()
+    config.model_name = "LLM-1B-DeepSeek"
+    config.attention.attention_type = AttentionType.DEEPSEEK_SPARSE
+    config.attention.ds_compressed_dim = 512
+    return config
+
+
+def get_1b_mhc_config() -> ModelConfig:
+    """1B model with Manifold Hyper-Connections."""
+    config = get_1b_base_config()
+    config.model_name = "LLM-1B-mHC"
+    config.connection.connection_type = ConnectionType.MHC
+    config.connection.mhc_expansion_rate = 4.0
+    return config
+
+
+def get_1b_mtp_config() -> ModelConfig:
+    """1B model with Multi-Token Prediction."""
+    config = get_1b_base_config()
+    config.model_name = "LLM-1B-MTP"
+    config.head.use_multi_token_prediction = True
+    config.head.num_predict_tokens = 4
+    return config
+
+
+def get_1b_yarn_config() -> ModelConfig:
+    """1B model with YaRN for extended context."""
+    config = get_1b_base_config()
+    config.model_name = "LLM-1B-YaRN"
+    config.max_position_embeddings = 32768
+    config.position.position_type = PositionEmbeddingType.YARN
+    config.position.yarn_original_max_position = 4096
+    config.position.yarn_scale = 8.0
+    return config
+
+
+def get_1b_full_config() -> ModelConfig:
+    """1B model with ALL advanced features enabled."""
+    config = ModelConfig(
+        model_name="LLM-1B-Full",
+        vocab_size=50304,
+        hidden_size=2048,
+        num_hidden_layers=24,
+        max_position_embeddings=32768,
+        attention=AttentionConfig(
+            attention_type=AttentionType.GATED_SPARSE,  # or DEEPSEEK_SPARSE
+            num_attention_heads=16,
+            num_key_value_heads=4,
+            gsa_num_slots=64,
+        ),
+        position=PositionConfig(
+            position_type=PositionEmbeddingType.YARN,
+            yarn_original_max_position=4096,
+            yarn_scale=8.0,
+        ),
+        ffn=FFNConfig(
+            ffn_type=FFNType.SWIGLU,
+            intermediate_size=5504,
+        ),
+        connection=ConnectionConfig(
+            connection_type=ConnectionType.MHC,
+            mhc_expansion_rate=4.0,
+        ),
+        head=HeadConfig(
+            use_multi_token_prediction=True,
+            num_predict_tokens=4,
+        ),
+    )
+    return config
+
+
+# Configuration presets registry
+PRESET_CONFIGS = {
+    "1b-base": get_1b_base_config,
+    "1b-gsa": get_1b_gsa_config,
+    "1b-deepseek": get_1b_deepseek_config,
+    "1b-mhc": get_1b_mhc_config,
+    "1b-mtp": get_1b_mtp_config,
+    "1b-yarn": get_1b_yarn_config,
+    "1b-full": get_1b_full_config,
+}
+
+
+def get_preset_config(name: str) -> ModelConfig:
+    """Get a preset configuration by name."""
+    if name not in PRESET_CONFIGS:
+        available = ", ".join(PRESET_CONFIGS.keys())
+        raise ValueError(f"Unknown preset: {name}. Available: {available}")
+    return PRESET_CONFIGS[name]()
