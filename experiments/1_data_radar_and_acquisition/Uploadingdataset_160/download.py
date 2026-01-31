@@ -3,6 +3,7 @@ import json
 import boto3
 import os
 import time
+import argparse
 from pathlib import Path
 from datasets import load_dataset
 from itertools import islice
@@ -171,19 +172,113 @@ def process_generic(name, dcfg, cfg, mode):
 # Main
 # -------------------------
 
+# -------------------------
+# Argument Parsing
+# -------------------------
+
+def parse_args():
+    """Parse command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description='Download HuggingFace datasets to local storage and/or S3',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use config.yml defaults
+  python download.py
+
+  # Override S3 bucket
+  python download.py --s3-bucket my-custom-bucket
+
+  # Download full datasets to S3
+  python download.py --mode full --storage s3 --s3-bucket my-bucket
+
+  # Download to both local and S3
+  python download.py --storage both --s3-bucket my-bucket --region us-west-2
+        """
+    )
+    
+    parser.add_argument(
+        '--s3-bucket',
+        type=str,
+        help='S3 bucket name (overrides config.yml)'
+    )
+    
+    parser.add_argument(
+        '--region',
+        type=str,
+        help='AWS region (overrides config.yml)'
+    )
+    
+    parser.add_argument(
+        '--storage',
+        type=str,
+        choices=['local', 's3', 'both'],
+        help='Storage mode: local, s3, or both (overrides config.yml)'
+    )
+    
+    parser.add_argument(
+        '--mode',
+        type=str,
+        choices=['test', 'full'],
+        help='Download mode: test (limited) or full (complete datasets)'
+    )
+    
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='config.yml',
+        help='Path to config file (default: config.yml)'
+    )
+    
+    return parser.parse_args()
+
+
+# -------------------------
+# Main
+# -------------------------
+
 def main():
+    # Parse command-line arguments
+    args = parse_args()
+    
     print("=" * 60)
     print("🚀 Dataset Download Tool")
     print("=" * 60)
     
     # Load configuration
-    with open("config.yml") as f:
+    if not os.path.exists(args.config):
+        print(f"❌ Config file not found: {args.config}")
+        return
+        
+    with open(args.config) as f:
         cfg = yaml.safe_load(f)
+
+    # Override config with command-line arguments
+    if args.s3_bucket:
+        cfg["aws"]["s3_bucket"] = args.s3_bucket
+        print(f"🔧 Using S3 bucket from command line: {args.s3_bucket}")
+    
+    if args.region:
+        cfg["aws"]["region"] = args.region
+        print(f"🔧 Using AWS region from command line: {args.region}")
+    
+    if args.storage:
+        cfg["storage"]["mode"] = args.storage
+        print(f"🔧 Using storage mode from command line: {args.storage}")
+    
+    if args.mode:
+        cfg["mode"] = args.mode
+        print(f"🔧 Using download mode from command line: {args.mode}")
 
     mode = cfg["mode"]
     print(f"\n⚙️  Mode: {mode}")
     print(f"💾 Storage: {cfg['storage']['mode']}")
     print(f"📁 Local dir: {cfg['storage']['local_dir']}")
+    
+    # Show S3 info if using S3
+    if cfg['storage']['mode'] in ['s3', 'both']:
+        print(f"☁️  S3 bucket: s3://{cfg['aws']['s3_bucket']}/{cfg['aws']['s3_prefix']}")
+        print(f"🌍 AWS region: {cfg['aws']['region']}")
     
     times = {}
     total_start = time.time()
