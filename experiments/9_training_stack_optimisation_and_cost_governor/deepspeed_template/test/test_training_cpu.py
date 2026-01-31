@@ -220,9 +220,9 @@ class TestUtilities:
         set_seed(123)
         rand2 = torch.rand(5)
 
-        assert not torch.allclose(
-            rand1, rand2
-        ), "Different seeds should produce different results"
+        assert not torch.allclose(rand1, rand2), (
+            "Different seeds should produce different results"
+        )
 
         print("✓ Different seeds produce different results")
 

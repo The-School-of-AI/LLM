@@ -7,20 +7,20 @@ Supports both ZeRO Stage 2 and Stage 3 configurations.
 Usage:
     # Multi-GPU training with Stage 2 (uses all available GPUs)
     deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json
-    
+
     # Multi-GPU training with specific number of GPUs
     deepspeed --num_gpus=4 main.py --deepspeed_config config/deepspeed/zero-2.json
-    
+
     # Stage 3 (optimizer + parameters + gradients partitioning + CPU offload)
     deepspeed main.py --deepspeed_config config/deepspeed/zero-3.json
-    
+
     # With custom settings
     deepspeed --num_gpus=4 main.py --deepspeed_config config/deepspeed/zero-2.json \
                                     --model_name distilgpt2 \
                                     --num_epochs 3 \
                                     --batch_size 16 \
                                     --max_length 256
-    
+
     # Single GPU training (for testing)
     python main.py --deepspeed_config config/deepspeed/zero-2.json
 """
@@ -195,9 +195,9 @@ def main():
     # ========================================
     print("\n[4/5] Training...")
     for epoch in range(args.num_epochs):
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Epoch {epoch + 1}/{args.num_epochs}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         # Train
         train_epoch(

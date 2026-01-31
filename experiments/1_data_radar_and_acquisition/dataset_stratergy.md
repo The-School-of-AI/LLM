@@ -29,7 +29,7 @@ The training follows a **staged pre-training curriculum**:
 ## 🔬 Data Sources & Governance
 
 ### 1. Global Reasoning Foundation
-* **Dolma v1.7 & Dolmino Mix**: Sourced from the Allen Institute for AI (Ai2). These datasets provide the core "intelligence" signal. 
+* **Dolma v1.7 & Dolmino Mix**: Sourced from the Allen Institute for AI (Ai2). These datasets provide the core "intelligence" signal.
 * **Key Innovation**: Dolmino utilizes vision-based **olmOCR** to extract clean data from technical PDFs, virtually eliminating the "junk" typical of standard web scrapes.
 * **Papers**: [Dolma (2402.00159)](https://arxiv.org/abs/2402.00159) | [OLMo 3 (2512.13961)](https://arxiv.org/abs/2512.13961)
 
@@ -56,6 +56,6 @@ The training follows a **staged pre-training curriculum**:
 ---
 
 ## 📜 Ethical & Legal Compliance
-All datasets selected carry permissive licenses (CC-0, CC-BY, ODC-By) allowing for commercial use. 
+All datasets selected carry permissive licenses (CC-0, CC-BY, ODC-By) allowing for commercial use.
 * **Attribution**: Final model weights must include attribution to AI4Bharat and the Allen Institute for AI.
 * **Safety**: All sources have undergone model-based safety filtering to remove toxicity and PII.

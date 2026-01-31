@@ -467,20 +467,20 @@ The template includes data loading utilities in `src/data.py`. To use your own d
 # src/data.py
 def get_dataloaders(dataset_name, dataset_config, tokenizer, batch_size, max_length):
     """Create train/eval/test dataloaders."""
-    
+
     # Option 1: Load from HuggingFace (already implemented)
     dataset = load_dataset(dataset_name, dataset_config)
-    
+
     # Option 2: Load from local files
     from datasets import Dataset
     import pandas as pd
-    
+
     df = pd.read_csv("your_data.csv")
     dataset = Dataset.from_pandas(df)
-    
+
     # Option 3: Load from custom source
     # Your custom data loading logic here
-    
+
     # Then tokenize and create dataloaders
     tokenized = dataset.map(lambda x: tokenize_function(x, tokenizer, max_length))
     # ... rest of the function
@@ -505,7 +505,7 @@ Edit `src/train.py` and modify the `evaluate()` function:
 ```python
 def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     # ... existing code ...
-    
+
     # Add your custom metrics
     accuracy = compute_accuracy(predictions, labels)
     print(f"Accuracy: {accuracy:.4f}")
