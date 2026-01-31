@@ -87,7 +87,7 @@ def process_stream(ds_iter, shard_size, cfg, local_subdir, s3_subdir):
 
 def process_sangraha(dcfg, cfg, mode):
     """Process Sangraha dataset with multiple languages"""
-    print(f"  📥 Loading Sangraha dataset...")
+    print("  📥 Loading Sangraha dataset...")
     for lang in dcfg["languages"]:
         print(f"  🌐 Language: {lang}")
         ds = load_dataset(
@@ -127,7 +127,7 @@ def process_indiccorp_v2(dcfg, cfg, mode):
 
 def process_dolma(dcfg, cfg, mode):
     """Process Dolma dataset"""
-    print(f"  📥 Loading Dolma...")
+    print("  📥 Loading Dolma...")
     ds = load_dataset(
         dcfg["repo"],
         dcfg["name"],
