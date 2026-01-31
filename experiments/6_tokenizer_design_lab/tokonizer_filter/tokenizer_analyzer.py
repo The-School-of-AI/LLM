@@ -4,11 +4,20 @@ Unified Tokenizer Analysis Tool
 
 Analyze tokenizer vocabularies from JSON files.
 Generate reports, find common tokens, and export data for analysis.
+Automatically filters out removed categories from tokenizer_config.json.
 
 Usage Examples:
+  # Generate report (filters removed categories automatically)
   python tokenizer_analyzer.py --report
+  
+  # Find common tokens >= 32 chars (excludes removed categories)
   python tokenizer_analyzer.py --common-tokens --min-length 32
-  python tokenizer_analyzer.py --report --common-tokens --export-long-tokens
+  
+  # Export long tokens with category filtering
+  python tokenizer_analyzer.py --export-long-tokens --min-length 10
+  
+  # Use custom config file
+  python tokenizer_analyzer.py --report --config custom_config.json
 """
 
 import argparse
@@ -38,10 +47,42 @@ from utils import (
 class TokenizerAnalyzer:
     """Unified tokenizer analysis tool."""
     
-    def __init__(self):
+    def __init__(self, config_path: str = "tokenizer_config.json"):
         self.tokenizers = {}
         self.analyses = {}
         self.category_stats = {}
+        self.config_path = config_path
+        self.removed_categories = set()
+        
+        # Load config to get removed categories
+        self._load_config()
+    
+    def _load_config(self):
+        """Load tokenizer config and identify removed categories."""
+        try:
+            config_file = Path(self.config_path)
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # Extract removed categories
+                if 'category_priorities' in config and 'remove' in config['category_priorities']:
+                    for category_name in config['category_priorities']['remove'].keys():
+                        self.removed_categories.add(category_name)
+                    
+                    if self.removed_categories:
+                        print(f"✓ Loaded config: Will filter out {len(self.removed_categories)} categories:")
+                        for cat in sorted(self.removed_categories):
+                            print(f"  - {cat}")
+            else:
+                print(f"ℹ️  Config file not found: {config_file}, no category filtering applied")
+        
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load config: {e}")
+    
+    def should_include_token(self, category: str) -> bool:
+        """Check if a token category should be included in analysis."""
+        return category not in self.removed_categories
     
     def load_tokenizer_from_json(self, json_path: Path) -> bool:
         """Load a tokenizer vocabulary from JSON file."""
@@ -291,6 +332,10 @@ class TokenizerAnalyzer:
             text_to_categorize = decoded_text if decoded_text else token_value
             category = categorize_token(text_to_categorize, check_language)
             
+            # Skip if category should be removed
+            if not self.should_include_token(category):
+                continue
+            
             # Detect languages in the decoded text
             detected_languages = []
             if decoded_text:
@@ -328,14 +373,17 @@ class TokenizerAnalyzer:
         common_tokens = sum(1 for row in comparison_data if row['present_in_all'] == 'Yes')
         print(f"  Tokens present in ALL tokenizers: {common_tokens}")
         
-        # Show category breakdown
+        # Show category breakdown (filtered)
         category_counts = defaultdict(int)
         for row in comparison_data:
             category_counts[row['category']] += 1
         
-        print(f"\n  Category breakdown:")
+        print(f"\n  Category breakdown (after filtering removed categories):")
         for category in sorted(category_counts.keys()):
             print(f"    {category}: {category_counts[category]}")
+        
+        if self.removed_categories:
+            print(f"\n  ℹ️  Filtered out categories: {', '.join(sorted(self.removed_categories))}")
         
         # Write to CSV with enhanced columns
         if comparison_data:
@@ -392,6 +440,10 @@ class TokenizerAnalyzer:
                         
                         category = categorize_token(decoded, check_language)
                         
+                        # Skip if category should be removed
+                        if not self.should_include_token(category):
+                            continue
+                        
                         languages = []
                         for char in decoded:
                             is_lang, lang = check_language(char)
@@ -415,6 +467,9 @@ class TokenizerAnalyzer:
         
         print(f"\n✓ Exported {total_exported:,} tokens total")
         print(f"✓ CSV saved to: {output_path}")
+        
+        if self.removed_categories:
+            print(f"ℹ️  Filtered out categories: {', '.join(sorted(self.removed_categories))}")
 
 
 # ============================================================================
@@ -427,14 +482,23 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Quick Examples:
-  # Generate report
+  # Generate report (automatically filters removed categories)
   python tokenizer_analyzer.py --report
   
-  # Find common tokens >= 32 chars
+  # Find common tokens >= 32 chars (excludes east_asian, middle_eastern, etc.)
   python tokenizer_analyzer.py --common-tokens --min-length 32
   
-  # Complete analysis
+  # Complete analysis with category filtering
   python tokenizer_analyzer.py --report --common-tokens --export-long-tokens --min-length 10
+  
+  # Use custom config file
+  python tokenizer_analyzer.py --report --config my_config.json
+
+Category Filtering:
+  The analyzer automatically reads tokenizer_config.json and excludes tokens
+  from categories marked as "remove" (e.g., east_asian, middle_eastern, 
+  european, multilingual, long_tokens). This ensures exported CSV files and
+  reports only contain tokens you intend to keep.
         """
     )
     
@@ -463,6 +527,11 @@ Quick Examples:
     output_group = parser.add_argument_group('Output Files')
     output_group.add_argument('--output', help='Custom JSON report filename')
     
+    # Configuration
+    config_group = parser.add_argument_group('Configuration')
+    config_group.add_argument('--config', '-c', default='tokenizer_config.json',
+                             help='Tokenizer config file for category filtering (default: tokenizer_config.json)')
+    
     args = parser.parse_args()
     
     # Validate: at least one analysis type required
@@ -476,9 +545,10 @@ Quick Examples:
     print(f"Output: {args.output_dir}")
     if args.min_length > 0:
         print(f"Filter: tokens with length >= {args.min_length}")
+    print()
     
-    # Create analyzer
-    analyzer = TokenizerAnalyzer()
+    # Create analyzer with config
+    analyzer = TokenizerAnalyzer(config_path=args.config)
     
     # Load tokenizers
     print("\nLoading tokenizers...")

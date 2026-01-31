@@ -5,7 +5,7 @@
     "target_size": "N/A",
     "size_limit_enforced": false,
     "removed_count": 50982,
-    "timestamp": "2026-01-31T09:26:56.782778"
+    "timestamp": "2026-01-31T17:10:15.833024"
   },
   "stats": {
     "category_symbols": 20627,
@@ -79,24 +79,20 @@
       },
       "remove": {
         "east_asian": {
-          "description": "Chinese, Japanese, Korean tokens",
-          "reason": "Not in scope for this tokenizer"
+          "description": "Removed via command-line parameter",
+          "reason": "User-specified removal"
         },
         "middle_eastern": {
-          "description": "Arabic, Hebrew, Persian tokens",
-          "reason": "Not in scope for this tokenizer"
+          "description": "Removed via command-line parameter",
+          "reason": "User-specified removal"
         },
         "european": {
-          "description": "Cyrillic, Greek tokens (except Latin)",
-          "reason": "Low priority, can use byte fallback"
+          "description": "Removed via command-line parameter",
+          "reason": "User-specified removal"
         },
         "multilingual": {
-          "description": "Mixed language tokens",
-          "reason": "Ambiguous, low utility"
-        },
-        "long_tokens": {
-          "description": "Tokens with length > 32",
-          "reason": "Exceeds max token length requirement"
+          "description": "Removed via command-line parameter",
+          "reason": "User-specified removal"
         }
       }
     }

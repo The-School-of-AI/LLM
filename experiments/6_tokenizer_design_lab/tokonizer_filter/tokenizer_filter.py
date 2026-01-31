@@ -20,7 +20,7 @@ Usage:
     # Remove specific categories (parameter-driven)
     python tokenizer_filter.py --input-dir tokenizer_json_files --remove-categories east_asian middle_eastern european
     
-    # Custom token length (parameter-driven)
+    # Custom token length (parameter-driven, default is 31)
     python tokenizer_filter.py --input-dir tokenizer_json_files --max-token-length 24
     
     # Filter low-frequency English tokens (unusual patterns, jargon, archaic, long compounds)
@@ -29,7 +29,7 @@ Usage:
     # Enforce 128k size limit (optional)
     python tokenizer_filter.py --input-dir tokenizer_json_files --target-size 128000 --enforce-size
     
-    # Combine: remove categories + filter English + custom length
+    # Combine: remove categories + filter English + custom length (default max is 31)
     python tokenizer_filter.py --input-dir tokenizer_json_files --remove-categories east_asian middle_eastern --filter-low-freq-english --max-token-length 30
 """
 
@@ -44,10 +44,7 @@ import unicodedata
 
 # Import common utilities
 from utils import (
-    LANGUAGE_RANGES,
-    check_language,
-    categorize_token,
-    load_vocab_from_json
+    LANGUAGE_RANGES
 )
 
 
@@ -114,7 +111,7 @@ class TokenizerFilter:
         return {
             "selection_criteria": {
                 "target_vocab_size": 128000,
-                "max_token_length": 32
+                "max_token_length": 31
             },
             "category_priorities": {
                 "keep": {
@@ -626,13 +623,13 @@ Examples:
   python tokenizer_filter.py --input-dir tokenizer_json_files --remove-categories east_asian middle_eastern --filter-low-freq-english
   
   # Remove categories AND set max length (no size limit)
-  python tokenizer_filter.py --input-dir tokenizer_json_files --remove-categories east_asian middle_eastern --max-token-length 32
+  python tokenizer_filter.py --input-dir tokenizer_json_files --remove-categories east_asian middle_eastern --max-token-length 31
   
   # Enforce 128k size limit (optional)
   python tokenizer_filter.py --input-dir tokenizer_json_files --target-size 128000 --enforce-size --remove-categories east_asian
   
   # Full pipeline: all filters enabled
-  python tokenizer_filter.py --input-dir tokenizer_json_files --max-token-length 32 --remove-categories east_asian middle_eastern european --filter-low-freq-english --max-english-length 10
+  python tokenizer_filter.py --input-dir tokenizer_json_files --max-token-length 31 --remove-categories east_asian middle_eastern european --filter-low-freq-english --max-english-length 10
         """
     )
     
@@ -643,7 +640,7 @@ Examples:
     parser.add_argument("--config", "-c", default="tokenizer_config.json", help="Configuration file (default: tokenizer_config.json in current dir)")
     parser.add_argument("--target-size", "-t", type=int, help="Target vocabulary size (optional, for reference only unless --enforce-size is used)")
     parser.add_argument("--enforce-size", action="store_true", help="Enforce target size limit (by default, keeps all non-filtered tokens)")
-    parser.add_argument("--max-token-length", type=int, help="Maximum token length (overrides config, e.g., 32, 24, 30)")
+    parser.add_argument("--max-token-length", type=int, help="Maximum token length (overrides config, default: 31, e.g., 31, 24, 30)")
     parser.add_argument("--remove-categories", nargs="+", 
                        help="Categories to remove (overrides config). Options: east_asian, middle_eastern, european, multilingual, whitespace, other, long_tokens")
     parser.add_argument("--filter-low-freq-english", action="store_true", 
