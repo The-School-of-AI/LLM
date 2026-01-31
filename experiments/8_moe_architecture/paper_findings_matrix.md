@@ -121,8 +121,11 @@ Below are the final, paper-faithful stage proposals we should use. These preserv
 | `rho` | 0.5 |
 | `k_max` | **16** |
 | Null experts (M) | **256–512** |
-| Expected real routed experts `E[K_real]` | **8** |
-| Total active per token (incl. shared) | **≈9** (8 routed + 1 shared) |
+| **Experts per segment (N_seg)|
+  **`N_seg = N_final / m`**, where **`N_final = min(AlignUp(N_explosion, G_ep), AlignDown(N_mem_cap, G_ep))`** and **`m=4`**|
+| **Real routed experts (N)**|
+  **`N_explosion = K_total * (P_target - P_other) / P_ffn_dense - K_s`**, with **`K_total = K_r + K_s`**, **`K_r=8`**, **`K_s=1`**, and **`P_other = P_dense - P_ffn_dense`**|
+
 
 **Notes:** this preserves DeepSeek-V3 compute while massively increasing capacity. Keep expert FFN shapes fixed across scale.
 
@@ -164,6 +167,16 @@ Below are the final, paper-faithful stage proposals we should use. These preserv
 |---|---:|---:|---:|---:|---:|---:|---:|
 | 3B (MoE-small) | 32 | 32 | 2 | **16** | 0.5 | **8** | **≈10** |
 | 8B (MoE-medium) | 32 | 32 | 2 | **16** | 0.5 | **8** | **≈10** |
-| 70B (MoE-large) | 256–512 | 256–512 | 1 | **16** | 0.5 | **8** | **≈9** |
-
+| 70B (MoE-large) | 256–512 **TBD(expert‑explosion equation)*** | 256–512 | 1 | **16** | 0.5 | **8** | **≈9** |
 ---
+
+
+###Citations
+[1]: https://arxiv.org/pdf/2601.15370 "Improving MoE Compute Efficiency by Composing Weight and Data Sparsity"
+[2]: https://arxiv.org/abs/2408.15664?utm_source=chatgpt.com "Auxiliary-Loss-Free Load Balancing Strategy for Mixture-of-Experts"
+[3]: https://arxiv.org/html/2412.19437v1 "DeepSeek-V3 Technical Report"
+[4]: https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp/blob/main/config.json?utm_source=chatgpt.com "config.json · deepseek-ai/DeepSeek-V3.2-Exp at main"
+[5]: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/config.json?utm_source=chatgpt.com "config.json · moonshotai/Kimi-K2-Instruct at main - Hugging Face"
+[6]: https://arxiv.org/abs/1701.06538?utm_source=chatgpt.com "Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer"
+[7]: https://arxiv.org/abs/2101.03961?utm_source=chatgpt.com "[2101.03961] Switch Transformers: Scaling to Trillion Parameter Models ..."
+[8]: https://arxiv.org/abs/2006.16668?utm_source=chatgpt.com "[2006.16668] GShard: Scaling Giant Models with Conditional Computation ..."
