@@ -8,7 +8,7 @@ This document outlines the strategies and methodologies for arriving at the fina
 
 ### 1.1 Metadata Extraction
 
-All documents are tagged with standardized metadata:
+All documents are tagged with standardized metadata from source dataset:
 - **source_dataset**: Origin dataset (dolma, fineweb, sangraha)
 - **doc_id**: Unique identifier
 - **language**: Detected language (en, indic, other)
@@ -17,20 +17,44 @@ All documents are tagged with standardized metadata:
 
 ### 1.2 Signal Extraction
 
-Documents are analyzed for multiple difficulty signals:
+Documents are analyzed for multiple high-level difficulty and capability signals.  
+Signals are derived from combinations of underlying document-level features (listed below in 1.3). These features feed into the band, modality, and domain assignment.
 
 | Signal | Correlation | Detection Method |
-|--------|-------------|------------------|
-| Avg sentence length | Higher difficulty | Structural analysis |
+|--------|-------------|-----------------|
+| Avg sentence length | Higher difficulty | Aggregated sentence statistics |
 | Rare token ratio | Higher difficulty | Token frequency |
 | Flesch-Kincaid grade | Readability proxy | Syllable counting |
-| Code blocks | B3+ | Regex patterns |
-| Math symbols | B4+ | Unicode ranges |
-| CoT markers | B3+ reasoning | Keyword patterns |
-| Research paper structure | B4+ | Citation/abstract detection |
-| Agentic traces | B5 | Tool-calling patterns |
+| Code blocks | B3+ | Code-token density + regex |
+| Math symbols | B4+ | Math symbol density |
+| CoT markers | B3+ reasoning | Reasoning marker aggregation |
+| Research paper structure | B4+ | Citation + section patterns |
+| Agentic traces | B5 | Agent marker + JSON structure |
 
-### 1.3 Multi-Dimensional Classification
+
+### 1.3 Underlying Document-Level Features
+ 
+These features are extracted programmatically for all documents
+
+| Feature | Description                     | Used By Signals |
+|--------|---------------------------------|-----------------|
+| doc_token_count | Total tokens in document        | Length normalization |
+| sentence_len_avg | Mean tokens per sentence        | Avg sentence length |
+| sentence_len_std | Variance in sentence length     | Difficulty estimation |
+| unique_token_ratio | Unique / total tokens           | Rare token ratio |
+| token_entropy | Entropy over token distribution | Difficulty, quality |
+| flesch_kincaid_grade | FK grade level                  | Readability proxy |
+| code_token_ratio | Fraction of code-like tokens    | Code blocks |
+| math_symbol_ratio | Math symbols / tokens           | Math symbols |
+| citation_count | Citation-like patterns          | Research structure |
+| repetition_score | Repeated n-gram score           | Noise filtering |
+| gzip_compression_ratio | Compressed / raw size           | Redundancy detection |
+
+[Sample feature extractor](../../experiments/2_curirculum_architects/feature_extractor.py)  
+
+
+
+### 1.4 Multi-Dimensional Classification
 
 Each document receives **three independent labels**:
 
@@ -60,6 +84,18 @@ Each document receives **three independent labels**:
 - `dialogue_chat`
 - `planning_reasoning_curated`
 
+
+### 1.5 Processing Flow and Storage
+
+Each document is processed in a single pass:
+
+1. The document is read once, and all **underlying low-level features** (tokens, sentence statistics, structural cues, lexical features, etc.) are computed.
+2. These features are then aggregated to compute the **higher-level modalities**: 
+   - Band (B0-B5)  
+   - Modality (general_text, code, math, etc.)  
+   - Domain (source-based classification)
+3. Only the **dataset metadata** and the **higher-level modalities** are stored back at the document level.  
+   - Low-level features are used internally for signal computation but are **not saved** to reduce storage and maintain privacy.
 ---
 
 ## 2. Language Filtering
