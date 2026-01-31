@@ -30,6 +30,7 @@ import argparse
 import deepspeed
 import torch
 from src.data import get_dataloaders, get_tokenizer
+from src.moe_utils import create_moe_param_groups, is_moe_model
 from src.train import evaluate, generate_text, save_checkpoint, train_epoch
 from src.utils import set_seed
 from transformers import AutoModelForCausalLM
@@ -184,8 +185,16 @@ def main():
     # Step 3: Initialize DeepSpeed
     # ========================================
     print("\n[3/5] Initializing DeepSpeed...")
+    
+    # Check if model is MoE and use appropriate param groups
+    if is_moe_model(model):
+        print("  MoE model detected - using MoE parameter groups")
+        model_parameters = create_moe_param_groups(model)
+    else:
+        model_parameters = model.parameters()
+    
     model_engine, optimizer, _, _ = deepspeed.initialize(
-        args=args, model=model, model_parameters=model.parameters()
+        args=args, model=model, model_parameters=model_parameters
     )
     print("  DeepSpeed engine initialized")
     print(f"  Device: {model_engine.device}")

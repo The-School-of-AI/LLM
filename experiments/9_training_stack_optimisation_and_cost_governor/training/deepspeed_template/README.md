@@ -279,6 +279,32 @@ uv add pytest
 - Prefetching and communication overlap
 - Model state gathering for checkpointing
 
+#### MoE Configurations (`config/deepspeed/zero-*-moe.json`)
+
+> **⚠️ Important**: For Mixture-of-Experts models, use the MoE-specific configs.
+
+**Available MoE configs:**
+- `zero-2-moe.json` - **Recommended** for MoE models (stable)
+- `zero-3-moe.json` - Fallback (has a known race condition, see below)
+
+**Key differences from standard configs:**
+- `fp16_master_weights_and_grads: true` - Saves ~50% memory
+- Automatic MoE parameter group detection in `main.py`
+
+**ZeRO-3 + MoE Compatibility:**
+There was a race condition bug ([GitHub #7824](https://github.com/deepspeedai/DeepSpeed/issues/7824)) when using ZeRO-3 with MoE models. This was fixed in [PR #7825](https://github.com/deepspeedai/DeepSpeed/pull/7825) and is available in **DeepSpeed ≥ 0.18.6**.
+
+**Recommendation:** 
+- If using DeepSpeed ≥ 0.18.6: Both `zero-2-moe.json` and `zero-3-moe.json` are safe to use
+- If using older versions: Use `zero-2-moe.json` (more stable)
+
+### `src/moe_utils.py`
+
+MoE-specific utilities:
+- `is_moe_model()`: Detects if a model contains MoE layers
+- `create_moe_param_groups()`: Creates proper parameter groups for MoE optimizer
+- `get_moe_config_recommendations()`: Returns recommended settings and known issues
+
 ## 🔧 Module Details
 
 ### `src/data.py`
