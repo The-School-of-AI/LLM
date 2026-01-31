@@ -1,0 +1,167 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.conda/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+
+# Machine Learning & Training
+checkpoints/
+checkpoint/
+*.ckpt
+*.pth
+*.pt
+*.bin
+*.safetensors
+model_output/
+outputs/
+logs/
+runs/
+results/
+saved_models/
+experiments/
+
+# Datasets
+data/
+datasets/
+*.csv
+*.tsv
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
+
+# Weights & Biases
+wandb/
+.wandb/
+
+# TensorBoard
+events.out.tfevents.*
+tensorboard/
+tb_logs/
+
+# MLflow
+mlruns/
+.mlflow/
+
+# DeepSpeed
+.deepspeed_env
+deepspeed_checkpoints/
+zero_to_fp32.py
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.directory
+.fuse_hidden*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Package managers
+*.lock
+!uv.lock
+poetry.lock
+
+# Profiling
+*.prof
+*.lprof
+profile_*.txt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Large files
+*.tar
+*.zip
+*.gz
+*.rar
+*.7z
+
+# Node (if using any JS tools)
+node_modules/
+package-lock.json
