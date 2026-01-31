@@ -1,9 +1,9 @@
-import re
 import math
+import re
 import zlib
 from collections import Counter
-from typing import Dict, List
 from statistics import mean, pstdev
+from typing import Dict, List
 
 # ------------------------
 # Regex buckets
