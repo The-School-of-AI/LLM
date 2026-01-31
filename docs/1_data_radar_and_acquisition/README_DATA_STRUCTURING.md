@@ -39,23 +39,23 @@ s3://&lt;org&gt;-pretraining-data/
 
 │
 
-├── 00_raw/
-
-├── 01_normalized/
-
-├── 02_filtered/
-
-├── 03_deduplicated/
-
-├── 04_training_ready/
-
-├── 05_eval_excluded/
-
-├── 06_sft/
-
-├── 07_alignment/
-
-└── metadata/
+  ├── 00_raw/
+  
+  ├── 01_normalized/
+  
+  ├── 02_filtered/
+  
+  ├── 03_deduplicated/
+  
+  ├── 04_training_ready/
+  
+  ├── 05_eval_excluded/
+  
+  ├── 06_sft/
+  
+  ├── 07_alignment/
+  
+  └── metadata/
 
 **Directory Semantics**
 
@@ -72,11 +72,11 @@ Store datasets exactly as obtained from the original source.
 
 00_raw/
 
-└── pile_cc/
+  └── pile_cc/
 
-├── original_dump/
-
-└── LICENSE.txt
+    ├── original_dump/
+    
+    └── LICENSE.txt
 
 **01_normalized/ - Canonical Text Format**
 
@@ -94,13 +94,13 @@ Convert all sources into a unified document format.
 
 01_normalized/
 
-└── pile_cc/
+  └── pile_cc/
 
-├── shard_00000.jsonl
-
-├── shard_00001.jsonl
-
-└── normalization_manifest.json
+    ├── shard_00000.jsonl
+    
+    ├── shard_00001.jsonl
+    
+    └── normalization_manifest.json
 
 **JSONL Schema (Required)**
 
@@ -145,13 +145,13 @@ Remove low-signal, unsafe, or out-of-scope content.
 
 02_filtered/
 
-└── pile_cc/
+  └── pile_cc/
 
-├── shard_00000.jsonl
-
-├── shard_00001.jsonl
-
-└── filter_report.json
+    ├── shard_00000.jsonl
+    
+    ├── shard_00001.jsonl
+    
+    └── filter_report.json
 
 **03_deduplicated/ - Global Deduplication**
 
@@ -172,13 +172,13 @@ Prevent overfitting and memorization at scale.
 
 03_deduplicated/
 
-└── global/
+  └── global/
 
-├── shard_00000.jsonl
-
-├── shard_00001.jsonl
-
-└── dedup_stats.json
+    ├── shard_00000.jsonl
+    
+    ├── shard_00001.jsonl
+    
+    └── dedup_stats.json
 
 **04_training_ready/ - Final Shards**
 
@@ -193,13 +193,13 @@ Training-consumable, weighted, shuffled data.
 
 04_training_ready/
 
-└── pretrain_v1/
+  └── pretrain_v1/
 
-├── shard_00000.tar
-
-├── shard_00001.tar
-
-└── dataset_manifest.json
+    ├── shard_00000.tar
+    
+    ├── shard_00001.tar
+    
+    └── dataset_manifest.json
 
 **Manifest Example**
 
@@ -241,13 +241,13 @@ Store data explicitly excluded due to benchmark contamination risk.
 
 05_eval_excluded/
 
-└── benchmarks/
+  └── benchmarks/
 
-├── gsm8k/
-
-├── mmlu/
-
-└── human_eval/
+    ├── gsm8k/
+    
+    ├── mmlu/
+    
+    └── human_eval/
 
 **Never mixed back into pretraining.**
 
@@ -255,13 +255,13 @@ Store data explicitly excluded due to benchmark contamination risk.
 
 06_sft/
 
-└── instruction_following/
+  └── instruction_following/
 
-├── train.jsonl
-
-├── validation.jsonl
-
-└── LICENSE.txt
+    ├── train.jsonl
+    
+    ├── validation.jsonl
+    
+    └── LICENSE.txt
 
 Schema includes:
 
@@ -274,13 +274,13 @@ Schema includes:
 
 07_alignment/
 
-└── preferences/
+  └── preferences/
 
-├── comparisons.jsonl
-
-├── reward_model/
-
-└── README.md
+    ├── comparisons.jsonl
+    
+    ├── reward_model/
+    
+    └── README.md
 
 Strict separation from pretraining data.
 
@@ -303,13 +303,13 @@ shard_00042.jsonl
 
 metadata/
 
-├── dataset_registry.json
-
-├── license_registry.json
-
-├── processing_versions.json
-
-└── benchmark_blocklist.json
+  ├── dataset_registry.json
+  
+  ├── license_registry.json
+  
+  ├── processing_versions.json
+  
+  └── benchmark_blocklist.json
 
 This directory is **authoritative** for:
 
