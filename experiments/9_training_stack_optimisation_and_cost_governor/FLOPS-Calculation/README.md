@@ -16,6 +16,14 @@ This tool calculates the estimated training time, FLOPs, and cloud costs for Lar
    python3 compute_flops.py
    ```
 
+## Output Snapshots
+We keep simple text snapshots of recent runs:
+- `last_run.txt`: baseline run for `flops_config.json`
+- `last_run_growth.txt`: growth/expansion run for `flops_config_growth.json`
+- `last_run_qwen3style.txt` and `last_run_growth_qwen3style.txt`: exploratory Qwen3-style MoE (many experts, top-k=8, smaller FFN) to approximate a 70B total parameter model
+
+These are **reference outputs only** and should be regenerated after config changes.
+
 ## Configuration (`flops_config.json`)
 
 ### Hardware & Cost
