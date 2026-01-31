@@ -1,16 +1,18 @@
-import yaml
+import argparse
 import json
-import boto3
 import os
 import time
-import argparse
-from pathlib import Path
-from datasets import load_dataset
 from itertools import islice
+from pathlib import Path
+
+import boto3
+import yaml
+from datasets import load_dataset
 
 # -------------------------
 # Helpers
 # -------------------------
+
 
 def apply_limit(dataset, limit_cfg, mode):
     """Apply test limits to dataset based on configuration"""
@@ -24,6 +26,7 @@ def apply_limit(dataset, limit_cfg, mode):
         return islice(dataset, int(10000 * percent / 100))  # Approximate
     raise ValueError(f"Unknown limit type: {limit_cfg['type']}")
 
+
 def save_jsonl_local(records, filepath):
     """Save records to local JSONL file"""
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
@@ -32,6 +35,7 @@ def save_jsonl_local(records, filepath):
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     print(f"  💾 Saved: {filepath}")
 
+
 def upload_jsonl_to_s3(records, bucket, key):
     """Upload records to S3 as JSONL"""
     s3 = boto3.client("s3")
@@ -39,12 +43,14 @@ def upload_jsonl_to_s3(records, bucket, key):
     s3.put_object(Bucket=bucket, Key=key, Body=body.encode("utf-8"))
     print(f"  ⬆️  Uploaded: s3://{bucket}/{key}")
 
+
 def save_records(records, mode, local_path, bucket, s3_key):
     """Save records based on storage mode"""
     if mode in ("local", "both"):
         save_jsonl_local(records, local_path)
     if mode in ("s3", "both"):
         upload_jsonl_to_s3(records, bucket, s3_key)
+
 
 def process_stream(ds_iter, shard_size, cfg, local_subdir, s3_subdir):
     """Process streaming dataset and save in shards"""
@@ -81,9 +87,11 @@ def process_stream(ds_iter, shard_size, cfg, local_subdir, s3_subdir):
 
     return total, shard_id + 1
 
+
 # -------------------------
 # Dataset Handlers
 # -------------------------
+
 
 def process_sangraha(dcfg, cfg, mode):
     """Process Sangraha dataset with multiple languages"""
@@ -106,6 +114,7 @@ def process_sangraha(dcfg, cfg, mode):
         )
         print(f"  ✅ {lang}: {total:,} records, {shards} shards")
 
+
 def process_indiccorp_v2(dcfg, cfg, mode):
     """Process IndicCorp V2 dataset"""
     print(f"  📥 Loading IndicCorp V2 (split: {dcfg['split']})...")
@@ -124,6 +133,7 @@ def process_indiccorp_v2(dcfg, cfg, mode):
         dcfg["s3_path"],
     )
     print(f"  ✅ Total: {total:,} records, {shards} shards")
+
 
 def process_dolma(dcfg, cfg, mode):
     """Process Dolma dataset"""
@@ -144,19 +154,20 @@ def process_dolma(dcfg, cfg, mode):
     )
     print(f"  ✅ Total: {total:,} records, {shards} shards")
 
+
 def process_generic(name, dcfg, cfg, mode):
     """Process generic HuggingFace dataset"""
     print(f"  📥 Loading {name}...")
-    
+
     load_args = {
         "path": dcfg["repo"],
         "split": dcfg.get("split", "train"),
-        "streaming": True
+        "streaming": True,
     }
-    
+
     if "name" in dcfg:
         load_args["name"] = dcfg["name"]
-    
+
     ds = load_dataset(**load_args)
     ds_iter = apply_limit(ds, dcfg["test_limit"], mode)
     total, shards = process_stream(
@@ -168,6 +179,7 @@ def process_generic(name, dcfg, cfg, mode):
     )
     print(f"  ✅ Total: {total:,} records, {shards} shards")
 
+
 # -------------------------
 # Main
 # -------------------------
@@ -176,10 +188,11 @@ def process_generic(name, dcfg, cfg, mode):
 # Argument Parsing
 # -------------------------
 
+
 def parse_args():
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
-        description='Download HuggingFace datasets to local storage and/or S3',
+        description="Download HuggingFace datasets to local storage and/or S3",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -194,42 +207,36 @@ Examples:
 
   # Download to both local and S3
   python download.py --storage both --s3-bucket my-bucket --region us-west-2
-        """
+        """,
     )
-    
+
     parser.add_argument(
-        '--s3-bucket',
-        type=str,
-        help='S3 bucket name (overrides config.yml)'
+        "--s3-bucket", type=str, help="S3 bucket name (overrides config.yml)"
     )
-    
+
+    parser.add_argument("--region", type=str, help="AWS region (overrides config.yml)")
+
     parser.add_argument(
-        '--region',
+        "--storage",
         type=str,
-        help='AWS region (overrides config.yml)'
+        choices=["local", "s3", "both"],
+        help="Storage mode: local, s3, or both (overrides config.yml)",
     )
-    
+
     parser.add_argument(
-        '--storage',
+        "--mode",
         type=str,
-        choices=['local', 's3', 'both'],
-        help='Storage mode: local, s3, or both (overrides config.yml)'
+        choices=["test", "full"],
+        help="Download mode: test (limited) or full (complete datasets)",
     )
-    
+
     parser.add_argument(
-        '--mode',
+        "--config",
         type=str,
-        choices=['test', 'full'],
-        help='Download mode: test (limited) or full (complete datasets)'
+        default="config.yml",
+        help="Path to config file (default: config.yml)",
     )
-    
-    parser.add_argument(
-        '--config',
-        type=str,
-        default='config.yml',
-        help='Path to config file (default: config.yml)'
-    )
-    
+
     return parser.parse_args()
 
 
@@ -237,19 +244,20 @@ Examples:
 # Main
 # -------------------------
 
+
 def main():
     # Parse command-line arguments
     args = parse_args()
-    
+
     print("=" * 60)
     print("🚀 Dataset Download Tool")
     print("=" * 60)
-    
+
     # Load configuration
     if not os.path.exists(args.config):
         print(f"❌ Config file not found: {args.config}")
         return
-        
+
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
@@ -257,15 +265,15 @@ def main():
     if args.s3_bucket:
         cfg["aws"]["s3_bucket"] = args.s3_bucket
         print(f"🔧 Using S3 bucket from command line: {args.s3_bucket}")
-    
+
     if args.region:
         cfg["aws"]["region"] = args.region
         print(f"🔧 Using AWS region from command line: {args.region}")
-    
+
     if args.storage:
         cfg["storage"]["mode"] = args.storage
         print(f"🔧 Using storage mode from command line: {args.storage}")
-    
+
     if args.mode:
         cfg["mode"] = args.mode
         print(f"🔧 Using download mode from command line: {args.mode}")
@@ -274,12 +282,14 @@ def main():
     print(f"\n⚙️  Mode: {mode}")
     print(f"💾 Storage: {cfg['storage']['mode']}")
     print(f"📁 Local dir: {cfg['storage']['local_dir']}")
-    
+
     # Show S3 info if using S3
-    if cfg['storage']['mode'] in ['s3', 'both']:
-        print(f"☁️  S3 bucket: s3://{cfg['aws']['s3_bucket']}/{cfg['aws']['s3_prefix']}")
+    if cfg["storage"]["mode"] in ["s3", "both"]:
+        print(
+            f"☁️  S3 bucket: s3://{cfg['aws']['s3_bucket']}/{cfg['aws']['s3_prefix']}"
+        )
         print(f"🌍 AWS region: {cfg['aws']['region']}")
-    
+
     times = {}
     total_start = time.time()
 
@@ -297,11 +307,11 @@ def main():
             else:
                 # Generic handler for other datasets (including dolma)
                 process_generic(name, dcfg, cfg, mode)
-                
+
             elapsed = time.time() - start
             times[name] = elapsed
             print(f"⏱️  Time: {elapsed:.2f}s")
-            
+
         except Exception as e:
             print(f"❌ Error processing {name}: {e}")
             times[name] = -1
@@ -319,6 +329,7 @@ def main():
     print(f"\n⏱️  TOTAL TIME: {total_time:.2f}s")
     print(f"{'='*60}")
     print("🎉 Done!")
+
 
 if __name__ == "__main__":
     main()
