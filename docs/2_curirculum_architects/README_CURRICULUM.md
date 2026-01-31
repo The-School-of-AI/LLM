@@ -248,7 +248,7 @@ check_stage_constraints → output classification
 
 ---
 
-**Reference Implementation**: https://colab.research.google.com/drive/1a5ASgJIDi8VbbUvc43uT93DBPB7OXkCg?usp=sharing
+**Reference Implementation**: [https://colab.research.google.com/drive/1a5ASgJIDi8VbbUvc43uT93DBPB7OXkCg?usp=sharing](https://colab.research.google.com/drive/1Qhch3c5XAqNyQOJDfOsOyoIZVUJuur_-?usp=sharing)
 
 
 ---
