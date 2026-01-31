@@ -163,7 +163,7 @@ Below are the final, paper-faithful stage proposals we should use. These preserv
 | Stage | Real Experts (N) | Null Experts (M) | Shared (Ks) | `k_max` | `rho` | `E[K_real]` | Total Active (incl. shared) |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | 3B (MoE-small) | 32 | 32 | 2 | **16** | 0.5 | **8** | **≈10** |
-| 8B (MoE-medium) | 64 | 64 | 2 | **16** | 0.5 | **8** | **≈10** |
+| 8B (MoE-medium) | 32 | 32 | 2 | **16** | 0.5 | **8** | **≈10** |
 | 70B (MoE-large) | 256–512 | 256–512 | 1 | **16** | 0.5 | **8** | **≈9** |
 
 ---
