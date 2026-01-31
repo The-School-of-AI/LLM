@@ -1,0 +1,97 @@
+dolma_1_7_sources:
+  web_content:
+    description: Primary web-scale knowledge sources
+    sources:
+      - source: common_crawl
+        dataset_name: Dolma CC
+        approx_tokens_billion: 1195
+        notes: General-purpose web crawl
+
+      - source: refinedweb
+        dataset_name: RefinedWeb
+        approx_tokens_billion: 456
+        notes: Linguistically filtered high-quality web data
+
+      - source: c4
+        dataset_name: C4 (Colossal Clean Crawled Corpus)
+        approx_tokens_billion: 138
+        notes: Cleaned and deduplicated web content
+
+      - source: cc_news
+        dataset_name: CC News
+        approx_tokens_billion: 14
+        notes: News-focused web crawl for temporal coverage
+
+  code_and_programming:
+    description: Programming and technical reasoning data
+    sources:
+      - source: starcoder
+        dataset_name: StarCoder
+        approx_tokens_billion: 263
+        notes: Multi-language source code corpus
+
+      - source: stackexchange
+        dataset_name: StackExchange
+        approx_tokens_billion: 19
+        notes: Technical Q&A across programming and engineering topics
+
+  social_and_conversational:
+    description: Informal human dialogue and social interaction
+    sources:
+      - source: reddit
+        dataset_name: Reddit (PushShift)
+        approx_tokens_billion: 79
+        notes: Conversational, opinionated, and slang-heavy text
+
+  stem_and_academic:
+    description: Scientific and academic research literature
+    sources:
+      - source: semantic_scholar
+        dataset_name: Semantic Scholar (peS2o)
+        approx_tokens_billion: 57
+        notes: Peer-reviewed and curated academic papers
+
+      - source: arxiv
+        dataset_name: arXiv
+        approx_tokens_billion: 28
+        notes: Scientific preprints in AI, math, and physics
+
+  mathematical_reasoning:
+    description: Math-focused symbolic and logical reasoning data
+    sources:
+      - source: openwebmath
+        dataset_name: OpenWebMath
+        approx_tokens_billion: 12.6
+        notes: LaTeX-dense mathematical web content
+
+      - source: algebraic_stack
+        dataset_name: Algebraic Stack
+        approx_tokens_billion: 12.6
+        notes: Formal mathematics and logical reasoning datasets
+
+  curation_and_instruction:
+    description: Instruction-tuned and curated task datasets
+    sources:
+      - source: flan
+        dataset_name: Flan Collection
+        approx_tokens_billion: 16.5
+        notes: Synthetic and human-curated instruction data
+
+  books_and_reference:
+    description: High-quality books and encyclopedic references
+    sources:
+      - source: gutenberg
+        dataset_name: Project Gutenberg
+        approx_tokens_billion: 5.3
+        notes: Public-domain books and literature
+
+      - source: wikipedia
+        dataset_name: Wikipedia & Wikibooks
+        approx_tokens_billion: 3.7
+        oversampling: "200%"
+        notes: Curated encyclopedic knowledge
+
+      - source: megawika
+        dataset_name: MegaWika
+        approx_tokens_billion: 4.6
+        notes: Wikipedia-cited external reference pages
