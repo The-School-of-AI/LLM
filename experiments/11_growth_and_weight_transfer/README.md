@@ -8,11 +8,21 @@ Demonstrates stable model growth through 4 phases without loss spikes.
 # Clone and setup
 !git clone -b p11/feat/growth-dense-to-moe https://github.com/The-School-of-AI/LLM.git
 %cd LLM/experiments/11_growth_and_weight_transfer
-!pip install torch pyyaml -q
+!pip install torch pyyaml datasets -q  # Added datasets for TinyStories
 
 # Run experiment
 !python run_growth_experiment.py
 ```
+
+## Dataset Options
+
+| Dataset | Size | Tokenization | Use Case |
+|---------|------|--------------|----------|
+| **tiny_shakespeare** | 1MB | Character-level | Fast MVP, proof-of-concept |
+| **tinystories** | 2GB | Word-level | Better validation, diverse domains |
+| **dummy** | N/A | Random | Debugging only |
+
+**To switch datasets:** Edit `config/config.yaml` → `data.dataset_name`
 
 ## Growth Path (4 Phases)
 
@@ -43,7 +53,7 @@ Phase 4: MoE 8 experts (final) → Train 1000 steps
 │   ├── model.py              # Dense transformer (~70M)
 │   ├── moe_model.py          # MoE variant
 │   ├── growth.py             # Growth utilities
-│   └── dataset.py            # TinyShakespeare
+│   └── dataset.py            # TinyShakespeare + TinyStories
 ├── train.py                  # Single-phase training
 └── run_growth_experiment.py  # Full 4-phase experiment
 ```
@@ -86,3 +96,9 @@ Phase 2 (MoE)      0.XXXX          +0.24
 Phase 3 (Scaled)   0.XXXX          +0.XX
 Phase 4 (Experts)  0.XXXX          +0.XX
 ```
+
+## Tips
+
+- **Fast testing**: Use `tiny_shakespeare` with reduced steps (100 each)
+- **Production validation**: Use `tinystories` with full 1000 steps
+- **T4 GPU runtime**: ~2-3 hours for full 4-phase (4000 steps)

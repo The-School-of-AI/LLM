@@ -53,6 +53,10 @@ training:
 
 # Dataset Configuration
 data:
+  # Options:
+  # - "tiny_shakespeare": 1MB, character-level, fast (MVP/proof-of-concept)
+  # - "tinystories": 2GB, diverse stories, word-level (better validation)
+  # - "dummy": Random tokens (debugging only)
   dataset_name: "tiny_shakespeare"
   num_samples: 50000
 
