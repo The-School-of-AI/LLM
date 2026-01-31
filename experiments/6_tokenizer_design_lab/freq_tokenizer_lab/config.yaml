@@ -1,0 +1,296 @@
+# Configuration for Tokenizer Frequency Analysis and Reindexing
+
+# Input tokenizers
+tokenizer_sources:
+  base_path: "/Users/chethan/Documents/era/capstone/experiments/6_tokenizer_design_lab/tokonizer_filter/filtered_tokenizer"
+  tokenizers:
+    - byted_filtered
+    - ds_filtered
+    - dscode_filtered
+    - gemma_filtered
+    - gptoss_filtered
+    - mistral_filtered
+    - olmo_filtered
+    - olmocode_filtered
+    - qwen_filtered
+    - qwencode_filtered
+
+# Evaluation benchmarks
+evaluation:
+  # Indic language evaluation (legacy - small samples)
+  indic:
+    languages:
+      - hindi       # Devanagari
+      - marathi     # Devanagari
+      - sanskrit    # Devanagari
+      - bengali
+      - tamil
+      - telugu
+      - gujarati
+    sample_size_per_lang: 10000  # characters per language
+    metrics:
+      - tokens_per_char
+      - byte_fallback_rate
+      - fragmentation_score
+      - devanagari_quality
+    failure_thresholds:
+      byte_fallback_rate: 0.30  # reject if >30% byte fallback
+      tokens_per_char: 2.0      # reject if >2x token explosion
+
+  # Code evaluation
+  code:
+    languages:
+      - python
+      - javascript
+      - typescript
+      - c
+      - cpp
+    sample_size_per_lang: 5000   # lines per language
+    patterns:
+      - stdlib_functions
+      - common_keywords
+      - json_structures
+      - nested_objects
+      - string_literals
+    metrics:
+      - tokens_per_line
+      - symbol_preservation
+      - structure_quality
+    failure_thresholds:
+      tokens_per_line: 50       # reject if excessive tokenization
+
+  # JSON and tool-calling
+  json:
+    test_cases:
+      - simple_objects
+      - nested_structures
+      - arrays
+      - unicode_strings
+      - function_schemas
+    metrics:
+      - tokens_per_byte
+      - structure_preservation
+      - escape_handling
+
+# HuggingFace Dataset-based Evaluation (NEW - uses real datasets)
+evaluation_hf:
+  # Indic language evaluation using IndicCorpV2
+  indic:
+    dataset: "ai4bharat/IndicCorpV2"
+    split: "hin_Deva"  # Hindi Devanagari (use 'mar_Deva' for Marathi, 'san_Deva' for Sanskrit, etc.)
+    sample_size: 10000  # number of documents to process
+    text_column: "text"
+    metrics:
+      - tokens_per_char
+      - byte_fallback_rate
+      - fragmentation_score
+      - devanagari_quality
+
+  # Code and Latin evaluation using Dolma datasets
+  code:
+    datasets:
+      - name: "allenai/dolma3_dolmino_mix-100B-1125"
+        split: "validation"  # Only validation split available
+        sample_size: 5000  # number of documents
+        sample_fraction: 0.05  # use 5% of documents
+        text_column: "text"
+      - name: "allenai/dolma"
+        split: "train"
+        sample_size: 5000
+        sample_fraction: 0.05  # use 5% of documents
+        text_column: "text"
+    metrics:
+      - tokens_per_line
+      - symbol_preservation
+      - structure_quality
+
+# Frequency analysis
+frequency_analysis:
+  # Dataset sources
+  datasets:
+    indic:
+      name: "ai4bharat/IndicCorpV2"
+      subset: null
+      split: "train"
+      sample_size_gb: 5  # GB to process
+      text_column: "text"
+
+    code:
+      name: "allenai/dolma3_dolmino_mix-100B-1125"
+      subset: null
+      split: "train"
+      sample_size_gb: 5  # GB to process
+      text_column: "text"
+
+    # Add additional datasets here as needed
+    # custom_dataset:
+    #   name: "organization/dataset-name"
+    #   subset: null
+    #   split: "train"
+    #   sample_size_gb: 5
+    #   text_column: "text"
+
+  # Streaming parameters
+  streaming:
+    batch_size: 1000
+    buffer_size: 10000
+    num_workers: 4
+
+  # Frequency computation
+  computation:
+    smoothing: "log"  # Options: "none", "log", "sqrt", "power"
+    smoothing_factor: 1.0
+    percentiles: [50, 75, 90, 95, 99]
+    classification:
+      head_percentile: 90      # top 10%
+      torso_percentile: 50     # middle 40%
+      tail_percentile: 0       # bottom 50%
+
+# Token ID reindexing
+reindexing:
+  # ID allocation strategy
+  strategy: "category_blocks"  # Options: "pure_frequency", "reserved_special", "category_blocks"
+
+  # Category blocks (for category_blocks strategy)
+  category_blocks:
+    special_tokens:
+      start_id: 0
+      end_id: 511
+      description: "Reserved for special tokens (256 slots)"
+
+    high_frequency:
+      start_id: 512
+      end_id: 10512
+      description: "Top 10% most frequent tokens (head)"
+      sort_by: "frequency_desc"
+
+    medium_frequency:
+      start_id: 10512
+      end_id: 80512
+      description: "Middle 50% frequency tokens (torso)"
+      sort_by: "frequency_desc"
+
+    low_frequency:
+      start_id: 80512
+      end_id: 128000
+      description: "Bottom 40% frequency tokens (tail)"
+      sort_by: "frequency_desc"
+
+  # Smoothing for MoE routing
+  moe_smoothing:
+    enabled: true
+    method: "log_smooth"  # Reduces exact frequency-to-ID correlation
+    temperature: 0.1
+
+  # Validation
+  validation:
+    test_decode_encode: true
+    test_special_tokens: true
+    test_sample_size: 10000
+
+    # MoE routing validation
+    moe_routing:
+      enabled: true
+      check_id_frequency_correlation: true
+      max_spearman_correlation: 0.95  # Reject if correlation > 0.95
+      track_vocab_skew: true
+      compute_entropy: true
+
+# Special tokens
+special_tokens:
+  # Document structure
+  document:
+    - name: "begin_of_text"
+      token: "<|begin_of_text|>"
+      id: 0
+    - name: "end_of_text"
+      token: "<|end_of_text|>"
+      id: 1
+    - name: "chunk_sep"
+      token: "<|chunk_sep|>"
+      id: 2
+
+  # Chat roles
+  chat:
+    - name: "system"
+      token: "<|system|>"
+      id: 10
+    - name: "user"
+      token: "<|user|>"
+      id: 11
+    - name: "assistant"
+      token: "<|assistant|>"
+      id: 12
+
+  # Code blocks
+  code:
+    - name: "code_begin"
+      token: "<|code_begin|>"
+      id: 20
+    - name: "code_end"
+      token: "<|code_end|>"
+      id: 21
+
+  # Language tags
+  language:
+    - name: "lang_python"
+      token: "<|lang:python|>"
+      id: 30
+    - name: "lang_javascript"
+      token: "<|lang:javascript|>"
+      id: 31
+    - name: "lang_typescript"
+      token: "<|lang:typescript|>"
+      id: 32
+    - name: "lang_c"
+      token: "<|lang:c|>"
+      id: 33
+    - name: "lang_cpp"
+      token: "<|lang:cpp|>"
+      id: 34
+
+  # JSON and tool calling
+  json_tools:
+    - name: "json_begin"
+      token: "<|json_begin|>"
+      id: 40
+    - name: "json_end"
+      token: "<|json_end|>"
+      id: 41
+    - name: "tool_call"
+      token: "<|tool_call|>"
+      id: 42
+    - name: "tool_result"
+      token: "<|tool_result|>"
+      id: 43
+
+  # Source metadata
+  source:
+    - name: "source_wikipedia"
+      token: "<|source:wikipedia|>"
+      id: 50
+    - name: "source_github"
+      token: "<|source:github|>"
+      id: 51
+    - name: "source_web"
+      token: "<|source:web|>"
+      id: 52
+    - name: "source_books"
+      token: "<|source:books|>"
+      id: 53
+
+# Output paths
+output:
+  results_dir: "./results"
+  evaluation_results: "./results/evaluation_results.json"
+  evaluation_results_hf: "./results/evaluation_results_hf.json"  # HuggingFace dataset evaluation
+  frequency_stats_dir: "./results/frequency_stats"
+  reindexed_tokenizers_dir: "./results/reindexed_tokenizers"
+  documentation_dir: "./docs"
+  logs_dir: "./logs"
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+  file: "./logs/tokenizer_lab.log"

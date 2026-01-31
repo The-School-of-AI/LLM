@@ -1,0 +1,199 @@
+# Test Configuration - Small sample sizes for quick testing
+# Copy of config.yaml with reduced sample sizes
+
+# Input tokenizers
+tokenizer_sources:
+  base_path: "/Users/chethan/Documents/era/capstone/experiments/6_tokenizer_design_lab/tokonizer_filter/filtered_tokenizer"
+  tokenizers:
+    - gptoss_filtered  # Test with just one tokenizer first
+
+# Evaluation benchmarks (legacy)
+evaluation:
+  indic:
+    languages:
+      - hindi
+      - marathi
+      - sanskrit
+      - bengali
+      - tamil
+      - telugu
+      - gujarati
+    sample_size_per_lang: 10000
+    metrics:
+      - tokens_per_char
+      - byte_fallback_rate
+      - fragmentation_score
+      - devanagari_quality
+    failure_thresholds:
+      byte_fallback_rate: 0.30
+      tokens_per_char: 2.0
+
+  code:
+    languages:
+      - python
+      - javascript
+      - typescript
+      - c
+      - cpp
+    sample_size_per_lang: 5000
+    patterns:
+      - stdlib_functions
+      - common_keywords
+      - json_structures
+      - nested_objects
+      - string_literals
+    metrics:
+      - tokens_per_line
+      - symbol_preservation
+      - structure_quality
+    failure_thresholds:
+      tokens_per_line: 50
+
+  json:
+    test_cases:
+      - simple_objects
+      - nested_structures
+      - arrays
+      - unicode_strings
+      - function_schemas
+    metrics:
+      - tokens_per_byte
+      - structure_preservation
+      - escape_handling
+
+# HuggingFace Dataset-based Evaluation (TEST - small samples)
+evaluation_hf:
+  # Indic language evaluation using IndicCorpV2
+  indic:
+    dataset: "ai4bharat/IndicCorpV2"
+    split: "hin_Deva"  # Hindi Devanagari split
+    sample_size: 100  # Just 100 samples for testing
+    text_column: "text"
+    metrics:
+      - tokens_per_char
+      - byte_fallback_rate
+      - fragmentation_score
+      - devanagari_quality
+
+  # Code and Latin evaluation using Dolma datasets
+  code:
+    datasets:
+      - name: "allenai/dolma3_dolmino_mix-100B-1125"
+        split: "validation"  # Only validation split available
+        sample_size: 50  # Just 50 samples for testing
+        sample_fraction: 0.05
+        text_column: "text"
+    metrics:
+      - tokens_per_line
+      - symbol_preservation
+      - structure_quality
+
+# Frequency analysis
+frequency_analysis:
+  datasets:
+    indic:
+      name: "ai4bharat/IndicCorpV2"
+      subset: null
+      split: "train"
+      sample_size_gb: 5
+      text_column: "text"
+
+    code:
+      name: "allenai/dolma3_dolmino_mix-100B-1125"
+      subset: null
+      split: "train"
+      sample_size_gb: 5
+      text_column: "text"
+
+  streaming:
+    batch_size: 1000
+    buffer_size: 10000
+    num_workers: 4
+
+  computation:
+    smoothing: "log"
+    smoothing_factor: 1.0
+    percentiles: [50, 75, 90, 95, 99]
+    classification:
+      head_percentile: 90
+      torso_percentile: 50
+      tail_percentile: 0
+
+# Token ID reindexing
+reindexing:
+  strategy: "category_blocks"
+  category_blocks:
+    special_tokens:
+      start_id: 0
+      end_id: 511
+      description: "Reserved for special tokens (256 slots)"
+    high_frequency:
+      start_id: 512
+      end_id: 10512
+      description: "Top 10% most frequent tokens (head)"
+      sort_by: "frequency_desc"
+    medium_frequency:
+      start_id: 10512
+      end_id: 80512
+      description: "Middle 50% frequency tokens (torso)"
+      sort_by: "frequency_desc"
+    low_frequency:
+      start_id: 80512
+      end_id: 128000
+      description: "Bottom 40% frequency tokens (tail)"
+      sort_by: "frequency_desc"
+
+  moe_smoothing:
+    enabled: true
+    method: "log_smooth"
+    temperature: 0.1
+
+  validation:
+    test_decode_encode: true
+    test_special_tokens: true
+    test_sample_size: 10000
+    moe_routing:
+      enabled: true
+      check_id_frequency_correlation: true
+      max_spearman_correlation: 0.95
+      track_vocab_skew: true
+      compute_entropy: true
+
+# Special tokens (abbreviated for test)
+special_tokens:
+  document:
+    - name: "begin_of_text"
+      token: "<|begin_of_text|>"
+      id: 0
+    - name: "end_of_text"
+      token: "<|end_of_text|>"
+      id: 1
+
+  chat:
+    - name: "system"
+      token: "<|system|>"
+      id: 10
+    - name: "user"
+      token: "<|user|>"
+      id: 11
+
+  code:
+    - name: "code_begin"
+      token: "<|code_begin|>"
+      id: 20
+
+# Output paths
+output:
+  results_dir: "./results"
+  evaluation_results: "./results/evaluation_results.json"
+  evaluation_results_hf: "./results/evaluation_results_hf_test.json"
+  frequency_stats_dir: "./results/frequency_stats"
+  reindexed_tokenizers_dir: "./results/reindexed_tokenizers"
+  documentation_dir: "./docs"
+  logs_dir: "./logs"
+
+# Logging
+logging:
+  level: "INFO"
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+  file: "./logs/tokenizer_lab_test.log"
