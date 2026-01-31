@@ -1,0 +1,224 @@
+{
+  "project": {
+    "name": "128k Tokenizer Selection and Adaptation",
+    "version": "2.0",
+    "description": "Indic-capable, code-optimized, JSON-friendly tokenizer with 128k tokens"
+  },
+  
+  "selection_criteria": {
+    "target_vocab_size": 128000,
+    "max_token_length": 32,
+    "required_capabilities": [
+      "indic_languages",
+      "code_optimization",
+      "json_tool_calling",
+      "english_baseline"
+    ]
+  },
+  
+  "language_ranges": {
+    "indic": {
+      "devanagari": {
+        "ranges": [[2304, 2431], [43232, 43263]],
+        "languages": ["Hindi", "Sanskrit", "Marathi", "Nepali"],
+        "priority": "high"
+      },
+      "bengali": {
+        "ranges": [[2432, 2559]],
+        "languages": ["Bengali", "Assamese"],
+        "priority": "medium"
+      },
+      "tamil": {
+        "ranges": [[2944, 3071]],
+        "languages": ["Tamil"],
+        "priority": "medium"
+      },
+      "telugu": {
+        "ranges": [[3072, 3199]],
+        "languages": ["Telugu"],
+        "priority": "medium"
+      },
+      "kannada": {
+        "ranges": [[3200, 3327]],
+        "languages": ["Kannada"],
+        "priority": "medium"
+      },
+      "malayalam": {
+        "ranges": [[3328, 3455]],
+        "languages": ["Malayalam"],
+        "priority": "medium"
+      },
+      "gujarati": {
+        "ranges": [[2688, 2815]],
+        "languages": ["Gujarati"],
+        "priority": "medium"
+      },
+      "gurmukhi": {
+        "ranges": [[2560, 2687]],
+        "languages": ["Punjabi"],
+        "priority": "low"
+      },
+      "odia": {
+        "ranges": [[2816, 2943]],
+        "languages": ["Odia", "Oriya"],
+        "priority": "low"
+      },
+      "sinhala": {
+        "ranges": [[3456, 3583]],
+        "languages": ["Sinhala"],
+        "priority": "low"
+      }
+    },
+    
+    "east_asian": {
+      "chinese": {
+        "ranges": [[19968, 40959], [13312, 19903], [131072, 173791]],
+        "priority": "medium"
+      },
+      "japanese_hiragana": {
+        "ranges": [[12352, 12447]],
+        "priority": "medium"
+      },
+      "japanese_katakana": {
+        "ranges": [[12448, 12543]],
+        "priority": "medium"
+      },
+      "korean": {
+        "ranges": [[44032, 55215], [4352, 4607]],
+        "priority": "low"
+      }
+    },
+    
+    "middle_eastern": {
+      "arabic": {
+        "ranges": [[1536, 1791], [1872, 1919], [64336, 65023], [65136, 65279]],
+        "priority": "low"
+      },
+      "hebrew": {
+        "ranges": [[1424, 1535]],
+        "priority": "low"
+      }
+    },
+    
+    "european": {
+      "cyrillic": {
+        "ranges": [[1024, 1279]],
+        "priority": "low"
+      },
+      "greek": {
+        "ranges": [[880, 1023]],
+        "priority": "low"
+      }
+    },
+    
+    "english": {
+      "ranges": [[65, 90], [97, 122]],
+      "priority": "critical"
+    }
+  },
+  
+  "category_priorities": {
+    "keep": {
+      "english": {
+        "priority": 10,
+        "description": "Essential English tokens",
+        "max_token_length": 32
+      },
+      "code": {
+        "priority": 9,
+        "description": "Code tokens (Python, JS/TS, C/C++)",
+        "max_token_length": 32,
+        "languages": ["python", "javascript", "typescript", "c", "cpp"]
+      },
+      "indic": {
+        "priority": 8,
+        "description": "Indic language tokens (strong Devanagari)",
+        "max_token_length": 32,
+        "focus_scripts": ["devanagari"]
+      },
+      "special": {
+        "priority": 7,
+        "description": "Special tokens for control and formatting",
+        "max_token_length": 32
+      },
+      "numeric": {
+        "priority": 6,
+        "description": "Number tokens",
+        "max_token_length": 32
+      },
+      "symbols": {
+        "priority": 5,
+        "description": "Punctuation and operators for JSON/code",
+        "max_token_length": 32
+      }
+    },
+    
+    "remove": {
+      "east_asian": {
+        "description": "Chinese, Japanese, Korean tokens",
+        "reason": "Not in scope for this tokenizer"
+      },
+      "middle_eastern": {
+        "description": "Arabic, Hebrew, Persian tokens",
+        "reason": "Not in scope for this tokenizer"
+      },
+      "european": {
+        "description": "Cyrillic, Greek tokens (except Latin)",
+        "reason": "Low priority, can use byte fallback"
+      },
+      "multilingual": {
+        "description": "Mixed language tokens",
+        "reason": "Ambiguous, low utility"
+      },
+      "long_tokens": {
+        "description": "Tokens with length > 32",
+        "reason": "Exceeds max token length requirement"
+      }
+    }
+  },
+  
+  "filtering_rules": {
+    "max_token_length": 32,
+    "min_frequency": 0,
+    "preserve_special_tokens": true,
+    "preserve_ascii_tokens": true,
+    "preserve_code_patterns": true,
+    "preserve_json_patterns": true
+  },
+  
+  "json_tool_calling_patterns": {
+    "brackets": ["[", "]", "{", "}"],
+    "quotes": ["\"", "'"],
+    "separators": [",", ":", ";"],
+    "keywords": ["null", "true", "false", "function", "parameters"],
+    "common_keys": ["type", "name", "value", "id", "data", "content", "role", "message"]
+  },
+  
+  "code_optimization_patterns": {
+    "python": {
+      "keywords": ["def", "class", "import", "from", "if", "else", "for", "while", "return", "yield"],
+      "operators": ["==", "!=", "<=", ">=", "->", "**", "//"],
+      "common_libs": ["numpy", "pandas", "torch", "tensorflow"]
+    },
+    "javascript": {
+      "keywords": ["function", "const", "let", "var", "async", "await", "=>"],
+      "operators": ["===", "!==", "=>"],
+      "common_patterns": ["console.log", "require", "import", "export"]
+    },
+    "typescript": {
+      "keywords": ["interface", "type", "enum", "namespace"],
+      "operators": ["::", "as", "is"]
+    },
+    "c_cpp": {
+      "keywords": ["include", "define", "ifdef", "endif", "struct", "typedef"],
+      "operators": ["->", "::"]
+    }
+  },
+  
+  "output": {
+    "filtered_tokenizer_dir": "./filtered_tokenizer",
+    "stats_output_dir": "./tokenizer_results",
+    "removed_tokens_log": "./tokenizer_results/removed_tokens.json",
+    "filtering_report": "./tokenizer_results/filtering_report.json"
+  }
+}

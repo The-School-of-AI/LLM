@@ -1,0 +1,104 @@
+{
+  "metadata": {
+    "original_size": 131072,
+    "filtered_size": 99420,
+    "target_size": "N/A",
+    "size_limit_enforced": false,
+    "removed_count": 31652,
+    "timestamp": "2026-01-31T09:26:54.167483"
+  },
+  "stats": {
+    "category_symbols": 13093,
+    "category_numeric": 5809,
+    "category_other": 34389,
+    "category_english": 347777,
+    "category_whitespace": 362,
+    "category_code": 18618,
+    "category_european": 20639,
+    "category_long_tokens": 267,
+    "category_middle_eastern": 15684,
+    "category_east_asian": 64834,
+    "category_multilingual": 9421,
+    "category_special": 1404,
+    "category_indic": 6416
+  },
+  "removed_summary": {
+    "other": 16045,
+    "whitespace": 68,
+    "middle_eastern": 3511,
+    "european": 4000,
+    "east_asian": 6110,
+    "multilingual": 1863,
+    "long_tokens": 55
+  },
+  "config": {
+    "target_vocab_size": 128000,
+    "max_token_length": 32,
+    "category_priorities": {
+      "keep": {
+        "english": {
+          "priority": 10,
+          "description": "Essential English tokens",
+          "max_token_length": 32
+        },
+        "code": {
+          "priority": 9,
+          "description": "Code tokens (Python, JS/TS, C/C++)",
+          "max_token_length": 32,
+          "languages": [
+            "python",
+            "javascript",
+            "typescript",
+            "c",
+            "cpp"
+          ]
+        },
+        "indic": {
+          "priority": 8,
+          "description": "Indic language tokens (strong Devanagari)",
+          "max_token_length": 32,
+          "focus_scripts": [
+            "devanagari"
+          ]
+        },
+        "special": {
+          "priority": 7,
+          "description": "Special tokens for control and formatting",
+          "max_token_length": 32
+        },
+        "numeric": {
+          "priority": 6,
+          "description": "Number tokens",
+          "max_token_length": 32
+        },
+        "symbols": {
+          "priority": 5,
+          "description": "Punctuation and operators for JSON/code",
+          "max_token_length": 32
+        }
+      },
+      "remove": {
+        "east_asian": {
+          "description": "Chinese, Japanese, Korean tokens",
+          "reason": "Not in scope for this tokenizer"
+        },
+        "middle_eastern": {
+          "description": "Arabic, Hebrew, Persian tokens",
+          "reason": "Not in scope for this tokenizer"
+        },
+        "european": {
+          "description": "Cyrillic, Greek tokens (except Latin)",
+          "reason": "Low priority, can use byte fallback"
+        },
+        "multilingual": {
+          "description": "Mixed language tokens",
+          "reason": "Ambiguous, low utility"
+        },
+        "long_tokens": {
+          "description": "Tokens with length > 32",
+          "reason": "Exceeds max token length requirement"
+        }
+      }
+    }
+  }
+}

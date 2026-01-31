@@ -1,0 +1,169 @@
+{
+  "special_tokens_scheme": {
+    "version": "1.0",
+    "description": "Special token allocation for 128k tokenizer with future governance support",
+    
+    "base_special_tokens": {
+      "description": "Core 20 tokens - Foundation tokens used across all models",
+      "id_range": [0, 19],
+      "tokens": [
+        {"id": 0, "token": "</s>", "description": "End of sequence"},
+        {"id": 1, "token": "<pad>", "description": "Padding token"},
+        {"id": 2, "token": "<s>", "description": "Start of sequence"},
+        {"id": 3, "token": "<unk>", "description": "Unknown token"},
+        {"id": 4, "token": "<|endoftext|>", "description": "End of text (GPT-style)"},
+        {"id": 5, "token": "<|im_end|>", "description": "End of turn (ChatML)"},
+        {"id": 6, "token": "<|im_start|>", "description": "Start of turn (ChatML)"},
+        {"id": 7, "token": "[/INST]", "description": "End instruction (Mistral-style)"},
+        {"id": 8, "token": "[INST]", "description": "Start instruction (Mistral-style)"},
+        {"id": 9, "token": "[TOOL_CALLS]", "description": "Tool call marker"},
+        {"id": 10, "token": "<|system|>", "description": "System role marker"},
+        {"id": 11, "token": "<|user|>", "description": "User role marker"},
+        {"id": 12, "token": "<|assistant|>", "description": "Assistant role marker"},
+        {"id": 13, "token": "<|tool|>", "description": "Tool role marker"},
+        {"id": 14, "token": "<reserved_14>", "description": "Reserved for future role"},
+        {"id": 15, "token": "<reserved_15>", "description": "Reserved for future role"},
+        {"id": 16, "token": "<reserved_16>", "description": "Reserved base token"},
+        {"id": 17, "token": "<reserved_17>", "description": "Reserved base token"},
+        {"id": 18, "token": "<reserved_18>", "description": "Reserved base token"},
+        {"id": 19, "token": "<reserved_19>", "description": "Reserved base token"}
+      ]
+    },
+    
+    "document_structure_tokens": {
+      "description": "Document and chunk separation tokens",
+      "id_range": [20, 29],
+      "tokens": [
+        {"id": 20, "token": "<|doc_start|>", "description": "Start of document"},
+        {"id": 21, "token": "<|doc_end|>", "description": "End of document"},
+        {"id": 22, "token": "<|chunk_start|>", "description": "Start of chunk/segment"},
+        {"id": 23, "token": "<|chunk_end|>", "description": "End of chunk/segment"},
+        {"id": 24, "token": "<|section_start|>", "description": "Start of section"},
+        {"id": 25, "token": "<|section_end|>", "description": "End of section"},
+        {"id": 26, "token": "<|paragraph|>", "description": "Paragraph separator"},
+        {"id": 27, "token": "<|line_break|>", "description": "Explicit line break"},
+        {"id": 28, "token": "<|page_break|>", "description": "Page break"},
+        {"id": 29, "token": "<|separator|>", "description": "Generic separator"}
+      ]
+    },
+    
+    "code_tokens": {
+      "description": "Code block and language markers",
+      "id_range": [30, 49],
+      "tokens": [
+        {"id": 30, "token": "<|code_start|>", "description": "Start of code block"},
+        {"id": 31, "token": "<|code_end|>", "description": "End of code block"},
+        {"id": 32, "token": "<|lang:python|>", "description": "Python code"},
+        {"id": 33, "token": "<|lang:javascript|>", "description": "JavaScript code"},
+        {"id": 34, "token": "<|lang:java|>", "description": "Java code"},
+        {"id": 35, "token": "<|lang:cpp|>", "description": "C++ code"},
+        {"id": 36, "token": "<|lang:c|>", "description": "C code"},
+        {"id": 37, "token": "<|lang:rust|>", "description": "Rust code"},
+        {"id": 38, "token": "<|lang:go|>", "description": "Go code"},
+        {"id": 39, "token": "<|lang:typescript|>", "description": "TypeScript code"},
+        {"id": 40, "token": "<|lang:bash|>", "description": "Bash/Shell code"},
+        {"id": 41, "token": "<|lang:sql|>", "description": "SQL code"},
+        {"id": 42, "token": "<|lang:html|>", "description": "HTML code"},
+        {"id": 43, "token": "<|lang:css|>", "description": "CSS code"},
+        {"id": 44, "token": "<|lang:json|>", "description": "JSON data"},
+        {"id": 45, "token": "<|lang:yaml|>", "description": "YAML data"},
+        {"id": 46, "token": "<|lang:xml|>", "description": "XML data"},
+        {"id": 47, "token": "<|lang:markdown|>", "description": "Markdown"},
+        {"id": 48, "token": "<|inline_code|>", "description": "Inline code marker"},
+        {"id": 49, "token": "<|code_comment|>", "description": "Code comment"}
+      ]
+    },
+    
+    "json_structural_tokens": {
+      "description": "JSON and tool-call envelope tokens",
+      "id_range": [50, 59],
+      "tokens": [
+        {"id": 50, "token": "{", "description": "JSON object start"},
+        {"id": 51, "token": "}", "description": "JSON object end"},
+        {"id": 52, "token": "[", "description": "JSON array start"},
+        {"id": 53, "token": "]", "description": "JSON array end"},
+        {"id": 54, "token": ":", "description": "JSON key-value separator"},
+        {"id": 55, "token": ",", "description": "JSON element separator"},
+        {"id": 56, "token": "\"", "description": "JSON string quote"},
+        {"id": 57, "token": "<|json_start|>", "description": "Start of JSON block"},
+        {"id": 58, "token": "<|json_end|>", "description": "End of JSON block"},
+        {"id": 59, "token": "<|null|>", "description": "JSON null value"}
+      ]
+    },
+    
+    "tool_call_tokens": {
+      "description": "Function calling and tool use tokens",
+      "id_range": [60, 74],
+      "tokens": [
+        {"id": 60, "token": "<|tool_call_start|>", "description": "Start of tool call"},
+        {"id": 61, "token": "<|tool_call_end|>", "description": "End of tool call"},
+        {"id": 62, "token": "<|tool_result_start|>", "description": "Start of tool result"},
+        {"id": 63, "token": "<|tool_result_end|>", "description": "End of tool result"},
+        {"id": 64, "token": "<|function_name|>", "description": "Function name marker"},
+        {"id": 65, "token": "<|function_args|>", "description": "Function arguments marker"},
+        {"id": 66, "token": "<|function_result|>", "description": "Function result marker"},
+        {"id": 67, "token": "<|tool_error|>", "description": "Tool execution error"},
+        {"id": 68, "token": "<|parallel_tool_calls|>", "description": "Multiple parallel tool calls"},
+        {"id": 69, "token": "<reserved_tool_69>", "description": "Reserved for tool use"},
+        {"id": 70, "token": "<reserved_tool_70>", "description": "Reserved for tool use"},
+        {"id": 71, "token": "<reserved_tool_71>", "description": "Reserved for tool use"},
+        {"id": 72, "token": "<reserved_tool_72>", "description": "Reserved for tool use"},
+        {"id": 73, "token": "<reserved_tool_73>", "description": "Reserved for tool use"},
+        {"id": 74, "token": "<reserved_tool_74>", "description": "Reserved for tool use"}
+      ]
+    },
+    
+    "metadata_tokens": {
+      "description": "Source metadata and attribution tags",
+      "id_range": [75, 99],
+      "tokens": [
+        {"id": 75, "token": "<|meta_start|>", "description": "Start of metadata block"},
+        {"id": 76, "token": "<|meta_end|>", "description": "End of metadata block"},
+        {"id": 77, "token": "<|source:web|>", "description": "Web source"},
+        {"id": 78, "token": "<|source:book|>", "description": "Book source"},
+        {"id": 79, "token": "<|source:arxiv|>", "description": "ArXiv paper"},
+        {"id": 80, "token": "<|source:github|>", "description": "GitHub repository"},
+        {"id": 81, "token": "<|source:wikipedia|>", "description": "Wikipedia article"},
+        {"id": 82, "token": "<|source:stackoverflow|>", "description": "Stack Overflow"},
+        {"id": 83, "token": "<|source:news|>", "description": "News article"},
+        {"id": 84, "token": "<|source:docs|>", "description": "Technical documentation"},
+        {"id": 85, "token": "<|source:conversation|>", "description": "Conversation data"},
+        {"id": 86, "token": "<|lang:en|>", "description": "English language"},
+        {"id": 87, "token": "<|lang:hi|>", "description": "Hindi language"},
+        {"id": 88, "token": "<|lang:code|>", "description": "Programming code"},
+        {"id": 89, "token": "<|quality:high|>", "description": "High quality content"},
+        {"id": 90, "token": "<|quality:medium|>", "description": "Medium quality content"},
+        {"id": 91, "token": "<|quality:low|>", "description": "Low quality content"},
+        {"id": 92, "token": "<|timestamp|>", "description": "Timestamp marker"},
+        {"id": 93, "token": "<|url|>", "description": "URL marker"},
+        {"id": 94, "token": "<|title|>", "description": "Title marker"},
+        {"id": 95, "token": "<|author|>", "description": "Author marker"},
+        {"id": 96, "token": "<|license|>", "description": "License marker"},
+        {"id": 97, "token": "<reserved_meta_97>", "description": "Reserved metadata"},
+        {"id": 98, "token": "<reserved_meta_98>", "description": "Reserved metadata"},
+        {"id": 99, "token": "<reserved_meta_99>", "description": "Reserved metadata"}
+      ]
+    },
+    
+    "future_governance_reserved": {
+      "description": "Reserved token IDs for future needs - DO NOT ALLOCATE",
+      "id_range": [100, 299],
+      "count": 200,
+      "tokens": "Reserved for future special tokens, model updates, and governance requirements"
+    },
+    
+    "regular_vocabulary_start": {
+      "description": "Regular vocabulary tokens start here",
+      "id_start": 300,
+      "note": "All regular English, Code, Indic, Numeric, and Symbol tokens are allocated from ID 300 onwards"
+    }
+  },
+  
+  "usage_examples": {
+    "chat_format": "<|im_start|><|system|>You are a helpful assistant<|im_end|><|im_start|><|user|>Hello<|im_end|><|im_start|><|assistant|>",
+    "document_with_metadata": "<|meta_start|><|source:arxiv|><|title|>Deep Learning Paper<|meta_end|><|doc_start|>Abstract: ...<|doc_end|>",
+    "code_block": "<|code_start|><|lang:python|>def hello():\n    print('world')<|code_end|>",
+    "tool_call": "<|tool_call_start|><|function_name|>search<|function_args|>{\"query\": \"LLM\"}<|tool_call_end|>",
+    "chunked_document": "<|doc_start|><|chunk_start|>First chunk<|chunk_end|><|chunk_start|>Second chunk<|chunk_end|><|doc_end|>"
+  }
+}
