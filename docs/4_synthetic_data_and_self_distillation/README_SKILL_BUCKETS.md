@@ -835,7 +835,7 @@ Everyday reasoning about the physical and social world, including intuitive phys
 ### Sub-skills
 - Physical commonsense (objects, gravity, fluids)
 - Social commonsense (intentions, reactions, norms)
-- Temporal commonsense (event ordering, duration)
+- Temporal commonsense (event ordering, duration) 
 - Spatial reasoning (containment, relative position)
 - Functional knowledge (what objects are for)
 
