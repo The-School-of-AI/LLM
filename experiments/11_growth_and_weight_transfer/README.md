@@ -1,4 +1,4 @@
-# Growth & Weight Transfer Experiment
+<img width="778" height="855" alt="image" src="https://github.com/user-attachments/assets/4e685381-941c-4d0e-b47c-58ecfbed833a" /># Growth & Weight Transfer Experiment
 
 ## 🎯 Overview
 
@@ -240,6 +240,12 @@ growth:
 ---
 
 ## 📊 Detailed Results
+
+<img width="761" height="895" alt="image" src="https://github.com/user-attachments/assets/1aaa75fc-c559-477f-8e63-88ea1687db35" />
+<img width="775" height="913" alt="image" src="https://github.com/user-attachments/assets/f88e2a6e-c7bd-465c-8e01-ed3ad6c6c67c" />
+<img width="778" height="855" alt="image" src="https://github.com/user-attachments/assets/deac66c4-e8ee-40f0-8af1-4b18268731a4" />
+
+
 
 ### Phase-by-Phase Breakdown
 
