@@ -1,8 +1,8 @@
 {
   "hardware": {
     "num_gpus": 8,
-    "price_per_gpu_hour": 2.50,
-    "mfu": 0.30,
+    "price_per_gpu_hour": 2.5,
+    "mfu": 0.3,
     "quantization": "all",
     "tflops_mode": "dense",
     "tflops_per_gpu": {
@@ -29,7 +29,11 @@
         "top_k_experts": 0,
         "null_expert_prob": 0.0,
         "sequence_length": 4096,
-        "tie_embeddings": true
+        "tie_embeddings": true,
+        "ffn_type": "swiglu",
+        "num_kv_heads": 4,
+        "attention_kernel_multiplier": 0.9,
+        "quantization_flops_multiplier": 1.0
       }
     },
     {
@@ -42,11 +46,17 @@
         "intermediate_size": 3840,
         "num_layers": 24,
         "num_heads": 16,
-        "num_experts": 8,
+        "num_experts": 512,
         "top_k_experts": 2,
-        "null_expert_prob": 0.0,
+        "null_expert_prob": 0.05,
         "sequence_length": 4096,
-        "tie_embeddings": true
+        "tie_embeddings": true,
+        "ffn_type": "swiglu",
+        "num_kv_heads": 4,
+        "attention_kernel_multiplier": 0.9,
+        "quantization_flops_multiplier": 1.0,
+        "moe_capacity_factor": 1.1,
+        "moe_routing_overhead_ratio": 0.02
       }
     },
     {
@@ -59,11 +69,17 @@
         "intermediate_size": 5802,
         "num_layers": 24,
         "num_heads": 32,
-        "num_experts": 8,
+        "num_experts": 512,
         "top_k_experts": 2,
-        "null_expert_prob": 0.0,
+        "null_expert_prob": 0.05,
         "sequence_length": 4096,
-        "tie_embeddings": true
+        "tie_embeddings": true,
+        "ffn_type": "swiglu",
+        "num_kv_heads": 8,
+        "attention_kernel_multiplier": 0.9,
+        "quantization_flops_multiplier": 1.0,
+        "moe_capacity_factor": 1.1,
+        "moe_routing_overhead_ratio": 0.02
       }
     },
     {
@@ -76,12 +92,18 @@
         "intermediate_size": 49152,
         "num_layers": 24,
         "num_heads": 32,
-        "num_experts": 9,
+        "num_experts": 512,
         "top_k_experts": 2,
-        "null_expert_prob": 0.0,
+        "null_expert_prob": 0.05,
         "num_moe_layers": 24,
         "tie_embeddings": true,
-        "sequence_length": 4096
+        "sequence_length": 4096,
+        "ffn_type": "swiglu",
+        "num_kv_heads": 8,
+        "attention_kernel_multiplier": 0.9,
+        "quantization_flops_multiplier": 1.0,
+        "moe_capacity_factor": 1.1,
+        "moe_routing_overhead_ratio": 0.02
       }
     }
   ]
