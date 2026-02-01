@@ -23,7 +23,7 @@ from curriculum_tools import (
     apply_floors_caps,
 )
 
-DEFAULT_OWNER = "Team 2: Curriculum Architects"
+DEFAULT_OWNER = "Curriculum Team"
 
 @dataclass
 class LanguagePolicy:
@@ -39,11 +39,11 @@ class ContextPolicy:
     min_context_tokens: int = 4096
     pretrain_context_tokens: int = 4096
     long_context_target_tokens: int = 262144
-    note: str = "Team 2 ensures curriculum is compatible with later context extension; does not implement extension."
+    note: str = "Curriculum is compatible with later context extension; does not implement extension."
 
 def default_dataset_interface() -> dict:
     return {
-        "input_from_team1": {
+        "input_data_requirements": {
             "required_fields": ["dataset_id", "license", "estimated_tokens", "domain_tags", "language_tags", "cleaning_claims"]
         },
         "segmentation_requests_allowed": True,

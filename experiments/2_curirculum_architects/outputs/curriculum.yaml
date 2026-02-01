@@ -1,6 +1,6 @@
 version: '0.2'
-owner_team: 'Team 2: Curriculum Architects'
-frozen_on: '2026-01-31'
+owner_team: Curriculum Team
+frozen_on: '2026-02-01'
 languages:
   primary:
   - en
@@ -19,8 +19,8 @@ context_policy:
   min_context_tokens: 4096
   pretrain_context_tokens: 4096
   long_context_target_tokens: 262144
-  note: Team 2 ensures curriculum is compatible with later context extension; does
-    not implement extension.
+  note: Curriculum is compatible with later context extension; does not implement
+    extension.
 growth_schedule:
   stages:
   - name: 1B
@@ -36,7 +36,7 @@ growth_schedule:
     order: 4
     curriculum_profile: final_adaptive_knobs
 dataset_interface:
-  input_from_team1:
+  input_data_requirements:
     required_fields:
     - dataset_id
     - license
@@ -89,11 +89,11 @@ guardrails:
 stage_profiles:
   base:
     band_weights:
-      B0: 0.780992
-      B1: 0.219008
-      B2: 0.0
-      B3: 0.0
-      B4: 0.0
+      B0: 0.440603
+      B1: 0.24478
+      B2: 0.175793
+      B3: 0.129033
+      B4: 0.009791
       B5: 0.0
     modality_weights:
       general_text: 0.86
@@ -105,12 +105,12 @@ stage_profiles:
     - Reasoning seed exists (B4/B5 small) to avoid 'never appears'.
   harder_shift_1:
     band_weights:
-      B0: 1.0
-      B1: 0.0
-      B2: 0.0
-      B3: 0.0
-      B4: 0.0
-      B5: 0.0
+      B0: 0.315318
+      B1: 0.097413
+      B2: 0.266734
+      B3: 0.189669
+      B4: 0.12086
+      B5: 0.010007
     modality_weights:
       general_text: 0.78
       code: 0.18
@@ -121,12 +121,12 @@ stage_profiles:
     - Hindi can be introduced within caps, staged mainly into B2–B4.
   harder_shift_2:
     band_weights:
-      B0: 0.905155
-      B1: 0.094845
-      B2: 0.0
-      B3: 0.0
-      B4: 0.0
-      B5: 0.0
+      B0: 0.183137
+      B1: 0.100056
+      B2: 0.246904
+      B3: 0.239549
+      B4: 0.200336
+      B5: 0.030017
     modality_weights:
       general_text: 0.68
       code: 0.24
@@ -136,12 +136,12 @@ stage_profiles:
     - Ensure reasoning and long-context eval start improving measurably here.
   final_adaptive_knobs:
     band_weights:
-      B0: 1.0
-      B1: 0.0
-      B2: 0.0
-      B3: 0.0
-      B4: 0.0
-      B5: 0.0
+      B0: 0.099914
+      B1: 0.037137
+      B2: 0.169292
+      B3: 0.215546
+      B4: 0.228658
+      B5: 0.249453
     modality_weights:
       general_text: 0.62
       code: 0.28

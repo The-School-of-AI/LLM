@@ -1,8 +1,8 @@
 
-# Steps: Using data with the curriculum generator (no proxy models)
+# Steps: Using data with the curriculum generator
 
-This walkthrough shows the minimal workflow to generate a mentor-schema-aligned `curriculum.yaml`
-using your real data (FineWeb/Dolma/Sangraha/etc.) and the provided tools.
+This walkthrough shows the minimal workflow to generate a schema-aligned `curriculum.yaml`
+using your real data (FineWeb/Dolma/etc.) and the provided tools.
 
 ---
 
@@ -13,11 +13,11 @@ using your real data (FineWeb/Dolma/Sangraha/etc.) and the provided tools.
     capacity + quantile anchoring + KL regularization.
 
 - `curriculum_yaml_generator.py`  
-  - Generates `curriculum.yaml` in the mentor schema.
+  - Generates `curriculum.yaml` in the standard schema.
   - Can either use the default stage profiles OR compute band weights from a base distribution.
 
 - `curriculum_validator.py`  
-  - Validates the YAML against mentor-style guardrails.
+  - Validates the YAML against guardrails.
 
 - `spike_simulator.py`  
   - Simulates rolling-window domain spikes (useful once domain tags are available).
@@ -92,7 +92,7 @@ Final output example:
 
 ## 4) Generate curriculum.yaml from base distribution
 
-Option A (fast): use default stage profiles from mentor sample
+Option A (fast): use default stage profiles.
 ```bash
 python curriculum_yaml_generator.py
 # produces curriculum.yaml (edit path in __main__ or call build_curriculum_yaml)
@@ -141,8 +141,8 @@ python spike_simulator.py --window-tokens 2000000 --max-domain-share 0.25
 
 ---
 
-## Notes for Team 3 (Coreset team)
-- Curriculum team provides:
+## Notes for Coreset Teams
+- Curriculum provides:
   - stage profiles (band weights + modality weights)
   - floors/caps and earliest-stage constraints
 - Coreset team implements:

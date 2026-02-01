@@ -1,1 +1,0 @@
-OK: curriculum.yaml passed validation.
