@@ -4,7 +4,7 @@ Growth Utilities for Weight Transfer
 This module provides functions to grow a model across architectural phases:
 1. dense_to_moe: Convert dense FFN layers to MoE blocks
 2. add_layers: Add new transformer blocks with identity initialization  
-3. scale_hidden_dim: Increase hidden dimension with RMS-preserving initialization
+3. scale_hidden_dim: Increase hidden dimension with interleaved attention transfer
 4. add_experts: Add more experts (expert explosion)
 
 Key principle: All growth operations must preserve the model's current behavior
@@ -141,50 +141,147 @@ def add_layers(
     return model
 
 
+def _interleave_qkv_weights(old_weight, num_heads, old_head_dim, new_head_dim, new_input_dim, old_input_dim):
+    """
+    Interleave Q/K/V projection weights to preserve head structure.
+    
+    The key insight: After Q/K/V projection, the output is reshaped to (num_heads, head_dim).
+    If we just concatenate zeros at the end, the reshape scrambles the heads.
+    We need to insert zeros BETWEEN each head's dimensions.
+    
+    Steps:
+    1. Reshape old weight (old_out, old_in) -> (num_heads, old_head_dim, old_in)
+    2. Create zero padding (num_heads, pad_dim, old_in)
+    3. Concatenate along head_dim: (num_heads, new_head_dim, old_in)
+    4. Flatten back: (new_out, old_in)
+    5. Expand input dimension with zeros: (new_out, new_in)
+    """
+    # old_weight shape: (num_heads * old_head_dim, old_input_dim)
+    # e.g., (576, 576) for Q with 9 heads, 64 head_dim
+    
+    pad_dim = new_head_dim - old_head_dim  # e.g., 80 - 64 = 16
+    
+    # Step 1: Reshape to per-head view
+    # (576, 576) -> (9, 64, 576)
+    per_head = old_weight.reshape(num_heads, old_head_dim, old_input_dim)
+    
+    # Step 2: Create zero padding for each head
+    # (9, 16, 576)
+    zero_pad = torch.zeros(
+        num_heads, pad_dim, old_input_dim,
+        dtype=old_weight.dtype, device=old_weight.device
+    )
+    
+    # Step 3: Concatenate along head_dim axis
+    # (9, 64, 576) cat (9, 16, 576) -> (9, 80, 576)
+    expanded = torch.cat([per_head, zero_pad], dim=1)
+    
+    # Step 4: Flatten back to 2D
+    # (9, 80, 576) -> (720, 576)
+    new_out_dim = num_heads * new_head_dim
+    flattened = expanded.reshape(new_out_dim, old_input_dim)
+    
+    # Step 5: Expand input dimension with zeros
+    # (720, 576) -> (720, 720)
+    new_weight = torch.zeros(
+        new_out_dim, new_input_dim,
+        dtype=old_weight.dtype, device=old_weight.device
+    )
+    new_weight[:, :old_input_dim] = flattened
+    
+    return new_weight
+
+
+def _interleave_o_proj_weights(old_weight, num_heads, old_head_dim, new_head_dim, new_output_dim, old_output_dim):
+    """
+    Interleave O projection weights to preserve head structure.
+    
+    O projection: (hidden_size, num_heads * head_dim) -> takes attention output and projects back
+    
+    We need to:
+    1. Reshape input dimension to per-head: (old_hidden, num_heads, old_head_dim)
+    2. Add zero padding per head: (old_hidden, num_heads, new_head_dim)
+    3. Flatten: (old_hidden, new_qkv_dim)
+    4. Expand output dimension with zeros: (new_hidden, new_qkv_dim)
+    """
+    # old_weight shape: (old_hidden, num_heads * old_head_dim)
+    # e.g., (576, 576)
+    
+    pad_dim = new_head_dim - old_head_dim
+    old_qkv_dim = num_heads * old_head_dim
+    new_qkv_dim = num_heads * new_head_dim
+    
+    # Step 1: Reshape input (qkv) dimension to per-head view
+    # (576, 576) -> (576, 9, 64)
+    per_head = old_weight.reshape(old_output_dim, num_heads, old_head_dim)
+    
+    # Step 2: Create zero padding
+    # (576, 9, 16)
+    zero_pad = torch.zeros(
+        old_output_dim, num_heads, pad_dim,
+        dtype=old_weight.dtype, device=old_weight.device
+    )
+    
+    # Step 3: Concatenate
+    # (576, 9, 80)
+    expanded = torch.cat([per_head, zero_pad], dim=2)
+    
+    # Step 4: Flatten back
+    # (576, 720)
+    flattened = expanded.reshape(old_output_dim, new_qkv_dim)
+    
+    # Step 5: Expand output dimension with zeros (for new hidden dims)
+    # (576, 720) -> (720, 720)
+    new_weight = torch.zeros(
+        new_output_dim, new_qkv_dim,
+        dtype=old_weight.dtype, device=old_weight.device
+    )
+    new_weight[:old_output_dim, :] = flattened
+    
+    return new_weight
+
+
 def scale_hidden_dim(
     model: nn.Module,
     new_hidden_size: int,
     new_intermediate_size: Optional[int] = None,
-    **kwargs,  # Accept but ignore legacy params
+    **kwargs,
 ) -> nn.Module:
     """
-    Scale the hidden dimension using RMS-PRESERVING initialization.
+    Scale the hidden dimension with INTERLEAVED attention weight transfer.
     
-    The Key Insight (RMSNorm Bug Fix):
-    ==================================
-    RMSNorm computes: output = x / sqrt(mean(x²) + eps) * weight
+    The Critical Insight:
+    =====================
+    When hidden_size changes, head_dim changes too (head_dim = hidden_size / num_heads).
+    After Q/K/V projection, output is reshaped to (num_heads, head_dim).
     
-    If we zero-pad new dimensions:
-    - Old: RMS([1,1,1,...]) = 1.0
-    - New: RMS([1,1,1,...,0,0,0]) = sqrt(576/720) ≈ 0.894
-    - The output is scaled by 1/0.894 ≈ 1.12 → 12% magnitude shift!
+    Naive copy: [head0_old | head1_old | ... | zeros] 
+    After reshape: heads are SCRAMBLED!
     
-    Solution: Pad with values that PRESERVE the RMS:
-    - New dims get gaussian noise with same variance as old dims
-    - This keeps mean(x²) unchanged → RMSNorm output unchanged
+    Interleaved copy: [head0_old | zeros | head1_old | zeros | ...]
+    After reshape: each head gets [old_values | zeros] - CORRECT!
     
-    For output projections (o_proj, down_proj):
-    - New OUTPUT rows = 0 (new dims don't contribute to residual)
-    
-    Combined strategy:
-    - Embeddings: RMS-preserving noise in new dims
-    - Input weights: RMS-preserving noise in new input cols  
-    - Output weights: Zero in new output rows
-    
-    Args:
-        model: Model to scale (MoE or dense)
-        new_hidden_size: Target hidden size
-        new_intermediate_size: Target intermediate size (default: proportional)
+    This function implements interleaved weight transfer for Q/K/V/O projections.
     """
     old_config = model.config
     old_hidden = old_config.hidden_size
     old_intermediate = old_config.intermediate_size
+    num_heads = old_config.num_attention_heads
+    num_kv_heads = old_config.num_key_value_heads
     
     if new_hidden_size <= old_hidden:
         raise ValueError(f"new_hidden_size must be > current ({old_hidden})")
     
+    if new_hidden_size % num_heads != 0:
+        raise ValueError(f"new_hidden_size ({new_hidden_size}) must be divisible by num_heads ({num_heads})")
+    
     if new_intermediate_size is None:
         new_intermediate_size = int(old_intermediate * new_hidden_size / old_hidden)
+    
+    old_head_dim = old_hidden // num_heads
+    new_head_dim = new_hidden_size // num_heads
+    old_kv_head_dim = old_hidden // num_kv_heads
+    new_kv_head_dim = new_hidden_size // num_kv_heads
     
     # Determine if MoE
     is_moe = hasattr(model, 'config') and hasattr(model.config, 'num_experts')
@@ -220,132 +317,99 @@ def scale_hidden_dim(
         )
         new_model = SmolLM2(new_config)
     
-    def rms_preserving_pad(old_tensor, new_shape, pad_dims, dtype, device):
-        """
-        Pad tensor with RMS-preserving gaussian noise.
-        
-        pad_dims: list of (dim_idx, old_size, new_size) tuples
-        """
-        # Compute variance of old tensor
-        variance = (old_tensor ** 2).mean().item()
-        std = math.sqrt(variance) if variance > 0 else 0.01
-        
-        # Create new tensor with gaussian noise
-        new_tensor = torch.randn(new_shape, dtype=dtype, device=device) * std
-        
-        # Copy old values
-        slices = [slice(None)] * len(new_shape)
-        for dim_idx, old_size, new_size in pad_dims:
-            slices[dim_idx] = slice(0, old_size)
-        
-        new_tensor[tuple(slices)] = old_tensor
-        return new_tensor
-    
-    
-    # Transfer and initialize weights with DECOUPLED NOISE CHANNEL strategy
     with torch.no_grad():
-        # === 1. Embeddings: RMS-preserving noise in new dims ===
-        # This creates a "noise channel" with correct variance for RMSNorm
+        # === 1. Embeddings: Zero-pad new dimensions ===
         old_embed = model.embed_tokens.weight.data
-        new_model.embed_tokens.weight.data = rms_preserving_pad(
-            old_embed, 
-            (old_config.vocab_size, new_hidden_size),
-            [(1, old_hidden, new_hidden_size)],
-            old_embed.dtype, old_embed.device
-        )
+        new_model.embed_tokens.weight.data.zero_()
+        new_model.embed_tokens.weight.data[:, :old_hidden] = old_embed
         
-        # === 2. Final Norm (RMSNorm): new dims = 1.0 ===
+        # === 2. Final Norm: new dims = 1.0 ===
         new_model.norm.weight.data[:old_hidden] = model.norm.weight.data
         new_model.norm.weight.data[old_hidden:] = 1.0
         
-        # === 3. LM Head: Zero new input cols (IGNORE noise channel) ===
+        # === 3. LM Head: Zero new input cols ===
         if hasattr(model, 'lm_head') and model.lm_head is not None:
             new_model.lm_head.weight.data.zero_()
             new_model.lm_head.weight.data[:, :old_hidden] = model.lm_head.weight.data
         
         # === 4. Transfer each layer ===
         for old_layer, new_layer in zip(model.layers, new_model.layers):
-            # Layer norms: Identity scaling for noise channel
+            # Layer norms
             new_layer.input_layernorm.weight.data[:old_hidden] = old_layer.input_layernorm.weight.data
             new_layer.input_layernorm.weight.data[old_hidden:] = 1.0
             new_layer.post_attention_layernorm.weight.data[:old_hidden] = old_layer.post_attention_layernorm.weight.data
             new_layer.post_attention_layernorm.weight.data[old_hidden:] = 1.0
             
-            # === Attention ===
             old_attn = old_layer.self_attn
             new_attn = new_layer.self_attn
             
-            # Q, K, V projections: ZERO new input cols (IGNORE noise channel)
-            for old_proj, new_proj in [
-                (old_attn.q_proj, new_attn.q_proj),
-                (old_attn.k_proj, new_attn.k_proj),
-                (old_attn.v_proj, new_attn.v_proj),
-            ]:
-                new_proj.weight.data.zero_()
-                old_out = old_proj.weight.shape[0]
-                
-                # Copy old weights
-                new_proj.weight.data[:old_out, :old_hidden] = old_proj.weight.data
-                
-                # New output dims (if any) initialized to 0 or small noise? 
-                # Let's keep them 0 for now to be safe.
-                # New Input dims (576:720) are 0 → Ignore noise channel!
+            # === Q projection: INTERLEAVED transfer ===
+            new_attn.q_proj.weight.data = _interleave_qkv_weights(
+                old_attn.q_proj.weight.data,
+                num_heads, old_head_dim, new_head_dim,
+                new_hidden_size, old_hidden
+            )
             
-            # O projection: Zero new output rows (Block noise from affecting residual)
-            old_out_h = old_attn.o_proj.weight.shape[0]
-            old_in = old_attn.o_proj.weight.shape[1]
+            # === K projection: INTERLEAVED transfer (uses num_kv_heads) ===
+            new_attn.k_proj.weight.data = _interleave_qkv_weights(
+                old_attn.k_proj.weight.data,
+                num_kv_heads, old_kv_head_dim, new_kv_head_dim,
+                new_hidden_size, old_hidden
+            )
             
-            new_attn.o_proj.weight.data.zero_()
-            # Copy old weights. New input cols (from QKV output) depend on QKV expansion strategy
-            # Since QKV new output dims are 0, we can copy normally.
+            # === V projection: INTERLEAVED transfer (uses num_kv_heads) ===
+            new_attn.v_proj.weight.data = _interleave_qkv_weights(
+                old_attn.v_proj.weight.data,
+                num_kv_heads, old_kv_head_dim, new_kv_head_dim,
+                new_hidden_size, old_hidden
+            )
             
-            # Wait, if QKV expanded head output, o_proj input dim increased.
-            # But earlier we just copied `[:old_out_h, :old_in]`.
-            new_attn.o_proj.weight.data[:old_out_h, :old_in] = old_attn.o_proj.weight.data
+            # === O projection: INTERLEAVED transfer ===
+            new_attn.o_proj.weight.data = _interleave_o_proj_weights(
+                old_attn.o_proj.weight.data,
+                num_heads, old_head_dim, new_head_dim,
+                new_hidden_size, old_hidden
+            )
             
             # === MLP / MoE Experts ===
             if hasattr(old_layer, 'mlp'):
-                _transfer_mlp_decoupled(old_layer.mlp, new_layer.mlp, 
-                                        old_hidden, new_hidden_size,
-                                        old_intermediate, new_intermediate_size)
+                _transfer_mlp_weights(old_layer.mlp, new_layer.mlp, 
+                                      old_hidden, new_hidden_size,
+                                      old_intermediate, new_intermediate_size)
             elif hasattr(old_layer, 'moe'):
-                # Transfer router: Zero new input cols (IGNORE noise channel)
+                # Router: zero new input cols
                 old_gate = old_layer.moe.router.gate.weight.data
                 new_layer.moe.router.gate.weight.data.zero_()
                 new_layer.moe.router.gate.weight.data[:, :old_hidden] = old_gate
                 
-                # Transfer each expert
+                # Each expert
                 for old_exp, new_exp in zip(old_layer.moe.experts, new_layer.moe.experts):
-                    _transfer_mlp_decoupled(old_exp, new_exp,
-                                            old_hidden, new_hidden_size,
-                                            old_intermediate, new_intermediate_size)
-
+                    _transfer_mlp_weights(old_exp, new_exp,
+                                          old_hidden, new_hidden_size,
+                                          old_intermediate, new_intermediate_size)
+    
     print(f"✓ Scaled hidden dimension from {old_hidden} to {new_hidden_size}")
+    print(f"  - Head dim: {old_head_dim} → {new_head_dim}")
     print(f"  - Intermediate: {old_intermediate} → {new_intermediate_size}")
-    print(f"  - Strategy: DECOUPLED NOISE (Embed=Noise, Proj=Zero)")
+    print(f"  - Strategy: INTERLEAVED (preserves attention heads)")
     print(f"  - New parameter count: {new_model.num_parameters():,}")
     
     return new_model
 
 
-def _transfer_mlp_decoupled(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, new_inter):
+def _transfer_mlp_weights(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, new_inter):
     """
-    Transfer MLP weights with decoupled noise strategy.
-    
-    Key principle:
-    - gate_proj, up_proj: ZERO new input cols (ignore noise channel)
-    - down_proj: ZERO new output rows (don't write to noise channel)
+    Transfer MLP weights with zero-padding for new dimensions.
     """
-    # gate_proj: Zero new input cols
+    # gate_proj: (intermediate, hidden) - zero new input cols
     new_mlp.gate_proj.weight.data.zero_()
     new_mlp.gate_proj.weight.data[:old_inter, :old_hidden] = old_mlp.gate_proj.weight.data
-    # If intermediate grew, new rows are 0
     
-    # up_proj: Zero new input cols
+    # up_proj: same as gate_proj
     new_mlp.up_proj.weight.data.zero_()
     new_mlp.up_proj.weight.data[:old_inter, :old_hidden] = old_mlp.up_proj.weight.data
     
-    # down_proj: Zero new output rows
+    # down_proj: (hidden, intermediate) - zero new output rows
     new_mlp.down_proj.weight.data.zero_()
     new_mlp.down_proj.weight.data[:old_hidden, :old_inter] = old_mlp.down_proj.weight.data
 
@@ -418,8 +482,8 @@ if __name__ == "__main__":
     print("\n3. Adding layers...")
     moe_model = add_layers(moe_model, num_new_layers=2)
     
-    # 4. Test scale_hidden_dim with RMS-PRESERVING
-    print("\n4. Scaling hidden dimension (RMS-preserving)...")
+    # 4. Test scale_hidden_dim with INTERLEAVED
+    print("\n4. Scaling hidden dimension (interleaved)...")
     moe_model = scale_hidden_dim(moe_model, new_hidden_size=384)
     
     # 5. Test add_experts
