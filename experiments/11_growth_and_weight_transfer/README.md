@@ -1,4 +1,4 @@
-<img width="778" height="855" alt="image" src="https://github.com/user-attachments/assets/4e685381-941c-4d0e-b47c-58ecfbed833a" /># Growth & Weight Transfer Experiment
+# Growth & Weight Transfer Experiment
 
 ## 🎯 Overview
 
