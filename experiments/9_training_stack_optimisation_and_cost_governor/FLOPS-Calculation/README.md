@@ -77,6 +77,9 @@ Attention_Term = 12 * Num_Layers * Hidden_Size * (Sequence_Length^2)
 Total_Per_Seq  = Linear_Term + Attention_Term
 ```
 *Total Training FLOPs* is then scaled by the total number of sequences (`Total_Tokens / Sequence_Length`).
+Notes:
+- `Active_NonEmbedding_Params` excludes embeddings, but includes the output logits projection even if embeddings are tied.
+- If `include_softmax_flops=true`, a small extra softmax term is added.
 
 ### 2. Parameter Counting
 - **Dense Models**: `Active Params` = `Total Params`.
@@ -84,6 +87,7 @@ Total_Per_Seq  = Linear_Term + Attention_Term
     - `Total Params`: Includes weights from **all** experts.
     - `Active Params`: Includes weights from only the **Top-K** experts selected per token.
 - **Embeddings** are counted for parameter totals but excluded from linear FLOPs.
+- **Null expert** logic still includes router compute by default (FFN skipped only).
 
 ### 3. Cost Calculation
 ```python
@@ -95,3 +99,7 @@ The `null_expert_prob` defines the fraction of tokens that skip the MoE layer (e
 - **How to determine**:
   1. **Design Choice**: Set a target (e.g., `0.1` for 10% drop rate) to enforce efficiency.
   2. **Profiling**: Run a small ~1B model benchmark, log the router's assignment distribution, and use the observed drop rate.
+
+### 5. Growth / Expansion Mode
+In `compute_flops_growth.py`, token allocation uses the same per-token FLOPs formula as
+the main calculator, so growth budgets are consistent with attention-aware compute.
