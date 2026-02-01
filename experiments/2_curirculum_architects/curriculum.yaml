@@ -1,13 +1,15 @@
-# curriculum.yaml
-# Purpose: Frozen "constitution" for how tokens are ordered/mixed over time.
-# Notes:
-# - Difficulty banding initially uses dataset-provided cleanliness + lightweight heuristics.
-# - Tokenizer-driven difficulty proxy (multi-tokenizer cross-ref) is owned by Team 6; this YAML reserves hooks for it.
-# - Agentic / tool traces formats and safety rules are owned by Team 17; this YAML reserves hooks + staging caps.
+# ============================================================
+# curriculum.yaml — CANONICAL CURRICULUM CONSTITUTION - AUTHORITATIVE
+# ============================================================
+# This file is the single source of truth for curriculum policy.
+# Any deviation requires escalation + re-freeze.
+# ============================================================
 
 version: "0.1"
 owner_team: "Team 2: Curriculum Architects"
-frozen_on: "2026-02-XX"
+status: "DRAFT" # "FROZEN"
+frozen_on: "2026-01-31"
+change_policy: "STRUCTURE_IMMUTABLE" # "NO_CHANGES_ALLOWED"
 languages:
   primary: ["en"]
   secondary:
@@ -19,504 +21,314 @@ languages:
     provider: "dataset_claimed_clean" # must come from dataset vendor/curator claims + docs
     min_confidence: 0.90              # only if dataset provides it; otherwise reject/seg-request
 
-context_policy:
-  min_context_tokens: 4096
-  pretrain_context_tokens: 4096
-  long_context_target_tokens: 262144     # later phase (post-pretrain / extension)
-  note: "Team 2 ensures curriculum is compatible with later context extension; does not implement extension."
+# ============================================================
+# GLOBAL CONTRACT
+# ============================================================
+global_contract:
+  guarantees:
+    determinism:
+      sampling: true
+      batch_content: true
+      data_order: true
+      fixed_seed_required: true
+    safety_defaults:
+      downgrade_on_uncertainty: true
+      upgrade_never_allowed: true
+  enforcement:
+    violation_action: "REJECT_OR_HALT"
 
+# ============================================================
+# LANGUAGE & CONTEXT POLICY
+# ============================================================
+language_and_context:
+
+  language_policy:
+    definition_method: "hard_cap_with_stage_gating"
+    primary_languages:
+      - lang: "en"
+        max_share: 0.92
+    secondary_languages:
+      - lang: "hi"
+        max_share: 0.08
+        earliest_stage: "3B"
+    excluded_languages:
+      - "zh"
+      - "ja"
+      - "ko"
+      - "fr"
+      - "de"
+      - "es"
+    violation_action: "DROP_SAMPLE"
+
+  context_policy:
+    definition_method: "fixed_pretrain_context"
+    min_context_tokens: 4096
+    pretrain_context_tokens: 4096
+    short_context_pretraining: false
+    long_context_extension:
+      allowed_later: true
+      owned_by: "Post-pretraining teams"
+
+# ============================================================
+# 3. DIFFICULTY SYSTEM (CORE OF CURRICULUM)
+# ============================================================
+difficulty_system:
+
+  definition_method:
+    primary: "heuristic_rules"
+    secondary: "tokenizer_proxy"
+    audit:
+      enabled: true
+      audit_model: "small_frozen_lm"
+      scope: "spot_checks_only"
+
+  tokenizer_proxy:
+    owner_team: "Team 6: Tokenizer Lab"
+    purpose: "complexity_proxy_not_quality"
+    required_metrics:
+      - avg_token_rank
+      - rare_token_ratio
+      - tail_token_ratio
+      - symbolic_token_density
+      - structural_token_density
+
+  bands:
+
+    B0:
+      name: "Nursery"
+      intent: "Surface language acquisition"
+      allowed_modalities: ["general_text"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.02
+          max_tail_ratio: 0.005
+        perplexity_range: [1.1, 30]
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B1:
+      name: "Primary"
+      intent: "Fluent everyday language"
+      allowed_modalities: ["general_text", "clean_exposition"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.05
+          max_tail_ratio: 0.01
+        perplexity_range: [10, 60]
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B2:
+      name: "HighSchool"
+      intent: "Structured knowledge without explicit reasoning"
+      allowed_modalities: ["structured_knowledge"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.10
+          max_tail_ratio: 0.02
+        perplexity_range: [30, 120]
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B3:
+      name: "Undergraduate"
+      intent: "Reasoning emergence"
+      allowed_modalities: ["technical_text", "code"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.20
+          max_tail_ratio: 0.05
+        perplexity_range: [80, 300]
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 64
+        agentic: "forbidden"
+
+    B4:
+      name: "Graduate"
+      intent: "Explicit abstraction and algorithms"
+      allowed_modalities: ["math", "code"]
+      constraints:
+        tokenizer:
+          min_rare_ratio: 0.15
+          min_tail_ratio: 0.05
+        perplexity_range: [200, 800]
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 128
+        agentic: "toy_only"
+
+    B5:
+      name: "PhD"
+      intent: "Planning and system-level reasoning"
+      allowed_modalities: ["hard_reasoning", "advanced_code", "planning"]
+      constraints:
+        tokenizer:
+          min_rare_ratio: 0.25
+          min_tail_ratio: 0.10
+        perplexity_range: [400, 1500]
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 256
+        agentic:
+          allowed: true
+          max_token_share: 0.02
+
+# ============================================================
+# 4. MODALITY SYSTEM
+# ============================================================
+modalities:
+  general_text:
+    purpose: "language fluency"
+  structured_knowledge:
+    purpose: "factual and conceptual grounding"
+  code:
+    purpose: "procedural and algorithmic reasoning"
+    allowed_languages: ["python", "javascript", "typescript", "c", "cpp"]
+  math:
+    purpose: "symbolic abstraction"
+  cot_reasoning:
+    purpose: "scaffolded reasoning traces"
+  agentic_traces:
+    purpose: "tool-use and planning"
+    owner_team: "Team 17"
+    status: "format_pending"
+
+# ============================================================
+# 5. STAGE & GROWTH SCHEDULE
+# ============================================================
 growth_schedule:
+
   stages:
     - name: "1B"
       order: 1
-      curriculum_profile: "base"
+      profile: "base"
     - name: "3B"
       order: 2
-      curriculum_profile: "harder_shift_1"
+      profile: "harder_shift_1"
     - name: "8B"
       order: 3
-      curriculum_profile: "harder_shift_2"
+      profile: "harder_shift_2"
     - name: "70B"
       order: 4
-      curriculum_profile: "final_adaptive_knobs"  # structure frozen, knobs adjustable within bounds
+      profile: "final_adaptive"
 
-# Difficulty bands are canonical and remain constant across stages.
-difficulty_bands:
-  definition_method:
-    primary: "heuristic"   # until Team 6 provides tokenizer proxy
-    hooks:
-      tokenizer_proxy:
-        owner_team: "Team 6: Tokenizer Lab"
-        status: "pending"
-        description: "Multi-tokenizer cross-ref signals: fragmentation, token count, rank-ish statistics."
-      scorer_audit:
-        owner_team: "Team 2"
-        status: "enabled"
-        description: "Fixed small scorer per stage used ONLY for sampled audits, not full-corpus bucketing."
-  bands:
-    - id: "B0"
-      name: "Nursery"
-      allowed_modalities: ["general_text"]
-      cot_policy: "exclude"
-      agentic_policy: "exclude"
-      code_policy: "minimal_examples_only"
-    - id: "B1"
-      name: "Primary"
-      allowed_modalities: ["general_text", "clean_exposition"]
-      cot_policy: "exclude"
-      agentic_policy: "exclude"
-      code_policy: "minimal_examples_only"
-    - id: "B2"
-      name: "HighSchool"
-      allowed_modalities: ["general_text", "structured_knowledge"]
-      cot_policy: "exclude"
-      agentic_policy: "exclude"
-      code_policy: "light"
-    - id: "B3"
-      name: "Undergrad"
-      allowed_modalities: ["structured_knowledge", "technical_text", "code"]
-      cot_policy: "allow_curated_capped"
-      agentic_policy: "exclude"
-      code_policy: "medium"
-    - id: "B4"
-      name: "Graduate"
-      allowed_modalities: ["technical_text", "math", "code"]
-      cot_policy: "allow_curated_capped"
-      agentic_policy: "toy_only_capped"
-      code_policy: "heavy"
-    - id: "B5"
-      name: "PhD"
-      allowed_modalities: ["hard_reasoning", "math", "advanced_code", "planning"]
-      cot_policy: "allow_curated_strict_cap"
-      agentic_policy: "allow_strict_cap"
-      code_policy: "heavy"
+  stage_profiles:
 
-# Modalities (what type of training signal) and staging rules.
-modalities:
-  general_text:
-    description: "Natural language for chat competence."
-  code:
-    description: "Programming data for coding capability."
-    allowed_languages: ["python", "javascript", "typescript", "c", "cpp"]  # adjust later
-  cot_reasoning:
-    description: "Chain-of-thought style traces. Must be curated; never dominant."
-  agentic_traces:
-    description: "Tool-calling / planning traces for downstream agentic behavior."
-    owner_team: "Team 17"
-    status: "pending_format_rules"
-    allowed_formats: ["json_tool_calls", "structured_traces"]  # placeholders, Team 17 to finalize
+    base:
+      band_weights:
+        B0: 0.30
+        B1: 0.28
+        B2: 0.20
+        B3: 0.14
+        B4: 0.06
+        B5: 0.02
+      modality_weights:
+        general_text: 0.86
+        code: 0.12
+        cot_reasoning: 0.02
+        agentic_traces: 0.00
 
-# Dataset interface from Team 1 (Team 2 can re-segment/reject parts).
-dataset_interface:
-  input_from_team1:
-    required_fields: ["dataset_id", "license", "estimated_tokens", "domain_tags", "language_tags", "cleaning_claims"]
-  segmentation_requests_allowed: true
-  partial_rejection_allowed: true
-  rejection_reasons:
-    - "language_scope_violation"
-    - "insufficient_cleaning_claims"
-    - "duplication_or_boilerplate_risk"
-    - "benchmark_contamination_risk"
-    - "unknown_license_or_restrictions"
+    harder_shift_1:
+      band_weights:
+        B0: 0.22
+        B1: 0.24
+        B2: 0.22
+        B3: 0.18
+        B4: 0.10
+        B5: 0.04
+      modality_weights:
+        general_text: 0.78
+        code: 0.18
+        cot_reasoning: 0.03
+        agentic_traces: 0.01
 
-# Guardrails to prevent silent failure modes.
+    harder_shift_2:
+      band_weights:
+        B0: 0.14
+        B1: 0.18
+        B2: 0.22
+        B3: 0.22
+        B4: 0.16
+        B5: 0.08
+      modality_weights:
+        general_text: 0.68
+        code: 0.24
+        cot_reasoning: 0.05
+        agentic_traces: 0.03
+
+    final_adaptive:
+      band_weights:
+        B0: 0.10
+        B1: 0.14
+        B2: 0.20
+        B3: 0.22
+        B4: 0.20
+        B5: 0.14
+      modality_weights:
+        general_text: 0.60
+        code: 0.28
+        cot_reasoning: 0.07
+        agentic_traces: 0.05
+      adaptive_knobs:
+        enabled: true
+        bounds:
+          band_delta_max: 0.03
+          modality_delta_max: 0.02
+
+# ============================================================
+# 6. GUARDRAILS & SMOOTHING
+# ============================================================
 guardrails:
-  non_negotiables:
-    - "prevent_overfitting_before_capacity_unlocks"
-    - "long_context_capability_must_appear"
-    - "reasoning_capability_must_appear"
-  anti_domain_spike:
-    rolling_window_tokens: 2000000           # apply per rolling window
-    max_domain_share_in_window: 0.25         # no single domain exceeds 25%
-    smoothing:
-      type: "ema"
-      max_weight_delta_per_update: 0.02      # prevents sudden mix shifts
-  cot_caps:
-    max_share_global: 0.06                   # CoT never dominant across training
-    max_share_in_band:
-      B3: 0.05
-      B4: 0.08
-      B5: 0.10
-  agentic_caps:
-    max_share_global: 0.03                   # very limited during pretraining
-    earliest_band: "B4"
-  hindi_caps:
-    max_share_global: 0.08
-    earliest_stage: "3B"
-    note: "Hindi must not leak into B0/B1 as a byproduct of difficulty heuristics."
-  quality_gates:
-    enforcement_mode: "dataset_claimed"      # at puny budget, rely on curated dataset claims
-    must_have_claims:
-      - "language_filtering_en_hi_only_or_equivalent"
-      - "boilerplate_and_spam_reduction"
-      - "deduplication_or_near-dedup"
-    optional_claims:
-      - "pii_reduction"
-      - "toxicity_filtering"
-    fail_action: "reject_or_request_resegmentation"
 
-# Stage profiles: same bands, different ratios.
-# Ratios sum to 1.0 within each stage profile.
-stage_profiles:
-  base:  # 1B
-    band_weights:
-      B0: 0.30
-      B1: 0.28
-      B2: 0.20
-      B3: 0.14
-      B4: 0.06
-      B5: 0.02
-    modality_weights:
-      general_text: 0.86
-      code: 0.12
-      cot_reasoning: 0.02
-      agentic_traces: 0.00
-    notes:
-      - "Strong language foundation; introduce code early but controlled."
-      - "Reasoning seed exists (B4/B5 small) to avoid 'never appears'."
+  rolling_window:
+    window_tokens: 2000000
+    max_band_delta: 0.03
+    max_domain_delta: 0.05
 
-  harder_shift_1:  # 3B
-    band_weights:
-      B0: 0.22
-      B1: 0.24
-      B2: 0.22
-      B3: 0.18
-      B4: 0.10
-      B5: 0.04
-    modality_weights:
-      general_text: 0.78
-      code: 0.18
-      cot_reasoning: 0.03
-      agentic_traces: 0.01
-    notes:
-      - "Shift toward higher difficulty and more code."
-      - "Hindi can be introduced within caps, staged mainly into B2–B4."
+  caps:
+    cot:
+      global_max: 0.06
+    agentic:
+      global_max: 0.03
+      earliest_band: "B4"
 
-  harder_shift_2:  # 8B
-    band_weights:
-      B0: 0.14
-      B1: 0.18
-      B2: 0.22
-      B3: 0.22
-      B4: 0.16
-      B5: 0.08
-    modality_weights:
-      general_text: 0.68
-      code: 0.24
-      cot_reasoning: 0.05
-      agentic_traces: 0.03
-    notes:
-      - "Ensure reasoning and long-context eval start improving measurably here."
+# ============================================================
+# 7. DOMAIN GROUPING
+# ============================================================
+domains:
+  definition_method: "team1_tags_consolidated_by_team2"
 
-  final_adaptive_knobs:  # 70B
-    band_weights:
-      B0: 0.10
-      B1: 0.14
-      B2: 0.20
-      B3: 0.22
-      B4: 0.20
-      B5: 0.14
-    modality_weights:
-      general_text: 0.60
-      code: 0.28
-      cot_reasoning: 0.07
-      agentic_traces: 0.05
-    adaptive_knobs:
-      enabled: true
-      allowed_adjustments:
-        # knobs can be moved within bounds if eval deltas stall (structure still frozen)
-        band_weight_delta_max: 0.03
-        modality_weight_delta_max: 0.02
-      triggers:
-        reasoning_eval:
-          metric: "reasoning_benchmark_delta"
-          if_delta_below: 0.01
-          action:
-            increase_bands: ["B4", "B5"]
-            decrease_bands: ["B0", "B1"]
-        long_context_eval:
-          metric: "long_context_benchmark_delta"
-          if_delta_below: 0.01
-          action:
-            increase_bands: ["B3", "B4", "B5"]
-            note: "Long-context *training* expansion handled elsewhere; this only biases toward long-dependency content."
+  domain_groups:
+    general_web_clean: {}
+    encyclopedic: {}
+    technical_docs: {}
+    math_science: {}
+    code_repos: {}
+    planning_reasoning_curated: {}
 
-# Evaluation signals Team 2 watches (definitions owned by Benchmarking teams).
-signals:
-  primary:
-    - name: "early_benchmark_delta"
+  band_domain_policy:
+    B0: ["general_web_clean"]
+    B1: ["general_web_clean", "encyclopedic"]
+    B2: ["encyclopedic", "technical_docs"]
+    B3: ["technical_docs", "code_repos"]
+    B4: ["math_science", "code_repos"]
+    B5: ["planning_reasoning_curated", "math_science", "code_repos"]
+
+# ============================================================
+# 8. EVALUATION SIGNAL INTERFACE
+# ============================================================
+evaluation_interface:
+  purpose: "guides_adaptive_knobs_only"
+  signals:
+    - name: "reasoning_eval_delta"
       owner_team: "Benchmarking"
-      frequency: "weekly"
     - name: "long_context_eval_delta"
       owner_team: "Benchmarking"
-      frequency: "weekly"
-  note: "Signals guide only allowed knob adjustments in 70B stage; YAML structure remains frozen."
-
-# Explicit cross-team coordination requirements
-coordination:
-  tokenizer_lab:
-    team: "Team 6"
-    required_outputs:
-      - "tokenizer_proxy_spec"
-      - "multi-tokenizer difficulty proxy recommendations"
-  agentic_team:
-    team: "Team 17"
-    required_outputs:
-      - "safe_agentic_trace_formats"
-      - "tool-call data staging rules"
-      - "caps and contamination risks"
-
-# Example domain groups (Team 1 provides tags; Team 2 consolidates to avoid spikes).
-domain_groups:
-  - id: "general_web_clean"
-  - id: "encyclopedic"
-  - id: "news_nonpolitical"
-  - id: "technical_docs"
-  - id: "math_science"
-  - id: "code_repos"
-  - id: "dialogue_chat"
-  - id: "planning_reasoning_curated"
-
-# Optional: provide an explicit map of which domains are allowed in which bands.
-band_domain_policy:
-  B0: ["general_web_clean", "dialogue_chat"]
-  B1: ["general_web_clean", "encyclopedic", "dialogue_chat"]
-  B2: ["encyclopedic", "news_nonpolitical", "technical_docs"]
-  B3: ["technical_docs", "math_science", "code_repos"]
-  B4: ["math_science", "code_repos", "planning_reasoning_curated"]
-  B5: ["planning_reasoning_curated", "math_science", "code_repos"]
-
-# Dataset Implementation Details
-# This section documents how datasets are processed, cleaned, and mapped to curriculum bands.
-dataset_implementations:
-  indiccorpv2:
-    dataset_id: "ai4bharat/IndicCorpV2"
-    license: "CC-0"
-    total_tokens: 20900000000  # 20.9B tokens
-    languages: 24  # 23 Indic languages + Indian English
-    implementation_path: "experiments/2_curirculum_architects/src/indiccorpv2"
-    
-    # Dataset characteristics
-    characteristics:
-      source_type: "web_crawled"
-      quality_tier: "mixed"  # spans B0-B3, requires filtering
-      folder_structure: false  # no inherent difficulty signals
-      metadata_available: false  # no content type metadata
-    
-    # Processing pipeline
-    processing:
-      pipeline_script: "indiccorp_cleaner.py"
-      analysis_script: "analyze_processed.py"
-      exploration_notebook: "explore_indiccorpv2.ipynb"
-      
-      # Quality filters (applied before difficulty classification)
-      quality_filters:
-        min_words: 10
-        max_words: 10000
-        min_avg_word_length: 2.0
-        max_avg_word_length: 15.0
-        max_symbol_ratio: 0.30
-        max_repetition_ratio: 0.50
-        min_lexical_diversity: 0.15
-        spam_patterns:
-          - "repetitive_character_sequences"
-          - "excessive_urls"
-          - "hex_escape_sequences"
-          - "bullet_point_spam"
-      
-      # Deduplication
-      deduplication:
-        method: "exact_hash_match"
-        normalization: "lowercase_whitespace_normalized"
-        hash_algorithm: "md5"
-      
-      # Difficulty classification (heuristic-based)
-      difficulty_classification:
-        method: "heuristic_rules"
-        bands: ["B0", "B1", "B2", "B3", "B4"]
-        features_used:
-          - "avg_sentence_length"
-          - "lexical_diversity"
-          - "word_count"
-          - "long_word_ratio"
-          - "very_long_word_ratio"
-          - "has_references"
-          - "number_ratio"
-          - "paragraph_count"
-          - "sentence_length_variance"
-        
-        # Classification rules (simplified - see implementation for full logic)
-        band_rules:
-          B0:
-            description: "Nursery - Simple grammar, repetitive"
-            conditions:
-              - "avg_sentence_length < 10"
-              - "lexical_diversity < 0.35"
-              - "word_count < 300"
-              - "long_word_ratio < 0.10"
-            confidence_range: [0.6, 0.8]
-          
-          B1:
-            description: "Primary - Fluent general knowledge (default)"
-            conditions:
-              - "default_classification"
-            confidence: 0.6
-          
-          B2:
-            description: "High School - Structured narrative, longer docs"
-            conditions:
-              - "avg_sentence_length > 12"
-              - "lexical_diversity > 0.40"
-              - "word_count > 200"
-              - "paragraph_count > 2"
-            confidence: 0.7
-          
-          B3:
-            description: "Undergrad - Technical, reasoning"
-            conditions:
-              - "avg_sentence_length > 18"
-              - "long_word_ratio > 0.18"
-              - "lexical_diversity > 0.50"
-              - "word_count > 300"
-            confidence_range: [0.65, 0.8]
-          
-          B4:
-            description: "Graduate - Advanced technical"
-            conditions:
-              - "avg_sentence_length > 25"
-              - "very_long_word_ratio > 0.15"
-              - "lexical_diversity > 0.60"
-              - "has_references OR number_ratio > 0.20"
-            confidence_range: [0.75, 0.9]
-      
-      # Content categorization
-      content_categorization:
-        categories: ["news", "wiki", "social", "blog", "formal", "conversational"]
-        method: "pattern_matching_with_heuristics"
-        patterns:
-          news:
-            - "date_patterns"
-            - "reported_announced_said"
-            - "journalist_correspondent"
-            - "temporal_markers"
-          wiki:
-            - "reference_citations"
-            - "also_known_as"
-            - "see_also_references"
-            - "biographical_dates"
-          social:
-            - "mentions_hashtags"
-            - "social_media_terms"
-            - "emoji_sequences"
-          blog:
-            - "first_person_markers"
-            - "personal_experience"
-            - "reader_address"
-      
-      # Output format
-      output_format:
-        structure: "jsonl_per_difficulty_band"
-        directory_layout: "processed_data/{lang}_{script}/{B0|B1|B2|B3|B4}/batch_*.jsonl"
-        fields:
-          - "text"
-          - "difficulty"
-          - "difficulty_confidence"
-          - "category"
-          - "word_count"
-          - "char_count"
-          - "metadata"
-        metadata_fields:
-          - "lang"
-          - "lexical_diversity"
-          - "avg_sentence_length"
-    
-    # Usage plan across training stages
-    stage_usage:
-      "1B":
-        strategy: "minimal_use"
-        bands: ["B0"]
-        max_share: 0.05  # <5% of Indic mix
-        rationale: "Grammar stability needs clean data; prefer Sangraha Verified + FineWeb Edu Indic"
-        categories: ["extremely_simple_text_only"]
-      
-      "3B":
-        strategy: "moderate_use"
-        bands: ["B1"]
-        share: 0.30  # 30-40% of Indic mix
-        rationale: "Introduce native Hindi content for diversity"
-        categories: ["news", "blog"]
-        note: "Requires category tagging during processing"
-      
-      "8B":
-        strategy: "expanded_use"
-        bands: ["B1", "B2"]
-        share: 0.30  # 30% of Indic mix
-        rationale: "Add structured content for long-context capability"
-        categories: ["formal", "wiki", "news", "blog"]
-      
-      "70B":
-        strategy: "full_use"
-        bands: ["B0", "B1", "B2", "B3"]
-        rationale: "Model has capacity to handle mixed quality; maximize coverage"
-        categories: ["all"]
-    
-    # Language support
-    language_support:
-      primary_indic: "hi"  # Hindi - 6-7B tokens
-      high_resource:
-        - "hi"  # Hindi (hin_Deva) - ~6-7B tokens
-        - "te"  # Telugu (tel_Telu) - ~2.1B tokens
-        - "ur"  # Urdu (urd_Arab) - ~1.5B tokens
-        - "ta"  # Tamil (tam_Taml) - ~1.3B tokens
-        - "bn"  # Bengali (ben_Beng) - ~1.2B tokens
-        - "mr"  # Marathi (mar_Deva) - ~1.0B tokens
-        - "gu"  # Gujarati (guj_Gujr) - ~850M tokens
-        - "pa"  # Punjabi (pan_Guru) - ~770M tokens
-        - "ml"  # Malayalam (mal_Mlym) - ~700M tokens
-        - "kn"  # Kannada (kan_Knda) - ~500M tokens
-        - "or"  # Odia (ory_Orya) - ~270M tokens
-      low_resource: 11  # languages with <50M tokens each
-      total_indic_tokens: 14400000000  # 14.4B tokens
-      indian_english_tokens: 6500000000  # 6.5B tokens
-      script_mapping:
-        note: "Uses ISO 639-3 codes with script suffixes (e.g., hin_Deva, ben_Beng)"
-        common_mappings:
-          "hi": "hin_Deva"
-          "bn": "ben_Beng"
-          "te": "tel_Telu"
-          "ta": "tam_Taml"
-          "mr": "mar_Deva"
-          "gu": "guj_Gujr"
-          "kn": "kan_Knda"
-          "ml": "mal_Mlym"
-          "pa": "pan_Guru"
-          "or": "ory_Orya"
-          "ur": "urd_Arab"
-    
-    # Integration notes
-    integration:
-      processing_required: true
-      cleaning_required: true  # web-crawled, mixed quality
-      difficulty_tagging: true  # no inherent difficulty signals
-      category_tagging: true  # pattern-based categorization
-      alternatives:
-        - "Sangraha Verified (structured, pre-filtered)"
-        - "FineWeb2 Indic subset (higher quality)"
-      coordination:
-        team_1: "Dataset selection and approval"
-        team_3: "Coreset integration with difficulty bands"
-        team_5: "QA and leakage checks on processed output"
-    
-    # Statistics and monitoring
-    statistics:
-      processing_stats_file: "processing_stats.json"
-      tracked_metrics:
-        - "total_processed"
-        - "kept"
-        - "pass_rate"
-        - "duplicates_removed"
-        - "quality_failures"
-        - "difficulty_distribution"
-        - "category_distribution"
-      analysis_tool: "analyze_processed.py"
-      comparison_reports: "comparison_report.csv"
+  restriction: "NO_STRUCTURAL_CHANGES_ALLOWED"
