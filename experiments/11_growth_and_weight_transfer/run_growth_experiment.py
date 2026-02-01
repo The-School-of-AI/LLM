@@ -89,7 +89,8 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         config["training"]["phase1_steps"] + 
         config["training"]["phase2_steps"] + 
         config["training"]["phase3_steps"] +
-        config["training"]["phase4_steps"]
+        config["training"]["phase4_steps"] +
+        config["training"]["phase5_steps"]
     )
     
     print(f"\n🖥️  Device: {device}")
