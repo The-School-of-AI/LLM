@@ -82,6 +82,8 @@ Notes:
 - If `include_softmax_flops=true`, a small extra softmax term is added.
 - If `attention_window` or `attention_sparsity` is set, the attention term uses the reduced effective context.
 - `recompute_multiplier` scales total FLOPs for activation checkpointing/recompute.
+- `attention_kernel_multiplier` (or `flash_attention_multiplier`) scales the attention term to model faster kernels.
+- `quantization_flops_multiplier` scales total FLOPs to model quantization overheads.
 
 ### 2. Parameter Counting
 - **Dense Models**: `Active Params` = `Total Params`.
@@ -91,6 +93,8 @@ Notes:
 - **Embeddings** are counted for parameter totals but excluded from linear FLOPs.
 - **Null expert** logic still includes router compute by default (FFN skipped only).
 - **MoE capacity** (`moe_capacity_factor`) inflates compute (not parameter counts) to model expert padding/overflow.
+- **MoE routing overhead** can be added via `moe_routing_overhead_ratio` (ratio of MoE expert compute)
+  or `moe_routing_flops_per_token` (absolute per-token per-layer overhead).
 
 ### Optional Architecture Knobs
 These keys are optional and default to current behavior if omitted:
@@ -101,6 +105,11 @@ These keys are optional and default to current behavior if omitted:
 - `attention_window`: Sliding-window attention size.
 - `attention_sparsity`: Fraction (0,1] of tokens attended per token (ignored if `attention_window` set).
 - `recompute_multiplier`: Activation checkpointing multiplier on total FLOPs.
+- `attention_kernel_multiplier`: Scales attention term for FlashAttention-like kernels.
+- `flash_attention_multiplier`: Alias for `attention_kernel_multiplier`.
+- `quantization_flops_multiplier`: Scales total FLOPs for quantization overheads.
+- `moe_routing_overhead_ratio`: Adds overhead as a ratio of MoE expert compute.
+- `moe_routing_flops_per_token`: Adds fixed overhead per-token per-layer.
 
 ### 3. Cost Calculation
 ```python
