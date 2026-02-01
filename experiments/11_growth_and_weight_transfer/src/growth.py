@@ -4,7 +4,7 @@ Growth Utilities for Weight Transfer
 This module provides functions to grow a model across architectural phases:
 1. dense_to_moe: Convert dense FFN layers to MoE blocks
 2. add_layers: Add new transformer blocks with identity initialization  
-3. scale_hidden_dim: Increase hidden dimension with zero-output initialization
+3. scale_hidden_dim: Increase hidden dimension with RMS-preserving initialization
 4. add_experts: Add more experts (expert explosion)
 
 Key principle: All growth operations must preserve the model's current behavior
@@ -12,6 +12,7 @@ as closely as possible to avoid loss spikes.
 """
 
 import copy
+import math
 import torch
 import torch.nn as nn
 from typing import Optional, Dict, Any
@@ -144,28 +145,31 @@ def scale_hidden_dim(
     model: nn.Module,
     new_hidden_size: int,
     new_intermediate_size: Optional[int] = None,
-    **kwargs,  # Accept but ignore legacy params like padding_mode
+    **kwargs,  # Accept but ignore legacy params
 ) -> nn.Module:
     """
-    Scale the hidden dimension using ZERO-OUTPUT initialization.
+    Scale the hidden dimension using RMS-PRESERVING initialization.
     
-    Strategy (Function-Preserving):
-    ================================
-    The key insight is that new dimensions should NOT affect the output initially.
-    This is achieved by setting OUTPUT-side weights to zero for new dimensions:
+    The Key Insight (RMSNorm Bug Fix):
+    ==================================
+    RMSNorm computes: output = x / sqrt(mean(x²) + eps) * weight
     
-    1. Embeddings: new dims = 0 (tokens start with only original info)
-    2. q_proj, k_proj, v_proj: new INPUT cols = 0 (don't read new dims)  
-    3. o_proj: new OUTPUT rows = 0 (new dims don't contribute to residual)
-    4. gate_proj, up_proj: new INPUT cols = 0 (don't read new dims)
-    5. down_proj: new OUTPUT rows = 0 (new dims don't contribute to residual)
-    6. RMSNorm: new dims = 1.0 (identity scaling)
-    7. lm_head: new INPUT cols = 0 (don't read new dims for prediction)
+    If we zero-pad new dimensions:
+    - Old: RMS([1,1,1,...]) = 1.0
+    - New: RMS([1,1,1,...,0,0,0]) = sqrt(576/720) ≈ 0.894
+    - The output is scaled by 1/0.894 ≈ 1.12 → 12% magnitude shift!
     
-    This ensures:
-    - Model output is IDENTICAL before and after scaling
-    - New dimensions exist but are "dormant"
-    - Training will gradually activate new dimensions
+    Solution: Pad with values that PRESERVE the RMS:
+    - New dims get gaussian noise with same variance as old dims
+    - This keeps mean(x²) unchanged → RMSNorm output unchanged
+    
+    For output projections (o_proj, down_proj):
+    - New OUTPUT rows = 0 (new dims don't contribute to residual)
+    
+    Combined strategy:
+    - Embeddings: RMS-preserving noise in new dims
+    - Input weights: RMS-preserving noise in new input cols  
+    - Output weights: Zero in new output rows
     
     Args:
         model: Model to scale (MoE or dense)
@@ -216,28 +220,50 @@ def scale_hidden_dim(
         )
         new_model = SmolLM2(new_config)
     
-    # Transfer and initialize weights with ZERO-OUTPUT strategy
+    def rms_preserving_pad(old_tensor, new_shape, pad_dims, dtype, device):
+        """
+        Pad tensor with RMS-preserving gaussian noise.
+        
+        pad_dims: list of (dim_idx, old_size, new_size) tuples
+        """
+        # Compute variance of old tensor
+        variance = (old_tensor ** 2).mean().item()
+        std = math.sqrt(variance) if variance > 0 else 0.01
+        
+        # Create new tensor with gaussian noise
+        new_tensor = torch.randn(new_shape, dtype=dtype, device=device) * std
+        
+        # Copy old values
+        slices = [slice(None)] * len(new_shape)
+        for dim_idx, old_size, new_size in pad_dims:
+            slices[dim_idx] = slice(0, old_size)
+        
+        new_tensor[tuple(slices)] = old_tensor
+        return new_tensor
+    
+    # Transfer and initialize weights
     with torch.no_grad():
-        # === 1. Embeddings: new dims = 0 ===
-        # Tokens only carry information in original dimensions initially
+        # === 1. Embeddings: RMS-preserving noise in new dims ===
         old_embed = model.embed_tokens.weight.data
-        new_model.embed_tokens.weight.data.zero_()
-        new_model.embed_tokens.weight.data[:, :old_hidden] = old_embed
-        # New cols (576:720) are already 0
+        new_model.embed_tokens.weight.data = rms_preserving_pad(
+            old_embed, 
+            (old_config.vocab_size, new_hidden_size),
+            [(1, old_hidden, new_hidden_size)],
+            old_embed.dtype, old_embed.device
+        )
         
         # === 2. Final Norm (RMSNorm): new dims = 1.0 ===
         new_model.norm.weight.data[:old_hidden] = model.norm.weight.data
-        new_model.norm.weight.data[old_hidden:] = 1.0  # Identity scaling
+        new_model.norm.weight.data[old_hidden:] = 1.0
         
-        # === 3. LM Head: don't read new dims ===
+        # === 3. LM Head: Zero in new input cols (don't read new dims) ===
         if hasattr(model, 'lm_head') and model.lm_head is not None:
             new_model.lm_head.weight.data.zero_()
             new_model.lm_head.weight.data[:, :old_hidden] = model.lm_head.weight.data
-            # New cols (576:720) are 0 → new dims don't affect logits
         
         # === 4. Transfer each layer ===
         for old_layer, new_layer in zip(model.layers, new_model.layers):
-            # Layer norms: new dims = 1.0 (identity)
+            # Layer norms: new dims = 1.0
             new_layer.input_layernorm.weight.data[:old_hidden] = old_layer.input_layernorm.weight.data
             new_layer.input_layernorm.weight.data[old_hidden:] = 1.0
             new_layer.post_attention_layernorm.weight.data[:old_hidden] = old_layer.post_attention_layernorm.weight.data
@@ -247,83 +273,137 @@ def scale_hidden_dim(
             old_attn = old_layer.self_attn
             new_attn = new_layer.self_attn
             
-            # Q, K, V projections: (out, in) - don't read new INPUT dims
-            # New model has larger input dim, set new input cols to 0
+            # Q, K, V projections: RMS-preserving noise in new INPUT cols
             for old_proj, new_proj in [
                 (old_attn.q_proj, new_attn.q_proj),
                 (old_attn.k_proj, new_attn.k_proj),
                 (old_attn.v_proj, new_attn.v_proj),
             ]:
-                new_proj.weight.data.zero_()
                 old_out = old_proj.weight.shape[0]
                 new_out = new_proj.weight.shape[0]
                 
-                # Copy old weights
-                new_proj.weight.data[:old_out, :old_hidden] = old_proj.weight.data
-                
-                # New input dims (576:720) are 0 → don't read from them
-                # New output dims might exist if head_dim changes
-                # We leave them as 0 initially
+                # RMS-preserving pad for input dimension
+                new_proj.weight.data[:old_out, :] = rms_preserving_pad(
+                    old_proj.weight.data,
+                    (old_out, new_hidden_size),
+                    [(1, old_hidden, new_hidden_size)],
+                    old_proj.weight.dtype, old_proj.weight.device
+                )
+                # New output dims (if any) = gaussian noise
+                if new_out > old_out:
+                    variance = (old_proj.weight.data ** 2).mean().item()
+                    std = math.sqrt(variance) if variance > 0 else 0.01
+                    new_proj.weight.data[old_out:, :] = torch.randn(
+                        new_out - old_out, new_hidden_size,
+                        dtype=old_proj.weight.dtype, device=old_proj.weight.device
+                    ) * std
             
-            # O projection: (hidden, qkv_out) - don't write new OUTPUT dims
+            # O projection: Zero in new OUTPUT rows (don't write to new dims)
+            old_out_h = old_attn.o_proj.weight.shape[0]
+            old_in = old_attn.o_proj.weight.shape[1]
+            
             new_attn.o_proj.weight.data.zero_()
-            old_out_h = old_attn.o_proj.weight.shape[0]  # old hidden
-            old_in = old_attn.o_proj.weight.shape[1]  # old qkv total
-            
-            # Copy old weights (old_hidden rows, old qkv cols)
-            new_attn.o_proj.weight.data[:old_out_h, :old_in] = old_attn.o_proj.weight.data
-            
-            # New OUTPUT rows (576:720) are 0 → don't contribute to residual
-            # This is the KEY: new dims in residual stream are 0 after attention
+            # Copy old weights and RMS-preserve new input cols
+            new_attn.o_proj.weight.data[:old_out_h, :] = rms_preserving_pad(
+                old_attn.o_proj.weight.data,
+                (old_out_h, new_attn.o_proj.weight.shape[1]),
+                [(1, old_in, new_attn.o_proj.weight.shape[1])],
+                old_attn.o_proj.weight.dtype, old_attn.o_proj.weight.device
+            )
+            # New OUTPUT rows (576:720) stay ZERO → don't contribute to residual
             
             # === MLP / MoE Experts ===
             if hasattr(old_layer, 'mlp'):
-                _transfer_mlp_zero_output(old_layer.mlp, new_layer.mlp, 
-                                          old_hidden, new_hidden_size,
-                                          old_intermediate, new_intermediate_size)
+                _transfer_mlp_rms_preserving(old_layer.mlp, new_layer.mlp, 
+                                              old_hidden, new_hidden_size,
+                                              old_intermediate, new_intermediate_size)
             elif hasattr(old_layer, 'moe'):
-                # Transfer router: don't read new dims
+                # Transfer router: RMS-preserving for input
                 old_gate = old_layer.moe.router.gate.weight.data
-                new_layer.moe.router.gate.weight.data.zero_()
-                new_layer.moe.router.gate.weight.data[:, :old_hidden] = old_gate
+                new_layer.moe.router.gate.weight.data = rms_preserving_pad(
+                    old_gate,
+                    (old_gate.shape[0], new_hidden_size),
+                    [(1, old_hidden, new_hidden_size)],
+                    old_gate.dtype, old_gate.device
+                )
                 
                 # Transfer each expert
                 for old_exp, new_exp in zip(old_layer.moe.experts, new_layer.moe.experts):
-                    _transfer_mlp_zero_output(old_exp, new_exp,
-                                              old_hidden, new_hidden_size,
-                                              old_intermediate, new_intermediate_size)
+                    _transfer_mlp_rms_preserving(old_exp, new_exp,
+                                                  old_hidden, new_hidden_size,
+                                                  old_intermediate, new_intermediate_size)
     
     print(f"✓ Scaled hidden dimension from {old_hidden} to {new_hidden_size}")
     print(f"  - Intermediate: {old_intermediate} → {new_intermediate_size}")
-    print(f"  - Strategy: ZERO-OUTPUT (function-preserving)")
+    print(f"  - Strategy: RMS-PRESERVING (maintains normalization)")
     print(f"  - New parameter count: {new_model.num_parameters():,}")
     
     return new_model
 
 
-def _transfer_mlp_zero_output(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, new_inter):
+def _transfer_mlp_rms_preserving(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, new_inter):
     """
-    Transfer MLP weights with zero-output initialization.
+    Transfer MLP weights with RMS-preserving initialization.
     
     Key principle:
-    - gate_proj, up_proj: Don't READ from new input dims
-    - down_proj: Don't WRITE to new output dims
+    - gate_proj, up_proj: RMS-preserving for input dims
+    - down_proj: Zero for new OUTPUT rows (don't write to residual)
     """
-    # gate_proj: (intermediate, hidden) - don't read new input dims
-    new_mlp.gate_proj.weight.data.zero_()
-    new_mlp.gate_proj.weight.data[:old_inter, :old_hidden] = old_mlp.gate_proj.weight.data
-    # New input cols (576:720) are 0 → don't read
-    # New output rows (if any) are 0 → don't contribute
+    def rms_pad(old_tensor, new_shape, dim_idx, old_size):
+        variance = (old_tensor ** 2).mean().item()
+        std = math.sqrt(variance) if variance > 0 else 0.01
+        new_tensor = torch.randn(new_shape, dtype=old_tensor.dtype, device=old_tensor.device) * std
+        slices = [slice(None)] * len(new_shape)
+        slices[dim_idx] = slice(0, old_size)
+        # Handle both dimensions
+        slices[0] = slice(0, old_tensor.shape[0])
+        new_tensor[tuple(slices)] = old_tensor
+        return new_tensor
     
-    # up_proj: (intermediate, hidden) - don't read new input dims  
-    new_mlp.up_proj.weight.data.zero_()
-    new_mlp.up_proj.weight.data[:old_inter, :old_hidden] = old_mlp.up_proj.weight.data
+    # gate_proj: (intermediate, hidden) - RMS-preserving for both dims
+    new_mlp.gate_proj.weight.data[:old_inter, :] = rms_pad(
+        old_mlp.gate_proj.weight.data,
+        (old_inter, new_hidden),
+        1, old_hidden
+    )
+    # New intermediate rows = small init
+    if new_inter > old_inter:
+        variance = (old_mlp.gate_proj.weight.data ** 2).mean().item()
+        std = math.sqrt(variance) if variance > 0 else 0.01
+        new_mlp.gate_proj.weight.data[old_inter:, :] = torch.randn(
+            new_inter - old_inter, new_hidden,
+            dtype=old_mlp.gate_proj.weight.dtype, device=old_mlp.gate_proj.weight.device
+        ) * std
     
-    # down_proj: (hidden, intermediate) - don't write new output dims
+    # up_proj: same as gate_proj
+    new_mlp.up_proj.weight.data[:old_inter, :] = rms_pad(
+        old_mlp.up_proj.weight.data,
+        (old_inter, new_hidden),
+        1, old_hidden
+    )
+    if new_inter > old_inter:
+        variance = (old_mlp.up_proj.weight.data ** 2).mean().item()
+        std = math.sqrt(variance) if variance > 0 else 0.01
+        new_mlp.up_proj.weight.data[old_inter:, :] = torch.randn(
+            new_inter - old_inter, new_hidden,
+            dtype=old_mlp.up_proj.weight.dtype, device=old_mlp.up_proj.weight.device
+        ) * std
+    
+    # down_proj: (hidden, intermediate) - Zero for new OUTPUT rows
     new_mlp.down_proj.weight.data.zero_()
+    # Copy old weights and RMS-preserve new intermediate cols
+    variance = (old_mlp.down_proj.weight.data ** 2).mean().item()
+    std = math.sqrt(variance) if variance > 0 else 0.01
+    
+    # Old hidden rows, old intermediate cols
     new_mlp.down_proj.weight.data[:old_hidden, :old_inter] = old_mlp.down_proj.weight.data
-    # New OUTPUT rows (576:720) are 0 → don't contribute to residual
-    # This is the KEY for function preservation!
+    # Old hidden rows, new intermediate cols (small init so gate/up can learn to use them)
+    new_mlp.down_proj.weight.data[:old_hidden, old_inter:] = torch.randn(
+        old_hidden, new_inter - old_inter,
+        dtype=old_mlp.down_proj.weight.dtype, device=old_mlp.down_proj.weight.device
+    ) * std * 0.1  # Smaller scale for new intermediate→hidden paths
+    
+    # New OUTPUT rows (576:720) stay ZERO → don't contribute to residual
 
 
 def add_experts(
@@ -394,8 +474,8 @@ if __name__ == "__main__":
     print("\n3. Adding layers...")
     moe_model = add_layers(moe_model, num_new_layers=2)
     
-    # 4. Test scale_hidden_dim with ZERO-OUTPUT
-    print("\n4. Scaling hidden dimension (zero-output)...")
+    # 4. Test scale_hidden_dim with RMS-PRESERVING
+    print("\n4. Scaling hidden dimension (RMS-preserving)...")
     moe_model = scale_hidden_dim(moe_model, new_hidden_size=384)
     
     # 5. Test add_experts
