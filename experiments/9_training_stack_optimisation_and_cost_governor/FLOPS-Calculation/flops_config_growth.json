@@ -1,14 +1,13 @@
 {
   "hardware": {
     "num_gpus": 8,
-    "price_per_gpu_hour": 2.5,
+    "price_per_gpu_hour": 6.88,
     "mfu": 0.3,
     "quantization": "all",
-    "tflops_mode": "dense",
+    "tflops_mode": "sparse",
     "tflops_per_gpu": {
-      "bf16": 989.0,
-      "fp8": 1979.0,
-      "nvfp4": 3500.0
+      "bf16": 1979.0,
+      "fp8": 3958.0
     }
   },
   "growth": {
