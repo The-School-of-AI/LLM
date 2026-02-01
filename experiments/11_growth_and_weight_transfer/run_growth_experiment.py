@@ -1,12 +1,13 @@
 """
-Run Growth Experiment End-to-End (3-Phase MVP)
+Run Growth Experiment End-to-End (4-Phase)
 
-This script executes the 3-phase growth experiment:
+This script executes the full 4-phase growth experiment:
 1. Phase 1: Train dense model
-2. Phase 2: Convert to MoE + Add ghost layers
-3. Phase 3: Add more experts (expert explosion)
+2. Phase 2: Convert to MoE
+3. Phase 3: Add ghost layers + Scale hidden dimension
+4. Phase 4: Add more experts (expert explosion)
 
-NOTE: scale_hidden_dim is skipped for MVP (causes loss spikes, needs more research)
+Goal: Demonstrate that loss does NOT spike at transitions.
 """
 
 import os
@@ -22,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.model import SmolLM2, SmolLM2Config
 from src.moe_model import SmolLM2MoE, MoEConfig
-from src.growth import dense_to_moe, add_experts, add_layers
+from src.growth import dense_to_moe, add_experts, add_layers, scale_hidden_dim
 from src.dataset import get_dataloader
 from train import train_phase, get_device, save_checkpoint, count_parameters
 
@@ -62,16 +63,17 @@ def log_transition(name, pre_loss, post_loss, wandb_run=None, step=0):
 
 
 def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False):
-    """Run the 3-phase growth experiment."""
+    """Run the full 4-phase growth experiment."""
     
     print("=" * 70)
-    print("🧪 GROWTH EXPERIMENT (3 Phases - MVP)")
+    print("🧪 GROWTH EXPERIMENT (4 Phases)")
     print("=" * 70)
     print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("\nGrowth Path:")
     print("  Phase 1: Dense → Train")
-    print("  Phase 2: Dense → MoE + Layers → Train")
-    print("  Phase 3: MoE → ×Experts → Train")
+    print("  Phase 2: Dense → MoE → Train")
+    print("  Phase 3: MoE → +Layers + Scale Dim → Train")
+    print("  Phase 4: MoE → ×Experts → Train")
     
     # Load config
     with open(config_path, "r") as f:
@@ -84,7 +86,8 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     total_planned_steps = (
         config["training"]["phase1_steps"] + 
         config["training"]["phase2_steps"] + 
-        config["training"]["phase3_steps"]
+        config["training"]["phase3_steps"] +
+        config["training"]["phase4_steps"]
     )
     
     print(f"\n🖥️  Device: {device}")
@@ -98,7 +101,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             import wandb
             wandb_run = wandb.init(
                 project=config["training"].get("wandb_project", "growth-experiment"),
-                name=f"growth_3phase_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                name=f"growth_4phase_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 config=config,
             )
         except ImportError:
@@ -153,13 +156,13 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print(f"\n✅ Phase 1 complete! Loss: {phase1_loss:.4f}")
     
     # =========================================================================
-    # PHASE 2: Dense → MoE + Add Ghost Layers
+    # PHASE 2: Dense → MoE
     # =========================================================================
     print("\n" + "=" * 70)
-    print("📌 PHASE 2: Dense → MoE + Add Ghost Layers")
+    print("📌 PHASE 2: Dense → MoE")
     print("=" * 70)
     
-    pre_growth_loss = measure_loss(model, dataloader, device)
+    pre_moe_loss = measure_loss(model, dataloader, device)
     
     # Convert to MoE
     moe_config = config["growth"]["dense_to_moe"]
@@ -169,17 +172,8 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         num_experts_per_tok=moe_config["num_experts_per_tok"],
     )
     
-    # Add ghost layers
-    layer_config = config["growth"]["add_layers"]
-    print(f"\n🔧 Adding {layer_config['num_new_layers']} ghost layers...")
-    model = add_layers(
-        model,
-        num_new_layers=layer_config["num_new_layers"],
-        init_mode=layer_config["init_mode"],
-    )
-    
-    post_growth_loss = measure_loss(model, dataloader, device)
-    results["phase2_delta"] = log_transition("moe_and_layers", pre_growth_loss, post_growth_loss, wandb_run, total_steps)
+    post_moe_loss = measure_loss(model, dataloader, device)
+    results["phase2_delta"] = log_transition("moe_conversion", pre_moe_loss, post_moe_loss, wandb_run, total_steps)
     
     phase2_steps = config["training"]["phase2_steps"]
     print(f"\n🚀 Training MoE for {phase2_steps} steps...")
@@ -206,31 +200,42 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     results["phase2_loss"] = phase2_loss
     print(f"\n✅ Phase 2 complete! Loss: {phase2_loss:.4f}")
     
-    # Clear some memory before Phase 3
+    # Clear memory
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
     
     # =========================================================================
-    # PHASE 3: Expert Explosion
+    # PHASE 3: Add Ghost Layers + Scale Hidden Dimension
     # =========================================================================
     print("\n" + "=" * 70)
-    print("📌 PHASE 3: Expert Explosion (×Experts)")
+    print("📌 PHASE 3: Add Ghost Layers + Scale Hidden Dimension")
     print("=" * 70)
     
-    pre_expert_loss = measure_loss(model, dataloader, device)
+    pre_growth_loss = measure_loss(model, dataloader, device)
     
-    expert_config = config["growth"]["add_experts"]
-    print(f"\n🔧 Adding {expert_config['num_new_experts']} new experts per layer...")
-    model = add_experts(
+    # Step 3a: Add ghost layers
+    layer_config = config["growth"]["add_layers"]
+    print(f"\n🔧 Adding {layer_config['num_new_layers']} ghost layers...")
+    model = add_layers(
         model,
-        num_new_experts=expert_config["num_new_experts"],
-        clone_from=expert_config["clone_from"],
+        num_new_layers=layer_config["num_new_layers"],
+        init_mode=layer_config["init_mode"],
     )
     
-    post_expert_loss = measure_loss(model, dataloader, device)
-    results["phase3_delta"] = log_transition("expert_explosion", pre_expert_loss, post_expert_loss, wandb_run, total_steps)
+    # Step 3b: Scale hidden dimension
+    dim_config = config["growth"]["scale_hidden_dim"]
+    print(f"\n🔧 Scaling hidden dimension to {dim_config['new_hidden_size']}...")
+    model = scale_hidden_dim(
+        model,
+        new_hidden_size=dim_config["new_hidden_size"],
+        new_intermediate_size=dim_config.get("new_intermediate_size"),
+        padding_mode=dim_config["padding_mode"],
+    )
+    
+    post_growth_loss = measure_loss(model, dataloader, device)
+    results["phase3_delta"] = log_transition("layers_and_scale", pre_growth_loss, post_growth_loss, wandb_run, total_steps)
     
     phase3_steps = config["training"]["phase3_steps"]
-    print(f"\n🚀 Training with more experts for {phase3_steps} steps...")
+    print(f"\n🚀 Training scaled model for {phase3_steps} steps...")
     
     phase3_loss = train_phase(
         model=model,
@@ -245,7 +250,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         log_every=config["training"]["log_every"],
         checkpoint_every=config["training"]["checkpoint_every"],
         save_dir=config["training"]["save_dir"],
-        checkpoint_prefix="phase3_experts",
+        checkpoint_prefix="phase3_scaled",
         device=device,
         wandb_run=wandb_run,
     )
@@ -254,6 +259,54 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     results["phase3_loss"] = phase3_loss
     print(f"\n✅ Phase 3 complete! Loss: {phase3_loss:.4f}")
     
+    # Clear memory
+    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+    
+    # =========================================================================
+    # PHASE 4: Expert Explosion
+    # =========================================================================
+    print("\n" + "=" * 70)
+    print("📌 PHASE 4: Expert Explosion (×Experts)")
+    print("=" * 70)
+    
+    pre_expert_loss = measure_loss(model, dataloader, device)
+    
+    expert_config = config["growth"]["add_experts"]
+    print(f"\n🔧 Adding {expert_config['num_new_experts']} new experts per layer...")
+    model = add_experts(
+        model,
+        num_new_experts=expert_config["num_new_experts"],
+        clone_from=expert_config["clone_from"],
+    )
+    
+    post_expert_loss = measure_loss(model, dataloader, device)
+    results["phase4_delta"] = log_transition("expert_explosion", pre_expert_loss, post_expert_loss, wandb_run, total_steps)
+    
+    phase4_steps = config["training"]["phase4_steps"]
+    print(f"\n🚀 Training with more experts for {phase4_steps} steps...")
+    
+    phase4_loss = train_phase(
+        model=model,
+        dataloader=dataloader,
+        num_steps=phase4_steps,
+        start_step=total_steps,
+        learning_rate=config["training"]["learning_rate"] * 0.125,
+        weight_decay=config["training"]["weight_decay"],
+        warmup_steps=50,
+        max_grad_norm=config["training"]["max_grad_norm"],
+        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+        log_every=config["training"]["log_every"],
+        checkpoint_every=config["training"]["checkpoint_every"],
+        save_dir=config["training"]["save_dir"],
+        checkpoint_prefix="phase4_experts",
+        device=device,
+        wandb_run=wandb_run,
+    )
+    
+    total_steps += phase4_steps
+    results["phase4_loss"] = phase4_loss
+    print(f"\n✅ Phase 4 complete! Loss: {phase4_loss:.4f}")
+    
     # =========================================================================
     # SUMMARY
     # =========================================================================
@@ -261,16 +314,19 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print("📊 EXPERIMENT SUMMARY")
     print("=" * 70)
     print(f"Total steps trained: {total_steps}")
-    print(f"\n{'Phase':<25} {'Final Loss':<15} {'Transition Δ':<15}")
-    print("-" * 55)
-    print(f"{'Phase 1 (Dense)':<25} {results['phase1_loss']:<15.4f} {'-':<15}")
-    print(f"{'Phase 2 (MoE+Layers)':<25} {results['phase2_loss']:<15.4f} {results['phase2_delta']:+.4f}")
-    print(f"{'Phase 3 (×Experts)':<25} {results['phase3_loss']:<15.4f} {results['phase3_delta']:+.4f}")
+    print(f"\n{'Phase':<30} {'Final Loss':<15} {'Transition Δ':<15}")
+    print("-" * 60)
+    print(f"{'Phase 1 (Dense)':<30} {results['phase1_loss']:<15.4f} {'-':<15}")
+    print(f"{'Phase 2 (MoE)':<30} {results['phase2_loss']:<15.4f} {results['phase2_delta']:+.4f}")
+    print(f"{'Phase 3 (Layers+Scale)':<30} {results['phase3_loss']:<15.4f} {results['phase3_delta']:+.4f}")
+    print(f"{'Phase 4 (×Experts)':<30} {results['phase4_loss']:<15.4f} {results['phase4_delta']:+.4f}")
     print(f"\nFinal model parameters: {count_parameters(model):,}")
     print("=" * 70)
     
     # Check if all transitions were stable
-    all_stable = abs(results["phase2_delta"]) < 0.5 and abs(results["phase3_delta"]) < 0.5
+    all_stable = (abs(results["phase2_delta"]) < 0.5 and 
+                  abs(results["phase3_delta"]) < 0.5 and
+                  abs(results["phase4_delta"]) < 0.5)
     if all_stable:
         print("\n🎉 SUCCESS: All transitions were STABLE (delta < 0.5)")
     else:
@@ -278,7 +334,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     
     # Save final checkpoint
     save_checkpoint(
-        model, None, None, total_steps, phase3_loss,
+        model, None, None, total_steps, phase4_loss,
         config["training"]["save_dir"], "final",
     )
     
@@ -287,6 +343,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             "phase1_final_loss": results["phase1_loss"],
             "phase2_final_loss": results["phase2_loss"],
             "phase3_final_loss": results["phase3_loss"],
+            "phase4_final_loss": results["phase4_loss"],
             "total_steps": total_steps,
             "final_parameters": count_parameters(model),
             "all_transitions_stable": all_stable,
@@ -301,7 +358,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Run Growth Experiment (3 Phases)")
+    parser = argparse.ArgumentParser(description="Run Growth Experiment (4 Phases)")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Config file")
     parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
     args = parser.parse_args()

@@ -1,7 +1,6 @@
-# Growth Experiment Configuration (3-Phase MVP)
-# ==============================================
-# Focuses on proven growth methods only
-# Skip scale_hidden_dim (causes spikes, needs more research)
+# Growth Experiment Configuration (4-Phase)
+# ==========================================
+# Tests all 4 growth methods
 
 # Model Configuration (SmolLM2-style ~70M params)
 model:
@@ -24,21 +23,22 @@ moe:
 
 # Training Configuration
 training:
-  phase1_steps: 10  # Set to 1000 for full run
-  phase2_steps: 10
-  phase3_steps: 10
+  phase1_steps: 100
+  phase2_steps: 100
+  phase3_steps: 100
+  phase4_steps: 100
   
-  batch_size: 4  # Reduced for memory
-  gradient_accumulation_steps: 8  # Compensate for smaller batch
+  batch_size: 4
+  gradient_accumulation_steps: 8
   learning_rate: 3.0e-4
   weight_decay: 0.01
-  warmup_steps: 5
+  warmup_steps: 20
   max_grad_norm: 1.0
-  max_length: 256  # Reduced for memory
+  max_length: 256
   
   checkpoint_every: 500
   save_dir: "./checkpoints"
-  log_every: 5
+  log_every: 20
   wandb_project: "growth-experiment"
   wandb_run_name: null
 
@@ -54,12 +54,18 @@ growth:
     num_experts: 4
     num_experts_per_tok: 2
   
-  # Phase 1 → 2: Add ghost layers
+  # Phase 2: Add ghost layers
   add_layers:
     num_new_layers: 4
     init_mode: "identity"
   
-  # Phase 2 → 3: Expert explosion
+  # Phase 3: Scale hidden dimension (zero padding)
+  scale_hidden_dim:
+    new_hidden_size: 720  # Must be divisible by num_attention_heads (9)
+    new_intermediate_size: 1920
+    padding_mode: "zero"
+  
+  # Phase 4: Expert explosion
   add_experts:
     num_new_experts: 4  # 4 → 8 experts
     clone_from: "random"

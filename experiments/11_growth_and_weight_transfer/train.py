@@ -48,7 +48,7 @@ def count_parameters(model: nn.Module) -> int:
 
 def save_checkpoint(
     model: nn.Module,
-    optimizer: torch.optim.Optimizer,
+    optimizer: Optional[torch.optim.Optimizer],
     scheduler,
     step: int,
     loss: float,
@@ -62,7 +62,7 @@ def save_checkpoint(
     torch.save({
         "step": step,
         "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict() if optimizer else None,
         "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
         "loss": loss,
         "config": model.config,
