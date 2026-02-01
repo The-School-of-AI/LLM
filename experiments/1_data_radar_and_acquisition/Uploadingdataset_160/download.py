@@ -196,8 +196,14 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Use config.yml defaults
+  # Use config.yml defaults (all datasets)
   python download.py
+
+  # Download only specific datasets
+  python download.py --datasets sangraha ncert
+
+  # Download only NCERT dataset
+  python download.py --datasets ncert --mode test
 
   # Override S3 bucket
   python download.py --s3-bucket my-custom-bucket
@@ -235,6 +241,13 @@ Examples:
         type=str,
         default="config.yml",
         help="Path to config file (default: config.yml)",
+    )
+
+    parser.add_argument(
+        "--datasets",
+        nargs="+",
+        type=str,
+        help="Specific datasets to download (e.g., sangraha ncert). If not specified, downloads all datasets from config.yml",
     )
 
     return parser.parse_args()
@@ -291,7 +304,27 @@ def main():
     times = {}
     total_start = time.time()
 
-    for name, dcfg in cfg["datasets"].items():
+    # Filter datasets if --datasets argument is provided
+    datasets_to_process = cfg["datasets"]
+    if args.datasets:
+        print(f"🔍 Filtering datasets: {', '.join(args.datasets)}")
+        datasets_to_process = {
+            name: dcfg
+            for name, dcfg in cfg["datasets"].items()
+            if name in args.datasets
+        }
+
+        # Warn if any requested datasets are not in config
+        missing = set(args.datasets) - set(cfg["datasets"].keys())
+        if missing:
+            print(f"⚠️  Warning: These datasets are not in config.yml: {', '.join(missing)}")
+
+        if not datasets_to_process:
+            print("❌ No valid datasets to process!")
+            print(f"📋 Available datasets: {', '.join(cfg['datasets'].keys())}")
+            return
+
+    for name, dcfg in datasets_to_process.items():
         print(f"\n{'='*60}")
         print(f"🚀 Processing: {name}")
         print(f"{'='*60}")

@@ -35,7 +35,7 @@ python download.py --storage both --s3-bucket YOUR-BUCKET --mode test
 
 ## 📚 Datasets
 
-This tool downloads two high-quality Indic language datasets:
+This tool downloads three high-quality datasets for Indic languages and educational content:
 
 ### 1. **Sangraha** - AI4Bharat Synthetic Dataset
 - **Languages**: Hindi (Devanagari), Hindi (Latin), Tamil
@@ -49,6 +49,14 @@ This tool downloads two high-quality Indic language datasets:
 - **Full Mode**: Complete dataset (~200 GB)
 - **Source**: [ai4bharat/IndicCorpV2](https://huggingface.co/datasets/ai4bharat/IndicCorpV2)
 
+### 3. **NCERT** - Educational Textbooks (Grades 6-12)
+- **Content**: NCERT textbooks across multiple subjects
+- **Subjects**: Science, Mathematics, Social Studies, Languages, etc.
+- **Grades**: 6th to 12th standard
+- **Test Mode**: 10,000 rows
+- **Full Mode**: Complete dataset (~5 GB)
+- **Source**: [ParthKadam2003/NCERT_Dataset](https://huggingface.co/datasets/ParthKadam2003/NCERT_Dataset)
+
 ## 🎯 Command-Line Options
 
 ### Available Arguments
@@ -60,13 +68,30 @@ This tool downloads two high-quality Indic language datasets:
 | `--region` | AWS region | `--region us-east-1` |
 | `--mode` | Download mode: `test` or `full` | `--mode full` |
 | `--config` | Config file path | `--config custom.yml` |
+| `--datasets` | Specific datasets to download | `--datasets sangraha ncert` |
 
 ### Usage Examples
+
+#### Selective Dataset Download
+
+```bash
+# Download only NCERT dataset
+python download.py --datasets ncert --storage local --mode test
+
+# Download only Sangraha dataset
+python download.py --datasets sangraha --storage local --mode test
+
+# Download multiple specific datasets
+python download.py --datasets sangraha ncert --storage local --mode test
+
+# Download only IndicCorp V2 to S3
+python download.py --datasets indiccorp_v2 --storage s3 --s3-bucket my-bucket --mode full
+```
 
 #### Test Mode Examples
 
 ```bash
-# Test data locally only
+# Test data locally only (all datasets)
 python download.py --storage local --mode test
 
 # Test data to S3 only
@@ -79,7 +104,7 @@ python download.py --storage both --s3-bucket ai4bharat-data --mode test
 #### Full Mode Examples
 
 ```bash
-# Full datasets locally (⚠️ ~250 GB)
+# Full datasets locally (⚠️ ~255 GB)
 python download.py --storage local --mode full
 
 # Full datasets to S3 (recommended)
@@ -92,8 +117,8 @@ python download.py --storage both --s3-bucket ai4bharat-data --mode full
 #### Advanced Examples
 
 ```bash
-# Custom region
-python download.py --storage s3 --s3-bucket my-bucket --region us-west-2 --mode test
+# Download only NCERT with custom region
+python download.py --datasets ncert --storage s3 --s3-bucket my-bucket --region us-west-2 --mode full
 
 # Use custom config file
 python download.py --config prod-config.yml --mode full
@@ -118,14 +143,18 @@ python download.py --help
 │   └── tam_Taml/
 │       ├── part-00000.jsonl
 │       └── part-00001.jsonl
-└── indiccorp_v2/
-    └── hin/
-        ├── part-00000.jsonl
-        ├── part-00001.jsonl
-        ├── part-00002.jsonl
-        ├── part-00003.jsonl
-        ├── part-00004.jsonl
-        └── part-00005.jsonl
+├── indiccorp_v2/
+│   └── hin/
+│       ├── part-00000.jsonl
+│       ├── part-00001.jsonl
+│       ├── part-00002.jsonl
+│       ├── part-00003.jsonl
+│       ├── part-00004.jsonl
+│       └── part-00005.jsonl
+└── ncert/
+    ├── part-00000.jsonl
+    ├── part-00001.jsonl
+    └── ...
 ```
 
 ### S3 Storage
@@ -137,8 +166,9 @@ s3://YOUR-BUCKET/
     │   ├── hin_Deva/
     │   ├── hin_Latn/
     │   └── tam_Taml/
-    └── indiccorp_v2/
-        └── hin/
+    ├── indiccorp_v2/
+    │   └── hin/
+    └── ncert/
 ```
 
 ## ⚙️ Configuration
@@ -178,6 +208,13 @@ datasets:
     test_limit:
       type: rows
       value: 50000
+
+  ncert:
+    repo: ParthKadam2003/NCERT_Dataset
+    split: train
+    test_limit:
+      type: rows
+      value: 10000
 ```
 
 **Note**: Command-line arguments override config.yml values.
@@ -296,13 +333,15 @@ python download.py --storage both --s3-bucket YOUR-BUCKET --mode full
 ### Test Mode
 - **Sangraha**: ~5 MB (30,000 records)
 - **IndicCorp V2**: ~10 MB (50,000 records)
-- **Total**: ~15 MB
+- **NCERT**: ~2 MB (10,000 records)
+- **Total**: ~17 MB
 - **Time**: ~1-2 minutes
 
 ### Full Mode
 - **Sangraha**: ~50 GB (all languages, complete dataset)
 - **IndicCorp V2**: ~200 GB (Hindi complete corpus)
-- **Total**: ~250 GB
+- **NCERT**: ~5 GB (complete educational content)
+- **Total**: ~255 GB
 - **Time**: Several hours (depends on internet speed)
 
 ## 🐛 Troubleshooting

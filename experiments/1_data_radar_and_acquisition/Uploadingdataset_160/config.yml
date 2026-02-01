@@ -9,7 +9,7 @@ aws:
   s3_prefix: s3
 
 # Mode: 'test' applies limits below, 'full' downloads entire datasets
-mode: test        # test | full
+mode: full        # test | full
 
 datasets:
 
@@ -37,3 +37,13 @@ datasets:
       value: 50000
     s3_path: indiccorp_v2/hin
     local_path: indiccorp_v2/hin
+
+  # NCERT Educational Textbooks - Grades 6-12
+  ncert:
+    repo: ParthKadam2003/NCERT_Dataset
+    split: train
+    test_limit:
+      type: rows
+      value: 10000
+    s3_path: ncert
+    local_path: ncert
