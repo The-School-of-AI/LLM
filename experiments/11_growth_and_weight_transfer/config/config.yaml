@@ -59,12 +59,14 @@ growth:
     num_new_layers: 4
     init_mode: "identity"
   
-  # Phase 3: Scale hidden dimension (variance-preserving noise padding)
+  # Phase 3: Scale hidden dimension (ADD HEADS, not fatten them)
+  # CRITICAL: Must keep head_dim=64 to preserve RoPE encoding!
+  # 768 = 12 heads × 64 dim (adds 3 new heads to original 9)
   scale_hidden_dim:
-    new_hidden_size: 720  # Must be divisible by num_attention_heads (9)
-    new_intermediate_size: 1920
-    padding_mode: "noise"  # "noise" preserves variance structure, "zero" causes spikes
-    noise_scale: 0.01
+    new_hidden_size: 768  # 12 heads × 64 dim (head_dim preserved!)
+    new_intermediate_size: 2048
+    # num_heads auto-computed: 768/64 = 12 (was 9)
+    # num_kv_heads auto-computed: 12/3 = 4 (was 3)
   
   # Phase 4: Expert explosion
   add_experts:
