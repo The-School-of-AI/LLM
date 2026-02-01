@@ -241,9 +241,11 @@ def scale_hidden_dim(
         new_tensor[tuple(slices)] = old_tensor
         return new_tensor
     
-    # Transfer and initialize weights
+    
+    # Transfer and initialize weights with DECOUPLED NOISE CHANNEL strategy
     with torch.no_grad():
         # === 1. Embeddings: RMS-preserving noise in new dims ===
+        # This creates a "noise channel" with correct variance for RMSNorm
         old_embed = model.embed_tokens.weight.data
         new_model.embed_tokens.weight.data = rms_preserving_pad(
             old_embed, 
@@ -256,14 +258,14 @@ def scale_hidden_dim(
         new_model.norm.weight.data[:old_hidden] = model.norm.weight.data
         new_model.norm.weight.data[old_hidden:] = 1.0
         
-        # === 3. LM Head: Zero in new input cols (don't read new dims) ===
+        # === 3. LM Head: Zero new input cols (IGNORE noise channel) ===
         if hasattr(model, 'lm_head') and model.lm_head is not None:
             new_model.lm_head.weight.data.zero_()
             new_model.lm_head.weight.data[:, :old_hidden] = model.lm_head.weight.data
         
         # === 4. Transfer each layer ===
         for old_layer, new_layer in zip(model.layers, new_model.layers):
-            # Layer norms: new dims = 1.0
+            # Layer norms: Identity scaling for noise channel
             new_layer.input_layernorm.weight.data[:old_hidden] = old_layer.input_layernorm.weight.data
             new_layer.input_layernorm.weight.data[old_hidden:] = 1.0
             new_layer.post_attention_layernorm.weight.data[:old_hidden] = old_layer.post_attention_layernorm.weight.data
@@ -273,137 +275,79 @@ def scale_hidden_dim(
             old_attn = old_layer.self_attn
             new_attn = new_layer.self_attn
             
-            # Q, K, V projections: RMS-preserving noise in new INPUT cols
+            # Q, K, V projections: ZERO new input cols (IGNORE noise channel)
             for old_proj, new_proj in [
                 (old_attn.q_proj, new_attn.q_proj),
                 (old_attn.k_proj, new_attn.k_proj),
                 (old_attn.v_proj, new_attn.v_proj),
             ]:
+                new_proj.weight.data.zero_()
                 old_out = old_proj.weight.shape[0]
-                new_out = new_proj.weight.shape[0]
                 
-                # RMS-preserving pad for input dimension
-                new_proj.weight.data[:old_out, :] = rms_preserving_pad(
-                    old_proj.weight.data,
-                    (old_out, new_hidden_size),
-                    [(1, old_hidden, new_hidden_size)],
-                    old_proj.weight.dtype, old_proj.weight.device
-                )
-                # New output dims (if any) = gaussian noise
-                if new_out > old_out:
-                    variance = (old_proj.weight.data ** 2).mean().item()
-                    std = math.sqrt(variance) if variance > 0 else 0.01
-                    new_proj.weight.data[old_out:, :] = torch.randn(
-                        new_out - old_out, new_hidden_size,
-                        dtype=old_proj.weight.dtype, device=old_proj.weight.device
-                    ) * std
+                # Copy old weights
+                new_proj.weight.data[:old_out, :old_hidden] = old_proj.weight.data
+                
+                # New output dims (if any) initialized to 0 or small noise? 
+                # Let's keep them 0 for now to be safe.
+                # New Input dims (576:720) are 0 → Ignore noise channel!
             
-            # O projection: Zero in new OUTPUT rows (don't write to new dims)
+            # O projection: Zero new output rows (Block noise from affecting residual)
             old_out_h = old_attn.o_proj.weight.shape[0]
             old_in = old_attn.o_proj.weight.shape[1]
             
             new_attn.o_proj.weight.data.zero_()
-            # Copy old weights and RMS-preserve new input cols
-            new_attn.o_proj.weight.data[:old_out_h, :] = rms_preserving_pad(
-                old_attn.o_proj.weight.data,
-                (old_out_h, new_attn.o_proj.weight.shape[1]),
-                [(1, old_in, new_attn.o_proj.weight.shape[1])],
-                old_attn.o_proj.weight.dtype, old_attn.o_proj.weight.device
-            )
-            # New OUTPUT rows (576:720) stay ZERO → don't contribute to residual
+            # Copy old weights. New input cols (from QKV output) depend on QKV expansion strategy
+            # Since QKV new output dims are 0, we can copy normally.
+            
+            # Wait, if QKV expanded head output, o_proj input dim increased.
+            # But earlier we just copied `[:old_out_h, :old_in]`.
+            new_attn.o_proj.weight.data[:old_out_h, :old_in] = old_attn.o_proj.weight.data
             
             # === MLP / MoE Experts ===
             if hasattr(old_layer, 'mlp'):
-                _transfer_mlp_rms_preserving(old_layer.mlp, new_layer.mlp, 
-                                              old_hidden, new_hidden_size,
-                                              old_intermediate, new_intermediate_size)
+                _transfer_mlp_decoupled(old_layer.mlp, new_layer.mlp, 
+                                        old_hidden, new_hidden_size,
+                                        old_intermediate, new_intermediate_size)
             elif hasattr(old_layer, 'moe'):
-                # Transfer router: RMS-preserving for input
+                # Transfer router: Zero new input cols (IGNORE noise channel)
                 old_gate = old_layer.moe.router.gate.weight.data
-                new_layer.moe.router.gate.weight.data = rms_preserving_pad(
-                    old_gate,
-                    (old_gate.shape[0], new_hidden_size),
-                    [(1, old_hidden, new_hidden_size)],
-                    old_gate.dtype, old_gate.device
-                )
+                new_layer.moe.router.gate.weight.data.zero_()
+                new_layer.moe.router.gate.weight.data[:, :old_hidden] = old_gate
                 
                 # Transfer each expert
                 for old_exp, new_exp in zip(old_layer.moe.experts, new_layer.moe.experts):
-                    _transfer_mlp_rms_preserving(old_exp, new_exp,
-                                                  old_hidden, new_hidden_size,
-                                                  old_intermediate, new_intermediate_size)
-    
+                    _transfer_mlp_decoupled(old_exp, new_exp,
+                                            old_hidden, new_hidden_size,
+                                            old_intermediate, new_intermediate_size)
+
     print(f"✓ Scaled hidden dimension from {old_hidden} to {new_hidden_size}")
     print(f"  - Intermediate: {old_intermediate} → {new_intermediate_size}")
-    print(f"  - Strategy: RMS-PRESERVING (maintains normalization)")
+    print(f"  - Strategy: DECOUPLED NOISE (Embed=Noise, Proj=Zero)")
     print(f"  - New parameter count: {new_model.num_parameters():,}")
     
     return new_model
 
 
-def _transfer_mlp_rms_preserving(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, new_inter):
+def _transfer_mlp_decoupled(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, new_inter):
     """
-    Transfer MLP weights with RMS-preserving initialization.
+    Transfer MLP weights with decoupled noise strategy.
     
     Key principle:
-    - gate_proj, up_proj: RMS-preserving for input dims
-    - down_proj: Zero for new OUTPUT rows (don't write to residual)
+    - gate_proj, up_proj: ZERO new input cols (ignore noise channel)
+    - down_proj: ZERO new output rows (don't write to noise channel)
     """
-    def rms_pad(old_tensor, new_shape, dim_idx, old_size):
-        variance = (old_tensor ** 2).mean().item()
-        std = math.sqrt(variance) if variance > 0 else 0.01
-        new_tensor = torch.randn(new_shape, dtype=old_tensor.dtype, device=old_tensor.device) * std
-        slices = [slice(None)] * len(new_shape)
-        slices[dim_idx] = slice(0, old_size)
-        # Handle both dimensions
-        slices[0] = slice(0, old_tensor.shape[0])
-        new_tensor[tuple(slices)] = old_tensor
-        return new_tensor
+    # gate_proj: Zero new input cols
+    new_mlp.gate_proj.weight.data.zero_()
+    new_mlp.gate_proj.weight.data[:old_inter, :old_hidden] = old_mlp.gate_proj.weight.data
+    # If intermediate grew, new rows are 0
     
-    # gate_proj: (intermediate, hidden) - RMS-preserving for both dims
-    new_mlp.gate_proj.weight.data[:old_inter, :] = rms_pad(
-        old_mlp.gate_proj.weight.data,
-        (old_inter, new_hidden),
-        1, old_hidden
-    )
-    # New intermediate rows = small init
-    if new_inter > old_inter:
-        variance = (old_mlp.gate_proj.weight.data ** 2).mean().item()
-        std = math.sqrt(variance) if variance > 0 else 0.01
-        new_mlp.gate_proj.weight.data[old_inter:, :] = torch.randn(
-            new_inter - old_inter, new_hidden,
-            dtype=old_mlp.gate_proj.weight.dtype, device=old_mlp.gate_proj.weight.device
-        ) * std
+    # up_proj: Zero new input cols
+    new_mlp.up_proj.weight.data.zero_()
+    new_mlp.up_proj.weight.data[:old_inter, :old_hidden] = old_mlp.up_proj.weight.data
     
-    # up_proj: same as gate_proj
-    new_mlp.up_proj.weight.data[:old_inter, :] = rms_pad(
-        old_mlp.up_proj.weight.data,
-        (old_inter, new_hidden),
-        1, old_hidden
-    )
-    if new_inter > old_inter:
-        variance = (old_mlp.up_proj.weight.data ** 2).mean().item()
-        std = math.sqrt(variance) if variance > 0 else 0.01
-        new_mlp.up_proj.weight.data[old_inter:, :] = torch.randn(
-            new_inter - old_inter, new_hidden,
-            dtype=old_mlp.up_proj.weight.dtype, device=old_mlp.up_proj.weight.device
-        ) * std
-    
-    # down_proj: (hidden, intermediate) - Zero for new OUTPUT rows
+    # down_proj: Zero new output rows
     new_mlp.down_proj.weight.data.zero_()
-    # Copy old weights and RMS-preserve new intermediate cols
-    variance = (old_mlp.down_proj.weight.data ** 2).mean().item()
-    std = math.sqrt(variance) if variance > 0 else 0.01
-    
-    # Old hidden rows, old intermediate cols
     new_mlp.down_proj.weight.data[:old_hidden, :old_inter] = old_mlp.down_proj.weight.data
-    # Old hidden rows, new intermediate cols (small init so gate/up can learn to use them)
-    new_mlp.down_proj.weight.data[:old_hidden, old_inter:] = torch.randn(
-        old_hidden, new_inter - old_inter,
-        dtype=old_mlp.down_proj.weight.dtype, device=old_mlp.down_proj.weight.device
-    ) * std * 0.1  # Smaller scale for new intermediate→hidden paths
-    
-    # New OUTPUT rows (576:720) stay ZERO → don't contribute to residual
 
 
 def add_experts(
