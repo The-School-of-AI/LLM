@@ -9,7 +9,7 @@ aws:
   s3_prefix: s3
 
 # Mode: 'test' applies limits below, 'full' downloads entire datasets
-mode: full        # test | full
+mode: test        # test | full
 
 datasets:
 

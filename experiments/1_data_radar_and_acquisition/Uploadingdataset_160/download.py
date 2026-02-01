@@ -317,7 +317,9 @@ def main():
         # Warn if any requested datasets are not in config
         missing = set(args.datasets) - set(cfg["datasets"].keys())
         if missing:
-            print(f"⚠️  Warning: These datasets are not in config.yml: {', '.join(missing)}")
+            print(
+                f"⚠️  Warning: These datasets are not in config.yml: {', '.join(missing)}"
+            )
 
         if not datasets_to_process:
             print("❌ No valid datasets to process!")
