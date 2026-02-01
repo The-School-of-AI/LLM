@@ -312,20 +312,25 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print(f"\n✅ Phase 4 complete! Loss: {phase4_loss:.4f}")
     
     # =========================================================================
-    # PHASE 5: YaRN Context Extension
+    # PHASE 5: YaRN Context Extension ("Sandwich Protocol")
     # =========================================================================
     print("\n" + "=" * 70)
     print("📌 PHASE 5: YaRN Context Extension")
     print("=" * 70)
     
-    # Measure pre-YaRN loss at SHORT context (baseline)
-    pre_context_loss = measure_loss(model, dataloader, device)
+    # -------------------------------------------------------------------------
+    # STEP 1: "Do No Harm" Check - Measure loss on SHORT context before/after YaRN
+    # This proves YaRN didn't break the model's existing brain
+    # -------------------------------------------------------------------------
+    print("\n📋 Step 1: 'Do No Harm' Check (short context)")
+    pre_yarn_short_loss = measure_loss(model, dataloader, device)
+    print(f"  Pre-YaRN loss (256 context): {pre_yarn_short_loss:.4f}")
     
     # Apply YaRN context scaling
     context_config = config["growth"]["scale_context"]
     new_max_length = context_config["new_max_length"]
     
-    print(f"\n🔧 Extending context with YaRN ({model.config.max_position_embeddings} → {new_max_length})...")
+    print(f"\n🔧 Applying YaRN ({model.config.max_position_embeddings} → {new_max_length})...")
     model = scale_context_length(
         model,
         new_max_length=new_max_length,
@@ -333,15 +338,22 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         beta=context_config.get("beta", 32.0),
     )
     
-    # Measure post-YaRN loss at SAME SHORT context (fair comparison!)
-    # This shows YaRN's impact on existing behavior
-    post_context_loss = measure_loss(model, dataloader, device)
-    results["phase5_delta"] = log_transition("context_extension", pre_context_loss, post_context_loss, wandb_run, total_steps)
+    post_yarn_short_loss = measure_loss(model, dataloader, device)
+    print(f"  Post-YaRN loss (256 context): {post_yarn_short_loss:.4f}")
     
-    # Create new dataloader with longer sequences
-    # Use batch_size=1 for long context to avoid OOM
-    phase5_batch_size = max(1, config["training"]["batch_size"] // 4)  # Reduce for memory
-    print(f"\n🔧 Creating new dataloader with max_length={new_max_length}, batch_size={phase5_batch_size}...")
+    yarn_delta = post_yarn_short_loss - pre_yarn_short_loss
+    yarn_status = "✅ PRESERVED!" if abs(yarn_delta) < 0.3 else "⚠️ Changed"
+    print(f"  YaRN impact: {yarn_delta:+.4f} ({yarn_status})")
+    results["phase5_delta"] = yarn_delta
+    
+    # -------------------------------------------------------------------------
+    # STEP 2: Training Loop - Train on LONG context to learn new positions
+    # -------------------------------------------------------------------------
+    print("\n📋 Step 2: Training on Long Context")
+    
+    # Create dataloader with longer sequences (reduced batch for memory)
+    phase5_batch_size = max(1, config["training"]["batch_size"] // 4)
+    print(f"  Creating dataloader: max_length={new_max_length}, batch_size={phase5_batch_size}")
     long_dataloader = get_dataloader(
         dataset_name=config["data"]["dataset_name"],
         batch_size=phase5_batch_size,
@@ -349,10 +361,13 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         num_samples=config["data"]["num_samples"],
     )
     
-    phase5_steps = config["training"]["phase5_steps"]
-    print(f"\n🚀 Training with extended context for {phase5_steps} steps...")
+    # Measure starting loss on LONG context (expected to be higher initially)
+    initial_long_loss = measure_loss(model, long_dataloader, device)
+    print(f"  Initial long context loss: {initial_long_loss:.4f} (expected higher)")
     
-    # Use higher gradient accumulation to compensate for smaller batch
+    phase5_steps = config["training"]["phase5_steps"]
+    print(f"\n🚀 Training for {phase5_steps} steps on long context...")
+    
     phase5_grad_accum = config["training"]["gradient_accumulation_steps"] * 4
     
     phase5_loss = train_phase(
@@ -360,7 +375,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         dataloader=long_dataloader,
         num_steps=phase5_steps,
         start_step=total_steps,
-        learning_rate=config["training"]["learning_rate"] * 0.1,  # Lower LR for fine-tuning
+        learning_rate=config["training"]["learning_rate"] * 0.1,
         weight_decay=config["training"]["weight_decay"],
         warmup_steps=20,
         max_grad_norm=config["training"]["max_grad_norm"],
@@ -374,8 +389,26 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     )
     
     total_steps += phase5_steps
+    
+    # -------------------------------------------------------------------------
+    # STEP 3: "Capability" Check - Prove the model can now handle long context
+    # -------------------------------------------------------------------------
+    print("\n📋 Step 3: 'Capability' Check (long context)")
+    final_long_loss = measure_loss(model, long_dataloader, device)
+    print(f"  Final long context loss: {final_long_loss:.4f}")
+    
+    capability_gain = initial_long_loss - final_long_loss
+    capability_status = "✅ LEARNED!" if capability_gain > 0.5 else "⚠️ Needs more training"
+    print(f"  Capability gain: {capability_gain:+.4f} ({capability_status})")
+    
     results["phase5_loss"] = phase5_loss
-    print(f"\n✅ Phase 5 complete! Loss: {phase5_loss:.4f}")
+    results["phase5_initial_long_loss"] = initial_long_loss
+    results["phase5_final_long_loss"] = final_long_loss
+    results["phase5_capability_gain"] = capability_gain
+    
+    print(f"\n✅ Phase 5 complete!")
+    print(f"  Short context preserved: {yarn_delta:+.4f}")
+    print(f"  Long context capability: {initial_long_loss:.4f} → {final_long_loss:.4f} ({capability_gain:+.4f})")
     
     # =========================================================================
     # SUMMARY
