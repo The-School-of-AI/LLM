@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,23 +16,27 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.conda/
+
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
+# Unit test / coverage
 htmlcov/
 .tox/
 .nox/
@@ -46,6 +46,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+<<<<<<< HEAD
 *.py,cover
 .hypothesis/
 .pytest_cache/
@@ -59,68 +60,127 @@ cover/
 *.pot
 
 # Django stuff:
+=======
+>>>>>>> 3a94409e (Added offload data scripts and updated pyproject/requirements)
 *.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+.pytest_cache/
 
-# Flask stuff:
-instance/
-.webassets-cache
+# Machine Learning & Training
+checkpoints/
+checkpoint/
+*.ckpt
+*.pth
+*.pt
+*.bin
+*.safetensors
+model_output/
+outputs/
+logs/
+runs/
+results/
+saved_models/
+experiments/
 
-# Scrapy stuff:
-.scrapy
+# Datasets
+data/
+datasets/
+*.csv
+*.tsv
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
 
-# Sphinx documentation
-docs/_build/
+uv*
+cmd*
+# Weights & Biases
+wandb/
+.wandb/
 
-# PyBuilder
-.pybuilder/
-target/
+# TensorBoard
+events.out.tfevents.*
+tensorboard/
+tb_logs/
+
+# MLflow
+mlruns/
+.mlflow/
+
+# DeepSpeed
+.deepspeed_env
+deepspeed_checkpoints/
+zero_to_fp32.py
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
-# IPython
-profile_default/
-ipython_config.py
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-.pdm.toml
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+# Linux
+*~
+.directory
+.fuse_hidden*
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
 
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# Environment variables
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+.env.local
+.env.*.local
+*.env
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# Package managers
+*.lock
+!uv.lock
+poetry.lock
 
-# Rope project settings
-.ropeproject
+# Profiling
+*.prof
+*.lprof
+profile_*.txt
 
-# mkdocs documentation
-/site
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Large files
+*.tar
+*.zip
+*.gz
+*.rar
+*.7z
 
+<<<<<<< HEAD
 # Pyre type checker
 .pyre/
 
@@ -144,3 +204,8 @@ logs/
 
 # macOS specific files
 *.DS_Store
+=======
+# Node (if using any JS tools)
+node_modules/
+package-lock.json
+>>>>>>> 3a94409e (Added offload data scripts and updated pyproject/requirements)
