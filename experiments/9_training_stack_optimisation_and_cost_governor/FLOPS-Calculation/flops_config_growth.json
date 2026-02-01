@@ -42,7 +42,7 @@
       "architecture": {
         "vocab_size": 50257,
         "hidden_size": 1280,
-        "intermediate_size": 2624,
+        "intermediate_size": 8512,
         "num_layers": 24,
         "num_heads": 16,
         "top_k_experts": 2,
@@ -56,7 +56,7 @@
         "moe_capacity_factor": 1.1,
         "moe_routing_overhead_ratio": 0.02,
         "num_moe_layers": 1,
-        "num_experts": 256
+        "num_experts": 64
       }
     },
     {
@@ -66,7 +66,7 @@
       "architecture": {
         "vocab_size": 50257,
         "hidden_size": 2176,
-        "intermediate_size": 4160,
+        "intermediate_size": 13376,
         "num_layers": 24,
         "num_heads": 32,
         "top_k_experts": 2,
@@ -80,7 +80,7 @@
         "moe_capacity_factor": 1.1,
         "moe_routing_overhead_ratio": 0.02,
         "num_moe_layers": 1,
-        "num_experts": 256
+        "num_experts": 64
       }
     },
     {
@@ -90,7 +90,7 @@
       "architecture": {
         "vocab_size": 64000,
         "hidden_size": 2176,
-        "intermediate_size": 4608,
+        "intermediate_size": 18048,
         "num_layers": 24,
         "num_heads": 32,
         "top_k_experts": 2,
@@ -104,7 +104,7 @@
         "quantization_flops_multiplier": 1.0,
         "moe_capacity_factor": 1.1,
         "moe_routing_overhead_ratio": 0.02,
-        "num_experts": 256
+        "num_experts": 64
       }
     }
   ]
