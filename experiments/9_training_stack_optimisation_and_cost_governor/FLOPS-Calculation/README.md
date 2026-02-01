@@ -80,6 +80,8 @@ Total_Per_Seq  = Linear_Term + Attention_Term
 Notes:
 - `Active_NonEmbedding_Params` excludes embeddings, but includes the output logits projection even if embeddings are tied.
 - If `include_softmax_flops=true`, a small extra softmax term is added.
+- If `attention_window` or `attention_sparsity` is set, the attention term uses the reduced effective context.
+- `recompute_multiplier` scales total FLOPs for activation checkpointing/recompute.
 
 ### 2. Parameter Counting
 - **Dense Models**: `Active Params` = `Total Params`.
@@ -88,6 +90,17 @@ Notes:
     - `Active Params`: Includes weights from only the **Top-K** experts selected per token.
 - **Embeddings** are counted for parameter totals but excluded from linear FLOPs.
 - **Null expert** logic still includes router compute by default (FFN skipped only).
+- **MoE capacity** (`moe_capacity_factor`) inflates compute (not parameter counts) to model expert padding/overflow.
+
+### Optional Architecture Knobs
+These keys are optional and default to current behavior if omitted:
+- `num_kv_heads`: Enable GQA/MQA parameter counting (defaults to `num_heads`).
+- `ffn_type`: One of `swiglu`, `geglu`, `glu`, `gelu`, `relu` (defaults to `swiglu`).
+- `ffn_multiplier`: Numeric override for FFN matrix count (e.g., 2 or 3).
+- `moe_capacity_factor`: >1 models MoE padding/overflow compute.
+- `attention_window`: Sliding-window attention size.
+- `attention_sparsity`: Fraction (0,1] of tokens attended per token (ignored if `attention_window` set).
+- `recompute_multiplier`: Activation checkpointing multiplier on total FLOPs.
 
 ### 3. Cost Calculation
 ```python
