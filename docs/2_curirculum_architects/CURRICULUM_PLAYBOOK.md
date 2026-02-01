@@ -40,15 +40,18 @@ pip install -r requirements.txt
 ```
 
 ### 2. Run the Experiment
-Use the provided script to process your data and generate a curriculum:
+Use the provided script to process your data and generate a curriculum.
+Supports `.jsonl` (text field auto-detected) and `.parquet` (requires pandas/pyarrow).
 
 ```bash
-python scripts/run_experiment.py <input_file.jsonl> <output_directory>
+python scripts/run_experiment.py <input_file> <output_directory>
 ```
 
 **Example:**
 ```bash
 python scripts/run_experiment.py data/sample_10k.jsonl outputs/run_1
+# OR
+python scripts/run_experiment.py data/sample.parquet outputs/run_1
 ```
 
 ### 3. Output
@@ -85,4 +88,3 @@ def optimize_band_weights(base, target, ...):
     # ...
 ```
 
-This ensures your curriculum is **ambitious but realistic**.
