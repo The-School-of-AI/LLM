@@ -439,7 +439,7 @@
           total_tokens: 40000000000,
           vocab_size: 50257,
           hidden_size: 1280,
-          intermediate_size: 2816,
+          intermediate_size: 8512,
           num_layers: 24,
           num_heads: 16,
           num_kv_heads: 4,
@@ -462,7 +462,7 @@
           total_tokens: 100000000000,
           vocab_size: 50257,
           hidden_size: 2176,
-          intermediate_size: 4608,
+          intermediate_size: 13376,
           num_layers: 24,
           num_heads: 32,
           num_kv_heads: 8,
@@ -485,7 +485,7 @@
           total_tokens: 240000000000,
           vocab_size: 64000,
           hidden_size: 2176,
-          intermediate_size: 16320,
+          intermediate_size: 18048,
           num_layers: 24,
           num_heads: 32,
           num_kv_heads: 8,
@@ -677,10 +677,12 @@
         const active_params =
           (1 - null_prob) * active_params_base + null_prob * params_null_path;
 
+        const moe_linear_params =
+          top_k * ffn_params_per_expert * moe_capacity_factor + router_params;
         const active_linear_params =
           layers * attn_params_per_layer +
           dense_layers * ffn_params_dense +
-          num_moe_layers * (active_ffn_params_moe * moe_capacity_factor) +
+          num_moe_layers * moe_linear_params +
           lm_head_params_for_flops;
 
         const params_null_path_linear =

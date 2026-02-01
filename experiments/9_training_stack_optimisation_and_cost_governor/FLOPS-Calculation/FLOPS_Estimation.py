@@ -28,8 +28,8 @@ def dense_transformer_flops(
         param_estimates: Tuple of parameter estimates for embeddings, layers, and output logits
     """
     
-    # Embedding FLOPs: input embeddings
-    embeddings_flops = 2 * n_ctx * n_vocab * d_model
+    # Embedding lookup is not a dense GEMM; ignore FLOPs to avoid overcount.
+    embeddings_flops = 0.0
 
     # Attention FLOPs per layer
     attn_qkv_flops = 2 * n_ctx * 3 * d_model * (d_attn * n_heads)       # Q, K, V projections
@@ -124,7 +124,10 @@ def moe_layer_flops(
     total_flops = router_flops + effective_expert_flops + routing_overhead
 
     # Active parameters (only those used per forward pass)
-    active_params_per_token = experts_per_token * (d_model * d_ff + d_ff * d_model)
+    active_params_per_token = (
+        experts_per_token * (d_model * d_ff + d_ff * d_model)
+        + d_model * num_experts
+    )
     active_params = active_params_per_token
 
     # Detailed FLOPs breakdown
@@ -184,8 +187,8 @@ def moe_transformer_flops(
     if moe_layers_end is None:
         moe_layers_end = n_layer
 
-    # Embedding FLOPs
-    embeddings_flops = 2 * n_ctx * n_vocab * d_model
+    # Embedding lookup is not a dense GEMM; ignore FLOPs to avoid overcount.
+    embeddings_flops = 0.0
 
     # Output logits FLOPs
     logits_flops = 2 * n_ctx * d_model * n_vocab
@@ -232,11 +235,12 @@ def moe_transformer_flops(
 
     # Total parameters
     total_params = (
-        n_vocab * d_model +                # Embeddings
+        n_vocab * d_model +                 # Embeddings
         n_layer * (4 * d_model * d_model) + # Attention params (Q,K,V + proj)
         num_dense_layers * (2 * d_model * d_ff) + # Dense FFN
+        num_moe_layers * (d_model * num_experts) + # MoE routers
         num_moe_layers * num_experts * (2 * d_model * d_ff) + # All MoE experts
-        d_model * n_vocab                  # Output logits
+        d_model * n_vocab                   # Output logits
     )
 
     # Active parameters (parameters actually used per forward pass)
@@ -244,6 +248,7 @@ def moe_transformer_flops(
         n_vocab * d_model +                 # Embeddings
         n_layer * (4 * d_model * d_model) + # Attention params
         num_dense_layers * (2 * d_model * d_ff) + # Dense FFN
+        num_moe_layers * (d_model * num_experts) + # MoE routers
         num_moe_layers * moe_active_params + # Only active experts
         d_model * n_vocab                   # Output logits
     )
