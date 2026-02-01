@@ -3,9 +3,9 @@ Run Growth Experiment End-to-End (4-Phase)
 
 This script executes the full 4-phase growth experiment:
 1. Phase 1: Train dense model
-2. Phase 2: Convert to MoE (keep experts same)
-3. Phase 3: Add layers (ghost layers) + scale hidden dim (padding)
-4. Phase 4: Multiply experts (expert explosion)
+2. Phase 2: Convert to MoE
+3. Phase 3: Add layers + scale hidden dim (ghost layers + zero padding)
+4. Phase 4: Add more experts (expert explosion)
 
 Goal: Demonstrate that loss does NOT spike at transitions.
 """
@@ -83,9 +83,18 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     # Setup
     device = get_device(config.get("device", "auto"))
     torch.manual_seed(config.get("seed", 42))
+    
+    # Calculate total steps
+    total_planned_steps = (
+        config["training"]["phase1_steps"] + 
+        config["training"]["phase2_steps"] + 
+        config["training"]["phase3_steps"] +
+        config["training"]["phase4_steps"]
+    )
+    
     print(f"\n🖥️  Device: {device}")
     print(f"📚 Dataset: {config['data']['dataset_name']}")
-    print(f"📊 Total steps: {config['training']['phase1_steps'] + config['training']['phase2_steps'] + config['training']['phase3_steps'] + config['training']['phase4_steps']}")
+    print(f"📊 Total steps: {total_planned_steps}")
     
     # Initialize WandB if requested
     wandb_run = None
@@ -100,7 +109,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         except ImportError:
             print("⚠️  WandB not installed. Skipping logging.")
     
-    # Create dataloader (shared across all phases)
+    # Create dataloader
     dataloader = get_dataloader(
         dataset_name=config["data"]["dataset_name"],
         batch_size=config["training"]["batch_size"],
@@ -149,7 +158,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print(f"\n✅ Phase 1 complete! Loss: {phase1_loss:.4f}")
     
     # =========================================================================
-    # PHASE 2: Dense → MoE Conversion
+    # PHASE 2: Dense → MoE
     # =========================================================================
     print("\n" + "=" * 70)
     print("📌 PHASE 2: Dense → MoE Conversion")
@@ -157,7 +166,6 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     
     pre_moe_loss = measure_loss(model, dataloader, device)
     
-    # Convert to MoE
     moe_config = config["growth"]["dense_to_moe"]
     model = dense_to_moe(
         model,
@@ -168,7 +176,6 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     post_moe_loss = measure_loss(model, dataloader, device)
     results["phase2_delta"] = log_transition("moe_conversion", pre_moe_loss, post_moe_loss, wandb_run, total_steps)
     
-    # Train Phase 2
     phase2_steps = config["training"]["phase2_steps"]
     print(f"\n🚀 Training MoE for {phase2_steps} steps...")
     
@@ -218,13 +225,13 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     model = scale_hidden_dim(
         model,
         new_hidden_size=dim_config["new_hidden_size"],
+        new_intermediate_size=dim_config.get("new_intermediate_size"),
         padding_mode=dim_config["padding_mode"],
     )
     
     post_scale_loss = measure_loss(model, dataloader, device)
     results["phase3_delta"] = log_transition("layers_and_dim", pre_scale_loss, post_scale_loss, wandb_run, total_steps)
     
-    # Train Phase 3
     phase3_steps = config["training"]["phase3_steps"]
     print(f"\n🚀 Training scaled model for {phase3_steps} steps...")
     
@@ -251,15 +258,14 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print(f"\n✅ Phase 3 complete! Loss: {phase3_loss:.4f}")
     
     # =========================================================================
-    # PHASE 4: Expert Explosion (Multiply Experts)
+    # PHASE 4: Expert Explosion
     # =========================================================================
     print("\n" + "=" * 70)
-    print("📌 PHASE 4: Expert Explosion (Multiply Experts)")
+    print("📌 PHASE 4: Expert Explosion (×Experts)")
     print("=" * 70)
     
     pre_expert_loss = measure_loss(model, dataloader, device)
     
-    # Multiply experts
     expert_config = config["growth"]["add_experts"]
     print(f"\n🔧 Adding {expert_config['num_new_experts']} new experts per layer...")
     model = add_experts(
@@ -271,7 +277,6 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     post_expert_loss = measure_loss(model, dataloader, device)
     results["phase4_delta"] = log_transition("expert_explosion", pre_expert_loss, post_expert_loss, wandb_run, total_steps)
     
-    # Train Phase 4
     phase4_steps = config["training"]["phase4_steps"]
     print(f"\n🚀 Training with more experts for {phase4_steps} steps...")
     
@@ -304,12 +309,12 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print("📊 EXPERIMENT SUMMARY")
     print("=" * 70)
     print(f"Total steps trained: {total_steps}")
-    print(f"\n{'Phase':<20} {'Final Loss':<15} {'Transition Δ':<15}")
-    print("-" * 50)
-    print(f"{'Phase 1 (Dense)':<20} {results['phase1_loss']:<15.4f} {'-':<15}")
-    print(f"{'Phase 2 (MoE)':<20} {results['phase2_loss']:<15.4f} {results['phase2_delta']:+.4f}")
-    print(f"{'Phase 3 (Layers+Dim)':<20} {results['phase3_loss']:<15.4f} {results['phase3_delta']:+.4f}")
-    print(f"{'Phase 4 (Experts)':<20} {results['phase4_loss']:<15.4f} {results['phase4_delta']:+.4f}")
+    print(f"\n{'Phase':<25} {'Final Loss':<15} {'Transition Δ':<15}")
+    print("-" * 55)
+    print(f"{'Phase 1 (Dense)':<25} {results['phase1_loss']:<15.4f} {'-':<15}")
+    print(f"{'Phase 2 (MoE)':<25} {results['phase2_loss']:<15.4f} {results['phase2_delta']:+.4f}")
+    print(f"{'Phase 3 (Layers+Dim)':<25} {results['phase3_loss']:<15.4f} {results['phase3_delta']:+.4f}")
+    print(f"{'Phase 4 (×Experts)':<25} {results['phase4_loss']:<15.4f} {results['phase4_delta']:+.4f}")
     print(f"\nFinal model parameters: {count_parameters(model):,}")
     print("=" * 70)
     
