@@ -171,6 +171,10 @@ class SparseAttentionPattern(nn.Module):
         
         # Scatter ones at topk positions
         sparse_mask.scatter_(-1, topk_indices, 0.0)
+
+        # Always allow self-attention to avoid fully-masked rows (NaNs in softmax)
+        diag_idx = torch.arange(seq_len, device=device)
+        sparse_mask[:, :, diag_idx, diag_idx] = 0.0
         
         # Ensure causal masking
         causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device), diagonal=1).bool()
