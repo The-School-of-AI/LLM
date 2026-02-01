@@ -200,6 +200,10 @@ class TrainingStage:
             "active_linear_params": effective_active_linear_params,
             "embedding_params": embedding_params,
             "lm_head_params": lm_head_params,
+            "ffn_params_per_expert": ffn_params_per_expert,
+            "ffn_multiplier": ffn_multiplier,
+            "top_k_experts": top_k,
+            "moe_capacity_factor": moe_capacity_factor,
             "num_moe_layers": num_moe_layers,
             "dense_layers": dense_layers,
             "num_experts": experts,
@@ -211,14 +215,38 @@ class TrainingStage:
         arch = self.architecture
 
         n_linear = params["active_linear_params"]
+        num_moe_layers = params["num_moe_layers"]
+        ffn_params_per_expert = params["ffn_params_per_expert"]
+        top_k = params["top_k_experts"]
+        moe_capacity_factor = params["moe_capacity_factor"]
         layers = arch.get("num_layers", 24)
         h = arch.get("hidden_size", 2048)
         s = arch.get("sequence_length", 4096)
         attention_window = arch.get("attention_window")
         attention_sparsity = arch.get("attention_sparsity")
+        attention_kernel_multiplier = arch.get("attention_kernel_multiplier")
+        if attention_kernel_multiplier is None:
+            attention_kernel_multiplier = arch.get("flash_attention_multiplier", 1.0)
+        attention_kernel_multiplier = float(attention_kernel_multiplier)
+        quantization_flops_multiplier = float(
+            arch.get("quantization_flops_multiplier", 1.0)
+        )
+        moe_routing_overhead_ratio = float(
+            arch.get("moe_routing_overhead_ratio", 0.0)
+        )
+        moe_routing_flops_per_token = arch.get("moe_routing_flops_per_token")
+        null_prob = float(arch.get("null_expert_prob", 0.0))
         recompute_multiplier = float(arch.get("recompute_multiplier", 1.0))
         if s <= 0:
             raise ValueError("sequence_length must be > 0.")
+        if attention_kernel_multiplier <= 0:
+            raise ValueError("attention_kernel_multiplier must be > 0.")
+        if quantization_flops_multiplier <= 0:
+            raise ValueError("quantization_flops_multiplier must be > 0.")
+        if moe_routing_overhead_ratio < 0:
+            raise ValueError("moe_routing_overhead_ratio must be >= 0.")
+        if null_prob < 0 or null_prob > 1:
+            raise ValueError("null_expert_prob must be in [0, 1].")
         if recompute_multiplier <= 0:
             raise ValueError("recompute_multiplier must be > 0.")
 
@@ -232,16 +260,39 @@ class TrainingStage:
                 raise ValueError("attention_sparsity must be in (0, 1].")
             attn_tokens = s * float(attention_sparsity)
 
-        flops_per_token = 6 * n_linear + 12 * layers * h * attn_tokens
+        attention_term = 12 * layers * h * attn_tokens
+        softmax_term = 0.0
         if arch.get("include_softmax_flops", False):
             heads = arch.get("num_heads")
             if heads is None:
                 raise ValueError(
                     "num_heads must be set when include_softmax_flops is True."
                 )
-            flops_per_token += 3 * layers * heads * s
+            softmax_term = 3 * layers * heads * attn_tokens
 
-        return flops_per_token * recompute_multiplier
+        flops_per_token = 6 * n_linear + attention_kernel_multiplier * (
+            attention_term + softmax_term
+        )
+
+        if num_moe_layers > 0:
+            moe_expert_flops_per_token = (
+                6 * top_k * ffn_params_per_expert * moe_capacity_factor
+            )
+            if moe_routing_overhead_ratio > 0:
+                flops_per_token += (
+                    num_moe_layers
+                    * moe_routing_overhead_ratio
+                    * moe_expert_flops_per_token
+                    * (1 - null_prob)
+                )
+            if moe_routing_flops_per_token is not None:
+                flops_per_token += (
+                    num_moe_layers
+                    * float(moe_routing_flops_per_token)
+                    * (1 - null_prob)
+                )
+
+        return flops_per_token * recompute_multiplier * quantization_flops_multiplier
 
     def calculate_flops(self, params: Optional[dict] = None) -> float:
         params = params or self.calculate_params()
