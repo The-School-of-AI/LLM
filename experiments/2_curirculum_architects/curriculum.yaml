@@ -5,9 +5,9 @@
 # - Tokenizer-driven difficulty proxy (multi-tokenizer cross-ref) is owned by Team 6; this YAML reserves hooks for it.
 # - Agentic / tool traces formats and safety rules are owned by Team 17; this YAML reserves hooks + staging caps.
 
-version: "0.2"
+version: "0.1"
 owner_team: "Team 2: Curriculum Architects"
-frozen_on: "2026-02-02"
+frozen_on: "2026-02-XX"
 languages:
   primary: ["en"]
   secondary:
