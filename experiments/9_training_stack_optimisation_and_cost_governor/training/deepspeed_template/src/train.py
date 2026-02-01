@@ -1,223 +1,194 @@
-"""
-Training utilities for DeepSpeed.
-
-This module contains training, evaluation, and inference functions
-for training language models with DeepSpeed optimization.
-"""
-
+import time
 import torch
 from tqdm import tqdm
 
+from src.moe_utils import try_get_moe_expert_counts, expert_imbalance_ratio
 
-def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=10):
-    """
-    Train the model for one epoch.
 
-    Args:
-        model_engine: DeepSpeed model engine
-        train_loader: DataLoader for training data
-        epoch: Current epoch number
-        max_steps: Maximum number of steps per epoch (None for full epoch)
-        log_interval: Log every N steps
+def _safe_get_lr(model_engine):
+    try:
+        return model_engine.optimizer.param_groups[0]["lr"]
+    except Exception:
+        return None
 
-    Returns:
-        Average training loss for the epoch
-    """
+
+def _safe_gpu_mem_mb():
+    if not torch.cuda.is_available():
+        return None
+    try:
+        return int(torch.cuda.memory_allocated() / (1024 * 1024))
+    except Exception:
+        return None
+
+
+def train_epoch(model_engine, train_loader, epoch, writer=None, log_interval=10, global_step_start=0):
     model_engine.train()
-    total_loss = 0
+    total_loss = 0.0
     steps = 0
+    global_step = global_step_start
 
-    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}")
+    progress = tqdm(
+        train_loader,
+        desc=f"train epoch {epoch}",
+        disable=(getattr(model_engine, "global_rank", 0) != 0),
+    )
 
-    for i, batch in enumerate(progress_bar):
-        # Move batch to device
+    for step, batch in enumerate(progress):
+        t0 = time.time()
+
         input_ids = batch["input_ids"].to(model_engine.device)
         attention_mask = batch["attention_mask"].to(model_engine.device)
         labels = batch["labels"].to(model_engine.device)
 
-        # Forward pass
+        # forward
+        tf0 = time.time()
         outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
         loss = outputs.loss
+        tf_ms = (time.time() - tf0) * 1000
 
-        # Backward pass
+        # backward
+        tb0 = time.time()
         model_engine.backward(loss)
+        tb_ms = (time.time() - tb0) * 1000
 
-        # Update weights
+        # step
+        ts0 = time.time()
         model_engine.step()
+        ts_ms = (time.time() - ts0) * 1000
 
-        # Track metrics
         total_loss += loss.item()
         steps += 1
 
-        # Update progress bar
-        progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+        # tokens/s (rough)
+        dt = max(time.time() - t0, 1e-6)
+        tok_s = input_ids.numel() / dt
 
-        # Log periodically
-        if i % log_interval == 0:
-            print(f"Epoch {epoch}, Step {i}, Loss: {loss.item():.4f}")
+        lr = _safe_get_lr(model_engine)
+        mem_mb = _safe_gpu_mem_mb()
 
-        # Early stopping for demo/debugging
-        if max_steps is not None and i >= max_steps:
-            break
+        # expert load
+        expert_counts = try_get_moe_expert_counts(model_engine.module)
+        imbalance = expert_imbalance_ratio(expert_counts)
 
-    avg_loss = total_loss / steps
-    print(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
+        # tqdm line
+        postfix = {"loss": f"{loss.item():.4f}", "tok/s": f"{tok_s:.0f}"}
+        if lr is not None:
+            postfix["lr"] = f"{lr:.2e}"
+        if mem_mb is not None:
+            postfix["memMB"] = f"{mem_mb}"
+        if imbalance is not None:
+            postfix["imb"] = f"{imbalance:.2f}"
 
-    return avg_loss
+        progress.set_postfix(postfix)
+
+        # terminal log
+        if step % log_interval == 0 and getattr(model_engine, "global_rank", 0) == 0:
+            print(
+                f"[train] epoch={epoch} step={step} gstep={global_step} "
+                f"loss={loss.item():.4f} "
+                f"lr={lr if lr is not None else 'NA'} "
+                f"tok/s={tok_s:.0f} "
+                f"mem_alloc={mem_mb if mem_mb is not None else 'NA'}MB "
+                f"time(ms): fwd={tf_ms:.1f} bwd={tb_ms:.1f} step={ts_ms:.1f}"
+            )
+
+        # tensorboard
+        if writer is not None and getattr(model_engine, "global_rank", 0) == 0:
+            writer.add_scalar("train/loss", loss.item(), global_step)
+            if lr is not None:
+                writer.add_scalar("train/lr", lr, global_step)
+            writer.add_scalar("train/tok_per_s", tok_s, global_step)
+            if mem_mb is not None:
+                writer.add_scalar("train/gpu_mem_mb", mem_mb, global_step)
+
+            if expert_counts is not None:
+                # histogram + imbalance
+                writer.add_histogram("moe/expert_counts", expert_counts, global_step)
+                if imbalance is not None:
+                    writer.add_scalar("moe/imbalance_ratio", imbalance, global_step)
+
+        global_step += 1
+
+    avg_loss = total_loss / max(steps, 1)
+    if getattr(model_engine, "global_rank", 0) == 0:
+        print(f"[train] epoch={epoch} avg_loss={avg_loss:.4f}")
+
+    return avg_loss, global_step
 
 
-def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
-    """
-    Evaluate the model on a dataset.
-
-    Args:
-        model_engine: DeepSpeed model engine
-        data_loader: DataLoader for evaluation data
-        phase: Name of the evaluation phase (for logging)
-        max_steps: Maximum number of steps (None for full evaluation)
-
-    Returns:
-        Tuple of (average_loss, average_perplexity)
-    """
+def evaluate(model_engine, data_loader, phase="eval", writer=None, global_step=None):
     model_engine.eval()
-    total_loss = 0
-    total_perplexity = 0
+    total_loss = 0.0
     steps = 0
 
-    progress_bar = tqdm(data_loader, desc=phase)
+    progress = tqdm(
+        data_loader,
+        desc=phase,
+        disable=(getattr(model_engine, "global_rank", 0) != 0),
+    )
 
     with torch.no_grad():
-        for i, batch in enumerate(progress_bar):
-            # Move batch to device
+        for batch in progress:
             input_ids = batch["input_ids"].to(model_engine.device)
             attention_mask = batch["attention_mask"].to(model_engine.device)
             labels = batch["labels"].to(model_engine.device)
 
-            # Forward pass
-            outputs = model_engine(
-                input_ids, attention_mask=attention_mask, labels=labels
-            )
+            outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
 
-            # Track metrics
             total_loss += loss.item()
-            total_perplexity += torch.exp(loss).item()
             steps += 1
+            progress.set_postfix({"loss": f"{loss.item():.4f}"})
 
-            # Update progress bar
-            progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+    avg_loss = total_loss / max(steps, 1)
+    ppl = float(torch.exp(torch.tensor(avg_loss)))
 
-            # Early stopping for demo/debugging
-            if max_steps is not None and i >= max_steps:
-                break
+    if getattr(model_engine, "global_rank", 0) == 0:
+        print(f"[{phase}] avg_loss={avg_loss:.4f} ppl={ppl:.2f}")
+        if writer is not None and global_step is not None:
+            writer.add_scalar(f"{phase}/loss", avg_loss, global_step)
+            writer.add_scalar(f"{phase}/ppl", ppl, global_step)
 
-    avg_loss = total_loss / steps
-    avg_perplexity = total_perplexity / steps
-
-    print(f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}")
-
-    return avg_loss, avg_perplexity
+    return avg_loss, ppl
 
 
-def generate_text(
-    model_engine,
-    tokenizer,
-    prompt="The history of artificial intelligence begins with",
-    max_new_tokens=100,
-    temperature=0.8,
-    top_k=50,
-    top_p=0.92,
-):
+def generate_text(model_engine, tokenizer, prompt, max_new_tokens=80):
     """
-    Generate text using the trained model.
-
-    Args:
-        model_engine: DeepSpeed model engine
-        tokenizer: Tokenizer for encoding/decoding
-        prompt: Input prompt for generation
-        max_new_tokens: Maximum number of tokens to generate
-        temperature: Sampling temperature (lower = more conservative)
-        top_k: Top-k sampling parameter
-        top_p: Top-p (nucleus) sampling parameter
-
-    Returns:
-        Dictionary with 'prompt', 'full_text', and 'generated_text'
+    Safe generation for MoE: min_capacity already set to 0 in the MoE layer,
+    so small prompts won't crash.
     """
     model_engine.eval()
-
-    print(f'\nGenerating text from prompt: "{prompt}"')
-
-    # Tokenize prompt
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"].to(model_engine.device)
     attention_mask = inputs["attention_mask"].to(model_engine.device)
 
-    print(f"Input tokens: {input_ids.shape[1]}")
-
-    # Generate
     with torch.no_grad():
-        output_ids = model_engine.module.generate(
-            input_ids,
+        out = model_engine.module.generate(
+            input_ids=input_ids,
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
-            num_return_sequences=1,
             do_sample=True,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            no_repeat_ngram_size=2,
+            top_k=50,
+            top_p=0.95,
+            temperature=0.8,
             pad_token_id=tokenizer.eos_token_id,
         )
 
-    # Decode
-    input_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
-    full_output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-
-    # Extract generated portion
-    generated_text = (
-        full_output[len(input_text) :].strip()
-        if len(full_output) > len(input_text)
-        else ""
-    )
-
-    print(f"\nGenerated {output_ids.shape[1] - input_ids.shape[1]} new tokens")
-    print(f"\nFull Output:\n{full_output}")
-    print(f"\nGenerated Continuation:\n{generated_text}")
-
-    return {
-        "prompt": input_text,
-        "full_text": full_output,
-        "generated_text": generated_text,
-    }
+    text = tokenizer.decode(out[0], skip_special_tokens=True)
+    if getattr(model_engine, "global_rank", 0) == 0:
+        print("\n=== Generation ===")
+        print(text)
+    return text
 
 
 def save_checkpoint(model_engine, output_dir, tag="final"):
-    """
-    Save model checkpoint.
-
-    Args:
-        model_engine: DeepSpeed model engine
-        output_dir: Directory to save checkpoint
-        tag: Tag for the checkpoint
-    """
-    print(f"Saving checkpoint to {output_dir} with tag '{tag}'")
+    if getattr(model_engine, "global_rank", 0) == 0:
+        print(f"[ckpt] saving -> {output_dir} tag={tag}")
     model_engine.save_checkpoint(output_dir, tag=tag)
-    print("Checkpoint saved successfully")
 
 
 def load_checkpoint(model_engine, checkpoint_dir, tag="final"):
-    """
-    Load model checkpoint.
-
-    Args:
-        model_engine: DeepSpeed model engine
-        checkpoint_dir: Directory containing checkpoint
-        tag: Tag of the checkpoint to load
-
-    Returns:
-        The loaded checkpoint metadata
-    """
-    print(f"Loading checkpoint from {checkpoint_dir} with tag '{tag}'")
+    if getattr(model_engine, "global_rank", 0) == 0:
+        print(f"[ckpt] loading <- {checkpoint_dir} tag={tag}")
     _, client_sd = model_engine.load_checkpoint(checkpoint_dir, tag=tag)
-    print("Checkpoint loaded successfully")
     return client_sd

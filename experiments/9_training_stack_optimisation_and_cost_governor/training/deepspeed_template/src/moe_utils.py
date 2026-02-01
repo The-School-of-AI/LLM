@@ -1,98 +1,87 @@
 """
-MoE (Mixture of Experts) utilities for DeepSpeed training.
-
-This module provides helper functions to properly initialize MoE models
-with DeepSpeed, ensuring correct parameter grouping for the optimizer.
+MoE utilities that are safe across DeepSpeed versions and won't break imports.
 """
 
-from typing import Any
+from __future__ import annotations
+from typing import Any, List, Optional, Tuple
+import torch
 
 
 def is_moe_model(model: Any) -> bool:
-    """
-    Check if a model contains MoE layers.
-    
-    This function recursively checks if any module in the model has the
-    `_z3_leaf` attribute set to True (indicating it's an MoE leaf module)
-    or if it's a DeepSpeed MoE layer.
-    
-    Args:
-        model: The PyTorch model to check.
-        
-    Returns:
-        True if the model contains MoE layers, False otherwise.
-    """
-    for module in model.modules():
-        # Check for DeepSpeed MoE layer marker
-        if hasattr(module, '_z3_leaf') and module._z3_leaf:
+    for m in model.modules():
+        name = type(m).__name__
+        if "MoE" in name or "MixtureOfExperts" in name:
             return True
-        # Check for DeepSpeed native MoE layer
-        module_name = type(module).__name__
-        if 'MoE' in module_name or 'MixtureOfExperts' in module_name:
+        if hasattr(m, "_z3_leaf") and getattr(m, "_z3_leaf") is True:
+            return True
+        # DeepSpeed MoE layer commonly has `deepspeed_moe`
+        if hasattr(m, "deepspeed_moe"):
             return True
     return False
 
 
-def create_moe_param_groups(model: Any) -> list:
+def create_moe_param_groups(model: Any):
     """
-    Create parameter groups for MoE models.
-    
-    For MoE models, DeepSpeed requires separating expert parameters from
-    non-expert parameters. This function uses DeepSpeed's utility to
-    split parameters into the appropriate groups.
-    
-    Args:
-        model: The MoE model.
-        
-    Returns:
-        A list of parameter groups suitable for DeepSpeed optimizer.
-        
-    Example:
-        >>> model = MyMoEModel()
-        >>> if is_moe_model(model):
-        ...     param_groups = create_moe_param_groups(model)
-        ... else:
-        ...     param_groups = model.parameters()
-        >>> model_engine, optimizer, _, _ = deepspeed.initialize(
-        ...     model=model,
-        ...     model_parameters=param_groups,
-        ...     config=ds_config
-        ... )
+    DeepSpeed MoE wants expert params separated for optimizer grouping.
+    If DS MoE utils are unavailable, fallback to dense params.
     """
     try:
         from deepspeed.moe.utils import split_params_into_different_moe_groups_for_optimizer
-        
-        parameters = {
-            'params': [p for p in model.parameters()],
-            'name': 'parameters'
-        }
-        return split_params_into_different_moe_groups_for_optimizer(parameters)
-    except ImportError:
-        # Fallback if DeepSpeed MoE utils not available
-        print("Warning: DeepSpeed MoE utils not available. Using default parameter groups.")
+
+        params = {"params": list(model.parameters()), "name": "parameters"}
+        return split_params_into_different_moe_groups_for_optimizer(params)
+    except Exception as e:
+        print(f"[moe_utils] MoE param group fallback -> using model.parameters() | reason: {e}")
         return model.parameters()
 
 
-def get_moe_config_recommendations() -> dict:
+def find_moe_modules(model: Any) -> List[Any]:
+    """Return a list of modules that look like DeepSpeed MoE layers."""
+    moe_modules = []
+    for m in model.modules():
+        name = type(m).__name__
+        if "MoE" in name or hasattr(m, "deepspeed_moe"):
+            moe_modules.append(m)
+    return moe_modules
+
+
+def try_get_moe_expert_counts(model: Any) -> Optional[torch.Tensor]:
     """
-    Get recommended DeepSpeed configuration for MoE models.
-    
-    Returns:
-        A dictionary with recommended settings and explanations.
+    Attempts to extract expert token counts from the first MoE layer.
+    Returns a 1D tensor [num_experts] if available.
     """
-    return {
-        "recommended_zero_stage": 2,
-        "reason": "ZeRO-2 is more stable with MoE. ZeRO-3 has a known race condition (GitHub #7824).",
-        "memory_optimization": {
-            "fp16_master_weights_and_grads": True,
-            "reason": "Keeps optimizer master weights in FP16, saving ~50% memory."
-        },
-        "known_issues": [
-            {
-                "issue": "ZeRO-3 + MoE race condition",
-                "github_issue": "https://github.com/deepspeedai/DeepSpeed/issues/7824",
-                "fix_pr": "https://github.com/deepspeedai/DeepSpeed/pull/7825",
-                "status": "Fixed in DeepSpeed >= 0.18.6"
-            }
-        ]
-    }
+    moe_modules = find_moe_modules(model)
+    if not moe_modules:
+        return None
+
+    m = moe_modules[0]
+
+    # DeepSpeed MoE sharded_moe sets `exp_counts` on the MoE layer (seen in your traceback)
+    exp_counts = getattr(m, "exp_counts", None)
+    if exp_counts is None and hasattr(m, "deepspeed_moe"):
+        exp_counts = getattr(m.deepspeed_moe, "exp_counts", None)
+
+    if exp_counts is None:
+        return None
+
+    try:
+        t = torch.as_tensor(exp_counts).detach()
+        if t.ndim == 0:
+            return None
+        return t.cpu()
+    except Exception:
+        return None
+
+
+def expert_imbalance_ratio(expert_counts: Optional[torch.Tensor]) -> Optional[float]:
+    """
+    Simple imbalance metric: max(count)/mean(count).
+    1.0 is perfectly balanced. Higher = more skew.
+    """
+    if expert_counts is None:
+        return None
+    counts = expert_counts.float()
+    mean = counts.mean().item()
+    if mean <= 0:
+        return None
+    return (counts.max().item() / mean)
