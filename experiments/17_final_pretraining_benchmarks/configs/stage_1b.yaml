@@ -6,14 +6,13 @@ benchmarks:
     enabled: true
     harness_task: "mmlu"
     shots: 0
-    subjects: ["elementary_mathematics", "high_school_biology", "high_school_chemistry", "high_school_physics", "high_school_computer_science", "us_history", "high_school_geography", "high_school_psychology"]
+    subjects: ["elementary_mathematics", "high_school_biology", "high_school_chemistry", "high_school_physics", "high_school_computer_science", "high_school_us_history", "high_school_geography", "high_school_psychology"]
     phases: ["pretraining"]
 
   - name: "TriviaQA"
     enabled: true
     harness_task: "triviaqa"
     shots: 0
-    subset: "easy-medium"
     phases: ["pretraining"]
 
   - name: "GSM8K"
@@ -29,7 +28,7 @@ benchmarks:
     phases: ["pretraining"]
 
   - name: "MSGS"
-    enabled: true
+    enabled: false
     harness_task: "msgs"
     shots: 0
     phases: ["pretraining"]
@@ -38,7 +37,7 @@ benchmarks:
     enabled: true
     harness_task: "blimp"
     shots: 0
-    tasks: ["adj_subject_verb_agreement", "determiner_noun_agreement_with_adj_2", "distractor_agreement_relative_clause"]
+    tasks: ["regular_plural_subject_verb_agreement_1", "determiner_noun_agreement_with_adj_2", "distractor_agreement_relative_clause"]
     phases: ["pretraining"]
 
   - name: "TruthfulQA"

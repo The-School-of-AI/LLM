@@ -1,0 +1,8 @@
+stage: "test"
+description: "Minimal test configuration for pipeline verification"
+benchmarks:
+  - name: "HellaSwag"
+    enabled: true
+    harness_task: "hellaswag"
+    shots: 0
+    phases: ["pretraining"]

@@ -1,54 +1,103 @@
 # Pre-training & SFT Benchmarking Suite
 
-This module provides a configurable framework to run specific benchmarks based on the model training stage (1B, 3B, 8B, 70B) and phase (Pre-training/SFT). It primarily uses the `lm-evaluation-harness` for standard tasks and supports custom scripts for others.
+This module provides a robust, configurable framework to run specific benchmarks based on the model training stage (1B, 3B, 8B, 70B) and phase (Pre-training/SFT). It leverages the `lm-evaluation-harness` for standard tasks and supports custom scripts for advanced evaluations.
 
-## Directory Structure
-- `configs/`: YAML configurations for each model stage (Harness tasks + Custom specs).
-- `src/`: Core evaluation logic (`eval_runner.py`).
-- `scripts/`: Placeholder/Actual custom evaluation scripts (e.g., AIME, SWE-bench).
-- `results/`: Standardized JSON output storage.
+## 🚀 Quick Start
 
-## Usage
-
-### 1. Pre-training Evaluation (1B -> 70B)
-To verify the base model capabilities at any stage of growth:
+### 1. Installation
+The evaluator automatically detects and uses a local `.venv` if present.
 ```bash
-python3 src/eval_runner.py --config configs/stage_1b.yaml --phase pretraining --test
+# Recommended: create and setup venv
+python3 -m venv .venv
+source .venv/bin/python3
+pip install -r requirements.txt
 ```
 
-### 2. SFT/Alignment Evaluation (Post-70B)
-SFT benchmarks are handled via a dedicated configuration designed for the final model state:
-```bash
-python3 src/eval_runner.py --config configs/sft_stage.yaml --phase sft --test
-```
-
-### 3. Real Execution (using lm-evaluation-harness)
-Ensure `lm-eval` is installed. Provide model arguments compatible with the harness.
+### 2. Run a Trial (Quick Verification)
+Run a limited execution (5 samples per task) to ensure weights and metrics load correctly:
 ```bash
 python3 src/eval_runner.py \
-    --config configs/stage_70b.yaml \
+    --config configs/stage_1b.yaml \
     --phase pretraining \
-    --model_args "pretrained=path/to/checkpoint,dtype=bfloat16"
+    --model_args "pretrained=HuggingFaceTB/SmolLM2-135M" \
+    --device "cpu" \
+    --trial
 ```
 
-## Configuration (YAML)
-Each benchmark in the YAML file specifies:
-- `harness_task`: The task name in `lm-evaluation-harness` (e.g., `mmlu`, `gsm8k`).
-- `custom_script`: Path to a python script for benchmarks not in the harness.
+### 3. Full Execution (Production)
+Run the full benchmarking suite on your checkpoint:
+```bash
+python3 src/eval_runner.py \
+    --config configs/stage_1b.yaml \
+    --phase pretraining \
+    --model_args "pretrained=path/to/checkpoint" \
+    --device "cuda:0" \
+    --batch_size "1"
+```
+
+## ⚡ Batch Size Recommendations
+
+The `--batch_size` parameter has a major impact on total evaluation time. **We recommend using a fixed value over `auto`** to avoid the slow per-task auto-detection phase.
+
+| Mode | Value | Recommended For | Rationale |
+| :--- | :--- | :--- | :--- |
+| **Standard** | `1` | **Default / Robustness** | Skips slow auto-detection. Safest for all hardware and model sizes. |
+| **High Perf** | `32`, `64` | **Optimized Runs** | Fastest execution if you know your GPU's VRAM limits. |
+| **Auto** | `auto` | *Discouraged* | Convenient but adds significant overhead by searching for batch size on every task. |
+
+---
+
+## 📂 Output Structure
+Every execution creates a unique, timestamped directory to prevent data loss and ensure clean logs:
+
+```text
+results/
+└── [stage]/                 (e.g., 1b, 8b)
+    └── [phase]/             (e.g., pretraining, sft)
+        └── [timestamp]/     (e.g., 20240201_123000)
+            ├── incremental_results.json  <-- Saved after every task
+            ├── logs/
+            │   └── execution.log         <-- Full stdout/stderr capture
+            ├── reports/
+            │   └── summary_report.md     <-- Human-readable Markdown
+            └── harness_raw/              <-- Raw JSON from lm-eval per task
+                ├── mmlu.json
+                └── gsm8k.json
+```
+
+## 🛠 Features
+
+### 1. Granular Reporting
+The YAML configuration supports specific subjects and subsets. The evaluator will automatically:
+- Expand `subjects` (e.g., MMLU subjects) into individual harness tasks.
+- Aggregate these sub-tasks into a parent benchmark score.
+- Generate a nested Markdown report showing both the **Aggregate** and **↳ Sub-task** scores.
+
+### 2. Incremental Saving
+Results are saved to `incremental_results.json` immediately after each benchmark completes. If a 24-hour run crashes at hour 23, you still have 23 hours of data.
+
+### 3. Intelligent Execution
+- **Venv Detection**: Automatically uses `.venv/bin/python3` if available.
+- **Robust Parsing**: Extracts metrics from `lm-eval` regardless of the filter used (e.g., `acc`, `exact_match`, `acc_norm`).
+- **Conflict Resolution**: Strips potential `device` conflicts between CLI arguments and `model_args`.
+
+## ⚙️ Configuration (YAML)
+Each benchmark in `configs/*.yaml` can specify:
+- `harness_task`: Base task name in `lm-evaluation-harness`.
+- `subjects`: List of MMLU-style subjects to run specifically.
+- `tasks`: List of specific subsets (e.g., for BLiMP).
+- `subset`: Specific dataset subset (e.g., for TriviaQA).
 - `shots`: Number of few-shot examples.
-- `mode/paradigm`: Stage-specific running modes (e.g., MC1 vs MC2, Zero-Shot vs CoT) as defined in `Paradigms.md`.
-- `tasks/subjects`: Curated subsets relevant to the model's capacity stage.
-- `phases`: List containing `pretraining` and/or `sft`.
-- `enabled`: Boolean to toggle the benchmark for that specific model stage.
+- `phases`: `[pretraining]` or `[sft]`.
 
-## Benchmarks Covered
-The suite covers all 25 benchmarks listed in `benchmarks-list.txt`, including:
-- **Linguistic**: BLiMP, HellaSwag, Winogrande, MSGS.
-- **Reasoning**: GSM8K, MATH, ARC, BBH, GPQA Diamond, AIME 2025.
-- **Knowledge**: MMLU, TriviaQA, SimpleQA.
-- **Code**: HumanEval, APPS, SWE-bench.
-- **Alignment/Safety**: IFEval, TruthfulQA, HELM Safety.
-- **Multilingual (Indic)**: IndicGLUE, IndicQA, Indic-Bias.
-- **Long Context**: L-Eval, RULER.
+## 🚧 Future Work & TODOs
 
-All configurations are tuned to focus on the specific metrics and risks identified in `Paradigms.md` for each growth stage (1B -> 70B).
+- [ ] **Custom Scripts**: Implement logic for placeholders in `scripts/` (AIME 2025, IndicGLUE, SWE-bench, etc.).
+- [ ] **Benchmarks List Review**: Review `benchmarks-list.txt` to ensure it is exhaustive and aligns with project deliverables.
+- [ ] **YAML Config Audit**: Comprehensive review of all task parameters (shots, mode, paradigm) in `1b`, `3b`, `8b`, `70b`, and `sft` YAMLs vs `Paradigms.md`.
+- [ ] **Multi-GPU Support**: Add orchestration for native model parallelism and FSDP via `accelerate`.
+- [ ] **MSGS Benchmark**: Investigate missing MSGS tasks in `v0.4.x` and re-enable or find substitutes.
+- [ ] **Visualizer**: Create a simple utility to compare `incremental_results.json` files across different model stages.
+
+---
+*Refer to `benchmarks-list.txt` for the full list of 25 supported benchmarks.*

@@ -1,0 +1,11 @@
+lm-eval
+pyyaml
+huggingface_hub
+transformers
+torch
+accelerate
+datasets
+evaluate
+scipy
+scikit-learn
+sentencepiece
