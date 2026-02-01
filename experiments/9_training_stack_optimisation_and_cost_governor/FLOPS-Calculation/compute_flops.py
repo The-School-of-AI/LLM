@@ -171,10 +171,13 @@ class TrainingStage:
         )
         active_params_base = embedding_params + active_non_embed_params
         # Linear params used for FLOPs (exclude embeddings, include logits even if tied).
+        moe_linear_params = (
+            top_k * ffn_params_per_expert * moe_capacity_factor + router_params
+        )
         active_linear_params = (
             layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
-            + num_moe_layers * (active_ffn_params_moe * moe_capacity_factor)
+            + num_moe_layers * moe_linear_params
             + lm_head_params_for_flops
         )
 
