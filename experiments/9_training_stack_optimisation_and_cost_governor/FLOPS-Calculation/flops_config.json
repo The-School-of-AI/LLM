@@ -22,7 +22,6 @@
         "intermediate_size": 5632,
         "num_layers": 18,
         "num_heads": 16,
-        "num_experts": 0,
         "top_k_experts": 0,
         "null_expert_prob": 0.0,
         "sequence_length": 4096,
@@ -30,7 +29,8 @@
         "ffn_type": "swiglu",
         "num_kv_heads": 4,
         "attention_kernel_multiplier": 0.9,
-        "quantization_flops_multiplier": 1.0
+        "quantization_flops_multiplier": 1.0,
+        "num_experts": 0
       }
     },
     {
@@ -43,7 +43,6 @@
         "intermediate_size": 3840,
         "num_layers": 24,
         "num_heads": 16,
-        "num_experts": 512,
         "top_k_experts": 2,
         "null_expert_prob": 0.05,
         "sequence_length": 4096,
@@ -53,7 +52,10 @@
         "attention_kernel_multiplier": 0.9,
         "quantization_flops_multiplier": 1.0,
         "moe_capacity_factor": 1.1,
-        "moe_routing_overhead_ratio": 0.02
+        "moe_routing_overhead_ratio": 0.02,
+        "solve_for": "num_experts",
+        "target_total_params": 3000000000,
+        "num_moe_layers": 24
       }
     },
     {
@@ -66,7 +68,6 @@
         "intermediate_size": 5802,
         "num_layers": 24,
         "num_heads": 32,
-        "num_experts": 512,
         "top_k_experts": 2,
         "null_expert_prob": 0.05,
         "sequence_length": 4096,
@@ -76,7 +77,10 @@
         "attention_kernel_multiplier": 0.9,
         "quantization_flops_multiplier": 1.0,
         "moe_capacity_factor": 1.1,
-        "moe_routing_overhead_ratio": 0.02
+        "moe_routing_overhead_ratio": 0.02,
+        "solve_for": "num_experts",
+        "target_total_params": 8000000000,
+        "num_moe_layers": 24
       }
     },
     {
@@ -89,7 +93,6 @@
         "intermediate_size": 49152,
         "num_layers": 24,
         "num_heads": 32,
-        "num_experts": 512,
         "top_k_experts": 2,
         "null_expert_prob": 0.05,
         "num_moe_layers": 24,
@@ -100,7 +103,9 @@
         "attention_kernel_multiplier": 0.9,
         "quantization_flops_multiplier": 1.0,
         "moe_capacity_factor": 1.1,
-        "moe_routing_overhead_ratio": 0.02
+        "moe_routing_overhead_ratio": 0.02,
+        "solve_for": "num_experts",
+        "target_total_params": 70000000000
       }
     }
   ]

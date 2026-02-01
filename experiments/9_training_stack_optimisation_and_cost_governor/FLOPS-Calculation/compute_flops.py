@@ -40,7 +40,7 @@ class TrainingStage:
             raise ValueError("num_experts and top_k_experts must be >= 0.")
         if moe_capacity_factor <= 0:
             raise ValueError("moe_capacity_factor must be > 0.")
-        if experts == 0:
+        if experts == 0 and solve_for not in ("num_experts", "num_experts_from_per_expert"):
             num_moe_layers = 0
         if experts > 0 and top_k > experts:
             raise ValueError("top_k_experts cannot exceed num_experts.")
