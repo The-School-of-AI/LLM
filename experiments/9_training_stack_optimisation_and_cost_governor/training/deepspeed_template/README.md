@@ -24,10 +24,9 @@ deepspeed_template/
 │
 ├── config/
 │   └── deepspeed/
-│       ├── zero-2-moe.json             # ZeRO-2 + MoE  ← recommended starting point
+│       ├── zero-2-moe.json             # ZeRO-2 + MoE  ← recommended (ZeRO-3 not supported for MoE)
 │       ├── zero-2.json                 # ZeRO-2 (dense model)
-│       ├── zero-3-moe.json             # ZeRO-3 + MoE  (advanced)
-│       └── zero-3.json                 # ZeRO-3 (dense model)
+│       └── zero-3.json                 # ZeRO-3 (dense model only)
 │
 ├── src/
 │   ├── models/
