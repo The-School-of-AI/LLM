@@ -97,7 +97,7 @@ def apply_rotary_pos_emb(q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, si
 class Attention(nn.Module):
     """Multi-head attention with Grouped Query Attention (GQA)."""
     
-    def __init__(self, config: SmolLM2Config, layer_idx: int):
+    def __init__(self, config: SmolLM2Config, layer_idx: int, rotary_emb: Optional[nn.Module] = None):
         super().__init__()
         self.config = config
         self.layer_idx = layer_idx
@@ -112,11 +112,15 @@ class Attention(nn.Module):
         self.v_proj = nn.Linear(self.hidden_size, self.num_kv_heads * self.head_dim, bias=False)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
         
-        self.rotary_emb = RotaryEmbedding(
-            self.head_dim,
-            max_position_embeddings=config.max_position_embeddings,
-            theta=config.rope_theta,
-        )
+        # Use provided rotary_emb (e.g., YaRN) or create standard RoPE
+        if rotary_emb is not None:
+            self.rotary_emb = rotary_emb
+        else:
+            self.rotary_emb = RotaryEmbedding(
+                self.head_dim,
+                max_position_embeddings=config.max_position_embeddings,
+                theta=config.rope_theta,
+            )
     
     def forward(
         self,

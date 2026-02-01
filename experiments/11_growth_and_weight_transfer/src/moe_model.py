@@ -129,11 +129,11 @@ class MoEBlock(nn.Module):
 class MoETransformerBlock(nn.Module):
     """Transformer block with MoE instead of standard MLP."""
     
-    def __init__(self, config: MoEConfig, layer_idx: int):
+    def __init__(self, config: MoEConfig, layer_idx: int, rotary_emb: Optional[nn.Module] = None):
         super().__init__()
         self.layer_idx = layer_idx
         self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.self_attn = Attention(config, layer_idx)
+        self.self_attn = Attention(config, layer_idx, rotary_emb=rotary_emb)
         self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.moe = MoEBlock(config)
     

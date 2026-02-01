@@ -1,11 +1,12 @@
 """
-Run Growth Experiment End-to-End (4-Phase)
+Run Growth Experiment End-to-End (5-Phase)
 
-This script executes the full 4-phase growth experiment:
+This script executes the full 5-phase growth experiment:
 1. Phase 1: Train dense model
 2. Phase 2: Convert to MoE
 3. Phase 3: Add ghost layers + Scale hidden dimension
 4. Phase 4: Add more experts (expert explosion)
+5. Phase 5: YaRN context extension (256 → 1024)
 
 Goal: Demonstrate that loss does NOT spike at transitions.
 """
@@ -23,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.model import SmolLM2, SmolLM2Config
 from src.moe_model import SmolLM2MoE, MoEConfig
-from src.growth import dense_to_moe, add_experts, add_layers, scale_hidden_dim
+from src.growth import dense_to_moe, add_experts, add_layers, scale_hidden_dim, scale_context_length
 from src.dataset import get_dataloader
 from train import train_phase, get_device, save_checkpoint, count_parameters
 
@@ -63,10 +64,10 @@ def log_transition(name, pre_loss, post_loss, wandb_run=None, step=0):
 
 
 def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False):
-    """Run the full 4-phase growth experiment."""
+    """Run the full 5-phase growth experiment."""
     
     print("=" * 70)
-    print("🧪 GROWTH EXPERIMENT (4 Phases)")
+    print("🧪 GROWTH EXPERIMENT (5 Phases)")
     print("=" * 70)
     print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("\nGrowth Path:")
@@ -74,6 +75,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print("  Phase 2: Dense → MoE → Train")
     print("  Phase 3: MoE → +Layers + Scale Dim → Train")
     print("  Phase 4: MoE → ×Experts → Train")
+    print("  Phase 5: YaRN Context Extension → Train")
     
     # Load config
     with open(config_path, "r") as f:
@@ -309,6 +311,64 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print(f"\n✅ Phase 4 complete! Loss: {phase4_loss:.4f}")
     
     # =========================================================================
+    # PHASE 5: YaRN Context Extension
+    # =========================================================================
+    print("\n" + "=" * 70)
+    print("📌 PHASE 5: YaRN Context Extension")
+    print("=" * 70)
+    
+    pre_context_loss = measure_loss(model, dataloader, device)
+    
+    # Apply YaRN context scaling
+    context_config = config["growth"]["scale_context"]
+    new_max_length = context_config["new_max_length"]
+    
+    print(f"\n🔧 Extending context with YaRN ({model.config.max_position_embeddings} → {new_max_length})...")
+    model = scale_context_length(
+        model,
+        new_max_length=new_max_length,
+        alpha=context_config.get("alpha", 1.0),
+        beta=context_config.get("beta", 32.0),
+    )
+    
+    # Create new dataloader with longer sequences
+    print(f"\n🔧 Creating new dataloader with max_length={new_max_length}...")
+    long_dataloader = get_dataloader(
+        dataset_name=config["data"]["dataset_name"],
+        batch_size=config["training"]["batch_size"],
+        max_length=new_max_length,
+        num_samples=config["data"]["num_samples"],
+    )
+    
+    post_context_loss = measure_loss(model, long_dataloader, device)
+    results["phase5_delta"] = log_transition("context_extension", pre_context_loss, post_context_loss, wandb_run, total_steps)
+    
+    phase5_steps = config["training"]["phase5_steps"]
+    print(f"\n🚀 Training with extended context for {phase5_steps} steps...")
+    
+    phase5_loss = train_phase(
+        model=model,
+        dataloader=long_dataloader,
+        num_steps=phase5_steps,
+        start_step=total_steps,
+        learning_rate=config["training"]["learning_rate"] * 0.1,  # Lower LR for fine-tuning
+        weight_decay=config["training"]["weight_decay"],
+        warmup_steps=20,
+        max_grad_norm=config["training"]["max_grad_norm"],
+        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+        log_every=config["training"]["log_every"],
+        checkpoint_every=config["training"]["checkpoint_every"],
+        save_dir=config["training"]["save_dir"],
+        checkpoint_prefix="phase5_yarn",
+        device=device,
+        wandb_run=wandb_run,
+    )
+    
+    total_steps += phase5_steps
+    results["phase5_loss"] = phase5_loss
+    print(f"\n✅ Phase 5 complete! Loss: {phase5_loss:.4f}")
+    
+    # =========================================================================
     # SUMMARY
     # =========================================================================
     print("\n" + "=" * 70)
@@ -321,13 +381,16 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print(f"{'Phase 2 (MoE)':<30} {results['phase2_loss']:<15.4f} {results['phase2_delta']:+.4f}")
     print(f"{'Phase 3 (Layers+Scale)':<30} {results['phase3_loss']:<15.4f} {results['phase3_delta']:+.4f}")
     print(f"{'Phase 4 (×Experts)':<30} {results['phase4_loss']:<15.4f} {results['phase4_delta']:+.4f}")
+    print(f"{'Phase 5 (YaRN Context)':<30} {results['phase5_loss']:<15.4f} {results['phase5_delta']:+.4f}")
     print(f"\nFinal model parameters: {count_parameters(model):,}")
+    print(f"Final context length: {model.config.max_position_embeddings}")
     print("=" * 70)
     
     # Check if all transitions were stable
     all_stable = (abs(results["phase2_delta"]) < 0.5 and 
                   abs(results["phase3_delta"]) < 0.5 and
-                  abs(results["phase4_delta"]) < 0.5)
+                  abs(results["phase4_delta"]) < 0.5 and
+                  abs(results["phase5_delta"]) < 0.5)
     if all_stable:
         print("\n🎉 SUCCESS: All transitions were STABLE (delta < 0.5)")
     else:
@@ -335,7 +398,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     
     # Save final checkpoint
     save_checkpoint(
-        model, None, None, total_steps, phase4_loss,
+        model, None, None, total_steps, phase5_loss,
         config["training"]["save_dir"], "final",
     )
     
@@ -345,8 +408,10 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             "phase2_final_loss": results["phase2_loss"],
             "phase3_final_loss": results["phase3_loss"],
             "phase4_final_loss": results["phase4_loss"],
+            "phase5_final_loss": results["phase5_loss"],
             "total_steps": total_steps,
             "final_parameters": count_parameters(model),
+            "final_context_length": model.config.max_position_embeddings,
             "all_transitions_stable": all_stable,
         })
         wandb_run.finish()
@@ -359,7 +424,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Run Growth Experiment (4 Phases)")
+    parser = argparse.ArgumentParser(description="Run Growth Experiment (5 Phases including YaRN)")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Config file")
     parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
     args = parser.parse_args()

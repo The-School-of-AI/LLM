@@ -404,6 +404,64 @@ def add_experts(
     return moe_model
 
 
+def scale_context_length(
+    model: nn.Module,
+    new_max_length: int,
+    alpha: float = 1.0,
+    beta: float = 32.0,
+) -> nn.Module:
+    """
+    Extend context length using YaRN (Yet another RoPE extensioN).
+    
+    This replaces the RoPE embeddings in all attention layers with YaRN RoPE,
+    which uses NTK-by-parts interpolation for smooth context extension.
+    
+    Args:
+        model: Model to update
+        new_max_length: New maximum context length
+        alpha: NTK-by-parts lower threshold (default: 1)
+        beta: NTK-by-parts upper threshold (default: 32)
+        
+    Returns:
+        Model with YaRN RoPE (same model, modified in place)
+    """
+    from .yarn import YaRNRotaryEmbedding
+    
+    old_max_length = model.config.max_position_embeddings
+    scale = new_max_length / old_max_length
+    head_dim = model.config.head_dim
+    rope_theta = model.config.rope_theta
+    
+    # Create YaRN RoPE embedding
+    yarn_rope = YaRNRotaryEmbedding(
+        dim=head_dim,
+        max_position_embeddings=new_max_length,
+        base=rope_theta,
+        scale=scale,
+        alpha=alpha,
+        beta=beta,
+        original_max_position_embeddings=old_max_length,
+    )
+    
+    # Move to same device as model
+    device = next(model.parameters()).device
+    yarn_rope = yarn_rope.to(device)
+    
+    # Replace RoPE in all attention layers
+    for layer in model.layers:
+        layer.self_attn.rotary_emb = yarn_rope
+    
+    # Update config
+    model.config.max_position_embeddings = new_max_length
+    
+    print(f"✓ Extended context length using YaRN")
+    print(f"  - Context: {old_max_length} → {new_max_length} ({scale:.1f}x)")
+    print(f"  - Method: NTK-by-parts (α={alpha}, β={beta})")
+    print(f"  - Attention scale: {yarn_rope.attention_scale:.4f}")
+    
+    return model
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("Testing Growth Utilities")
