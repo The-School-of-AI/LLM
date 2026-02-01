@@ -280,8 +280,8 @@ def scale_hidden_dim(
     
     old_head_dim = old_hidden // num_heads
     new_head_dim = new_hidden_size // num_heads
-    old_kv_head_dim = old_hidden // num_kv_heads
-    new_kv_head_dim = new_hidden_size // num_kv_heads
+    # K/V use the SAME head_dim as Q, just fewer heads
+    # So old_kv_head_dim = old_head_dim, not old_hidden // num_kv_heads
     
     # Determine if MoE
     is_moe = hasattr(model, 'config') and hasattr(model.config, 'num_experts')
@@ -350,17 +350,17 @@ def scale_hidden_dim(
                 new_hidden_size, old_hidden
             )
             
-            # === K projection: INTERLEAVED transfer (uses num_kv_heads) ===
+            # === K projection: INTERLEAVED transfer (uses num_kv_heads but same head_dim) ===
             new_attn.k_proj.weight.data = _interleave_qkv_weights(
                 old_attn.k_proj.weight.data,
-                num_kv_heads, old_kv_head_dim, new_kv_head_dim,
+                num_kv_heads, old_head_dim, new_head_dim,
                 new_hidden_size, old_hidden
             )
             
-            # === V projection: INTERLEAVED transfer (uses num_kv_heads) ===
+            # === V projection: INTERLEAVED transfer (uses num_kv_heads but same head_dim) ===
             new_attn.v_proj.weight.data = _interleave_qkv_weights(
                 old_attn.v_proj.weight.data,
-                num_kv_heads, old_kv_head_dim, new_kv_head_dim,
+                num_kv_heads, old_head_dim, new_head_dim,
                 new_hidden_size, old_hidden
             )
             
