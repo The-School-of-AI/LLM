@@ -1,0 +1,4 @@
+datasets==2.19.0
+huggingface-hub>=0.23.0
+requests>=2.31.0
+tomlkit>=0.12.0

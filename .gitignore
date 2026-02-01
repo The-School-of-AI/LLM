@@ -131,6 +131,8 @@ cython_debug/
 logs/
 /data
 /outputs
+/out
+out/
 /logs
 
 *.pt 

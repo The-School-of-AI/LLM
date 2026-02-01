@@ -1,0 +1,27 @@
+[run]
+out_dir = "out"
+seed = 42
+
+[sample]
+# Dolma: number of shard files to download (0 = skip)
+dolma_shards = 3
+
+# Sangraha: records per language split
+sangraha_n = 1000
+# valid Sangraha splits for verified config are: hin, eng, tam, tel, etc.
+sangraha_langs = ["hin", "eng"]
+
+# IndicCorpV2: records per split (these are the dataset's available splits)
+indic_n = 2000
+indic_splits = ["hin_Deva", "ben_Beng"]
+
+[datasets.dolma]
+repo_id = "allenai/dolma"
+version = "v1_7"
+
+[datasets.sangraha]
+repo = "ai4bharat/sangraha"
+config = "verified"
+
+[datasets.indiccorp_v2]
+repo = "ai4bharat/IndicCorpV2"
