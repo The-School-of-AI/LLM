@@ -43,7 +43,7 @@
       "architecture": {
         "vocab_size": 50257,
         "hidden_size": 1280,
-        "intermediate_size": 3840,
+        "intermediate_size": 2624,
         "num_layers": 24,
         "num_heads": 16,
         "top_k_experts": 2,
@@ -56,9 +56,8 @@
         "quantization_flops_multiplier": 1.0,
         "moe_capacity_factor": 1.1,
         "moe_routing_overhead_ratio": 0.02,
-        "solve_for": "num_experts",
-        "target_total_params": 3000000000,
-        "num_moe_layers": 24
+        "num_moe_layers": 1,
+        "num_experts": 256
       }
     },
     {
@@ -68,7 +67,7 @@
       "architecture": {
         "vocab_size": 50257,
         "hidden_size": 2176,
-        "intermediate_size": 5802,
+        "intermediate_size": 4160,
         "num_layers": 24,
         "num_heads": 32,
         "top_k_experts": 2,
@@ -81,9 +80,8 @@
         "quantization_flops_multiplier": 1.0,
         "moe_capacity_factor": 1.1,
         "moe_routing_overhead_ratio": 0.02,
-        "solve_for": "num_experts",
-        "target_total_params": 8000000000,
-        "num_moe_layers": 24
+        "num_moe_layers": 1,
+        "num_experts": 256
       }
     },
     {
@@ -93,12 +91,12 @@
       "architecture": {
         "vocab_size": 64000,
         "hidden_size": 2176,
-        "intermediate_size": 49152,
+        "intermediate_size": 4608,
         "num_layers": 24,
         "num_heads": 32,
         "top_k_experts": 2,
         "null_expert_prob": 0.05,
-        "num_moe_layers": 24,
+        "num_moe_layers": 9,
         "tie_embeddings": true,
         "sequence_length": 4096,
         "ffn_type": "swiglu",
@@ -107,8 +105,7 @@
         "quantization_flops_multiplier": 1.0,
         "moe_capacity_factor": 1.1,
         "moe_routing_overhead_ratio": 0.02,
-        "solve_for": "num_experts",
-        "target_total_params": 70000000000
+        "num_experts": 256
       }
     }
   ]
