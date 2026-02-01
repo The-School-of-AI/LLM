@@ -318,10 +318,18 @@ def scale_hidden_dim(
         new_model = SmolLM2(new_config)
     
     with torch.no_grad():
-        # === 1. Embeddings: Zero-pad new dimensions ===
+        # === 1. Embeddings: RMS-preserving noise in new dims ===
+        # This maintains the RMS for RMSNorm (avoids 12% scale shift)
+        # The noise is ignored by projection layers (they have zero columns for new dims)
         old_embed = model.embed_tokens.weight.data
-        new_model.embed_tokens.weight.data.zero_()
+        embed_variance = (old_embed ** 2).mean().item()
+        embed_std = math.sqrt(embed_variance) if embed_variance > 0 else 0.01
+        
         new_model.embed_tokens.weight.data[:, :old_hidden] = old_embed
+        new_model.embed_tokens.weight.data[:, old_hidden:] = torch.randn(
+            old_config.vocab_size, new_hidden_size - old_hidden,
+            dtype=old_embed.dtype, device=old_embed.device
+        ) * embed_std
         
         # === 2. Final Norm: new dims = 1.0 ===
         new_model.norm.weight.data[:old_hidden] = model.norm.weight.data
