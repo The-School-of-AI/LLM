@@ -61,8 +61,8 @@ growth:
   
   # Phase 2 → 3: Scale hidden dimension (zero padding)
   scale_hidden_dim:
-    new_hidden_size: 768
-    new_intermediate_size: 2048
+    new_hidden_size: 720  # Must be divisible by num_attention_heads (9)
+    new_intermediate_size: 1920
     padding_mode: "zero"
   
   # Phase 3 → 4: Expert explosion
