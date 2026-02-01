@@ -1,5 +1,32 @@
 # IndicCorpV2 Cleaning Pipeline
 
+IndicCorpV2 is web-crawled data without inherent quality tiers or folder-based difficulty signals. It's essentially a mixed bag that spans B0-B3, but you can't easily separate them without using filtering techniques because:
+
+1. No folder structure by difficulty
+2. No metadata indicating content type
+3. Mix of high-quality (news, wiki) and low-quality (social, spam) content
+
+Alternatives:
+You already have cleaner Indic sources:
+
+1. Sangraha Verified (structured, likely pre-filtered)
+2. FineWeb2 Indic subset (likely higher quality)
+
+
+Plan of usage:
+
+1B Model
+1. B0 -If possible avoid it, use Sangraha Verified + Fine Web Edu Indic . use <5% (only extremely simple text) if needed because Grammar stability needs clean data)
+
+3B Model
+1. B1 - Use 30-40% of Indic mix, use "news" + "blog" (will need creation of tags)
+
+8B Model
+1. B1 +B2 - Use 30% of Indic mix, add data for  "formal" + "wiki"
+
+70B Model
+1. Load entire data in B0-B2
+
 Cleans and categorizes IndicCorpV2 dataset by difficulty levels (B0-B4) for staged LLM training.
 
 ## Difficulty Ladder
