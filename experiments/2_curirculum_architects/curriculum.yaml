@@ -285,3 +285,238 @@ band_domain_policy:
   B3: ["technical_docs", "math_science", "code_repos"]
   B4: ["math_science", "code_repos", "planning_reasoning_curated"]
   B5: ["planning_reasoning_curated", "math_science", "code_repos"]
+
+# Dataset Implementation Details
+# This section documents how datasets are processed, cleaned, and mapped to curriculum bands.
+dataset_implementations:
+  indiccorpv2:
+    dataset_id: "ai4bharat/IndicCorpV2"
+    license: "CC-0"
+    total_tokens: 20900000000  # 20.9B tokens
+    languages: 24  # 23 Indic languages + Indian English
+    implementation_path: "experiments/2_curirculum_architects/src/indiccorpv2"
+    
+    # Dataset characteristics
+    characteristics:
+      source_type: "web_crawled"
+      quality_tier: "mixed"  # spans B0-B3, requires filtering
+      folder_structure: false  # no inherent difficulty signals
+      metadata_available: false  # no content type metadata
+    
+    # Processing pipeline
+    processing:
+      pipeline_script: "indiccorp_cleaner.py"
+      analysis_script: "analyze_processed.py"
+      exploration_notebook: "explore_indiccorpv2.ipynb"
+      
+      # Quality filters (applied before difficulty classification)
+      quality_filters:
+        min_words: 10
+        max_words: 10000
+        min_avg_word_length: 2.0
+        max_avg_word_length: 15.0
+        max_symbol_ratio: 0.30
+        max_repetition_ratio: 0.50
+        min_lexical_diversity: 0.15
+        spam_patterns:
+          - "repetitive_character_sequences"
+          - "excessive_urls"
+          - "hex_escape_sequences"
+          - "bullet_point_spam"
+      
+      # Deduplication
+      deduplication:
+        method: "exact_hash_match"
+        normalization: "lowercase_whitespace_normalized"
+        hash_algorithm: "md5"
+      
+      # Difficulty classification (heuristic-based)
+      difficulty_classification:
+        method: "heuristic_rules"
+        bands: ["B0", "B1", "B2", "B3", "B4"]
+        features_used:
+          - "avg_sentence_length"
+          - "lexical_diversity"
+          - "word_count"
+          - "long_word_ratio"
+          - "very_long_word_ratio"
+          - "has_references"
+          - "number_ratio"
+          - "paragraph_count"
+          - "sentence_length_variance"
+        
+        # Classification rules (simplified - see implementation for full logic)
+        band_rules:
+          B0:
+            description: "Nursery - Simple grammar, repetitive"
+            conditions:
+              - "avg_sentence_length < 10"
+              - "lexical_diversity < 0.35"
+              - "word_count < 300"
+              - "long_word_ratio < 0.10"
+            confidence_range: [0.6, 0.8]
+          
+          B1:
+            description: "Primary - Fluent general knowledge (default)"
+            conditions:
+              - "default_classification"
+            confidence: 0.6
+          
+          B2:
+            description: "High School - Structured narrative, longer docs"
+            conditions:
+              - "avg_sentence_length > 12"
+              - "lexical_diversity > 0.40"
+              - "word_count > 200"
+              - "paragraph_count > 2"
+            confidence: 0.7
+          
+          B3:
+            description: "Undergrad - Technical, reasoning"
+            conditions:
+              - "avg_sentence_length > 18"
+              - "long_word_ratio > 0.18"
+              - "lexical_diversity > 0.50"
+              - "word_count > 300"
+            confidence_range: [0.65, 0.8]
+          
+          B4:
+            description: "Graduate - Advanced technical"
+            conditions:
+              - "avg_sentence_length > 25"
+              - "very_long_word_ratio > 0.15"
+              - "lexical_diversity > 0.60"
+              - "has_references OR number_ratio > 0.20"
+            confidence_range: [0.75, 0.9]
+      
+      # Content categorization
+      content_categorization:
+        categories: ["news", "wiki", "social", "blog", "formal", "conversational"]
+        method: "pattern_matching_with_heuristics"
+        patterns:
+          news:
+            - "date_patterns"
+            - "reported_announced_said"
+            - "journalist_correspondent"
+            - "temporal_markers"
+          wiki:
+            - "reference_citations"
+            - "also_known_as"
+            - "see_also_references"
+            - "biographical_dates"
+          social:
+            - "mentions_hashtags"
+            - "social_media_terms"
+            - "emoji_sequences"
+          blog:
+            - "first_person_markers"
+            - "personal_experience"
+            - "reader_address"
+      
+      # Output format
+      output_format:
+        structure: "jsonl_per_difficulty_band"
+        directory_layout: "processed_data/{lang}_{script}/{B0|B1|B2|B3|B4}/batch_*.jsonl"
+        fields:
+          - "text"
+          - "difficulty"
+          - "difficulty_confidence"
+          - "category"
+          - "word_count"
+          - "char_count"
+          - "metadata"
+        metadata_fields:
+          - "lang"
+          - "lexical_diversity"
+          - "avg_sentence_length"
+    
+    # Usage plan across training stages
+    stage_usage:
+      "1B":
+        strategy: "minimal_use"
+        bands: ["B0"]
+        max_share: 0.05  # <5% of Indic mix
+        rationale: "Grammar stability needs clean data; prefer Sangraha Verified + FineWeb Edu Indic"
+        categories: ["extremely_simple_text_only"]
+      
+      "3B":
+        strategy: "moderate_use"
+        bands: ["B1"]
+        share: 0.30  # 30-40% of Indic mix
+        rationale: "Introduce native Hindi content for diversity"
+        categories: ["news", "blog"]
+        note: "Requires category tagging during processing"
+      
+      "8B":
+        strategy: "expanded_use"
+        bands: ["B1", "B2"]
+        share: 0.30  # 30% of Indic mix
+        rationale: "Add structured content for long-context capability"
+        categories: ["formal", "wiki", "news", "blog"]
+      
+      "70B":
+        strategy: "full_use"
+        bands: ["B0", "B1", "B2", "B3"]
+        rationale: "Model has capacity to handle mixed quality; maximize coverage"
+        categories: ["all"]
+    
+    # Language support
+    language_support:
+      primary_indic: "hi"  # Hindi - 6-7B tokens
+      high_resource:
+        - "hi"  # Hindi (hin_Deva) - ~6-7B tokens
+        - "te"  # Telugu (tel_Telu) - ~2.1B tokens
+        - "ur"  # Urdu (urd_Arab) - ~1.5B tokens
+        - "ta"  # Tamil (tam_Taml) - ~1.3B tokens
+        - "bn"  # Bengali (ben_Beng) - ~1.2B tokens
+        - "mr"  # Marathi (mar_Deva) - ~1.0B tokens
+        - "gu"  # Gujarati (guj_Gujr) - ~850M tokens
+        - "pa"  # Punjabi (pan_Guru) - ~770M tokens
+        - "ml"  # Malayalam (mal_Mlym) - ~700M tokens
+        - "kn"  # Kannada (kan_Knda) - ~500M tokens
+        - "or"  # Odia (ory_Orya) - ~270M tokens
+      low_resource: 11  # languages with <50M tokens each
+      total_indic_tokens: 14400000000  # 14.4B tokens
+      indian_english_tokens: 6500000000  # 6.5B tokens
+      script_mapping:
+        note: "Uses ISO 639-3 codes with script suffixes (e.g., hin_Deva, ben_Beng)"
+        common_mappings:
+          "hi": "hin_Deva"
+          "bn": "ben_Beng"
+          "te": "tel_Telu"
+          "ta": "tam_Taml"
+          "mr": "mar_Deva"
+          "gu": "guj_Gujr"
+          "kn": "kan_Knda"
+          "ml": "mal_Mlym"
+          "pa": "pan_Guru"
+          "or": "ory_Orya"
+          "ur": "urd_Arab"
+    
+    # Integration notes
+    integration:
+      processing_required: true
+      cleaning_required: true  # web-crawled, mixed quality
+      difficulty_tagging: true  # no inherent difficulty signals
+      category_tagging: true  # pattern-based categorization
+      alternatives:
+        - "Sangraha Verified (structured, pre-filtered)"
+        - "FineWeb2 Indic subset (higher quality)"
+      coordination:
+        team_1: "Dataset selection and approval"
+        team_3: "Coreset integration with difficulty bands"
+        team_5: "QA and leakage checks on processed output"
+    
+    # Statistics and monitoring
+    statistics:
+      processing_stats_file: "processing_stats.json"
+      tracked_metrics:
+        - "total_processed"
+        - "kept"
+        - "pass_rate"
+        - "duplicates_removed"
+        - "quality_failures"
+        - "difficulty_distribution"
+        - "category_distribution"
+      analysis_tool: "analyze_processed.py"
+      comparison_reports: "comparison_report.csv"
