@@ -23,6 +23,7 @@ class TrainingStage:
         null_prob = arch.get("null_expert_prob", 0.0)
         num_moe_layers = arch.get("num_moe_layers", layers if experts > 0 else 0)
         tie_embeddings = arch.get("tie_embeddings", True)
+        include_lm_head_flops = arch.get("include_lm_head_flops", True)
         target_total_params = arch.get("target_total_params")
         target_params_per_expert = arch.get("target_params_per_expert")
         solve_for = str(arch.get("solve_for", "")).strip().lower()
@@ -38,6 +39,8 @@ class TrainingStage:
 
         embedding_params = vocab * hidden
         lm_head_params = 0 if tie_embeddings else vocab * hidden
+        # Logits projection compute still happens even if tied.
+        lm_head_params_for_flops = vocab * hidden if include_lm_head_flops else 0
 
         attn_params_per_layer = 4 * hidden * hidden
 
@@ -46,6 +49,7 @@ class TrainingStage:
 
         total_ffn_params_moe = 0
         active_ffn_params_moe = 0
+        router_params = 0
         if experts > 0 or solve_for in ("num_experts", "num_experts_from_per_expert"):
             router_params = hidden * experts
             total_ffn_params_moe = experts * ffn_params_per_expert + router_params
@@ -123,12 +127,31 @@ class TrainingStage:
             + lm_head_params
         )
         active_params_base = embedding_params + active_non_embed_params
+        active_linear_params = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * active_ffn_params_moe
+            + lm_head_params_for_flops
+        )
 
         params_null_path = (
             embedding_params
             + layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
             + lm_head_params
+        )
+        params_null_path_non_embed = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
+            + lm_head_params
+        )
+        params_null_path_linear = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
+            + lm_head_params_for_flops
         )
 
         effective_active_params = (
@@ -136,16 +159,16 @@ class TrainingStage:
         ) * active_params_base + null_prob * params_null_path
         effective_active_non_embed_params = (
             1 - null_prob
-        ) * active_non_embed_params + null_prob * (
-            layers * attn_params_per_layer
-            + dense_layers * ffn_params_dense
-            + lm_head_params
-        )
+        ) * active_non_embed_params + null_prob * params_null_path_non_embed
+        effective_active_linear_params = (
+            1 - null_prob
+        ) * active_linear_params + null_prob * params_null_path_linear
 
         return {
             "total_params": total_params,
             "active_params": effective_active_params,
             "active_non_embed_params": effective_active_non_embed_params,
+            "active_linear_params": effective_active_linear_params,
             "embedding_params": embedding_params,
             "lm_head_params": lm_head_params,
             "num_moe_layers": num_moe_layers,
@@ -154,27 +177,34 @@ class TrainingStage:
             "derived_num_experts": derived_experts,
         }
 
-    def calculate_flops(self, params: Optional[dict] = None) -> float:
+    def flops_per_token(self, params: Optional[dict] = None) -> float:
         params = params or self.calculate_params()
         arch = self.architecture
 
-        n_linear = params["active_non_embed_params"]
+        n_linear = params["active_linear_params"]
         layers = arch.get("num_layers", 24)
         h = arch.get("hidden_size", 2048)
         s = arch.get("sequence_length", 4096)
         if s <= 0:
             raise ValueError("sequence_length must be > 0.")
+
+        flops_per_token = 6 * n_linear + 12 * layers * h * s
+        if arch.get("include_softmax_flops", False):
+            heads = arch.get("num_heads")
+            if heads is None:
+                raise ValueError(
+                    "num_heads must be set when include_softmax_flops is True."
+                )
+            flops_per_token += 3 * layers * heads * s
+
+        return flops_per_token
+
+    def calculate_flops(self, params: Optional[dict] = None) -> float:
+        params = params or self.calculate_params()
         if self.total_tokens <= 0:
             raise ValueError("total_tokens must be > 0.")
 
-        flops_per_seq_linear = 6 * s * n_linear
-        flops_per_seq_attn = 12 * layers * h * (s**2)
-
-        flops_per_seq_total = flops_per_seq_linear + flops_per_seq_attn
-
-        num_sequences = self.total_tokens / s
-
-        return flops_per_seq_total * num_sequences
+        return self.flops_per_token(params) * self.total_tokens
 
 
 def load_config(config_path: str):
@@ -192,7 +222,8 @@ def load_config(config_path: str):
 def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> None:
     """
     Allocate tokens to stages so total compute ~= largest stage from-scratch FLOPs.
-    This follows the paper-style compute budget: sum_i F_i = F_max, where F_i = 6 * N_i * T_i.
+    This follows the paper-style compute budget: sum_i F_i = F_max, using the same
+    per-token FLOPs formula as calculate_flops.
     """
     if not stages:
         return
@@ -201,20 +232,24 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
     if mode != "paper":
         raise ValueError("Only growth mode 'paper' is supported in this script.")
 
-    largest_stage = max(stages, key=lambda s: s.calculate_params()["active_params"])
-    largest_params = largest_stage.calculate_params()["active_params"]
-    largest_tokens = largest_stage.total_tokens
-    total_budget_flops = 6 * largest_params * largest_tokens
+    largest_stage = max(
+        stages,
+        key=lambda s: s.flops_per_token(s.calculate_params()) * s.total_tokens,
+    )
+    total_budget_flops = (
+        largest_stage.flops_per_token(largest_stage.calculate_params())
+        * largest_stage.total_tokens
+    )
 
     remaining_flops = total_budget_flops
     for stage in stages:
-        n = stage.calculate_params()["active_params"]
+        per_token_flops = stage.flops_per_token(stage.calculate_params())
         # Allocate tokens sequentially from small to large by default order.
-        t = remaining_flops / (6 * n)
+        t = remaining_flops / per_token_flops
         # Cap at original stage token budget if provided.
         t = min(t, stage.total_tokens)
         stage.total_tokens = t
-        remaining_flops -= 6 * n * t
+        remaining_flops -= per_token_flops * t
         if remaining_flops <= 0:
             remaining_flops = 0
 

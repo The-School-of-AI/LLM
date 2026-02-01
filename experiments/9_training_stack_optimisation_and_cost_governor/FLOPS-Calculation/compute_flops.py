@@ -26,6 +26,7 @@ class TrainingStage:
         null_prob = arch.get("null_expert_prob", 0.0)
         num_moe_layers = arch.get("num_moe_layers", layers if experts > 0 else 0)
         tie_embeddings = arch.get("tie_embeddings", True)
+        include_lm_head_flops = arch.get("include_lm_head_flops", True)
         target_total_params = arch.get("target_total_params")
         target_params_per_expert = arch.get("target_params_per_expert")
         solve_for = str(arch.get("solve_for", "")).strip().lower()
@@ -42,6 +43,8 @@ class TrainingStage:
         # 1. Embeddings (Vocab * Hidden) + Positional (MaxSeq * Hidden - neglected for approx)
         embedding_params = vocab * hidden
         lm_head_params = 0 if tie_embeddings else vocab * hidden
+        # Logits projection compute still happens even if tied.
+        lm_head_params_for_flops = vocab * hidden if include_lm_head_flops else 0
 
         # 2. Attention Block (per layer)
         # Q, K, V, O projections: 4 * (Hidden * Hidden)
@@ -55,6 +58,7 @@ class TrainingStage:
 
         total_ffn_params_moe = 0
         active_ffn_params_moe = 0
+        router_params = 0
         if experts > 0 or solve_for in ("num_experts", "num_experts_from_per_expert"):
             # MoE Layer
             # Router: Hidden * Experts
@@ -137,6 +141,13 @@ class TrainingStage:
             + lm_head_params
         )
         active_params_base = embedding_params + active_non_embed_params
+        # Linear params used for FLOPs (exclude embeddings, include logits even if tied).
+        active_linear_params = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * active_ffn_params_moe
+            + lm_head_params_for_flops
+        )
 
         # 6. Apply Null Expert Logic (70B Case)
         # Signal Path (1 - null_prob): uses active_params_base
@@ -148,7 +159,20 @@ class TrainingStage:
             embedding_params
             + layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
             + lm_head_params
+        )
+        params_null_path_non_embed = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
+            + lm_head_params
+        )
+        params_null_path_linear = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
+            + lm_head_params_for_flops
         )
 
         effective_active_params = (
@@ -156,16 +180,16 @@ class TrainingStage:
         ) * active_params_base + null_prob * params_null_path
         effective_active_non_embed_params = (
             1 - null_prob
-        ) * active_non_embed_params + null_prob * (
-            layers * attn_params_per_layer
-            + dense_layers * ffn_params_dense
-            + lm_head_params
-        )
+        ) * active_non_embed_params + null_prob * params_null_path_non_embed
+        effective_active_linear_params = (
+            1 - null_prob
+        ) * active_linear_params + null_prob * params_null_path_linear
 
         return {
             "total_params": total_params,
             "active_params": effective_active_params,
             "active_non_embed_params": effective_active_non_embed_params,
+            "active_linear_params": effective_active_linear_params,
             "embedding_params": embedding_params,
             "lm_head_params": lm_head_params,
             "num_moe_layers": num_moe_layers,
@@ -174,42 +198,41 @@ class TrainingStage:
             "derived_num_experts": derived_experts,
         }
 
-    def calculate_flops(self, params: Optional[dict] = None) -> float:
+    def flops_per_token(self, params: Optional[dict] = None) -> float:
         """
-        Calculates FLOPs using the precise 'Attention-Aware' formula.
-        Ref: (6 * seq_len * num_params) + (12 * num_layers * hidden_size * seq_len^2)
+        Per-token FLOPs using the attention-aware training formula.
         """
         params = params or self.calculate_params()
         arch = self.architecture
 
-        # 1. Fetch Architecture Vars
-        N_linear = params["active_non_embed_params"]
-        L = arch.get("num_layers", 24)
-        H = arch.get("hidden_size", 2048)
-        S = arch.get("sequence_length", 4096)
-        if S <= 0:
+        n_linear = params["active_linear_params"]
+        layers = arch.get("num_layers", 24)
+        h = arch.get("hidden_size", 2048)
+        s = arch.get("sequence_length", 4096)
+        if s <= 0:
             raise ValueError("sequence_length must be > 0.")
+
+        flops_per_token = 6 * n_linear + 12 * layers * h * s
+        if arch.get("include_softmax_flops", False):
+            heads = arch.get("num_heads")
+            if heads is None:
+                raise ValueError(
+                    "num_heads must be set when include_softmax_flops is True."
+                )
+            flops_per_token += 3 * layers * heads * s
+
+        return flops_per_token
+
+    def calculate_flops(self, params: Optional[dict] = None) -> float:
+        """
+        Calculates total training FLOPs using the attention-aware formula.
+        Total = per-token FLOPs * total_tokens.
+        """
+        params = params or self.calculate_params()
         if self.total_tokens <= 0:
             raise ValueError("total_tokens must be > 0.")
 
-        # 2. Calculate FLOPs per Sequence (Exact formula from Image)
-        # Term 1: Linear Matrix Muls (FFN + Projections)
-        # Formula: 6 * seq_len * num_params
-        flops_per_seq_linear = 6 * S * N_linear
-
-        # Term 2: Attention Mechanism (Quadratic)
-        # Formula: 12 * num_layers * hidden_size * seq_len^2
-        flops_per_seq_attn = 12 * L * H * (S**2)
-
-        flops_per_seq_total = flops_per_seq_linear + flops_per_seq_attn
-
-        # 3. Scale to Total Training Tokens
-        # Number of sequences = Total Tokens / Sequence Length
-        num_sequences = self.total_tokens / S
-
-        total_flops = flops_per_seq_total * num_sequences
-
-        return total_flops
+        return self.flops_per_token(params) * self.total_tokens
 
 
 def load_config(config_path: str):
