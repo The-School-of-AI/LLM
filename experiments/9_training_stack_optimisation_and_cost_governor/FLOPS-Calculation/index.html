@@ -243,6 +243,22 @@
               </select>
             </label>
           </div>
+          <div>
+            <label>Compute Mode
+              <select id="computeMode">
+                <option value="normal" selected>normal</option>
+                <option value="growth">growth</option>
+              </select>
+            </label>
+          </div>
+          <div>
+            <label>Preserve Total Tokens
+              <select id="preserveTokens">
+                <option value="true" selected>true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+          </div>
         </div>
         <div class="grid three" style="margin-top: 12px;">
           <label>BF16 TFLOPs
@@ -540,6 +556,54 @@
         });
       }
 
+      function applyGrowthAllocation(stages, preserveTotalTokens) {
+        if (!stages.length) return stages;
+
+        const originalTotalTokens = stages.reduce(
+          (sum, stage) => sum + (stage.total_tokens || 0),
+          0
+        );
+
+        const stageWithMaxCompute = stages.reduce((best, stage) => {
+          const params = calcStage(stage);
+          const fpt = flopsPerToken(stage, params);
+          const compute = fpt * stage.total_tokens;
+          if (!best || compute > best.compute) {
+            return { stage, compute };
+          }
+          return best;
+        }, null);
+
+        const totalBudgetFlops = stageWithMaxCompute.compute;
+        let remainingFlops = totalBudgetFlops;
+
+        const allocated = stages.map((stage) => {
+          const params = calcStage(stage);
+          const perTokenFlops = flopsPerToken(stage, params);
+          let tokens = remainingFlops / perTokenFlops;
+          tokens = Math.min(tokens, stage.total_tokens);
+          remainingFlops -= perTokenFlops * tokens;
+          if (remainingFlops < 0) remainingFlops = 0;
+          return { ...stage, total_tokens: tokens };
+        });
+
+        if (preserveTotalTokens && originalTotalTokens > 0) {
+          const allocatedTotal = allocated.reduce(
+            (sum, stage) => sum + stage.total_tokens,
+            0
+          );
+          if (allocatedTotal > 0) {
+            const scale = originalTotalTokens / allocatedTotal;
+            return allocated.map((stage) => ({
+              ...stage,
+              total_tokens: stage.total_tokens * scale,
+            }));
+          }
+        }
+
+        return allocated;
+      }
+
       function formatNum(value, digits = 2) {
         return value.toLocaleString(undefined, {
           minimumFractionDigits: digits,
@@ -698,11 +762,19 @@
       }
 
       function run() {
-        const stages = readStages();
+        const rawStages = readStages();
         const numGpus = Number(document.getElementById("numGpus").value);
         const mfu = Number(document.getElementById("mfu").value);
         const price = Number(document.getElementById("price").value);
         const tflopsMode = document.getElementById("tflopsMode").value;
+        const computeMode = document.getElementById("computeMode").value;
+        const preserveTokens =
+          document.getElementById("preserveTokens").value === "true";
+
+        const stages =
+          computeMode === "growth"
+            ? applyGrowthAllocation(rawStages, preserveTokens)
+            : rawStages;
 
         const precisions = [
           { label: "bf16", value: Number(document.getElementById("bf16Tflops").value) },
@@ -748,6 +820,7 @@
             label: precision.label.toUpperCase(),
             peak: precision.value,
             tflopsMode,
+            computeMode,
             stageRows,
             total_flops,
             total_days,
@@ -766,7 +839,7 @@
           const wrapper = document.createElement("div");
           wrapper.className = "summary";
           wrapper.innerHTML = `
-            <div class="mono"><strong>${result.label}</strong> • ${result.peak} TFLOPs (${result.tflopsMode})</div>
+            <div class="mono"><strong>${result.label}</strong> • ${result.peak} TFLOPs (${result.tflopsMode}) • ${result.computeMode}</div>
             <table>
               <thead>
                 <tr>
