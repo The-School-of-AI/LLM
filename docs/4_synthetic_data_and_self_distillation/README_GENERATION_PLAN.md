@@ -1,297 +1,441 @@
+```markdown
 # Synthetic Data Generation Plan
 
 **Team 4: Synthetic Data & Self-Distillation**  
-**70B LLM — Gated by diagnostic tests, aligned to skill buckets**
+**70B LLM — Pre-planned buffers, gated by diagnostics, solver-verified, curriculum-aligned**
 
 ---
 
 ## 1. Purpose & Principles
 
-- **Pre-planned, not reactive.** All synthetic data is prepared in advance, gated by the 36 diagnostic tests defined in `diagnostic_tests.md`. Data may be partially or entirely unused; unprepared data is failure.
-- **Targeted.** Each dataset targets specific skill buckets and failure modes identified by tests and by `skill_buckets.md`, not benchmark items.
-- **Bands.** Synthetic data is **B3–B5 only**; B0–B2 use curriculum/coreset only.
-- **Cap.** 5–10% of effective training mix per stage; adjustable only when measured weakness justifies it. Synthetic data must never dominate any rolling window.
-- **Two-view policy.** Every sample has:
+- **Pre-planned, not reactive.** All synthetic data is prepared in advance and can be injected if diagnostic gates show weakness. Data may be partially or entirely unused. **Unprepared buffers are failure.**
+- **Targeted.** Synthetic data targets **skills/failure modes**, not benchmark items.
+- **Bands.** Synthetic data is **B3–B5 only** (B0–B2 remain curriculum/coreset).
+- **Cap.** Synthetic share is capped at **5–10%** per stage (and never dominates any rolling window).
+- **Two-view policy.** Every accepted item has:
   - **Distilled view (primary):** final answer + short justification/outline; higher sampling weight.
-  - **CoT view (secondary, gated):** explicit reasoning under `<think>` token, bounded length; never dominant.
-- **CoT by band:** B3 → rare, capped, short; B4/B5 → allowed, capped.
+  - **CoT view (secondary, gated):** `<think>…</think>`, bounded length, never dominant.
+- **Compute discipline.** Prefer programmatic generation + deterministic verification; use teacher models mainly for surface-form diversity (paraphrase), not correctness.
 
 ---
 
-## 2. Mapping: Diagnostic Tests → Skill Buckets → Data Gen
+## 2. Diagnostics Preconditions 
 
-The 36 diagnostic tests (see `diagnostic_tests.md`) map to **8 testable skill areas** on base (non-chat) models. These map further to the full **38 skill buckets** in `skill_buckets.md` for generation scope.
+Synthetic shards are considered **“ready-to-inject” only if the diagnostic suite is stable and locked**.
 
-| Diag. bucket | Tests       | Skill bucket(s) (from #116)        | Priority | Primary benchmarks |
-|--------------|------------|------------------------------------|----------|--------------------|
-| 1. Multilingual LM | TEST-029–031 (3) | FND-LEX-EN                         | MEDIUM   | HellaSwag          |
-| 2. Long-Context    | TEST-032–034 (3) | FND-LCX                            | LOW      | LongBench          |
-| 3. General Knowledge | TEST-025–028 (4) | FND-FACT                          | MEDIUM   | MMLU-style         |
-| 4. Logical Reasoning | TEST-019–024 (6) | RSN-LOG, RSN-CAUS (light)        | HIGH     | BigBench-Logic     |
-| 5. Mathematical    | TEST-001–008 (8) | RSN-ARITH, RSN-ALG, RSN-WPT       | **CRITICAL** | GSM8K           |
-| 6. Code Understanding | TEST-015–018 (4) | CODE-COMP                        | HIGH     | MBPP subset        |
-| 7. Code Generation  | TEST-009–014 (6) | CODE-SYN, CODE-GEN-T1             | **CRITICAL** | HumanEval      |
-| 8. Structured Output | TEST-035–036 (2) | ALN-STRUCT (pre-train probe)     | LOW      | JSON/format        |
+### 2.1 Required diagnostic patches (minimum)
 
-**Heavy emphasis:** Buckets 5 (Math) and 7 (Code Gen) — GSM8K and HumanEval are primary benchmark targets. Synthetic data for these must be ready first and verified against TEST-001–014.
+These must be applied **before** generating any shard that claims it is “gated by TEST-*”.
 
----
+#### TEST-009 (Loop trace): initialize `total` (invalid prompt fix)
 
-## 3. Stage & Curriculum Alignment
+**Before**
+python
+for i in range(1, 6):
+    total += i
+print(total)
+`
 
-Synthetic data is **stage-tagged** and respects Team 2’s frozen curriculum and caps.
+**After**
 
-| Stage | Params | Tokens | Bands in scope | Synthetic focus |
-|-------|--------|--------|----------------|-----------------|
-| Stage 1 | 1B   | 20B   | —              | No synthetic (B0–B2 only) |
-| Stage 2 | 3B   | 40B   | —              | No synthetic (B0–B2 only) |
-| Stage 3 | 8B   | 100B  | B3 (early), B4 (late) | Math (RSN-ARITH, RSN-WPT), Code (CODE-SYN, CODE-COMP, CODE-GEN-T1), Logic (RSN-LOG) |
-| Stage 4 (MoE) | 16B/70B | 240B | B3–B5 | All 8 testable buckets + SFT/alignment buckets as below |
+python
+total = 0
+for i in range(1, 6):
+    total += i
+print(total)
 
-**Anti-spike:** Respect curriculum caps and rolling-window rules; synthetic data integrates with coresets, not as a separate spike.
 
----
+#### TEST-035 (JSON completion): replace non-deterministic expectation
 
-## 4. Pre-Training Synthetic Data (B3–B5, 8 testable buckets)
+Replace “any city name” with a deterministic closure or schema-checked options.
 
-### 4.1 Bucket 5 — Mathematical & Quantitative (CRITICAL)
+Example replacement:
 
-**Driven by:** TEST-001–008 (multi-step arithmetic, linear equation, word problem, fraction, rate, percentage, age, two-hop).
+* Prompt: `{"name":"Alice","age":25,"city":"Paris"`
+* Expected: `}`
 
-**Skill buckets:** RSN-ARITH, RSN-ALG, RSN-WPT.
+#### TEST-036 (Table reading): remove instruction-like QA formatting
 
-**Generate:**
+Convert to continuation with fixed label.
 
-- **Correct solutions:** Multi-step arithmetic, word problems, linear equations, fractions/percentages/rates; style randomization; no benchmark-adjacent phrasing.
-- **Hard negatives:** Wrong operator (e.g. + vs −), wrong question (total vs difference), unit/rate confusion; labeled as incorrect with short justification.
-- **Error-correction trajectories:** Wrong step → corrected step → final answer (distilled view); optional short CoT in `<think>` for B4/B5.
-- **Per skill_buckets priorities:** Multi-digit drills, order-of-operations, decimal/fraction arithmetic, word problems with decomposition, distractor-heavy problems, step-by-step equation solving.
+Example replacement:
 
-**Verification:** Re-solve with early SLM checkpoint (Team 10); accept only if teacher correct and student agreement (stage-appropriate). Reject fluent-but-wrong and benchmark look-alikes.
+* Prompt:
 
-**Tags:** `stage`, `band` (B3/B4/B5), `skill_bucket` (RSN-ARITH, RSN-ALG, RSN-WPT). CoT only for B4/B5; B3 CoT rare and short.
+  
+  Name Age
+  Alice 25
+  Bob 30
+  Bob_age =
+  
+* Expected: `30`
 
----
+#### Ambiguity removal (math wording)
 
-### 4.2 Bucket 7 — Code Generation (CRITICAL)
-
-**Driven by:** TEST-009–014 (loop trace, function completion, conditional, list/string ops, list indexing).
-
-**Skill buckets:** CODE-SYN, CODE-GEN-T1 (Python/JS focus for pre-train).
-
-**Generate:**
-
-- **Correct solutions:** Loop traces, function completions, conditionals, list/string operations; continuation-style prompts (no instruction format).
-- **Hard negatives:** Off-by-one, wrong branch (if/else), wrong method (e.g. `upper` vs `lower`); labeled incorrect + short rationale.
-- **Error-correction:** Buggy snippet → minimal fix → correct output; distilled view primary.
-- **Per skill_buckets:** Syntax/structure examples, function-from-spec, algorithm implementation, execution tracing.
-
-**Verification:** Run code or use execution harness; teacher correctness + student re-solve. Reject benchmark-adjacent phrasing and style collapse.
-
-**Tags:** `stage`, `band`, `skill_bucket` (CODE-SYN, CODE-GEN-T1). CoT gated by band.
+Avoid “3 times older”; use “three times as old”.
 
 ---
 
-### 4.3 Bucket 6 — Code Understanding (HIGH)
+### 2.2 Suite versioning and lock
 
-**Driven by:** TEST-015–018 (edge case, type error, logic inversion, off-by-one).
+* Add `suite_version` (e.g., `diag_suite_v1.1`) to `diagnostic_tests.json`.
+* Every synthetic sample must reference the locked suite version via metadata:
 
-**Skill bucket:** CODE-COMP.
-
-**Generate:**
-
-- **Correct:** Edge-case identification, type-error detection, logic-inversion detection, range-boundary comments/completions.
-- **Hard negatives:** Misidentifying error type, missing edge case; with short justification.
-- **Per skill_buckets:** Code explanation pairs, execution tracing, bug localization hints.
-
-**Tags:** `stage`, `band`, CODE-COMP. CoT only where band allows.
+  * `diag_suite_version: "diag_suite_v1.1"`
+  * `linked_tests: ["TEST-001", "TEST-003", ...]`
 
 ---
 
-### 4.4 Bucket 4 — Logical & Deductive Reasoning (HIGH)
+### 2.3 Scoring primitive (execution requirement)
 
-**Driven by:** TEST-019–024 (syllogism, contradiction, transitive, negation, temporal, spatial).
+Avoid brittle absolute `P(token) > threshold` gating where tokenization can change outcomes.
 
-**Skill buckets:** RSN-LOG, light RSN-CAUS.
+**Allowed scoring modes**
 
-**Generate:**
-
-- **Correct:** Syllogisms, contradiction detection, transitive chains, negation, temporal/spatial inference; continuation format.
-- **Hard negatives:** Affirming consequent, denying antecedent, false entailment; labeled with rationale.
-- **Per skill_buckets:** Explicit logical form, fallacy identification (negative examples), multi-step deduction, contradiction pairs.
-
-**Tags:** `stage`, `band`, RSN-LOG (and RSN-CAUS where applicable).
+* **Preferred**: generate short completion → **deterministic verifier pass/fail**
+* **Alternative**: log-likelihood ratio vs distractors
+  `LL(correct) - max_i LL(distractor_i) > margin`
 
 ---
 
-### 4.5 Bucket 3 — General Knowledge (MEDIUM)
+## 3. Mapping: Diagnostic Buckets → Skill Buckets → Pretraining-Compatible Targets
 
-**Driven by:** TEST-025–028 (science, geography, history, biology).
+### 3.1 Diagnostic scope (base-model testable)
 
-**Skill bucket:** FND-FACT.
+Diagnostics cover **8 testable areas** (TEST-001…036) and map to the broader taxonomy in `skill_buckets.md`.
 
-**Generate:**
+### 3.2 Updated mapping table (clarified PRE-safe structured outputs)
 
-- **Correct:** Factual completions (science, geography, history, biology); no instruction format.
-- **Hard negatives:** Entity confusion, temporal anachronism; with correction.
-- **Per skill_buckets:** Entity disambiguation, temporal ordering, fact verification (true/false).
-
-**Tags:** `stage`, `band`, FND-FACT.
-
----
-
-### 4.6 Bucket 1 — Multilingual LM / English (MEDIUM)
-
-**Driven by:** TEST-029–031 (vocabulary, synonym, idiom).
-
-**Skill bucket:** FND-LEX-EN.
-
-**Generate:**
-
-- **Correct:** Antonym/synonym/idiom completions; grammar-agreement completions.
-- **Per skill_buckets:** Grammar correction pairs, sentence completion with agreement constraints.
-
-**Tags:** `stage`, `band`, FND-LEX-EN.
+| Diag. bucket                            |   Tests | Primary taxonomy bucket IDs                   | Priority     | Notes                                                                                  |
+| --------------------------------------- | ------: | --------------------------------------------- | ------------ | -------------------------------------------------------------------------------------- |
+| 1. Multilingual LM (English)            | 029–031 | `FND-LEX-EN`                                  | MEDIUM       | Hindi deferred for base diagnostics; Hindi buffers optional (not gated by this suite). |
+| 2. Long-Context Retention               | 032–034 | `FND-LCX`                                     | LOW          | Base suite is short-context; prepare longer-needle buffers for later.                  |
+| 3. General Knowledge                    | 025–028 | `FND-FACT`                                    | MEDIUM       | Synthetic should be **closed-world micro-KB** to reduce contamination risk.            |
+| 4. Logical Reasoning                    | 019–024 | `RSN-LOG` (and light `RSN-CAUS`)              | HIGH         | Prefer solver-verified logical forms + paraphrase diversity.                           |
+| 5. Mathematical Reasoning               | 001–008 | `RSN-ARITH`, `RSN-ALG`, `RSN-WPT`             | **CRITICAL** | Deterministic verification mandatory (arith + SymPy).                                  |
+| 6. Code Understanding & Error Detection | 015–018 | `CODE-COMP` (and “DBG-like probes”)           | HIGH         | Keep fix-generation separate; diagnostics are detection/classification.                |
+| 7. Code Generation & Synthesis          | 009–014 | `CODE-SYN`, `CODE-GEN-T1`                     | **CRITICAL** | Verification via code execution + unit tests / golden outputs.                         |
+| 8. Structured Output (PRE-safe)         | 035–036 | `PRE-STRUCT` (subset aligned to `ALN-STRUCT`) | LOW          | Base-model formatting probes only; instruction-following alignment kept for SFT.       |
 
 ---
 
-### 4.7 Bucket 2 — Long-Context (LOW)
+## 4. Stage & Curriculum Alignment
 
-**Driven by:** TEST-032–034 (retention, multi-fact tracking, context consistency).
+Synthetic data is stage-tagged and respects Team 2’s frozen curriculum and caps.
 
-**Skill bucket:** FND-LCX.
+| Stage         |  Params | Tokens | Bands in scope    | Planned injection | Prepared buffers                                              |
+| ------------- | ------: | -----: | ----------------- | ----------------- | ------------------------------------------------------------- |
+| Stage 1       |      1B |    20B | B0–B2             | **0%**            | None required                                                 |
+| Stage 2       |      3B |    40B | mostly B0–B2      | **0% (default)**  | **YES: S2-B3 micro-buffer** (emergency / early B3 on-ramp)    |
+| Stage 3       |      8B |   100B | B3 early, B4 late | 5–10% (gated)     | Full pretraining buffers for buckets 1–8                      |
+| Stage 4 (MoE) | 16B/70B |   240B | B3–B5             | 5–10% (gated)     | Full pretraining buffers + separate SFT/RLHF buffers prepared |
 
-**Generate:**
-
-- **Correct:** Short passage with multiple facts → completion requiring retention; position-varied fact retrieval.
-- **Per skill_buckets:** Position-varied retrieval, multi-document synthesis, long-range dependency resolution.
-
-**Tags:** `stage`, `band`, FND-LCX.
-
----
-
-### 4.8 Bucket 8 — Structured Output (LOW)
-
-**Driven by:** TEST-035–036 (JSON completion, table reading).
-
-**Skill bucket:** ALN-STRUCT (probe-relevant subset for base model).
-
-**Generate:**
-
-- **Correct:** JSON continuation, table-cell completion; valid structure only.
-- **Per skill_buckets:** JSON with schemas, nested structures (continuation style).
-
-**Tags:** `stage`, `band`, ALN-STRUCT.
+**Anti-spike**: synthetic integrates into coresets; never dominates rolling windows.
 
 ---
 
-## 5. SFT & Post-Training (Alignment) Synthetic Data
+## 5. Ready-to-Inject Shard Catalog 
 
-Team objective: **Do not forget SFT, alignment, and post-training datasets.**
+> Sizes below are **buffer targets**, not mandatory injection volumes.
+> Injection remains capped at 5–10% per stage and controlled by diagnostics.
 
-These are not probed by the 36 base-model diagnostic tests (buckets 9–14 in diagnostic scope are instruction/MoE/alignment), but they are part of the same skill-bucket taxonomy and must be **prepared in advance** for downstream stages.
+### 5.1 Stage 2 — S2-B3 Micro-Buffer (Prepared, 0% planned injection)
 
-### 5.1 SFT-relevant buckets (from skill_buckets)
+| Shard               | Band | Buckets     | Linked tests | Verifier     | Target size |
+| ------------------- | ---- | ----------- | ------------ | ------------ | ----------: |
+| S2-MATH-CORE-MICRO  | B3   | `RSN-ARITH` | 001,005,006  | arithmetic   |    2–3M tok |
+| S2-CODE-CORE-MICRO  | B3   | `CODE-SYN`  | 010,011,014  | exec+golden  |    2–3M tok |
+| S2-LOGIC-CORE-MICRO | B3   | `RSN-LOG`   | 019,021,024  | logic_solver |    1–2M tok |
 
-- **RSN-ADVMATH (B4–B5):** Calculus, probability, combinatorics, proofs — problem/solution pairs; CoT allowed, capped.
-- **RSN-MH (B4–B5):** Multi-hop QA, evidence aggregation — chain demonstrations; CoT capped.
-- **CODE-GEN-T2 / CODE-GEN-T3:** Java, C++, TS, Go; Rust, SQL, Bash — implementation pairs; verification via execution.
-- **CODE-DBG, CODE-OPT, CODE-TEST:** Bug localization, minimal fix, optimization, test generation — per skill_buckets synthetic priorities.
-- **LANG-* (Hindi):** Hindi comprehension/generation/translation/Hinglish/Hindi logic — only if SFT curriculum includes them; tag with LANG-* bucket IDs.
-- **RSN-MATH-HI:** Hindi math (Devanagari numerals, terminology) — GSM8K-Hi alignment; prepare if Hindi math is in scope.
+### 5.2 Stage 3 — Main Pretraining Buffers
 
-### 5.2 Alignment buckets (SFT/RLHF)
+| Shard            | Band  | Buckets                  | Linked tests    | Verifier               | CoT ratio | Target size |
+| ---------------- | ----- | ------------------------ | --------------- | ---------------------- | --------: | ----------: |
+| S3-MATH-ARITH    | B3    | `RSN-ARITH`              | 001,005,006,008 | arithmetic             |       ≤5% |  12–18M tok |
+| S3-MATH-WPT      | B3–B4 | `RSN-WPT`                | 003,007,008     | solver+unit            |      ≤10% |  15–22M tok |
+| S3-MATH-ALG-LIN  | B4    | `RSN-ALG`                | 002             | SymPy                  |      ≤15% |   8–12M tok |
+| S3-CODE-COMPLETE | B3    | `CODE-SYN`,`CODE-GEN-T1` | 010,011,014     | exec                   |       ≤5% |  10–15M tok |
+| S3-CODE-TRACE    | B3    | `CODE-COMP`              | 009,012,013     | exec+golden            |       ≤5% |   6–10M tok |
+| S3-LOGIC-CORE    | B3–B4 | `RSN-LOG`                | 019–024         | logic_solver           |      ≤10% |   8–12M tok |
+| S3-CTX-TRACK     | B3–B4 | `FND-LCX`                | 032–034         | retrieval              |      ≤10% |    4–8M tok |
+| S3-PRE-STRUCT    | B4    | `PRE-STRUCT`             | 035–036         | json_parse/table_parse |      ≤15% |    2–4M tok |
+| S3-EN-LEX        | B3    | `FND-LEX-EN`             | 029–031         | closed_set             |       ≤5% |    2–4M tok |
+| S3-FACT-MICROKB  | B3    | `FND-FACT`               | patched 025–028 | micro_kb               |       ≤5% |    1–2M tok |
 
-- **ALN-INST:** Multi-constraint instruction pairs, negative instruction examples.
-- **ALN-STRUCT:** JSON/schema, complex nested structures (instruction + response format).
-- **ALN-HALL:** Uncertainty expression, abstention on unknowns.
-- **ALN-SAFE:** Harmful-request refusals, jailbreak resistance (no leakage into pre-train probes).
-- **ALN-HELP:** High-quality response examples, length calibration.
+### 5.3 Stage 4 — Expanded Pretraining Buffers (still buckets 1–8)
 
-**Rules:** Tag with phase `[SFT]` or `[RLHF]`, band, and skill_bucket. Keep separate from pre-train continuation data; no contamination of base-model diagnostic tests.
-
----
-
-## 6. Generation Process
-
-### 6.1 Sources
-
-- **Local LMs** (preferred) for generation and verification.
-- **Larger teacher models** (as permitted) for distillation and hard-negative mining.
-- **Prompt templates** with style randomization to avoid teacher fingerprints and benchmark-adjacent phrasing.
-
-### 6.2 Two-view creation
-
-For each sample:
-
-1. **Distilled view:** Final answer + short justification/outline (1–2 sentences). This is the primary training view; higher sampling weight.
-2. **CoT view (optional, gated):** Same content with a `<think>`…`</think>` block containing bounded explicit reasoning; secondary weight, never dominant. Omit CoT for B3 except rare/short; allow CoT for B4/B5 within caps.
-
-### 6.3 Verification & filtering
-
-- **Teacher correctness:** All correct-solution and error-correction samples verified (automated or human) before inclusion.
-- **Student re-solve:** Where possible, check early SLM (Team 10) agreement on a subset; reject if systematic disagreement.
-- **Reject:** Fluent-but-incorrect reasoning, teacher stylistic fingerprints, benchmark-adjacent phrasing.
-- **Deduplicate:** Against training pool (Team 1) and eval sets (approximate if exact unavailable).
-- **Similarity check:** Avoid near-duplicates within synthetic set and to known benchmarks.
-
-### 6.4 Volume & caps
-
-- **Per-stage synthetic share:** 5–10% of effective mix; start at lower end, increase only if diagnostic tests show weakness.
-- **Per-bucket:** Allocate more to Math and Code Gen; ensure no single bucket dominates the synthetic portion.
-- **Rolling window:** Synthetic data must not dominate any rolling window of the curriculum.
+| Shard                | Band  | Buckets                         | Linked tests    | Verifier         | CoT ratio | Target size |
+| -------------------- | ----- | ------------------------------- | --------------- | ---------------- | --------: | ----------: |
+| S4-MATH-HARD         | B4–B5 | `RSN-ARITH`,`RSN-ALG`,`RSN-WPT` | 001–008         | solver           |      ≤20% |  30–60M tok |
+| S4-CODE-GEN-HARD     | B4–B5 | `CODE-GEN-T1`                   | 009–014         | exec+tests       |      ≤20% |  25–50M tok |
+| S4-CODE-COMP-EDGE    | B4–B5 | `CODE-COMP`                     | 015–018         | exec+classify    |      ≤20% |  15–30M tok |
+| S4-LOGIC-ROBUST      | B4–B5 | `RSN-LOG`                       | 019–024         | logic_solver     |      ≤20% |  12–25M tok |
+| S4-LCX-NEEDLE-LONG   | B4–B5 | `FND-LCX`                       | extends 032–034 | retrieval        |      ≤20% |  10–20M tok |
+| S4-PRE-STRUCT-NESTED | B4–B5 | `PRE-STRUCT`                    | 035–036         | json+schema_lite |      ≤20% |   5–10M tok |
 
 ---
 
-## 7. Gating & Readiness
+## 6. Generation Process (Execution details)
 
-### 7.1 Before training
+### 6.1 Source hierarchy (cost/quality)
 
-- **36 diagnostic tests** (see `diagnostic_tests.md`) defined and harness ready.
-- **Baseline run** on early B3 checkpoint (Team 10): record pass rates per bucket, identify weak buckets (< 50% or below threshold).
-- **Synthetic datasets** pre-generated for all 8 testable buckets (and SFT/alignment buckets as above), tagged and filtered.
-- **Buffers:** Ready-to-inject shards per stage; 5–10% cap documented.
+* **Tier A (preferred):** programmatic generation + deterministic verification
+  (math, logic, LCX needles, structured JSON/table, code templates + tests)
+* **Tier B:** teacher-assisted paraphrase / surface randomization
+  (varied word problems, varied story contexts, varied code comments)
+* **Tier C:** teacher-generated candidates only when verifiers exist and acceptance is strict.
 
-### 7.2 Injection decision
+### 6.2 Required sample metadata (JSONL)
 
-- Use diagnostic results and curriculum plan to decide **whether** and **how much** synthetic data to inject per stage/bucket.
-- Optional: use early checkpoint pass rates to prioritize which buckets get synthetic data first (e.g. Math and Code if TEST-001–014 are weak).
+Every record must include (minimum):
 
-### 7.3 After injection (per stage / checkpoint)
+* `id`, `shard`, `stage`, `band`
+* `skill_buckets` (taxonomy IDs), `linked_tests`
+* `diag_suite_version`
+* `view: "distilled" | "cot"`, `cot_triggered: bool`
+* `prompt`, `completion`
+* `verifier: {type, status, details_hash}`
+* `dedup: {method, score, nearest_neighbor_id?}`
+* `source: {generator, teacher_model?, seed}`
 
-- **Re-run** the same 36 tests on post-injection checkpoint.
-- **Measure:** Delta per bucket, regression in non-targeted buckets.
-- **Success (typical):** +15% pass rate in targeted buckets; < −5% regression elsewhere; correlation with GSM8K/HumanEval gains where applicable.
-- **Impact report:** weakness → synthetic data used → before/after test deltas; document absence of regressions.
+### 6.3 Two-view creation rules 
+
+**Distilled view** is always created. **CoT view** is optional and capped.
+
+* **B3**: CoT present in **≤ 5%** of items; `cot_len_cap ≤ 120 tokens`; sampling weight **distilled:cot ≥ 8:1**
+* **B4**: CoT present in **≤ 15%**; `cot_len_cap ≤ 220`; sampling weight **≥ 6:1**
+* **B5**: CoT present in **≤ 20%**; `cot_len_cap ≤ 300 tokens`; sampling weight **≥ 5:1**
+
+CoT view must be gated with:
+
+* `<think> ... </think>`
+* never the dominant training signal
+
+### 6.4 Hard negatives and correction trajectories (CHANGED — safe formats only)
+
+Hard negatives are required but must be **non-poisoning**.
+
+**Allowed formats**
+
+1. **Binary classification**
+
+
+Problem: ...
+Candidate: 49.14
+Label: CORRECT
+
+
+and
+
+
+Problem: ...
+Candidate: 48.14
+Label: INCORRECT
+
+
+2. **Correction trajectory (distilled target ends correct)**
+
+
+Attempt: ...
+Error: ...
+Correct: ...
+Outline: ...
+
+
+**Disallowed**
+
+* Free-form wrong-answer samples without explicit “INCORRECT” labeling or correction framing.
+
+### 6.5 Style randomization and anti-fingerprint
+
+* Multiple prompt templates per shard (≥ 20 templates for critical shards)
+* Randomize names/contexts/units while keeping solver-verifiable structure
+* Ban teacher boilerplate phrases via style filter
+
+### 6.6 General knowledge (CHANGED — closed-world micro-KB)
+
+Replace open-world trivia augmentation with micro-KB tasks.
+
+Example prompt:
+
+
+Facts:
+- Water freezes at 0°C.
+- The capital of France is Paris.
+Question: The capital of France is
+Answer:
+
+
+Verifier: answer must match a fact in the provided block.
+
+### 6.7 Long-context (execution)
+
+* Provide keyed facts distributed across the context:
+
+  * positions 10% / 50% / 90%
+* Require completion of `key = value` line at end.
+
+Verifier: exact match.
+
+### 6.8 Structured output (PRE-STRUCT)
+
+Pretraining-compatible formatting tasks only:
+
+* JSON closure / strict parse
+* schema-lite with a fixed small schema (optional)
+* table cell extraction via fixed label completion
+
+Verifier: parse success / table parser.
 
 ---
 
-## 8. Deliverables Checklist
+## 7. Verification & Filtering 
 
-- [ ] **Skill buckets** — Defined (from `skill_buckets.md`).
-- [ ] **25–50 diagnostic tests** — Defined and documented (36 in `diagnostic_tests.md`).
-- [ ] **Synthetic dataset shards** — Stage-tagged, band-tagged, skill-bucket-tagged; B3–B5 only; two-view where CoT applies.
-- [ ] **Filtering and verification logic** — Scripts/criteria for correctness, re-solve, dedup, similarity.
-- [ ] **Impact reports** — Before/after test deltas, no regressions; mapping weakness → data → improvement.
-- [ ] **SFT/alignment buffers** — Prepared for ALN-*, RSN-ADVMATH, RSN-MH, CODE-DBG/OPT/TEST, LANG-*, etc., as needed by curriculum.
+### 7.1 Multi-stage acceptance gates (must all pass)
+
+1. **Deterministic verifier pass (mandatory where available)**
+
+   * Math: arithmetic + SymPy
+   * Logic: truth-table / SAT evaluator
+   * Code: execution + unit tests / golden outputs
+   * JSON: strict parse (+ schema-lite when used)
+
+2. **Student re-solve agreement (secondary; stage-appropriate)**
+
+   * Use Team 10 checkpoint where available
+   * Reject if systematic disagreement (or downgrade band / mark as stretch with tiny weight)
+
+3. **Style fingerprint filter**
+
+   * Remove repeated teacher artifacts
+   * Enforce variability quotas
+
+4. **Dedup + benchmark adjacency**
+
+   * Dedup within synthetic set (minhash/near-neighbor)
+   * Dedup against Team 1 pool where hashes/embeddings exist
+   * Apply benchmark-adjacency filters (template similarity, n-gram overlap, known phrasing)
+
+### 7.2 Rejection policy (explicit)
+
+Reject:
+
+* fluent-but-incorrect
+* unverifiable answers
+* ambiguous prompts
+* benchmark look-alike phrasing
+* near-duplicates above threshold
 
 ---
 
-## 9. Dependencies
+## 8. Gating, Injection, and Anti-Spike Policy (NEW — enforceable)
 
-- **Team 1:** Dataset pool and metadata (for dedup and mix caps).
-- **Team 2:** Frozen curriculum structure and caps (for stage/band alignment and anti-spike).
-- **Team 10:** Early checkpoints (for baseline diagnostic run and student re-solve verification).
+### 8.1 Gate criterion (per shard)
+
+A shard is eligible for injection if linked test performance indicates weakness, e.g.:
+
+* critical buckets (math/code): pass rate < target floor (stage-dependent)
+* OR consistent failure mode signature (clustered errors)
+
+### 8.2 Weight update rule (anti-spike control law)
+
+For each bucket/shard maintain an injection weight `w` updated at evaluation checkpoints:
+
+$
+* `w_raw = clamp(alpha * (target_pass - current_pass), 0, cap_stage)`
+* `w = (1 - beta) * w_prev + beta * w_raw`
+$
+
+Defaults:
+
+* `cap_stage = 0.05` (Stage 2), `0.10` (Stage 3/4)
+* `beta = 0.05` (slow changes prevent spikes)
+* `alpha` tuned so typical gaps map to 1–10% range
+
+### 8.3 Rolling-window constraint (hard)
+
+Synthetic must not exceed the curriculum rolling-window cap:
+
+* `synthetic_share(window) <= window_cap` (from Team 2)
+
+### 8.4 Regression guardrail
+
+After any injection decision:
+
+* re-run full diagnostic suite
+* block or reduce synthetic if any non-target bucket regresses by > **5% absolute**
 
 ---
 
-## 10. Failure conditions to avoid
+## 9. SFT & Post-Training Buffers 
 
-- Preparing synthetic data **reactively** during training.
-- **No tests** defined in advance.
-- Improvements only on **benchmark look-alikes** (no skill-bucket coverage).
-- **General loss** or **non-target capability** regressions.
-- Synthetic data **rejected** for noise, leakage, or benchmark contamination.
+These datasets are **prepared in advance** but stored separately and used only in SFT/RLHF phases.
+
+### 9.1 SFT buffers (examples)
+
+* `RSN-ADVMATH` (B4–B5): calculus/probability/proofs (solver-verified where possible)
+* `RSN-MH` (B4–B5): multi-hop reasoning with evidence tracking
+* `CODE-GEN-T2/T3`: typed languages + SQL/Bash (compile/execute verification)
+* `CODE-DBG/CODE-OPT/CODE-TEST`: fix/minimize/refactor/test-gen with execution harness
+* `LANG-*` (Hindi): comprehension/generation/translation/hinglish (if in curriculum scope)
+
+### 9.2 Alignment buffers (SFT/RLHF)
+
+* `ALN-INST`, `ALN-STRUCT`, `ALN-HALL`, `ALN-SAFE`, `ALN-HELP`
+
+**Hard rule:** Do not mix alignment-style instruction-response samples into base pretraining synthetic by default.
 
 ---
+
+## 10. Deliverables Checklist
+
+### 10.1 Must-submit artifacts
+
+* [ ] Locked diagnostic suite + version (`diag_suite_v1.1`)
+* [ ] Shard catalog (this section) + sizes + linked tests + verifiers
+* [ ] Stage-tagged synthetic shards (distilled + optional CoT)
+* [ ] Verifier logs + acceptance stats per shard
+* [ ] Dedup + adjacency reports
+* [ ] Injection policy implementation notes (anti-spike + regression checks)
+* [ ] Separate SFT/RLHF buffers packaged (not injected into pretraining)
+
+### 10.2 Recommended directory structure
+
+```
+synthetic/
+  shard_catalog.yaml
+  generators/
+  verifiers/
+  filters/
+  shards/
+    S2/
+    S3/
+    S4/
+  reports/
+    baseline_diag.json
+    shard_acceptance.json
+    dedup_report.json
+    injection_recommendations.json
+```
+
+---
+
+## 11. Dependencies
+
+* **Team 1:** dataset pool + metadata for dedup/mix constraints
+* **Team 2:** frozen curriculum + rolling-window caps
+* **Team 10:** early checkpoints for re-solve verification and baseline diagnostics
+
+---
+
+## 12. Failure Conditions (Reiterated)
+
+* Preparing synthetic reactively during training
+* No stable diagnostic suite defined in advance
+* No deterministic verification (accepting fluent-but-wrong)
+* Benchmark look-alike improvements only
+* Curriculum violations / domain spikes / rolling-window dominance
+* Synthetic rejected for leakage/noise due to weak filtering
+```
+
 
