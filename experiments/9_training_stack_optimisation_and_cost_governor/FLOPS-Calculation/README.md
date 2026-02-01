@@ -125,3 +125,5 @@ The `null_expert_prob` defines the fraction of tokens that skip the MoE layer (e
 ### 5. Growth / Expansion Mode
 In `compute_flops_growth.py`, token allocation uses the same per-token FLOPs formula as
 the main calculator, so growth budgets are consistent with attention-aware compute.
+By default, `preserve_total_tokens=true` rescales the allocated tokens so the final sum
+matches the original total token budget.

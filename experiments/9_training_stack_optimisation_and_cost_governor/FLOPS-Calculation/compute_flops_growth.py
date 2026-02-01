@@ -327,6 +327,9 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
     if mode != "paper":
         raise ValueError("Only growth mode 'paper' is supported in this script.")
 
+    original_total_tokens = sum(stage.total_tokens for stage in stages)
+    preserve_total_tokens = bool(growth_cfg.get("preserve_total_tokens", True))
+
     largest_stage = max(
         stages,
         key=lambda s: s.flops_per_token(s.calculate_params()) * s.total_tokens,
@@ -347,6 +350,13 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
         remaining_flops -= per_token_flops * t
         if remaining_flops <= 0:
             remaining_flops = 0
+
+    if preserve_total_tokens and original_total_tokens > 0:
+        allocated_total = sum(stage.total_tokens for stage in stages)
+        if allocated_total > 0:
+            scale = original_total_tokens / allocated_total
+            for stage in stages:
+                stage.total_tokens *= scale
 
 
 def main() -> None:
