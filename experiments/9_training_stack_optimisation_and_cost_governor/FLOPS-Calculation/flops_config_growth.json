@@ -11,7 +11,8 @@
     }
   },
   "growth": {
-    "mode": "paper"
+    "mode": "paper",
+    "preserve_total_tokens": true
   },
   "stages": [
     {
