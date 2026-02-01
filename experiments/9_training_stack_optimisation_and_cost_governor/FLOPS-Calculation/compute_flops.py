@@ -21,24 +21,40 @@ class TrainingStage:
         hidden = arch.get("hidden_size", 2048)
         intermediate = arch.get("intermediate_size", 4 * hidden)
         layers = arch.get("num_layers", 24)
+        num_heads = arch.get("num_heads")
+        num_kv_heads = arch.get("num_kv_heads", num_heads)
         experts = arch.get("num_experts", 0)
         top_k = arch.get("top_k_experts", 1)
         null_prob = arch.get("null_expert_prob", 0.0)
         num_moe_layers = arch.get("num_moe_layers", layers if experts > 0 else 0)
         tie_embeddings = arch.get("tie_embeddings", True)
         include_lm_head_flops = arch.get("include_lm_head_flops", True)
+        moe_capacity_factor = float(arch.get("moe_capacity_factor", 1.0))
+        ffn_type = str(arch.get("ffn_type", "swiglu")).strip().lower()
+        ffn_multiplier = arch.get("ffn_multiplier")
         target_total_params = arch.get("target_total_params")
         target_params_per_expert = arch.get("target_params_per_expert")
         solve_for = str(arch.get("solve_for", "")).strip().lower()
 
         if experts < 0 or top_k < 0:
             raise ValueError("num_experts and top_k_experts must be >= 0.")
+        if moe_capacity_factor <= 0:
+            raise ValueError("moe_capacity_factor must be > 0.")
         if experts == 0:
             num_moe_layers = 0
         if experts > 0 and top_k > experts:
             raise ValueError("top_k_experts cannot exceed num_experts.")
         if num_moe_layers < 0 or num_moe_layers > layers:
             raise ValueError("num_moe_layers must be between 0 and num_layers.")
+        if num_heads is not None and num_kv_heads is None:
+            num_kv_heads = num_heads
+        if num_heads is not None and num_kv_heads is not None:
+            if num_kv_heads <= 0:
+                raise ValueError("num_kv_heads must be > 0.")
+            if num_kv_heads > num_heads:
+                raise ValueError("num_kv_heads cannot exceed num_heads.")
+            if num_heads % num_kv_heads != 0:
+                raise ValueError("num_kv_heads must divide num_heads for GQA/MQA.")
 
         # 1. Embeddings (Vocab * Hidden) + Positional (MaxSeq * Hidden - neglected for approx)
         embedding_params = vocab * hidden
@@ -49,11 +65,24 @@ class TrainingStage:
         # 2. Attention Block (per layer)
         # Q, K, V, O projections: 4 * (Hidden * Hidden)
         # We neglect biases for FLOPs approx
-        attn_params_per_layer = 4 * hidden * hidden
+        if num_heads is None or num_kv_heads is None:
+            attn_params_per_layer = 4 * hidden * hidden
+        else:
+            kv_ratio = num_kv_heads / num_heads
+            attn_params_per_layer = hidden * hidden * (2 + 2 * kv_ratio)
 
         # 3. FFN Block (per layer)
         # SwiGLU: 3 matrices (Gate, Up, Down): 3 * (Hidden * Intermediate)
-        ffn_params_per_expert = 3 * hidden * intermediate
+        if ffn_multiplier is None:
+            if ffn_type in ("gelu", "relu", "mlp"):
+                ffn_multiplier = 2
+            elif ffn_type in ("swiglu", "geglu", "glu"):
+                ffn_multiplier = 3
+            else:
+                raise ValueError(
+                    f"Unknown ffn_type '{ffn_type}'. Use 'swiglu', 'geglu', 'glu', 'gelu', 'relu', or set ffn_multiplier."
+                )
+        ffn_params_per_expert = float(ffn_multiplier) * hidden * intermediate
         ffn_params_dense = ffn_params_per_expert
 
         total_ffn_params_moe = 0
@@ -145,7 +174,7 @@ class TrainingStage:
         active_linear_params = (
             layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
-            + num_moe_layers * active_ffn_params_moe
+            + num_moe_layers * (active_ffn_params_moe * moe_capacity_factor)
             + lm_head_params_for_flops
         )
 
@@ -209,10 +238,25 @@ class TrainingStage:
         layers = arch.get("num_layers", 24)
         h = arch.get("hidden_size", 2048)
         s = arch.get("sequence_length", 4096)
+        attention_window = arch.get("attention_window")
+        attention_sparsity = arch.get("attention_sparsity")
+        recompute_multiplier = float(arch.get("recompute_multiplier", 1.0))
         if s <= 0:
             raise ValueError("sequence_length must be > 0.")
+        if recompute_multiplier <= 0:
+            raise ValueError("recompute_multiplier must be > 0.")
 
-        flops_per_token = 6 * n_linear + 12 * layers * h * s
+        attn_tokens = s
+        if attention_window is not None:
+            if attention_window <= 0:
+                raise ValueError("attention_window must be > 0.")
+            attn_tokens = min(s, float(attention_window))
+        elif attention_sparsity is not None:
+            if attention_sparsity <= 0 or attention_sparsity > 1:
+                raise ValueError("attention_sparsity must be in (0, 1].")
+            attn_tokens = s * float(attention_sparsity)
+
+        flops_per_token = 6 * n_linear + 12 * layers * h * attn_tokens
         if arch.get("include_softmax_flops", False):
             heads = arch.get("num_heads")
             if heads is None:
@@ -221,7 +265,7 @@ class TrainingStage:
                 )
             flops_per_token += 3 * layers * heads * s
 
-        return flops_per_token
+        return flops_per_token * recompute_multiplier
 
     def calculate_flops(self, params: Optional[dict] = None) -> float:
         """
