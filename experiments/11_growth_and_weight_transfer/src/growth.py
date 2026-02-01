@@ -4,7 +4,7 @@ Growth Utilities for Weight Transfer
 This module provides functions to grow a model across architectural phases:
 1. dense_to_moe: Convert dense FFN layers to MoE blocks
 2. add_layers: Add new transformer blocks with identity initialization  
-3. scale_hidden_dim: Increase hidden dimension with zero padding
+3. scale_hidden_dim: Increase hidden dimension with variance-preserving initialization
 4. add_experts: Add more experts (expert explosion)
 
 Key principle: All growth operations must preserve the model's current behavior
@@ -144,21 +144,28 @@ def scale_hidden_dim(
     model: nn.Module,
     new_hidden_size: int,
     new_intermediate_size: Optional[int] = None,
-    padding_mode: str = "zero",
+    padding_mode: str = "noise",  # "noise" or "zero"
+    noise_scale: float = 0.01,
 ) -> nn.Module:
     """
     Scale the hidden dimension by rebuilding the model with padded weights.
     
-    Strategy:
+    Strategy (based on MoE spectral geometry paper insights):
     - Create a new model with larger hidden_size
-    - Copy old weights, pad with zeros
-    - This preserves behavior on original dimensions
+    - Copy old weights to corresponding positions
+    - Initialize NEW dimensions with small noise (not zeros!) to preserve variance structure
+    
+    Why noise instead of zeros?
+    - Zero-padding artificially concentrates variance in original dimensions
+    - RMSNorm recomputes statistics over ALL dimensions → zeros break normalization
+    - Small noise preserves the variance structure the model learned
     
     Args:
         model: Model to scale (MoE or dense)
         new_hidden_size: Target hidden size
-        new_intermediate_size: Target intermediate size (default: 4 * new_hidden_size)
-        padding_mode: "zero" for zero padding
+        new_intermediate_size: Target intermediate size (default: proportional)
+        padding_mode: "noise" for variance-preserving, "zero" for zero-padding
+        noise_scale: Scale of noise for new dimensions (default: 0.01)
     """
     old_config = model.config
     old_hidden = old_config.hidden_size
@@ -168,26 +175,12 @@ def scale_hidden_dim(
         raise ValueError(f"new_hidden_size must be > current ({old_hidden})")
     
     if new_intermediate_size is None:
-        # Scale intermediate proportionally
         new_intermediate_size = int(old_intermediate * new_hidden_size / old_hidden)
-    
-    hidden_delta = new_hidden_size - old_hidden
-    inter_delta = new_intermediate_size - old_intermediate
-    
-    # Helper to pad tensors
-    def pad_tensor(tensor, dim, size):
-        if size <= 0:
-            return tensor
-        pad_shape = list(tensor.shape)
-        pad_shape[dim] = size
-        padding = torch.zeros(pad_shape, dtype=tensor.dtype, device=tensor.device)
-        return torch.cat([tensor, padding], dim=dim)
     
     # Determine if MoE
     is_moe = hasattr(model, 'config') and hasattr(model.config, 'num_experts')
     
     if is_moe:
-        # Create new MoE config
         new_config = MoEConfig(
             vocab_size=old_config.vocab_size,
             hidden_size=new_hidden_size,
@@ -218,97 +211,147 @@ def scale_hidden_dim(
         )
         new_model = SmolLM2(new_config)
     
-    # Transfer and pad embeddings
+    def get_padding_value(shape, dtype, device):
+        """Get padding values - noise or zeros based on mode."""
+        if padding_mode == "noise":
+            return torch.randn(shape, dtype=dtype, device=device) * noise_scale
+        else:
+            return torch.zeros(shape, dtype=dtype, device=device)
+    
+    # Transfer and pad weights
     with torch.no_grad():
+        # === Embeddings ===
+        # Copy old embeddings, add noise to new columns
         old_embed = model.embed_tokens.weight.data
         new_model.embed_tokens.weight.data[:, :old_hidden] = old_embed
-        new_model.embed_tokens.weight.data[:, old_hidden:] = 0
+        new_model.embed_tokens.weight.data[:, old_hidden:] = get_padding_value(
+            (old_config.vocab_size, new_hidden_size - old_hidden),
+            old_embed.dtype, old_embed.device
+        )
         
-        # Transfer final norm
+        # === Final Norm (RMSNorm) ===
+        # For RMSNorm, new dims should be 1.0 (identity) not 0
         new_model.norm.weight.data[:old_hidden] = model.norm.weight.data
-        new_model.norm.weight.data[old_hidden:] = 1.0  # RMSNorm expects 1s
+        new_model.norm.weight.data[old_hidden:] = 1.0
         
-        # Transfer LM head if exists
+        # === LM Head ===
         if hasattr(model, 'lm_head') and model.lm_head is not None:
             new_model.lm_head.weight.data[:, :old_hidden] = model.lm_head.weight.data
-            new_model.lm_head.weight.data[:, old_hidden:] = 0
+            new_model.lm_head.weight.data[:, old_hidden:] = get_padding_value(
+                (old_config.vocab_size, new_hidden_size - old_hidden),
+                model.lm_head.weight.data.dtype, model.lm_head.weight.data.device
+            )
         
-        # Transfer each layer
+        # === Transfer each layer ===
         for old_layer, new_layer in zip(model.layers, new_model.layers):
-            # Layer norms
+            # Layer norms (RMSNorm) - new dims should be 1.0
             new_layer.input_layernorm.weight.data[:old_hidden] = old_layer.input_layernorm.weight.data
             new_layer.input_layernorm.weight.data[old_hidden:] = 1.0
             new_layer.post_attention_layernorm.weight.data[:old_hidden] = old_layer.post_attention_layernorm.weight.data
             new_layer.post_attention_layernorm.weight.data[old_hidden:] = 1.0
             
-            # Attention - need to handle head dimensions
+            # === Attention ===
             old_attn = old_layer.self_attn
             new_attn = new_layer.self_attn
             
-            # For now, copy what fits and zero the rest
-            # Q, K, V projections (input dim changes)
+            # Q, K, V projections - input dim changes
             for old_proj, new_proj in [
                 (old_attn.q_proj, new_attn.q_proj),
                 (old_attn.k_proj, new_attn.k_proj),
                 (old_attn.v_proj, new_attn.v_proj),
             ]:
                 min_out = min(old_proj.weight.shape[0], new_proj.weight.shape[0])
+                # Copy matching dimensions
                 new_proj.weight.data[:min_out, :old_hidden] = old_proj.weight.data[:min_out, :]
-                new_proj.weight.data[:min_out, old_hidden:] = 0
-                new_proj.weight.data[min_out:, :] = 0
+                # Add noise/zeros to new input dimensions
+                new_proj.weight.data[:min_out, old_hidden:] = get_padding_value(
+                    (min_out, new_hidden_size - old_hidden),
+                    old_proj.weight.data.dtype, old_proj.weight.data.device
+                )
+                # Initialize expanded output dimensions
+                if new_proj.weight.shape[0] > min_out:
+                    new_proj.weight.data[min_out:, :] = get_padding_value(
+                        (new_proj.weight.shape[0] - min_out, new_proj.weight.shape[1]),
+                        old_proj.weight.data.dtype, old_proj.weight.data.device
+                    )
             
-            # O projection (both dims change)
+            # O projection - both dims change
             min_out = min(old_attn.o_proj.weight.shape[0], new_attn.o_proj.weight.shape[0])
             min_in = min(old_attn.o_proj.weight.shape[1], new_attn.o_proj.weight.shape[1])
             new_attn.o_proj.weight.data[:min_out, :min_in] = old_attn.o_proj.weight.data[:min_out, :min_in]
-            new_attn.o_proj.weight.data[min_out:, :] = 0
-            new_attn.o_proj.weight.data[:, min_in:] = 0
+            # Noise for new output dims (critical for residual path!)
+            new_attn.o_proj.weight.data[min_out:, :] = get_padding_value(
+                (new_hidden_size - min_out, new_attn.o_proj.weight.shape[1]),
+                old_attn.o_proj.weight.data.dtype, old_attn.o_proj.weight.data.device
+            )
+            new_attn.o_proj.weight.data[:, min_in:] = get_padding_value(
+                (new_attn.o_proj.weight.shape[0], new_attn.o_proj.weight.shape[1] - min_in),
+                old_attn.o_proj.weight.data.dtype, old_attn.o_proj.weight.data.device
+            )
             
-            # MLP / MoE experts
+            # === MLP / MoE Experts ===
             if hasattr(old_layer, 'mlp'):
-                old_mlp = old_layer.mlp
-                new_mlp = new_layer.mlp
-                
-                # gate_proj and up_proj: (intermediate, hidden)
-                new_mlp.gate_proj.weight.data[:old_intermediate, :old_hidden] = old_mlp.gate_proj.weight.data
-                new_mlp.gate_proj.weight.data[old_intermediate:, :] = 0
-                new_mlp.gate_proj.weight.data[:, old_hidden:] = 0
-                
-                new_mlp.up_proj.weight.data[:old_intermediate, :old_hidden] = old_mlp.up_proj.weight.data
-                new_mlp.up_proj.weight.data[old_intermediate:, :] = 0
-                new_mlp.up_proj.weight.data[:, old_hidden:] = 0
-                
-                # down_proj: (hidden, intermediate)
-                new_mlp.down_proj.weight.data[:old_hidden, :old_intermediate] = old_mlp.down_proj.weight.data
-                new_mlp.down_proj.weight.data[old_hidden:, :] = 0
-                new_mlp.down_proj.weight.data[:, old_intermediate:] = 0
-                
+                _transfer_mlp_weights(old_layer.mlp, new_layer.mlp, 
+                                      old_hidden, new_hidden_size,
+                                      old_intermediate, new_intermediate_size,
+                                      get_padding_value)
             elif hasattr(old_layer, 'moe'):
                 # Transfer router
                 old_gate = old_layer.moe.router.gate.weight.data
                 new_layer.moe.router.gate.weight.data[:, :old_hidden] = old_gate
-                new_layer.moe.router.gate.weight.data[:, old_hidden:] = 0
+                new_layer.moe.router.gate.weight.data[:, old_hidden:] = get_padding_value(
+                    (old_gate.shape[0], new_hidden_size - old_hidden),
+                    old_gate.dtype, old_gate.device
+                )
                 
                 # Transfer each expert
                 for old_exp, new_exp in zip(old_layer.moe.experts, new_layer.moe.experts):
-                    new_exp.gate_proj.weight.data[:old_intermediate, :old_hidden] = old_exp.gate_proj.weight.data
-                    new_exp.gate_proj.weight.data[old_intermediate:, :] = 0
-                    new_exp.gate_proj.weight.data[:, old_hidden:] = 0
-                    
-                    new_exp.up_proj.weight.data[:old_intermediate, :old_hidden] = old_exp.up_proj.weight.data
-                    new_exp.up_proj.weight.data[old_intermediate:, :] = 0
-                    new_exp.up_proj.weight.data[:, old_hidden:] = 0
-                    
-                    new_exp.down_proj.weight.data[:old_hidden, :old_intermediate] = old_exp.down_proj.weight.data
-                    new_exp.down_proj.weight.data[old_hidden:, :] = 0
-                    new_exp.down_proj.weight.data[:, old_intermediate:] = 0
+                    _transfer_mlp_weights(old_exp, new_exp,
+                                          old_hidden, new_hidden_size,
+                                          old_intermediate, new_intermediate_size,
+                                          get_padding_value)
     
     print(f"✓ Scaled hidden dimension from {old_hidden} to {new_hidden_size}")
     print(f"  - Intermediate: {old_intermediate} → {new_intermediate_size}")
-    print(f"  - Padding mode: {padding_mode}")
+    print(f"  - Padding mode: {padding_mode} (scale={noise_scale})")
     print(f"  - New parameter count: {new_model.num_parameters():,}")
     
     return new_model
+
+
+def _transfer_mlp_weights(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, new_inter, get_padding_value):
+    """Helper to transfer MLP weights with padding."""
+    # gate_proj and up_proj: (intermediate, hidden)
+    new_mlp.gate_proj.weight.data[:old_inter, :old_hidden] = old_mlp.gate_proj.weight.data
+    new_mlp.gate_proj.weight.data[old_inter:, :] = get_padding_value(
+        (new_inter - old_inter, new_hidden),
+        old_mlp.gate_proj.weight.data.dtype, old_mlp.gate_proj.weight.data.device
+    )
+    new_mlp.gate_proj.weight.data[:old_inter, old_hidden:] = get_padding_value(
+        (old_inter, new_hidden - old_hidden),
+        old_mlp.gate_proj.weight.data.dtype, old_mlp.gate_proj.weight.data.device
+    )
+    
+    new_mlp.up_proj.weight.data[:old_inter, :old_hidden] = old_mlp.up_proj.weight.data
+    new_mlp.up_proj.weight.data[old_inter:, :] = get_padding_value(
+        (new_inter - old_inter, new_hidden),
+        old_mlp.up_proj.weight.data.dtype, old_mlp.up_proj.weight.data.device
+    )
+    new_mlp.up_proj.weight.data[:old_inter, old_hidden:] = get_padding_value(
+        (old_inter, new_hidden - old_hidden),
+        old_mlp.up_proj.weight.data.dtype, old_mlp.up_proj.weight.data.device
+    )
+    
+    # down_proj: (hidden, intermediate)
+    new_mlp.down_proj.weight.data[:old_hidden, :old_inter] = old_mlp.down_proj.weight.data
+    new_mlp.down_proj.weight.data[old_hidden:, :] = get_padding_value(
+        (new_hidden - old_hidden, new_inter),
+        old_mlp.down_proj.weight.data.dtype, old_mlp.down_proj.weight.data.device
+    )
+    new_mlp.down_proj.weight.data[:old_hidden, old_inter:] = get_padding_value(
+        (old_hidden, new_inter - old_inter),
+        old_mlp.down_proj.weight.data.dtype, old_mlp.down_proj.weight.data.device
+    )
 
 
 def add_experts(
@@ -379,9 +422,9 @@ if __name__ == "__main__":
     print("\n3. Adding layers...")
     moe_model = add_layers(moe_model, num_new_layers=2)
     
-    # 4. Test scale_hidden_dim
-    print("\n4. Scaling hidden dimension...")
-    moe_model = scale_hidden_dim(moe_model, new_hidden_size=384)
+    # 4. Test scale_hidden_dim with NOISE padding
+    print("\n4. Scaling hidden dimension (noise-padded)...")
+    moe_model = scale_hidden_dim(moe_model, new_hidden_size=384, padding_mode="noise")
     
     # 5. Test add_experts
     print("\n5. Adding experts...")

@@ -228,7 +228,8 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         model,
         new_hidden_size=dim_config["new_hidden_size"],
         new_intermediate_size=dim_config.get("new_intermediate_size"),
-        padding_mode=dim_config["padding_mode"],
+        padding_mode=dim_config.get("padding_mode", "noise"),
+        noise_scale=dim_config.get("noise_scale", 0.01),
     )
     
     post_growth_loss = measure_loss(model, dataloader, device)
