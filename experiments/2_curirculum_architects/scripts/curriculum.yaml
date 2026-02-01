@@ -14,9 +14,9 @@ languages:
     - lang: "hi"
       max_token_share: 0.08         # Hindi allowed but capped (staged)
       earliest_stage: "3B"          # introduce later to avoid distorting early bands
-  excluded_langs: ["zh", "ja", "ko"] # plus other non-en/hi by default
+  excluded_langs: ["zh", "ja", "ko"]  # plus other non-en/hi by default
   language_id_requirement:
-    provider: "dataset_claimed_clean" # must come from dataset vendor/curator claims + docs
+    provider: "dataset_claimed_clean"  # must come from dataset vendor/curator claims + docs
     min_confidence: 0.90              # only if dataset provides it; otherwise reject/seg-request
 
 context_policy:
@@ -239,7 +239,7 @@ stage_profiles:
           if_delta_below: 0.01
           action:
             increase_bands: ["B3", "B4", "B5"]
-            note: "Long-context *training* expansion handled elsewhere; this only biases toward long-dependency content."
+            note: "Long-context *training* expansion handled elsewhere; biases toward long-dependency content."
 
 # Evaluation signals Team 2 watches (definitions owned by Benchmarking teams).
 signals:
