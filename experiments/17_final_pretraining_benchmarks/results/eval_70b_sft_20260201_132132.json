@@ -1,0 +1,52 @@
+{
+    "metadata": {
+        "stage": "70b",
+        "phase": "sft",
+        "timestamp": "2026-02-01T13:21:32.305282",
+        "is_test": true
+    },
+    "benchmarks": [
+        {
+            "name": "MMLU-Pro",
+            "status": "success",
+            "score": 0.42,
+            "metric": "accuracy"
+        },
+        {
+            "name": "GPQA Diamond",
+            "status": "success",
+            "score": 0.42,
+            "metric": "accuracy"
+        },
+        {
+            "name": "GSM8K",
+            "status": "success",
+            "score": 35.0,
+            "metric": "exact_match"
+        },
+        {
+            "name": "AIME 2025",
+            "status": "success",
+            "score": 0.42,
+            "metric": "accuracy"
+        },
+        {
+            "name": "IFEval",
+            "status": "success",
+            "score": 0.42,
+            "metric": "strict_accuracy"
+        },
+        {
+            "name": "HumanEval+",
+            "status": "success",
+            "score": 35.0,
+            "metric": "pass@1"
+        },
+        {
+            "name": "SimpleQA",
+            "status": "success",
+            "score": 0.42,
+            "metric": "factual_accuracy"
+        }
+    ]
+}

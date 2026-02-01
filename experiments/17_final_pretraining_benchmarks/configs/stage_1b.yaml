@@ -1,0 +1,79 @@
+stage: "1b"
+description: "Pre-training benchmarks for 1B model (Base Capability Profile)"
+benchmarks:
+  # Harness Benchmarks
+  - name: "MMLU"
+    enabled: true
+    harness_task: "mmlu"
+    shots: 0
+    subjects: ["elementary_mathematics", "high_school_biology", "high_school_chemistry", "high_school_physics", "high_school_computer_science", "us_history", "high_school_geography", "high_school_psychology"]
+    phases: ["pretraining"]
+
+  - name: "TriviaQA"
+    enabled: true
+    harness_task: "triviaqa"
+    shots: 0
+    subset: "easy-medium"
+    phases: ["pretraining"]
+
+  - name: "GSM8K"
+    enabled: true
+    harness_task: "gsm8k"
+    shots: 5
+    phases: ["pretraining"]
+
+  - name: "ARC-Challenge"
+    enabled: true
+    harness_task: "arc_challenge"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "MSGS"
+    enabled: true
+    harness_task: "msgs"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "BLiMP"
+    enabled: true
+    harness_task: "blimp"
+    shots: 0
+    tasks: ["adj_subject_verb_agreement", "determiner_noun_agreement_with_adj_2", "distractor_agreement_relative_clause"]
+    phases: ["pretraining"]
+
+  - name: "TruthfulQA"
+    enabled: true
+    harness_task: "truthfulqa"
+    mode: "MC1"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "HellaSwag"
+    enabled: true
+    harness_task: "hellaswag"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "Winogrande"
+    enabled: true
+    harness_task: "winogrande"
+    shots: 0
+    phases: ["pretraining"]
+
+  # Custom Benchmarks Pipeline
+  - name: "AIME 2025"
+    enabled: true
+    custom_script: "scripts/aime2025.py"
+    paradigm: "0-shot (Baseline)"
+    phases: ["pretraining"]
+
+  - name: "IndicGLUE"
+    enabled: true
+    custom_script: "scripts/indic_glue.py"
+    tasks: ["iitp-movie-reviews", "bbc-news-articles", "article-genre-classification"]
+    phases: ["pretraining"]
+
+  - name: "IndicQA"
+    enabled: true
+    custom_script: "scripts/indic_qa.py"
+    phases: ["pretraining"]

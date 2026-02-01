@@ -1,0 +1,84 @@
+stage: "3b"
+description: "Pre-training benchmarks for 3B model (Knowledge Breadth)"
+benchmarks:
+  # Harness Benchmarks
+  - name: "MMLU"
+    enabled: true
+    harness_task: "mmlu"
+    shots: 5
+    phases: ["pretraining"]
+
+  - name: "TriviaQA"
+    enabled: true
+    harness_task: "triviaqa"
+    shots: 3
+    subset: "medium"
+    phases: ["pretraining"]
+
+  - name: "GSM8K"
+    enabled: true
+    harness_task: "gsm8k"
+    shots: 8
+    phases: ["pretraining"]
+
+  - name: "ARC-Challenge"
+    enabled: true
+    harness_task: "arc_challenge"
+    shots: 5
+    phases: ["pretraining"]
+
+  - name: "MATH"
+    enabled: true
+    harness_task: "hendrycks_math"
+    shots: 2
+    phases: ["pretraining"]
+
+  - name: "MSGS"
+    enabled: true
+    harness_task: "msgs"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "BLiMP"
+    enabled: true
+    harness_task: "blimp"
+    shots: 0
+    tasks: ["adj_subject_verb_agreement", "determiner_noun_agreement_with_adj_2", "distractor_agreement_relative_clause"]
+    phases: ["pretraining"]
+
+  - name: "TruthfulQA"
+    enabled: true
+    harness_task: "truthfulqa"
+    mode: "MC1"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "HellaSwag"
+    enabled: true
+    harness_task: "hellaswag"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "Winogrande"
+    enabled: true
+    harness_task: "winogrande"
+    shots: 0
+    phases: ["pretraining"]
+
+  # Custom Benchmarks Pipeline
+  - name: "AIME 2025"
+    enabled: true
+    custom_script: "scripts/aime2025.py"
+    paradigm: "3-shot"
+    phases: ["pretraining"]
+
+  - name: "IndicGLUE"
+    enabled: true
+    custom_script: "scripts/indic_glue.py"
+    tasks: ["iitp-movie-reviews", "bbc-news-articles", "article-genre-classification"]
+    phases: ["pretraining"]
+
+  - name: "IndicQA"
+    enabled: true
+    custom_script: "scripts/indic_qa.py"
+    phases: ["pretraining"]

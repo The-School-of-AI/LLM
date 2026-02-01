@@ -1,0 +1,114 @@
+stage: "sft_70b"
+description: "Final SFT alignment benchmarks (After 70B stage)"
+benchmarks:
+  # Harness Benchmarks
+  - name: "MMLU"
+    enabled: true
+    harness_task: "mmlu"
+    shots: 5
+    phases: ["sft"]
+
+  - name: "TriviaQA"
+    enabled: true
+    harness_task: "triviaqa"
+    shots: 5
+    cot: true
+    phases: ["sft"]
+
+  - name: "GPQA Diamond"
+    enabled: true
+    harness_task: "gpqa_diamond"
+    shots: 10
+    cot: true
+    phases: ["sft"]
+
+  - name: "GSM8K"
+    enabled: true
+    harness_task: "gsm8k"
+    shots: 16
+    cot: true
+    phases: ["sft"]
+
+  - name: "BBH (Big Bench Hard)"
+    enabled: true
+    harness_task: "bbh"
+    shots: 3
+    cot: true
+    phases: ["sft"]
+
+  - name: "ARC-Challenge"
+    enabled: true
+    harness_task: "arc_challenge"
+    shots: 25
+    phases: ["sft"]
+
+  - name: "MATH"
+    enabled: true
+    harness_task: "hendrycks_math"
+    shots: 8
+    phases: ["sft"]
+
+  - name: "IFEval"
+    enabled: true
+    harness_task: "ifeval"
+    shots: 0
+    paradigm: "Nested/Complex Constraints"
+    phases: ["sft"]
+
+  - name: "APPS"
+    enabled: true
+    harness_task: "apps"
+    shots: 10
+    phases: ["sft"]
+
+  - name: "TruthfulQA"
+    enabled: true
+    harness_task: "truthfulqa"
+    mode: "MC2"
+    shots: 0
+    phases: ["sft"]
+
+  # Custom Benchmarks Pipeline (Alignment & Advanced Reasoning)
+  - name: "HumanEval"
+    enabled: true
+    custom_script: "scripts/humaneval.py"
+    paradigm: "HumanEval+ (Rigorous)"
+    phases: ["sft"]
+
+  - name: "SimpleQA_Verified"
+    enabled: true
+    custom_script: "scripts/simpleqa.py"
+    mode: "Hard Filtering / Uncertainty Aware"
+    phases: ["sft"]
+
+  - name: "AIME 2025"
+    enabled: true
+    custom_script: "scripts/aime2025.py"
+    paradigm: "8-shot CoT / SC (N=40) / Tools"
+    phases: ["sft"]
+
+  - name: "L-Eval (Long Context Evaluation Suite)"
+    enabled: true
+    custom_script: "scripts/leval.py"
+    phases: ["sft"]
+
+  - name: "RULER"
+    enabled: true
+    custom_script: "scripts/ruler.py"
+    tasks: ["longchat_qa"]
+    phases: ["sft"]
+
+  - name: "Indic-Bias (FairITales)"
+    enabled: true
+    custom_script: "scripts/indic_bias.py"
+    phases: ["sft"]
+
+  - name: "HELM Safety"
+    enabled: true
+    custom_script: "scripts/helm_safety.py"
+    phases: ["sft"]
+
+  - name: "SWE-bench Verified"
+    enabled: true
+    custom_script: "scripts/swebench.py"
+    phases: ["sft"]

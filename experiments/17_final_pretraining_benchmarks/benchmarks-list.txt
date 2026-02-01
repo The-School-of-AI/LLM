@@ -1,0 +1,25 @@
+Benchmark
+MMLU
+TriviaQA
+GPQA Diamond
+GSM8K
+BBH (Big Bench Hard)
+ARC-Challenge
+MATH
+IFEval
+SimpleQA_Verified
+HumanEval
+APPS
+AIME 2025
+MSGS
+BLiMP
+IndicGLUE
+IndicQA
+L-Eval (Long Context Evaluation Suite)
+RULER
+TruthfulQA
+Indic-Bias (FairITales)
+HELM Safety
+SWE-bench Verified
+HellaSwag
+Winogrande

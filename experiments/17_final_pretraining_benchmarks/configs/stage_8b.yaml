@@ -1,0 +1,101 @@
+stage: "8b"
+description: "Pre-training benchmarks for 8B model (Reasoning Emergence)"
+benchmarks:
+  # Harness Benchmarks
+  - name: "MMLU"
+    enabled: true
+    harness_task: "mmlu"
+    shots: 5
+    phases: ["pretraining"]
+
+  - name: "TriviaQA"
+    enabled: true
+    harness_task: "triviaqa"
+    shots: 5
+    cot: true
+    subset: "medium-hard"
+    phases: ["pretraining"]
+
+  - name: "GPQA Diamond"
+    enabled: true
+    harness_task: "gpqa_diamond"
+    shots: 5
+    cot: true
+    phases: ["pretraining"]
+
+  - name: "GSM8K"
+    enabled: true
+    harness_task: "gsm8k"
+    shots: 8
+    cot: true
+    phases: ["pretraining"]
+
+  - name: "BBH (Big Bench Hard)"
+    enabled: true
+    harness_task: "bbh"
+    shots: 3
+    cot: true
+    tasks: ["logical_deduction", "tracking_shuffled_objects", "geometric_shapes", "formal_fallacies", "multi_step_arithmetic", "temporal_sequences", "penguins_in_a_table"]
+    phases: ["pretraining"]
+
+  - name: "ARC-Challenge"
+    enabled: true
+    harness_task: "arc_challenge"
+    shots: 25
+    phases: ["pretraining"]
+
+  - name: "MATH"
+    enabled: true
+    harness_task: "hendrycks_math"
+    shots: 4
+    phases: ["pretraining"]
+
+  - name: "MSGS"
+    enabled: true
+    harness_task: "msgs"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "BLiMP"
+    enabled: true
+    harness_task: "blimp"
+    shots: 0
+    tasks: ["anaphor_gender_agreement", "irregular_past_participle_adjectives", "ellipsis_n_bar_2", "principle_A_c_command"]
+    phases: ["pretraining"]
+
+  - name: "TruthfulQA"
+    enabled: true
+    harness_task: "truthfulqa"
+    mode: "Generative"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "HellaSwag"
+    enabled: true
+    harness_task: "hellaswag"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "Winogrande"
+    enabled: true
+    harness_task: "winogrande"
+    shots: 0
+    phases: ["pretraining"]
+
+  # Custom Benchmarks Pipeline
+  - name: "AIME 2025"
+    enabled: true
+    custom_script: "scripts/aime2025.py"
+    paradigm: "5-8 shot"
+    phases: ["pretraining"]
+
+  - name: "IndicGLUE"
+    enabled: true
+    custom_script: "scripts/indic_glue.py"
+    tasks: ["amnesty-ner", "cvit-pib-sentence-retrieval", "indic-headline-prediction"]
+    phases: ["pretraining"]
+
+  - name: "IndicQA"
+    enabled: true
+    custom_script: "scripts/indic_qa.py"
+    phases: ["pretraining"]
