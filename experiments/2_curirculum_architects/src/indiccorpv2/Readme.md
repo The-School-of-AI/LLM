@@ -12,8 +12,54 @@ You already have cleaner Indic sources:
 1. Sangraha Verified (structured, likely pre-filtered)
 2. FineWeb2 Indic subset (likely higher quality)
 
+## Dataset Stats
+- 24 languages (23 Indic + Indian English)
+- 20.9 Billion tokens
+- Web-crawled from Indian websites
+- License: CC-0
 
-Plan of usage:
+Total: **20.9 billion tokens** covering 24 languages (23 Indic + English).
+- Indic portion: 14.4 billion tokens
+- Indian English: 6.5 billion tokens
+
+### High-Resource Languages
+
+| Split | Language | Tokens | Sentences |
+|-------|----------|--------|-----------|
+| `hin_Deva` | Hindi | ~6-7B | 349M |
+| `tel_Telu` | Telugu | ~2.1B | 108.5M |
+| `urd_Arab` | Urdu | ~1.5B | 76.2M |
+| `tam_Taml` | Tamil | ~1.3B | 64.7M |
+| `ben_Beng` | Bengali | ~1.2B | 60M |
+| `mar_Deva` | Marathi | ~1.0B | 34M |
+| `guj_Gujr` | Gujarati | ~850M | 43M |
+| `pan_Guru` | Punjabi | ~770M | 38.6M |
+| `mal_Mlym` | Malayalam | ~700M | 34M |
+| `kan_Knda` | Kannada | ~500M | 24M |
+| `ory_Orya` | Odia | ~270M | 13.4M |
+
+### Low-Resource Languages (Bottom 11)
+
+Collectively ~1.08 billion tokens.
+
+| Split | Language | Tokens |
+|-------|----------|--------|
+| `asm_Beng` | Assamese | ~66M |
+| `san_Deva` | Sanskrit | ~88M |
+| `npi_Deva` | Nepali | ~30M |
+| `brx_Deva` | Bodo | <50M |
+| `doi_Deva` | Dogri | <50M |
+| `gom_Deva` | Konkani | <50M |
+| `kas_Arab` | Kashmiri | <50M |
+| `mai_Deva` | Maithili | <50M |
+| `mni_Mtei` | Manipuri | <50M |
+| `snd_Deva` | Sindhi | <50M |
+| `santhali` | Santali | <50M |
+| `khasi` | Khasi | <50M |
+
+> English split (`eng_Latn`): ~6.5 billion tokens.
+
+## Plan of usage:
 
 1B Model
 1. B0 -If possible avoid it, use Sangraha Verified + Fine Web Edu Indic . use <5% (only extremely simple text) if needed because Grammar stability needs clean data)
