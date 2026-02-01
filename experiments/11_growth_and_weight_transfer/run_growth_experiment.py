@@ -318,6 +318,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print("📌 PHASE 5: YaRN Context Extension")
     print("=" * 70)
     
+    # Measure pre-YaRN loss at SHORT context (baseline)
     pre_context_loss = measure_loss(model, dataloader, device)
     
     # Apply YaRN context scaling
@@ -332,20 +333,27 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         beta=context_config.get("beta", 32.0),
     )
     
+    # Measure post-YaRN loss at SAME SHORT context (fair comparison!)
+    # This shows YaRN's impact on existing behavior
+    post_context_loss = measure_loss(model, dataloader, device)
+    results["phase5_delta"] = log_transition("context_extension", pre_context_loss, post_context_loss, wandb_run, total_steps)
+    
     # Create new dataloader with longer sequences
-    print(f"\n🔧 Creating new dataloader with max_length={new_max_length}...")
+    # Use batch_size=1 for long context to avoid OOM
+    phase5_batch_size = max(1, config["training"]["batch_size"] // 4)  # Reduce for memory
+    print(f"\n🔧 Creating new dataloader with max_length={new_max_length}, batch_size={phase5_batch_size}...")
     long_dataloader = get_dataloader(
         dataset_name=config["data"]["dataset_name"],
-        batch_size=config["training"]["batch_size"],
+        batch_size=phase5_batch_size,
         max_length=new_max_length,
         num_samples=config["data"]["num_samples"],
     )
     
-    post_context_loss = measure_loss(model, long_dataloader, device)
-    results["phase5_delta"] = log_transition("context_extension", pre_context_loss, post_context_loss, wandb_run, total_steps)
-    
     phase5_steps = config["training"]["phase5_steps"]
     print(f"\n🚀 Training with extended context for {phase5_steps} steps...")
+    
+    # Use higher gradient accumulation to compensate for smaller batch
+    phase5_grad_accum = config["training"]["gradient_accumulation_steps"] * 4
     
     phase5_loss = train_phase(
         model=model,
@@ -356,7 +364,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         weight_decay=config["training"]["weight_decay"],
         warmup_steps=20,
         max_grad_norm=config["training"]["max_grad_norm"],
-        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+        gradient_accumulation_steps=phase5_grad_accum,
         log_every=config["training"]["log_every"],
         checkpoint_every=config["training"]["checkpoint_every"],
         save_dir=config["training"]["save_dir"],
