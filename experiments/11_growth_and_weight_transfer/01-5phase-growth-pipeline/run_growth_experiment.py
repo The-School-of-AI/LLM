@@ -65,20 +65,24 @@ def log_transition(name, pre_loss, post_loss, wandb_run=None, step=0):
     return delta
 
 
-def find_latest_checkpoint(save_dir: str) -> Tuple[Optional[str], int, int]:
+def find_latest_checkpoint(save_dir: str, config: dict = None) -> Tuple[Optional[str], int, int, bool]:
     """
     Scan checkpoint directory and find the latest checkpoint.
     
+    Args:
+        save_dir: Directory containing checkpoints
+        config: Optional config to determine if phase completed fully
+    
     Returns:
-        Tuple of (checkpoint_path, phase_number, step_number)
-        Returns (None, 0, 0) if no checkpoints found.
+        Tuple of (checkpoint_path, phase_number, step_number, phase_complete)
+        Returns (None, 0, 0, False) if no checkpoints found.
     """
     if not os.path.exists(save_dir):
-        return None, 0, 0
+        return None, 0, 0, False
     
     checkpoints = glob.glob(os.path.join(save_dir, "*.pt"))
     if not checkpoints:
-        return None, 0, 0
+        return None, 0, 0, False
     
     # Parse checkpoint filenames like "phase3_scaled_step_2500.pt"
     checkpoint_info = []
@@ -97,26 +101,42 @@ def find_latest_checkpoint(save_dir: str) -> Tuple[Optional[str], int, int]:
             checkpoint_info.append((ckpt, phase, step))
     
     if not checkpoint_info:
-        return None, 0, 0
+        return None, 0, 0, False
     
     # Sort by step number (descending) and return latest
     checkpoint_info.sort(key=lambda x: x[2], reverse=True)
     latest_ckpt, latest_phase, latest_step = checkpoint_info[0]
     
+    # Check if phase is complete (if config provided)
+    phase_complete = False
+    if config:
+        phase_end_steps = {
+            1: config["training"]["phase1_steps"],
+            2: config["training"]["phase1_steps"] + config["training"]["phase2_steps"],
+            3: config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"],
+            4: config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"] + config["training"]["phase4_steps"],
+            5: config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"] + config["training"]["phase4_steps"] + config["training"]["phase5_steps"],
+        }
+        expected_end = phase_end_steps.get(latest_phase, 0)
+        phase_complete = (latest_step >= expected_end)
+    
     print(f"🔍 Found {len(checkpoint_info)} checkpoints")
     print(f"   Latest: {os.path.basename(latest_ckpt)} (Phase {latest_phase}, Step {latest_step})")
+    if config and not phase_complete:
+        print(f"   ⚠️  Phase {latest_phase} is incomplete (mid-phase checkpoint)")
     
-    return latest_ckpt, latest_phase, latest_step
+    return latest_ckpt, latest_phase, latest_step, phase_complete
 
 
-def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False, resume_phase: int = 0):
+def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False, resume_phase: int = 0, resume_checkpoint_path: str = None):
     """Run the full 5-phase growth experiment.
     
     Args:
         config_path: Path to config YAML
         use_wandb: Enable WandB logging
         resume_phase: Phase to resume from (1-5). If 0, start fresh.
-                     Loads checkpoint from the END of the previous phase.
+        resume_checkpoint_path: If provided, load this checkpoint directly (for mid-phase resume).
+                               If None, loads end-of-previous-phase checkpoint.
     """
     
     print("=" * 70)
@@ -173,88 +193,102 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     model = None  # Will be set based on resume_phase
     
     # =========================================================================
-    # RESUME LOGIC: Load checkpoint if resuming from a later phase
     # =========================================================================
     if resume_phase > 0:
         print(f"\n🔄 RESUMING FROM PHASE {resume_phase}")
         print("=" * 70)
         
-        # Determine which checkpoint to load based on resume phase
-        checkpoint_map = {
-            2: ("phase1_dense", config["training"]["phase1_steps"]),
-            3: ("phase2_moe", config["training"]["phase1_steps"] + config["training"]["phase2_steps"]),
-            4: ("phase3_scaled", config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"]),
-            5: ("phase4_experts", config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"] + config["training"]["phase4_steps"]),
-        }
-        
-        if resume_phase in checkpoint_map:
-            prefix, expected_step = checkpoint_map[resume_phase]
-            checkpoint_path = os.path.join(config["training"]["save_dir"], f"{prefix}_step_{expected_step}.pt")
-            
-            if os.path.exists(checkpoint_path):
-                print(f"📂 Loading checkpoint: {checkpoint_path}")
-                checkpoint = torch.load(checkpoint_path, map_location=device)
-                total_steps = checkpoint["step"]
-                
-                # Extract samples_seen for dataloader skip
-                if "dataloader_state" in checkpoint:
-                    skip_samples = checkpoint["dataloader_state"].get("samples_seen", 0)
-                    print(f"📊 Will skip {skip_samples:,} previously seen samples")
-                
-                # Reconstruct the model at the correct architecture stage
-                if resume_phase == 2:
-                    # Load dense model, will convert to MoE
-                    model_config = SmolLM2Config(**config["model"])
-                    model = SmolLM2(model_config)
-                    model.load_state_dict(checkpoint["model_state_dict"])
-                    print(f"✓ Loaded dense model from step {total_steps}")
-                    
-                elif resume_phase >= 3:
-                    # Load MoE model (need to recreate MoE structure first)
-                    from src.moe_model import SmolLM2MoE, MoEConfig
-                    
-                    if resume_phase == 3:
-                        # Phase 2 checkpoint is base MoE
-                        moe_cfg = {**config["model"], 
-                                   "num_experts": config["growth"]["dense_to_moe"]["num_experts"],
-                                   "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
-                        model_config = MoEConfig(**moe_cfg)
-                        model = SmolLM2MoE(model_config)
-                    elif resume_phase == 4:
-                        # Phase 3 checkpoint has scaled dimensions
-                        moe_cfg = {**config["model"],
-                                   "hidden_size": config["growth"]["scale_hidden_dim"]["new_hidden_size"],
-                                   "intermediate_size": config["growth"]["scale_hidden_dim"]["new_intermediate_size"],
-                                   "num_hidden_layers": config["model"]["num_hidden_layers"] + config["growth"]["add_layers"]["num_new_layers"],
-                                   "num_attention_heads": config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64,
-                                   "num_key_value_heads": (config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64) // 3,
-                                   "num_experts": config["growth"]["dense_to_moe"]["num_experts"],
-                                   "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
-                        model_config = MoEConfig(**moe_cfg)
-                        model = SmolLM2MoE(model_config)
-                    elif resume_phase == 5:
-                        # Phase 4 checkpoint has doubled experts
-                        moe_cfg = {**config["model"],
-                                   "hidden_size": config["growth"]["scale_hidden_dim"]["new_hidden_size"],
-                                   "intermediate_size": config["growth"]["scale_hidden_dim"]["new_intermediate_size"],
-                                   "num_hidden_layers": config["model"]["num_hidden_layers"] + config["growth"]["add_layers"]["num_new_layers"],
-                                   "num_attention_heads": config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64,
-                                   "num_key_value_heads": (config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64) // 3,
-                                   "num_experts": config["growth"]["dense_to_moe"]["num_experts"] + config["growth"]["add_experts"]["num_new_experts"],
-                                   "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
-                        model_config = MoEConfig(**moe_cfg)
-                        model = SmolLM2MoE(model_config)
-                    
-                    model.load_state_dict(checkpoint["model_state_dict"])
-                    print(f"✓ Loaded MoE model from step {total_steps}")
-                    print(f"  Parameters: {count_parameters(model):,}")
+        # Determine checkpoint path
+        if resume_checkpoint_path and os.path.exists(resume_checkpoint_path):
+            # Mid-phase resume: use provided checkpoint path directly
+            checkpoint_path = resume_checkpoint_path
+            is_mid_phase = True
+        else:
+            # Normal resume: look for end-of-previous-phase checkpoint
+            checkpoint_map = {
+                2: ("phase1_dense", config["training"]["phase1_steps"]),
+                3: ("phase2_moe", config["training"]["phase1_steps"] + config["training"]["phase2_steps"]),
+                4: ("phase3_scaled", config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"]),
+                5: ("phase4_experts", config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"] + config["training"]["phase4_steps"]),
+            }
+            if resume_phase in checkpoint_map:
+                prefix, expected_step = checkpoint_map[resume_phase]
+                checkpoint_path = os.path.join(config["training"]["save_dir"], f"{prefix}_step_{expected_step}.pt")
             else:
-                print(f"❌ Checkpoint not found: {checkpoint_path}")
-                print("Available checkpoints:")
-                for f in os.listdir(config["training"]["save_dir"]):
-                    if f.endswith(".pt"):
-                        print(f"  - {f}")
-                raise FileNotFoundError(f"Cannot resume: {checkpoint_path} not found")
+                checkpoint_path = None
+            is_mid_phase = False
+        
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"📂 Loading checkpoint: {checkpoint_path}")
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            total_steps = checkpoint["step"]
+            
+            # Extract samples_seen for dataloader skip
+            if "dataloader_state" in checkpoint:
+                skip_samples = checkpoint["dataloader_state"].get("samples_seen", 0)
+                print(f"📊 Will skip {skip_samples:,} previously seen samples")
+            
+            # Reconstruct the model at the correct architecture stage
+            if resume_phase == 1:
+                # Mid-phase Phase 1: load dense model
+                model_config = SmolLM2Config(**config["model"])
+                model = SmolLM2(model_config)
+                model.load_state_dict(checkpoint["model_state_dict"])
+                print(f"✓ Loaded dense model from step {total_steps}")
+                
+            elif resume_phase == 2:
+                # Load dense model, will convert to MoE
+                model_config = SmolLM2Config(**config["model"])
+                model = SmolLM2(model_config)
+                model.load_state_dict(checkpoint["model_state_dict"])
+                print(f"✓ Loaded dense model from step {total_steps}")
+                
+            elif resume_phase >= 3:
+                # Load MoE model (need to recreate MoE structure first)
+                from src.moe_model import SmolLM2MoE, MoEConfig
+                
+                if resume_phase == 3:
+                    # Phase 2 checkpoint is base MoE
+                    moe_cfg = {**config["model"], 
+                               "num_experts": config["growth"]["dense_to_moe"]["num_experts"],
+                               "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
+                    model_config = MoEConfig(**moe_cfg)
+                    model = SmolLM2MoE(model_config)
+                elif resume_phase == 4:
+                    # Phase 3 checkpoint has scaled dimensions
+                    moe_cfg = {**config["model"],
+                               "hidden_size": config["growth"]["scale_hidden_dim"]["new_hidden_size"],
+                               "intermediate_size": config["growth"]["scale_hidden_dim"]["new_intermediate_size"],
+                               "num_hidden_layers": config["model"]["num_hidden_layers"] + config["growth"]["add_layers"]["num_new_layers"],
+                               "num_attention_heads": config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64,
+                               "num_key_value_heads": (config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64) // 3,
+                               "num_experts": config["growth"]["dense_to_moe"]["num_experts"],
+                               "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
+                    model_config = MoEConfig(**moe_cfg)
+                    model = SmolLM2MoE(model_config)
+                elif resume_phase == 5:
+                    # Phase 4 checkpoint has doubled experts
+                    moe_cfg = {**config["model"],
+                               "hidden_size": config["growth"]["scale_hidden_dim"]["new_hidden_size"],
+                               "intermediate_size": config["growth"]["scale_hidden_dim"]["new_intermediate_size"],
+                               "num_hidden_layers": config["model"]["num_hidden_layers"] + config["growth"]["add_layers"]["num_new_layers"],
+                               "num_attention_heads": config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64,
+                               "num_key_value_heads": (config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64) // 3,
+                               "num_experts": config["growth"]["dense_to_moe"]["num_experts"] + config["growth"]["add_experts"]["num_new_experts"],
+                               "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
+                    model_config = MoEConfig(**moe_cfg)
+                    model = SmolLM2MoE(model_config)
+                
+                model.load_state_dict(checkpoint["model_state_dict"])
+                print(f"✓ Loaded MoE model from step {total_steps}")
+                print(f"  Parameters: {count_parameters(model):,}")
+        else:
+            print(f"❌ Checkpoint not found: {checkpoint_path}")
+            print("Available checkpoints:")
+            for f in os.listdir(config["training"]["save_dir"]):
+                if f.endswith(".pt"):
+                    print(f"  - {f}")
+            raise FileNotFoundError(f"Cannot resume: {checkpoint_path} not found")
         
         # Skip to the appropriate phase
         if resume_phase == 1:
@@ -291,33 +325,45 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         print("📌 PHASE 1: Dense Model Training")
         print("=" * 70)
         
-        model_config = SmolLM2Config(**config["model"])
-        model = SmolLM2(model_config)
-        print(f"✓ Created dense model: {count_parameters(model):,} parameters")
+        # Check if we're resuming mid-phase (model already loaded)
+        if model is None:
+            model_config = SmolLM2Config(**config["model"])
+            model = SmolLM2(model_config)
+            print(f"✓ Created dense model: {count_parameters(model):,} parameters")
+            start_step = 0
+        else:
+            print(f"✓ Resuming with loaded dense model: {count_parameters(model):,} parameters")
+            start_step = total_steps
         
         phase1_steps = config["training"]["phase1_steps"]
-        print(f"\n🚀 Training for {phase1_steps} steps...")
+        remaining_steps = phase1_steps - start_step
         
-        phase1_loss = train_phase(
-            model=model,
-            dataloader=dataloader,
-            num_steps=phase1_steps,
-            start_step=0,
-            learning_rate=config["training"]["learning_rate"],
-            weight_decay=config["training"]["weight_decay"],
-            warmup_steps=config["training"]["warmup_steps"],
-            max_grad_norm=config["training"]["max_grad_norm"],
-            gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
-            log_every=config["training"]["log_every"],
-            checkpoint_every=config["training"]["checkpoint_every"],
-            save_dir=config["training"]["save_dir"],
-            checkpoint_prefix="phase1_dense",
-            device=device,
-            wandb_run=wandb_run,
-        )
+        if remaining_steps > 0:
+            print(f"\n🚀 Training for {remaining_steps} steps (from step {start_step} to {phase1_steps})...")
+            
+            phase1_loss = train_phase(
+                model=model,
+                dataloader=dataloader,
+                num_steps=remaining_steps,
+                start_step=start_step,
+                learning_rate=config["training"]["learning_rate"],
+                weight_decay=config["training"]["weight_decay"],
+                warmup_steps=config["training"]["warmup_steps"],
+                max_grad_norm=config["training"]["max_grad_norm"],
+                gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+                log_every=config["training"]["log_every"],
+                checkpoint_every=config["training"]["checkpoint_every"],
+                save_dir=config["training"]["save_dir"],
+                checkpoint_prefix="phase1_dense",
+                device=device,
+                wandb_run=wandb_run,
+            )
+            results["phase1_loss"] = phase1_loss
+        else:
+            print(f"\n⏭️  Phase 1 already complete at step {start_step}")
+            phase1_loss = 0.0  # Placeholder
         
-        total_steps += phase1_steps
-        results["phase1_loss"] = phase1_loss
+        total_steps = phase1_steps  # Phase 1 ends at phase1_steps
         print(f"\n✅ Phase 1 complete! Loss: {phase1_loss:.4f}")
     
     # =========================================================================
@@ -642,19 +688,27 @@ if __name__ == "__main__":
     
     # Handle auto-resume
     resume_phase = args.resume_phase
+    resume_checkpoint_path = None  # Will be set if resuming mid-phase
+    
     if args.resume and resume_phase == 0:
         # Load config to get save_dir
         with open(args.config, "r") as f:
             config = yaml.safe_load(f)
         save_dir = config["training"].get("save_dir", "./checkpoints")
         
-        _, detected_phase, detected_step = find_latest_checkpoint(save_dir)
+        latest_ckpt, detected_phase, detected_step, phase_complete = find_latest_checkpoint(save_dir, config)
+        
         if detected_phase > 0:
-            # Resume from the NEXT phase after the completed one
-            # Unless the phase wasn't fully completed, then resume same phase
-            resume_phase = detected_phase + 1
-            print(f"\n🔄 Auto-resume: Will start from Phase {resume_phase}")
+            if phase_complete:
+                # Phase is complete, start next phase
+                resume_phase = detected_phase + 1
+                print(f"\n🔄 Auto-resume: Phase {detected_phase} complete, will start Phase {resume_phase}")
+            else:
+                # Mid-phase checkpoint - resume same phase from this checkpoint
+                resume_phase = detected_phase
+                resume_checkpoint_path = latest_ckpt  # Pass the actual checkpoint path
+                print(f"\n🔄 Auto-resume: Will continue Phase {resume_phase} from step {detected_step}")
         else:
             print("\n📝 No checkpoints found. Starting fresh.")
     
-    results = run_experiment(args.config, args.wandb, resume_phase)
+    results = run_experiment(args.config, args.wandb, resume_phase, resume_checkpoint_path)
