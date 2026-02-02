@@ -15,7 +15,10 @@ class ModalityMetric(MetricPlugin):
     name = "modality"
 
     # Regex patterns
-    CODE_PATTERN = re.compile(r"```|def\s+\w+\(|class\s+\w+|function\s+\w+|import\s+\w+", re.IGNORECASE | re.MULTILINE)
+    CODE_PATTERN = re.compile(
+        r"```|def\s+\w+\(|class\s+\w+|function\s+\w+|import\s+\w+",
+        re.IGNORECASE | re.MULTILINE,
+    )
     MATH_PATTERN = re.compile(r"[∑∫√≈≠≤≥→∞]|\\(frac|sum|int|sqrt|begin\{equation\})", re.IGNORECASE)
     REASONING_PATTERN = re.compile(r"let's think step by step|therefore|thus|hence|reasoning:", re.IGNORECASE)
     AGENTIC_PATTERN = re.compile(r'"(tool|action|observation|thought)"\s*:|Observation:|Action:', re.IGNORECASE)
