@@ -1,0 +1,10 @@
+{"id": 1, "text": "The cat sat on the mat. It was happy.", "source": "simple", "category": "basic"}
+{"id": 2, "text": "Hello world! How are you today? I hope you are doing well.", "source": "simple", "category": "greeting"}
+{"id": 3, "text": "The weather is nice today. We went to the park and had a picnic with our friends.", "source": "simple", "category": "narrative"}
+{"id": 4, "text": "Photosynthesis is the process by which plants convert sunlight into energy through chlorophyll in their leaves.", "source": "educational", "category": "science"}
+{"id": 5, "text": "The water cycle describes how water moves through the environment, evaporating from oceans, forming clouds, and returning as precipitation.", "source": "educational", "category": "science"}
+{"id": 6, "text": "The quicksort algorithm uses divide-and-conquer strategy with O(n log n) average time complexity, making it efficient for large datasets.", "source": "technical", "category": "programming"}
+{"id": 7, "text": "Python's list comprehension provides a concise way to create lists by applying expressions to iterables, reducing code verbosity significantly.", "source": "technical", "category": "programming"}
+{"id": 8, "text": "The transformer architecture employs self-attention mechanisms to model long-range dependencies in sequential data, revolutionizing natural language processing.", "source": "research", "category": "machine_learning"}
+{"id": 9, "text": "Machine learning models utilize gradient descent optimization algorithms to iteratively minimize loss functions, converging towards optimal parameter configurations through backpropagation.", "source": "research", "category": "machine_learning"}
+{"id": 10, "text": "The antidisestablishmentarian framework utilizes zephyr-based optimization techniques for quantum computing applications, leveraging sophisticated neural architectures to achieve cross-modal understanding through attention mechanisms.", "source": "advanced", "category": "research"}
