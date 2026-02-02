@@ -369,7 +369,33 @@ Controls:
 
 ## Example Output
 
+`For 1B-Base`
+
 ```
+Initialized LLM-1B-Base
+  Parameters: 0.66B
+  Attention: grouped_query
+  Connection: residual
+  Position: rope
+  MTP: False
+/workspace/LLM/experiments/10_slm_training/llm_architecture/training/train.py:275: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  self.scaler = GradScaler(enabled=self.use_amp and training_config.amp_dtype == "float16")
+
+📊 Profiling enabled: ./profiler_logs/base_training_detailed
+   Will profile for 40 steps
+
+
+============================================================
+Starting Training: base_training
+============================================================
+Model: LLM-1B-Base
+Parameters: 0.66B
+Device: cuda
+Max steps: 10000
+Batch size: 2 x 4
+Profiling: Enabled (40 steps)
+============================================================
+
 ✓ Memory profiler started
   Output: profiler_logs/base_training_detailed
   TensorBoard: profiler_logs/base_training_detailed/tensorboard
@@ -447,4 +473,122 @@ Self CUDA time total: 14.512s
 ================================================================================
 
 ✓ Stack traces exported to: profiler_logs/base_training_detailed/stack_trace.txt
+```
+
+`For 1B-GSA`
+
+```
+=========================================
+Running Training with Profiler
+=========================================
+Preset: 1b-gsa
+Max Steps: 10000
+Batch Size: 1
+Gradient Accumulation: 4
+Learning Rate: 3e-4
+Experiment Name: 1b-gsa-training
+Profiling Output Dir: logs/
+Profiling Active Steps: 10
+Profiling Wait Steps: 10
+Profiling Warmup Steps: 10
+Profiling Repeat: 1
+=========================================
+
+Running profiling from: /workspace/LLM/experiments/10_slm_training/llm_architecture
+
+Initialized LLM-1B-GSA
+  Parameters: 1.31B
+  Attention: gated_sparse
+  Connection: residual
+  Position: rope
+  MTP: False
+
+📊 Profiling enabled: logs/
+   Will profile for 30 steps
+
+============================================================
+Starting Training: 1b-gsa-training
+============================================================
+Model: LLM-1B-GSA
+Parameters: 1.31B
+Device: cuda
+Max steps: 10000
+Batch size: 1 x 4
+Profiling: Enabled (30 steps)
+============================================================
+
+✓ Memory profiler started
+  Output: logs
+  TensorBoard: logs/tensorboard
+Step     10/10000 | Loss: 44.9510 | LR: 6.00e-06 | Tok/s: 1,073 | Grad: 21.10 | ETA: 3.0h
+Step     20/10000 | Loss: 44.7245 | LR: 1.20e-05 | Tok/s: 1,148 | Grad: 21.00 | ETA: 3.0h
+Step     30/10000 | Loss: 45.0939 | LR: 1.80e-05 | Tok/s: 829 | Grad: 20.93 | ETA: 3.3h
+✓ Memory profiler stopped after 30 steps
+
+================================================================================
+PROFILING SUMMARY
+================================================================================
+
+Top 20 operations by CUDA time:
+--------------------------------------------------------------------------------
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg       CPU Mem  Self CPU Mem      CUDA Mem  Self CUDA Mem    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                          ProfilerStep*         0.00%       0.000us         0.00%       0.000us       0.000us       13.019s       167.51%       13.019s        1.302s           0 B           0 B           0 B           0 B            10  
+                                          ProfilerStep*        43.49%        8.236s        72.95%       13.817s        1.382s       0.000us         0.00%        3.225s     322.536ms      15.00 KB      14.96 KB       5.38 GB   -1090.23 GB            10  
+                                            aten::copy_         1.74%     330.434ms         4.87%     923.123ms       6.897us        2.561s        32.95%        2.561s      19.134us           0 B           0 B           0 B           0 B        133840  
+                                               aten::to         0.40%      75.069ms         5.49%        1.040s       9.271us       0.000us         0.00%        1.445s      12.876us           0 B           0 B    1052.10 GB    -111.94 MB        112220  
+                                         aten::_to_copy         1.10%     208.221ms         5.10%     965.374ms      13.003us       0.000us         0.00%        1.445s      19.464us           0 B           0 B    1052.21 GB           0 B         74240  
+    autograd::engine::evaluate_function: IndexBackward0         0.26%      49.116ms         6.45%        1.222s     159.086us       0.000us         0.00%        1.168s     152.033us           0 B           0 B    -717.58 GB    -729.56 GB          7680  
+                                         IndexBackward0         0.19%      36.013ms         5.99%        1.135s     147.807us       0.000us         0.00%        1.149s     149.617us           0 B           0 B      11.98 GB           0 B          7680  
+                                 aten::_index_put_impl_         1.17%     221.483ms         5.38%        1.019s     117.991us        1.023s        13.16%        1.140s     131.940us           0 B     -87.14 KB           0 B    -114.69 GB          8640  
+                                            aten::clone         0.59%     111.534ms         3.95%     748.049ms      14.985us       0.000us         0.00%        1.097s      21.981us           0 B           0 B     526.23 GB    -512.00 KB         49920  
+                                           aten::einsum         0.93%     176.729ms         7.85%        1.487s      91.145us       0.000us         0.00%        1.060s      64.950us           0 B           0 B     249.96 GB    -846.50 MB         16320  
+                                          aten::reshape         0.92%     174.643ms         2.82%     533.387ms       4.300us       0.000us         0.00%        1.044s       8.418us           0 B           0 B     486.40 GB           0 B        124040  
+     autograd::engine::evaluate_function: ViewBackward0         0.74%     139.901ms         2.31%     438.204ms       8.936us       0.000us         0.00%        1.025s      20.907us           0 B           0 B           0 B    -482.58 GB         49040  
+                                          ViewBackward0         0.28%      52.889ms         1.58%     298.303ms       6.083us       0.000us         0.00%        1.025s      20.907us           0 B           0 B     482.58 GB           0 B         49040  
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us        1.016s        13.08%        1.016s     117.647us           0 B           0 B           0 B           0 B          8640  
+                                              aten::bmm         1.78%     337.245ms         2.34%     443.040ms      18.460us     965.627ms        12.42%     965.629ms      40.235us           0 B           0 B     486.09 GB     486.09 GB         24000  
+                                            aten::index         0.85%     160.691ms         2.43%     460.349ms      47.953us     903.587ms        11.63%     936.453ms      97.547us           0 B           0 B     720.24 GB     689.08 GB          9600  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us     760.985ms         9.79%     760.985ms      17.186us           0 B           0 B           0 B           0 B         44280  
+      autograd::engine::evaluate_function: BmmBackward0         0.32%      59.667ms         1.89%     358.812ms      46.720us       0.000us         0.00%     710.853ms      92.559us           0 B           0 B      -2.81 GB    -485.62 GB          7680  
+                                           BmmBackward0         0.20%      38.788ms         1.58%     299.144ms      38.951us       0.000us         0.00%     710.853ms      92.559us           0 B           0 B     482.81 GB           0 B          7680  
+                              Optimizer.step#AdamW.step         0.00%       0.000us         0.00%       0.000us       0.000us     710.835ms         9.15%     710.835ms      71.083ms           0 B           0 B           0 B           0 B            10  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 18.940s
+Self CUDA time total: 7.772s
+
+
+Top 20 operations by CUDA memory:
+--------------------------------------------------------------------------------
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg       CPU Mem  Self CPU Mem      CUDA Mem  Self CUDA Mem    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                    aten::empty_strided         1.12%     211.609ms         1.81%     342.548ms       4.370us       0.000us         0.00%       0.000us       0.000us           0 B           0 B    1101.30 GB    1101.30 GB         78380  
+                                         aten::_to_copy         1.10%     208.221ms         5.10%     965.374ms      13.003us       0.000us         0.00%        1.445s      19.464us           0 B           0 B    1052.21 GB           0 B         74240  
+                                               aten::to         0.40%      75.069ms         5.49%        1.040s       9.271us       0.000us         0.00%        1.445s      12.876us           0 B           0 B    1052.10 GB    -111.94 MB        112220  
+                                            aten::index         0.85%     160.691ms         2.43%     460.349ms      47.953us     903.587ms        11.63%     936.453ms      97.547us           0 B           0 B     720.24 GB     689.08 GB          9600  
+                                        ToCopyBackward0         0.15%      27.943ms         1.74%     330.308ms      11.421us       0.000us         0.00%     681.716ms      23.572us           0 B           0 B     694.34 GB           0 B         28920  
+                                            aten::empty         1.04%     196.898ms         1.25%     236.570ms       2.483us       0.000us         0.00%       0.000us       0.000us          80 B          80 B     597.72 GB     597.72 GB         95270  
+                                       aten::empty_like         0.37%      69.187ms         1.33%     251.950ms       3.915us       0.000us         0.00%       0.000us       0.000us           0 B           0 B     558.76 GB     512.00 KB         64360  
+                                            aten::clone         0.59%     111.534ms         3.95%     748.049ms      14.985us       0.000us         0.00%        1.097s      21.981us           0 B           0 B     526.23 GB    -512.00 KB         49920  
+                                          aten::reshape         0.92%     174.643ms         2.82%     533.387ms       4.300us       0.000us         0.00%        1.044s       8.418us           0 B           0 B     486.40 GB           0 B        124040  
+                                              aten::bmm         1.78%     337.245ms         2.34%     443.040ms      18.460us     965.627ms        12.42%     965.629ms      40.235us           0 B           0 B     486.09 GB     486.09 GB         24000  
+                                           BmmBackward0         0.20%      38.788ms         1.58%     299.144ms      38.951us       0.000us         0.00%     710.853ms      92.559us           0 B           0 B     482.81 GB           0 B          7680  
+                                          ViewBackward0         0.28%      52.889ms         1.58%     298.303ms       6.083us       0.000us         0.00%        1.025s      20.907us           0 B           0 B     482.58 GB           0 B         49040  
+autograd::engine::evaluate_function: ToCopyBackward0...         0.51%      95.941ms         2.37%     448.608ms      15.512us       0.000us         0.00%     693.074ms      23.965us           0 B           0 B     336.38 GB    -357.96 GB         28920  
+                                           aten::einsum         0.93%     176.729ms         7.85%        1.487s      91.145us       0.000us         0.00%        1.060s      64.950us           0 B           0 B     249.96 GB    -846.50 MB         16320  
+                                           aten::linear         0.36%      67.515ms         8.18%        1.549s      66.994us       0.000us         0.00%     634.823ms      27.458us           0 B           0 B     128.40 GB     -32.00 KB         23120  
+                                               aten::mm         2.02%     383.136ms         2.90%     548.516ms      20.315us     624.283ms         8.03%     624.351ms      23.124us           0 B           0 B     116.36 GB     116.36 GB         27000  
+                                            MmBackward0         0.19%      36.878ms         1.59%     300.436ms      44.443us       0.000us         0.00%     380.126ms      56.232us           0 B           0 B      95.49 GB           0 B          6760  
+                                              aten::mul         1.94%     367.246ms         3.30%     625.279ms       9.382us     164.168ms         2.11%     164.168ms       2.463us      47.12 KB      47.12 KB      94.79 GB      94.79 GB         66650  
+                                    aten::_foreach_sqrt         0.02%       4.209ms         0.07%      13.462ms     673.087us      72.354ms         0.93%      72.354ms       3.618ms           0 B           0 B      48.85 GB           0 B            20  
+                                        aten::remainder         0.48%      91.538ms         0.76%     144.619ms       9.415us      33.236ms         0.43%      33.236ms       2.164us      39.60 KB      39.60 KB      32.94 GB      32.94 GB         15360  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 18.940s
+Self CUDA time total: 7.772s
+
+================================================================================
+
+✓ Stack traces exported to: logs/stack_trace.txt
 ```
