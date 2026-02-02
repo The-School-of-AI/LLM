@@ -40,9 +40,7 @@ def main():
     try:
         # Open files
         for band in bands:
-            file_handles[band] = open(
-                os.path.join(output_dir, f"{band}.jsonl"), "w", encoding="utf-8"
-            )
+            file_handles[band] = open(os.path.join(output_dir, f"{band}.jsonl"), "w", encoding="utf-8")
 
         # iterate with tqdm for progress bar
         for i, item in tqdm(enumerate(ds.take(sample_count)), total=sample_count):
@@ -72,9 +70,7 @@ def main():
             else:
                 # Fallback for unexpected bands
                 if "unknown" not in file_handles:
-                    file_handles["unknown"] = open(
-                        os.path.join(output_dir, "unknown.jsonl"), "w", encoding="utf-8"
-                    )
+                    file_handles["unknown"] = open(os.path.join(output_dir, "unknown.jsonl"), "w", encoding="utf-8")
                 file_handles["unknown"].write(json.dumps(output_obj) + "\n")
 
     finally:
