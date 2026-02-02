@@ -28,8 +28,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torch.cuda.amp import autocast, GradScaler
 
-# Add parent to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add llm_architecture directory to path
+# Path: memoryProfile -> profiling -> llm_architecture
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
 from models.llm import LLM, create_model

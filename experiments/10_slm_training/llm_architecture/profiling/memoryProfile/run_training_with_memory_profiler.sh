@@ -1,17 +1,17 @@
 #!/bin/bash
 
-# Script to run training with profiling enabled
+# Script to run training with memory profiling enabled
 # This script runs the LLM training with PyTorch profiler enabled
 
 set -e  # Exit on error
 
 # Default values
-PRESET="${PRESET:-1b-base}"
+PRESET="${PRESET:-1b-gsa}"
 MAX_STEPS="${MAX_STEPS:-10000}"
 BATCH_SIZE="${BATCH_SIZE:-2}"
 GRADIENT_ACCUMULATION="${GRADIENT_ACCUMULATION:-4}"
 LEARNING_RATE="${LEARNING_RATE:-3e-4}"
-EXPERIMENT_NAME="${EXPERIMENT_NAME:-base_training}"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-1b-gsa-training}"
 PROFILING_OUTPUT_DIR="${PROFILING_OUTPUT_DIR:-logs/}"
 PROFILING_ACTIVE_STEPS="${PROFILING_ACTIVE_STEPS:-20}"
 PROFILING_WAIT_STEPS="${PROFILING_WAIT_STEPS:-10}"
