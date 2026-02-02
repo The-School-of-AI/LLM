@@ -1,9 +1,9 @@
 """
-SmolLM2-style Dense Transformer Model (~100M params)
+SmolLM2-style Dense Transformer Model (~70M params)
 
 Architecture based on HuggingFaceTB/SmolLM2-135M but scaled down:
 - hidden_size: 576
-- num_layers: 12 (down from 30 for faster experiments)
+- num_layers: 12 (reduced for faster experiments)
 - num_attention_heads: 9 (GQA with 3 KV heads)
 - intermediate_size: 1536 (SwiGLU FFN)
 - vocab_size: 49152
