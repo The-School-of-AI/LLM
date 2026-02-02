@@ -36,11 +36,23 @@ echo "Profiling Repeat: $PROFILING_REPEAT"
 echo "========================================="
 echo ""
 
-# Change to the memoryProfile directory
-cd "$(dirname "$0")"
+# Change to project root (two levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+echo "Script directory: $SCRIPT_DIR"
+echo "Changing to project root: $PROJECT_ROOT"
+if ! cd "$PROJECT_ROOT"; then
+    echo "❌ Error: Could not change to project root directory"
+    exit 1
+fi
+
+echo ""
+echo "Running profiling from: $(pwd)"
+echo ""
 
 # Run training with profiling
-uv run python train_with_memory_profiler.py \
+uv run python ${SCRIPT_DIR}/train_with_memory_profiler.py \
     --preset "$PRESET" \
     --max-steps "$MAX_STEPS" \
     --batch-size "$BATCH_SIZE" \
