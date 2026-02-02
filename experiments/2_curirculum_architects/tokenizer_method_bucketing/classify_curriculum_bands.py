@@ -211,7 +211,7 @@ class CurriculumBandClassifier:
             text_field: Name of the field containing the text to classify
             
         Returns:
-            Record with added classification metadata
+            Record with added classification metadata, or rejection metadata if token count < 4096
         """
         # Extract text from record
         if text_field not in record:
@@ -228,6 +228,20 @@ class CurriculumBandClassifier:
         # Tokenize
         token_ids = self.tokenize_text(text)
         
+        # Count tokens
+        token_count = len(token_ids)
+        
+        # Check if token count meets minimum requirement
+        MIN_TOKEN_COUNT = 4096
+        if token_count < MIN_TOKEN_COUNT:
+            # Return rejected record with metadata
+            result = record.copy()
+            result['rejected'] = True
+            result['rejection_reason'] = f"Token count ({token_count}) below minimum threshold ({MIN_TOKEN_COUNT})"
+            result['token_count'] = token_count
+            result['token_stats'] = self.calculate_token_stats(token_ids)
+            return result
+        
         # Calculate statistics
         token_stats = self.calculate_token_stats(token_ids)
         
@@ -239,6 +253,7 @@ class CurriculumBandClassifier:
         result['curriculum_band'] = band
         result['token_stats'] = token_stats
         result['classification_metadata'] = metadata
+        result['rejected'] = False
         
         return result
     
@@ -246,7 +261,8 @@ class CurriculumBandClassifier:
                        input_file: str, 
                        output_file: str,
                        text_field: str = 'text',
-                       input_format: str = 'jsonl') -> Dict[str, int]:
+                       input_format: str = 'jsonl',
+                       rejected_output_file: str = None) -> Dict[str, int]:
         """
         Process entire dataset file and classify all records.
         
@@ -255,13 +271,20 @@ class CurriculumBandClassifier:
             output_file: Path to output classified dataset file
             text_field: Name of the field containing text
             input_format: Format of input file ('json' or 'jsonl')
+            rejected_output_file: Optional path to output rejected records file.
+                                 If None, will be derived from output_file.
             
         Returns:
-            Dictionary with band distribution counts
+            Dictionary with band distribution counts and rejected count
         """
         print(f"\nProcessing dataset: {input_file}")
         print(f"Text field: '{text_field}'")
         print(f"Input format: {input_format}")
+        
+        # Determine rejected output file path
+        if rejected_output_file is None:
+            output_path = Path(output_file)
+            rejected_output_file = str(output_path.parent / f"{output_path.stem}_rejected{output_path.suffix}")
         
         # Read input file
         records = []
@@ -282,20 +305,28 @@ class CurriculumBandClassifier:
         
         # Process each record
         classified_records = []
+        rejected_records = []
         band_counts = {'B0': 0, 'B1': 0, 'B2': 0, 'B3': 0, 'B4': 0, 'B5': 0}
+        rejected_count = 0
         
         for record in tqdm(records, desc="Classifying records"):
             try:
-                classified = self.process_record(record, text_field)
-                classified_records.append(classified)
-                band = classified['curriculum_band']
-                band_counts[band] += 1
+                processed = self.process_record(record, text_field)
+                
+                # Check if record was rejected
+                if processed.get('rejected', False):
+                    rejected_records.append(processed)
+                    rejected_count += 1
+                else:
+                    classified_records.append(processed)
+                    band = processed['curriculum_band']
+                    band_counts[band] += 1
             except Exception as e:
                 print(f"\nError processing record: {e}")
                 print(f"Record: {record}")
                 continue
         
-        # Write output file
+        # Write output file for classified records
         print(f"\nWriting classified dataset to: {output_file}")
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -307,6 +338,21 @@ class CurriculumBandClassifier:
         else:  # json
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(classified_records, f, ensure_ascii=False, indent=2)
+        
+        # Write rejected records file
+        if rejected_records:
+            print(f"Writing rejected records to: {rejected_output_file}")
+            rejected_path = Path(rejected_output_file)
+            rejected_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            if rejected_output_file.endswith('.jsonl'):
+                with open(rejected_output_file, 'w', encoding='utf-8') as f:
+                    for record in rejected_records:
+                        f.write(json.dumps(record, ensure_ascii=False) + '\n')
+            else:  # json
+                with open(rejected_output_file, 'w', encoding='utf-8') as f:
+                    json.dump(rejected_records, f, ensure_ascii=False, indent=2)
+            print(f"Saved {rejected_count} rejected records")
         
         print("Done!\n")
         
@@ -321,9 +367,13 @@ class CurriculumBandClassifier:
             desc = self.TOKEN_ID_THRESHOLDS[band]['description']
             print(f"{band:3s}: {count:6d} ({percentage:5.1f}%) - {desc}")
         print("=" * 60)
-        print(f"Total: {total} records")
+        print(f"Accepted: {total} records")
+        print(f"Rejected: {rejected_count} records (token count below minimum threshold)")
+        print(f"Total processed: {len(records)} records")
         print("=" * 60)
         
+        # Add rejected count to return dictionary
+        band_counts['rejected'] = rejected_count
         return band_counts
     
     def visualize_band_distribution(self, classified_file: str, 

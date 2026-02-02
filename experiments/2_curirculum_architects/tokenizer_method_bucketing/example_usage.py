@@ -55,10 +55,19 @@ for i, text in enumerate(examples, 1):
     
     print(f"\nExample {i}:")
     print(f"  Text: {text[:60]}...")
-    print(f"  Band: {classified['curriculum_band']}")
-    print(f"  Avg Token ID: {classified['token_stats']['avg']:.1f}")
-    print(f"  Max Token ID: {classified['token_stats']['max']}")
-    print(f"  Description: {classified['classification_metadata']['description']}")
+    
+    # Check if record was rejected due to insufficient tokens
+    if classified.get('rejected', False):
+        print(f"  Status: REJECTED")
+        print(f"  Reason: {classified['rejection_reason']}")
+        print(f"  Token Count: {classified['token_count']}")
+        print(f"  Avg Token ID: {classified['token_stats']['avg']:.1f}")
+        print(f"  Max Token ID: {classified['token_stats']['max']}")
+    else:
+        print(f"  Band: {classified['curriculum_band']}")
+        print(f"  Avg Token ID: {classified['token_stats']['avg']:.1f}")
+        print(f"  Max Token ID: {classified['token_stats']['max']}")
+        print(f"  Description: {classified['classification_metadata']['description']}")
 
 # Example 2: Create a sample dataset and classify it
 print("\n" + "="*60)

@@ -110,7 +110,7 @@ def create_band_distribution_plot(band_counts: dict, output_file: str = None,
     bands = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5']
     counts = [band_counts.get(band, 0) for band in bands]
     colors = [BAND_COLORS[band] for band in bands]
-    labels = [f"{BAND_NAMES[band]}\n({counts[i]:,})" for i, band in enumerate(bands)]
+    # labels = [f"{BAND_NAMES[band]}\n({counts[i]:,})" for i, band in enumerate(bands)]
     
     total = sum(counts)
     percentages = [(count / total * 100) if total > 0 else 0 for count in counts]
