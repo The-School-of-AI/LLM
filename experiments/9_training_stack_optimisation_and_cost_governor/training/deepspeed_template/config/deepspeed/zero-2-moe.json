@@ -25,13 +25,10 @@
     
     "zero_optimization": {
         "stage": 2,
-        
         "offload_optimizer": {
             "device": "cpu",
-            "pin_memory": true,
-            "fast_init": false
+            "pin_memory": true
         },
-        
         "contiguous_gradients": true,
         "overlap_comm": true,
         "reduce_scatter": true,
@@ -45,7 +42,7 @@
         "cpu_checkpointing": true,
         "contiguous_memory_optimization": true,
         "synchronize_checkpoint_boundary": false,
-        "number_checkpoints": 3
+        "number_checkpoints": null
     },
     
     "bf16": {
@@ -53,9 +50,6 @@
     },
     
     "gradient_clipping": 1.0,
-    "prescale_gradients": false,
-    "wall_clock_breakdown": false,
     "steps_per_print": 10,
-    
-    "dump_state": false
+    "wall_clock_breakdown": false
 }

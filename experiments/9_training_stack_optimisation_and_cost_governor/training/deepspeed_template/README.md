@@ -51,19 +51,28 @@ This template has been tested and verified on AWS g4dn.12xlarge instances (4x Te
 
 ## 🚀 Features
 
+### Core Training
 - **Modular Design**: Separate modules for training and configuration
 - **ZeRO Stage 2**: Optimizer state partitioning with CPU offload
 - **ZeRO Stage 3**: Full model parallelism (optimizer + parameters + gradients)
 - **Mixed Precision Training**: FP16 for faster training and reduced memory
-- **Flexible Configuration**: Easy to switch between different DeepSpeed configurations
+- **Multi-GPU Support**: Tested on 4x Tesla T4 GPUs (AWS g4dn.12xlarge)
+- **Custom Model Support**: Built-in Qwen2 MoE architecture with 8 experts and gradient checkpointing
+
+### Checkpointing & Resume
+- **Periodic Checkpoints**: Automatic checkpoint saving every N steps
+- **S3 Integration**: Non-blocking background upload to S3
+- **Resume Support**: Resume training from local or S3 checkpoints
+- **State Tracking**: Automatic tracking of epoch, step, loss, and optimizer state
+- **Checkpoint Cleanup**: Automatic cleanup of old checkpoints
+
+### Data & Monitoring
 - **Progress Tracking**: Built-in progress bars and logging
 - **Text Generation**: Test your model with custom prompts
-- **Checkpoint Support**: Save and load model checkpoints
-- **Multi-GPU Support**: Tested on 4x Tesla T4 GPUs (AWS g4dn.12xlarge)
+- **Flexible Configuration**: Easy to switch between different DeepSpeed configurations
 - **Reproducibility**: Configurable random seed for reproducible experiments
 - **Data Loading**: Pre-built tokenization and data loading utilities
 - **Comprehensive Testing**: CPU and GPU test suites for validation
-- **Custom Model Support**: Built-in Qwen2 MoE architecture with 8 experts and gradient checkpointing
 
 ## 📋 Requirements
 
@@ -248,6 +257,7 @@ uv add pytest
 
 ### Command Line Arguments
 
+#### Training Arguments
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--model_name` | `distilgpt2` | HuggingFace model name |
@@ -259,9 +269,172 @@ uv add pytest
 | `--num_epochs` | `1` | Number of training epochs |
 | `--seed` | `42` | Random seed for reproducibility |
 | `--deepspeed_config` | `config/deepspeed/zero-2.json` | DeepSpeed config path |
+
+#### Checkpoint Arguments
+| Argument | Default | Description |
+|----------|---------|-------------|
 | `--save_checkpoint` | `False` | Save checkpoint after training |
 | `--output_dir` | `./checkpoints` | Checkpoint output directory |
+| `--checkpoint_interval` | `50` | Save checkpoint every N steps |
+
+#### Resume Arguments
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--resume_from_checkpoint` | `None` | Resume from checkpoint tag (e.g., 'epoch0_step50') |
+| `--resume_step` | `None` | Step number to resume from |
+
+#### S3 Arguments
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--use_s3` | `False` | Enable S3 checkpoint upload/download |
+| `--s3_bucket` | `None` | S3 bucket name for checkpoints |
+| `--s3_prefix` | `training/checkpoints` | S3 prefix/folder path |
+| `--s3_region` | `us-east-1` | AWS region for S3 |
+| `--cleanup_after_upload` | `False` | Delete local checkpoints after S3 upload |
+| `--keep_last_n_checkpoints` | `3` | Number of local checkpoints to keep |
+
+#### Generation Arguments
+| Argument | Default | Description |
+|----------|---------|-------------|
 | `--generation_prompt` | `The history of...` | Prompt for text generation |
+
+## 💾 Checkpointing & Resume
+
+### Automatic Periodic Checkpoints
+
+Save checkpoints automatically during training every N steps:
+
+```bash
+deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+                  --checkpoint_interval 50 \
+                  --output_dir ./checkpoints
+```
+
+This will save checkpoints like:
+- `epoch0_step50`
+- `epoch0_step100`
+- `epoch0_step150`
+- `epoch0_end` (end of epoch)
+
+### S3 Checkpointing
+
+Enable automatic background upload of checkpoints to S3:
+
+```bash
+deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+                  --use_s3 \
+                  --s3_bucket my-training-bucket \
+                  --s3_prefix experiments/run-1 \
+                  --checkpoint_interval 100
+```
+
+**Features:**
+- ✅ Non-blocking background uploads (training continues while uploading)
+- ✅ Automatic retry with exponential backoff
+- ✅ Multi-node and multi-GPU support
+- ✅ Progress tracking and detailed logging
+- ✅ Automatic file distribution in multi-node scenarios
+
+**S3 Structure:**
+```
+s3://my-training-bucket/experiments/run-1/
+├── step_100/
+│   ├── mp_rank_00_model_states.pt
+│   ├── zero_pp_rank_0_mp_rank_00_optim_states.pt
+│   └── ...
+├── step_200/
+└── final/
+```
+
+### Resume from Local Checkpoint
+
+Resume training from a previously saved checkpoint:
+
+```bash
+deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+                  --resume_from_checkpoint epoch0_step100 \
+                  --output_dir ./checkpoints
+```
+
+The training will:
+1. Load model and optimizer states
+2. Restore epoch, step, and loss information
+3. Continue from where it left off
+
+### Resume from S3 Checkpoint
+
+Resume training with automatic download from S3:
+
+```bash
+deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+                  --use_s3 \
+                  --s3_bucket my-training-bucket \
+                  --s3_prefix experiments/run-1 \
+                  --resume_from_checkpoint epoch0_step100 \
+                  --resume_step 100
+```
+
+The system will:
+1. Check if checkpoint exists locally
+2. Download from S3 if not found locally
+3. Load checkpoint and restore training state
+4. Continue training and upload new checkpoints to S3
+
+### Advanced S3 Options
+
+**Cleanup old local checkpoints:**
+```bash
+deepspeed main.py --use_s3 \
+                  --s3_bucket my-bucket \
+                  --cleanup_after_upload \
+                  --keep_last_n_checkpoints 2
+```
+
+This will:
+- Keep only the last 2 checkpoints locally
+- Delete older checkpoints after successful S3 upload
+- Save local disk space during long training runs
+
+**Environment Variables:**
+```bash
+export S3_BUCKET_NAME=my-training-bucket
+export S3_PREFIX=experiments/run-1
+export S3_REGION=us-west-2
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+
+deepspeed main.py --use_s3
+```
+
+### Checkpoint Management
+
+The `S3CheckpointManager` provides:
+
+```python
+from src.checkpoint import S3CheckpointManager
+from config.aws.config import S3Config
+
+# Initialize
+config = S3Config(
+    bucket_name="my-bucket",
+    s3_prefix="training/run-1",
+    local_checkpoint_dir="./checkpoints",
+    keep_last_n_checkpoints=3,
+)
+checkpoint_mgr = S3CheckpointManager(config)
+
+# Save checkpoint
+checkpoint_mgr.save_checkpoint(model_engine, step=100)
+
+# Load checkpoint
+client_state = checkpoint_mgr.load_checkpoint(model_engine, step=100)
+
+# Wait for uploads
+checkpoint_mgr.wait_for_uploads()
+
+# Cleanup old checkpoints
+checkpoint_mgr.cleanup_old_checkpoints()
+```
 
 ### DeepSpeed Configurations
 
@@ -454,6 +627,65 @@ deepspeed main.py \
     --num_epochs 3
 ```
 
+### 5. Training with S3 Checkpointing (Cloud Training)
+
+```bash
+# Train with automatic S3 upload every 100 steps
+deepspeed --num_gpus=4 main.py \
+    --deepspeed_config config/deepspeed/zero-2.json \
+    --use_s3 \
+    --s3_bucket my-ml-training \
+    --s3_prefix experiments/gpt2-wikitext/run-001 \
+    --checkpoint_interval 100 \
+    --num_epochs 10 \
+    --batch_size 16
+```
+
+### 6. Resume from S3 Checkpoint
+
+```bash
+# Resume interrupted training from S3
+deepspeed --num_gpus=4 main.py \
+    --deepspeed_config config/deepspeed/zero-2.json \
+    --use_s3 \
+    --s3_bucket my-ml-training \
+    --s3_prefix experiments/gpt2-wikitext/run-001 \
+    --resume_from_checkpoint epoch2_step500 \
+    --resume_step 500 \
+    --checkpoint_interval 100
+```
+
+### 7. Long Training with Checkpoint Cleanup
+
+```bash
+# Long training run with automatic local cleanup
+deepspeed --num_gpus=4 main.py \
+    --deepspeed_config config/deepspeed/zero-3.json \
+    --use_s3 \
+    --s3_bucket my-ml-training \
+    --s3_prefix long-training/qwen2-moe \
+    --use_qwen2_moe \
+    --checkpoint_interval 50 \
+    --cleanup_after_upload \
+    --keep_last_n_checkpoints 2 \
+    --num_epochs 50 \
+    --batch_size 8
+```
+
+### 8. Multi-Node Training with S3 (Advanced)
+
+```bash
+# On all nodes - automatically handles distributed S3 uploads
+deepspeed --num_nodes=4 --num_gpus=4 main.py \
+    --deepspeed_config config/deepspeed/zero-3.json \
+    --use_s3 \
+    --s3_bucket multi-node-training \
+    --s3_prefix distributed-run/node-4x4gpu \
+    --checkpoint_interval 200 \
+    --batch_size 32 \
+    --num_epochs 20
+```
+
 ## 🐛 Troubleshooting
 
 ### Out of Memory Errors
@@ -505,6 +737,52 @@ uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu
 ```
 
 > **Note**: GPU tests are automatically skipped if CUDA is not available. This is expected behavior on CPU-only machines.
+
+### S3 Upload/Download Issues
+
+**Authentication Errors:**
+```bash
+# Verify AWS credentials are configured
+aws configure list
+
+# Or set environment variables
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+export AWS_DEFAULT_REGION=us-east-1
+
+# Test S3 access
+aws s3 ls s3://your-bucket-name/
+```
+
+**Bucket Permission Issues:**
+```bash
+# Check if bucket exists and you have access
+aws s3 ls s3://your-bucket-name/
+
+# Create bucket if needed
+aws s3 mb s3://your-bucket-name --region us-east-1
+```
+
+**Slow S3 Uploads:**
+- S3 uploads happen in the background and shouldn't slow training
+- Check network bandwidth: `iftop` or `nethogs`
+- Consider using larger `--checkpoint_interval` to reduce frequency
+- Use `--cleanup_after_upload` to save disk space
+
+**Resume Checkpoint Not Found:**
+```bash
+# List available checkpoints in S3
+aws s3 ls s3://your-bucket/your-prefix/ --recursive
+
+# Verify checkpoint tag name matches
+deepspeed main.py --resume_from_checkpoint epoch0_step100  # Must match exact tag
+```
+
+**Multi-Node S3 Issues:**
+- Ensure all nodes have AWS credentials
+- Use IAM roles on EC2 instances (preferred over access keys)
+- Check that all nodes can reach S3 endpoint
+- Verify security groups allow outbound HTTPS (port 443)
 
 ## 📝 Customization
 

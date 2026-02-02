@@ -11,7 +11,9 @@ from tqdm import tqdm
 from .utils import is_main_process, print_rank_0
 
 
-def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=10):
+def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=10, 
+                checkpoint_interval=None, output_dir=None, checkpoint_manager=None,
+                start_step=0, global_step=0):
     """
     Train the model for one epoch.
 
@@ -21,9 +23,14 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
         epoch: Current epoch number
         max_steps: Maximum number of steps per epoch (None for full epoch)
         log_interval: Log every N steps
+        checkpoint_interval: Save checkpoint every N steps (None to disable)
+        output_dir: Directory to save checkpoints (required if checkpoint_interval is set)
+        checkpoint_manager: S3CheckpointManager instance (optional, for S3 support)
+        start_step: Step to start from (for resuming)
+        global_step: Global step counter across all epochs
 
     Returns:
-        Average training loss for the epoch
+        Tuple of (average_loss, final_global_step)
     """
     model_engine.train()
     total_loss = 0
@@ -37,6 +44,10 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
     )
 
     for i, batch in enumerate(progress_bar):
+        # Skip steps if resuming
+        if i < start_step:
+            continue
+        
         # Move batch to device
         input_ids = batch["input_ids"].to(model_engine.device)
         attention_mask = batch["attention_mask"].to(model_engine.device)
@@ -55,22 +66,48 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
         # Track metrics
         total_loss += loss.item()
         steps += 1
+        global_step += 1
 
         # Update progress bar
-        progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+        progress_bar.set_postfix({"loss": f"{loss.item():.4f}", "global_step": global_step})
 
         # Log periodically
         if i % log_interval == 0:
-            print_rank_0(f"Epoch {epoch}, Step {i}, Loss: {loss.item():.4f}")
+            print_rank_0(f"Epoch {epoch}, Step {i}, Global Step {global_step}, Loss: {loss.item():.4f}")
+
+        # Save checkpoint periodically
+        if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:
+            checkpoint_tag = f"epoch{epoch}_step{i+1}"
+            print_rank_0(f"\nSaving checkpoint at epoch {epoch}, step {i+1}, global_step {global_step}...")
+            
+            # Client state to save with checkpoint
+            client_state = {
+                'epoch': epoch,
+                'step': i + 1,
+                'global_step': global_step,
+                'loss': loss.item(),
+            }
+            
+            if checkpoint_manager:
+                # Use S3CheckpointManager (will upload to S3 in background)
+                checkpoint_manager.save_checkpoint(
+                    model_engine,
+                    step=global_step,
+                    tag=checkpoint_tag,
+                    client_state=client_state
+                )
+            elif output_dir:
+                # Use basic checkpoint saving
+                save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
             break
 
-    avg_loss = total_loss / steps
+    avg_loss = total_loss / steps if steps > 0 else 0
     print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
 
-    return avg_loss
+    return avg_loss, global_step
 
 
 def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
