@@ -1,15 +1,15 @@
 {
   "stage": "1B",
-  "total_tokens": 525846,
+  "total_tokens": 1030027,
   "distribution": {
-    "B0_general_text": 143269,
-    "B0_code": 129658,
-    "B1_general_text": 2597,
-    "B1_code": 1697,
-    "B4_general_text": 80500,
-    "B4_code": 81375,
-    "B4_cot_reasoning": 86750
+    "B0_general_text": 265650,
+    "B0_code": 259433,
+    "B1_general_text": 5580,
+    "B1_code": 6864,
+    "B4_general_text": 162750,
+    "B4_code": 169000,
+    "B4_cot_reasoning": 160750
   },
-  "total_items": 3541,
+  "total_items": 6961,
   "output_file": "/Users/pankajkumar/Documents/git/TSAI/ERA4/capstone-antigravity/LLM/experiments/3_coreset_engineering/output/manifests/1B_index.jsonl"
 }

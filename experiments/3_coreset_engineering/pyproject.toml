@@ -3,7 +3,7 @@ name = "coreset-engineering"
 version = "0.1.0"
 description = "Engineering pipeline for Stage-Specific Coresets (Team 3)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "PyYAML>=6.0",
     "pandas>=2.0.0",
