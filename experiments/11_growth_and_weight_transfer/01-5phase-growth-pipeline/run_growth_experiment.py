@@ -18,7 +18,9 @@ import torch
 import torch.nn as nn
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
+import glob
+import re
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -61,6 +63,50 @@ def log_transition(name, pre_loss, post_loss, wandb_run=None, step=0):
         })
     
     return delta
+
+
+def find_latest_checkpoint(save_dir: str) -> Tuple[Optional[str], int, int]:
+    """
+    Scan checkpoint directory and find the latest checkpoint.
+    
+    Returns:
+        Tuple of (checkpoint_path, phase_number, step_number)
+        Returns (None, 0, 0) if no checkpoints found.
+    """
+    if not os.path.exists(save_dir):
+        return None, 0, 0
+    
+    checkpoints = glob.glob(os.path.join(save_dir, "*.pt"))
+    if not checkpoints:
+        return None, 0, 0
+    
+    # Parse checkpoint filenames like "phase3_scaled_step_2500.pt"
+    checkpoint_info = []
+    for ckpt in checkpoints:
+        basename = os.path.basename(ckpt)
+        # Skip "final" checkpoints
+        if basename.startswith("final"):
+            continue
+        
+        step_match = re.search(r'step_(\d+)', basename)
+        phase_match = re.search(r'phase(\d)', basename)
+        
+        if step_match and phase_match:
+            step = int(step_match.group(1))
+            phase = int(phase_match.group(1))
+            checkpoint_info.append((ckpt, phase, step))
+    
+    if not checkpoint_info:
+        return None, 0, 0
+    
+    # Sort by step number (descending) and return latest
+    checkpoint_info.sort(key=lambda x: x[2], reverse=True)
+    latest_ckpt, latest_phase, latest_step = checkpoint_info[0]
+    
+    print(f"🔍 Found {len(checkpoint_info)} checkpoints")
+    print(f"   Latest: {os.path.basename(latest_ckpt)} (Phase {latest_phase}, Step {latest_step})")
+    
+    return latest_ckpt, latest_phase, latest_step
 
 
 def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False, resume_phase: int = 0):
@@ -571,8 +617,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Growth Experiment (5 Phases including YaRN)")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Config file")
     parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
+    parser.add_argument("--resume", action="store_true", 
+                        help="Auto-resume from latest checkpoint")
     parser.add_argument("--resume-phase", type=int, default=0, choices=[0, 1, 2, 3, 4, 5],
-                        help="Resume from phase N (loads checkpoint from end of phase N-1). 0=start fresh")
+                        help="Resume from specific phase N (overrides --resume). 0=start fresh")
     args = parser.parse_args()
     
-    results = run_experiment(args.config, args.wandb, args.resume_phase)
+    # Handle auto-resume
+    resume_phase = args.resume_phase
+    if args.resume and resume_phase == 0:
+        # Load config to get save_dir
+        with open(args.config, "r") as f:
+            config = yaml.safe_load(f)
+        save_dir = config["training"].get("save_dir", "./checkpoints")
+        
+        _, detected_phase, detected_step = find_latest_checkpoint(save_dir)
+        if detected_phase > 0:
+            # Resume from the NEXT phase after the completed one
+            # Unless the phase wasn't fully completed, then resume same phase
+            resume_phase = detected_phase + 1
+            print(f"\n🔄 Auto-resume: Will start from Phase {resume_phase}")
+        else:
+            print("\n📝 No checkpoints found. Starting fresh.")
+    
+    results = run_experiment(args.config, args.wandb, resume_phase)
