@@ -36,11 +36,11 @@ attention:
   attention_bias: false
   
   # GSA specific (unused)
-  gsa_num_slots: 64
-  gsa_slot_dim: 64
-  gsa_num_gating_heads: 4
-  gsa_temperature: 1.0
-  gsa_sparse_topk: 32
+  gsa_indexer_dim: 64
+  gsa_num_indexer_heads: 4
+  gsa_k_base: 2048
+  gsa_k_min: 256
+  gsa_k_max: 4096
   
   # DeepSeek MLA specific parameters
   ds_compressed_dim: 512             # Compressed KV dimension (93.3% reduction)
@@ -79,10 +79,9 @@ ffn:
 # -----------------------------------------------------------------------------
 connection:
   connection_type: "residual"
-  mhc_expansion_rate: 4.0
-  mhc_num_connections: 2
-  mhc_use_dynamic_weights: true
-  mhc_manifold_dim: 64
+  mhc_expansion_rate: 4
+  mhc_alpha_init: 0.01
+  mhc_sinkhorn_iters: 20
 
 # -----------------------------------------------------------------------------
 # Output Head Configuration

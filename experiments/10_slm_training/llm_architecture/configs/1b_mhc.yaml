@@ -34,11 +34,11 @@ attention:
   head_dim: 128
   attention_dropout: 0.0
   attention_bias: false
-  gsa_num_slots: 64
-  gsa_slot_dim: 64
-  gsa_num_gating_heads: 4
-  gsa_temperature: 1.0
-  gsa_sparse_topk: 32
+  gsa_indexer_dim: 64
+  gsa_num_indexer_heads: 4
+  gsa_k_base: 2048
+  gsa_k_min: 256
+  gsa_k_max: 4096
   ds_compressed_dim: 512
   ds_rope_head_dim: 32
   ds_num_shared_experts: 1
@@ -75,10 +75,9 @@ ffn:
 # -----------------------------------------------------------------------------
 connection:
   connection_type: "mhc"             # mHC enabled
-  mhc_expansion_rate: 4.0            # Expansion rate for manifold projection
-  mhc_num_connections: 2             # Number of parallel connection paths
-  mhc_use_dynamic_weights: true      # Adaptive gating weights
-  mhc_manifold_dim: 64               # Manifold embedding dimension
+  mhc_expansion_rate: 4              # n: number of streams (paper uses 4)
+  mhc_alpha_init: 0.01               # α: gating factor init (paper uses 0.01)
+  mhc_sinkhorn_iters: 20             # Sinkhorn-Knopp iterations (paper uses 20)
 
 # -----------------------------------------------------------------------------
 # Output Head Configuration

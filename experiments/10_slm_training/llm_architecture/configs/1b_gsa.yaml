@@ -35,12 +35,12 @@ attention:
   attention_dropout: 0.0
   attention_bias: false
   
-  # GSA specific parameters
-  gsa_num_slots: 64                  # Number of memory slots
-  gsa_slot_dim: 64                   # Dimension per slot
-  gsa_num_gating_heads: 4            # Number of gating heads
-  gsa_temperature: 1.0               # Gating temperature
-  gsa_sparse_topk: 32                # Top-k sparse selection
+  # GSA specific parameters (paper 2601.15305v1)
+  gsa_indexer_dim: 64                # d_I: Low-dim indexer projection
+  gsa_num_indexer_heads: 4           # H_I: Number of indexer heads
+  gsa_k_base: 2048                   # Base selection budget
+  gsa_k_min: 256                     # Minimum k (high confidence)
+  gsa_k_max: 4096                    # Maximum k (low confidence)
   
   # DeepSeek specific (unused)
   ds_compressed_dim: 512
@@ -79,10 +79,9 @@ ffn:
 # -----------------------------------------------------------------------------
 connection:
   connection_type: "residual"
-  mhc_expansion_rate: 4.0
-  mhc_num_connections: 2
-  mhc_use_dynamic_weights: true
-  mhc_manifold_dim: 64
+  mhc_expansion_rate: 4
+  mhc_alpha_init: 0.01
+  mhc_sinkhorn_iters: 20
 
 # -----------------------------------------------------------------------------
 # Output Head Configuration
