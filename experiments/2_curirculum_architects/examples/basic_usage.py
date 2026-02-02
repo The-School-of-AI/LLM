@@ -1,0 +1,75 @@
+"""Simple example showing curriculum tagging with auto-discovery."""
+
+from pathlib import Path
+
+from curriculum_tags import CurriculumTagger
+
+
+def main():
+    """Demonstrate curriculum tagging."""
+    curriculum_path = Path(__file__).parent.parent / "curriculum.yaml"
+
+    # Simple! Auto-loads metrics from metrics_config.yaml
+    print("=" * 80)
+    print("Auto-Loading Metrics from metrics_config.yaml")
+    print("=" * 80)
+    tagger = CurriculumTagger(curriculum_path)
+    print(f"✓ Loaded {len(tagger.plugins)} metrics automatically")
+    for plugin in tagger.plugins:
+        print(f"  - {plugin.name}")
+
+    # Tag some samples
+    samples = [
+        {
+            "id": "sample_1",
+            "text": "Hello world! This is a simple sentence.",
+            "source": "example",
+        },
+        {
+            "id": "sample_2",
+            "text": """
+            def fibonacci(n):
+                if n <= 1:
+                    return n
+                return fibonacci(n-1) + fibonacci(n-2)
+            """,
+            "source": "code_example",
+        },
+        {
+            "id": "sample_3",
+            "text": """
+            The implementation of quantum entanglement phenomena requires 
+            sophisticated mathematical frameworks incorporating Hilbert space 
+            representations and non-commutative operator algebras.
+            """,
+            "source": "academic",
+        },
+    ]
+
+    print("\n" + "=" * 80)
+    print("Tagging Samples")
+    print("=" * 80)
+
+    for sample in samples:
+        tagged = tagger.tag_sample(sample)
+
+        print(f"\n📄 Sample: {tagged['id']}")
+        print(f"   Text: {tagged['text'][:50]}...")
+
+        tags = tagged["curriculum_tags"]
+
+        if "difficulty" in tags:
+            diff = tags["difficulty"]
+            print(f"   Difficulty: {diff['band']} (score: {diff['score']})")
+
+        if "modality" in tags:
+            mod = tags["modality"]
+            print(f"   Modality: {mod['primary_modality']}")
+
+        if "readability" in tags:
+            read = tags["readability"]
+            print(f"   Readability: Grade {read['flesch_kincaid_grade']}")
+
+
+if __name__ == "__main__":
+    main()

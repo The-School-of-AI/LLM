@@ -1,0 +1,338 @@
+# ============================================================
+# curriculum.yaml — CANONICAL CURRICULUM CONSTITUTION - AUTHORITATIVE
+# ============================================================
+# This file is the single source of truth for curriculum policy.
+# Any deviation requires escalation + re-freeze.
+# ============================================================
+
+version: "0.1"
+owner_team: "Team 2: Curriculum Architects"
+status: "DRAFT" # "FROZEN"
+frozen_on: "2026-01-31"
+change_policy: "STRUCTURE_IMMUTABLE" # "NO_CHANGES_ALLOWED"
+
+# ============================================================
+# LANGUAGES
+# ============================================================
+languages:
+  primary: ["en"]
+  secondary:
+    - lang: "hi"
+      max_token_share: 0.08         # Hindi allowed but capped (staged)
+      earliest_stage: "3B"          # introduce later to avoid distorting early bands
+  excluded_langs: ["zh", "ja", "ko"] # plus other non-en/hi by default
+  language_id_requirement:
+    provider: "dataset_claimed_clean" # must come from dataset vendor/curator claims + docs
+    min_confidence: 0.90              # only if dataset provides it; otherwise reject/seg-request
+
+# ============================================================
+# GLOBAL CONTRACT
+# ============================================================
+global_contract:
+  guarantees:
+    determinism:
+      sampling: true
+      batch_content: true
+      data_order: true
+      fixed_seed_required: true
+    safety_defaults:
+      downgrade_on_uncertainty: true
+      upgrade_never_allowed: true
+  enforcement:
+    violation_action: "REJECT_OR_HALT"
+
+# ============================================================
+# LANGUAGE & CONTEXT POLICY
+# ============================================================
+language_and_context:
+
+  language_policy:
+    definition_method: "hard_cap_with_stage_gating"
+    primary_languages:
+      - lang: "en"
+        max_share: 0.92
+    secondary_languages:
+      - lang: "hi"
+        max_share: 0.08
+        earliest_stage: "3B"
+    excluded_languages:
+      - "zh"
+      - "ja"
+      - "ko"
+      - "fr"
+      - "de"
+      - "es"
+    violation_action: "DROP_SAMPLE"
+
+  context_policy:
+    definition_method: "fixed_pretrain_context"
+    min_context_tokens: 4096
+    pretrain_context_tokens: 4096
+    short_context_pretraining: false
+    long_context_extension:
+      allowed_later: true
+      owned_by: "Post-pretraining teams"
+
+# ============================================================
+# 3. DIFFICULTY SYSTEM (CORE OF CURRICULUM)
+# ============================================================
+difficulty_system:
+
+  definition_method:
+    primary: "heuristic_rules"
+    secondary: "tokenizer_proxy"
+    audit:
+      enabled: true
+      audit_model: "small_frozen_lm"
+      scope: "spot_checks_only"
+
+  tokenizer_proxy:
+    owner_team: "Team 6: Tokenizer Lab"
+    purpose: "complexity_proxy_not_quality"
+    required_metrics:
+      - avg_token_rank
+      - rare_token_ratio
+      - tail_token_ratio
+      - symbolic_token_density
+      - structural_token_density
+
+  bands:
+
+    B0:
+      name: "Nursery"
+      intent: "Surface language acquisition"
+      allowed_modalities: ["general_text"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.02
+          max_tail_ratio: 0.005
+        perplexity_range: [1.1, 30]
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B1:
+      name: "Primary"
+      intent: "Fluent everyday language"
+      allowed_modalities: ["general_text", "clean_exposition"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.05
+          max_tail_ratio: 0.01
+        perplexity_range: [10, 60]
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B2:
+      name: "HighSchool"
+      intent: "Structured knowledge without explicit reasoning"
+      allowed_modalities: ["structured_knowledge"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.10
+          max_tail_ratio: 0.02
+        perplexity_range: [30, 120]
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B3:
+      name: "Undergraduate"
+      intent: "Reasoning emergence"
+      allowed_modalities: ["technical_text", "code"]
+      constraints:
+        tokenizer:
+          max_rare_ratio: 0.20
+          max_tail_ratio: 0.05
+        perplexity_range: [80, 300]
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 64
+        agentic: "forbidden"
+
+    B4:
+      name: "Graduate"
+      intent: "Explicit abstraction and algorithms"
+      allowed_modalities: ["math", "code"]
+      constraints:
+        tokenizer:
+          min_rare_ratio: 0.15
+          min_tail_ratio: 0.05
+        perplexity_range: [200, 800]
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 128
+        agentic: "toy_only"
+
+    B5:
+      name: "PhD"
+      intent: "Planning and system-level reasoning"
+      allowed_modalities: ["hard_reasoning", "advanced_code", "planning"]
+      constraints:
+        tokenizer:
+          min_rare_ratio: 0.25
+          min_tail_ratio: 0.10
+        perplexity_range: [400, 1500]
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 256
+        agentic:
+          allowed: true
+          max_token_share: 0.02
+
+# ============================================================
+# 4. MODALITY SYSTEM
+# ============================================================
+modalities:
+  general_text:
+    purpose: "language fluency"
+  structured_knowledge:
+    purpose: "factual and conceptual grounding"
+  code:
+    purpose: "procedural and algorithmic reasoning"
+    allowed_languages: ["python", "javascript", "typescript", "c", "cpp"]
+  math:
+    purpose: "symbolic abstraction"
+  cot_reasoning:
+    purpose: "scaffolded reasoning traces"
+  agentic_traces:
+    purpose: "tool-use and planning"
+    owner_team: "Team 17"
+    status: "format_pending"
+
+# ============================================================
+# 5. STAGE & GROWTH SCHEDULE
+# ============================================================
+growth_schedule:
+
+  stages:
+    - name: "1B"
+      order: 1
+      profile: "base"
+    - name: "3B"
+      order: 2
+      profile: "harder_shift_1"
+    - name: "8B"
+      order: 3
+      profile: "harder_shift_2"
+    - name: "70B"
+      order: 4
+      profile: "final_adaptive"
+
+  stage_profiles:
+
+    base:
+      band_weights:
+        B0: 0.30
+        B1: 0.28
+        B2: 0.20
+        B3: 0.14
+        B4: 0.06
+        B5: 0.02
+      modality_weights:
+        general_text: 0.86
+        code: 0.12
+        cot_reasoning: 0.02
+        agentic_traces: 0.00
+
+    harder_shift_1:
+      band_weights:
+        B0: 0.22
+        B1: 0.24
+        B2: 0.22
+        B3: 0.18
+        B4: 0.10
+        B5: 0.04
+      modality_weights:
+        general_text: 0.78
+        code: 0.18
+        cot_reasoning: 0.03
+        agentic_traces: 0.01
+
+    harder_shift_2:
+      band_weights:
+        B0: 0.14
+        B1: 0.18
+        B2: 0.22
+        B3: 0.22
+        B4: 0.16
+        B5: 0.08
+      modality_weights:
+        general_text: 0.68
+        code: 0.24
+        cot_reasoning: 0.05
+        agentic_traces: 0.03
+
+    final_adaptive:
+      band_weights:
+        B0: 0.10
+        B1: 0.14
+        B2: 0.20
+        B3: 0.22
+        B4: 0.20
+        B5: 0.14
+      modality_weights:
+        general_text: 0.60
+        code: 0.28
+        cot_reasoning: 0.07
+        agentic_traces: 0.05
+      adaptive_knobs:
+        enabled: true
+        bounds:
+          band_delta_max: 0.03
+          modality_delta_max: 0.02
+
+# ============================================================
+# 6. GUARDRAILS & SMOOTHING
+# ============================================================
+guardrails:
+
+  rolling_window:
+    window_tokens: 2000000
+    max_band_delta: 0.03
+    max_domain_delta: 0.05
+
+  caps:
+    cot:
+      global_max: 0.06
+    agentic:
+      global_max: 0.03
+      earliest_band: "B4"
+
+# ============================================================
+# 7. DOMAIN GROUPING
+# ============================================================
+domains:
+  definition_method: "team1_tags_consolidated_by_team2"
+
+  domain_groups:
+    general_web_clean: {}
+    encyclopedic: {}
+    technical_docs: {}
+    math_science: {}
+    code_repos: {}
+    planning_reasoning_curated: {}
+
+  band_domain_policy:
+    B0: ["general_web_clean"]
+    B1: ["general_web_clean", "encyclopedic"]
+    B2: ["encyclopedic", "technical_docs"]
+    B3: ["technical_docs", "code_repos"]
+    B4: ["math_science", "code_repos"]
+    B5: ["planning_reasoning_curated", "math_science", "code_repos"]
+
+# ============================================================
+# 8. EVALUATION SIGNAL INTERFACE
+# ============================================================
+evaluation_interface:
+  purpose: "guides_adaptive_knobs_only"
+  signals:
+    - name: "reasoning_eval_delta"
+      owner_team: "Benchmarking"
+    - name: "long_context_eval_delta"
+      owner_team: "Benchmarking"
+  restriction: "NO_STRUCTURAL_CHANGES_ALLOWED"
