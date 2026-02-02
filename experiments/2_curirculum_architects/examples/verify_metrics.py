@@ -46,32 +46,42 @@ def test_metrics():
     print("\nVerifying metrics...")
     
     # Check Tokenizer Difficulty
+    # Check Tokenizer Difficulty
     if "tokenizer_difficulty" in tags:
-        print("✅ TokenizerDifficultyMetric ran")
+        print("[OK] TokenizerDifficultyMetric ran")
         td = tags["tokenizer_difficulty"]
         # Updated to check for top-level stats since banding logic was removed
         if "avg_token_id" in td:
             print(f"   - Avg Token ID: {td['avg_token_id']}")
     else:
-        print("❌ TokenizerDifficultyMetric missing")
+        print("[FAIL] TokenizerDifficultyMetric missing")
 
     # Check Structural Density
     if "structural_density" in tags:
-        print("✅ StructuralDensityMetric ran")
+        print("[OK] StructuralDensityMetric ran")
         sd = tags["structural_density"]
         print(f"   - Structural Density: {sd.get('structural_density')}")
         print(f"   - Symbolic Density: {sd.get('symbolic_density')}")
     else:
-        print("❌ StructuralDensityMetric missing")
+        print("[FAIL] StructuralDensityMetric missing")
 
     # Check CoT Scanner
     if "cot_scanner" in tags:
-        print("✅ CoTScannerMetric ran")
+        print("[OK] CoTScannerMetric ran")
         cot = tags["cot_scanner"]
         print(f"   - Has CoT: {cot.get('has_cot')}")
         print(f"   - Has Agentic: {cot.get('has_agentic')}")
     else:
-        print("❌ CoTScannerMetric missing")
+        print("[FAIL] CoTScannerMetric missing")
+
+    # Check Band Assignment
+    if "band_assignment" in tags:
+        print("[OK] BandAssignmentMetric ran")
+        ba = tags["band_assignment"]
+        print(f"   - Band: {ba.get('band')}")
+        print(f"   - Reason: {ba.get('reason')}")
+    else:
+        print("[FAIL] BandAssignmentMetric missing")
 
 if __name__ == "__main__":
     test_metrics()

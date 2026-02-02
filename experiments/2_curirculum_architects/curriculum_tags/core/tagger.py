@@ -1,6 +1,7 @@
 """Main tagging engine for processing datasets."""
 
 import importlib
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -35,6 +36,14 @@ class CurriculumTagger:
         """
         self.config = CurriculumConfig(curriculum_path)
         self.plugins = metrics if metrics is not None else self._load_metrics(curriculum_path, metrics_config_path)
+
+    def _get_builtin_defaults(self) -> List[MetricPlugin]:
+        """Return list of essential default metrics if no config found."""
+        from ..metrics.difficulty import DifficultyMetric
+        from ..metrics.modality import ModalityMetric
+        from ..metrics.readability import ReadabilityMetric
+
+        return [DifficultyMetric(self.config), ModalityMetric(self.config), ReadabilityMetric(self.config)]
 
     def _load_metrics(
         self, curriculum_path: str | Path, metrics_config_path: Optional[str | Path]
@@ -79,7 +88,10 @@ class CurriculumTagger:
                     base_name = class_name
                     if base_name.endswith("Metric"):
                         base_name = base_name[:-6]
-                    module_name = base_name.lower()
+                    # module_name = base_name.lower()
+
+                    # Convert CamelCase to snake_case for module name
+                    module_name = re.sub(r"(?<!^)(?=[A-Z])", "_", base_name).lower()
 
                 module_path = f"curriculum_tags.metrics.{module_name}"
 
