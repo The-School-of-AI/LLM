@@ -4,11 +4,16 @@ This guide shows you how to add a new curriculum metric to the tagging system.
 
 ## Quick Start
 
-**3 simple steps:**
+**2 simple steps:**
 
 1. Create your metric class file
 2. Add entry to `metrics_config.yaml`
-3. Done! Auto-discovery handles the rest
+
+That's it! The system auto-discovers your metric from both the file system and config.
+
+**Auto-discovery works at two levels:**
+- **Import-level**: Package automatically imports all metrics from `.py` files in this directory
+- **Runtime-level**: `CurriculumTagger` loads enabled metrics from `metrics_config.yaml`
 
 ## Step 1: Create Your Metric File
 
@@ -80,14 +85,22 @@ metrics:
     enabled: true
 ```
 
+**Auto-discovery magic:**
+- ✅ Your metric is automatically imported when someone does `from curriculum_tags import YourMetric`
+- ✅ The tagger loads it at runtime based on the config
+- ✅ No need to edit `__init__.py` - it scans the directory!
+
 **Naming convention:**
 - File name: `your_metric_name.py` (lowercase, underscores)
 - Class name: `YourMetric` (PascalCase, ends with "Metric")
 - Config name: Must match the `name` attribute in your class
 
-## Step 3: Test It
+## Step 3: Verify It Works
 
 ```bash
+# Test the import
+uv run python -c 'from curriculum_tags import YourMetric; print(YourMetric.name)'
+
 # Add your metric's test file
 tests/test_your_metric.py
 
