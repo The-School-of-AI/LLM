@@ -63,8 +63,15 @@ def log_transition(name, pre_loss, post_loss, wandb_run=None, step=0):
     return delta
 
 
-def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False):
-    """Run the full 5-phase growth experiment."""
+def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False, resume_phase: int = 0):
+    """Run the full 5-phase growth experiment.
+    
+    Args:
+        config_path: Path to config YAML
+        use_wandb: Enable WandB logging
+        resume_phase: Phase to resume from (1-5). If 0, start fresh.
+                     Loads checkpoint from the END of the previous phase.
+    """
     
     print("=" * 70)
     print("🧪 GROWTH EXPERIMENT (5 Phases)")
@@ -121,195 +128,290 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     
     total_steps = 0
     results = {}
+    model = None  # Will be set based on resume_phase
+    
+    # =========================================================================
+    # RESUME LOGIC: Load checkpoint if resuming from a later phase
+    # =========================================================================
+    if resume_phase > 0:
+        print(f"\n🔄 RESUMING FROM PHASE {resume_phase}")
+        print("=" * 70)
+        
+        # Determine which checkpoint to load based on resume phase
+        checkpoint_map = {
+            2: ("phase1_dense", config["training"]["phase1_steps"]),
+            3: ("phase2_moe", config["training"]["phase1_steps"] + config["training"]["phase2_steps"]),
+            4: ("phase3_scaled", config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"]),
+            5: ("phase4_experts", config["training"]["phase1_steps"] + config["training"]["phase2_steps"] + config["training"]["phase3_steps"] + config["training"]["phase4_steps"]),
+        }
+        
+        if resume_phase in checkpoint_map:
+            prefix, expected_step = checkpoint_map[resume_phase]
+            checkpoint_path = os.path.join(config["training"]["save_dir"], f"{prefix}_step_{expected_step}.pt")
+            
+            if os.path.exists(checkpoint_path):
+                print(f"📂 Loading checkpoint: {checkpoint_path}")
+                checkpoint = torch.load(checkpoint_path, map_location=device)
+                total_steps = checkpoint["step"]
+                
+                # Reconstruct the model at the correct architecture stage
+                if resume_phase == 2:
+                    # Load dense model, will convert to MoE
+                    model_config = SmolLM2Config(**config["model"])
+                    model = SmolLM2(model_config)
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                    print(f"✓ Loaded dense model from step {total_steps}")
+                    
+                elif resume_phase >= 3:
+                    # Load MoE model (need to recreate MoE structure first)
+                    from src.moe_model import SmolLM2MoE, MoEConfig
+                    
+                    if resume_phase == 3:
+                        # Phase 2 checkpoint is base MoE
+                        moe_cfg = {**config["model"], 
+                                   "num_experts": config["growth"]["dense_to_moe"]["num_experts"],
+                                   "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
+                        model_config = MoEConfig(**moe_cfg)
+                        model = SmolLM2MoE(model_config)
+                    elif resume_phase == 4:
+                        # Phase 3 checkpoint has scaled dimensions
+                        moe_cfg = {**config["model"],
+                                   "hidden_size": config["growth"]["scale_hidden_dim"]["new_hidden_size"],
+                                   "intermediate_size": config["growth"]["scale_hidden_dim"]["new_intermediate_size"],
+                                   "num_hidden_layers": config["model"]["num_hidden_layers"] + config["growth"]["add_layers"]["num_new_layers"],
+                                   "num_attention_heads": config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64,
+                                   "num_key_value_heads": (config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64) // 3,
+                                   "num_experts": config["growth"]["dense_to_moe"]["num_experts"],
+                                   "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
+                        model_config = MoEConfig(**moe_cfg)
+                        model = SmolLM2MoE(model_config)
+                    elif resume_phase == 5:
+                        # Phase 4 checkpoint has doubled experts
+                        moe_cfg = {**config["model"],
+                                   "hidden_size": config["growth"]["scale_hidden_dim"]["new_hidden_size"],
+                                   "intermediate_size": config["growth"]["scale_hidden_dim"]["new_intermediate_size"],
+                                   "num_hidden_layers": config["model"]["num_hidden_layers"] + config["growth"]["add_layers"]["num_new_layers"],
+                                   "num_attention_heads": config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64,
+                                   "num_key_value_heads": (config["growth"]["scale_hidden_dim"]["new_hidden_size"] // 64) // 3,
+                                   "num_experts": config["growth"]["dense_to_moe"]["num_experts"] + config["growth"]["add_experts"]["num_new_experts"],
+                                   "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
+                        model_config = MoEConfig(**moe_cfg)
+                        model = SmolLM2MoE(model_config)
+                    
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                    print(f"✓ Loaded MoE model from step {total_steps}")
+                    print(f"  Parameters: {count_parameters(model):,}")
+            else:
+                print(f"❌ Checkpoint not found: {checkpoint_path}")
+                print("Available checkpoints:")
+                for f in os.listdir(config["training"]["save_dir"]):
+                    if f.endswith(".pt"):
+                        print(f"  - {f}")
+                raise FileNotFoundError(f"Cannot resume: {checkpoint_path} not found")
+        
+        # Skip to the appropriate phase
+        if resume_phase == 1:
+            print("Starting fresh from Phase 1...")
+        elif resume_phase > 1:
+            # Set dummy results for skipped phases
+            for i in range(1, resume_phase):
+                results[f"phase{i}_loss"] = 0.0
+                if i > 1:
+                    results[f"phase{i}_delta"] = 0.0
+            print(f"Skipping phases 1-{resume_phase-1}, starting at Phase {resume_phase}\n")
     
     # =========================================================================
     # PHASE 1: Dense Model Training
     # =========================================================================
-    print("\n" + "=" * 70)
-    print("📌 PHASE 1: Dense Model Training")
-    print("=" * 70)
-    
-    model_config = SmolLM2Config(**config["model"])
-    model = SmolLM2(model_config)
-    print(f"✓ Created dense model: {count_parameters(model):,} parameters")
-    
-    phase1_steps = config["training"]["phase1_steps"]
-    print(f"\n🚀 Training for {phase1_steps} steps...")
-    
-    phase1_loss = train_phase(
-        model=model,
-        dataloader=dataloader,
-        num_steps=phase1_steps,
-        start_step=0,
-        learning_rate=config["training"]["learning_rate"],
-        weight_decay=config["training"]["weight_decay"],
-        warmup_steps=config["training"]["warmup_steps"],
-        max_grad_norm=config["training"]["max_grad_norm"],
-        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
-        log_every=config["training"]["log_every"],
-        checkpoint_every=config["training"]["checkpoint_every"],
-        save_dir=config["training"]["save_dir"],
-        checkpoint_prefix="phase1_dense",
-        device=device,
-        wandb_run=wandb_run,
-    )
-    
-    total_steps += phase1_steps
-    results["phase1_loss"] = phase1_loss
-    print(f"\n✅ Phase 1 complete! Loss: {phase1_loss:.4f}")
+    if resume_phase <= 1:
+        print("\n" + "=" * 70)
+        print("📌 PHASE 1: Dense Model Training")
+        print("=" * 70)
+        
+        model_config = SmolLM2Config(**config["model"])
+        model = SmolLM2(model_config)
+        print(f"✓ Created dense model: {count_parameters(model):,} parameters")
+        
+        phase1_steps = config["training"]["phase1_steps"]
+        print(f"\n🚀 Training for {phase1_steps} steps...")
+        
+        phase1_loss = train_phase(
+            model=model,
+            dataloader=dataloader,
+            num_steps=phase1_steps,
+            start_step=0,
+            learning_rate=config["training"]["learning_rate"],
+            weight_decay=config["training"]["weight_decay"],
+            warmup_steps=config["training"]["warmup_steps"],
+            max_grad_norm=config["training"]["max_grad_norm"],
+            gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+            log_every=config["training"]["log_every"],
+            checkpoint_every=config["training"]["checkpoint_every"],
+            save_dir=config["training"]["save_dir"],
+            checkpoint_prefix="phase1_dense",
+            device=device,
+            wandb_run=wandb_run,
+        )
+        
+        total_steps += phase1_steps
+        results["phase1_loss"] = phase1_loss
+        print(f"\n✅ Phase 1 complete! Loss: {phase1_loss:.4f}")
     
     # =========================================================================
     # PHASE 2: Dense → MoE
     # =========================================================================
-    print("\n" + "=" * 70)
-    print("📌 PHASE 2: Dense → MoE")
-    print("=" * 70)
-    
-    pre_moe_loss = measure_loss(model, dataloader, device)
-    
-    # Convert to MoE
-    moe_config = config["growth"]["dense_to_moe"]
-    model = dense_to_moe(
-        model,
-        num_experts=moe_config["num_experts"],
-        num_experts_per_tok=moe_config["num_experts_per_tok"],
-    )
-    
-    post_moe_loss = measure_loss(model, dataloader, device)
-    results["phase2_delta"] = log_transition("moe_conversion", pre_moe_loss, post_moe_loss, wandb_run, total_steps)
-    
-    phase2_steps = config["training"]["phase2_steps"]
-    print(f"\n🚀 Training MoE for {phase2_steps} steps...")
-    
-    phase2_loss = train_phase(
-        model=model,
-        dataloader=dataloader,
-        num_steps=phase2_steps,
-        start_step=total_steps,
-        learning_rate=config["training"]["learning_rate"] * 0.5,
-        weight_decay=config["training"]["weight_decay"],
-        warmup_steps=50,
-        max_grad_norm=config["training"]["max_grad_norm"],
-        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
-        log_every=config["training"]["log_every"],
-        checkpoint_every=config["training"]["checkpoint_every"],
-        save_dir=config["training"]["save_dir"],
-        checkpoint_prefix="phase2_moe",
-        device=device,
-        wandb_run=wandb_run,
-    )
-    
-    total_steps += phase2_steps
-    results["phase2_loss"] = phase2_loss
-    print(f"\n✅ Phase 2 complete! Loss: {phase2_loss:.4f}")
-    
-    # Clear memory
-    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+    if resume_phase <= 2:
+        print("\n" + "=" * 70)
+        print("📌 PHASE 2: Dense → MoE")
+        print("=" * 70)
+        
+        pre_moe_loss = measure_loss(model, dataloader, device)
+        
+        # Convert to MoE
+        moe_config = config["growth"]["dense_to_moe"]
+        model = dense_to_moe(
+            model,
+            num_experts=moe_config["num_experts"],
+            num_experts_per_tok=moe_config["num_experts_per_tok"],
+        )
+        
+        post_moe_loss = measure_loss(model, dataloader, device)
+        results["phase2_delta"] = log_transition("moe_conversion", pre_moe_loss, post_moe_loss, wandb_run, total_steps)
+        
+        phase2_steps = config["training"]["phase2_steps"]
+        print(f"\n🚀 Training MoE for {phase2_steps} steps...")
+        
+        phase2_loss = train_phase(
+            model=model,
+            dataloader=dataloader,
+            num_steps=phase2_steps,
+            start_step=total_steps,
+            learning_rate=config["training"]["learning_rate"] * 0.5,
+            weight_decay=config["training"]["weight_decay"],
+            warmup_steps=50,
+            max_grad_norm=config["training"]["max_grad_norm"],
+            gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+            log_every=config["training"]["log_every"],
+            checkpoint_every=config["training"]["checkpoint_every"],
+            save_dir=config["training"]["save_dir"],
+            checkpoint_prefix="phase2_moe",
+            device=device,
+            wandb_run=wandb_run,
+        )
+        
+        total_steps += phase2_steps
+        results["phase2_loss"] = phase2_loss
+        print(f"\n✅ Phase 2 complete! Loss: {phase2_loss:.4f}")
+        
+        # Clear memory
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
     
     # =========================================================================
     # PHASE 3: Add Ghost Layers + Scale Hidden Dimension
     # =========================================================================
-    print("\n" + "=" * 70)
-    print("📌 PHASE 3: Add Ghost Layers + Scale Hidden Dimension")
-    print("=" * 70)
-    
-    pre_growth_loss = measure_loss(model, dataloader, device)
-    
-    # Step 3a: Add ghost layers
-    layer_config = config["growth"]["add_layers"]
-    print(f"\n🔧 Adding {layer_config['num_new_layers']} ghost layers...")
-    model = add_layers(
-        model,
-        num_new_layers=layer_config["num_new_layers"],
-        init_mode=layer_config["init_mode"],
-    )
-    
-    # Step 3b: Scale hidden dimension
-    dim_config = config["growth"]["scale_hidden_dim"]
-    print(f"\n🔧 Scaling hidden dimension to {dim_config['new_hidden_size']}...")
-    model = scale_hidden_dim(
-        model,
-        new_hidden_size=dim_config["new_hidden_size"],
-        new_intermediate_size=dim_config.get("new_intermediate_size"),
-        padding_mode=dim_config.get("padding_mode", "noise"),
-        noise_scale=dim_config.get("noise_scale", 0.01),
-    )
-    
-    post_growth_loss = measure_loss(model, dataloader, device)
-    results["phase3_delta"] = log_transition("layers_and_scale", pre_growth_loss, post_growth_loss, wandb_run, total_steps)
-    
-    phase3_steps = config["training"]["phase3_steps"]
-    print(f"\n🚀 Training scaled model for {phase3_steps} steps...")
-    
-    phase3_loss = train_phase(
-        model=model,
-        dataloader=dataloader,
-        num_steps=phase3_steps,
-        start_step=total_steps,
-        learning_rate=config["training"]["learning_rate"] * 0.25,
-        weight_decay=config["training"]["weight_decay"],
-        warmup_steps=50,
-        max_grad_norm=config["training"]["max_grad_norm"],
-        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
-        log_every=config["training"]["log_every"],
-        checkpoint_every=config["training"]["checkpoint_every"],
-        save_dir=config["training"]["save_dir"],
-        checkpoint_prefix="phase3_scaled",
-        device=device,
-        wandb_run=wandb_run,
-    )
-    
-    total_steps += phase3_steps
-    results["phase3_loss"] = phase3_loss
-    print(f"\n✅ Phase 3 complete! Loss: {phase3_loss:.4f}")
-    
-    # Clear memory
-    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+    if resume_phase <= 3:
+        print("\n" + "=" * 70)
+        print("📌 PHASE 3: Add Ghost Layers + Scale Hidden Dimension")
+        print("=" * 70)
+        
+        pre_growth_loss = measure_loss(model, dataloader, device)
+        
+        # Step 3a: Add ghost layers
+        layer_config = config["growth"]["add_layers"]
+        print(f"\n🔧 Adding {layer_config['num_new_layers']} ghost layers...")
+        model = add_layers(
+            model,
+            num_new_layers=layer_config["num_new_layers"],
+            init_mode=layer_config["init_mode"],
+        )
+        
+        # Step 3b: Scale hidden dimension
+        dim_config = config["growth"]["scale_hidden_dim"]
+        print(f"\n🔧 Scaling hidden dimension to {dim_config['new_hidden_size']}...")
+        model = scale_hidden_dim(
+            model,
+            new_hidden_size=dim_config["new_hidden_size"],
+            new_intermediate_size=dim_config.get("new_intermediate_size"),
+            padding_mode=dim_config.get("padding_mode", "noise"),
+            noise_scale=dim_config.get("noise_scale", 0.01),
+        )
+        
+        post_growth_loss = measure_loss(model, dataloader, device)
+        results["phase3_delta"] = log_transition("layers_and_scale", pre_growth_loss, post_growth_loss, wandb_run, total_steps)
+        
+        phase3_steps = config["training"]["phase3_steps"]
+        print(f"\n🚀 Training scaled model for {phase3_steps} steps...")
+        
+        phase3_loss = train_phase(
+            model=model,
+            dataloader=dataloader,
+            num_steps=phase3_steps,
+            start_step=total_steps,
+            learning_rate=config["training"]["learning_rate"] * 0.25,
+            weight_decay=config["training"]["weight_decay"],
+            warmup_steps=50,
+            max_grad_norm=config["training"]["max_grad_norm"],
+            gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+            log_every=config["training"]["log_every"],
+            checkpoint_every=config["training"]["checkpoint_every"],
+            save_dir=config["training"]["save_dir"],
+            checkpoint_prefix="phase3_scaled",
+            device=device,
+            wandb_run=wandb_run,
+        )
+        
+        total_steps += phase3_steps
+        results["phase3_loss"] = phase3_loss
+        print(f"\n✅ Phase 3 complete! Loss: {phase3_loss:.4f}")
+        
+        # Clear memory
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
     
     # =========================================================================
     # PHASE 4: Expert Explosion
     # =========================================================================
-    print("\n" + "=" * 70)
-    print("📌 PHASE 4: Expert Explosion (×Experts)")
-    print("=" * 70)
-    
-    pre_expert_loss = measure_loss(model, dataloader, device)
-    
-    expert_config = config["growth"]["add_experts"]
-    print(f"\n🔧 Adding {expert_config['num_new_experts']} new experts per layer...")
-    model = add_experts(
-        model,
-        num_new_experts=expert_config["num_new_experts"],
-        clone_from=expert_config["clone_from"],
-    )
-    
-    post_expert_loss = measure_loss(model, dataloader, device)
-    results["phase4_delta"] = log_transition("expert_explosion", pre_expert_loss, post_expert_loss, wandb_run, total_steps)
-    
-    phase4_steps = config["training"]["phase4_steps"]
-    print(f"\n🚀 Training with more experts for {phase4_steps} steps...")
-    
-    phase4_loss = train_phase(
-        model=model,
-        dataloader=dataloader,
-        num_steps=phase4_steps,
-        start_step=total_steps,
-        learning_rate=config["training"]["learning_rate"] * 0.125,
-        weight_decay=config["training"]["weight_decay"],
-        warmup_steps=50,
-        max_grad_norm=config["training"]["max_grad_norm"],
-        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
-        log_every=config["training"]["log_every"],
-        checkpoint_every=config["training"]["checkpoint_every"],
-        save_dir=config["training"]["save_dir"],
-        checkpoint_prefix="phase4_experts",
-        device=device,
-        wandb_run=wandb_run,
-    )
-    
-    total_steps += phase4_steps
-    results["phase4_loss"] = phase4_loss
-    print(f"\n✅ Phase 4 complete! Loss: {phase4_loss:.4f}")
+    if resume_phase <= 4:
+        print("\n" + "=" * 70)
+        print("📌 PHASE 4: Expert Explosion (×Experts)")
+        print("=" * 70)
+        
+        pre_expert_loss = measure_loss(model, dataloader, device)
+        
+        expert_config = config["growth"]["add_experts"]
+        print(f"\n🔧 Adding {expert_config['num_new_experts']} new experts per layer...")
+        model = add_experts(
+            model,
+            num_new_experts=expert_config["num_new_experts"],
+            clone_from=expert_config["clone_from"],
+        )
+        
+        post_expert_loss = measure_loss(model, dataloader, device)
+        results["phase4_delta"] = log_transition("expert_explosion", pre_expert_loss, post_expert_loss, wandb_run, total_steps)
+        
+        phase4_steps = config["training"]["phase4_steps"]
+        print(f"\n🚀 Training with more experts for {phase4_steps} steps...")
+        
+        phase4_loss = train_phase(
+            model=model,
+            dataloader=dataloader,
+            num_steps=phase4_steps,
+            start_step=total_steps,
+            learning_rate=config["training"]["learning_rate"] * 0.125,
+            weight_decay=config["training"]["weight_decay"],
+            warmup_steps=50,
+            max_grad_norm=config["training"]["max_grad_norm"],
+            gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+            log_every=config["training"]["log_every"],
+            checkpoint_every=config["training"]["checkpoint_every"],
+            save_dir=config["training"]["save_dir"],
+            checkpoint_prefix="phase4_experts",
+            device=device,
+            wandb_run=wandb_run,
+        )
+        
+        total_steps += phase4_steps
+        results["phase4_loss"] = phase4_loss
+        print(f"\n✅ Phase 4 complete! Loss: {phase4_loss:.4f}")
     
     # =========================================================================
     # PHASE 5: YaRN Context Extension ("Sandwich Protocol")
@@ -469,6 +571,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Growth Experiment (5 Phases including YaRN)")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Config file")
     parser.add_argument("--wandb", action="store_true", help="Enable WandB logging")
+    parser.add_argument("--resume-phase", type=int, default=0, choices=[0, 1, 2, 3, 4, 5],
+                        help="Resume from phase N (loads checkpoint from end of phase N-1). 0=start fresh")
     args = parser.parse_args()
     
-    results = run_experiment(args.config, args.wandb)
+    results = run_experiment(args.config, args.wandb, args.resume_phase)
