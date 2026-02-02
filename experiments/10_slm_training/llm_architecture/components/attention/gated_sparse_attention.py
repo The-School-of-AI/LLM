@@ -25,6 +25,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from typing import Optional, Tuple
+import torch.utils.checkpoint as checkpoint
 
 # Import RoPE if available
 try:
@@ -385,6 +386,7 @@ class GatedSparseAttention(nn.Module):
         self.layer_idx = layer_idx
         self.attention_dropout = attention_dropout
         self.scale = 1.0 / math.sqrt(head_dim)
+        self.gradient_checkpointing = False
         
         # Indexer parameters
         self.indexer_dim = indexer_dim
@@ -437,6 +439,12 @@ class GatedSparseAttention(nn.Module):
             batch, num_kv_heads, n_rep, seq_len, head_dim
         )
         return hidden_states.reshape(batch, num_kv_heads * n_rep, seq_len, head_dim)
+
+    def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs=None):
+        """
+        Activates gradient checkpointing for the current model.
+        """
+        self.gradient_checkpointing = True
     
     def forward(
         self,
@@ -521,98 +529,111 @@ class GatedSparseAttention(nn.Module):
         # selected_indices: [batch, seq_q, k_max_used]
         # k_t: [batch, seq_q] (variable per token)
         # valid_k_mask: [batch, seq_q, k_max_used]
-        
-    # ==================== Step 5: Chunked Sparse SDPA ====================
-        # We process the sequence in chunks to ensure memory usage is O(chunk_size * k)
-        # instead of O(seq_len * k).
-        
-        chunk_size = 64  # Small chunk size to keep memory low
+           
+
+        # ==================== Step 5: Chunked Sparse SDPA (with Checkpointing) ====================
+        chunk_size = 64
         attn_outputs = []
 
-        # We need to flatten Batch and Heads for efficient indexing
-        # key_states_expanded: [Batch, Heads, Total_KV, D] -> [B*H, Total_KV, D]
-        # value_states_expanded: [Batch, Heads, Total_KV, D] -> [B*H, Total_KV, D]
+        # 1. Flatten K/V once (Shared across all chunks)
         k_flat = key_states_expanded.flatten(0, 1)
         v_flat = value_states_expanded.flatten(0, 1)
         
-        # Pre-calculate row indices for advanced indexing: [[0], [1], ... [B*H-1]]
-        # This tells PyTorch: "For the 0th head, use the 0th set of indices..."
+        # Pre-calculate row indices: [[0], [1], ... [B*H-1]]
         batch_head_idx = torch.arange(k_flat.size(0), device=k_flat.device).unsqueeze(1)
 
-        for i in range(0, seq_len, chunk_size):
-            end = min(i + chunk_size, seq_len)
-            current_chunk_len = end - i
+        # 2. Define the function to process ONE chunk
+        # This function contains the logic that will be re-run during backward pass
+        def compute_chunk_attention(q_c, idx_c, valid_c, am_c, i_start):
+            # q_c: [B, H, chunk, D]
+            # idx_c: [B, chunk, k]
+            # valid_c: [B, chunk, k]
             
-            # 1. Slice Query for this chunk: [Batch, Heads, chunk, D]
-            q_chunk = query_states[:, :, i:end, :]
+            # A. Expand dims for Heads
+            current_chunk_len = q_c.size(2)
+            k_val = idx_c.size(-1)
             
-            # 2. Slice sparse indices/mask for this chunk.
-            # selected_indices: [B, L, k], valid_k_mask: [B, L, k]
-            idx_chunk = selected_indices[:, i:end, :]  # [B, chunk, k]
-            valid_chunk = valid_k_mask[:, i:end, :]    # [B, chunk, k]
-            k_val = idx_chunk.size(-1)
-            idx_chunk_h = idx_chunk[:, None, :, :].expand(batch_size, self.num_heads, current_chunk_len, k_val)
-            valid_chunk_h = valid_chunk[:, None, :, :].expand(batch_size, self.num_heads, current_chunk_len, k_val)
+            idx_chunk_h = idx_c[:, None, :, :].expand(batch_size, self.num_heads, current_chunk_len, k_val)
+            valid_chunk_h = valid_c[:, None, :, :].expand(batch_size, self.num_heads, current_chunk_len, k_val)
 
-            # 3. Flatten indices to match the flattened Keys: [B*H, chunk * k]
-            # We reshape to [B*H, -1] so we can grab all keys for this chunk in one go
+            # B. Flatten indices & Gather
             idx_flat = idx_chunk_h.flatten(0, 1).reshape(k_flat.size(0), -1)
-
-            # 4. ADVANCED INDEXING (The efficient part)
-            # Instead of torch.gather, we use direct integer indexing.
-            # We grab the specific keys defined by idx_flat from k_flat.
-            # Result: [B*H, chunk*k, D]
+            
             k_selected_flat = k_flat[batch_head_idx, idx_flat]
             v_selected_flat = v_flat[batch_head_idx, idx_flat]
 
-            # 5. Reshape back to 5D for Attention Math
-            # [Batch, Heads, chunk, k, D]
             k_selected = k_selected_flat.view(batch_size, self.num_heads, current_chunk_len, k_val, self.head_dim)
             v_selected = v_selected_flat.view(batch_size, self.num_heads, current_chunk_len, k_val, self.head_dim)
 
-            # 6. Compute Attention Scores: Q * K^T
-            # q_chunk: [B, H, chunk, D]
-            # k_selected: [B, H, chunk, k, D]
-            # We want dot product along D. Result: [B, H, chunk, k]
-            attn_scores = torch.einsum('bhqd,bhqkd->bhqk', q_chunk, k_selected) * self.scale
-
-            # Mask padded slots from variable k per token
+            # C. Attention Scores
+            attn_scores = torch.einsum('bhqd,bhqkd->bhqk', q_c, k_selected) * self.scale
+            
+            # D. Masking
+            # Pad Mask
             attn_scores = attn_scores.masked_fill(~valid_chunk_h, float('-inf'))
-
-            # Causal mask in gathered space (key position must be <= query position)
+            
+            # Causal Mask (Re-computed here to save memory)
             kv_offset = kv_seq_len - seq_len
-            qpos = (kv_offset + torch.arange(i, end, device=hidden_states.device))[None, None, :, None]
-            causal_invalid = idx_chunk_h > qpos
+            # Calculate absolute query positions for this specific chunk
+            chunk_qpos = (kv_offset + torch.arange(i_start, i_start + current_chunk_len, device=q_c.device))[None, None, :, None]
+            causal_invalid = idx_chunk_h > chunk_qpos
             attn_scores = attn_scores.masked_fill(causal_invalid, float('-inf'))
 
-            # Add provided additive mask gathered on selected key indices
-            if attention_mask is not None and attention_mask.dim() == 4:
-                am = attention_mask
-                if am.size(0) == 1 and batch_size > 1:
-                    am = am.expand(batch_size, -1, -1, -1)
-                am_chunk = am[:, :, i:end, :]  # [B, 1, chunk, kv_seq_len]
+            # Attention Mask (if provided)
+            if am_c is not None:
+                # Gather specific mask values for these sparse indices
                 am_sel = torch.gather(
-                    am_chunk,
+                    am_c,
                     dim=-1,
-                    index=idx_chunk[:, None, :, :].expand(batch_size, am_chunk.size(1), current_chunk_len, k_val),
-                )  # [B, 1, chunk, k]
-                attn_scores = attn_scores + am_sel.expand(batch_size, self.num_heads, current_chunk_len, k_val)
+                    index=idx_chunk_h[:, :1, :, :] # Use head 0 indices for mask gather
+                )
+                attn_scores = attn_scores + am_sel
 
-            # 7. Apply Softmax
-            attn_probs = F.softmax(attn_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+            # E. Softmax & Output
+            attn_probs = F.softmax(attn_scores, dim=-1, dtype=torch.float32).to(q_c.dtype)
             attn_probs = F.dropout(attn_probs, p=self.attention_dropout, training=self.training)
             
-            # 8. Compute Output: Probs * V
-            # attn_probs: [B, H, chunk, k]
-            # v_selected: [B, H, chunk, k, D]
-            # Weighted sum along 'k' dimension. Result: [B, H, chunk, D]
-            chunk_output = torch.einsum('bhqk,bhqkd->bhqd', attn_probs, v_selected)
+            out = torch.einsum('bhqk,bhqkd->bhqd', attn_probs, v_selected)
+            return out
+
+        # 3. The Loop
+        for i in range(0, seq_len, chunk_size):
+            end = min(i + chunk_size, seq_len)
+            
+            # Slice Inputs
+            q_chunk = query_states[:, :, i:end, :]
+            idx_chunk = selected_indices[:, i:end, :]
+            valid_chunk = valid_k_mask[:, i:end, :]
+            
+            # Handle Attention Mask Slicing
+            am_chunk = None
+            if attention_mask is not None and attention_mask.dim() == 4:
+                # Expand mask once if needed
+                if attention_mask.size(0) == 1 and batch_size > 1:
+                     attention_mask = attention_mask.expand(batch_size, -1, -1, -1)
+                am_chunk = attention_mask[:, :, i:end, :]
+
+            # 4. CALL WITH CHECKPOINT
+            # usage of use_reentrant=False is recommended for newer PyTorch
+            if self.training and self.gradient_checkpointing:
+                chunk_output = checkpoint.checkpoint(
+                    compute_chunk_attention,
+                    q_chunk, 
+                    idx_chunk, 
+                    valid_chunk, 
+                    am_chunk,
+                    i, # Pass integer i as arg
+                    use_reentrant=False 
+                )
+            else:
+                # Standard call for inference (no overhead)
+                chunk_output = compute_chunk_attention(
+                    q_chunk, idx_chunk, valid_chunk, am_chunk, i
+                )
             
             attn_outputs.append(chunk_output)
 
-        # Concatenate all chunks back together: [Batch, Heads, Seq_Len, D]
         attn_output = torch.cat(attn_outputs, dim=2)
-
 
         # ==================== Step 6: Output Gate (G1) ====================
         # O^{gated} = O^{sparse} ⊙ σ(h · W_O^g)

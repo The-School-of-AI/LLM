@@ -135,6 +135,9 @@ class LLM(nn.Module):
         print(f"  Position: {config.position.position_type.value}")
         print(f"  MTP: {config.head.use_multi_token_prediction}")
         
+        # HF-style compatibility flag used by training scripts.
+        self.gradient_checkpointing = False
+        
     def _init_weights(self, module: nn.Module):
         """Initialize weights."""
         if isinstance(module, nn.Linear):
@@ -151,6 +154,64 @@ class LLM(nn.Module):
     def set_input_embeddings(self, value: nn.Module):
         """Set input embedding layer."""
         self.embed_tokens = value
+    
+    def gradient_checkpointing_enable(
+        self,
+        gradient_checkpointing_kwargs: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """
+        Enable gradient checkpointing on supported submodules.
+        
+        Returns:
+            Number of submodules toggled.
+        """
+        enabled = 0
+        
+        for module in self.modules():
+            if module is self:
+                continue
+            
+            enable_fn = getattr(module, "gradient_checkpointing_enable", None)
+            if callable(enable_fn):
+                try:
+                    enable_fn(gradient_checkpointing_kwargs=gradient_checkpointing_kwargs)
+                except TypeError:
+                    enable_fn()
+                enabled += 1
+                continue
+            
+            if hasattr(module, "gradient_checkpointing"):
+                module.gradient_checkpointing = True
+                enabled += 1
+        
+        self.gradient_checkpointing = enabled > 0
+        return enabled
+    
+    def gradient_checkpointing_disable(self) -> int:
+        """
+        Disable gradient checkpointing on supported submodules.
+        
+        Returns:
+            Number of submodules toggled.
+        """
+        disabled = 0
+        
+        for module in self.modules():
+            if module is self:
+                continue
+            
+            disable_fn = getattr(module, "gradient_checkpointing_disable", None)
+            if callable(disable_fn):
+                disable_fn()
+                disabled += 1
+                continue
+            
+            if hasattr(module, "gradient_checkpointing"):
+                module.gradient_checkpointing = False
+                disabled += 1
+        
+        self.gradient_checkpointing = False
+        return disabled
     
     def _prepare_attention_mask(
         self,

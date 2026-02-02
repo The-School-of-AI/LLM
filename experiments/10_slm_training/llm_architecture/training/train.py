@@ -247,6 +247,7 @@ class Trainer:
         # Device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
+        model.gradient_checkpointing_enable()
         
         # Optimizer
         self.optimizer = self._create_optimizer()
