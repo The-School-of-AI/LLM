@@ -68,23 +68,18 @@ class CurriculumTagger:
 
             try:
                 # Auto-import from metrics package
-                # Convention: class DifficultyMetric in difficulty.py
-                # Handle CamelCase to snake_case conversion for multi-word metrics
+                # If module is explicitly provided in config, use it
+                module_name = metric_def.get("module")
                 
-                # 1. Remove 'Metric' suffix if present
-                base_name = class_name
-                if base_name.endswith("Metric"):
-                    base_name = base_name[:-6]
-                
-                # 2. Convert to snake_case
-                # Handle acronyms: CoTScanner -> cot_scanner
-                # Look for uppercase followed by lowercase (start of new word) OR
-                # Look for uppercase followed by uppercase (acronym)
-                import re
-                # Insert underscore between lower and upper
-                s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', base_name)
-                # Insert underscore between lower/digit and upper
-                module_name = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+                if not module_name:
+                    # Fallback convention: class DifficultyMetric in difficulty.py
+                    # Simple heuristic: remove "Metric" and lowercase
+                    # This covers standard cases like DifficultyMetric -> difficulty
+                    # Complex cases should specify 'module' in config
+                    base_name = class_name
+                    if base_name.endswith("Metric"):
+                        base_name = base_name[:-6]
+                    module_name = base_name.lower()
                 
                 module_path = f"curriculum_tags.metrics.{module_name}"
 
