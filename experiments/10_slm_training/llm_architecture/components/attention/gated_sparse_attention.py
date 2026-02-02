@@ -594,9 +594,9 @@ class GatedSparseAttention(nn.Module):
                 am_sel = torch.gather(
                     am_chunk,
                     dim=-1,
-            else:
-                # If user passes a different mask format, fall back to no-op rather than crash.
-                pass
+                    index=idx_chunk[:, None, :, :].expand(batch_size, am_chunk.size(1), current_chunk_len, k_val),
+                )  # [B, 1, chunk, k]
+                attn_scores = attn_scores + am_sel.expand(batch_size, self.num_heads, current_chunk_len, k_val)
 
             # 7. Apply Softmax
             attn_probs = F.softmax(attn_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
@@ -606,9 +606,9 @@ class GatedSparseAttention(nn.Module):
             # attn_probs: [B, H, chunk, k]
             # v_selected: [B, H, chunk, k, D]
             # Weighted sum along 'k' dimension. Result: [B, H, chunk, D]
-        # Softmax over selected keys
-        attn_weights = F.softmax(attn_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
-        attn_weights = F.dropout(attn_weights, p=self.attention_dropout, training=self.training)
+            chunk_output = torch.einsum('bhqk,bhqkd->bhqd', attn_probs, v_selected)
+            
+            attn_outputs.append(chunk_output)
 
         # Concatenate all chunks back together: [Batch, Heads, Seq_Len, D]
         attn_output = torch.cat(attn_outputs, dim=2)
