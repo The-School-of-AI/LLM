@@ -70,6 +70,14 @@ def main():
             read = tags["readability"]
             print(f"   Readability: Grade {read['flesch_kincaid_grade']}")
 
+        if "entropy" in tags:
+            ent = tags["entropy"]
+            print(f"   Entropy: {ent['score']}")
+
+        if "diversity" in tags:
+            div = tags["diversity"]
+            print(f"   Diversity: {div['rare_ratio']} (tokens: {div['token_count']})")
+
 
 if __name__ == "__main__":
     main()

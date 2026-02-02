@@ -18,6 +18,14 @@ metrics:
     class: ReadabilityMetric
     enabled: true
 
+  - name: entropy
+    class: EntropyMetric
+    enabled: true
+
+  - name: diversity
+    class: DiversityMetric
+    enabled: true
+
 # To add a new metric:
 # 1. Create YourMetric class in src/curriculum_tags/metrics/your_metric.py
 # 2. Add entry here:
