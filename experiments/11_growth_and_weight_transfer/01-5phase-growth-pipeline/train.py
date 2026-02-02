@@ -101,7 +101,7 @@ def load_checkpoint(
         dataloader_state = checkpoint["dataloader_state"]
         if "rng_state" in dataloader_state:
             torch.set_rng_state(dataloader_state["rng_state"])
-            print(f"  🔄 Restored RNG state for dataloader")
+            print("  🔄 Restored RNG state for dataloader")
     
     print(f"  📂 Loaded checkpoint from step {checkpoint['step']}")
     return checkpoint

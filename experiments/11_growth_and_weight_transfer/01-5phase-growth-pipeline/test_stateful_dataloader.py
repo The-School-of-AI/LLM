@@ -21,7 +21,7 @@ data_iter = iter(dataloader)
 for i in range(25):  # 25 batches × 4 = 100 samples
     batch = next(data_iter)
     
-print(f"✓ Processed 100 samples")
+print("✓ Processed 100 samples")
 print(f"  Dataset state: {dataset.state_dict()}")
 samples_seen = dataset.state_dict()["samples_seen"]
 
@@ -40,11 +40,11 @@ print(f"✓ Created dataloader with skip_samples={samples_seen}")
 # Get first batch from resumed dataloader
 data_iter2 = iter(dataloader2)
 batch = next(data_iter2)
-print(f"✓ Got first batch after skipping")
+print("✓ Got first batch after skipping")
 print(f"  New dataset state: {dataset2.state_dict()}")
 
 # Test 3: Verify checkpoint saving
-print(f"\n📋 Test 3: Simulate checkpoint save/load")
+print("\n📋 Test 3: Simulate checkpoint save/load")
 checkpoint = {
     "step": 25,
     "dataloader_state": dataset.state_dict(),
@@ -58,7 +58,7 @@ print("✅ ALL TESTS PASSED!")
 print("=" * 60)
 
 # Test 4: Verify we actually got DIFFERENT data after skipping
-print(f"\n📋 Test 4: Verify data is actually different after skip")
+print("\n📋 Test 4: Verify data is actually different after skip")
 
 # Get first batch from fresh dataloader
 dl_fresh, _ = get_dataloader(

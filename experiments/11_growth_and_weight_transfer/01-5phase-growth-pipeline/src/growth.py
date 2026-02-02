@@ -332,7 +332,7 @@ def scale_hidden_dim(
     print(f"  - Heads: {old_num_heads} → {new_num_heads} (head_dim={head_dim} PRESERVED)")
     print(f"  - KV Heads: {old_num_kv_heads} → {new_num_kv_heads}")
     print(f"  - Intermediate: {old_intermediate} → {new_intermediate_size}")
-    print(f"  - Strategy: ADD HEADS (RoPE-safe, zero-spike)")
+    print("  - Strategy: ADD HEADS (RoPE-safe, zero-spike)")
     print(f"  - New parameter count: {new_model.num_parameters():,}")
     
     return new_model
@@ -454,7 +454,7 @@ def scale_context_length(
     # Update config
     model.config.max_position_embeddings = new_max_length
     
-    print(f"✓ Extended context length using YaRN")
+    print("✓ Extended context length using YaRN")
     print(f"  - Context: {old_max_length} → {new_max_length} ({scale:.1f}x)")
     print(f"  - Method: NTK-by-parts (α={alpha}, β={beta})")
     print(f"  - Attention scale: {yarn_rope.attention_scale:.4f}")

@@ -436,7 +436,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             )
             results["phase2_loss"] = phase2_loss
         else:
-            print(f"\n⏭️  Phase 2 already complete")
+            print("\n⏭️  Phase 2 already complete")
             phase2_loss = 0.0
         
         total_steps = config["training"]["phase1_steps"] + config["training"]["phase2_steps"]
@@ -647,7 +647,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     results["phase5_final_long_loss"] = final_long_loss
     results["phase5_capability_gain"] = capability_gain
     
-    print(f"\n✅ Phase 5 complete!")
+    print("\n✅ Phase 5 complete!")
     print(f"  Short context preserved: {yarn_delta:+.4f}")
     print(f"  Long context capability: {initial_long_loss:.4f} → {final_long_loss:.4f} ({capability_gain:+.4f})")
     

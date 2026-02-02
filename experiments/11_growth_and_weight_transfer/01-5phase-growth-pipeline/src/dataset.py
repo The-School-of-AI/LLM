@@ -242,12 +242,11 @@ class TinyShakespeareDataset(Dataset):
         """Download or load cached text."""
         import os
         import urllib.request
-        
         os.makedirs(self.cache_dir, exist_ok=True)
         cache_path = os.path.join(self.cache_dir, "tiny_shakespeare.txt")
         
         if not os.path.exists(cache_path):
-            print(f"  ⬇️  Downloading TinyShakespeare...")
+            print("  ⬇️  Downloading TinyShakespeare...")
             urllib.request.urlretrieve(self.URL, cache_path)
         
         with open(cache_path, "r", encoding="utf-8") as f:
