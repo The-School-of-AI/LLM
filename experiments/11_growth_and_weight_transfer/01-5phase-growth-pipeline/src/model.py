@@ -23,7 +23,7 @@ class SmolLM2Config:
     vocab_size: int = 49152
     hidden_size: int = 576
     intermediate_size: int = 1536
-    num_hidden_layers: int = 12  # Reduced from 30 for ~100M params
+    num_hidden_layers: int = 12  # Reduced for faster experiments (~70M params)
     num_attention_heads: int = 9
     num_key_value_heads: int = 3  # GQA: 3 KV heads shared by 9 Q heads
     max_position_embeddings: int = 2048
