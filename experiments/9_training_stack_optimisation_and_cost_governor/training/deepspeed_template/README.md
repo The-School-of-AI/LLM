@@ -63,6 +63,7 @@ This template has been tested and verified on AWS g4dn.12xlarge instances (4x Te
 - **Reproducibility**: Configurable random seed for reproducible experiments
 - **Data Loading**: Pre-built tokenization and data loading utilities
 - **Comprehensive Testing**: CPU and GPU test suites for validation
+- **Custom Model Support**: Built-in Qwen2 MoE architecture with 8 experts and gradient checkpointing
 
 ## 📋 Requirements
 
@@ -121,6 +122,28 @@ Or specify number of GPUs:
 ```bash
 deepspeed --num_gpus=4 main.py --deepspeed_config config/deepspeed/zero-2.json
 ```
+
+### Training with Custom Qwen2 MoE Model
+
+Train a custom 8-expert Mixture of Experts model from scratch:
+
+```bash
+deepspeed --num_gpus=4 main.py \
+    --use_qwen2_moe \
+    --deepspeed_config config/deepspeed/zero-3.json \
+    --batch_size 8 \
+    --max_length 512 \
+    --num_epochs 3
+```
+
+**Model Specifications:**
+- **Architecture**: Qwen2 with Mixture of Experts (MoE)
+- **Parameters**: ~300M trainable parameters
+- **Experts**: 8 experts, 2 active per token
+- **Hidden Size**: 768
+- **Layers**: 20
+- **Attention**: Grouped-query attention (12 heads, 4 KV heads)
+- **Features**: Gradient checkpointing enabled for memory efficiency
 
 ### Advanced Training (ZeRO Stage 3)
 
@@ -228,6 +251,7 @@ uv add pytest
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--model_name` | `distilgpt2` | HuggingFace model name |
+| `--use_qwen2_moe` | `False` | Use custom Qwen2 MoE model (8 experts, 300M params) |
 | `--dataset_name` | `wikitext` | Dataset name |
 | `--dataset_config` | `wikitext-2-raw-v1` | Dataset configuration |
 | `--batch_size` | `8` | Training batch size |
@@ -280,6 +304,16 @@ uv add pytest
 - Model state gathering for checkpointing
 
 ## 🔧 Module Details
+
+### `src/model.py`
+
+Model loading and initialization utilities:
+- `get_model()`: Loads pretrained models from HuggingFace Hub
+- `get_qwen2_moe_model()`: Creates custom Qwen2 MoE model from scratch with:
+  - 8 experts with 2 active per token
+  - Grouped-query attention for efficiency
+  - Gradient checkpointing enabled
+  - Router auxiliary loss for load balancing
 
 ### `src/data.py`
 
@@ -381,7 +415,22 @@ python main.py \
     --max_eval_steps 20
 ```
 
-### 2. Full Training with Checkpointing (Multi-GPU)
+### 2. Training Qwen2 MoE from Scratch (Multi-GPU)
+
+```bash
+# Train custom MoE model on 4 GPUs with checkpointing
+deepspeed --num_gpus=4 main.py \
+    --use_qwen2_moe \
+    --deepspeed_config config/deepspeed/zero-3.json \
+    --num_epochs 5 \
+    --batch_size 8 \
+    --max_length 1024 \
+    --save_checkpoint \
+    --output_dir ./checkpoints/qwen2_moe_run1 \
+    --seed 42
+```
+
+### 3. Full Training with Checkpointing (Multi-GPU)
 
 ```bash
 # Train and save checkpoint on 4 GPUs
@@ -393,7 +442,7 @@ deepspeed --num_gpus=4 main.py \
     --output_dir ./checkpoints/run1
 ```
 
-### 3. Custom Model Training (Multi-GPU)
+### 4. Custom Model Training (Multi-GPU)
 
 ```bash
 # Train a different model on all available GPUs

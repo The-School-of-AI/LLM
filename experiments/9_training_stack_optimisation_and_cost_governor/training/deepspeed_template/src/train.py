@@ -8,6 +8,8 @@ for training language models with DeepSpeed optimization.
 import torch
 from tqdm import tqdm
 
+from .utils import is_main_process, print_rank_0
+
 
 def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=10):
     """
@@ -27,7 +29,12 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
     total_loss = 0
     steps = 0
 
-    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}")
+    # Only show progress bar on main process
+    progress_bar = tqdm(
+        train_loader, 
+        desc=f"Epoch {epoch}",
+        disable=not is_main_process()
+    )
 
     for i, batch in enumerate(progress_bar):
         # Move batch to device
@@ -54,14 +61,14 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
 
         # Log periodically
         if i % log_interval == 0:
-            print(f"Epoch {epoch}, Step {i}, Loss: {loss.item():.4f}")
+            print_rank_0(f"Epoch {epoch}, Step {i}, Loss: {loss.item():.4f}")
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
             break
 
     avg_loss = total_loss / steps
-    print(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
+    print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
 
     return avg_loss
 
@@ -84,7 +91,12 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     total_perplexity = 0
     steps = 0
 
-    progress_bar = tqdm(data_loader, desc=phase)
+    # Only show progress bar on main process
+    progress_bar = tqdm(
+        data_loader, 
+        desc=phase,
+        disable=not is_main_process()
+    )
 
     with torch.no_grad():
         for i, batch in enumerate(progress_bar):
@@ -114,7 +126,7 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     avg_loss = total_loss / steps
     avg_perplexity = total_perplexity / steps
 
-    print(f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}")
+    print_rank_0(f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}")
 
     return avg_loss, avg_perplexity
 
@@ -145,44 +157,50 @@ def generate_text(
     """
     model_engine.eval()
 
-    print(f'\nGenerating text from prompt: "{prompt}"')
+    print_rank_0(f'\nGenerating text from prompt: "{prompt}"')
 
     # Tokenize prompt
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"].to(model_engine.device)
     attention_mask = inputs["attention_mask"].to(model_engine.device)
 
-    print(f"Input tokens: {input_ids.shape[1]}")
+    print_rank_0(f"Input tokens: {input_ids.shape[1]}")
 
-    # Generate
-    with torch.no_grad():
-        output_ids = model_engine.module.generate(
-            input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            num_return_sequences=1,
-            do_sample=True,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            no_repeat_ngram_size=2,
-            pad_token_id=tokenizer.eos_token_id,
+    # Generate (only on rank 0 to avoid redundant generation)
+    if is_main_process():
+        with torch.no_grad():
+            output_ids = model_engine.module.generate(
+                input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=max_new_tokens,
+                num_return_sequences=1,
+                do_sample=True,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                no_repeat_ngram_size=2,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+
+        # Decode
+        input_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
+        full_output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+
+        # Extract generated portion
+        generated_text = (
+            full_output[len(input_text) :].strip()
+            if len(full_output) > len(input_text)
+            else ""
         )
 
-    # Decode
-    input_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
-    full_output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-
-    # Extract generated portion
-    generated_text = (
-        full_output[len(input_text) :].strip()
-        if len(full_output) > len(input_text)
-        else ""
-    )
-
-    print(f"\nGenerated {output_ids.shape[1] - input_ids.shape[1]} new tokens")
-    print(f"\nFull Output:\n{full_output}")
-    print(f"\nGenerated Continuation:\n{generated_text}")
+        print_rank_0(f"\nGenerated {output_ids.shape[1] - input_ids.shape[1]} new tokens")
+        print_rank_0(f"\nFull Output:\n{full_output}")
+        print_rank_0(f"\nGenerated Continuation:\n{generated_text}")
+    else:
+        # Return empty results for non-main processes
+        input_text = ""
+        full_output = ""
+        generated_text = ""
 
     return {
         "prompt": input_text,
@@ -200,9 +218,9 @@ def save_checkpoint(model_engine, output_dir, tag="final"):
         output_dir: Directory to save checkpoint
         tag: Tag for the checkpoint
     """
-    print(f"Saving checkpoint to {output_dir} with tag '{tag}'")
+    print_rank_0(f"Saving checkpoint to {output_dir} with tag '{tag}'")
     model_engine.save_checkpoint(output_dir, tag=tag)
-    print("Checkpoint saved successfully")
+    print_rank_0("Checkpoint saved successfully")
 
 
 def load_checkpoint(model_engine, checkpoint_dir, tag="final"):
@@ -217,7 +235,7 @@ def load_checkpoint(model_engine, checkpoint_dir, tag="final"):
     Returns:
         The loaded checkpoint metadata
     """
-    print(f"Loading checkpoint from {checkpoint_dir} with tag '{tag}'")
+    print_rank_0(f"Loading checkpoint from {checkpoint_dir} with tag '{tag}'")
     _, client_sd = model_engine.load_checkpoint(checkpoint_dir, tag=tag)
-    print("Checkpoint loaded successfully")
+    print_rank_0("Checkpoint loaded successfully")
     return client_sd
