@@ -558,10 +558,19 @@ class GatedSparseAttention(nn.Module):
         if attention_mask is not None:
             # expected shape: [B, 1, L, kv_seq_len] (or broadcastable)
             if attention_mask.dim() == 4:
+                am = attention_mask
+                # LLM causal mask is often [1, 1, L, T]; broadcast batch if needed.
+                if am.size(0) == 1 and batch_size > 1:
+                    am = am.expand(batch_size, -1, -1, -1)
+                elif am.size(0) != batch_size:
+                    raise ValueError(
+                        f"attention_mask batch mismatch: mask batch={am.size(0)}, "
+                        f"input batch={batch_size}"
+                    )
                 am_sel = torch.gather(
-                    attention_mask,
+                    am,
                     dim=-1,
-                    index=selected_indices[:, None, :, :].expand(batch_size, attention_mask.size(1), seq_len, k_max_used)
+                    index=selected_indices[:, None, :, :].expand(batch_size, am.size(1), seq_len, k_max_used)
                 )  # [B, 1, L, k]
                 attn_scores = attn_scores + am_sel.expand(batch_size, self.num_heads, seq_len, k_max_used)
             else:
