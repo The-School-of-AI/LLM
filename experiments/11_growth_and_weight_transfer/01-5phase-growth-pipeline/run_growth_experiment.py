@@ -220,7 +220,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         
         if checkpoint_path and os.path.exists(checkpoint_path):
             print(f"📂 Loading checkpoint: {checkpoint_path}")
-            checkpoint = torch.load(checkpoint_path, map_location=device)
+            checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
             total_steps = checkpoint["step"]
             
             # Extract samples_seen for dataloader skip

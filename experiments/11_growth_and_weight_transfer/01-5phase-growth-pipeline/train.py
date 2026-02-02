@@ -86,7 +86,7 @@ def load_checkpoint(
     restore_dataloader_state: bool = True,
 ) -> Dict[str, Any]:
     """Load a training checkpoint and optionally restore dataloader state."""
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     
     model.load_state_dict(checkpoint["model_state_dict"])
     
