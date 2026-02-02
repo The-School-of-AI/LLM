@@ -120,4 +120,4 @@ metrics:
 #    - name: your_metric
 #      class: YourMetric
 #      enabled: true
-# 3. The system will auto-discover and use it.
+# 3. The system will auto-discover and use it
