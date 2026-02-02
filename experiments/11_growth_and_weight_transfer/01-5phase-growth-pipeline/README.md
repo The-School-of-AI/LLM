@@ -4,14 +4,17 @@
 
 This experiment implements **5 function-preserving growth mechanisms** for scaling language models without losing learned capabilities. All transformations are designed to minimize loss spikes during architecture changes.
 
-**Final Results (100 steps per phase):**
+**Final Results (100 steps per phase, 500 total):**
 
-| Phase | Operation | Loss Delta | Status |
-|-------|-----------|------------|--------|
-| Phase 2 | Dense → MoE | +0.25 | ✅ STABLE |
-| Phase 3 | +Layers + Scale Dim | +0.09 | ✅ STABLE |
-| Phase 4 | +Experts | +0.12 | ✅ STABLE |
-| Phase 5 | YaRN Context (256→1024) | ~+0.02 | ✅ STABLE |
+| Phase | Operation | Final Loss | Loss Delta | Status |
+|-------|-----------|------------|------------|--------|
+| Phase 1 | Dense Training | 2.0140 | - | ✅ |
+| Phase 2 | Dense → MoE | 1.7076 | +0.2500 | ✅ STABLE |
+| Phase 3 | +Layers + Scale Dim | 1.5228 | +0.0667 | ✅ STABLE |
+| Phase 4 | +Experts (4→8) | 1.4236 | +0.1266 | ✅ STABLE |
+| Phase 5 | YaRN Context (256→1024) | 1.2878 | +0.3706 | ✅ STABLE |
+
+**Final Model:** 667M params, 1024 context length
 
 ---
 
@@ -78,8 +81,8 @@ Train a base SmolLM2-style model (~70M params).
 !rm -rf LLM
 
 # Clone the repo
-!git clone -b p11/feat/growth-dense-to-moe https://github.com/The-School-of-AI/LLM.git
-%cd LLM/experiments/11_growth_and_weight_transfer
+!git clone -b p11/feat/5phase-growth-pipeline https://github.com/The-School-of-AI/LLM.git
+%cd LLM/experiments/11_growth_and_weight_transfer/01-5phase-growth-pipeline
 
 # Install dependencies
 !pip install torch pyyaml datasets -q
@@ -92,8 +95,8 @@ Train a base SmolLM2-style model (~70M params).
 
 ```bash
 # Clone
-git clone -b p11/feat/growth-dense-to-moe https://github.com/The-School-of-AI/LLM.git
-cd LLM/experiments/11_growth_and_weight_transfer
+git clone -b p11/feat/5phase-growth-pipeline https://github.com/The-School-of-AI/LLM.git
+cd LLM/experiments/11_growth_and_weight_transfer/01-5phase-growth-pipeline
 
 # Setup
 python3 -m venv venv && source venv/bin/activate
@@ -163,41 +166,25 @@ training:
 
 ---
 
-## 📊 Expected Output
+## 📊 Actual Output
 
 ```
 ======================================================================
-🧪 GROWTH EXPERIMENT (5 Phases)
-======================================================================
-
-📌 PHASE 1: Dense Model Training
-✅ Phase 1 complete! Loss: 2.01
-
-📌 PHASE 2: Dense → MoE
-✅ Loss delta: +0.25 (STABLE!)
-
-📌 PHASE 3: Add Ghost Layers + Scale Hidden Dimension
-✅ Loss delta: +0.09 (STABLE!)
-
-📌 PHASE 4: Expert Explosion
-✅ Loss delta: +0.12 (STABLE!)
-
-📌 PHASE 5: YaRN Context Extension
-📋 Step 1: 'Do No Harm' Check
-  YaRN impact: +0.02 (✅ PRESERVED!)
-📋 Step 2: Training on Long Context
-  Training for 100 steps...
-📋 Step 3: 'Capability' Check
-  Capability gain: +1.20 (✅ LEARNED!)
-
-======================================================================
 📊 EXPERIMENT SUMMARY
 ======================================================================
-Phase 1 (Dense)          2.01           -
-Phase 2 (MoE)            1.71           +0.25
-Phase 3 (Layers+Scale)   1.51           +0.09
-Phase 4 (×Experts)       1.42           +0.12
-Phase 5 (YaRN Context)   1.60           +0.02
+Total steps trained: 500
+
+Phase                          Final Loss      Transition Δ   
+------------------------------------------------------------
+Phase 1 (Dense)                2.0140          -              
+Phase 2 (MoE)                  1.7076          +0.2500
+Phase 3 (Layers+Scale)         1.5228          +0.0667
+Phase 4 (×Experts)             1.4236          +0.1266
+Phase 5 (YaRN Context)         1.2878          +0.3706
+
+Final model parameters: 667,017,984
+Final context length: 1024
+======================================================================
 
 🎉 SUCCESS: All transitions were STABLE (delta < 0.5)
 ```
