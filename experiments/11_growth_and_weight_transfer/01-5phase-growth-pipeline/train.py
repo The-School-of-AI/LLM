@@ -226,22 +226,23 @@ def train_phase(
                 save_dir, checkpoint_prefix, dataloader_state,
             )
     
-    # Final checkpoint with samples_seen
-    batch_size = dataloader.batch_size or 1
-    steps_taken = step - start_step
-    samples_seen = initial_samples_seen + (steps_taken * batch_size * gradient_accumulation_steps)
-    
-    dataloader_state = {
-        "samples_seen": samples_seen,
-        "rng_state": torch.get_rng_state(),
-    }
-    if dataset is not None and hasattr(dataset, 'state_dict'):
-        dataloader_state.update(dataset.state_dict())
-    
-    save_checkpoint(
-        model, optimizer, scheduler, step, batch_loss,
-        save_dir, checkpoint_prefix, dataloader_state,
-    )
+    # Final checkpoint with samples_seen (skip if already saved at this step)
+    if step % checkpoint_every != 0:
+        batch_size = dataloader.batch_size or 1
+        steps_taken = step - start_step
+        samples_seen = initial_samples_seen + (steps_taken * batch_size * gradient_accumulation_steps)
+        
+        dataloader_state = {
+            "samples_seen": samples_seen,
+            "rng_state": torch.get_rng_state(),
+        }
+        if dataset is not None and hasattr(dataset, 'state_dict'):
+            dataloader_state.update(dataset.state_dict())
+        
+        save_checkpoint(
+            model, optimizer, scheduler, step, batch_loss,
+            save_dir, checkpoint_prefix, dataloader_state,
+        )
     
     return batch_loss
 
