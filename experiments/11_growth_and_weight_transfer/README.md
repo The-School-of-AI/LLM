@@ -7,7 +7,6 @@ This directory contains multiple experiments exploring different approaches to m
 | Folder | Approach | Description |
 |--------|----------|-------------|
 | `01-5phase-growth-pipeline/` | ADD HEADS + Ghost Layers + YaRN | 5-phase growth with RoPE-safe dimension scaling |
-| `02-gstack-bilateral/` | GStack + Bilateral Growth | Depth stacking + weight tiling (TBD) |
 
 ---
 
