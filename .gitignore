@@ -134,4 +134,4 @@ logs/
 /logs
 
 *.pt 
-*.pth
+*.pth*.pem
