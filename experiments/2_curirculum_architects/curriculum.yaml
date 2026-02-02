@@ -5,7 +5,7 @@
 # Any deviation requires escalation + re-freeze.
 # ============================================================
 
-version: "0.1"
+version: "0.2"
 owner_team: "Team 2: Curriculum Architects"
 status: "DRAFT"  # "FROZEN"
 frozen_on: "2026-02-02"
@@ -216,6 +216,8 @@ modalities:
     allowed_languages: ["python", "javascript", "typescript", "c", "cpp", "java"]
   math:
     purpose: "symbolic abstraction"
+  research_papers:
+    purpose: "research papers"
   cot_reasoning:
     purpose: "scaffolded reasoning traces"
   agentic_traces:
