@@ -66,6 +66,7 @@ The pipeline absorbs raw data chunks, scores them for difficulty, removes duplic
     - `audit_visuals.py`: Visualization suite.
 - **data/**: Local directory for input datasets.
 - **output/**: Generated manifests and indices.
+- **tests/**: Unit tests (located in `tests/3_coreset_engineering` at project root).
 
 ## Usage
 
@@ -107,6 +108,12 @@ uv run experiments/3_coreset_engineering/scripts/audit_visuals.py \
 *   `{stage}_band_dist.png`: Difficulty Band Histogram (verifies Band Weights).
 *   `{stage}_modality_dist.png`: Modality Breakdown (verifies Modality Weights).
 *   `{stage}_score_box.png`: Quality Score box-and-whiskers per Band (verifies Bucketing).
+
+### 5. Running Tests
+Run the unit tests specific to this experiment:
+```bash
+uv run --package coreset-engineering pytest tests/3_coreset_engineering
+```
 
 ## Configuration Details (`curriculum.yaml`)
 
