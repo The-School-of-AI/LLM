@@ -21,43 +21,38 @@ We apply "floors" to prevents complex concepts from being misclassified as simpl
 *   **COT Floor**: If `cot_scanner` detects Chain-of-Thought traces, the band is forced to be **at least B3**.
     *   *Example*: A simple "Let's think step by step" explanation written in B1-level English will be bumped to B3.
 
-### 3. General Text Classification (The Core Logic)
-For general text, we use a **Map-and-Validate** approach.
+### 3. Constraint-Based Classification (The Core Logic)
+For general text, we use a **Multi-Constraint Matching** approach. We check if a sample fits the criteria for *any* band, and then apply a **Resolution Policy**.
 
-#### Step A: Primary Mapping
-We take the **Difficulty Level (L0-L5)** from the `DifficultyMetric` and map it to a candidate Band.
+#### Step A: Find Candidate Bands
+A sample is a candidate for a band if it meets ALL of the following:
 
-| Difficulty Level | Candidate Band |
-| :--- | :--- |
-| **L0**, **L1** | **B0** (Nursery) |
-| **L2** | **B1** (Primary) |
-| **L3** | **B2** (High School) |
-| **L4** | **B4** (Graduate) |
-| **L5** | **B5** (PhD) |
+1.  **Difficulty Level**: The sample's L-level (e.g., L2) is in the band's `allowed_difficulty_levels`.
+2.  **Metric Ranges**: The sample's Readability, Difficulty Score, Entropy, and Diversity fall within the band's defined `(min, max)` ranges.
 
-#### Step B: Secondary Validation
-The Candidate Band is NOT guaranteed. The sample must **prove** it belongs there by meeting minimum thresholds for **Entropy**, **Diversity**, and **Readability**.
+**Default Constraints:**
 
-If a sample fails the validation for its Candidate Band, we demote it to the next lower band and check again, recursively.
+| Band | Allowed Levels | Readability Range (FK) | Difficulty Score Range | Entropy Range | Diversity Range |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **B0** | L0, L1 | 0.0 - 6.0 | 0.0 - 0.30 | 0.0 - 4.5 | 0.00 - 0.15 |
+| **B1** | L1, L2, L3 | 4.0 - 10.0 | 0.20 - 0.50 | 3.5 - 5.5 | 0.10 - 0.25 |
+| **B2** | L2, L3, L4 | 8.0 - 14.0 | 0.40 - 0.70 | 4.0 - 6.0 | 0.15 - 0.35 |
+| **B3** | L3, L4 | 12.0 - Inf | 0.60 - 0.85 | 4.5 - Inf | 0.20 - Inf |
+| **B4** | L4, L5 | 14.0 - Inf | 0.75 - Inf | 5.0 - Inf | 0.25 - Inf |
+| **B5** | L5 | 16.0 - Inf | 0.85 - Inf | 5.5 - Inf | 0.30 - Inf |
 
-**Validation Thresholds:**
+#### Step B: Policy Resolution
+If a sample qualifies for multiple bands (e.g., both B1 and B2), we use the configured `overlap_policy`.
 
-| Band | Min Grade (FK) | Min Entropy | Min Diversity |
-| :--- | :--- | :--- | :--- |
-| **B5** | 16.0 | 5.5 | 0.30 |
-| **B4** | 14.0 | 5.0 | 0.25 |
-| **B3** | 12.0 | 4.5 | 0.20 |
-| **B2** | 8.0 | 4.0 | 0.15 |
-| **B1** | 4.0 | 3.5 | 0.10 |
-| **B0** | 0.0 | 0.0 | 0.00 |
+*   **Highest (Default)**: Assign the highest band (e.g., B2).
+*   **Lowest**: Assign the lowest band (e.g., B1).
 
-*   *Example*: Text is **L4** (Candidate B4).
-    *   It has high difficulty words, BUT it is repetitive (Low Diversity: 0.10).
-    *   Check B4: Fails Diversity > 0.25.
-    *   Check B3: Fails Diversity > 0.20.
-    *   Check B2: Fails Diversity > 0.15.
-    *   Check B1: Passes Diversity > 0.10.
-    *   **Final Result**: **B1**.
+#### Example
+Sample: **L2**, FK **9.0**, Diff **0.42**.
+*   **B1 Check**: L2 allowed. FK 9.0 in [4,10]. Diff 0.42 in [0.2, 0.5]. -> **PASS**
+*   **B2 Check**: L2 allowed. FK 9.0 in [8,14]. Diff 0.42 in [0.4, 0.7]. -> **PASS**
+*   **B3 Check**: L3 allowed? No. -> **FAIL**
+*   **Result**: Candidates [B1, B2]. Policy Highest -> **B2**.
 
 ## Configuration
 
