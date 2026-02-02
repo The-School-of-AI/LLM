@@ -1,0 +1,177 @@
+{
+  "model": "70b_moe",
+  "parameters": {
+    "config": {
+      "model": "80L-4096H",
+      "moe": "64E-top4",
+      "intermediate": 11008,
+      "vocab_size": 32000
+    },
+    "per_component": {
+      "embeddings": {
+        "count": "131.07M",
+        "pct_of_total": "0.0%"
+      },
+      "attention": {
+        "q_per_layer": "16.78M",
+        "k_per_layer": "4.19M",
+        "v_per_layer": "4.19M",
+        "o_per_layer": "16.78M",
+        "total_per_layer": "41.94M",
+        "total_all_layers": "3.36B",
+        "pct_of_total": "0.5%"
+      },
+      "router": {
+        "per_layer": "2.15M",
+        "total": "171.79M",
+        "pct_of_total": "0.0%"
+      },
+      "experts": {
+        "single_expert": "135.27M",
+        "shared_per_layer": "541.07M",
+        "routed_per_layer": "8.66B",
+        "shared_total": "43.29B",
+        "routed_total": "692.56B",
+        "pct_shared": "5.8%",
+        "pct_routed": "93.0%"
+      },
+      "gating": {
+        "per_layer": "67.11M",
+        "total": "5.37B",
+        "pct_of_total": "0.7%"
+      },
+      "layernorm": {
+        "per_layer": "16.38K",
+        "total": "1.31M",
+        "pct_of_total": "0.0%"
+      }
+    },
+    "summary": {
+      "total_params": "744.88B",
+      "active_params": "95.60B",
+      "active_ratio": "12.8%",
+      "sparsity": "87.2%"
+    },
+    "raw": {
+      "total_params": 744877020320,
+      "active_params": 95598761120
+    }
+  },
+  "flops": {
+    "config": {
+      "model": "80L-4096H",
+      "moe": "64E-top4",
+      "batch_size": 8,
+      "seq_length": 4096,
+      "num_gpus": 32
+    },
+    "flops_breakdown": {
+      "attention": {
+        "qkv_projection": "1649.27B",
+        "scores": "1099.51B",
+        "softmax": "21.47B",
+        "weighted_sum": "1099.51B",
+        "output_projection": "1099.51B",
+        "total_per_layer": "4969.28B"
+      },
+      "router": {
+        "forward": "140.74B",
+        "topk_selection": "0.79M",
+        "total_per_layer": "140.74B"
+      },
+      "experts": {
+        "shared": "35466.46B",
+        "routed_topk": "35466.46B",
+        "null": "13.42M",
+        "gating": "4402.34B",
+        "combine": "2.15B",
+        "total_per_layer": "75337.43B"
+      },
+      "other": {
+        "layer_norm_per_layer": "1.34B",
+        "embedding": "8589.93B"
+      }
+    },
+    "totals": {
+      "forward_per_token": "196.67B FLOPs",
+      "backward_per_token": "393.34B FLOPs",
+      "total_per_token": "590.01B FLOPs",
+      "forward_per_batch": "6444.49T FLOPs",
+      "total_per_step": "77333.91T FLOPs"
+    },
+    "throughput": {
+      "gpu_capacity": "9984.0 TFLOPS",
+      "theoretical_tokens_per_sec": "16922",
+      "estimated_mfu": "35%",
+      "realistic_tokens_per_sec": "5923",
+      "steps_per_sec": "0.045",
+      "tokens_per_day": "0.51B"
+    }
+  },
+  "memory": {
+    "config": {
+      "model": "80L-4096H",
+      "moe": "64E-top4",
+      "total_params": "744.88B",
+      "num_gpus": 32,
+      "parallelism": "TP=1, PP=4, EP=1, DP=8",
+      "zero_stage": "PARAMETER"
+    },
+    "weights_breakdown": {
+      "embeddings": "0.26 GB",
+      "attention": "6.71 GB",
+      "router": "0.34 GB",
+      "shared_experts": "86.57 GB",
+      "routed_experts": "1385.13 GB",
+      "gating": "10.74 GB",
+      "layernorm": "0.00 GB",
+      "total": "1489.75 GB"
+    },
+    "training_memory": {
+      "weights": "1489.75 GB",
+      "gradients": "1489.75 GB",
+      "optimizer_states": "5959.01 GB",
+      "static_total": "8938.52 GB"
+    },
+    "activations": {
+      "attention": "85.90 GB",
+      "attention_scores_O_S2": "2.68 GB",
+      "ffn_experts": "461.71 GB",
+      "router": "0.41 GB",
+      "total_no_checkpoint": "550.70 GB",
+      "with_checkpoint": "183.57 GB",
+      "flash_attention": "Enabled"
+    },
+    "peak_memory": {
+      "total_single_gpu": "10.016 TB",
+      "buffers": "893.85 GB"
+    },
+    "distributed": {
+      "weights_per_gpu": "46.55 GB",
+      "gradients_per_gpu": "5.82 GB",
+      "optimizer_per_gpu": "186.22 GB",
+      "activations_per_gpu": "45.89 GB",
+      "total_per_gpu": "507.95 GB",
+      "cluster_total": "16.254 TB"
+    },
+    "recommendations": [
+      "\u26a0\ufe0f Per-GPU memory exceeds 80GB. Consider:",
+      "  - Increase pipeline parallelism",
+      "  - Enable ZeRO-3 if not already",
+      "  - Reduce batch size"
+    ]
+  },
+  "diagnostics": {
+    "num_routed_experts": 512,
+    "num_null_experts": 1,
+    "thresholds": {
+      "min_null_junk_rate": 0.6,
+      "max_null_signal_rate": 0.1,
+      "min_entropy": 0.7
+    }
+  },
+  "dashboard": {
+    "panels": 11,
+    "alerts": 5
+  }
+}

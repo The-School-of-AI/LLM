@@ -1,0 +1,2205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoE Architecture Growth Cadence - Team 8</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a25;
+            --bg-card: #15151f;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-pink: #ec4899;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #2a2a3a;
+            --glow-blue: 0 0 30px rgba(59, 130, 246, 0.3);
+            --glow-purple: 0 0 30px rgba(139, 92, 246, 0.3);
+            --glow-cyan: 0 0 30px rgba(6, 182, 212, 0.3);
+            --glow-green: 0 0 30px rgba(16, 185, 129, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .header {
+            padding: 2rem 4rem;
+            background: linear-gradient(180deg, var(--bg-secondary) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        .logo-text h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-text span {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            background: var(--bg-tertiary);
+            padding: 0.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .nav-tab {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border: none;
+            background: transparent;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .nav-tab.active {
+            background: var(--accent-blue);
+            color: white;
+            box-shadow: var(--glow-blue);
+        }
+
+        .nav-tab.active[data-stage="1"] { background: var(--accent-blue); box-shadow: var(--glow-blue); }
+        .nav-tab.active[data-stage="2"] { background: var(--accent-purple); box-shadow: var(--glow-purple); }
+        .nav-tab.active[data-stage="3"] { background: var(--accent-cyan); box-shadow: var(--glow-cyan); }
+        .nav-tab.active[data-stage="4"] { background: var(--accent-green); box-shadow: var(--glow-green); }
+
+        .main-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem 4rem;
+        }
+
+        .growth-path {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .growth-stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .growth-stage:hover {
+            transform: translateY(-4px);
+        }
+
+        .growth-stage.active .stage-circle {
+            transform: scale(1.2);
+        }
+
+        .stage-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            border: 3px solid transparent;
+        }
+
+        .stage-circle[data-type="dense"] {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+        }
+
+        .stage-circle[data-type="moe"] {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+        }
+
+        .stage-circle .expert-count {
+            font-size: 0.65rem;
+            opacity: 0.9;
+        }
+
+        .growth-stage.active .stage-circle {
+            border-color: white;
+            box-shadow: 0 0 40px rgba(255,255,255,0.3);
+        }
+
+        .stage-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .stage-size {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .growth-arrow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .growth-arrow .arrow {
+            font-size: 2rem;
+            color: var(--text-muted);
+        }
+
+        .growth-arrow .transition-type {
+            font-size: 0.65rem;
+            color: var(--accent-orange);
+            background: rgba(245, 158, 11, 0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .architecture-section {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .architecture-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .section-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .section-badge.dense {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .section-badge.moe {
+            background: rgba(139, 92, 246, 0.2);
+            color: var(--accent-purple);
+            border: 1px solid var(--accent-purple);
+        }
+
+        .section-badge.moe-scale {
+            background: rgba(6, 182, 212, 0.2);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+        }
+
+        .section-badge.moe-expand {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .content-grid.full {
+            grid-template-columns: 1fr;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--accent-blue);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .card-icon.blue { background: rgba(59, 130, 246, 0.2); }
+        .card-icon.purple { background: rgba(139, 92, 246, 0.2); }
+        .card-icon.cyan { background: rgba(6, 182, 212, 0.2); }
+        .card-icon.green { background: rgba(16, 185, 129, 0.2); }
+        .card-icon.orange { background: rgba(245, 158, 11, 0.2); }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        .architecture-diagram {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 2rem;
+            position: relative;
+            min-height: 400px;
+        }
+
+        .diagram-layers {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .diagram-layer {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .diagram-block {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            min-width: 120px;
+            position: relative;
+        }
+
+        .diagram-block:hover {
+            transform: scale(1.05);
+        }
+
+        .diagram-block.clickable::after {
+            content: '👆';
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            font-size: 0.75rem;
+        }
+
+        .diagram-block.input {
+            background: linear-gradient(135deg, #1e3a5f, #1e4976);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .diagram-block.attention {
+            background: linear-gradient(135deg, #3b1f5f, #4a2576);
+            border: 1px solid var(--accent-purple);
+        }
+
+        .diagram-block.ffn {
+            background: linear-gradient(135deg, #1f4f4f, #1f5f5f);
+            border: 1px solid var(--accent-cyan);
+        }
+
+        .diagram-block.moe-router {
+            background: linear-gradient(135deg, #4f1f3f, #5f1f4f);
+            border: 1px solid var(--accent-pink);
+        }
+
+        .diagram-block.expert {
+            background: linear-gradient(135deg, #1f4f2f, #1f5f3f);
+            border: 1px solid var(--accent-green);
+            min-width: 60px;
+            padding: 0.75rem 1rem;
+        }
+
+        .diagram-block.null-expert {
+            background: linear-gradient(135deg, #3f3f1f, #4f4f1f);
+            border: 1px solid var(--accent-orange);
+        }
+
+        .diagram-block.shared {
+            background: linear-gradient(135deg, #2f2f5f, #3f3f6f);
+            border: 1px solid #6366f1;
+        }
+
+        .diagram-block.output {
+            background: linear-gradient(135deg, #1e3a5f, #1e4976);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .diagram-arrow {
+            color: var(--text-muted);
+            font-size: 1.5rem;
+        }
+
+        .diagram-arrow.vertical {
+            transform: rotate(90deg);
+        }
+
+        .experts-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            max-width: 400px;
+        }
+
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .config-table th,
+        .config-table td {
+            padding: 0.875rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .config-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .config-table td {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .config-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .config-value {
+            color: var(--accent-cyan);
+        }
+
+        .config-value.changed {
+            color: var(--accent-orange);
+            font-weight: 600;
+        }
+
+        .config-formula {
+            color: var(--accent-orange);
+            font-size: 0.8rem;
+        }
+
+        .code-block {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            white-space: pre;
+        }
+
+        .code-block .keyword { color: var(--accent-purple); }
+        .code-block .function { color: var(--accent-blue); }
+        .code-block .string { color: var(--accent-green); }
+        .code-block .number { color: var(--accent-orange); }
+        .code-block .comment { color: var(--text-muted); }
+
+        .expansion-card {
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border-color: var(--accent-purple);
+        }
+
+        .expansion-card.scale {
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(6, 182, 212, 0.1) 100%);
+            border-color: var(--accent-cyan);
+        }
+
+        .expansion-card.expand {
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.1) 100%);
+            border-color: var(--accent-green);
+        }
+
+        .expansion-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .expansion-step {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-purple);
+        }
+
+        .expansion-step.scale {
+            border-left-color: var(--accent-cyan);
+        }
+
+        .expansion-step.expand {
+            border-left-color: var(--accent-green);
+        }
+
+        .step-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+            flex-shrink: 0;
+        }
+
+        .step-number.scale { background: var(--accent-cyan); }
+        .step-number.expand { background: var(--accent-green); }
+
+        .step-content h4 {
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .info-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .info-pill {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .info-pill.blue { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .info-pill.purple { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .info-pill.cyan { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
+        .info-pill.green { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .info-pill.orange { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 2rem;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalIn 0.3s ease;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--accent-red);
+        }
+
+        .modal-content {
+            padding: 1.5rem;
+        }
+
+        .comparison-table {
+            width: 100%;
+            margin-top: 2rem;
+            border-collapse: collapse;
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .comparison-table th {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comparison-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table .stage-1 { color: var(--accent-blue); }
+        .comparison-table .stage-2 { color: var(--accent-purple); }
+        .comparison-table .stage-3 { color: var(--accent-cyan); }
+        .comparison-table .stage-4 { color: var(--accent-green); }
+
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+            border: 1px solid var(--accent-blue);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .highlight-box.warning {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(239, 68, 68, 0.1));
+            border-color: var(--accent-orange);
+        }
+
+        .highlight-box.success {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(6, 182, 212, 0.1));
+            border-color: var(--accent-green);
+        }
+
+        .highlight-box h4 {
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .highlight-box.warning h4 { color: var(--accent-orange); }
+        .highlight-box.success h4 { color: var(--accent-green); }
+
+        .highlight-box p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .why-section {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .why-section h4 {
+            color: var(--accent-orange);
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .why-list {
+            list-style: none;
+        }
+
+        .why-list li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .why-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent-green);
+        }
+
+        .router-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .flow-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .flow-content {
+            flex: 1;
+        }
+
+        .flow-content h5 {
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .flow-content p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .flow-content code {
+            background: var(--bg-primary);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .transition-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            padding: 2rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            margin: 1rem 0;
+        }
+
+        .transition-box {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .transition-box.before {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid var(--accent-purple);
+        }
+
+        .transition-box.after {
+            background: rgba(6, 182, 212, 0.2);
+            border: 1px solid var(--accent-cyan);
+        }
+
+        .transition-box.after-expand {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid var(--accent-green);
+        }
+
+        .transition-box h5 {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .transition-box p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .transition-arrow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .transition-arrow .arrow {
+            font-size: 2rem;
+            color: var(--accent-orange);
+        }
+
+        .transition-arrow .label {
+            font-size: 0.7rem;
+            color: var(--accent-orange);
+            background: rgba(245, 158, 11, 0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 1200px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .summary-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem 1.5rem;
+            }
+            
+            .main-content {
+                padding: 1rem 1.5rem;
+            }
+            
+            .nav-tabs {
+                flex-wrap: wrap;
+            }
+            
+            .growth-path {
+                flex-wrap: wrap;
+            }
+            
+            .summary-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">T8</div>
+                <div class="logo-text">
+                    <h1>MoE Architecture Guide</h1>
+                    <span>Team 8 - Expert Expansion & Routing</span>
+                </div>
+            </div>
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-stage="1" onclick="showStage(1)">1B Dense</button>
+                <button class="nav-tab" data-stage="2" onclick="showStage(2)">3B MoE-8</button>
+                <button class="nav-tab" data-stage="3" onclick="showStage(3)">8B MoE-8</button>
+                <button class="nav-tab" data-stage="4" onclick="showStage(4)">70B MoE-64</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- Growth Path Visualization -->
+        <div class="growth-path">
+            <div class="growth-stage active" data-stage="1" onclick="showStage(1)">
+                <div class="stage-circle" data-type="dense">1B</div>
+                <div class="stage-label">
+                    <div class="stage-size">Dense</div>
+                    Foundation
+                </div>
+            </div>
+            <div class="growth-arrow">
+                <span class="arrow">→</span>
+                <span class="transition-type">Explosion</span>
+            </div>
+            <div class="growth-stage" data-stage="2" onclick="showStage(2)">
+                <div class="stage-circle" data-type="moe">
+                    3B
+                    <span class="expert-count">8 exp</span>
+                </div>
+                <div class="stage-label">
+                    <div class="stage-size">MoE-8</div>
+                    Learn Routing
+                </div>
+            </div>
+            <div class="growth-arrow">
+                <span class="arrow">→</span>
+                <span class="transition-type">Scale Dims</span>
+            </div>
+            <div class="growth-stage" data-stage="3" onclick="showStage(3)">
+                <div class="stage-circle" data-type="moe">
+                    8B
+                    <span class="expert-count">8 exp</span>
+                </div>
+                <div class="stage-label">
+                    <div class="stage-size">MoE-8</div>
+                    Scale Up
+                </div>
+            </div>
+            <div class="growth-arrow">
+                <span class="arrow">→</span>
+                <span class="transition-type">Expand Exp</span>
+            </div>
+            <div class="growth-stage" data-stage="4" onclick="showStage(4)">
+                <div class="stage-circle" data-type="moe">
+                    70B
+                    <span class="expert-count">64 exp</span>
+                </div>
+                <div class="stage-label">
+                    <div class="stage-size">MoE-64</div>
+                    Scale Experts
+                </div>
+            </div>
+        </div>
+
+        <!-- Stage 1: 1B Dense -->
+        <section class="architecture-section active" id="stage-1">
+            <div class="section-header">
+                <span class="section-badge dense">STAGE 1</span>
+                <h2 class="section-title">1B Dense - Foundation Model</h2>
+            </div>
+
+            <div class="content-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon blue">📐</div>
+                        <span class="card-title">Architecture Diagram</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="architecture-diagram">
+                            <div class="diagram-layers">
+                                <div class="diagram-layer">
+                                    <div class="diagram-block input clickable" onclick="showModal('input')">Input Embeddings</div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer" style="flex-direction: column; gap: 0.5rem;">
+                                    <div style="font-size: 0.8rem; color: var(--text-muted);">× 24 Layers</div>
+                                    <div class="diagram-block attention clickable" onclick="showModal('attention')">Multi-Head Attention (GQA)</div>
+                                    <div class="diagram-arrow vertical">↓</div>
+                                    <div class="diagram-block ffn clickable" onclick="showModal('ffn-dense')">Dense FFN (SwiGLU)</div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer">
+                                    <div class="diagram-block output">Output Head (LM Head)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon cyan">⚙️</div>
+                        <span class="card-title">Configuration</span>
+                    </div>
+                    <div class="card-content">
+                        <table class="config-table">
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Value</th>
+                                <th>Notes</th>
+                            </tr>
+                            <tr>
+                                <td>Total Parameters</td>
+                                <td class="config-value">1.0B</td>
+                                <td>Foundation size</td>
+                            </tr>
+                            <tr>
+                                <td>Hidden Size (d)</td>
+                                <td class="config-value">2048</td>
+                                <td>Model dimension</td>
+                            </tr>
+                            <tr>
+                                <td>Intermediate Size</td>
+                                <td class="config-value">5504</td>
+                                <td class="config-formula">≈ 2.7 × d</td>
+                            </tr>
+                            <tr>
+                                <td>Num Layers</td>
+                                <td class="config-value">24</td>
+                                <td>Transformer blocks</td>
+                            </tr>
+                            <tr>
+                                <td>Attention Heads</td>
+                                <td class="config-value">16</td>
+                                <td>Query heads</td>
+                            </tr>
+                            <tr>
+                                <td>KV Heads (GQA)</td>
+                                <td class="config-value">4</td>
+                                <td>Ratio 4:1</td>
+                            </tr>
+                            <tr>
+                                <td>Head Dimension</td>
+                                <td class="config-value">128</td>
+                                <td class="config-formula">d / heads</td>
+                            </tr>
+                            <tr>
+                                <td>Vocab Size</td>
+                                <td class="config-value">32000</td>
+                                <td>Tokenizer vocab</td>
+                            </tr>
+                            <tr>
+                                <td>Max Sequence</td>
+                                <td class="config-value">4096</td>
+                                <td>Context length</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4>💡 Purpose of Stage 1</h4>
+                <p>The 1B Dense model serves as the <strong>foundation</strong> for all subsequent stages. It establishes:</p>
+                <ul class="why-list">
+                    <li>Basic language understanding and generation capabilities</li>
+                    <li>Stable weight distributions that will be copied to experts</li>
+                    <li>A checkpoint that can be verified before MoE conversion</li>
+                    <li>The FFN weights become the template for all 8 experts in Stage 2</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Stage 2: 3B MoE-8 -->
+        <section class="architecture-section" id="stage-2">
+            <div class="section-header">
+                <span class="section-badge moe">STAGE 2</span>
+                <h2 class="section-title">3B MoE - Learn Routing (8 Experts)</h2>
+            </div>
+
+            <div class="content-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon purple">📐</div>
+                        <span class="card-title">Architecture Diagram</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="architecture-diagram">
+                            <div class="diagram-layers">
+                                <div class="diagram-layer">
+                                    <div class="diagram-block input">Input Embeddings (2048d)</div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer" style="flex-direction: column; gap: 0.5rem;">
+                                    <div style="font-size: 0.8rem; color: var(--text-muted);">× 24 Layers</div>
+                                    <div class="diagram-block attention">Multi-Head Attention</div>
+                                    <div class="diagram-arrow vertical">↓</div>
+                                    <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%;">
+                                        <div class="diagram-block moe-router clickable" onclick="showModal('router')">
+                                            GSA Router (4 heads × 64d)
+                                        </div>
+                                        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">Shared (Always Active)</div>
+                                                <div class="experts-container" style="max-width: 150px;">
+                                                    <div class="diagram-block shared clickable" onclick="showModal('shared-expert')">S1</div>
+                                                    <div class="diagram-block shared clickable" onclick="showModal('shared-expert')">S2</div>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">Routed (Top-2)</div>
+                                                <div class="experts-container">
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E1</div>
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E2</div>
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E3</div>
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E4</div>
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E5</div>
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E6</div>
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E7</div>
+                                                    <div class="diagram-block expert clickable" onclick="showModal('expert')">E8</div>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">Null</div>
+                                                <div class="diagram-block null-expert clickable" onclick="showModal('null-expert')">∅</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer">
+                                    <div class="diagram-block output">Output Head</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon cyan">⚙️</div>
+                        <span class="card-title">Configuration</span>
+                    </div>
+                    <div class="card-content">
+                        <table class="config-table">
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Value</th>
+                                <th>Notes</th>
+                            </tr>
+                            <tr>
+                                <td>Total Parameters</td>
+                                <td class="config-value">3.0B</td>
+                                <td>With all experts</td>
+                            </tr>
+                            <tr>
+                                <td>Active Parameters</td>
+                                <td class="config-value">~1.2B</td>
+                                <td>Per forward pass</td>
+                            </tr>
+                            <tr>
+                                <td>Hidden Size</td>
+                                <td class="config-value">2048</td>
+                                <td>Same as 1B</td>
+                            </tr>
+                            <tr>
+                                <td>Intermediate Size</td>
+                                <td class="config-value">5504</td>
+                                <td>Per expert</td>
+                            </tr>
+                            <tr>
+                                <td>Num Layers</td>
+                                <td class="config-value">24</td>
+                                <td>Same as 1B</td>
+                            </tr>
+                            <tr>
+                                <td>Shared Experts</td>
+                                <td class="config-value">2</td>
+                                <td>Always active</td>
+                            </tr>
+                            <tr>
+                                <td>Routed Experts</td>
+                                <td class="config-value">8</td>
+                                <td>Selected by router</td>
+                            </tr>
+                            <tr>
+                                <td>Null Experts</td>
+                                <td class="config-value">1</td>
+                                <td>Zero-compute</td>
+                            </tr>
+                            <tr>
+                                <td>Top-K</td>
+                                <td class="config-value">2</td>
+                                <td>Experts per token</td>
+                            </tr>
+                            <tr>
+                                <td>Router Type</td>
+                                <td class="config-value">GSA</td>
+                                <td>Sigmoid, 4 heads</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card expansion-card">
+                <div class="card-header">
+                    <div class="card-icon purple">🔄</div>
+                    <span class="card-title">Expansion: 1B Dense → 3B MoE (EXPLOSION)</span>
+                </div>
+                <div class="card-content">
+                    <div class="transition-diagram">
+                        <div class="transition-box before">
+                            <h5>1B Dense</h5>
+                            <p>1 FFN per layer</p>
+                            <p>hidden: 2048</p>
+                        </div>
+                        <div class="transition-arrow">
+                            <span class="arrow">→</span>
+                            <span class="label">Copy FFN to all 8</span>
+                        </div>
+                        <div class="transition-box after" style="background: rgba(139, 92, 246, 0.2); border-color: var(--accent-purple);">
+                            <h5>3B MoE-8</h5>
+                            <p>8 experts per layer</p>
+                            <p>hidden: 2048</p>
+                        </div>
+                    </div>
+                    
+                    <div class="expansion-steps">
+                        <div class="expansion-step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h4>Copy Dense FFN to All 8 Experts</h4>
+                                <p>Each expert starts as an <strong>identical copy</strong> of the 1B Dense FFN. This is "explosion" (1→8).</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h4>Initialize Fresh GSA Router</h4>
+                                <p>New router with 4 heads × 64d projection. Initialized to route uniformly across all experts.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h4>Add Tiny Noise (σ=1e-4)</h4>
+                                <p>Small Gaussian noise to expert weights for symmetry breaking during training.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h4>Train to Learn Routing</h4>
+                                <p>Router learns which tokens go to which experts. Experts specialize through gradient updates.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box" style="margin-top: 1.5rem;">
+                        <h4>⚠️ Lossless Guarantee</h4>
+                        <p>At initialization (before noise): All experts identical + weights sum to 1 → <code>output_MoE = output_Dense</code>. The model starts from the exact same point.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <div class="card-icon orange">❓</div>
+                    <span class="card-title">Why 8 Routed Experts?</span>
+                </div>
+                <div class="card-content">
+                    <div class="why-section">
+                        <h4>Rationale for 8 Experts at 3B Scale</h4>
+                        <ul class="why-list">
+                            <li><strong>Minimum for meaningful specialization</strong> - 8 can capture broad categories (code, math, etc.)</li>
+                            <li><strong>Stability first</strong> - Fewer routing decisions = less potential instability</li>
+                            <li><strong>Learning objective</strong> - Stage 2 is about learning ROUTING, not maximizing capacity</li>
+                            <li><strong>Prepares for scaling</strong> - Same 8 experts will grow bigger in Stage 3</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 3: 8B MoE-8 (CORRECTED!) -->
+        <section class="architecture-section" id="stage-3">
+            <div class="section-header">
+                <span class="section-badge moe-scale">STAGE 3</span>
+                <h2 class="section-title">8B MoE - Scale Dimensions (Still 8 Experts)</h2>
+            </div>
+
+            <div class="highlight-box warning" style="margin-bottom: 2rem;">
+                <h4>🔑 Key Point: SAME Expert Count, BIGGER Dimensions</h4>
+                <p>Stage 3 keeps the same 8 experts but scales up hidden dimensions and depth. The routing learned in 3B is preserved! We only increase model capacity, not expert count.</p>
+            </div>
+
+            <div class="content-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon cyan">📐</div>
+                        <span class="card-title">Architecture Diagram</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="architecture-diagram">
+                            <div class="diagram-layers">
+                                <div class="diagram-layer">
+                                    <div class="diagram-block input">Input Embeddings <strong>(4096d)</strong></div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer" style="flex-direction: column; gap: 0.5rem;">
+                                    <div style="font-size: 0.8rem; color: var(--text-muted);">× <strong>48 Layers</strong> (2× more!)</div>
+                                    <div class="diagram-block attention clickable" onclick="showModal('attention-8b')">Multi-Head Attention (32 heads)</div>
+                                    <div class="diagram-arrow vertical">↓</div>
+                                    <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%;">
+                                        <div class="diagram-block moe-router clickable" onclick="showModal('router-8b')">
+                                            GSA Router (4 heads × 128d)
+                                        </div>
+                                        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">Shared (2)</div>
+                                                <div class="experts-container" style="max-width: 150px;">
+                                                    <div class="diagram-block shared">S1</div>
+                                                    <div class="diagram-block shared">S2</div>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--accent-orange);">SAME 8 Experts (Scaled!)</div>
+                                                <div class="experts-container">
+                                                    <div class="diagram-block expert">E1</div>
+                                                    <div class="diagram-block expert">E2</div>
+                                                    <div class="diagram-block expert">E3</div>
+                                                    <div class="diagram-block expert">E4</div>
+                                                    <div class="diagram-block expert">E5</div>
+                                                    <div class="diagram-block expert">E6</div>
+                                                    <div class="diagram-block expert">E7</div>
+                                                    <div class="diagram-block expert">E8</div>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">Null</div>
+                                                <div class="diagram-block null-expert">∅</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer">
+                                    <div class="diagram-block output">Output Head</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon cyan">⚙️</div>
+                        <span class="card-title">Configuration (Changes Highlighted)</span>
+                    </div>
+                    <div class="card-content">
+                        <table class="config-table">
+                            <tr>
+                                <th>Parameter</th>
+                                <th>3B MoE</th>
+                                <th>8B MoE</th>
+                                <th>Change</th>
+                            </tr>
+                            <tr>
+                                <td>Total Params</td>
+                                <td>3.0B</td>
+                                <td class="config-value changed">8.0B</td>
+                                <td>+5B</td>
+                            </tr>
+                            <tr>
+                                <td>Active Params</td>
+                                <td>~1.2B</td>
+                                <td class="config-value changed">~3B</td>
+                                <td>+1.8B</td>
+                            </tr>
+                            <tr>
+                                <td>Hidden Size</td>
+                                <td>2048</td>
+                                <td class="config-value changed">4096</td>
+                                <td>2×</td>
+                            </tr>
+                            <tr>
+                                <td>Intermediate</td>
+                                <td>5504</td>
+                                <td class="config-value changed">11008</td>
+                                <td>2×</td>
+                            </tr>
+                            <tr>
+                                <td>Num Layers</td>
+                                <td>24</td>
+                                <td class="config-value changed">48</td>
+                                <td>2×</td>
+                            </tr>
+                            <tr>
+                                <td>Attention Heads</td>
+                                <td>16</td>
+                                <td class="config-value changed">32</td>
+                                <td>2×</td>
+                            </tr>
+                            <tr>
+                                <td>KV Heads</td>
+                                <td>4</td>
+                                <td class="config-value changed">8</td>
+                                <td>2×</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Routed Experts</strong></td>
+                                <td>8</td>
+                                <td class="config-value">8</td>
+                                <td style="color: var(--accent-green);">Same!</td>
+                            </tr>
+                            <tr>
+                                <td>Top-K</td>
+                                <td>2</td>
+                                <td class="config-value">2</td>
+                                <td style="color: var(--accent-green);">Same!</td>
+                            </tr>
+                            <tr>
+                                <td>Router Dim</td>
+                                <td>64</td>
+                                <td class="config-value changed">128</td>
+                                <td>2×</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card expansion-card scale">
+                <div class="card-header">
+                    <div class="card-icon cyan">🔄</div>
+                    <span class="card-title">Scaling: 3B MoE → 8B MoE (DIMENSION SCALE)</span>
+                </div>
+                <div class="card-content">
+                    <div class="transition-diagram">
+                        <div class="transition-box before">
+                            <h5>3B MoE-8</h5>
+                            <p>8 experts</p>
+                            <p>hidden: 2048</p>
+                            <p>layers: 24</p>
+                        </div>
+                        <div class="transition-arrow">
+                            <span class="arrow">→</span>
+                            <span class="label">Scale dims 2×</span>
+                        </div>
+                        <div class="transition-box after">
+                            <h5>8B MoE-8</h5>
+                            <p>8 experts (same!)</p>
+                            <p>hidden: 4096</p>
+                            <p>layers: 48</p>
+                        </div>
+                    </div>
+                    
+                    <div class="expansion-steps">
+                        <div class="expansion-step scale">
+                            <div class="step-number scale">1</div>
+                            <div class="step-content">
+                                <h4>Interpolate Expert Weights to 2× Size</h4>
+                                <p>Each expert's FFN (w1, w2, w3) gets interpolated from 2048→4096 hidden and 5504→11008 intermediate.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step scale">
+                            <div class="step-number scale">2</div>
+                            <div class="step-content">
+                                <h4>Scale Router Projections</h4>
+                                <p>Router input dimension 2048→4096. Router dim optionally increased 64→128 for richer routing.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step scale">
+                            <div class="step-number scale">3</div>
+                            <div class="step-content">
+                                <h4>Add More Layers (24→48)</h4>
+                                <p>Interleave new layers with initialized MoE blocks. Can use "layer splitting" or fresh init.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step scale">
+                            <div class="step-number scale">4</div>
+                            <div class="step-content">
+                                <h4>Continue Training</h4>
+                                <p>Same routing patterns preserved! Experts refine their specializations at larger capacity.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box success" style="margin-top: 1.5rem;">
+                        <h4>✅ Why Keep Same Experts?</h4>
+                        <p>The 8 experts have already learned their specializations during 3B training. Scaling dimensions makes each expert MORE capable without changing what they specialize in. Routing knowledge is preserved!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <div class="card-icon orange">❓</div>
+                    <span class="card-title">Why Not Add More Experts Yet?</span>
+                </div>
+                <div class="card-content">
+                    <div class="why-section">
+                        <h4>Benefits of Scaling Dimensions First</h4>
+                        <ul class="why-list">
+                            <li><strong>Routing stability</strong> - Adding experts requires learning new routing; scaling dims doesn't</li>
+                            <li><strong>Expert capacity</strong> - 8 larger experts can handle more nuanced specialization</li>
+                            <li><strong>Gradient preservation</strong> - Interpolation preserves learned weights better than expert splitting</li>
+                            <li><strong>Prepares for 70B</strong> - 8 high-capacity experts become the template for 64-expert explosion</li>
+                            <li><strong>Verification point</strong> - Can validate 8B MoE before massive 70B expert expansion</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 4: 70B MoE-64 -->
+        <section class="architecture-section" id="stage-4">
+            <div class="section-header">
+                <span class="section-badge moe-expand">STAGE 4</span>
+                <h2 class="section-title">70B MoE - Expert Expansion (8 → 64 Experts)</h2>
+            </div>
+
+            <div class="highlight-box success" style="margin-bottom: 2rem;">
+                <h4>🚀 Expert Expansion: 8 → 64</h4>
+                <p>Now we expand the number of experts! Each of the 8 experts becomes the template for 8 children → 64 total experts. This enables fine-grained specialization at massive scale.</p>
+            </div>
+
+            <div class="content-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon green">📐</div>
+                        <span class="card-title">Architecture Diagram</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="architecture-diagram" style="min-height: 500px;">
+                            <div class="diagram-layers">
+                                <div class="diagram-layer">
+                                    <div class="diagram-block input">Input Embeddings (4096d)</div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer" style="flex-direction: column; gap: 0.75rem;">
+                                    <div style="font-size: 0.8rem; color: var(--text-muted);">× <strong>80 Layers</strong></div>
+                                    <div class="diagram-block attention">Multi-Head Attention (32 heads)</div>
+                                    <div class="diagram-arrow vertical">↓</div>
+                                    <div style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; width: 100%;">
+                                        <div class="diagram-block moe-router clickable" onclick="showModal('router-70b')" style="min-width: 220px;">
+                                            GSA Gated Lightning Router<br>
+                                            <span style="font-size: 0.7rem;">4 heads × 128d • Sigmoid • Adaptive Top-K</span>
+                                        </div>
+                                        <div style="display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; justify-content: center;">
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">4 Shared</div>
+                                                <div class="experts-container" style="max-width: 200px;">
+                                                    <div class="diagram-block shared">S1</div>
+                                                    <div class="diagram-block shared">S2</div>
+                                                    <div class="diagram-block shared">S3</div>
+                                                    <div class="diagram-block shared">S4</div>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--accent-green);">64 Routed Experts (Top-4)</div>
+                                                <div class="experts-container" style="max-width: 400px;">
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem;">1.1</div>
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem;">1.2</div>
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem;">...</div>
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem;">1.8</div>
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem; opacity: 0.7;">2.1</div>
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem; opacity: 0.7;">...</div>
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem; opacity: 0.6;">...</div>
+                                                    <div class="diagram-block expert" style="padding: 0.4rem 0.6rem; min-width: 32px; font-size: 0.65rem;">8.8</div>
+                                                </div>
+                                                <div style="font-size: 0.6rem; color: var(--text-muted);">8 parent groups × 8 children = 64</div>
+                                            </div>
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">2 Null</div>
+                                                <div class="experts-container">
+                                                    <div class="diagram-block null-expert clickable" onclick="showModal('null-expert')">∅₁</div>
+                                                    <div class="diagram-block null-expert clickable" onclick="showModal('null-expert')">∅₂</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="diagram-arrow vertical">↓</div>
+                                <div class="diagram-layer">
+                                    <div class="diagram-block output">Output Head</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon cyan">⚙️</div>
+                        <span class="card-title">Configuration</span>
+                    </div>
+                    <div class="card-content">
+                        <table class="config-table">
+                            <tr>
+                                <th>Parameter</th>
+                                <th>8B MoE</th>
+                                <th>70B MoE</th>
+                                <th>Change</th>
+                            </tr>
+                            <tr>
+                                <td>Total Params</td>
+                                <td>8.0B</td>
+                                <td class="config-value changed">70B</td>
+                                <td>~9×</td>
+                            </tr>
+                            <tr>
+                                <td>Active Params</td>
+                                <td>~3B</td>
+                                <td class="config-value changed">~12B</td>
+                                <td>~4×</td>
+                            </tr>
+                            <tr>
+                                <td>Hidden Size</td>
+                                <td>4096</td>
+                                <td class="config-value">4096</td>
+                                <td>Same</td>
+                            </tr>
+                            <tr>
+                                <td>Num Layers</td>
+                                <td>48</td>
+                                <td class="config-value changed">80</td>
+                                <td>+32</td>
+                            </tr>
+                            <tr>
+                                <td>Shared Experts</td>
+                                <td>2</td>
+                                <td class="config-value changed">4</td>
+                                <td>2×</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Routed Experts</strong></td>
+                                <td>8</td>
+                                <td class="config-value changed">64</td>
+                                <td style="color: var(--accent-green);">8×!</td>
+                            </tr>
+                            <tr>
+                                <td>Null Experts</td>
+                                <td>1</td>
+                                <td class="config-value changed">2</td>
+                                <td>+1</td>
+                            </tr>
+                            <tr>
+                                <td>Top-K</td>
+                                <td>2</td>
+                                <td class="config-value changed">4</td>
+                                <td>2×</td>
+                            </tr>
+                            <tr>
+                                <td>Expert Gating</td>
+                                <td>G1+G2</td>
+                                <td class="config-value">G1+G2</td>
+                                <td>Same</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card expansion-card expand">
+                <div class="card-header">
+                    <div class="card-icon green">🔄</div>
+                    <span class="card-title">Expert Expansion: 8B MoE-8 → 70B MoE-64</span>
+                </div>
+                <div class="card-content">
+                    <div class="transition-diagram">
+                        <div class="transition-box before" style="background: rgba(6, 182, 212, 0.2); border-color: var(--accent-cyan);">
+                            <h5>8B MoE-8</h5>
+                            <p>8 experts</p>
+                            <p>hidden: 4096</p>
+                            <p>top-2</p>
+                        </div>
+                        <div class="transition-arrow">
+                            <span class="arrow">→</span>
+                            <span class="label">Each expert → 8 children</span>
+                        </div>
+                        <div class="transition-box after-expand">
+                            <h5>70B MoE-64</h5>
+                            <p>64 experts (8×8)</p>
+                            <p>hidden: 4096</p>
+                            <p>top-4</p>
+                        </div>
+                    </div>
+                    
+                    <div class="expansion-steps">
+                        <div class="expansion-step expand">
+                            <div class="step-number expand">1</div>
+                            <div class="step-content">
+                                <h4>Copy Each Expert to 8 Children</h4>
+                                <p>Expert E1 → {E1.1, E1.2, ..., E1.8}. Each child starts identical to its parent.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step expand">
+                            <div class="step-number expand">2</div>
+                            <div class="step-content">
+                                <h4>Initialize Fresh Router for 64 Experts</h4>
+                                <p>New GSA router with 64 expert keys. Can optionally warm-start from 8-expert router with hierarchical init.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step expand">
+                            <div class="step-number expand">3</div>
+                            <div class="step-content">
+                                <h4>Add Noise for Divergence (σ=1e-3)</h4>
+                                <p>Children of same parent start similar but diverge during training into sub-specializations.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step expand">
+                            <div class="step-number expand">4</div>
+                            <div class="step-content">
+                                <h4>Increase Top-K (2→4)</h4>
+                                <p>With 64 experts, need more active experts per token for coverage. 4/64 = 6.25% active.</p>
+                            </div>
+                        </div>
+                        <div class="expansion-step expand">
+                            <div class="step-number expand">5</div>
+                            <div class="step-content">
+                                <h4>Train with Loss-Free Load Balancing</h4>
+                                <p>Bias-only adjustment. Router learns fine-grained 64-expert routing patterns.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-grid" style="margin-top: 1rem;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon orange">❓</div>
+                        <span class="card-title">Why 64 Experts Now?</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="why-section">
+                            <h4>Rationale for 64 Experts at 70B Scale</h4>
+                            <ul class="why-list">
+                                <li><strong>Clean hierarchy</strong> - 8 parents × 8 children = 64. Preserves specialization structure.</li>
+                                <li><strong>Parameter budget</strong> - 70B / 8B ≈ 9×. Mostly comes from 8× more experts.</li>
+                                <li><strong>Data diversity match</strong> - 50-100 distinct patterns in language; 64 matches well.</li>
+                                <li><strong>Literature validated</strong> - DeepSeek-MoE, Mixtral use similar expert counts.</li>
+                                <li><strong>Hardware friendly</strong> - 64 = power of 2, efficient GPU scheduling.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon green">❓</div>
+                        <span class="card-title">Why Top-4 Active?</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="why-section">
+                            <h4>Rationale for 4 Active Experts</h4>
+                            <ul class="why-list">
+                                <li><strong>Capacity balance</strong> - 4 experts provide enough capacity per token</li>
+                                <li><strong>Specialization + coverage</strong> - Can combine 4 different sub-specialties</li>
+                                <li><strong>Compute budget</strong> - 4/64 = 6.25% active (reasonable overhead)</li>
+                                <li><strong>Adaptive range</strong> - Can vary 2-6 based on GSA confidence score</li>
+                                <li><strong>Preserves hierarchy</strong> - Often selects 1-2 from each parent group</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Complete Comparison -->
+        <h2 style="margin-top: 3rem; margin-bottom: 1.5rem;">📊 Complete Architecture Comparison</h2>
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th class="stage-1">1B Dense</th>
+                    <th class="stage-2">3B MoE-8</th>
+                    <th class="stage-3">8B MoE-8</th>
+                    <th class="stage-4">70B MoE-64</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Total Params</strong></td>
+                    <td class="stage-1">1.0B</td>
+                    <td class="stage-2">3.0B</td>
+                    <td class="stage-3">8.0B</td>
+                    <td class="stage-4">70B</td>
+                </tr>
+                <tr>
+                    <td><strong>Active Params</strong></td>
+                    <td class="stage-1">1.0B</td>
+                    <td class="stage-2">~1.2B</td>
+                    <td class="stage-3">~3B</td>
+                    <td class="stage-4">~12B</td>
+                </tr>
+                <tr>
+                    <td><strong>Hidden Size</strong></td>
+                    <td class="stage-1">2048</td>
+                    <td class="stage-2">2048</td>
+                    <td class="stage-3">4096</td>
+                    <td class="stage-4">4096</td>
+                </tr>
+                <tr>
+                    <td><strong>Intermediate</strong></td>
+                    <td class="stage-1">5504</td>
+                    <td class="stage-2">5504</td>
+                    <td class="stage-3">11008</td>
+                    <td class="stage-4">11008</td>
+                </tr>
+                <tr>
+                    <td><strong>Layers</strong></td>
+                    <td class="stage-1">24</td>
+                    <td class="stage-2">24</td>
+                    <td class="stage-3">48</td>
+                    <td class="stage-4">80</td>
+                </tr>
+                <tr>
+                    <td><strong>Attention Heads</strong></td>
+                    <td class="stage-1">16</td>
+                    <td class="stage-2">16</td>
+                    <td class="stage-3">32</td>
+                    <td class="stage-4">32</td>
+                </tr>
+                <tr>
+                    <td><strong>Architecture</strong></td>
+                    <td class="stage-1">Dense</td>
+                    <td class="stage-2">MoE</td>
+                    <td class="stage-3">MoE</td>
+                    <td class="stage-4">MoE</td>
+                </tr>
+                <tr>
+                    <td><strong>Routed Experts</strong></td>
+                    <td class="stage-1">—</td>
+                    <td class="stage-2">8</td>
+                    <td class="stage-3">8</td>
+                    <td class="stage-4">64</td>
+                </tr>
+                <tr>
+                    <td><strong>Shared Experts</strong></td>
+                    <td class="stage-1">—</td>
+                    <td class="stage-2">2</td>
+                    <td class="stage-3">2</td>
+                    <td class="stage-4">4</td>
+                </tr>
+                <tr>
+                    <td><strong>Null Experts</strong></td>
+                    <td class="stage-1">—</td>
+                    <td class="stage-2">1</td>
+                    <td class="stage-3">1</td>
+                    <td class="stage-4">2</td>
+                </tr>
+                <tr>
+                    <td><strong>Top-K</strong></td>
+                    <td class="stage-1">—</td>
+                    <td class="stage-2">2</td>
+                    <td class="stage-3">2</td>
+                    <td class="stage-4">4</td>
+                </tr>
+                <tr>
+                    <td><strong>Transition Type</strong></td>
+                    <td class="stage-1">—</td>
+                    <td class="stage-2">Explosion (1→8)</td>
+                    <td class="stage-3">Scale Dims</td>
+                    <td class="stage-4">Expand Exp (8→64)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Summary Stats -->
+        <div class="summary-stats">
+            <div class="stat-card">
+                <div class="stat-value">70×</div>
+                <div class="stat-label">Parameter Growth</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">8→64</div>
+                <div class="stat-label">Expert Expansion</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">Top-4</div>
+                <div class="stat-label">Active Experts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">~17%</div>
+                <div class="stat-label">Active Ratio (70B)</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Component Details</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-content" id="modal-content"></div>
+        </div>
+    </div>
+
+    <script>
+        const modalContent = {
+            'input': {
+                title: 'Input Embeddings',
+                content: `
+                    <p>Token and position embeddings combined to create input representations.</p>
+                    <div class="code-block"><span class="keyword">class</span> <span class="function">Embeddings</span>(nn.Module):
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, vocab_size, hidden_size):
+        self.token_emb = nn.Embedding(vocab_size, hidden_size)
+        <span class="comment"># Use RoPE for positional encoding</span>
+        self.rotary_emb = RotaryEmbedding(dim=hidden_size // num_heads)
+    
+    <span class="keyword">def</span> <span class="function">forward</span>(self, input_ids):
+        <span class="keyword">return</span> self.token_emb(input_ids)</div>
+                    <div class="info-pills">
+                        <span class="info-pill blue">vocab: 32000</span>
+                        <span class="info-pill cyan">hidden: 2048/4096</span>
+                    </div>
+                `
+            },
+            'attention': {
+                title: 'Multi-Head Attention (GQA)',
+                content: `
+                    <p>Grouped-Query Attention for efficient KV cache during inference.</p>
+                    <div class="code-block"><span class="keyword">class</span> <span class="function">GQAttention</span>(nn.Module):
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, hidden_size, num_heads, num_kv_heads):
+        self.num_heads = num_heads       <span class="comment"># 16 for 1B/3B, 32 for 8B/70B</span>
+        self.num_kv_heads = num_kv_heads <span class="comment"># 4 for 1B/3B, 8 for 8B/70B</span>
+        self.head_dim = <span class="number">128</span>             <span class="comment"># Always 128</span>
+        
+        self.q_proj = nn.Linear(hidden_size, num_heads * head_dim)
+        self.k_proj = nn.Linear(hidden_size, num_kv_heads * head_dim)
+        self.v_proj = nn.Linear(hidden_size, num_kv_heads * head_dim)
+        self.o_proj = nn.Linear(num_heads * head_dim, hidden_size)</div>
+                `
+            },
+            'ffn-dense': {
+                title: 'Dense FFN (SwiGLU)',
+                content: `
+                    <p>SwiGLU activation for better gradient flow.</p>
+                    <div class="code-block"><span class="keyword">class</span> <span class="function">SwiGLUFFN</span>(nn.Module):
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, hidden_size, intermediate_size):
+        self.w1 = nn.Linear(hidden_size, intermediate_size, bias=False)
+        self.w2 = nn.Linear(intermediate_size, hidden_size, bias=False)
+        self.w3 = nn.Linear(hidden_size, intermediate_size, bias=False)
+        
+    <span class="keyword">def</span> <span class="function">forward</span>(self, x):
+        <span class="comment"># SwiGLU: swish(x @ W1) * (x @ W3)</span>
+        <span class="keyword">return</span> self.w2(F.silu(self.w1(x)) * self.w3(x))</div>
+                    <div class="highlight-box">
+                        <h4>💡 This becomes the template for all experts!</h4>
+                        <p>In Stage 2, this FFN is copied to all 8 experts. Each expert starts identical, then specializes during training.</p>
+                    </div>
+                `
+            },
+            'router': {
+                title: 'GSA Gated Lightning Router',
+                content: `
+                    <p>Multi-head router with sigmoid scoring from GSA paper.</p>
+                    <div class="router-flow">
+                        <div class="flow-step">
+                            <div class="flow-icon" style="background: rgba(139, 92, 246, 0.2);">1️⃣</div>
+                            <div class="flow-content">
+                                <h5>Head Weights</h5>
+                                <p><code>w = σ(x @ W_weight)</code> - Query-dependent head importance</p>
+                            </div>
+                        </div>
+                        <div class="flow-step">
+                            <div class="flow-icon" style="background: rgba(6, 182, 212, 0.2);">2️⃣</div>
+                            <div class="flow-content">
+                                <h5>Query Projection</h5>
+                                <p><code>q = x @ W_query</code> - Project to 64d per head</p>
+                            </div>
+                        </div>
+                        <div class="flow-step">
+                            <div class="flow-icon" style="background: rgba(16, 185, 129, 0.2);">3️⃣</div>
+                            <div class="flow-content">
+                                <h5>Expert Affinity (Sigmoid!)</h5>
+                                <p><code>score = Σⱼ wⱼ · σ(qⱼ · expert_keyᵢ + bⱼ)</code></p>
+                            </div>
+                        </div>
+                        <div class="flow-step">
+                            <div class="flow-icon" style="background: rgba(245, 158, 11, 0.2);">4️⃣</div>
+                            <div class="flow-content">
+                                <h5>Bias Adjustment (Load Balancing)</h5>
+                                <p><code>adjusted = score + expert_bias</code></p>
+                            </div>
+                        </div>
+                        <div class="flow-step">
+                            <div class="flow-icon" style="background: rgba(236, 72, 153, 0.2);">5️⃣</div>
+                            <div class="flow-content">
+                                <h5>Top-K Selection</h5>
+                                <p><code>indices = topk(adjusted, k=2)</code></p>
+                            </div>
+                        </div>
+                        <div class="flow-step">
+                            <div class="flow-icon" style="background: rgba(59, 130, 246, 0.2);">6️⃣</div>
+                            <div class="flow-content">
+                                <h5>Gating Weights (from ORIGINAL scores!)</h5>
+                                <p><code>weights = normalize(original_score[indices])</code></p>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'expert': {
+                title: 'Gated Expert (G1+G2)',
+                content: `
+                    <p>Expert FFN with dual gating for collapse prevention.</p>
+                    <div class="code-block"><span class="keyword">class</span> <span class="function">GatedExpert</span>(nn.Module):
+    <span class="keyword">def</span> <span class="function">__init__</span>(self, hidden_size, intermediate_size):
+        <span class="comment"># SwiGLU FFN</span>
+        self.w1 = nn.Linear(hidden_size, intermediate_size)
+        self.w2 = nn.Linear(intermediate_size, hidden_size)
+        self.w3 = nn.Linear(hidden_size, intermediate_size)
+        
+        <span class="comment"># G2: Input gate</span>
+        self.input_gate = nn.Linear(hidden_size, hidden_size)
+        <span class="comment"># G1: Output gate</span>
+        self.output_gate = nn.Linear(hidden_size, hidden_size)
+        
+    <span class="keyword">def</span> <span class="function">forward</span>(self, x):
+        g2 = torch.sigmoid(self.input_gate(x))
+        x_gated = x * g2
+        
+        h = F.silu(self.w1(x_gated)) * self.w3(x_gated)
+        output = self.w2(h)
+        
+        g1 = torch.sigmoid(self.output_gate(x))
+        <span class="keyword">return</span> output * g1</div>
+                `
+            },
+            'null-expert': {
+                title: 'Null Expert',
+                content: `
+                    <p>Zero-compute pathway that competes in top-k routing.</p>
+                    <div class="code-block"><span class="keyword">class</span> <span class="function">NullExpert</span>(nn.Module):
+    <span class="keyword">def</span> <span class="function">forward</span>(self, x):
+        <span class="keyword">return</span> torch.zeros_like(x)</div>
+                    <div class="why-section">
+                        <h4>How Router Learns Null Routing</h4>
+                        <ul class="why-list">
+                            <li><strong>Gradient signal:</strong> Routing important tokens to null → loss increases → gradient pushes away from null</li>
+                            <li><strong>Junk tokens:</strong> Routing "the", padding, etc. to null → loss unchanged → no gradient pressure</li>
+                            <li><strong>Target:</strong> 60-80% of junk tokens, &lt;10% of signal tokens</li>
+                        </ul>
+                    </div>
+                `
+            },
+            'shared-expert': {
+                title: 'Shared Expert',
+                content: `
+                    <p>Experts that process ALL tokens (always active).</p>
+                    <div class="highlight-box">
+                        <h4>💡 Why Shared Experts?</h4>
+                        <p>Shared experts provide baseline capacity. Even if routing fails, shared experts ensure minimum capability.</p>
+                    </div>
+                    <div class="code-block"><span class="comment"># In forward pass:</span>
+shared_out = sum(exp(x) <span class="keyword">for</span> exp <span class="keyword">in</span> shared_experts) / num_shared
+routed_out = compute_routed(x, router)
+output = shared_out + routed_out</div>
+                `
+            },
+            'attention-8b': {
+                title: 'Scaled Attention (8B)',
+                content: `
+                    <p>Attention scaled 2× from 3B configuration.</p>
+                    <table class="config-table">
+                        <tr><th>Parameter</th><th>3B</th><th>8B</th></tr>
+                        <tr><td>Query Heads</td><td>16</td><td class="config-value">32</td></tr>
+                        <tr><td>KV Heads</td><td>4</td><td class="config-value">8</td></tr>
+                        <tr><td>Head Dim</td><td>128</td><td>128 (same)</td></tr>
+                    </table>
+                `
+            },
+            'router-8b': {
+                title: 'Scaled Router (8B)',
+                content: `
+                    <p>Same 8 experts, but router handles 4096d input.</p>
+                    <table class="config-table">
+                        <tr><th>Parameter</th><th>3B</th><th>8B</th></tr>
+                        <tr><td>Input Dim</td><td>2048</td><td class="config-value">4096</td></tr>
+                        <tr><td>Router Dim</td><td>64</td><td class="config-value">128</td></tr>
+                        <tr><td>Num Experts</td><td>8</td><td>8 (same!)</td></tr>
+                        <tr><td>Top-K</td><td>2</td><td>2 (same!)</td></tr>
+                    </table>
+                    <div class="highlight-box success">
+                        <h4>✅ Routing Knowledge Preserved</h4>
+                        <p>The 8 experts keep their learned specializations. Only their capacity increases!</p>
+                    </div>
+                `
+            },
+            'router-70b': {
+                title: 'Expanded Router (70B)',
+                content: `
+                    <p>New router for 64 experts with adaptive top-k.</p>
+                    <table class="config-table">
+                        <tr><th>Parameter</th><th>Value</th></tr>
+                        <tr><td>Router Heads</td><td class="config-value">4</td></tr>
+                        <tr><td>Router Dim</td><td class="config-value">128</td></tr>
+                        <tr><td>Total Experts</td><td class="config-value">66 (64 + 2 null)</td></tr>
+                        <tr><td>Top-K</td><td class="config-value">4 (adaptive 2-6)</td></tr>
+                    </table>
+                    <div class="highlight-box">
+                        <h4>⚡ Hierarchical Init (Optional)</h4>
+                        <p>Can warm-start 64 expert keys from 8 parent keys: child[i,j].key = parent[i].key + noise</p>
+                    </div>
+                `
+            }
+        };
+
+        function showStage(stage) {
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.stage == stage);
+            });
+            document.querySelectorAll('.growth-stage').forEach(gs => {
+                gs.classList.toggle('active', gs.dataset.stage == stage);
+            });
+            document.querySelectorAll('.architecture-section').forEach(section => {
+                section.classList.toggle('active', section.id === `stage-${stage}`);
+            });
+        }
+
+        function showModal(componentId) {
+            const content = modalContent[componentId];
+            if (!content) return;
+            document.getElementById('modal-title').textContent = content.title;
+            document.getElementById('modal-content').innerHTML = content.content;
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+
+        function closeModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('modal-overlay').classList.remove('active');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>

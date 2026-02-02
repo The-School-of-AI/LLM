@@ -1,0 +1,11 @@
+{
+  "config": {
+    "num_routed_experts": 64,
+    "num_shared_experts": 4,
+    "num_null_experts": 2,
+    "top_k": 4
+  },
+  "history": [],
+  "token_expert_map": {},
+  "bucket_expert_map": {}
+}

@@ -1,0 +1,545 @@
+{
+  "title": "Team 7 - MoE Routing Diagnostics",
+  "version": "1.0.0",
+  "refresh_interval": 5,
+  "metrics": {
+    "null_junk_rate": {
+      "display_name": "Junk \u2192 Null Rate",
+      "description": "Percentage of junk tokens routed to null expert",
+      "unit": "%",
+      "thresholds": {
+        "green": [
+          60.0,
+          80.0
+        ],
+        "yellow": [
+          50.0,
+          60.0
+        ],
+        "red": [
+          0.0,
+          50.0
+        ]
+      }
+    },
+    "null_boilerplate_rate": {
+      "display_name": "Boilerplate \u2192 Null Rate",
+      "description": "Percentage of boilerplate tokens routed to null",
+      "unit": "%",
+      "thresholds": {
+        "green": [
+          40.0,
+          70.0
+        ],
+        "yellow": [
+          null,
+          null
+        ],
+        "red": [
+          null,
+          null
+        ]
+      }
+    },
+    "null_signal_rate": {
+      "display_name": "Signal \u2192 Null Rate",
+      "description": "Percentage of signal tokens leaked to null (should be low)",
+      "unit": "%",
+      "thresholds": {
+        "green": [
+          0.0,
+          10.0
+        ],
+        "yellow": [
+          10.0,
+          15.0
+        ],
+        "red": [
+          15.0,
+          100.0
+        ]
+      }
+    },
+    "compute_savings": {
+      "display_name": "Compute Savings",
+      "description": "FLOPs saved by null expert routing",
+      "unit": "%",
+      "thresholds": {
+        "green": [
+          10.0,
+          100.0
+        ],
+        "yellow": [
+          null,
+          null
+        ],
+        "red": [
+          null,
+          null
+        ]
+      }
+    },
+    "routing_entropy": {
+      "display_name": "Routing Entropy",
+      "description": "Normalized entropy of expert selection (1.0 = uniform)",
+      "unit": "",
+      "thresholds": {
+        "green": [
+          0.7,
+          1.0
+        ],
+        "yellow": [
+          0.5,
+          0.7
+        ],
+        "red": [
+          0.0,
+          0.5
+        ]
+      }
+    },
+    "gini_coefficient": {
+      "display_name": "Load Balance (Gini)",
+      "description": "Gini coefficient of expert utilization (0 = perfect balance)",
+      "unit": "",
+      "thresholds": {
+        "green": [
+          0.0,
+          0.3
+        ],
+        "yellow": [
+          0.3,
+          0.5
+        ],
+        "red": [
+          0.5,
+          1.0
+        ]
+      }
+    },
+    "dead_expert_count": {
+      "display_name": "Dead Experts",
+      "description": "Number of experts with <1% utilization",
+      "unit": "",
+      "thresholds": {
+        "green": [
+          0.0,
+          0.0
+        ],
+        "yellow": [
+          1.0,
+          2.0
+        ],
+        "red": [
+          3.0,
+          100.0
+        ]
+      }
+    },
+    "overloaded_expert_count": {
+      "display_name": "Overloaded Experts",
+      "description": "Number of experts with >3x expected utilization",
+      "unit": "",
+      "thresholds": {
+        "green": [
+          0.0,
+          0.0
+        ],
+        "yellow": [
+          1.0,
+          2.0
+        ],
+        "red": [
+          3.0,
+          100.0
+        ]
+      }
+    },
+    "stability_score": {
+      "display_name": "Stability Score",
+      "description": "Routing stability over time (1.0 = fully stable)",
+      "unit": "",
+      "thresholds": {
+        "green": [
+          0.8,
+          1.0
+        ],
+        "yellow": [
+          0.6,
+          0.8
+        ],
+        "red": [
+          0.0,
+          0.6
+        ]
+      }
+    },
+    "lora_ready": {
+      "display_name": "LoRA Ready",
+      "description": "Whether MoE block is stable enough for LoRA",
+      "unit": "",
+      "thresholds": {
+        "green": [
+          null,
+          null
+        ],
+        "yellow": [
+          null,
+          null
+        ],
+        "red": [
+          null,
+          null
+        ]
+      }
+    },
+    "growth_ready": {
+      "display_name": "Growth Ready",
+      "description": "Whether conditions are met for expert expansion",
+      "unit": "",
+      "thresholds": {
+        "green": [
+          null,
+          null
+        ],
+        "yellow": [
+          null,
+          null
+        ],
+        "red": [
+          null,
+          null
+        ]
+      }
+    },
+    "tokens_per_second": {
+      "display_name": "Throughput",
+      "description": "Training tokens processed per second",
+      "unit": "tok/s",
+      "thresholds": {
+        "green": [
+          null,
+          null
+        ],
+        "yellow": [
+          null,
+          null
+        ],
+        "red": [
+          null,
+          null
+        ]
+      }
+    },
+    "expert_latency_ms": {
+      "display_name": "Expert Latency",
+      "description": "Average expert computation time",
+      "unit": "ms",
+      "thresholds": {
+        "green": [
+          null,
+          null
+        ],
+        "yellow": [
+          null,
+          null
+        ],
+        "red": [
+          null,
+          null
+        ]
+      }
+    }
+  },
+  "panels": [
+    {
+      "id": "null_junk_gauge",
+      "title": "Junk \u2192 Null Rate",
+      "type": "gauge",
+      "metrics": [
+        "null_junk_rate"
+      ],
+      "layout": {
+        "row": 0,
+        "col": 0,
+        "width": 3,
+        "height": 3
+      },
+      "options": {
+        "min": 0,
+        "max": 100,
+        "target": 70
+      }
+    },
+    {
+      "id": "null_signal_gauge",
+      "title": "Signal Leakage to Null",
+      "type": "gauge",
+      "metrics": [
+        "null_signal_rate"
+      ],
+      "layout": {
+        "row": 0,
+        "col": 3,
+        "width": 3,
+        "height": 3
+      },
+      "options": {
+        "min": 0,
+        "max": 30,
+        "target": 5,
+        "inverse": true
+      }
+    },
+    {
+      "id": "entropy_gauge",
+      "title": "Routing Entropy",
+      "type": "gauge",
+      "metrics": [
+        "routing_entropy"
+      ],
+      "layout": {
+        "row": 0,
+        "col": 6,
+        "width": 3,
+        "height": 3
+      },
+      "options": {
+        "min": 0,
+        "max": 1,
+        "target": 0.85
+      }
+    },
+    {
+      "id": "status_panel",
+      "title": "System Status",
+      "type": "status",
+      "metrics": [
+        "lora_ready",
+        "growth_ready"
+      ],
+      "layout": {
+        "row": 0,
+        "col": 9,
+        "width": 3,
+        "height": 3
+      },
+      "options": {}
+    },
+    {
+      "id": "null_rates_trend",
+      "title": "Null Routing Rates Over Time",
+      "type": "line_chart",
+      "metrics": [
+        "null_junk_rate",
+        "null_boilerplate_rate",
+        "null_signal_rate"
+      ],
+      "layout": {
+        "row": 1,
+        "col": 0,
+        "width": 6,
+        "height": 4
+      },
+      "options": {
+        "legend": true,
+        "y_min": 0,
+        "y_max": 100
+      }
+    },
+    {
+      "id": "health_trend",
+      "title": "Routing Health Over Time",
+      "type": "line_chart",
+      "metrics": [
+        "routing_entropy",
+        "gini_coefficient"
+      ],
+      "layout": {
+        "row": 1,
+        "col": 6,
+        "width": 6,
+        "height": 4
+      },
+      "options": {
+        "legend": true,
+        "y_min": 0,
+        "y_max": 1
+      }
+    },
+    {
+      "id": "expert_utilization",
+      "title": "Expert Utilization Distribution",
+      "type": "bar_chart",
+      "metrics": [
+        "expert_utilization"
+      ],
+      "layout": {
+        "row": 2,
+        "col": 0,
+        "width": 8,
+        "height": 4
+      },
+      "options": {
+        "x_label": "Expert ID",
+        "y_label": "Utilization %"
+      }
+    },
+    {
+      "id": "expert_health",
+      "title": "Expert Health Status",
+      "type": "table",
+      "metrics": [
+        "dead_expert_count",
+        "overloaded_expert_count"
+      ],
+      "layout": {
+        "row": 2,
+        "col": 8,
+        "width": 4,
+        "height": 4
+      },
+      "options": {}
+    },
+    {
+      "id": "bucket_routing",
+      "title": "Routing by Curriculum Bucket (B0-B5)",
+      "type": "heatmap",
+      "metrics": [
+        "bucket_expert_distribution"
+      ],
+      "layout": {
+        "row": 3,
+        "col": 0,
+        "width": 8,
+        "height": 4
+      },
+      "options": {
+        "x_label": "Expert ID",
+        "y_label": "Bucket",
+        "y_categories": [
+          "B0 Trivial",
+          "B1 Basic",
+          "B2 Intermediate",
+          "B3 Advanced",
+          "B4 Expert",
+          "B5 Frontier"
+        ]
+      }
+    },
+    {
+      "id": "compute_savings",
+      "title": "Compute Savings",
+      "type": "gauge",
+      "metrics": [
+        "compute_savings"
+      ],
+      "layout": {
+        "row": 3,
+        "col": 8,
+        "width": 4,
+        "height": 4
+      },
+      "options": {
+        "min": 0,
+        "max": 30,
+        "suffix": "% FLOPs saved"
+      }
+    },
+    {
+      "id": "alerts",
+      "title": "Active Alerts",
+      "type": "alert_list",
+      "metrics": [
+        "alerts"
+      ],
+      "layout": {
+        "row": 4,
+        "col": 0,
+        "width": 12,
+        "height": 3
+      },
+      "options": {}
+    }
+  ],
+  "alerts": [
+    {
+      "id": "null_junk_low",
+      "name": "Low Null Routing for Junk",
+      "description": "Junk tokens not routing to null as expected",
+      "severity": "warning",
+      "metric": "null_junk_rate",
+      "condition": "below",
+      "threshold": 50.0,
+      "for_duration": 300,
+      "recommendation": "Increase null expert bias or review token classification"
+    },
+    {
+      "id": "null_signal_high",
+      "name": "High Signal Leakage to Null",
+      "description": "Too many signal tokens routing to null expert",
+      "severity": "warning",
+      "metric": "null_signal_rate",
+      "condition": "above",
+      "threshold": 15.0,
+      "for_duration": 300,
+      "recommendation": "Decrease null expert bias or check router learning"
+    },
+    {
+      "id": "entropy_collapse",
+      "name": "Router Entropy Collapse",
+      "description": "Routing entropy critically low - possible expert collapse",
+      "severity": "critical",
+      "metric": "routing_entropy",
+      "condition": "below",
+      "threshold": 0.5,
+      "for_duration": 60,
+      "recommendation": "URGENT: Check for expert collapse, consider router reset"
+    },
+    {
+      "id": "load_imbalance",
+      "name": "Expert Load Imbalance",
+      "description": "Expert utilization is highly uneven",
+      "severity": "warning",
+      "metric": "gini_coefficient",
+      "condition": "above",
+      "threshold": 0.5,
+      "for_duration": 300,
+      "recommendation": "Review load balancing bias adjustment"
+    },
+    {
+      "id": "dead_experts",
+      "name": "Dead Experts Detected",
+      "description": "One or more experts have near-zero utilization",
+      "severity": "warning",
+      "metric": "dead_expert_count",
+      "condition": "above",
+      "threshold": 0,
+      "for_duration": 600,
+      "recommendation": "Boost bias for dead experts or reinitialize"
+    }
+  ],
+  "objectives": {
+    "null_expert_fire_rate": {
+      "target": "60-80% for junk tokens",
+      "description": "Null experts should heavily fire on low-information tokens"
+    },
+    "token_expert_mapping": {
+      "description": "Track which token ID families route to which experts"
+    },
+    "curriculum_tracking": {
+      "buckets": [
+        "B0",
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5"
+      ],
+      "description": "Monitor routing specialization by curriculum difficulty"
+    },
+    "stability_milestones": {
+      "description": "Determine LoRA-readiness and expert growth triggers"
+    }
+  }
+}
