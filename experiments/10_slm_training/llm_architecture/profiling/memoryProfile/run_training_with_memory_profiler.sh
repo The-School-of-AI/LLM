@@ -3,7 +3,7 @@
 # Script to run training with memory profiling enabled
 # This script runs the LLM training with PyTorch profiler enabled
 
-set -e  # Exit on error
+#set -e  # Exit on error
 
 # Default values
 PRESET="${PRESET:-1b-gsa}"

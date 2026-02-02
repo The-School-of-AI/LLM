@@ -26,7 +26,7 @@ PROFILE_STEPS="10-12"  # Not used by ncu - just kept for documentation
 MAX_STEPS=12
 BATCH_SIZE=1
 GRADIENT_ACCUMULATION=1
-SEQ_LENGTH=512
+SEQ_LENGTH= 256
 LEARNING_RATE=3e-4
 EXPERIMENT_NAME="kernel_profiling_${PROFILE_NAME}"
 
@@ -95,7 +95,7 @@ source "${PROJECT_ROOT}/.venv/bin/activate"
 
 # Run ncu with full analysis sections
 # NOTE: sudo is required because RmProfilingAdminOnly=1 restricts GPU performance counters
-sudo /opt/nvidia/nsight-compute/2025.4.1/ncu \
+/opt/nvidia/nsight-compute/2025.4.1/ncu \
   -f \
   --set full \
   --target-processes all \
