@@ -237,11 +237,25 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
                 print(f"✓ Loaded dense model from step {total_steps}")
                 
             elif resume_phase == 2:
-                # Load dense model, will convert to MoE
-                model_config = SmolLM2Config(**config["model"])
-                model = SmolLM2(model_config)
-                model.load_state_dict(checkpoint["model_state_dict"])
-                print(f"✓ Loaded dense model from step {total_steps}")
+                # Phase 2 has two cases:
+                # 1. End of Phase 1 checkpoint (dense model) - will convert to MoE
+                # 2. Mid-Phase 2 checkpoint (already MoE) - load directly
+                if is_mid_phase:
+                    # Mid-phase: checkpoint is already MoE
+                    from src.moe_model import SmolLM2MoE, MoEConfig
+                    moe_cfg = {**config["model"], 
+                               "num_experts": config["growth"]["dense_to_moe"]["num_experts"],
+                               "num_experts_per_tok": config["growth"]["dense_to_moe"]["num_experts_per_tok"]}
+                    model_config = MoEConfig(**moe_cfg)
+                    model = SmolLM2MoE(model_config)
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                    print(f"✓ Loaded MoE model from step {total_steps} (mid-Phase 2)")
+                else:
+                    # End of Phase 1: load dense model, will be converted to MoE
+                    model_config = SmolLM2Config(**config["model"])
+                    model = SmolLM2(model_config)
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                    print(f"✓ Loaded dense model from step {total_steps}")
                 
             elif resume_phase >= 3:
                 # Load MoE model (need to recreate MoE structure first)
@@ -374,42 +388,58 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         print("📌 PHASE 2: Dense → MoE")
         print("=" * 70)
         
-        pre_moe_loss = measure_loss(model, dataloader, device)
+        from src.moe_model import SmolLM2MoE
         
-        # Convert to MoE
-        moe_config = config["growth"]["dense_to_moe"]
-        model = dense_to_moe(
-            model,
-            num_experts=moe_config["num_experts"],
-            num_experts_per_tok=moe_config["num_experts_per_tok"],
-        )
+        # Check if model is already MoE (mid-phase resume)
+        if isinstance(model, SmolLM2MoE):
+            print("✓ Model is already MoE (mid-phase resume)")
+            # Calculate remaining steps
+            phase2_end_step = config["training"]["phase1_steps"] + config["training"]["phase2_steps"]
+            remaining_steps = phase2_end_step - total_steps
+            start_step = total_steps
+        else:
+            # Convert dense to MoE
+            pre_moe_loss = measure_loss(model, dataloader, device)
+            
+            moe_config = config["growth"]["dense_to_moe"]
+            model = dense_to_moe(
+                model,
+                num_experts=moe_config["num_experts"],
+                num_experts_per_tok=moe_config["num_experts_per_tok"],
+            )
+            
+            post_moe_loss = measure_loss(model, dataloader, device)
+            results["phase2_delta"] = log_transition("moe_conversion", pre_moe_loss, post_moe_loss, wandb_run, total_steps)
+            
+            remaining_steps = config["training"]["phase2_steps"]
+            start_step = total_steps
         
-        post_moe_loss = measure_loss(model, dataloader, device)
-        results["phase2_delta"] = log_transition("moe_conversion", pre_moe_loss, post_moe_loss, wandb_run, total_steps)
+        if remaining_steps > 0:
+            print(f"\n🚀 Training MoE for {remaining_steps} steps (from step {start_step})...")
+            
+            phase2_loss = train_phase(
+                model=model,
+                dataloader=dataloader,
+                num_steps=remaining_steps,
+                start_step=start_step,
+                learning_rate=config["training"]["learning_rate"] * 0.5,
+                weight_decay=config["training"]["weight_decay"],
+                warmup_steps=50,
+                max_grad_norm=config["training"]["max_grad_norm"],
+                gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+                log_every=config["training"]["log_every"],
+                checkpoint_every=config["training"]["checkpoint_every"],
+                save_dir=config["training"]["save_dir"],
+                checkpoint_prefix="phase2_moe",
+                device=device,
+                wandb_run=wandb_run,
+            )
+            results["phase2_loss"] = phase2_loss
+        else:
+            print(f"\n⏭️  Phase 2 already complete")
+            phase2_loss = 0.0
         
-        phase2_steps = config["training"]["phase2_steps"]
-        print(f"\n🚀 Training MoE for {phase2_steps} steps...")
-        
-        phase2_loss = train_phase(
-            model=model,
-            dataloader=dataloader,
-            num_steps=phase2_steps,
-            start_step=total_steps,
-            learning_rate=config["training"]["learning_rate"] * 0.5,
-            weight_decay=config["training"]["weight_decay"],
-            warmup_steps=50,
-            max_grad_norm=config["training"]["max_grad_norm"],
-            gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
-            log_every=config["training"]["log_every"],
-            checkpoint_every=config["training"]["checkpoint_every"],
-            save_dir=config["training"]["save_dir"],
-            checkpoint_prefix="phase2_moe",
-            device=device,
-            wandb_run=wandb_run,
-        )
-        
-        total_steps += phase2_steps
-        results["phase2_loss"] = phase2_loss
+        total_steps = config["training"]["phase1_steps"] + config["training"]["phase2_steps"]
         print(f"\n✅ Phase 2 complete! Loss: {phase2_loss:.4f}")
         
         # Clear memory
