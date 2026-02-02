@@ -119,7 +119,12 @@ class BandAssignmentMetric(MetricPlugin):
         diff_score = difficulty_tags.get("score", 0.0)
         diff_level = difficulty_tags.get("level", "L0")
         entropy = entropy_tags.get("score", 0.0)
-        diversity = diversity_tags.get("rare_ratio", 0.0)
+        diversity = diversity_tags.get("rare_ratio")
+        
+        # Fallback for diversity: read from difficulty features if dedicated metric is disabled
+        if diversity is None:
+            diversity = difficulty_tags.get("features", {}).get("rare_ratio", 0.0)
+            
         tokenizer_level = tokenizer_tags.get("level", "T0")
         structural_density = structural_tags.get("structural_density", 0.0)
         

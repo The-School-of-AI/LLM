@@ -8,6 +8,13 @@ from typing import Dict, Optional
 import pyarrow.parquet as pq
 import yaml
 from pathlib import Path
+import sys
+import os
+
+# Ensure project root is in path
+sys.path.append(str(Path(__file__).parent.parent))
+
+from curriculum_tags.metrics.band_assignment import BandAssignmentMetric
 
 
 def load_curriculum_config(path: str | Path) -> Dict:
@@ -107,16 +114,23 @@ def compute_band_proportions(
     return final
 
 
-def sample_metadata(metadata_path: str, sample_rate: float) -> Dict[str, float]:
+def sample_metadata(metadata_path: str, sample_rate: float, recompute: bool = False, curriculum_path: str = "curriculum.yaml") -> Dict[str, float]:
     """Sample metadata and calculate base distribution of bands."""
     print(f"Reading metadata from: {metadata_path}")
     print(f"Sampling rate: {sample_rate*100}%")
+    if recompute:
+        print("Re-computing band assignments using current band_assignment.yaml logic...")
+        # Create metric instance
+        fake_config = type('Config', (), {'path': str(Path(curriculum_path).absolute())})()
+        metric = BandAssignmentMetric(fake_config)
 
     if not Path(metadata_path).exists():
         raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
     
+    # pq.read_table handles single files or directories
     table = pq.read_table(metadata_path)
     total_rows = table.num_rows
+    print(f"Total rows found across files: {total_rows}")
     
     # Simple random sampling indices
     sample_size = int(total_rows * sample_rate)
@@ -133,13 +147,24 @@ def sample_metadata(metadata_path: str, sample_rate: float) -> Dict[str, float]:
         tags = row.get("curriculum_tags", {})
         band = None
         
-        # Priority 1: New Band Assignment Metric
-        if "band_assignment" in tags and "band" in tags["band_assignment"]:
-            band = tags["band_assignment"]["band"]
-            
-        # Priority 2: Legacy Difficulty Metric (Fallback)
-        elif "difficulty" in tags and "band" in tags["difficulty"]:
-            band = tags["difficulty"]["band"]
+        if recompute:
+            # IMPORTANT: Re-run logic on the raw tags
+            # Construct sample dict expected by compute()
+            # compute() expects {"curriculum_tags": ...}
+            # row is flat, but contains "curriculum_tags" column which is a dict (struct in parquet)
+            # wait, table.to_pylist() converts struct columns to dicts.
+            # So tags is indeed the dictionary of tags.
+            sample_input = {"curriculum_tags": tags}
+            result = metric.compute(sample_input)
+            band = result["band"]
+        else:
+            # Priority 1: New Band Assignment Metric
+            if "band_assignment" in tags and "band" in tags["band_assignment"]:
+                band = tags["band_assignment"]["band"]
+                
+            # Priority 2: Legacy Difficulty Metric (Fallback)
+            elif "difficulty" in tags and "band" in tags["difficulty"]:
+                band = tags["difficulty"]["band"]
             
         if band:
             counts[band] = counts.get(band, 0) + 1
@@ -156,10 +181,11 @@ import json
 
 def main():
     parser = argparse.ArgumentParser(description="Calculate curriculum band proportions.")
-    parser.add_argument("metadata_path", help="Path to .metadata.parquet file")
+    parser.add_argument("metadata_path", help="Path to .metadata.parquet file or directory containing them")
     parser.add_argument("--sampling-rate", type=float, default=0.005, help="Sampling rate (default 0.005)")
     parser.add_argument("--curriculum-path", default="curriculum.yaml", help="Path to curriculum.yaml")
     parser.add_argument("--output-json", help="Path to save output proportions as JSON")
+    parser.add_argument("--recompute", action="store_true", help="Re-run band assignment logic on signals instead of using stored tags")
 
     args = parser.parse_args()
 
@@ -189,7 +215,7 @@ def main():
 
     # 1. Sample Distribution
     try:
-        base_dist = sample_metadata(args.metadata_path, args.sampling_rate)
+        base_dist = sample_metadata(args.metadata_path, args.sampling_rate, args.recompute, args.curriculum_path)
         print("\nBase Distribution (from Data):")
         for b, p in sorted(base_dist.items()):
             print(f"  {b}: {p:.4f}")

@@ -16,42 +16,42 @@ bands:
 
   B1:
     allowed_difficulty_levels: ["L1", "L2", "L3"]
-    readability_range: [4.0, 10.0]
-    difficulty_score_range: [0.20, 0.50]
-    entropy_range: [3.5, 5.5]
-    diversity_range: [0.10, 0.25]
+    readability_range: [2.0, 14.0]
+    difficulty_score_range: [0.10, 0.60]
+    entropy_range: [1.5, 6.0]
+    diversity_range: [0.00, 0.40]
     allowed_modalities: ["general_text", "clean_exposition"]
 
   B2:
     allowed_difficulty_levels: ["L2", "L3", "L4"]
     readability_range: [8.0, 14.0]
     difficulty_score_range: [0.40, 0.70]
-    entropy_range: [4.0, 6.0]
-    diversity_range: [0.15, 0.35]
+    entropy_range: [2.5, 6.0]
+    diversity_range: [0.10, 0.35]
     allowed_modalities: ["general_text", "structured_knowledge"]
 
   B3:
     allowed_difficulty_levels: ["L3", "L4"]
     readability_range: [12.0, .inf]
     difficulty_score_range: [0.60, 0.85]
-    entropy_range: [4.5, .inf]
-    diversity_range: [0.20, .inf]
+    entropy_range: [3.0, .inf]
+    diversity_range: [0.15, .inf]
     allowed_modalities: ["structured_knowledge", "technical_text", "code"]
 
   B4:
     allowed_difficulty_levels: ["L4", "L5"]
     readability_range: [14.0, .inf]
     difficulty_score_range: [0.75, .inf]
-    entropy_range: [5.0, .inf]
-    diversity_range: [0.25, .inf]
+    entropy_range: [3.5, .inf]
+    diversity_range: [0.20, .inf]
     allowed_modalities: ["technical_text", "math", "code", "planning_reasoning_curated"]
 
   B5:
     allowed_difficulty_levels: ["L5"]
     readability_range: [16.0, .inf]
     difficulty_score_range: [0.85, .inf]
-    entropy_range: [5.5, .inf]
-    diversity_range: [0.30, .inf]
+    entropy_range: [4.0, .inf]
+    diversity_range: [0.25, .inf]
     # allowed_tokenizer_levels: ["T3", "T4", "T5"]
     # structural_density_range: [0.3, .inf]
     allowed_modalities: ["hard_reasoning", "math", "advanced_code", "planning"]

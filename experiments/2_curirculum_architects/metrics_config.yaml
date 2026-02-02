@@ -97,7 +97,7 @@ metrics:
 
   - name: diversity
     class: DiversityMetric
-    enabled: true
+    enabled: false
     output: |
       "diversity": {
         "rare_ratio": float,
