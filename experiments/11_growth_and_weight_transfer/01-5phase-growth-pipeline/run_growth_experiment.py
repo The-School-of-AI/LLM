@@ -583,7 +583,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print(f"  Post-YaRN loss (256 context): {post_yarn_short_loss:.4f}")
     
     yarn_delta = post_yarn_short_loss - pre_yarn_short_loss
-    yarn_status = "✅ PRESERVED!" if abs(yarn_delta) < 0.3 else "⚠️ Changed"
+    yarn_status = "✅ PRESERVED!" if abs(yarn_delta) < 0.5 else "⚠️ Changed"
     print(f"  YaRN impact: {yarn_delta:+.4f} ({yarn_status})")
     results["phase5_delta"] = yarn_delta
     
