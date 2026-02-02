@@ -3,6 +3,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from pathlib import Path
+
 from ..core.plugin import MetricPlugin
 
 
@@ -73,16 +75,17 @@ class BandAssignmentMetric(MetricPlugin):
         
         logic_config = BandAssignmentConfig()
         
-        # 1. Load from YAML if available (System Default)
-        import os
-        default_yaml = os.path.join(os.path.dirname(__file__), "band_assignment.yaml")
-        if os.path.exists(default_yaml):
-            try:
-                logic_config = BandAssignmentConfig.from_yaml(default_yaml)
-            except Exception as e:
-                # Log error or print? For now print to stderr in dev
-                # print(f"Error loading band_assignment.yaml: {e}")
-                pass
+        # 1. Load from YAML if available (Next to curriculum.yaml)
+        if hasattr(self.config, "path") and self.config.path:
+            config_dir = Path(self.config.path).parent
+            yaml_path = config_dir / "band_assignment.yaml"
+            
+            if yaml_path.exists():
+                try:
+                    logic_config = BandAssignmentConfig.from_yaml(str(yaml_path))
+                except Exception as e:
+                    # print(f"Error loading band_assignment.yaml: {e}")
+                    pass
                 
         # 2. Allow programmatic override (e.g. from tests) doesn't easily map to dataclass yet 
         # unless strict mapping. 

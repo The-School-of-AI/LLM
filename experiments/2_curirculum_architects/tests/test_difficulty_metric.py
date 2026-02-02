@@ -13,7 +13,7 @@ from curriculum_tags.utils.curriculum_loader import CurriculumConfig
 @pytest.fixture
 def temp_config():
     """Create temporary config."""
-    config_data = ({"version": "0.1"},)
+    config_data = {"version": "0.1"}
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.dump(config_data, f)
         path = Path(f.name)
