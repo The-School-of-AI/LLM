@@ -2,16 +2,18 @@ import ray
 import s3fs
 from tqdm import tqdm
 
-from curriculum_tags.engine import CurriculumTagger
+from curriculum_tags import CurriculumTagger
 
 # ------------------------
 # CONFIGURATION
 # ------------------------
-INPUT_S3_PREFIX = "s3://my-bucket/dolma_parquet/"
-OUTPUT_S3_PREFIX = "s3://my-bucket/dolma_enriched/"
-CURRICULUM_YAML = "/home/ubuntu/curriculum.yaml"
-BATCH_SIZE = 10000
-NUM_CPUS = 8  # parallelism = number of files processed at once
+INPUT_S3_PREFIX = "s3://smita-erav4/parquet_raw"
+OUTPUT_S3_PREFIX = "s3://smita-erav4/parquet_processed"
+CURRICULUM_YAML = (
+    "/home/ubuntu/LLM/experiments/2_curirculum_architects/curriculum.yaml"  # "/home/ubuntu/curriculum.yaml"
+)
+BATCH_SIZE = 100
+NUM_CPUS = 2  # parallelism = number of files processed at once
 MAX_INFLIGHT = NUM_CPUS * 2
 
 # ------------------------
@@ -28,8 +30,15 @@ def process_s3_file(file_path: str) -> dict:
     fs = s3fs.S3FileSystem()
     tagger = CurriculumTagger(CURRICULUM_YAML)
 
-    relative_path = file_path.replace(INPUT_S3_PREFIX, "")
+    input_prefix = INPUT_S3_PREFIX.replace("s3://", "")
+    assert file_path.startswith(input_prefix)
+    # output_prefix = OUTPUT_S3_PREFIX.replace("s3://", "")
+
+    relative_path = file_path.replace(input_prefix, "")
     output_file = OUTPUT_S3_PREFIX + relative_path
+
+    print(f"Processing file: {file_path}")
+    print(f"Output file: {output_file}")
 
     try:
         stats = tagger.process_parquet_s3(

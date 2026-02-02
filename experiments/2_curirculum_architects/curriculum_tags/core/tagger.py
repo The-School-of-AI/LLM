@@ -126,6 +126,7 @@ class CurriculumTagger:
         for plugin in self.plugins:
             try:
                 tags = plugin.compute(sample)
+                print(f"id: {sample['id']}, tags: {tags}")
                 sample["curriculum_tags"][plugin.name] = tags
             except Exception as e:
                 sample["curriculum_tags"][plugin.name] = {"error": str(e)}
