@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-02-02T10:17:06.371642",
+  "config_path": "configs/1b_gsa.yaml",
+  "config_name": "LLM-1B-GSA",
+  "device": "xpu",
+  "dtype": "float16",
+  "batch_size": 1,
+  "parameters": 1219069952,
+  "parameters_billions": 1.219069952,
+  "model_settings": {
+    "attention": "gated_sparse",
+    "position": "rope",
+    "connection": "residual",
+    "mtp": false,
+    "hidden_size": 2048,
+    "num_layers": 24
+  },
+  "inference": [
+    {
+      "seq_len": 128,
+      "tokens_per_sec": 440.8440952192426,
+      "samples_per_sec": 3.444094493900333,
+      "ms_per_sample": 290.3520799940452,
+      "memory_gb": 2.490386432
+    },
+    {
+      "seq_len": 256,
+      "tokens_per_sec": 533.2363509784501,
+      "samples_per_sec": 2.0829544960095707,
+      "ms_per_sample": 480.087299994193,
+      "memory_gb": 2.506510336
+    }
+  ],
+  "training": [
+    {
+      "seq_len": 128,
+      "tokens_per_sec": 177.71399326189353,
+      "samples_per_sec": 1.3883905723585432,
+      "ms_per_sample": 720.2584200073034,
+      "memory_gb": 5.283961856
+    },
+    {
+      "seq_len": 256,
+      "tokens_per_sec": 239.6528254364978,
+      "samples_per_sec": 0.9361438493613196,
+      "ms_per_sample": 1068.2119000004604,
+      "memory_gb": 5.293728768
+    }
+  ]
+}
