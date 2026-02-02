@@ -1,0 +1,27 @@
+# Metrics Configuration
+# Define which metrics to apply and in what order
+# Each metric class should exist in src/curriculum_tags/metrics/
+
+version: "0.1"
+
+# Metrics are applied in order - later metrics can use results from earlier ones
+metrics:
+  - name: difficulty
+    class: DifficultyMetric
+    enabled: true
+    
+  - name: modality
+    class: ModalityMetric
+    enabled: true
+    
+  - name: readability
+    class: ReadabilityMetric
+    enabled: true
+
+# To add a new metric:
+# 1. Create YourMetric class in src/curriculum_tags/metrics/your_metric.py
+# 2. Add entry here:
+#    - name: your_metric
+#      class: YourMetric
+#      enabled: true
+# 3. The system will auto-discover and use it.

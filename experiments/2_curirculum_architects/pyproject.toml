@@ -1,0 +1,48 @@
+# Curriculum Tags - Development Dependencies
+# Note: This is NOT a standalone package - it's part of the larger Lighting LLM project.
+# Using editable install (-e .) for development 
+
+[project]
+name = "curriculum-tags"
+version = "0.1.0"
+description = "Curriculum metadata tagging system (part of Lighting LLM project)"
+requires-python = ">=3.10"
+
+dependencies = [
+    "pyarrow>=14.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["curriculum_tags"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
