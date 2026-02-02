@@ -559,6 +559,13 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print("📌 PHASE 5: YaRN Context Extension")
     print("=" * 70)
     
+    # Clear GPU cache before Phase 5 (long context needs more memory)
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        import gc
+        gc.collect()
+        print("  🧹 Cleared GPU cache for long context training")
+    
     # -------------------------------------------------------------------------
     # STEP 1: "Do No Harm" Check - Measure loss on SHORT context before/after YaRN
     # This proves YaRN didn't break the model's existing brain

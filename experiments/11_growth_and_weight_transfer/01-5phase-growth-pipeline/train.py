@@ -154,6 +154,12 @@ def train_phase(
         eta_min=learning_rate * 0.1,
     )
     
+    # Mixed precision setup
+    use_amp = gradient_checkpointing and device.type == "cuda"  # Use AMP when checkpointing is enabled
+    scaler = torch.cuda.amp.GradScaler() if use_amp else None
+    if use_amp:
+        print("  ⚡ Mixed precision (fp16) enabled for memory optimization")
+    
     # Training loop
     data_iter = iter(dataloader)
     accumulated_loss = 0.0
@@ -174,15 +180,27 @@ def train_phase(
             input_ids = batch["input_ids"].to(device)
             labels = batch["labels"].to(device)
             
-            outputs = model(input_ids, labels=labels)
-            loss = outputs["loss"] / gradient_accumulation_steps
-            loss.backward()
+            # Forward pass with optional mixed precision
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(input_ids, labels=labels)
+                    loss = outputs["loss"] / gradient_accumulation_steps
+                scaler.scale(loss).backward()
+            else:
+                outputs = model(input_ids, labels=labels)
+                loss = outputs["loss"] / gradient_accumulation_steps
+                loss.backward()
             batch_loss += loss.item()
         
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-        
-        optimizer.step()
+        # Gradient clipping and optimizer step
+        if use_amp:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            optimizer.step()
         scheduler.step()
         
         step += 1
