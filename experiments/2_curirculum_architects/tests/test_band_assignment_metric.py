@@ -72,8 +72,8 @@ def test_code_math_logic(metric):
 
 
 def test_general_text_bands(metric):
-    """Test mixed logic with Difficulty Mapping + Secondary Thresholds."""
-    # L0 -> B0
+    """Test mixed logic with Difficulty Mapping + Secondary Ranges."""
+    # L0 -> Fits B0 criteria
     sample = {
         "curriculum_tags": {
             "difficulty": {"score": 0.1, "level": "L0"},
@@ -84,20 +84,34 @@ def test_general_text_bands(metric):
     }
     assert metric.compute(sample)["band"] == "B0"
     
-    # L2 -> B1 (Provided secondary stats pass)
+    # L2 -> Fits B1 criteria
     sample["curriculum_tags"]["difficulty"] = {"score": 0.4, "level": "L2"}
-    sample["curriculum_tags"]["readability"]["flesch_kincaid_grade"] = 10.0 # Pass B1
-    sample["curriculum_tags"]["entropy"]["score"] = 4.0 # Pass B1
-    sample["curriculum_tags"]["diversity"]["rare_ratio"] = 0.20 # Pass B1
-    assert metric.compute(sample)["band"] == "B1"
+    sample["curriculum_tags"]["readability"]["flesch_kincaid_grade"] = 9.0 # Fits B1 (4-10) and B2 (8-14)
+    sample["curriculum_tags"]["entropy"]["score"] = 4.0 
+    sample["curriculum_tags"]["diversity"]["rare_ratio"] = 0.20 
     
-    # L4 -> B4 (Provided stats pass)
-    sample["curriculum_tags"]["difficulty"] = {"score": 0.8, "level": "L4"}
-    sample["curriculum_tags"]["readability"]["flesch_kincaid_grade"] = 15.0 # Pass B4
-    sample["curriculum_tags"]["entropy"]["score"] = 5.2 # Pass B4
-    sample["curriculum_tags"]["diversity"]["rare_ratio"] = 0.28 # Pass B4
-    assert metric.compute(sample)["band"] == "B4"
+    # With L2, Diff 0.4, FK 9.0:
+    # B1 Constraints: L2 ok, Read 4-10 ok, Diff 0.2-0.5 ok, Ent 3.5-5.5 ok, Div 0.10-0.25 ok. -> MATCH
+    # B2 Constraints: L2 ok, Read 8-14 ok, Diff 0.4-0.7 ok, Ent 4.0-6.0 ok, Div 0.15-0.35 ok. -> MATCH
+    # Overlap Policy: Highest -> B2
+    assert metric.compute(sample)["band"] == "B2"
 
+def test_hard_constraints_filtering(metric):
+    """Test that strict ranges filter out bands."""
+    # L2 (Allowed in B1, B2)
+    # BUT FK Grade 20.0 (Too high for B1 [4-10] or B2 [8-14])
+    sample = {
+        "curriculum_tags": {
+            "difficulty": {"score": 0.4, "level": "L2"},
+            "readability": {"flesch_kincaid_grade": 20.0},
+            "entropy": {"score": 4.0}, 
+            "diversity": {"rare_ratio": 0.20}
+        }
+    }
+    # Should fail B1 and B2 readability checks.
+    # Fallback -> B0
+    assert metric.compute(sample)["band"] == "B0"
+    
 def test_entropy_diversity_filtering(metric):
     """Test that low entropy/diversity limits the mapped band."""
     # L4 -> should be B4...

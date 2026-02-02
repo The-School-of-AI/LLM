@@ -5,7 +5,6 @@ from pathlib import Path
 
 from curriculum_tags import CurriculumTagger
 
-
 def main():
     """Demonstrate curriculum tagging."""
     curriculum_path = Path(__file__).parent.parent / "curriculum.yaml"
