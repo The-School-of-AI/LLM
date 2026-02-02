@@ -107,10 +107,11 @@ class TransformerBlock(nn.Module):
         elif attn_config.attention_type == AttentionType.GATED_SPARSE:
             return GatedSparseAttention(
                 **common_args,
-                num_slots=attn_config.gsa_num_slots,
-                slot_dim=attn_config.gsa_slot_dim,
-                sparse_topk=attn_config.gsa_sparse_topk,
-                temperature=attn_config.gsa_temperature,
+                indexer_dim=attn_config.gsa_indexer_dim,
+                num_indexer_heads=attn_config.gsa_num_indexer_heads,
+                k_base=attn_config.gsa_k_base,
+                k_min=attn_config.gsa_k_min,
+                k_max=attn_config.gsa_k_max,
             )
             
         elif attn_config.attention_type == AttentionType.DEEPSEEK_SPARSE:
@@ -155,9 +156,8 @@ class TransformerBlock(nn.Module):
             return ManifoldHyperConnection(
                 hidden_size=config.hidden_size,
                 expansion_rate=conn_config.mhc_expansion_rate,
-                num_connections=conn_config.mhc_num_connections,
-                use_dynamic_weights=conn_config.mhc_use_dynamic_weights,
-                manifold_dim=conn_config.mhc_manifold_dim,
+                alpha_init=getattr(conn_config, "mhc_alpha_init", 0.01),
+                sinkhorn_iters=getattr(conn_config, "mhc_sinkhorn_iters", 20),
                 dropout=config.hidden_dropout
             )
             

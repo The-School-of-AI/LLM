@@ -58,12 +58,12 @@ class AttentionConfig:
     attention_dropout: float = 0.0
     attention_bias: bool = False  # Modern LLMs don't use bias
     
-    # GSA specific (Gated Sparse Attention)
-    gsa_num_slots: int = 64       # Number of memory slots
-    gsa_slot_dim: int = 64        # Dimension per slot
-    gsa_num_gating_heads: int = 4
-    gsa_temperature: float = 1.0
-    gsa_sparse_topk: int = 32     # Top-k sparse selection
+    # GSA specific (Gated Sparse Attention - paper 2601.15305v1)
+    gsa_indexer_dim: int = 64          # d_I: Low-dim indexer projection
+    gsa_num_indexer_heads: int = 4     # H_I: Number of indexer heads
+    gsa_k_base: int = 2048             # Base selection budget
+    gsa_k_min: int = 256               # Minimum k (high confidence)
+    gsa_k_max: int = 4096              # Maximum k (low confidence)
     
     # DeepSeek Sparse Attention specific
     ds_compressed_dim: int = 512      # Compressed KV dimension
@@ -108,15 +108,25 @@ class FFNConfig:
 
 @dataclass
 class ConnectionConfig:
-    """Configuration for layer connections."""
+    """
+    Configuration for layer connections.
+    
+    For mHC (Manifold-Constrained Hyper-Connections from paper 2512.24880):
+    - mhc_expansion_rate (n): Number of parallel streams (default 4)
+    - mhc_alpha_init: Initial value for gating factors (default 0.01)
+    - mhc_sinkhorn_iters: Iterations for doubly stochastic projection (default 20)
+    
+    Parameter overhead per mHC module: ~nC(2n + n²) + constants
+    For n=4, C=2048: ~205K params/module, ~410K/layer, ~9.8M total (24 layers)
+    This is <1% overhead for a 1B model!
+    """
     
     connection_type: ConnectionType = ConnectionType.RESIDUAL
     
-    # mHC specific (Manifold Hyper-Connections)
-    mhc_expansion_rate: float = 4.0
-    mhc_num_connections: int = 2
-    mhc_use_dynamic_weights: bool = True
-    mhc_manifold_dim: int = 64
+    # mHC parameters (from DeepSeek paper 2512.24880v2)
+    mhc_expansion_rate: int = 4        # n: number of streams (paper uses 4)
+    mhc_alpha_init: float = 0.01       # α: gating factor init (paper uses 0.01)
+    mhc_sinkhorn_iters: int = 20       # Sinkhorn-Knopp iterations (paper uses 20)
 
 
 @dataclass
@@ -312,12 +322,17 @@ def get_1b_base_config() -> ModelConfig:
 
 
 def get_1b_gsa_config() -> ModelConfig:
-    """1B model with Gated Sparse Attention."""
+    """1B model with Gated Sparse Attention (paper 2601.15305v1)."""
     config = get_1b_base_config()
     config.model_name = "LLM-1B-GSA"
     config.attention.attention_type = AttentionType.GATED_SPARSE
-    config.attention.gsa_num_slots = 64
-    config.attention.gsa_sparse_topk = 32
+    # Indexer parameters (Table 1 in paper)
+    config.attention.gsa_indexer_dim = 64       # d_I
+    config.attention.gsa_num_indexer_heads = 4  # H_I
+    # Adaptive sparsity parameters
+    config.attention.gsa_k_base = 2048          # Base selection budget
+    config.attention.gsa_k_min = 256            # Min k (confident)
+    config.attention.gsa_k_max = 4096           # Max k (uncertain)
     return config
 
 
@@ -368,10 +383,14 @@ def get_1b_full_config() -> ModelConfig:
         num_hidden_layers=24,
         max_position_embeddings=32768,
         attention=AttentionConfig(
-            attention_type=AttentionType.GATED_SPARSE,  # or DEEPSEEK_SPARSE
-            num_attention_heads=16,
-            num_key_value_heads=4,
-            gsa_num_slots=64,
+        attention_type=AttentionType.GATED_SPARSE,
+        num_attention_heads=16,
+        num_key_value_heads=4,
+        gsa_indexer_dim=64,         # d_I (was gsa_num_slots)
+        gsa_num_indexer_heads=4,    # H_I
+        gsa_k_base=2048,            # Base selection budget
+        gsa_k_min=256,              # Min k
+        gsa_k_max=4096,             # Max k
         ),
         position=PositionConfig(
             position_type=PositionEmbeddingType.YARN,
@@ -380,7 +399,7 @@ def get_1b_full_config() -> ModelConfig:
         ),
         ffn=FFNConfig(
             ffn_type=FFNType.SWIGLU,
-            intermediate_size=5504,
+            intermediate_size=4096,
         ),
         connection=ConnectionConfig(
             connection_type=ConnectionType.MHC,

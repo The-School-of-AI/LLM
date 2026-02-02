@@ -2,368 +2,546 @@
 Manifold-Constrained Hyper-Connections (mHC)
 =============================================
 
-Implementation based on paper: arXiv:2512.24880
-"Manifold-Constrained Hyper-Connections for Efficient Deep Networks"
+CORRECT Implementation based on DeepSeek paper: arXiv:2512.24880v2
 
-Key innovations:
-1. Replaces standard residual connections
-2. Dynamic weighting based on manifold constraints
-3. Multi-path information flow
-4. Improved gradient flow and representation learning
+Key Concepts:
+1. Expand residual stream width from C to n×C (n=4 typically)
+2. Use TINY learnable matrices to control information flow:
+   - H_pre ∈ R^{1×n}: Aggregates n streams → 1 for layer input
+   - H_post ∈ R^{1×n}: Distributes layer output → n streams  
+   - H_res ∈ R^{n×n}: Mixes streams (doubly stochastic)
+3. Constrain H_res via Sinkhorn-Knopp to preserve signal stability
 
-mHC achieves:
-- Better gradient flow than residual connections
-- Improved representation quality
-- Minimal computational overhead
-- Compatible with any transformer architecture
+Parameter overhead per mHC module: ~200K (NOT millions!)
+- φ_pre: nC × n = 4 × 2048 × 4 = 32,768
+- φ_post: nC × n = 32,768
+- φ_res: nC × n² = 4 × 2048 × 16 = 131,072
+- Total: ~196K per mHC module
+
+This is fundamentally different from expanding hidden dimensions!
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple
 
 
-class ManifoldProjection(nn.Module):
+def sinkhorn_knopp(H: torch.Tensor, num_iters: int = 20, eps: float = 1e-8) -> torch.Tensor:
     """
-    Projects representations onto a learned manifold.
+    Sinkhorn-Knopp algorithm for projecting to doubly stochastic matrices.
     
-    The manifold constraint helps maintain geometric structure
-    of representations during forward pass.
+    A doubly stochastic matrix has:
+    - All elements ≥ 0
+    - All rows sum to 1
+    - All columns sum to 1
+    
+    This ensures stable signal propagation (no explosion/vanishing).
+    
+    Args:
+        H: Input matrix [..., n, n] (will be exponentiated)
+        num_iters: Number of iterations (paper uses 20)
+        eps: Numerical stability constant
+        
+    Returns:
+        Doubly stochastic matrix [..., n, n]
+    """
+    # Make positive via exp
+    M = torch.exp(H)
+    
+    # Alternate row and column normalization
+    for _ in range(num_iters):
+        # Row normalization: each row sums to 1
+        M = M / (M.sum(dim=-1, keepdim=True) + eps)
+        # Column normalization: each column sums to 1
+        M = M / (M.sum(dim=-2, keepdim=True) + eps)
+    
+    return M
+
+
+class mHCMapping(nn.Module):
+    """
+    Computes the three learnable mappings for mHC.
+    
+    From Eq. 7 in the paper:
+    - x̄_l = vec(x_l) ∈ R^{1×nC}  (flatten input)
+    - x̄'_l = RMSNorm(x̄_l)
+    - H̃_pre = α_pre · (x̄'_l @ φ_pre) + b_pre
+    - H̃_post = α_post · (x̄'_l @ φ_post) + b_post
+    - H̃_res = α_res · mat(x̄'_l @ φ_res) + b_res
+    
+    From Eq. 8:
+    - H_pre = σ(H̃_pre)
+    - H_post = 2σ(H̃_post)
+    - H_res = Sinkhorn-Knopp(H̃_res)
     """
     
     def __init__(
         self,
         hidden_size: int,
-        manifold_dim: int,
-        num_projections: int = 4
+        expansion_rate: int = 4,
+        alpha_init: float = 0.01,
+        sinkhorn_iters: int = 20
     ):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.manifold_dim = manifold_dim
-        self.num_projections = num_projections
+        self.hidden_size = hidden_size  # C
+        self.n = expansion_rate  # n (typically 4)
+        self.sinkhorn_iters = sinkhorn_iters
         
-        # Manifold basis vectors
-        self.manifold_basis = nn.Parameter(
-            torch.randn(num_projections, manifold_dim, hidden_size) * 0.02
-        )
+        # Flattened dimension: n * C
+        self.flat_dim = self.n * hidden_size
         
-        # Projection scaling
-        self.scale = nn.Parameter(torch.ones(num_projections))
+        # Linear projections for dynamic mappings (Eq. 7)
+        # φ_pre, φ_post ∈ R^{nC × n}
+        self.phi_pre = nn.Linear(self.flat_dim, self.n, bias=False)
+        self.phi_post = nn.Linear(self.flat_dim, self.n, bias=False)
+        # φ_res ∈ R^{nC × n²}
+        self.phi_res = nn.Linear(self.flat_dim, self.n * self.n, bias=False)
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Static biases
+        # b_pre, b_post ∈ R^{1×n}
+        self.b_pre = nn.Parameter(torch.zeros(1, self.n))
+        self.b_post = nn.Parameter(torch.zeros(1, self.n))
+        # b_res ∈ R^{n×n}, initialized to identity-like for stable start
+        self.b_res = nn.Parameter(torch.eye(self.n) * 2.0)  # Diagonal dominant
+        
+        # Learnable gating factors (initialized small, α=0.01 per paper)
+        self.alpha_pre = nn.Parameter(torch.tensor(alpha_init))
+        self.alpha_post = nn.Parameter(torch.tensor(alpha_init))
+        self.alpha_res = nn.Parameter(torch.tensor(alpha_init))
+        
+        # RMSNorm weight
+        self.rms_weight = nn.Parameter(torch.ones(self.flat_dim))
+        self.rms_eps = 1e-6
+        
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize projection weights with small values."""
+        nn.init.normal_(self.phi_pre.weight, std=0.02)
+        nn.init.normal_(self.phi_post.weight, std=0.02)
+        nn.init.normal_(self.phi_res.weight, std=0.02)
+    
+    def _rms_norm(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply RMSNorm to flattened input."""
+        variance = x.pow(2).mean(-1, keepdim=True)
+        x_normed = x * torch.rsqrt(variance + self.rms_eps)
+        return x_normed * self.rms_weight
+    
+    def forward(
+        self, 
+        x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Project input onto manifold and back.
+        Compute H_pre, H_post, H_res from input hidden states.
         
         Args:
-            x: Input tensor [..., hidden_size]
+            x: Hidden states [batch, seq_len, n, hidden_size]
             
         Returns:
-            Manifold-constrained tensor [..., hidden_size]
+            H_pre: [batch, seq_len, 1, n] - aggregation weights (non-negative)
+            H_post: [batch, seq_len, 1, n] - distribution weights (non-negative)
+            H_res: [batch, seq_len, n, n] - mixing matrix (doubly stochastic)
         """
-        # Project onto each manifold basis
-        # x: [..., H], basis: [P, M, H] -> projections: [..., P, M]
-        projections = torch.einsum('...h,pmh->...pm', x, self.manifold_basis)
+        batch_size, seq_len, n, hidden_size = x.shape
         
-        # Project back with scaling
-        # projections: [..., P, M], basis: [P, M, H] -> reconstructed: [..., H]
-        reconstructed = torch.einsum('...pm,pmh,p->...h', 
-                                     projections, 
-                                     self.manifold_basis,
-                                     self.scale)
+        # Flatten: [batch, seq, n, C] -> [batch, seq, n*C]
+        x_flat = x.reshape(batch_size, seq_len, -1)
         
-        return reconstructed
+        # RMSNorm on flattened input
+        x_normed = self._rms_norm(x_flat)
+        
+        # Dynamic mappings via linear projections
+        # [batch, seq, n*C] @ [n*C, n] -> [batch, seq, n]
+        H_pre_dynamic = self.phi_pre(x_normed)
+        H_post_dynamic = self.phi_post(x_normed)
+        # [batch, seq, n*C] @ [n*C, n²] -> [batch, seq, n²]
+        H_res_dynamic = self.phi_res(x_normed)
+        
+        # Combine dynamic + static with gating (Eq. 7)
+        H_pre_raw = self.alpha_pre * H_pre_dynamic + self.b_pre
+        H_post_raw = self.alpha_post * H_post_dynamic + self.b_post
+        H_res_raw = self.alpha_res * H_res_dynamic.view(batch_size, seq_len, self.n, self.n) + self.b_res
+        
+        # Apply constraints (Eq. 8)
+        # H_pre = σ(H̃_pre) - sigmoid for non-negativity
+        H_pre = torch.sigmoid(H_pre_raw).unsqueeze(2)  # [batch, seq, 1, n]
+        # H_post = 2σ(H̃_post) - scaled sigmoid
+        H_post = 2 * torch.sigmoid(H_post_raw).unsqueeze(2)  # [batch, seq, 1, n]
+        # H_res = Sinkhorn-Knopp(H̃_res) - doubly stochastic
+        H_res = sinkhorn_knopp(H_res_raw, self.sinkhorn_iters)  # [batch, seq, n, n]
+        
+        return H_pre, H_post, H_res
 
 
-class DynamicGating(nn.Module):
+class ManifoldConstrainedHyperConnection(nn.Module):
     """
-    Learns dynamic weights for hyper-connections.
+    Manifold-Constrained Hyper-Connections (mHC).
     
-    Computes gating weights based on input features
-    to adaptively route information.
+    Replaces standard residual connection with multi-stream architecture:
+    
+    Standard residual: x_{l+1} = x_l + F(x_l)
+    
+    mHC (Eq. 3): x_{l+1} = H_res @ x_l + H_post^T @ F(H_pre @ x_l)
+    
+    Where:
+    - x_l ∈ R^{n×C} is the expanded residual stream (n=4 streams)
+    - H_pre ∈ R^{1×n} aggregates streams for layer input
+    - H_post ∈ R^{1×n} distributes layer output to streams
+    - H_res ∈ R^{n×n} mixes streams (doubly stochastic for stability)
+    
+    Key properties of doubly stochastic H_res:
+    1. Norm preservation: ||H_res||_2 ≤ 1 (prevents gradient explosion)
+    2. Compositional closure: product of doubly stochastic is doubly stochastic
+    3. Signal conservation: row/column sums = 1 (mean preserving)
     """
     
     def __init__(
         self,
         hidden_size: int,
-        num_connections: int
+        expansion_rate: int = 4,
+        alpha_init: float = 0.01,
+        sinkhorn_iters: int = 20
     ):
         super().__init__()
         self.hidden_size = hidden_size
-        self.num_connections = num_connections
+        self.n = expansion_rate
         
-        # Gate projection
-        self.gate_proj = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size // 4),
-            nn.GELU(),
-            nn.Linear(hidden_size // 4, num_connections)
-        )
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Compute gating weights.
-        
-        Args:
-            x: Input tensor [..., hidden_size]
-            
-        Returns:
-            Gate weights [..., num_connections] summing to 1
-        """
-        # Pool over sequence if present
-        if x.dim() == 3:
-            pooled = x.mean(dim=1)  # [batch, hidden]
-        else:
-            pooled = x
-            
-        gates = self.gate_proj(pooled)
-        gates = F.softmax(gates, dim=-1)
-        
-        return gates
-
-
-class ManifoldHyperConnection(nn.Module):
-    """
-    Manifold-Constrained Hyper-Connection (mHC).
-    
-    Replaces standard residual connection:
-        Standard: output = x + f(x)
-        mHC: output = g(x, f(x)) where g is manifold-constrained
-    
-    Architecture:
-    1. Multiple parallel connection paths
-    2. Dynamic gating based on content
-    3. Manifold constraint for geometric preservation
-    4. Learnable combination weights
-    """
-    
-    def __init__(
-        self,
-        hidden_size: int,
-        expansion_rate: float = 4.0,
-        num_connections: int = 2,
-        use_dynamic_weights: bool = True,
-        manifold_dim: int = 64,
-        dropout: float = 0.0
-    ):
-        super().__init__()
-        self.hidden_size = hidden_size
-        self.expansion_rate = expansion_rate
-        self.num_connections = num_connections
-        self.use_dynamic_weights = use_dynamic_weights
-        
-        # Connection paths
-        expanded_dim = int(hidden_size * expansion_rate)
-        
-        self.connection_paths = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(hidden_size * 2, expanded_dim),  # Takes [x, sublayer_output]
-                nn.GELU(),
-                nn.Linear(expanded_dim, hidden_size)
-            )
-            for _ in range(num_connections)
-        ])
-        
-        # Dynamic gating
-        if use_dynamic_weights:
-            self.gating = DynamicGating(hidden_size, num_connections)
-        else:
-            # Static learnable weights
-            self.static_weights = nn.Parameter(torch.ones(num_connections) / num_connections)
-        
-        # Manifold projection for constraint
-        self.manifold_proj = ManifoldProjection(
+        # Mapping module computes H_pre, H_post, H_res
+        self.mapping = mHCMapping(
             hidden_size=hidden_size,
-            manifold_dim=manifold_dim,
-            num_projections=4
+            expansion_rate=expansion_rate,
+            alpha_init=alpha_init,
+            sinkhorn_iters=sinkhorn_iters
         )
+    
+    def expand_input(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Expand input from [batch, seq, C] to [batch, seq, n, C].
         
-        # Residual weight (how much to keep original)
-        self.residual_weight = nn.Parameter(torch.tensor(0.5))
+        Initial expansion: replicate input across n streams.
+        """
+        return x.unsqueeze(2).expand(-1, -1, self.n, -1).contiguous()
+    
+    def collapse_output(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Collapse output from [batch, seq, n, C] to [batch, seq, C].
         
-        # Output normalization
-        self.out_norm = nn.LayerNorm(hidden_size)
+        Final aggregation: mean across streams.
+        """
+        return x.mean(dim=2)
+    
+    def get_layer_input(
+        self, 
+        x: torch.Tensor, 
+        H_pre: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Aggregate n streams into single layer input.
         
-        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+        h_in = H_pre @ x_l (from Eq. 3)
         
+        Args:
+            x: Multi-stream state [batch, seq, n, C]
+            H_pre: Aggregation weights [batch, seq, 1, n]
+            
+        Returns:
+            Layer input [batch, seq, C]
+        """
+        # H_pre: [batch, seq, 1, n], x: [batch, seq, n, C]
+        # Result: [batch, seq, 1, C] -> squeeze -> [batch, seq, C]
+        return torch.matmul(H_pre, x).squeeze(2)
+    
+    def apply_residual(
+        self,
+        x: torch.Tensor,
+        layer_output: torch.Tensor,
+        H_res: torch.Tensor,
+        H_post: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Apply mHC residual connection.
+        
+        x_{l+1} = H_res @ x_l + H_post^T @ F(·) (Eq. 3)
+        
+        Args:
+            x: Current multi-stream state [batch, seq, n, C]
+            layer_output: Output from layer F [batch, seq, C]
+            H_res: Mixing matrix [batch, seq, n, n] (doubly stochastic)
+            H_post: Distribution weights [batch, seq, 1, n]
+            
+        Returns:
+            New multi-stream state [batch, seq, n, C]
+        """
+        # H_res @ x: Mix streams
+        # [batch, seq, n, n] @ [batch, seq, n, C] -> [batch, seq, n, C]
+        mixed = torch.matmul(H_res, x)
+        
+        # H_post^T @ layer_output: Distribute output to streams
+        # H_post: [batch, seq, 1, n] -> transpose -> [batch, seq, n, 1]
+        # layer_output: [batch, seq, C] -> [batch, seq, 1, C]
+        # Result: [batch, seq, n, 1] @ [batch, seq, 1, C] -> [batch, seq, n, C]
+        H_post_T = H_post.transpose(-2, -1)  # [batch, seq, n, 1]
+        layer_out_expanded = layer_output.unsqueeze(2)  # [batch, seq, 1, C]
+        distributed = torch.matmul(H_post_T, layer_out_expanded)  # [batch, seq, n, C]
+        
+        # Combine
+        return mixed + distributed
+    
     def forward(
         self,
         x: torch.Tensor,
-        sublayer_output: torch.Tensor
+        layer_output: torch.Tensor
     ) -> torch.Tensor:
         """
-        Apply manifold-constrained hyper-connection.
+        Full mHC forward pass.
         
         Args:
-            x: Original input (before sublayer)
-            sublayer_output: Output from sublayer (attention or FFN)
+            x: Multi-stream state [batch, seq, n, C]
+            layer_output: Output from layer F [batch, seq, C]
             
         Returns:
-            Combined output with manifold constraint
+            Updated multi-stream state [batch, seq, n, C]
         """
-        batch_size, seq_len, hidden_size = x.shape
-        
-        # Concatenate input and sublayer output
-        combined = torch.cat([x, sublayer_output], dim=-1)  # [batch, seq, 2*hidden]
-        
-        # Compute connection path outputs
-        path_outputs = []
-        for path in self.connection_paths:
-            path_out = path(combined)
-            path_outputs.append(path_out)
-        
-        # Stack path outputs: [batch, seq, num_connections, hidden]
-        path_outputs = torch.stack(path_outputs, dim=-2)
-        
-        # Get combination weights
-        if self.use_dynamic_weights:
-            # Dynamic gating based on input
-            weights = self.gating(x)  # [batch, num_connections]
-            weights = weights.unsqueeze(1).unsqueeze(-1)  # [batch, 1, num_connections, 1]
-        else:
-            weights = F.softmax(self.static_weights, dim=0)
-            weights = weights.view(1, 1, -1, 1)
-        
-        # Weighted combination of paths
-        combined_output = (path_outputs * weights).sum(dim=-2)  # [batch, seq, hidden]
-        
-        # Apply manifold constraint
-        manifold_term = self.manifold_proj(combined_output)
-        combined_output = combined_output + 0.1 * manifold_term  # Soft constraint
-        
-        # Mix with residual
-        residual_w = torch.sigmoid(self.residual_weight)
-        output = residual_w * x + (1 - residual_w) * combined_output
-        
-        # Apply dropout and normalize
-        output = self.dropout(output)
-        output = self.out_norm(output)
-        
-        return output
-
-
-class SimplifiedMHC(nn.Module):
-    """
-    Simplified Manifold Hyper-Connection.
+        H_pre, H_post, H_res = self.mapping(x)
+        return self.apply_residual(x, layer_output, H_res, H_post)
     
-    More efficient version that maintains key benefits:
-    - Multi-path information flow
-    - Adaptive weighting
-    - Better than standard residual
+    def get_aggregated_input(self, x: torch.Tensor) -> Tuple[torch.Tensor, Tuple]:
+        """
+        Get aggregated input for layer and cache mappings for later use.
+        
+        Args:
+            x: Multi-stream state [batch, seq, n, C]
+            
+        Returns:
+            layer_input: Aggregated input [batch, seq, C]
+            cache: (H_pre, H_post, H_res) for apply_cached
+        """
+        H_pre, H_post, H_res = self.mapping(x)
+        layer_input = self.get_layer_input(x, H_pre)
+        return layer_input, (H_pre, H_post, H_res)
     
-    Lower overhead for resource-constrained settings.
-    """
-    
-    def __init__(
+    def apply_cached(
         self,
-        hidden_size: int,
-        num_connections: int = 2,
-        dropout: float = 0.0
-    ):
+        x: torch.Tensor,
+        layer_output: torch.Tensor,
+        cache: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
+        """
+        Apply residual with cached mappings (avoids recomputing).
+        
+        Args:
+            x: Multi-stream state [batch, seq, n, C]
+            layer_output: Output from layer [batch, seq, C]
+            cache: (H_pre, H_post, H_res) from get_aggregated_input
+            
+        Returns:
+            Updated multi-stream state [batch, seq, n, C]
+        """
+        H_pre, H_post, H_res = cache
+        return self.apply_residual(x, layer_output, H_res, H_post)
+
+
+class RMSNorm(nn.Module):
+    """RMSNorm layer."""
+    
+    def __init__(self, hidden_size: int, eps: float = 1e-6):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.num_connections = num_connections
-        
-        # Simple linear transforms for each path
-        self.transforms = nn.ModuleList([
-            nn.Linear(hidden_size, hidden_size, bias=False)
-            for _ in range(num_connections)
-        ])
-        
-        # Gating
-        self.gate = nn.Linear(hidden_size, num_connections)
-        
-        # Output scaling
-        self.alpha = nn.Parameter(torch.zeros(1))
-        
-        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
-        
-    def forward(
-        self,
-        x: torch.Tensor,
-        sublayer_output: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Apply simplified mHC.
-        
-        Args:
-            x: Original input
-            sublayer_output: Sublayer output
-            
-        Returns:
-            Combined output
-        """
-        # Compute gate weights
-        gate_weights = F.softmax(self.gate(x.mean(dim=1, keepdim=True)), dim=-1)
-        gate_weights = gate_weights.unsqueeze(-1)  # [batch, 1, num_conn, 1]
-        
-        # Apply transforms to sublayer output
-        transformed = []
-        for transform in self.transforms:
-            transformed.append(transform(sublayer_output))
-        transformed = torch.stack(transformed, dim=-2)  # [batch, seq, num_conn, hidden]
-        
-        # Weighted combination
-        combined = (transformed * gate_weights).sum(dim=-2)
-        
-        # Residual with learnable scaling
-        alpha = torch.sigmoid(self.alpha)
-        output = x + alpha * combined + (1 - alpha) * sublayer_output
-        
-        return self.dropout(output)
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.eps = eps
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        variance = x.pow(2).mean(-1, keepdim=True)
+        return x * torch.rsqrt(variance + self.eps) * self.weight
 
+
+# =============================================================================
+# Standard residual for comparison
+# =============================================================================
 
 class ResidualConnection(nn.Module):
-    """
-    Standard residual connection for comparison.
-    
-    output = x + sublayer(x)
-    """
+    """Standard residual connection: x + F(x)"""
     
     def __init__(self, dropout: float = 0.0):
         super().__init__()
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
-        
-    def forward(
-        self,
-        x: torch.Tensor,
-        sublayer_output: torch.Tensor
-    ) -> torch.Tensor:
+    
+    def forward(self, x: torch.Tensor, sublayer_output: torch.Tensor) -> torch.Tensor:
         return x + self.dropout(sublayer_output)
 
 
-def create_connection(
-    connection_type: str,
-    hidden_size: int,
-    **kwargs
-) -> nn.Module:
+# =============================================================================
+# Backward-compatible wrappers (expected by transformer_block.py)
+# =============================================================================
+
+class ManifoldHyperConnection(nn.Module):
     """
-    Factory function to create connection module.
+    Backward-compatible mHC adapter.
+
+    Exposes the legacy signature: forward(x, sublayer_output) -> [batch, seq, C].
+    Internally uses the multi-stream ManifoldConstrainedHyperConnection.
+    """
+
+    def __init__(
+        self,
+        hidden_size: int,
+        expansion_rate: float = 4.0,
+        alpha_init: float = 0.01,
+        sinkhorn_iters: int = 20,
+        num_connections: int = 2,  # kept for API compatibility
+        use_dynamic_weights: bool = True,  # kept for API compatibility
+        manifold_dim: int = 64,  # kept for API compatibility
+        dropout: float = 0.0,
+        **kwargs
+    ):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.expansion_rate = int(expansion_rate)
+        self.mhc = ManifoldConstrainedHyperConnection(
+            hidden_size=hidden_size,
+            expansion_rate=self.expansion_rate,
+            alpha_init=alpha_init,
+            sinkhorn_iters=sinkhorn_iters
+        )
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+
+    def forward(self, x: torch.Tensor, sublayer_output: torch.Tensor) -> torch.Tensor:
+        # Expand single stream to n streams, apply mHC, then collapse.
+        x_multi = x.unsqueeze(2).expand(-1, -1, self.expansion_rate, -1).contiguous()
+        y_multi = self.mhc(x_multi, sublayer_output)
+        y = y_multi.mean(dim=2)
+        return self.dropout(y)
+
+
+class SimplifiedMHC(nn.Module):
+    """
+    Minimal simplified mHC for compatibility.
+    Uses a learnable residual scaling.
+    """
+
+    def __init__(self, hidden_size: int, num_connections: int = 2, dropout: float = 0.0):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.zeros(1))
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+
+    def forward(self, x: torch.Tensor, sublayer_output: torch.Tensor) -> torch.Tensor:
+        alpha = torch.sigmoid(self.alpha)
+        return x + self.dropout(alpha * sublayer_output)
+
+
+# =============================================================================
+# Parameter counting utilities
+# =============================================================================
+
+def count_mhc_parameters_per_module(hidden_size: int, expansion_rate: int = 4) -> dict:
+    """
+    Count parameters in a single mHC module.
     
-    Args:
-        connection_type: "residual", "mhc", or "simplified_mhc"
-        hidden_size: Model hidden dimension
-        **kwargs: Additional arguments for specific connection types
-        
-    Returns:
-        Connection module
+    Based on paper's parameterization:
+    - φ_pre: nC × n
+    - φ_post: nC × n  
+    - φ_res: nC × n²
+    - b_pre: n, b_post: n, b_res: n²
+    - α: 3 scalars
+    - RMSNorm weight: nC
     """
-    if connection_type == "residual":
-        return ResidualConnection(dropout=kwargs.get('dropout', 0.0))
-    elif connection_type == "mhc":
-        return ManifoldHyperConnection(
-            hidden_size=hidden_size,
-            expansion_rate=kwargs.get('expansion_rate', 4.0),
-            num_connections=kwargs.get('num_connections', 2),
-            use_dynamic_weights=kwargs.get('use_dynamic_weights', True),
-            manifold_dim=kwargs.get('manifold_dim', 64),
-            dropout=kwargs.get('dropout', 0.0)
-        )
-    elif connection_type == "simplified_mhc":
-        return SimplifiedMHC(
-            hidden_size=hidden_size,
-            num_connections=kwargs.get('num_connections', 2),
-            dropout=kwargs.get('dropout', 0.0)
-        )
-    else:
-        raise ValueError(f"Unknown connection type: {connection_type}")
+    n = expansion_rate
+    C = hidden_size
+    
+    breakdown = {
+        'phi_pre': n * C * n,       # nC × n
+        'phi_post': n * C * n,      # nC × n
+        'phi_res': n * C * n * n,   # nC × n²
+        'b_pre': n,
+        'b_post': n,
+        'b_res': n * n,
+        'alpha_scalars': 3,
+        'rms_weight': n * C,
+    }
+    breakdown['total'] = sum(breakdown.values())
+    
+    return breakdown
+
+
+def print_mhc_overhead(hidden_size: int = 2048, num_layers: int = 24, expansion_rate: int = 4):
+    """Print mHC parameter overhead analysis."""
+    breakdown = count_mhc_parameters_per_module(hidden_size, expansion_rate)
+    
+    print(f"\n{'='*60}")
+    print(f"mHC Parameter Analysis")
+    print(f"Configuration: n={expansion_rate}, C={hidden_size}, layers={num_layers}")
+    print(f"{'='*60}")
+    
+    print("\nPer mHC module breakdown:")
+    for key, val in breakdown.items():
+        if key != 'total':
+            print(f"  {key:15s}: {val:>10,}")
+    print(f"  {'TOTAL':15s}: {breakdown['total']:>10,}")
+    
+    # 2 mHC per layer (attention + FFN)
+    per_layer = breakdown['total'] * 2
+    total = per_layer * num_layers
+    
+    print(f"\nPer transformer layer (2 mHC): {per_layer:,}")
+    print(f"Total for {num_layers} layers: {total:,}")
+    print(f"Total in millions: {total / 1e6:.2f}M")
+    
+    # Compare to 1B model
+    model_1b = 1.1e9
+    print(f"\nOverhead vs 1B model: {100 * total / model_1b:.2f}%")
+    print(f"{'='*60}\n")
+
+
+# =============================================================================
+# Test
+# =============================================================================
+
+if __name__ == "__main__":
+    print("Testing CORRECT mHC Implementation")
+    print("=" * 60)
+    
+    # Config
+    batch_size = 2
+    seq_len = 128
+    hidden_size = 2048
+    n = 4
+    
+    # Create mHC
+    mhc = ManifoldConstrainedHyperConnection(
+        hidden_size=hidden_size,
+        expansion_rate=n
+    )
+    
+    # Count actual parameters
+    actual_params = sum(p.numel() for p in mhc.parameters())
+    expected = count_mhc_parameters_per_module(hidden_size, n)['total']
+    
+    print(f"Actual parameters: {actual_params:,}")
+    print(f"Expected from formula: {expected:,}")
+    print(f"Match: {actual_params == expected}")
+    
+    # Test forward pass
+    x = torch.randn(batch_size, seq_len, n, hidden_size)
+    layer_output = torch.randn(batch_size, seq_len, hidden_size)
+    
+    # Using two-step API (how it's used in transformer)
+    layer_input, cache = mhc.get_aggregated_input(x)
+    print(f"\nInput shape: {x.shape}")
+    print(f"Layer input shape: {layer_input.shape}")
+    
+    x_new = mhc.apply_cached(x, layer_output, cache)
+    print(f"Output shape: {x_new.shape}")
+    
+    # Verify doubly stochastic property
+    H_pre, H_post, H_res = mhc.mapping(x)
+    print(f"\nH_res verification:")
+    print(f"  Shape: {H_res.shape}")
+    row_sums = H_res[0, 0].sum(dim=-1)
+    col_sums = H_res[0, 0].sum(dim=-2)
+    print(f"  Row sums (should be ~1): {row_sums.tolist()}")
+    print(f"  Col sums (should be ~1): {col_sums.tolist()}")
+    print(f"  All non-negative: {(H_res >= 0).all().item()}")
+    
+    # Full overhead analysis
+    print_mhc_overhead(hidden_size=2048, num_layers=24, expansion_rate=4)
