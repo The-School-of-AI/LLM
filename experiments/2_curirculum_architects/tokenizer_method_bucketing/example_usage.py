@@ -8,17 +8,20 @@ Usage:
     python example_usage.py --local-tokenizer C:\Balaji\erav4\capstone\tokenizer
 """
 
-from classify_curriculum_bands import CurriculumBandClassifier
-import json
 import argparse
+import json
+
+from classify_curriculum_bands import CurriculumBandClassifier
 
 # Parse command-line arguments
-parser = argparse.ArgumentParser(description='Example usage of Curriculum Band Classifier')
+parser = argparse.ArgumentParser(
+    description="Example usage of Curriculum Band Classifier"
+)
 parser.add_argument(
-    '--local-tokenizer',
+    "--local-tokenizer",
     type=str,
     default=None,
-    help='Local path to tokenizer files (overrides default HuggingFace model)'
+    help="Local path to tokenizer files (overrides default HuggingFace model)",
 )
 args = parser.parse_args()
 
@@ -26,19 +29,15 @@ args = parser.parse_args()
 print("Initializing classifier...")
 if args.local_tokenizer:
     print(f"Using local tokenizer from: {args.local_tokenizer}")
-    classifier = CurriculumBandClassifier(
-        local_tokenizer_path=args.local_tokenizer
-    )
+    classifier = CurriculumBandClassifier(local_tokenizer_path=args.local_tokenizer)
 else:
     print("Using HuggingFace model: meta-llama/Llama-3.3-70B-Instruct")
-    classifier = CurriculumBandClassifier(
-        model_id="meta-llama/Llama-3.3-70B-Instruct"
-    )
+    classifier = CurriculumBandClassifier(model_id="meta-llama/Llama-3.3-70B-Instruct")
 
 # Example 1: Classify individual texts
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("Example 1: Classifying individual texts")
-print("="*60)
+print("=" * 60)
 
 examples = [
     "The cat sat on the mat. It was happy.",  # Should be B0
@@ -52,13 +51,13 @@ examples = [
 for i, text in enumerate(examples, 1):
     record = {"text": text, "example_id": i}
     classified = classifier.process_record(record)
-    
+
     print(f"\nExample {i}:")
     print(f"  Text: {text[:60]}...")
-    
+
     # Check if record was rejected due to insufficient tokens
-    if classified.get('rejected', False):
-        print(f"  Status: REJECTED")
+    if classified.get("rejected", False):
+        print("  Status: REJECTED")
         print(f"  Reason: {classified['rejection_reason']}")
         print(f"  Token Count: {classified['token_count']}")
         print(f"  Avg Token ID: {classified['token_stats']['avg']:.1f}")
@@ -70,17 +69,29 @@ for i, text in enumerate(examples, 1):
         print(f"  Description: {classified['classification_metadata']['description']}")
 
 # Example 2: Create a sample dataset and classify it
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("Example 2: Creating and classifying a sample dataset")
-print("="*60)
+print("=" * 60)
 
 sample_dataset = [
     {"text": "The cat sat on the mat.", "id": 1, "source": "web"},
     {"text": "Hello world! How are you today?", "id": 2, "source": "web"},
     {"text": "Python is a programming language.", "id": 3, "source": "code"},
-    {"text": "The algorithm uses dynamic programming to solve the problem.", "id": 4, "source": "code"},
-    {"text": "Machine learning models use neural networks for pattern recognition.", "id": 5, "source": "research"},
-    {"text": "The antidisestablishmentarian methodology employs sophisticated optimization techniques.", "id": 6, "source": "research"},
+    {
+        "text": "The algorithm uses dynamic programming to solve the problem.",
+        "id": 4,
+        "source": "code",
+    },
+    {
+        "text": "Machine learning models use neural networks for pattern recognition.",
+        "id": 5,
+        "source": "research",
+    },
+    {
+        "text": "The antidisestablishmentarian methodology employs sophisticated optimization techniques.",
+        "id": 6,
+        "source": "research",
+    },
 ]
 
 # Save sample dataset
@@ -95,25 +106,25 @@ band_counts = classifier.process_dataset(
     input_file="sample_dataset.jsonl",
     output_file="sample_dataset_classified.jsonl",
     text_field="text",
-    input_format="jsonl"
+    input_format="jsonl",
 )
 
 print("\nClassification complete!")
 print("Check sample_dataset_classified.jsonl for results.")
 
 # Example 3: Visualize band distribution
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("Example 3: Visualizing band distribution")
-print("="*60)
+print("=" * 60)
 
 try:
     from visualize_band_distribution import visualize_dataset
-    
+
     visualize_dataset(
         input_file="sample_dataset_classified.jsonl",
         output_file="band_distribution.png",
         input_format="jsonl",
-        title="Sample Dataset - Band Distribution"
+        title="Sample Dataset - Band Distribution",
     )
     print("\n✓ Band distribution visualization saved to: band_distribution.png")
 except ImportError:

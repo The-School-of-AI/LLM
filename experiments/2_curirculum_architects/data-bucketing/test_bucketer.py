@@ -1,5 +1,7 @@
 import unittest
+
 from bucketer import DataBucketer
+
 
 class TestDataBucketer(unittest.TestCase):
     def setUp(self):
@@ -17,7 +19,9 @@ class TestDataBucketer(unittest.TestCase):
         Every morning, the birds would sing songs.
         """
         result = self.bucketer.bucket_sample(text)
-        self.assertIn(result.band, ["B1", "B0"]) # Allow B0 if it falls short on length/complexity metrics slightly
+        self.assertIn(
+            result.band, ["B1", "B0"]
+        )  # Allow B0 if it falls short on length/complexity metrics slightly
 
     def test_b2_structured_knowledge(self):
         text = """
@@ -92,5 +96,6 @@ class TestDataBucketer(unittest.TestCase):
         result = self.bucketer.bucket_sample(text)
         self.assertIn(result.band, ["B4", "B5"])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
