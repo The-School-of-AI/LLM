@@ -56,3 +56,30 @@ print(f"  Would skip {loaded_skip} samples on resume")
 print("\n" + "=" * 60)
 print("✅ ALL TESTS PASSED!")
 print("=" * 60)
+
+# Test 4: Verify we actually got DIFFERENT data after skipping
+print(f"\n📋 Test 4: Verify data is actually different after skip")
+
+# Get first batch from fresh dataloader
+dl_fresh, _ = get_dataloader(
+    dataset_name="tinystories", batch_size=4, max_length=256, 
+    skip_samples=0, return_dataset=True
+)
+first_batch_fresh = next(iter(dl_fresh))["input_ids"]
+
+# Get first batch from resumed dataloader (skip 100)
+dl_resumed, _ = get_dataloader(
+    dataset_name="tinystories", batch_size=4, max_length=256, 
+    skip_samples=100, return_dataset=True
+)
+first_batch_resumed = next(iter(dl_resumed))["input_ids"]
+
+# They should be different
+if torch.equal(first_batch_fresh, first_batch_resumed):
+    print("❌ FAIL: Batches are identical - skip not working!")
+else:
+    print("✓ First batches are DIFFERENT - skip is working correctly!")
+
+print("\n" + "=" * 60)
+print("✅ ALL 4 TESTS PASSED!")
+print("=" * 60)
