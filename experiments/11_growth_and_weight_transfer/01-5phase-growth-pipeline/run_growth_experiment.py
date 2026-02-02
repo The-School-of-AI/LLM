@@ -163,14 +163,10 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         except ImportError:
             print("⚠️  WandB not installed. Skipping logging.")
     
-    # Create dataloader
-    dataloader = get_dataloader(
-        dataset_name=config["data"]["dataset_name"],
-        batch_size=config["training"]["batch_size"],
-        max_length=config["training"]["max_length"],
-        vocab_size=config["model"]["vocab_size"],
-        num_samples=config["data"].get("num_samples", 10000),
-    )
+    # Create dataloader (will be recreated with skip_samples if resuming)
+    skip_samples = 0  # Will be set from checkpoint if resuming
+    dataloader = None
+    dataset = None
     
     total_steps = 0
     results = {}
@@ -199,6 +195,11 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
                 print(f"📂 Loading checkpoint: {checkpoint_path}")
                 checkpoint = torch.load(checkpoint_path, map_location=device)
                 total_steps = checkpoint["step"]
+                
+                # Extract samples_seen for dataloader skip
+                if "dataloader_state" in checkpoint:
+                    skip_samples = checkpoint["dataloader_state"].get("samples_seen", 0)
+                    print(f"📊 Will skip {skip_samples:,} previously seen samples")
                 
                 # Reconstruct the model at the correct architecture stage
                 if resume_phase == 2:
@@ -265,6 +266,22 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
                 if i > 1:
                     results[f"phase{i}_delta"] = 0.0
             print(f"Skipping phases 1-{resume_phase-1}, starting at Phase {resume_phase}\n")
+    
+    # =========================================================================
+    # CREATE DATALOADER (with skip_samples if resuming)
+    # =========================================================================
+    if skip_samples > 0:
+        print(f"\n📊 Creating dataloader with {skip_samples:,} samples to skip...")
+    
+    dataloader, dataset = get_dataloader(
+        dataset_name=config["data"]["dataset_name"],
+        batch_size=config["training"]["batch_size"],
+        max_length=config["training"]["max_length"],
+        vocab_size=config["model"]["vocab_size"],
+        num_samples=config["data"].get("num_samples", 10000),
+        skip_samples=skip_samples,
+        return_dataset=True,
+    )
     
     # =========================================================================
     # PHASE 1: Dense Model Training

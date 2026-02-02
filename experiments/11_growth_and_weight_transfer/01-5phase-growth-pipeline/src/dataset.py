@@ -109,7 +109,7 @@ class TextDataset(Dataset):
 
 
 class StreamingTextDataset(IterableDataset):
-    """Streaming dataset for large corpora."""
+    """Streaming dataset for large corpora with resume support."""
     
     def __init__(
         self,
@@ -118,12 +118,15 @@ class StreamingTextDataset(IterableDataset):
         tokenizer = None,
         max_length: int = 512,
         seed: int = 42,
+        skip_samples: int = 0,  # Number of samples to skip on resume
     ):
         self.hf_dataset_name = hf_dataset_name
         self.split = split
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.seed = seed
+        self.skip_samples = skip_samples
+        self.samples_yielded = 0  # Track samples yielded in current session
         self._dataset = None
     
     def _load_dataset(self):
@@ -140,10 +143,29 @@ class StreamingTextDataset(IterableDataset):
                 raise ImportError("Please install datasets: pip install datasets")
         return self._dataset
     
+    def state_dict(self) -> Dict[str, Any]:
+        """Return state for checkpointing."""
+        return {
+            "samples_seen": self.samples_yielded + self.skip_samples,
+            "skip_samples": self.skip_samples,
+        }
+    
     def __iter__(self) -> Iterator[Dict[str, torch.Tensor]]:
         dataset = self._load_dataset()
+        skipped = 0
+        
+        # Log skip progress for large skips
+        if self.skip_samples > 0:
+            print(f"  ⏩ Skipping {self.skip_samples} previously seen samples...")
         
         for example in dataset:
+            # Skip previously seen samples
+            if skipped < self.skip_samples:
+                skipped += 1
+                if skipped % 10000 == 0:
+                    print(f"     Skipped {skipped}/{self.skip_samples}...")
+                continue
+            
             # Get text field (varies by dataset)
             if "text" in example:
                 text = example["text"]
@@ -176,6 +198,7 @@ class StreamingTextDataset(IterableDataset):
                         torch.zeros(self.max_length - len(input_ids), dtype=torch.long)
                     ])
             
+            self.samples_yielded += 1
             yield {
                 "input_ids": input_ids,
                 "labels": input_ids.clone(),
@@ -293,6 +316,8 @@ def get_dataloader(
     tokenizer = None,
     seed: int = 42,
     return_sampler: bool = False,
+    skip_samples: int = 0,  # NEW: For resume support
+    return_dataset: bool = False,  # NEW: Return dataset for state access
     **kwargs,
 ):
     """
@@ -306,9 +331,11 @@ def get_dataloader(
         tokenizer: HuggingFace tokenizer (optional)
         seed: Random seed for reproducibility
         return_sampler: If True, return (dataloader, sampler) for state management
+        skip_samples: Number of samples to skip (for resume)
+        return_dataset: If True, return (dataloader, dataset) for state access
     
     Returns:
-        DataLoader instance, or (DataLoader, StatefulSampler) if return_sampler=True
+        DataLoader instance, or tuple with sampler/dataset if requested
     """
     sampler = None
     
@@ -340,11 +367,12 @@ def get_dataloader(
         )
     
     elif dataset_name == "tinystories":
-        # Streaming datasets don't support StatefulSampler
+        # Streaming dataset with resume support
         dataset = StreamingTextDataset(
             hf_dataset_name="roneneldan/TinyStories",
             tokenizer=tokenizer,
             max_length=max_length,
+            skip_samples=skip_samples,
         )
         dataloader = DataLoader(
             dataset,
@@ -358,6 +386,7 @@ def get_dataloader(
             hf_dataset_name=dataset_name,
             tokenizer=tokenizer,
             max_length=max_length,
+            skip_samples=skip_samples,
         )
         dataloader = DataLoader(
             dataset,
@@ -365,6 +394,8 @@ def get_dataloader(
             num_workers=num_workers,
         )
     
+    if return_dataset:
+        return dataloader, dataset
     if return_sampler:
         return dataloader, sampler
     return dataloader
