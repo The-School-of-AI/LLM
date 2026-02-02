@@ -100,7 +100,7 @@ def download(
             print(f"Resuming from record {skip_count}, targeting {num_records} total records")
             
             # If we already have enough records, return
-            if skip_count >= num_records:
+            if num_records is not None and skip_count >= num_records:
                 print(f"Already have {skip_count} records, nothing to download")
                 return skip_count
     
