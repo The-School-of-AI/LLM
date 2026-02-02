@@ -125,6 +125,7 @@ def train_phase(
     wandb_run = None,
     dataset = None,  # NEW: For tracking samples_seen
     initial_samples_seen: int = 0,  # NEW: Starting sample count for resume
+    gradient_checkpointing: bool = False,  # NEW: Enable gradient checkpointing for memory
 ) -> float:
     """
     Train a model for a specified number of steps.
@@ -134,6 +135,12 @@ def train_phase(
     """
     model.to(device)
     model.train()
+    
+    # Enable gradient checkpointing if requested (saves ~40% memory)
+    if gradient_checkpointing:
+        print("  ⚡ Gradient checkpointing enabled (memory optimization)")
+        for layer in model.layers:
+            layer.gradient_checkpointing = True
     
     optimizer = AdamW(
         model.parameters(),

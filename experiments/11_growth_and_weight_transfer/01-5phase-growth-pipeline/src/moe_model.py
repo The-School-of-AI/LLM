@@ -136,12 +136,14 @@ class MoETransformerBlock(nn.Module):
         self.self_attn = Attention(config, layer_idx, rotary_emb=rotary_emb)
         self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.moe = MoEBlock(config)
+        self.gradient_checkpointing = False  # NEW: For memory optimization
     
-    def forward(
+    def _forward_impl(
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Internal forward implementation."""
         # Self-attention with residual
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
@@ -155,6 +157,20 @@ class MoETransformerBlock(nn.Module):
         hidden_states = residual + hidden_states
         
         return hidden_states, aux_loss
+    
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.gradient_checkpointing and self.training:
+            # Use checkpointing for memory savings (trades compute for memory)
+            from torch.utils.checkpoint import checkpoint
+            hidden_states, aux_loss = checkpoint(
+                self._forward_impl, hidden_states, attention_mask, use_reentrant=False
+            )
+            return hidden_states, aux_loss
+        return self._forward_impl(hidden_states, attention_mask)
 
 
 class SmolLM2MoE(nn.Module):

@@ -627,6 +627,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         checkpoint_prefix="phase5_yarn",
         device=device,
         wandb_run=wandb_run,
+        gradient_checkpointing=True,  # Enable for 1024 context memory savings
     )
     
     total_steps += phase5_steps
