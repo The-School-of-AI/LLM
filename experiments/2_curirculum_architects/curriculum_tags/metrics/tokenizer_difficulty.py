@@ -42,7 +42,7 @@ class TokenizerDifficultyMetric(MetricPlugin):
                 return None
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        """Compute tokenizer-based difficulty metrics and band."""
+        """Compute tokenizer-based difficulty metrics."""
         if not self.tokenizer:
              return {"error": "Tokenizer not loaded"}
 
@@ -58,14 +58,7 @@ class TokenizerDifficultyMetric(MetricPlugin):
         # Calculate stats
         stats = self._calculate_stats(tokens)
         
-        # Assign band
-        band, reason = self._assign_band(stats)
-        
-        return {
-            "band": band,
-            "reason": reason,
-            "stats": stats
-        }
+        return stats
 
     def _calculate_stats(self, tokens: List[int]) -> Dict[str, float]:
         token_array = np.array(tokens)
@@ -76,67 +69,10 @@ class TokenizerDifficultyMetric(MetricPlugin):
             "token_count": len(tokens)
         }
 
-    def _assign_band(self, stats: Dict[str, float]) -> tuple[str, str]:
-        """Assign band based on curriculum constraints."""
-        # Check bands B0 to B5
-        # We assume bands are ordered B0, B1, ... B5 in config if we iterate, 
-        # but let's be explicit based on curriculum.yaml structure.
-        
-        # We want the *highest* band that fits? 
-        # Actually the script logic was: "A record is assigned to the highest band (most difficult) that it qualifies for?"
-        # Wait, usually lower bands have stricter (lower) max thresholds.
-        # B0: max 10000. If I have max 5000, I fit B0. I also fit B1 (max 20000).
-        # The script said: "Check bands from easiest (B0) to hardest (B5). We want the highest band that the sample qualifies for"
-        # Wait, if avg=100. 
-        # B0 limit 5000. 100 <= 5000. Fits B0.
-        # B1 limit 10000. 100 <= 10000. Fits B1.
-        # If it fits B0, it definitely fits B1, B2...
-        # So "highest band it qualifies for" would mean B5? That doesn't make sense. B0 is "easiest".
-        # If my score is low (easy), I should be B0.
-        # If my score is high (hard), I should be B5.
-        
-        # Let's re-read the script logic in classify_curriculum_bands.py:
-        # if avg <= B0_thresh AND max <= B0_thresh ... return B0.
-        # else check B1...
-        # This means we find the *first* (lowest) band that accommodates the stats.
-        # Example: avg=8000.
-        # B0 limit 5000. 8000 <= 5000 False. Not B0.
-        # B1 limit 10000. 8000 <= 10000 True. It is B1.
-        # So it classifies as the *lowest* band that contains the value.
-        
-        bands_order = ["B0", "B1", "B2", "B3", "B4", "B5"]
-        
-        for band in bands_order:
-            # Get constraints from config
-            # config path: difficulty_system.bands.{band}.constraints.tokenizer
-            prefix = f"difficulty_system.bands.{band}.constraints.tokenizer"
-            
-            avg_max = self.config.get(f"{prefix}.avg_max")
-            max_max = self.config.get(f"{prefix}.max_max")
-            p95_max = self.config.get(f"{prefix}.p95_max")
-            
-            # Handle infinity strings from yaml if necessary, or missing values
-            if avg_max == ".inf" or avg_max is None: avg_max = float("inf")
-            if max_max == ".inf" or max_max is None: max_max = float("inf")
-            if p95_max == ".inf" or p95_max is None: p95_max = float("inf")
-            
-            if (stats["avg_token_id"] <= avg_max and 
-                stats["max_token_id"] <= max_max and 
-                stats["p95_token_id"] <= p95_max):
-                
-                reason = f"Fits {band}: avg={stats['avg_token_id']:.1f}<={avg_max}, max={stats['max_token_id']}<={max_max}"
-                return band, reason
-                
-        return "B5", "Exceeded all thresholds"
-
     def _empty_result(self):
         return {
-            "band": "B0", # Default to simplest? Or None?
-            "reason": "Empty text or tokens",
-            "stats": {
-                "avg_token_id": 0.0,
-                "max_token_id": 0,
-                "p95_token_id": 0.0,
-                "token_count": 0
-            }
+            "avg_token_id": 0.0,
+            "max_token_id": 0,
+            "p95_token_id": 0.0,
+            "token_count": 0
         }

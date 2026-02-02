@@ -49,8 +49,9 @@ def test_metrics():
     if "tokenizer_difficulty" in tags:
         print("✅ TokenizerDifficultyMetric ran")
         td = tags["tokenizer_difficulty"]
-        if "stats" in td:
-            print(f"   - Avg Token ID: {td['stats'].get('avg_token_id')}")
+        # Updated to check for top-level stats since banding logic was removed
+        if "avg_token_id" in td:
+            print(f"   - Avg Token ID: {td['avg_token_id']}")
     else:
         print("❌ TokenizerDifficultyMetric missing")
 
