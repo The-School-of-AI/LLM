@@ -14,7 +14,20 @@ def metric():
     root_dir = Path(__file__).parent.parent
     fake_config = SimpleNamespace(path=str(root_dir / "curriculum.yaml"))
     
-    return BandAssignmentMetric(fake_config)
+    metric = BandAssignmentMetric(fake_config)
+
+    # Ensure fixture has default config if YAML load fails or is partial
+    if not metric.logic_config.bands:
+        from curriculum_tags.metrics.band_assignment import BandConstraints
+        metric.logic_config.bands = {
+            "B0": BandConstraints(allowed_difficulty_levels=["L0", "L1"], readability_range=(0.0, 6.0), difficulty_score_range=(0.0, 0.30), entropy_range=(0.0, 4.5), diversity_range=(0.0, 0.15), structural_density_range=(0.0, 0.2)),
+            "B1": BandConstraints(allowed_difficulty_levels=["L1", "L2", "L3"], readability_range=(4.0, 10.0), difficulty_score_range=(0.20, 0.50), entropy_range=(3.5, 5.5), diversity_range=(0.10, 0.25)),
+            "B2": BandConstraints(allowed_difficulty_levels=["L2", "L3", "L4"], readability_range=(8.0, 14.0), difficulty_score_range=(0.40, 0.70), entropy_range=(4.0, 6.0), diversity_range=(0.15, 0.35)),
+            "B3": BandConstraints(allowed_difficulty_levels=["L3", "L4"], readability_range=(12.0, float('inf')), difficulty_score_range=(0.60, 0.85), entropy_range=(4.5, float('inf')), diversity_range=(0.20, float('inf'))),
+            "B4": BandConstraints(allowed_difficulty_levels=["L4", "L5"], readability_range=(14.0, float('inf')), difficulty_score_range=(0.75, float('inf')), entropy_range=(5.0, float('inf')), diversity_range=(0.25, float('inf'))),
+            "B5": BandConstraints(allowed_difficulty_levels=["L5"], readability_range=(16.0, float('inf')), difficulty_score_range=(0.85, float('inf')), entropy_range=(5.5, float('inf')), diversity_range=(0.30, float('inf')))
+        }
+    return metric
 
 
 def test_agentic_traces(metric):
@@ -154,3 +167,69 @@ def test_cot_scanner_integration(metric):
         }
     }
     assert metric.compute(sample_agentic)["band"] == "B5"
+
+def test_tokenizer_difficulty_constraints(metric):
+    """Test that allowed tokenizer levels filter out bands."""
+    
+    # We rely on the fixture's default setup, but ensure we have B0/B1 constraints to play with.
+    # Setup constraints: B0 only allows T0
+    if "B0" in metric.logic_config.bands:
+         metric.logic_config.bands["B0"].allowed_tokenizer_levels = ["T0"]
+    
+    sample = {
+        "curriculum_tags": {
+            "difficulty": {"score": 0.1, "level": "L0"},
+            "tokenizer_difficulty": {"level": "T3", "avg_token_id": 50000}, # T3 > T0
+            "readability": {"flesch_kincaid_grade": 2.0}
+        }
+    }
+    
+    # Should fail B0 check due to T3 not in ["T0"]
+    
+    # Configure B1 to accept T3
+    if "B1" in metric.logic_config.bands:
+        metric.logic_config.bands["B1"].allowed_difficulty_levels = ["L0"]
+        metric.logic_config.bands["B1"].allowed_tokenizer_levels = ["T3"]
+        metric.logic_config.bands["B1"].readability_range = (0.0, 20.0) 
+        metric.logic_config.bands["B1"].difficulty_score_range = (0.0, 1.0)
+        metric.logic_config.bands["B1"].entropy_range = (0.0, 10.0)
+        metric.logic_config.bands["B1"].diversity_range = (0.0, 1.0)
+
+    result = metric.compute(sample)
+    
+    # Should skip B0 and pick B1
+    assert result["band"] == "B1"
+    assert "B0" not in result["reason"]
+
+def test_structural_density_constraints(metric):
+    """Test that structural density ranges filter out bands."""
+    
+    # B0 allows 0.0-0.2
+    if "B0" in metric.logic_config.bands:
+        metric.logic_config.bands["B0"].structural_density_range = (0.0, 0.2)
+        
+    sample = {
+        "curriculum_tags": {
+            "difficulty": {"score": 0.1, "level": "L0"},
+            "structural_density": {"structural_density": 0.5}, # Too high for B0
+            "readability": {"flesch_kincaid_grade": 2.0}
+        }
+    }
+    
+    # B1 allows ? (Defaults 0-inf if not set in fixture, but let's be explicit)
+    if "B1" in metric.logic_config.bands:
+         metric.logic_config.bands["B1"].structural_density_range = (0.0, 1.0)
+         # Ensure B1 is otherwise valid candidate
+         metric.logic_config.bands["B1"].allowed_difficulty_levels = ["L0"] 
+         # Fix: B1 default readability is 4.0+, but sample is 2.0. We must relax it.
+         metric.logic_config.bands["B1"].readability_range = (0.0, 20.0)
+         # Fix: B1 default diff score (0.2-0.5) excludes 0.1. Relax it.
+         metric.logic_config.bands["B1"].difficulty_score_range = (0.0, 1.0)
+         # Relax others
+         metric.logic_config.bands["B1"].entropy_range = (0.0, 10.0)
+         metric.logic_config.bands["B1"].diversity_range = (0.0, 1.0)
+    
+    result = metric.compute(sample)
+    
+    # B0 rejected (0.5 > 0.2), B1 accepted
+    assert result["band"] == "B1"

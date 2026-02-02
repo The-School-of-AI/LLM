@@ -10,6 +10,8 @@ bands:
     difficulty_score_range: [0.0, 0.30]
     entropy_range: [0.0, 4.5]
     diversity_range: [0.0, 0.15]
+    # allowed_tokenizer_levels: ["T0", "T1"]
+    # structural_density_range: [0.0, 0.2]
     allowed_modalities: ["general_text"]
 
   B1:
@@ -50,4 +52,6 @@ bands:
     difficulty_score_range: [0.85, .inf]
     entropy_range: [5.5, .inf]
     diversity_range: [0.30, .inf]
+    # allowed_tokenizer_levels: ["T3", "T4", "T5"]
+    # structural_density_range: [0.3, .inf]
     allowed_modalities: ["hard_reasoning", "math", "advanced_code", "planning"]

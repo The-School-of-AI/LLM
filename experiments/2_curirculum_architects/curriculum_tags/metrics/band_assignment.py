@@ -16,9 +16,11 @@ class BandConstraints:
     difficulty_score_range: Tuple[float, float] = (0.0, float('inf'))
     entropy_range: Tuple[float, float] = (0.0, float('inf'))
     diversity_range: Tuple[float, float] = (0.0, float('inf'))
+    structural_density_range: Tuple[float, float] = (0.0, float('inf'))
     
     # Allowed inputs
     allowed_difficulty_levels: List[str] = field(default_factory=list)
+    allowed_tokenizer_levels: List[str] = field(default_factory=list)
     allowed_modalities: List[str] = field(default_factory=list)
 
 @dataclass
@@ -39,10 +41,12 @@ class BandAssignmentConfig:
         for b_name, b_data in data.get("bands", {}).items():
             bands[b_name] = BandConstraints(
                 allowed_difficulty_levels=b_data.get("allowed_difficulty_levels", []),
+                allowed_tokenizer_levels=b_data.get("allowed_tokenizer_levels", []),
                 readability_range=tuple(b_data.get("readability_range", (0, float('inf')))),
                 difficulty_score_range=tuple(b_data.get("difficulty_score_range", (0, float('inf')))),
                 entropy_range=tuple(b_data.get("entropy_range", (0, float('inf')))),
                 diversity_range=tuple(b_data.get("diversity_range", (0, float('inf')))),
+                structural_density_range=tuple(b_data.get("structural_density_range", (0, float('inf')))),
                 allowed_modalities=b_data.get("allowed_modalities", [])
             )
             
@@ -108,12 +112,16 @@ class BandAssignmentMetric(MetricPlugin):
         entropy_tags = tags.get("entropy", {})
         diversity_tags = tags.get("diversity", {})
         cot_tags = tags.get("cot_scanner", {})
+        tokenizer_tags = tags.get("tokenizer_difficulty", {})
+        structural_tags = tags.get("structural_density", {})
         
         fk_grade = readability_tags.get("flesch_kincaid_grade", 0.0)
         diff_score = difficulty_tags.get("score", 0.0)
         diff_level = difficulty_tags.get("level", "L0")
         entropy = entropy_tags.get("score", 0.0)
         diversity = diversity_tags.get("rare_ratio", 0.0)
+        tokenizer_level = tokenizer_tags.get("level", "T0")
+        structural_density = structural_tags.get("structural_density", 0.0)
         
         has_cot_trace = cot_tags.get("has_cot", False)
         has_agentic_trace = cot_tags.get("has_agentic", False)
@@ -171,6 +179,12 @@ class BandAssignmentMetric(MetricPlugin):
             if not in_range(entropy, constraints.entropy_range):
                 continue
             if not in_range(diversity, constraints.diversity_range):
+                continue
+            if not in_range(structural_density, constraints.structural_density_range):
+                continue
+
+            # D. Tokenizer Level Check
+            if constraints.allowed_tokenizer_levels and tokenizer_level not in constraints.allowed_tokenizer_levels:
                 continue
                 
             # C. COT Floor Check
