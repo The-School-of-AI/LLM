@@ -1,9 +1,11 @@
 """Dolma v1.7 dataset downloader with streaming support."""
 
+import os
 from typing import Optional
 
+import torch
 from datasets import load_dataset
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, login
 
 from common import (
     ChunkedWriter,
@@ -17,6 +19,10 @@ from common import (
     load_progress,
     save_progress,
 )
+
+# Authenticate with HuggingFace if token is available
+if os.environ.get("HF_TOKEN"):
+    login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
 
 # Progress update interval
 PROGRESS_INTERVAL = 1000
@@ -76,6 +82,11 @@ def get_domain(source: str) -> str:
     return "other"
 
 
+def passthrough_collate(batch):
+    """Pass through batch items without conversion - handles datetime objects."""
+    return batch
+
+
 def download(
     num_records: int = 10,
     resume: bool = False,
@@ -125,6 +136,15 @@ def download(
     # Load using the json builder since the data files are .json.gz
     dataset = load_dataset("json", data_files=urls[:5], split="train", streaming=True)
     
+    # Use DataLoader with prefetching for faster iteration
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=1,
+        num_workers=4,
+        prefetch_factor=10,
+        collate_fn=passthrough_collate,
+    )
+    
     # Dictionary to hold ChunkedWriter instances per source
     # Note: For dolma, we track per-source record counts separately
     writers: dict[str, ChunkedWriter] = {}
@@ -132,7 +152,9 @@ def download(
     
     count = 0
     try:
-        for example in dataset:
+        for batch in dataloader:
+            # Extract single example from batch (batch_size=1, custom collate returns list)
+            example = batch[0]
             # Skip already downloaded records
             if count < skip_count:
                 count += 1

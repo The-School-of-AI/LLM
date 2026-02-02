@@ -1,8 +1,11 @@
 """Sangraha dataset downloader with streaming support."""
 
+import os
+import torch
 from typing import Optional
 
 from datasets import load_dataset
+from huggingface_hub import login
 
 from common import (
     ChunkedWriter,
@@ -16,6 +19,10 @@ from common import (
     load_progress,
     save_progress,
 )
+
+# Authenticate with HuggingFace if token is available
+if os.environ.get("HF_TOKEN"):
+    login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
 
 # Dataset identifier
 DATASET_NAME = "Sangraha"
@@ -116,11 +123,21 @@ def download(
     
     dataset = load_dataset("ai4bharat/sangraha", "verified", split=lang, streaming=True)
     
+    # Use DataLoader with prefetching for faster iteration
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=1,
+        num_workers=4,
+        prefetch_factor=10,
+        collate_fn=passthrough_collate,
+    )
+
     count = 0
     lang_name = LANGUAGE_NAMES.get(lang, lang)
-    
+
     try:
-        for example in dataset:
+        for batch in dataloader:
+            example = batch[0]
             # Skip already downloaded records
             if count < skip_count:
                 count += 1
@@ -167,3 +184,7 @@ def download(
     clear_progress("sangraha", lang, output_format, s3_storage)
     
     return count
+
+
+def passthrough_collate(batch):
+    return batch

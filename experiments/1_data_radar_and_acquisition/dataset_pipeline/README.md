@@ -55,6 +55,7 @@ uv run python main.py --dataset <dataset> --scope <scope> [options]
 | `--resume` | Resume from previous progress if interrupted | `false` |
 | `--chunk-size` | Records per output file | Auto by scope |
 | `--format` | Output format: `json` or `parquet` | `json` |
+| `--output-dir` | Output directory path for local storage | `.data` |
 | `--storage` | Storage: `local` or `s3` | `local` |
 | `--s3-bucket` | S3 bucket name (required if --storage=s3) | - |
 | `--s3-region` | AWS region for S3 bucket | `us-east-1` |
@@ -375,3 +376,60 @@ uv run python main.py --dataset indiccorp --scope validate --chunk-size 500
 - `pyarrow>=15.0.0` - Parquet support
 - `pandas>=2.0.0` - Data manipulation
 - `boto3>=1.34.0` - AWS S3 support
+
+## HuggingFace Authentication
+
+To enable higher download speeds and avoid rate limits, authenticate with the HuggingFace Hub:
+
+**Recommended:**
+
+```bash
+huggingface-cli login
+```
+- Paste your token from https://huggingface.co/settings/tokens
+- This stores your token in `~/.cache/huggingface/token` and enables automatic authentication for all runs.
+
+**Alternative (per-run):**
+
+```bash
+HF_TOKEN=hf_your_token_here uv run python main.py --dataset dolma --scope validate --format parquet
+```
+
+If you do not authenticate, you may see warnings and experience slower downloads or rate limits.
+
+## Production S3 Shell Scripts & Job Monitoring
+
+To simplify production runs and background execution with S3, use the provided shell scripts for each dataset. These scripts use `sudo` for environments where only the superuser can write/modify files.
+
+### Usage
+
+```bash
+# Dolma production run (background, S3)
+sudo sh run_dolma_prod_s3.sh <s3-bucket> <s3-region> <s3-prefix>
+
+# Sangraha production run (background, S3)
+sudo sh run_sangraha_prod_s3.sh <s3-bucket> <s3-region> <s3-prefix>
+
+# IndicCorp production run (background, S3)
+sudo sh run_indiccorp_prod_s3.sh <s3-bucket> <s3-region> <s3-prefix>
+
+# NCERT production run (background, S3)
+sudo sh run_ncert_prod_s3.sh <s3-bucket> <s3-region> <s3-prefix>
+```
+
+Each script will:
+- Start the job in the background with `nohup` and `sudo`
+- Print the process ID (PID) and log file location
+- Save the PID to `./logs/<dataset>.pid` and logs to `./logs/<dataset>.log`
+
+### Monitoring a Job
+
+Use the provided monitor script to follow logs and detect job completion:
+
+```bash
+sudo sh monitor_job.sh ./logs/dolma.pid ./logs/dolma.log
+```
+
+This will tail the log file and automatically stop when the process exits.
+
+> **Note:** All scripts assume you are in the `dataset_pipeline` directory. Adjust paths if running elsewhere.

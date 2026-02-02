@@ -14,8 +14,23 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from botocore.exceptions import ClientError
 
-# Base data directory
-DATA_DIR = Path(".data")
+# Base data directory (can be overridden via set_data_dir)
+_DATA_DIR = Path(".data")
+
+
+def get_data_dir() -> Path:
+    """Get the current data directory."""
+    return _DATA_DIR
+
+
+def set_data_dir(path: str) -> None:
+    """Set the data directory.
+    
+    Args:
+        path: Path to use as the data directory
+    """
+    global _DATA_DIR
+    _DATA_DIR = Path(path)
 
 # Default chunk size (records per file)
 DEFAULT_CHUNK_SIZE = 10000  # 10K records per file
@@ -218,7 +233,7 @@ def get_download_path(dataset: str, subfolder: str, filename: str, output_format
     Returns:
         Path object for the output file
     """
-    output_dir = DATA_DIR / dataset / subfolder / output_format
+    output_dir = get_data_dir() / dataset / subfolder / output_format
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir / filename
 
