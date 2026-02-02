@@ -1,0 +1,105 @@
+{
+  "hardware": {
+    "num_gpus": 24,
+    "price_per_gpu_hour": 2.50,
+    "mfu": 0.30,
+    "quantization": "all",
+    "zero_stage": 2,
+    "cpu_offload": false,
+    
+    "tflops_per_gpu": {
+      "bf16": 989.0,
+      "fp8": 1979.0,  
+      "nvfp4": 3500.0
+    },
+    
+    "_comment_zero_efficiency": "Throughput penalty by ZeRO stage. ZeRO-3 requires all-gather before each forward/backward pass.",
+    "zero_efficiency": {
+      "zero0": 1.00,
+      "zero2": 0.95,
+      "zero3": 0.70,
+      "zero_infinity": 0.25
+    },
+    
+    "_comment_scaling_efficiency": "Communication overhead at scale. Efficiency drops due to all-reduce, gradient sync, and network limits.",
+    "scaling_efficiency": {
+      "base_gpus": 8,
+      "efficiency_at_base": 1.00,
+      "efficiency_at_64": 0.90,
+      "efficiency_at_256": 0.80,
+      "efficiency_at_1024": 0.65
+    }
+  },
+  "growth": {
+    "mode": "paper"
+  },
+  "stages": [
+    {
+      "name": "1B Dense",
+      "total_tokens": 20000000000,
+      "architecture": {
+        "vocab_size": 50257,
+        "hidden_size": 2048,
+        "intermediate_size": 5461,
+        "num_layers": 18,
+        "num_heads": 16,
+        "num_experts": 0,
+        "top_k_experts": 0,
+        "sequence_length": 4096,
+        "tie_embeddings": true,
+        "actual_tokens": 20000000000
+      }
+    },
+    {
+      "name": "3B MoE",
+      "total_tokens": 40000000000,
+      "architecture": {
+        "vocab_size": 50257,
+        "hidden_size": 1536,
+        "intermediate_size": 4864,
+        "num_layers": 16,
+        "num_heads": 16,
+        "num_experts": 8,
+        "top_k_experts": 4,
+        "sequence_length": 4096,
+        "tie_embeddings": true,
+        "null_expert_prob": 0.50,
+        "actual_tokens": 40000000000
+      }
+    },
+    {
+      "name": "8B MoE",
+      "total_tokens": 100000000000,
+      "architecture": {
+        "vocab_size": 50257,
+        "hidden_size": 2048,
+        "intermediate_size": 6400,
+        "num_layers": 24,
+        "num_heads": 32,
+        "num_experts": 8,
+        "top_k_experts": 4,
+        "sequence_length": 4096,
+        "tie_embeddings": true,
+        "null_expert_prob": 0.50,
+        "actual_tokens": 100000000000
+      }
+    },
+    {
+      "name": "70B MoE",
+      "total_tokens": 240000000000,
+      "architecture": {
+        "vocab_size": 64000,
+        "hidden_size": 4096,
+        "intermediate_size": 11008,
+        "num_layers": 60,
+        "num_heads": 32,
+        "num_experts": 8,
+        "top_k_experts": 4,
+        "sequence_length": 4096,
+        "tie_embeddings": true,
+        "null_expert_prob": 0.50,
+        "actual_tokens": 240000000000
+      }
+    }
+  ]
+}
