@@ -105,7 +105,10 @@ def download(
                 print(f"Already have {skip_count} records, nothing to download")
                 return skip_count
     
-    print(f"--- Downloading {num_records - skip_count} records from Sangraha ({lang}) ---")
+    if num_records is not None:
+        print(f"--- Downloading {num_records - skip_count} records from Sangraha ({lang}) ---")
+    else:
+        print(f"--- Downloading all available records from Sangraha ({lang}) ---")
     print(f"Chunk size: {chunk_size} records per file, format: {output_format}")
     
     # Initialize chunked writer
@@ -143,7 +146,7 @@ def download(
                 count += 1
                 continue
                 
-            if count >= num_records:
+            if num_records is not None and count >= num_records:
                 break
                 
             text = example.get("text", "")

@@ -121,7 +121,10 @@ def download(
                 print(f"Already have {skip_count} records, nothing to download")
                 return skip_count
     
-    print(f"--- Downloading {num_records - skip_count} records from Dolma v1.7 ---")
+    if num_records is not None:
+        print(f"--- Downloading {num_records - skip_count} records from Dolma v1.7 ---")
+    else:
+        print(f"--- Downloading all available records from Dolma v1.7 ---")
     print(f"Chunk size: {chunk_size} records per file, format: {output_format}")
     
     # Fetch the list of URLs for v1.7
@@ -163,7 +166,7 @@ def download(
                 source_counts[source] = source_counts.get(source, 0) + 1
                 continue
                 
-            if count >= num_records:
+            if num_records is not None and count >= num_records:
                 break
             
             source = example.get("source", "unknown")
