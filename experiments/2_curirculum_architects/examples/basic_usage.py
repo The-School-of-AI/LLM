@@ -1,5 +1,6 @@
 """Simple example showing curriculum tagging with auto-discovery."""
 
+import json
 from pathlib import Path
 
 from curriculum_tags import CurriculumTagger
@@ -20,11 +21,7 @@ def main():
 
     # Tag some samples
     samples = [
-        {
-            "id": "sample_1",
-            "text": "Hello world! This is a simple sentence.",
-            "source": "example",
-        },
+        {"id": "sample_1", "text": "Hello world! This is a simple sentence.", "source": "example", "lang": "en"},
         {
             "id": "sample_2",
             "text": """
@@ -52,31 +49,9 @@ def main():
 
     for sample in samples:
         tagged = tagger.tag_sample(sample)
-
-        print(f"\n📄 Sample: {tagged['id']}")
-        print(f"   Text: {tagged['text'][:50]}...")
-
-        tags = tagged["curriculum_tags"]
-
-        if "difficulty" in tags:
-            diff = tags["difficulty"]
-            print(f"   Difficulty: {diff['band']} (score: {diff['score']})")
-
-        if "modality" in tags:
-            mod = tags["modality"]
-            print(f"   Modality: {mod['primary_modality']}")
-
-        if "readability" in tags:
-            read = tags["readability"]
-            print(f"   Readability: Grade {read['flesch_kincaid_grade']}")
-
-        if "entropy" in tags:
-            ent = tags["entropy"]
-            print(f"   Entropy: {ent['score']}")
-
-        if "diversity" in tags:
-            div = tags["diversity"]
-            print(f"   Diversity: {div['rare_ratio']} (tokens: {div['token_count']})")
+        print(json.dumps(tagged, indent=2))
+        print("-" * 80)
+    print("\n✓ Tagging complete.")
 
 
 if __name__ == "__main__":
