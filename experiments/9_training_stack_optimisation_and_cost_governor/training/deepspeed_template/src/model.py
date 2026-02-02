@@ -42,11 +42,7 @@ def get_qwen2_moe_model(device=None, print_info=True):
         max_position_embeddings=1024,
         num_experts=8,
         num_experts_per_tok=2,
-        norm_topk_prob=True,
-        output_router_logits=True,
-        router_aux_loss_coef=0.001,
         use_cache=False,
-        tie_word_embeddings=False,
         torch_dtype=torch.bfloat16,
     )
 
