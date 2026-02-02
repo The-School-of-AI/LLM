@@ -14,9 +14,7 @@ import json
 from classify_curriculum_bands import CurriculumBandClassifier
 
 # Parse command-line arguments
-parser = argparse.ArgumentParser(
-    description="Example usage of Curriculum Band Classifier"
-)
+parser = argparse.ArgumentParser(description="Example usage of Curriculum Band Classifier")
 parser.add_argument(
     "--local-tokenizer",
     type=str,

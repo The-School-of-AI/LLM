@@ -25,17 +25,13 @@ def analyze_b0(samples):
     # Random samples
     print("\n--- Random Samples ---")
     for s in random.sample(samples, min(3, len(samples))):
-        print(
-            f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}"
-        )
+        print(f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}")
         print(f"Snippet: {s['text_snippet']}")
 
     # Outlier check: Longest B0 text
     longest = max(samples, key=lambda x: len(x["full_text"].split()))
     print("\n--- Outlier: Longest B0 Sample ---")
-    print(
-        f"ID: {longest['id']} | Len: {len(longest['full_text'].split())} words | Rationale: {longest['rationale']}"
-    )
+    print(f"ID: {longest['id']} | Len: {len(longest['full_text'].split())} words | Rationale: {longest['rationale']}")
     print(f"Full Text: {longest['full_text'][:500]}...")
 
 
@@ -47,17 +43,13 @@ def analyze_b1(samples):
     # Random samples
     print("\n--- Random Samples ---")
     for s in random.sample(samples, min(3, len(samples))):
-        print(
-            f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}"
-        )
+        print(f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}")
         print(f"Snippet: {s['text_snippet']}")
 
     # Outlier check: Longest B1 text (might belong higher?)
     longest = max(samples, key=lambda x: len(x["full_text"].split()))
     print("\n--- Outlier: Longest B1 Sample ---")
-    print(
-        f"ID: {longest['id']} | Len: {len(longest['full_text'].split())} words | Rationale: {longest['rationale']}"
-    )
+    print(f"ID: {longest['id']} | Len: {len(longest['full_text'].split())} words | Rationale: {longest['rationale']}")
     print(f"Full Text: {longest['full_text'][:500]}...")
 
 
@@ -69,9 +61,7 @@ def analyze_b2(samples):
     # Random samples
     print("\n--- Random Samples ---")
     for s in random.sample(samples, min(3, len(samples))):
-        print(
-            f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}"
-        )
+        print(f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}")
         print(f"Snippet: {s['text_snippet']}")
 
 
@@ -83,9 +73,7 @@ def analyze_b3(samples):
     # Show all since there are only 9
     print("\n--- All B3 Samples ---")
     for s in samples:
-        print(
-            f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}"
-        )
+        print(f"ID: {s['id']} | Len: {len(s['full_text'].split())} words | Rationale: {s['rationale']}")
         print(f"Snippet: {s['text_snippet']}")
 
 

@@ -98,9 +98,7 @@ class DataBucketer:
         Assigns a difficulty band (B0-B5) to a text sample based on heuristics.
         """
         if not text or not isinstance(text, str):
-            return BucketingResult(
-                band="B0", rationale=["Empty or invalid input"], flags=["invalid_input"]
-            )
+            return BucketingResult(band="B0", rationale=["Empty or invalid input"], flags=["invalid_input"])
 
         metrics = self._analyze_structure(text)
         reasoning_count = self._count_matches(text, self.reasoning_markers)
@@ -115,12 +113,8 @@ class DataBucketer:
         reasoning_density = (reasoning_count / word_count) * 100
         abstraction_density = (abstraction_count / word_count) * 100
 
-        rationale.append(
-            f"Words: {metrics['word_count']}, Paragraphs: {metrics['paragraph_count']}"
-        )
-        rationale.append(
-            f"Reasoning density: {reasoning_density:.2f}, Abstraction density: {abstraction_density:.2f}"
-        )
+        rationale.append(f"Words: {metrics['word_count']}, Paragraphs: {metrics['paragraph_count']}")
+        rationale.append(f"Reasoning density: {reasoning_density:.2f}, Abstraction density: {abstraction_density:.2f}")
 
         # --- HEURISTIC DECISION TREE ---
         # Start from highest complexity and fall through
@@ -130,9 +124,7 @@ class DataBucketer:
             flags.append("suspected_verbosity_without_depth")
 
         if metrics["word_count"] < 10:
-            return BucketingResult(
-                band="B0", rationale=["Too short"], flags=["short_content"]
-            )
+            return BucketingResult(band="B0", rationale=["Too short"], flags=["short_content"])
 
         # B5: PhD
         # Requirements: High abstraction, novel synthesis, very low redundancy.
@@ -150,11 +142,7 @@ class DataBucketer:
 
         # B4: Graduate
         # Requirements: Formal reasoning, long dependency chains.
-        if (
-            reasoning_density > 1.0
-            and metrics["avg_sentence_len"] > 12
-            and metrics["paragraph_count"] >= 2
-        ):
+        if reasoning_density > 1.0 and metrics["avg_sentence_len"] > 12 and metrics["paragraph_count"] >= 2:
             return BucketingResult(
                 "B4",
                 rationale + ["Significant reasoning markers, long sentences"],
@@ -165,24 +153,14 @@ class DataBucketer:
         # Requirements: Multi-step explanations, code/tutorials.
         # Stricter code requirement: Must be substantial to count alone, or mixed with reasoning
         # Stricter reasoning: Enumerated lists alone aren't enough without high reasoning density
-        if (code_count > 2) or (
-            reasoning_density > 0.8 and metrics["has_enumerated_list"]
-        ):
-            reason = (
-                "Significant code presence"
-                if code_count > 2
-                else "Reasoning with structured steps"
-            )
+        if (code_count > 2) or (reasoning_density > 0.8 and metrics["has_enumerated_list"]):
+            reason = "Significant code presence" if code_count > 2 else "Reasoning with structured steps"
             return BucketingResult("B3", rationale + [reason], flags)
 
         # B2: High School
         # Requirements: Structured knowledge, implicit reasoning.
         # Added: Must have substantial paragraph length to avoid listicles
-        if (
-            metrics["paragraph_count"] > 1
-            and metrics["avg_paragraph_len"] > 15
-            and metrics["avg_sentence_len"] > 10
-        ):
+        if metrics["paragraph_count"] > 1 and metrics["avg_paragraph_len"] > 15 and metrics["avg_sentence_len"] > 10:
             return BucketingResult(
                 "B2",
                 rationale + ["Structured multi-paragraph text, moderate complexity"],
@@ -195,18 +173,12 @@ class DataBucketer:
         if metrics["word_count"] > 20:
             # Check if it might be B2 candidate by vocabulary/length but missed structure
             if metrics["avg_sentence_len"] > 15:
-                return BucketingResult(
-                    "B2", rationale + ["Dense sentence structure"], flags
-                )
-            return BucketingResult(
-                "B1", rationale + ["Fluent text, simple structure"], flags
-            )
+                return BucketingResult("B2", rationale + ["Dense sentence structure"], flags)
+            return BucketingResult("B1", rationale + ["Fluent text, simple structure"], flags)
 
         # B0: Nursery
         # Default fallback
-        return BucketingResult(
-            "B0", rationale + ["Simple/short text, low complexity signals"], flags
-        )
+        return BucketingResult("B0", rationale + ["Simple/short text, low complexity signals"], flags)
 
 
 if __name__ == "__main__":

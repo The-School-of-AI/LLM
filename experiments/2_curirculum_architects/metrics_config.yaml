@@ -41,6 +41,7 @@ metrics:
 
   - name: band_assignment
     class: BandAssignmentMetric
+    module: band_assignment
     enabled: true
 
 # To add a new metric:
