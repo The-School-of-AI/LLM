@@ -1,0 +1,32 @@
+[project]
+name = "coreset-engineering"
+version = "0.1.0"
+description = "Engineering pipeline for Stage-Specific Coresets (Team 3)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "tqdm>=4.65.0",
+]
+
+[project.scripts]
+coreset-builder = "scripts.coreset_builder:main"
+generate-mock-data = "scripts.generate_mock_data:main"
+audit-visuals = "scripts.audit_visuals:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/coreset_engine"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest",
+    "ruff",
+    "mypy"
+]
