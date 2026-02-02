@@ -1,0 +1,53 @@
+# Curriculum Configuration for Local Test (Scaled Down)
+# Target: Total ~200M tokens
+# Strategy: Perplexity-based Difficulty Progression
+
+difficulty_config:
+  bands:
+    - name: "Easy"
+      min: 0.0
+      max: 0.3    # High compression ratio = Easy (e.g. 0.1 means compressed is 10% of logic)
+    - name: "Medium"
+      min: 0.3
+      max: 0.6
+    - name: "Hard"
+      min: 0.6
+      max: 1.0    # Random noise/High entropy
+
+stages:
+  - id: "stage_1_10M"
+    target_tokens: 10000000  # 10M
+    domains:
+      web: 0.5
+      code: 0.2
+      math: 0.1
+      wiki: 0.2
+    # Ensure Stage 1 is mostly Easy
+    allowed_bands: ["Easy", "Medium"]
+
+  - id: "stage_2_40M"
+    target_tokens: 40000000 # 40M
+    domains:
+      web: 0.4
+      code: 0.3
+      math: 0.2
+      wiki: 0.1
+    # Allow harder
+    allowed_bands: ["Easy", "Medium", "Hard"]
+
+  - id: "stage_3_100M"
+    target_tokens: 100000000 # 100M
+    domains:
+      web: 0.3
+      code: 0.3
+      math: 0.3
+      wiki: 0.1
+    allowed_bands: ["Medium", "Hard"]
+
+  - id: "stage_4_MoE_50M"
+    target_tokens: 50000000 # 50M
+    domains:
+      web: 0.2
+      code: 0.4
+      math: 0.4
+    allowed_bands: ["Hard"]
