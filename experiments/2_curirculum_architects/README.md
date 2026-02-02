@@ -154,7 +154,7 @@ For general text, we use multi-constraint matching. A sample qualifies for a ban
 **Overlap Policy**: If a sample qualifies for multiple bands, we assign the **highest** band by default (configurable).
 
 > [!NOTE]
-> See [band_assignment.yaml](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/curriculum_tags/metrics/band_assignment.yaml) and [BAND_ASSIGNMENT.md](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/curriculum_tags/metrics/BAND_ASSIGNMENT.md) for complete implementation details.
+> See [band_assignment.yaml](./band_assignment.yaml) and [BAND_ASSIGNMENT.md](./curriculum_tags/metrics/BAND_ASSIGNMENT.md) for complete implementation details.
 
 ### Key Policies Defined
 
@@ -188,7 +188,59 @@ As the model grows, the curriculum shifts toward harder content:
 
 ---
 
-## 3. Data Sampler
+## 3. Band Proportion Calculation
+### How We Calculate Stage Weights
+The `calculate_proportions.py` script determines the target data mix for a specific model size (e.g., 1B, 3B, 8B, 70B). It uses a mathematical approach to align model capacity with content difficulty.
+
+#### 1. Model Capacity Score ($C$)
+We normalize model size on a logarithmic scale (from 1B to 70B parameters) to a 0–1 score:
+$$C = \frac{\log(\text{params}) - \log(\text{min\_params})}{\log(\text{max\_params}) - \log(\text{min\_params})}$$
+
+#### 2. Alignment Weight ($W_a$)
+Each band has a "Difficulty Centroid" ($D_b$) defined in `curriculum.yaml`. We calculate the alignment between the model's current capacity ($C$) and the band's difficulty ($D_b$):
+$$W_a = \exp(-\lambda \cdot |D_b - C|)$$
+*$\lambda$ (lambda_align) controls how "sharp" the focus is on matched difficulty.*
+
+#### 3. Proportion Computation
+The final proportion for a band ($P_b$) is calculated by combining the base distribution (what occurs naturally in the data) with the alignment weight, then enforcing floors and caps:
+
+1.  **Raw Weight**: $R_b = \text{BaseDist}_b \cdot W_a$
+2.  **Constraint Enforcement**: $R'_b = \max(\min(R_b, \text{Cap}_b), \text{Floor}_b)$
+3.  **Renormalization**: $P_b = \frac{R'_b}{\sum R'_b}$
+
+#### Usage
+To compute proportions for a new dataset:
+```bash
+uv run python scripts/calculate_proportions.py data/your_file.parquet --recompute
+```
+
+---
+
+## 4. Tokenizer Calibration (The T-Scale)
+### What is Tokenizer Calibration?
+High-frequency words (e.g., "the", "and") are assigned low IDs by modern tokenizers (like Llama-3), while rare technical terms or complex symbols are assigned much higher IDs. We use this relationship to calibrate **Tokenizer Difficulty Levels (T0–T5)**.
+
+### Calibration Thresholds
+A document is assigned a T-level by comparing its token ID distribution against these three calibrated thresholds:
+
+| Level | Intent | Avg Token ID | Max Token ID | P95 Token ID |
+|-------|--------|--------------|--------------|--------------|
+| **T0** | Very Simple | < 5,000 | < 10,000 | < 8,000 |
+| **T1** | Everyday Language | < 10,000 | < 20,000 | < 15,000 |
+| **T2** | Structured Knowledge | < 20,000 | < 40,000 | < 30,000 |
+| **T3** | Technical Content | < 40,000 | < 70,000 | < 60,000 |
+| **T4** | Complex Reasoning | < 70,000 | < 100,000 | < 90,000 |
+| **T5** | Advanced / Rare | ∞ | ∞ | ∞ |
+
+### Why It Matters
+While the **Flesch-Kincaid (FK)** score measures linguistic complexity (sentence/word length), the **Tokenizer Level (T-Scale)** measures "vocabulary density." A text can have simple sentences (high FK) but very rare terminology (high T-level), making it a candidate for a higher Curriculum Band.
+
+> [!CAUTION]
+> The current thresholds are calibrated for the **Llama-3.3-70B** tokenizer. This calibration **MUST be re-done** once the final custom tokenizer is provided by **Team 7 (Tokenizer Lab)**, as token ID distributions and vocabulary ranges will shift.
+
+---
+
+## 5. Data Sampler
 
 ### What It Does (Non-Technical Summary)
 
@@ -252,11 +304,11 @@ uv run python web/app.py
 
 | Component | Path |
 |-----------|------|
-| Curriculum Policy | [`curriculum.yaml`](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/curriculum.yaml) |
-| Metrics Config | [`metrics_config.yaml`](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/metrics_config.yaml) |
-| Tagging Library | [`metrics/README.md`](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/curriculum_tags/metrics/README.md) |
-| Data Sampler | [`data_sampler/README.md`](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/data_sampler/README.md) |
-| Examples | [`examples/README.md`](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/examples/README.md) |
+| Curriculum Policy | [`curriculum.yaml`](./curriculum.yaml) |
+| Metrics Config | [`metrics_config.yaml`](./metrics_config.yaml) |
+| Tagging Library | [`metrics/README.md`](./curriculum_tags/metrics/README.md) |
+| Data Sampler | [`data_sampler/README.md`](./data_sampler/README.md) |
+| Examples | [`examples/README.md`](./examples/README.md) |
 | Tests | `experiments/2_curirculum_architects/tests/` |
 
 ---
