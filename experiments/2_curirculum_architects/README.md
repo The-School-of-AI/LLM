@@ -35,8 +35,9 @@ sample = {"text": "Quantum mechanics...", "id": "123"}
 tagged = tagger.tag_sample(sample)
 print(tagged["curriculum_tags"])
 # {
-#   "difficulty": {"band": "B5", "score": 0.89},
+#   "difficulty": {"score": 0.89},
 #   "modality": {"primary_modality": "general_text", ...},
+#   "band_assignment": {"band": "B5", "reason": "Very high complexity text"},
 #   "readability": {"flesch_kincaid_grade": 29.7, ...}
 # }
 ```
@@ -246,7 +247,10 @@ metrics:
     class: DifficultyMetric
     enabled: true
   - name: modality
-    class: ModalityMetric  
+    class: ModalityMetric
+    enabled: true
+  - name: band_assignment
+    class: BandAssignmentMetric
     enabled: true
 ```
 
