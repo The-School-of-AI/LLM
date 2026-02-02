@@ -118,6 +118,36 @@ sed -i 's/phase5_steps: 100/phase5_steps: 1000/g' config/config.yaml
 python run_growth_experiment.py
 ```
 
+### Resume Training
+
+If training is interrupted (SSH disconnect, crash, etc.), you can resume from the last checkpoint:
+
+```bash
+# Auto-resume: detects latest checkpoint and continues
+python run_growth_experiment.py --resume
+
+# Manual: resume from a specific phase (loads checkpoint from end of previous phase)
+python run_growth_experiment.py --resume-phase 3  # Resumes from Phase 3
+```
+
+**How it works:**
+- Checkpoints save both model weights and `samples_seen` count
+- On resume, the dataloader skips previously seen samples
+- Training continues from exactly where it left off
+
+**Pro tip:** Use `screen` or `tmux` for long training runs:
+```bash
+screen -S training
+python run_growth_experiment.py --resume
+# Ctrl+A, D to detach | screen -r training to reattach
+```
+
+**Test the dataloader state:**
+```bash
+python test_stateful_dataloader.py
+```
+
+
 ---
 
 ## 📁 Project Structure
