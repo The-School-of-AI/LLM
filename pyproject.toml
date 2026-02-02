@@ -4,4 +4,7 @@ version = "0.1.0"
 description = "TSAI 70B LLM Training"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pre-commit>=4.5.1",
+    "yamllint>=1.38.0",
+]
