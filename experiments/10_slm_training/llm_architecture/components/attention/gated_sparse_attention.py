@@ -522,68 +522,98 @@ class GatedSparseAttention(nn.Module):
         # k_t: [batch, seq_q] (variable per token)
         # valid_k_mask: [batch, seq_q, k_max_used]
         
-        # ==================== Step 5: Sparse SDPA ====================
-        # True sparse attention compute (O(L · k · d)) using gathered K/V.
-        # selected_indices is padded to k_max_used; valid_k_mask marks real entries per token.
+    # ==================== Step 5: Chunked Sparse SDPA ====================
+        # We process the sequence in chunks to ensure memory usage is O(chunk_size * k)
+        # instead of O(seq_len * k).
+        
+        chunk_size = 64  # Small chunk size to keep memory low
+        attn_outputs = []
 
-        k_max_used = selected_indices.size(-1)
+        # We need to flatten Batch and Heads for efficient indexing
+        # key_states_expanded: [Batch, Heads, Total_KV, D] -> [B*H, Total_KV, D]
+        # value_states_expanded: [Batch, Heads, Total_KV, D] -> [B*H, Total_KV, D]
+        k_flat = key_states_expanded.flatten(0, 1)
+        v_flat = value_states_expanded.flatten(0, 1)
+        
+        # Pre-calculate row indices for advanced indexing: [[0], [1], ... [B*H-1]]
+        # This tells PyTorch: "For the 0th head, use the 0th set of indices..."
+        batch_head_idx = torch.arange(k_flat.size(0), device=k_flat.device).unsqueeze(1)
 
-        # Expand indices to heads: [B, H, L, k]
-        idx_h = selected_indices[:, None, :, :].expand(batch_size, self.num_heads, seq_len, k_max_used)
+        for i in range(0, seq_len, chunk_size):
+            end = min(i + chunk_size, seq_len)
+            current_chunk_len = end - i
+            
+            # 1. Slice Query for this chunk: [Batch, Heads, chunk, D]
+            q_chunk = query_states[:, :, i:end, :]
+            
+            # 2. Slice sparse indices/mask for this chunk.
+            # selected_indices: [B, L, k], valid_k_mask: [B, L, k]
+            idx_chunk = selected_indices[:, i:end, :]  # [B, chunk, k]
+            valid_chunk = valid_k_mask[:, i:end, :]    # [B, chunk, k]
+            k_val = idx_chunk.size(-1)
+            idx_chunk_h = idx_chunk[:, None, :, :].expand(batch_size, self.num_heads, current_chunk_len, k_val)
+            valid_chunk_h = valid_chunk[:, None, :, :].expand(batch_size, self.num_heads, current_chunk_len, k_val)
 
-        # Gather K/V for selected positions
-        # key_states_expanded: [B, H, kv_seq_len, Hd]
-        k_exp = key_states_expanded.unsqueeze(2).expand(batch_size, self.num_heads, seq_len, kv_seq_len, self.head_dim)
-        v_exp = value_states_expanded.unsqueeze(2).expand(batch_size, self.num_heads, seq_len, kv_seq_len, self.head_dim)
+            # 3. Flatten indices to match the flattened Keys: [B*H, chunk * k]
+            # We reshape to [B*H, -1] so we can grab all keys for this chunk in one go
+            idx_flat = idx_chunk_h.flatten(0, 1).reshape(k_flat.size(0), -1)
 
-        idx_exp = idx_h.unsqueeze(-1).expand(batch_size, self.num_heads, seq_len, k_max_used, self.head_dim)
-        k_sel = torch.gather(k_exp, dim=3, index=idx_exp)  # [B,H,L,k,Hd]
-        v_sel = torch.gather(v_exp, dim=3, index=idx_exp)  # [B,H,L,k,Hd]
+            # 4. ADVANCED INDEXING (The efficient part)
+            # Instead of torch.gather, we use direct integer indexing.
+            # We grab the specific keys defined by idx_flat from k_flat.
+            # Result: [B*H, chunk*k, D]
+            k_selected_flat = k_flat[batch_head_idx, idx_flat]
+            v_selected_flat = v_flat[batch_head_idx, idx_flat]
 
-        # Compute sparse attention scores: [B,H,L,k]
-        attn_scores = (query_states.unsqueeze(-2) * k_sel).sum(dim=-1) * self.scale
+            # 5. Reshape back to 5D for Attention Math
+            # [Batch, Heads, chunk, k, D]
+            k_selected = k_selected_flat.view(batch_size, self.num_heads, current_chunk_len, k_val, self.head_dim)
+            v_selected = v_selected_flat.view(batch_size, self.num_heads, current_chunk_len, k_val, self.head_dim)
 
-        # Mask out padded slots from variable k
-        valid_k = valid_k_mask[:, None, :, :].expand(batch_size, self.num_heads, seq_len, k_max_used)
-        attn_scores = attn_scores.masked_fill(~valid_k, float('-inf'))
+            # 6. Compute Attention Scores: Q * K^T
+            # q_chunk: [B, H, chunk, D]
+            # k_selected: [B, H, chunk, k, D]
+            # We want dot product along D. Result: [B, H, chunk, k]
+            attn_scores = torch.einsum('bhqd,bhqkd->bhqk', q_chunk, k_selected) * self.scale
 
-        # Causal mask in gathered space:
-        # key index must be <= query absolute position in KV sequence.
-        kv_offset = kv_seq_len - seq_len  # when using cache, keys are longer than current query length
-        qpos = (kv_offset + torch.arange(seq_len, device=hidden_states.device))[None, None, :, None]  # [1,1,L,1]
-        causal_invalid = idx_h[:, :, :, :] > qpos
-        attn_scores = attn_scores.masked_fill(causal_invalid, float('-inf'))
+            # Mask padded slots from variable k per token
+            attn_scores = attn_scores.masked_fill(~valid_chunk_h, float('-inf'))
 
-        # Combine with provided attention_mask (additive), gathered on selected indices.
-        if attention_mask is not None:
-            # expected shape: [B, 1, L, kv_seq_len] (or broadcastable)
-            if attention_mask.dim() == 4:
+            # Causal mask in gathered space (key position must be <= query position)
+            kv_offset = kv_seq_len - seq_len
+            qpos = (kv_offset + torch.arange(i, end, device=hidden_states.device))[None, None, :, None]
+            causal_invalid = idx_chunk_h > qpos
+            attn_scores = attn_scores.masked_fill(causal_invalid, float('-inf'))
+
+            # Add provided additive mask gathered on selected key indices
+            if attention_mask is not None and attention_mask.dim() == 4:
                 am = attention_mask
-                # LLM causal mask is often [1, 1, L, T]; broadcast batch if needed.
                 if am.size(0) == 1 and batch_size > 1:
                     am = am.expand(batch_size, -1, -1, -1)
-                elif am.size(0) != batch_size:
-                    raise ValueError(
-                        f"attention_mask batch mismatch: mask batch={am.size(0)}, "
-                        f"input batch={batch_size}"
-                    )
+                am_chunk = am[:, :, i:end, :]  # [B, 1, chunk, kv_seq_len]
                 am_sel = torch.gather(
-                    am,
+                    am_chunk,
                     dim=-1,
-                    index=selected_indices[:, None, :, :].expand(batch_size, am.size(1), seq_len, k_max_used)
-                )  # [B, 1, L, k]
-                attn_scores = attn_scores + am_sel.expand(batch_size, self.num_heads, seq_len, k_max_used)
             else:
                 # If user passes a different mask format, fall back to no-op rather than crash.
                 pass
 
+            # 7. Apply Softmax
+            attn_probs = F.softmax(attn_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+            attn_probs = F.dropout(attn_probs, p=self.attention_dropout, training=self.training)
+            
+            # 8. Compute Output: Probs * V
+            # attn_probs: [B, H, chunk, k]
+            # v_selected: [B, H, chunk, k, D]
+            # Weighted sum along 'k' dimension. Result: [B, H, chunk, D]
         # Softmax over selected keys
         attn_weights = F.softmax(attn_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
         attn_weights = F.dropout(attn_weights, p=self.attention_dropout, training=self.training)
 
-        # Weighted sum: [B,H,L,Hd]
-        attn_output = (attn_weights.unsqueeze(-1) * v_sel).sum(dim=-2)
-        
+        # Concatenate all chunks back together: [Batch, Heads, Seq_Len, D]
+        attn_output = torch.cat(attn_outputs, dim=2)
+
+
         # ==================== Step 6: Output Gate (G1) ====================
         # O^{gated} = O^{sparse} ⊙ σ(h · W_O^g)
         output_gate = self.dual_gating.compute_output_gate(hidden_states)
