@@ -18,6 +18,19 @@ metrics:
     class: ReadabilityMetric
     enabled: true
 
+  - name: tokenizer_difficulty
+    class: TokenizerDifficultyMetric
+    module: tokenizer_difficulty
+    enabled: true
+
+  - name: structural_density
+    class: StructuralDensityMetric
+    module: structural_density
+    enabled: true
+
+  - name: cot_scanner
+    class: COTScannerMetric
+    module: cot_scanner
   - name: entropy
     class: EntropyMetric
     enabled: true

@@ -68,8 +68,19 @@ class CurriculumTagger:
 
             try:
                 # Auto-import from metrics package
-                # Convention: class DifficultyMetric in difficulty.py
-                module_name = class_name.lower().replace("metric", "")
+                # If module is explicitly provided in config, use it
+                module_name = metric_def.get("module")
+                
+                if not module_name:
+                    # Fallback convention: class DifficultyMetric in difficulty.py
+                    # Simple heuristic: remove "Metric" and lowercase
+                    # This covers standard cases like DifficultyMetric -> difficulty
+                    # Complex cases should specify 'module' in config
+                    base_name = class_name
+                    if base_name.endswith("Metric"):
+                        base_name = base_name[:-6]
+                    module_name = base_name.lower()
+                
                 module_path = f"curriculum_tags.metrics.{module_name}"
 
                 module = importlib.import_module(module_path)
