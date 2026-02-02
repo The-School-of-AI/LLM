@@ -9,31 +9,27 @@ from ..core.plugin import MetricPlugin
 
 
 class DifficultyMetric(MetricPlugin):
-    """Classify text into difficulty bands using curriculum thresholds."""
+    """Classify text into difficulty levels based on linguistic features."""
 
     name = "difficulty"
 
     def __init__(self, config):
         super().__init__(config)
         # Get band thresholds from curriculum if available
-        self.bands = config.get("difficulty.bands", self._default_bands())
-
-    def _default_bands(self) -> Dict[str, float]:
-        """Default difficulty band thresholds."""
-        return {
-            "B0": 0.15,
-            "B1": 0.30,
-            "B2": 0.50,
-            "B3": 0.70,
-            "B4": 0.85,
-            "B5": 1.00,
+        self.levels = {
+            "L0": 0.1,
+            "L1": 0.3,
+            "L2": 0.5,
+            "L3": 0.7,
+            "L4": 0.9,
+            "L5": 1.0,
         }
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Compute difficulty score and band assignment.
 
         Returns:
-            band: Assigned difficulty band (B0-B5)
+            level: Assigned difficulty level (L0-L5)
             score: Continuous difficulty score (0-1)
             features: Component features
         """
@@ -45,11 +41,11 @@ class DifficultyMetric(MetricPlugin):
         # Compute composite score
         score = self._compute_score(features)
 
-        # Assign band
-        band = self._assign_band(score)
+        # Assign level
+        level = self._assign_level(score)
 
         return {
-            "band": band,
+            "level": level,
             "score": round(score, 3),
             "features": features,
         }
@@ -101,12 +97,12 @@ class DifficultyMetric(MetricPlugin):
 
         return min(max(score, 0.0), 1.0)
 
-    def _assign_band(self, score: float) -> str:
-        """Map score to difficulty band using curriculum thresholds."""
-        for band_name, threshold in self.bands.items():
+    def _assign_level(self, score: float) -> str:
+        """Map score to difficulty level using curriculum thresholds."""
+        for level_name, threshold in self.levels.items():
             if score < threshold:
-                return band_name
-        return list(self.bands.keys())[-1]  # Return highest band
+                return level_name
+        return list(self.levels.keys())[-1]  # Return highest level
 
     @staticmethod
     def _tokenize(text: str) -> list[str]:

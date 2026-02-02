@@ -93,20 +93,9 @@ class CurriculumTagger:
             except (ImportError, AttributeError) as e:
                 print(f"Warning: Could not load metric {class_name}: {e}")
                 continue
-
-        return loaded_metrics if loaded_metrics else self._get_builtin_defaults()
-
-    def _get_builtin_defaults(self) -> List[MetricPlugin]:
-        """Fallback to built-in default metrics."""
-        from ..metrics.difficulty import DifficultyMetric
-        from ..metrics.modality import ModalityMetric
-        from ..metrics.readability import ReadabilityMetric
-
-        return [
-            DifficultyMetric(self.config),
-            ModalityMetric(self.config),
-            ReadabilityMetric(self.config),
-        ]
+        if not loaded_metrics:
+            raise ValueError("No valid metrics loaded from configuration.")
+        return loaded_metrics
 
     def tag_sample(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Add curriculum tags to a single sample.
@@ -158,11 +147,15 @@ class CurriculumTagger:
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
 
+        # Prepare metadata parquet output path
+        metadata_path = output_path.with_suffix(".metadata.parquet")
+
         # Read parquet file
         parquet_file = pq.ParquetFile(input_path)
 
         # Process in batches
         output_batches = []
+        metadata_batches = []
         total_rows = 0
         error_count = 0
 
@@ -172,6 +165,7 @@ class CurriculumTagger:
 
             # Tag each record
             tagged_records = []
+            meta_records = []
             for record in records:
                 try:
                     tagged = self.tag_sample(record)
@@ -185,9 +179,15 @@ class CurriculumTagger:
                     tagged_records.append(record)
                     error_count += 1
 
-            # Convert back to Arrow table
+            # Prepare metadata records (id, curriculum_tags)
+            for tagged in tagged_records:
+                meta_records.append({"id": tagged.get("id"), "curriculum_tags": tagged.get("curriculum_tags", {})})
+
+            # Convert back to Arrow tables
             tagged_batch = pa.Table.from_pylist(tagged_records)
+            meta_batch = pa.Table.from_pylist(meta_records)
             output_batches.append(tagged_batch)
+            metadata_batches.append(meta_batch)
 
             total_rows += len(records)
 
@@ -197,6 +197,10 @@ class CurriculumTagger:
         # Combine and write
         output_table = pa.concat_tables(output_batches)
         pq.write_table(output_table, output_path)
+
+        # Combine and write metadata table
+        metadata_table = pa.concat_tables(metadata_batches)
+        pq.write_table(metadata_table, metadata_path)
 
         return {
             "total_rows": total_rows,

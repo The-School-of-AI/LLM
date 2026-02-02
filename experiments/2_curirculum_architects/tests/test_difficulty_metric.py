@@ -13,19 +13,7 @@ from curriculum_tags.utils.curriculum_loader import CurriculumConfig
 @pytest.fixture
 def temp_config():
     """Create temporary config."""
-    config_data = {
-        "version": "0.1",
-        "difficulty": {
-            "bands": {
-                "B0": 0.15,
-                "B1": 0.30,
-                "B2": 0.50,
-                "B3": 0.70,
-                "B4": 0.85,
-                "B5": 1.00,
-            }
-        },
-    }
+    config_data = ({"version": "0.1"},)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.dump(config_data, f)
         path = Path(f.name)
@@ -42,10 +30,10 @@ def test_difficulty_simple_text(temp_config):
     sample = {"text": "Hello world"}
     result = metric.compute(sample)
 
-    assert "band" in result
+    assert "level" in result
     assert "score" in result
     assert "features" in result
-    assert result["band"] in ["B0", "B1", "B2", "B3", "B4", "B5"]
+    assert result["level"] in ["L0", "L1", "L2", "L3", "L4", "L5"]
 
 
 def test_difficulty_complex_text(temp_config):
@@ -72,32 +60,21 @@ def test_difficulty_short_text(temp_config):
     sample = {"text": "Hi"}
     result = metric.compute(sample)
 
-    # Short text defaults to B0
-    assert result["band"] == "B0"
+    # Short text defaults to L0
+    assert result["level"] == "L0"
 
 
-def test_difficulty_custom_bands(temp_config):
-    """Test difficulty metric with custom curriculum bands."""
+def test_difficulty_custom_levels(temp_config):
+    """Test difficulty metric with custom curriculum levels."""
     # Modify config to have different thresholds
-    config_data = {
-        "version": "0.1",
-        "difficulty": {
-            "bands": {
-                "B0": 0.10,  # Lower threshold
-                "B1": 0.20,
-                "B2": 1.00,
-            }
-        },
+    metric = DifficultyMetric(temp_config)
+    metric.levels = {
+        "L0": 0.10,
+        "L1": 0.20,
+        "L2": 1.00,
     }
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.dump(config_data, f)
-        path = Path(f.name)
-
-    config = CurriculumConfig(path)
-    metric = DifficultyMetric(config)
 
     sample = {"text": "Hello world this is a test"}
     result = metric.compute(sample)
 
-    assert result["band"] in ["B0", "B1", "B2"]
-    path.unlink()
+    assert result["level"] in ["L0", "L1", "L2"]

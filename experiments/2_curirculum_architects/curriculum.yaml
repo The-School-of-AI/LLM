@@ -5,7 +5,7 @@
 # Any deviation requires escalation + re-freeze.
 # ============================================================
 
-version: "0.1"
+version: "0.3"
 owner_team: "Team 2: Curriculum Architects"
 status: "DRAFT"  # "FROZEN"
 frozen_on: "2026-02-02"
@@ -96,6 +96,29 @@ difficulty_system:
       - tail_token_ratio
       - symbolic_token_density
       - structural_token_density
+
+  # Band difficulty centroids for capacity alignment
+  difficulty_centroids:
+    B0: 0.10
+    B1: 0.22
+    B2: 0.40
+    B3: 0.60
+    B4: 0.78
+    B5: 0.92
+
+  # Minimum required proportion for each band
+  floors:
+    B0: 0.10
+    B1: 0.14
+    B2: 0.18
+    B3: 0.14
+    B4: 0.06
+    B5: 0.02
+
+  # Model Capacity Configuration
+  model_capacity_config:
+    min_params: 1000000000.0  # 1B
+    max_params: 70000000000.0 # 70B
 
   bands:
     # avg_max: The highest allowed average token difficulty across the entire text.
@@ -216,6 +239,8 @@ modalities:
     allowed_languages: ["python", "javascript", "typescript", "c", "cpp", "java"]
   math:
     purpose: "symbolic abstraction"
+  research_papers:
+    purpose: "research papers"
   cot_reasoning:
     purpose: "scaffolded reasoning traces"
   agentic_traces:
@@ -242,15 +267,19 @@ growth_schedule:
     - name: "1B"
       order: 1
       profile: "base"
+      params: 1000000000.0  # 1B
     - name: "3B"
       order: 2
       profile: "harder_shift_1"
+      params: 3000000000.0  # 3B
     - name: "8B"
       order: 3
       profile: "harder_shift_2"
+      params: 8000000000.0  # 8B
     - name: "70B"
       order: 4
       profile: "final_adaptive"
+      params: 70000000000.0 # 70B
 
   stage_profiles:
 

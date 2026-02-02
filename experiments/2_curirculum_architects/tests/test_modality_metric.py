@@ -81,6 +81,32 @@ def test_modality_general_text(temp_config):
     assert not result["has_agentic"]
 
 
+def test_modality_research_paper_detection(temp_config):
+    """Test modality detection for research papers."""
+    metric = ModalityMetric(temp_config)
+
+    # Test with Abstract
+    assert metric.compute({"text": "Abstract: This paper presents..."})["has_research_paper"] is True
+    
+    # Test with References
+    assert metric.compute({"text": "References: 1. Smith et al."})["has_research_paper"] is True
+    
+    # Test with arXiv/doi
+    assert metric.compute({"text": "See arXiv: 2101.12345 for details."})["has_research_paper"] is True
+    assert metric.compute({"text": "doi: 10.1145/1234567.1234568"})["has_research_paper"] is True
+    
+    # Test with et al.
+    assert metric.compute({"text": "As shown by Wang et al. (2023)..."})["has_research_paper"] is True
+    
+    # Test with citations [1, 2]...[3] (Regex requires multiple blocks)
+    assert metric.compute({"text": "Recent works [1, 2] have shown results [3]."})["has_research_paper"] is True
+    
+    # Test primary modality
+    result = metric.compute({"text": "Abstract: Deep learning is hard. doi: 123"})
+    assert result["has_research_paper"] is True
+    assert result["primary_modality"] == "research_papers"
+
+
 def test_modality_chaining_with_previous_tags(temp_config):
     """Test that modality can access previous plugin results."""
     metric = ModalityMetric(temp_config)
