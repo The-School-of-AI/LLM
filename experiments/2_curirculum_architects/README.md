@@ -203,6 +203,39 @@ samples = [
 tagged_samples = tagger.process_batch(samples)
 ```
 
+### Calculating Band Proportions
+
+The `calculate_proportions.py` script calculates optimal curriculum band distributions for different model sizes based on the "Capacity-Aware Curriculum" logic.
+
+**Features:**
+- Samples metadata from processed parquet files (default 0.5% sample)
+- Aligns difficulty distribution to model capacity (1B, 3B, 8B, 70B stages)
+- Enforces curriculum floors defined in `curriculum.yaml`
+- Outputs results for all stages
+
+**Usage:**
+
+```bash
+# Calculate and print to console
+uv run python scripts/calculate_proportions.py data/train.metadata.parquet
+
+# Specify custom sampling rate (e.g. 10%)
+uv run python scripts/calculate_proportions.py data/train.metadata.parquet --sampling-rate 0.1
+
+# Save output to JSON
+uv run python scripts/calculate_proportions.py data/train.metadata.parquet --output-json proportions.json
+```
+
+**Output Example:**
+```text
+Stage: 8B (Params: 8.0B, Cap: 0.4895)
+----------------------------------------
+  B0: 0.1872
+  B1: 0.2107
+  B2: 0.2709
+...
+```
+
 ## Configuration Files
 
 ### metrics_config.yaml
