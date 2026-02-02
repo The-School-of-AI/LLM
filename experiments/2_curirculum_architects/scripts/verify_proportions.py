@@ -25,8 +25,9 @@ def create_mock_metadata(path: Path):
         data.append({
             "id": f"id_{i}",
             "curriculum_tags": {
-                "difficulty": {"band": band},
-                "version": "0.2"
+                "difficulty": {"score": 0.5, "level": "L2"}, # Mock legacy
+                "band_assignment": {"band": band, "reason": "Mocked"}, # New Source
+                "version": "0.3"
             }
         })
         

@@ -131,13 +131,22 @@ def sample_metadata(metadata_path: str, sample_rate: float) -> Dict[str, float]:
     
     for row in samples:
         tags = row.get("curriculum_tags", {})
-        if "difficulty" in tags and "band" in tags["difficulty"]:
+        band = None
+        
+        # Priority 1: New Band Assignment Metric
+        if "band_assignment" in tags and "band" in tags["band_assignment"]:
+            band = tags["band_assignment"]["band"]
+            
+        # Priority 2: Legacy Difficulty Metric (Fallback)
+        elif "difficulty" in tags and "band" in tags["difficulty"]:
             band = tags["difficulty"]["band"]
+            
+        if band:
             counts[band] = counts.get(band, 0) + 1
             valid_samples += 1
             
     if valid_samples == 0:
-        raise ValueError("No valid difficulty tags found in sampled data.")
+        raise ValueError("No valid band assignment or difficulty tags found in sampled data.")
         
     # Convert to proportions
     return {k: v / valid_samples for k, v in counts.items()}
