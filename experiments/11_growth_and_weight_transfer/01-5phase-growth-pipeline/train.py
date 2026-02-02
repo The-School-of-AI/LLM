@@ -54,8 +54,9 @@ def save_checkpoint(
     loss: float,
     save_dir: str,
     prefix: str = "checkpoint",
+    dataloader_state: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Save a training checkpoint."""
+    """Save a training checkpoint with dataloader state for resumable training."""
     os.makedirs(save_dir, exist_ok=True)
     checkpoint_path = os.path.join(save_dir, f"{prefix}_step_{step}.pt")
     
@@ -66,6 +67,11 @@ def save_checkpoint(
         "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
         "loss": loss,
         "config": model.config,
+        # Dataloader state for resumable training
+        "dataloader_state": dataloader_state or {
+            "samples_seen": step,
+            "rng_state": torch.get_rng_state(),
+        },
     }, checkpoint_path)
     
     print(f"  💾 Saved checkpoint: {checkpoint_path}")
@@ -77,8 +83,9 @@ def load_checkpoint(
     model: nn.Module,
     optimizer: Optional[torch.optim.Optimizer] = None,
     scheduler = None,
+    restore_dataloader_state: bool = True,
 ) -> Dict[str, Any]:
-    """Load a training checkpoint."""
+    """Load a training checkpoint and optionally restore dataloader state."""
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -88,6 +95,13 @@ def load_checkpoint(
     
     if scheduler and checkpoint.get("scheduler_state_dict"):
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+    
+    # Restore RNG state for dataloader reproducibility
+    if restore_dataloader_state and "dataloader_state" in checkpoint:
+        dataloader_state = checkpoint["dataloader_state"]
+        if "rng_state" in dataloader_state:
+            torch.set_rng_state(dataloader_state["rng_state"])
+            print(f"  🔄 Restored RNG state for dataloader")
     
     print(f"  📂 Loaded checkpoint from step {checkpoint['step']}")
     return checkpoint

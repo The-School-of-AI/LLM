@@ -9,9 +9,65 @@ Supports:
 """
 
 import torch
-from torch.utils.data import Dataset, DataLoader, IterableDataset
-from typing import Optional, Iterator, Dict, Any
+from torch.utils.data import Dataset, DataLoader, IterableDataset, Sampler
+from typing import Optional, Iterator, Dict, Any, List
 import random
+
+
+class StatefulSampler(Sampler):
+    """
+    A sampler that maintains state for resumable training.
+    Tracks which samples have been seen and can be saved/restored.
+    """
+    
+    def __init__(self, data_source: Dataset, shuffle: bool = True, seed: int = 42):
+        self.data_source = data_source
+        self.shuffle = shuffle
+        self.seed = seed
+        self.epoch = 0
+        self.current_index = 0
+        self._indices: Optional[List[int]] = None
+        self._generate_indices()
+    
+    def _generate_indices(self):
+        """Generate shuffled indices for current epoch."""
+        generator = torch.Generator()
+        generator.manual_seed(self.seed + self.epoch)
+        
+        if self.shuffle:
+            self._indices = torch.randperm(len(self.data_source), generator=generator).tolist()
+        else:
+            self._indices = list(range(len(self.data_source)))
+    
+    def __iter__(self) -> Iterator[int]:
+        """Iterate from current position."""
+        while self.current_index < len(self._indices):
+            yield self._indices[self.current_index]
+            self.current_index += 1
+        
+        # Reset for next epoch
+        self.epoch += 1
+        self.current_index = 0
+        self._generate_indices()
+    
+    def __len__(self) -> int:
+        return len(self.data_source)
+    
+    def state_dict(self) -> Dict[str, Any]:
+        """Get sampler state for checkpointing."""
+        return {
+            "epoch": self.epoch,
+            "current_index": self.current_index,
+            "seed": self.seed,
+        }
+    
+    def load_state_dict(self, state_dict: Dict[str, Any]):
+        """Restore sampler state from checkpoint."""
+        self.epoch = state_dict["epoch"]
+        self.seed = state_dict.get("seed", self.seed)
+        self._generate_indices()
+        self.current_index = state_dict["current_index"]
+        print(f"  🔄 Restored sampler: epoch={self.epoch}, position={self.current_index}/{len(self)}")
 
 
 class TextDataset(Dataset):
@@ -235,10 +291,12 @@ def get_dataloader(
     max_length: int = 512,
     num_workers: int = 0,
     tokenizer = None,
+    seed: int = 42,
+    return_sampler: bool = False,
     **kwargs,
-) -> DataLoader:
+):
     """
-    Factory function to create a dataloader.
+    Factory function to create a dataloader with optional stateful sampler.
     
     Args:
         dataset_name: "dummy", "tinystories", or a HuggingFace dataset name
@@ -246,20 +304,25 @@ def get_dataloader(
         max_length: Maximum sequence length
         num_workers: DataLoader workers
         tokenizer: HuggingFace tokenizer (optional)
+        seed: Random seed for reproducibility
+        return_sampler: If True, return (dataloader, sampler) for state management
     
     Returns:
-        DataLoader instance
+        DataLoader instance, or (DataLoader, StatefulSampler) if return_sampler=True
     """
+    sampler = None
+    
     if dataset_name == "dummy":
         dataset = DummyDataset(
             max_length=max_length,
             vocab_size=kwargs.get("vocab_size", 49152),
             num_samples=kwargs.get("num_samples", 10000),
         )
-        return DataLoader(
+        sampler = StatefulSampler(dataset, shuffle=True, seed=seed)
+        dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
-            shuffle=True,
+            sampler=sampler,
             num_workers=num_workers,
         )
     
@@ -268,37 +331,43 @@ def get_dataloader(
             max_length=max_length,
             vocab_size=kwargs.get("vocab_size", 49152),
         )
-        return DataLoader(
+        sampler = StatefulSampler(dataset, shuffle=True, seed=seed)
+        dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
-            shuffle=True,
+            sampler=sampler,
             num_workers=num_workers,
         )
     
     elif dataset_name == "tinystories":
+        # Streaming datasets don't support StatefulSampler
         dataset = StreamingTextDataset(
             hf_dataset_name="roneneldan/TinyStories",
             tokenizer=tokenizer,
             max_length=max_length,
         )
-        return DataLoader(
+        dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             num_workers=num_workers,
         )
     
     else:
-        # Assume HuggingFace dataset name
+        # Assume HuggingFace dataset name (streaming)
         dataset = StreamingTextDataset(
             hf_dataset_name=dataset_name,
             tokenizer=tokenizer,
             max_length=max_length,
         )
-        return DataLoader(
+        dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             num_workers=num_workers,
         )
+    
+    if return_sampler:
+        return dataloader, sampler
+    return dataloader
 
 
 if __name__ == "__main__":
