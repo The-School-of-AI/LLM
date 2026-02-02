@@ -123,9 +123,10 @@ def train_phase(
     checkpoint_prefix: str = "checkpoint",
     device: torch.device = torch.device("cpu"),
     wandb_run = None,
-    dataset = None,  # NEW: For tracking samples_seen
-    initial_samples_seen: int = 0,  # NEW: Starting sample count for resume
-    gradient_checkpointing: bool = False,  # NEW: Enable gradient checkpointing for memory
+    dataset = None,  # For tracking samples_seen
+    initial_samples_seen: int = 0,  # Starting sample count for resume
+    gradient_checkpointing: bool = False,  # Enable gradient checkpointing for memory
+    use_amp: bool = None,  # Mixed precision (None = auto, True on CUDA)
 ) -> float:
     """
     Train a model for a specified number of steps.
@@ -154,11 +155,12 @@ def train_phase(
         eta_min=learning_rate * 0.1,
     )
     
-    # Mixed precision setup
-    use_amp = gradient_checkpointing and device.type == "cuda"  # Use AMP when checkpointing is enabled
+    # Mixed precision setup (default: enabled on CUDA for speed + memory)
+    if use_amp is None:
+        use_amp = device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler() if use_amp else None
     if use_amp:
-        print("  ⚡ Mixed precision (fp16) enabled for memory optimization")
+        print("  ⚡ Mixed precision (fp16) enabled")
     
     # Training loop
     data_iter = iter(dataloader)
