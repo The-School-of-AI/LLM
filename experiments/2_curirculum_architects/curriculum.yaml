@@ -7,22 +7,18 @@
 
 version: "0.1"
 owner_team: "Team 2: Curriculum Architects"
-status: "DRAFT" # "FROZEN"
-frozen_on: "2026-01-31"
-change_policy: "STRUCTURE_IMMUTABLE" # "NO_CHANGES_ALLOWED"
-
-# ============================================================
-# LANGUAGES
-# ============================================================
+status: "DRAFT"  # "FROZEN"
+frozen_on: "2026-02-02"
+change_policy: "STRUCTURE_IMMUTABLE"  # "NO_CHANGES_ALLOWED"
 languages:
   primary: ["en"]
   secondary:
     - lang: "hi"
       max_token_share: 0.08         # Hindi allowed but capped (staged)
       earliest_stage: "3B"          # introduce later to avoid distorting early bands
-  excluded_langs: ["zh", "ja", "ko"] # plus other non-en/hi by default
+  excluded_langs: ["zh", "ja", "ko", "fr", "de", "es"]  # plus other non-en/hi by default
   language_id_requirement:
-    provider: "dataset_claimed_clean" # must come from dataset vendor/curator claims + docs
+    provider: "dataset_claimed_clean"  # must come from dataset vendor/curator claims + docs
     min_confidence: 0.90              # only if dataset provides it; otherwise reject/seg-request
 
 # ============================================================
@@ -40,6 +36,11 @@ global_contract:
       upgrade_never_allowed: true
   enforcement:
     violation_action: "REJECT_OR_HALT"
+  rejection_reasons:
+    - "language_not_en_or_indic"
+    - "indic_not_allowed_at_stage"
+    - "agentic_not_allowed_in_band_at_stage"
+    - "below_minimum_token_threshold"
 
 # ============================================================
 # LANGUAGE & CONTEXT POLICY
@@ -74,12 +75,12 @@ language_and_context:
       owned_by: "Post-pretraining teams"
 
 # ============================================================
-# 3. DIFFICULTY SYSTEM (CORE OF CURRICULUM)
+# DIFFICULTY SYSTEM (CORE OF CURRICULUM)
 # ============================================================
 difficulty_system:
 
   definition_method:
-    primary: "heuristic_rules"
+    primary: "heuristic"
     secondary: "tokenizer_proxy"
     audit:
       enabled: true
@@ -97,29 +98,36 @@ difficulty_system:
       - structural_token_density
 
   bands:
-
+    # avg_max: The highest allowed average token difficulty across the entire text.
+    # max_max: The highest allowed single hardest token that can appear in the text.
+    # p95_max: The highest allowed token difficulty that 95% of the text stays below, ignoring rare outliers.
     B0:
       name: "Nursery"
       intent: "Surface language acquisition"
       allowed_modalities: ["general_text"]
+      allowed_domains: ["general_web_clean", "dialogue_chat"]
       constraints:
         tokenizer:
-          max_rare_ratio: 0.02
-          max_tail_ratio: 0.005
-        perplexity_range: [1.1, 30]
+          avg_max: 5000
+          max_max: 10000
+          p95_max: 8000
+          description: "Nursery: Very high frequency tokens, simple language"
       reasoning_policy:
         cot: "forbidden"
         agentic: "forbidden"
+
 
     B1:
       name: "Primary"
       intent: "Fluent everyday language"
       allowed_modalities: ["general_text", "clean_exposition"]
+      allowed_domains: ["general_web_clean", "encyclopedic", "dialogue_chat"]
       constraints:
         tokenizer:
-          max_rare_ratio: 0.05
-          max_tail_ratio: 0.01
-        perplexity_range: [10, 60]
+          avg_max: 10000
+          max_max: 20000
+          p95_max: 15000
+          description: "Primary: High frequency tokens, everyday language"
       reasoning_policy:
         cot: "forbidden"
         agentic: "forbidden"
@@ -127,12 +135,14 @@ difficulty_system:
     B2:
       name: "HighSchool"
       intent: "Structured knowledge without explicit reasoning"
-      allowed_modalities: ["structured_knowledge"]
+      allowed_modalities: ["general_text", "structured_knowledge"]
+      allowed_domains: ["encyclopedic", "news_nonpolitical", "technical_docs"]
       constraints:
         tokenizer:
-          max_rare_ratio: 0.10
-          max_tail_ratio: 0.02
-        perplexity_range: [30, 120]
+          avg_max: 20000
+          max_max: 40000
+          p95_max: 30000
+          description: "High School: Medium frequency, structured knowledge"
       reasoning_policy:
         cot: "forbidden"
         agentic: "forbidden"
@@ -140,12 +150,14 @@ difficulty_system:
     B3:
       name: "Undergraduate"
       intent: "Reasoning emergence"
-      allowed_modalities: ["technical_text", "code"]
+      allowed_modalities: ["structured_knowledge", "technical_text", "code"]
+      allowed_domains: ["technical_docs", "math_science", "code_repos"]
       constraints:
         tokenizer:
-          max_rare_ratio: 0.20
-          max_tail_ratio: 0.05
-        perplexity_range: [80, 300]
+          avg_max: 40000
+          max_max: 70000
+          p95_max: 60000
+          description: "Undergraduate: Lower frequency, technical content"
       reasoning_policy:
         cot:
           allowed: true
@@ -155,12 +167,14 @@ difficulty_system:
     B4:
       name: "Graduate"
       intent: "Explicit abstraction and algorithms"
-      allowed_modalities: ["math", "code"]
+      allowed_modalities: ["technical_text", "math", "code"]
+      allowed_domains: ["math_science", "code_repos", "planning_reasoning_curated"]
       constraints:
         tokenizer:
-          min_rare_ratio: 0.15
-          min_tail_ratio: 0.05
-        perplexity_range: [200, 800]
+          avg_max: 70000
+          max_max: 100000
+          p95_max: 90000
+          description: "Graduate: Low frequency, complex reasoning"
       reasoning_policy:
         cot:
           allowed: true
@@ -170,12 +184,14 @@ difficulty_system:
     B5:
       name: "PhD"
       intent: "Planning and system-level reasoning"
-      allowed_modalities: ["hard_reasoning", "advanced_code", "planning"]
+      allowed_modalities: ["hard_reasoning", "math", "advanced_code", "planning"]
+      allowed_domains: ["planning_reasoning_curated", "math_science", "code_repos"]
       constraints:
         tokenizer:
-          min_rare_ratio: 0.25
-          min_tail_ratio: 0.10
-        perplexity_range: [400, 1500]
+          avg_max: .inf
+          max_max: .inf
+          p95_max: .inf
+          description: "PhD: Very low frequency, advanced/rare terms"
       reasoning_policy:
         cot:
           allowed: true
@@ -184,8 +200,11 @@ difficulty_system:
           allowed: true
           max_token_share: 0.02
 
+# TODO: Add Triggers
+# TODO: Add Signals(from benchmark team)
+
 # ============================================================
-# 4. MODALITY SYSTEM
+# MODALITY SYSTEM
 # ============================================================
 modalities:
   general_text:
@@ -194,7 +213,7 @@ modalities:
     purpose: "factual and conceptual grounding"
   code:
     purpose: "procedural and algorithmic reasoning"
-    allowed_languages: ["python", "javascript", "typescript", "c", "cpp"]
+    allowed_languages: ["python", "javascript", "typescript", "c", "cpp", "java"]
   math:
     purpose: "symbolic abstraction"
   cot_reasoning:
@@ -205,7 +224,17 @@ modalities:
     status: "format_pending"
 
 # ============================================================
-# 5. STAGE & GROWTH SCHEDULE
+# DATASET INTERFACE
+# ============================================================
+dataset_interface:
+  input_from_team1:
+    required_fields: ["id", "text", "source", "added", "created", "metadata", "domain", "language"]
+  segmentation_requests_allowed: true
+  partial_rejection_allowed: true
+
+
+# ============================================================
+# STAGE & GROWTH SCHEDULE
 # ============================================================
 growth_schedule:
 
@@ -287,7 +316,7 @@ growth_schedule:
           modality_delta_max: 0.02
 
 # ============================================================
-# 6. GUARDRAILS & SMOOTHING
+# GUARDRAILS & SMOOTHING
 # ============================================================
 guardrails:
 
@@ -304,29 +333,48 @@ guardrails:
       earliest_band: "B4"
 
 # ============================================================
-# 7. DOMAIN GROUPING
+# Co-ordination
+# ============================================================
+# TODO: add logic for this
+coordination:
+  tokenizer_lab:
+    team: "Team 6"
+    required_outputs:
+      - "tokenizer_proxy_spec"
+      - "multi-tokenizer difficulty proxy recommendations"
+  agentic_team:
+    team: "Team 17"
+    required_outputs:
+      - "safe_agentic_trace_formats"
+      - "tool-call data staging rules"
+      - "caps and contamination risks"
+
+# ============================================================
+# DOMAIN GROUPING
 # ============================================================
 domains:
   definition_method: "team1_tags_consolidated_by_team2"
 
   domain_groups:
-    general_web_clean: {}
-    encyclopedic: {}
-    technical_docs: {}
-    math_science: {}
-    code_repos: {}
-    planning_reasoning_curated: {}
+    - id: "general_web_clean"
+    - id: "encyclopedic"
+    - id: "news_nonpolitical"
+    - id: "technical_docs"
+    - id: "math_science"
+    - id: "code_repos"
+    - id: "dialogue_chat"
+    - id: "planning_reasoning_curated"
 
   band_domain_policy:
-    B0: ["general_web_clean"]
-    B1: ["general_web_clean", "encyclopedic"]
-    B2: ["encyclopedic", "technical_docs"]
-    B3: ["technical_docs", "code_repos"]
-    B4: ["math_science", "code_repos"]
+    B0: ["general_web_clean", "dialogue_chat"]
+    B1: ["general_web_clean", "encyclopedic", "dialogue_chat"]
+    B2: ["encyclopedic", "news_nonpolitical", "technical_docs"]
+    B3: ["technical_docs", "math_science", "code_repos"]
+    B4: ["math_science", "code_repos", "planning_reasoning_curated"]
     B5: ["planning_reasoning_curated", "math_science", "code_repos"]
 
 # ============================================================
-# 8. EVALUATION SIGNAL INTERFACE
+# EVALUATION SIGNAL INTERFACE
 # ============================================================
 evaluation_interface:
   purpose: "guides_adaptive_knobs_only"
