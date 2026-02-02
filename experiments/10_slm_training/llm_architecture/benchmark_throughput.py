@@ -91,13 +91,30 @@ def _apply_benchmark_profile(config: ModelConfig, profile: str | None) -> ModelC
 
     Keeps architecture choices (attention type, connection type, position type, MTP) but
     reduces sizes to fit constrained devices.
+    
+    Profiles:
+        micro: For 4-8k context testing on limited memory (256 hidden, 4 layers)
+        tiny:  Standard small model testing (512 hidden, 6 layers)
+        small: Larger scale testing (1024 hidden, 12 layers)
     """
     if not profile:
         return config
 
     profile = profile.lower().strip()
-    if profile not in {"tiny", "small"}:
-        raise ValueError("Unsupported profile. Use one of: tiny, small")
+    if profile not in {"micro", "tiny", "small"}:
+        raise ValueError("Unsupported profile. Use one of: micro, tiny, small")
+
+    if profile == "micro":
+        config.model_name = f"{config.model_name} (micro)"
+        config.hidden_size = 256
+        config.num_hidden_layers = 4
+        config.max_position_embeddings = 16384  # Support up to 16k context
+        config.attention.num_attention_heads = 4
+        config.attention.num_key_value_heads = 1
+        config.ffn.intermediate_size = 1024
+        config.connection.mhc_expansion_rate = min(config.connection.mhc_expansion_rate, 1.5)
+        if config.head.use_multi_token_prediction:
+            config.head.num_predict_tokens = min(config.head.num_predict_tokens, 2)
 
     if profile == "tiny":
         config.model_name = f"{config.model_name} (tiny)"
@@ -394,8 +411,8 @@ def main():
                         help='Output JSON file path for results (e.g., results/benchmark.json)')
     parser.add_argument('--inference-only', action='store_true',
                         help='Skip training benchmark (useful for memory-constrained devices)')
-    parser.add_argument('--profile', type=str, default=None, choices=['tiny', 'small'],
-                        help='Scale model down for throughput testing (keeps architecture choices)')
+    parser.add_argument('--profile', type=str, default=None, choices=['micro', 'tiny', 'small'],
+                        help='Scale model down for throughput testing (micro=4-8k context, tiny, small)')
     
     args = parser.parse_args()
     

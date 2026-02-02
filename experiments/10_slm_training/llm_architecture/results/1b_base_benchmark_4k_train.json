@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-02-02T12:03:20.025789",
+  "config_path": "configs/1b_base.yaml",
+  "config_name": "LLM-1B-Base (micro)",
+  "device": "xpu",
+  "dtype": "float16",
+  "batch_size": 1,
+  "profile": "micro",
+  "parameters": 16681216,
+  "parameters_billions": 0.016681216,
+  "device_info": {
+    "device": "xpu",
+    "torch_version": "2.8.0+xpu",
+    "name": "Intel(R) Arc(TM) Graphics",
+    "total_memory_bytes": 8444891136,
+    "max_compute_units": 112,
+    "gpu_eu_count": 112,
+    "gpu_subslice_count": 14,
+    "driver_version": "1.6.33184",
+    "platform_name": "Intel(R) oneAPI Unified Runtime over Level-Zero",
+    "vendor": "Intel(R) Corporation",
+    "version": "12.71.4",
+    "has_fp16": true,
+    "has_fp64": true,
+    "sub_group_sizes": [
+      8,
+      16,
+      32
+    ],
+    "max_work_group_size": 1024,
+    "max_num_sub_groups": 128
+  },
+  "model_settings": {
+    "attention": "grouped_query",
+    "position": "rope",
+    "connection": "residual",
+    "mtp": false,
+    "hidden_size": 256,
+    "num_layers": 4
+  },
+  "inference": [
+    {
+      "seq_len": 4096,
+      "tokens_per_sec": 19785.84909888658,
+      "samples_per_sec": 4.830529565157857,
+      "ms_per_sample": 207.0166400000744,
+      "memory_gb": 0.752753152
+    }
+  ],
+  "training": [
+    {
+      "seq_len": 4096,
+      "tokens_per_sec": 6725.157365562352,
+      "samples_per_sec": 1.6418841224517462,
+      "ms_per_sample": 609.0563800000382,
+      "memory_gb": 3.532375552
+    }
+  ]
+}
