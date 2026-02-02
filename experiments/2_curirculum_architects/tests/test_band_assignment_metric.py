@@ -4,10 +4,17 @@ import pytest
 from curriculum_tags.metrics.band_assignment import BandAssignmentMetric
 
 
+from pathlib import Path
+from types import SimpleNamespace
+
 @pytest.fixture
 def metric():
-    """Create metric instance."""
-    return BandAssignmentMetric({})
+    """Create metric instance with access to real band_assignment.yaml."""
+    # We point to a fake curriculum.yaml in the project root so it finds band_assignment.yaml next to it
+    root_dir = Path(__file__).parent.parent
+    fake_config = SimpleNamespace(path=str(root_dir / "curriculum.yaml"))
+    
+    return BandAssignmentMetric(fake_config)
 
 
 def test_agentic_traces(metric):

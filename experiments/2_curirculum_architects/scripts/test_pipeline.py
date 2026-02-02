@@ -13,7 +13,7 @@ def run_command(command, cwd=None, shell=True):
     try:
         subprocess.check_call(command, cwd=cwd, shell=shell)
     except subprocess.CalledProcessError:
-        print(f"\n\033[0;31m✗ Command failed: {command}\033[0m")
+        print(f"\n\033[0;31m[!] Command failed: {command}\033[0m")
         sys.exit(1)
 
 def find_project_root():
@@ -81,14 +81,14 @@ def main():
     # 3. Run Unit Tests
     print_step(3, "Running Unit Tests...")
     run_command(f"{python_exe} -m pytest tests/ -v")
-    print("\033[0;32m✓ All tests passed\033[0m")
+    print("\033[0;32m[OK] All tests passed\033[0m")
 
     # 4. Run Smoke Test
     print_step(4, "Running Smoke Test (basic_usage.py)...")
     run_command(f"{python_exe} examples/basic_usage.py")
-    print("\033[0;32m✓ Smoke test passed\033[0m")
+    print("\033[0;32m[OK] Smoke test passed\033[0m")
 
-    print("\n\033[0;32m=== ✅ PIPELINE VERIFIED SUCCESSFULLY ===\033[0m")
+    print("\n\033[0;32m=== [DONE] PIPELINE VERIFIED SUCCESSFULLY ===\033[0m")
     print("You are ready to push to git.")
 
 if __name__ == "__main__":
