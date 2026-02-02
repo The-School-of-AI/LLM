@@ -117,10 +117,16 @@ class BandAssignmentMetric(MetricPlugin):
         entropy = entropy_tags.get("score", 0.0)
         diversity = diversity_tags.get("rare_ratio", 0.0)
         
+        # COT & Agentic signals from scanner
+        cot_tags = tags.get("cot_scanner", {})
+        has_cot_trace = cot_tags.get("has_cot", False)
+        has_agentic_trace = cot_tags.get("has_agentic", False)
+        
         # 2. Hard Modality Constraints (Overrides)
         
         # Agentic traces are distinctly B5 (or late B4) per curriculum
-        if has_agentic:
+        # We check both the regex scanner and the modality metric
+        if has_agentic or has_agentic_trace:
             return self._result("B5", "Contains agentic traces")
             
         # Research papers are typically B4+
@@ -128,6 +134,13 @@ class BandAssignmentMetric(MetricPlugin):
             if fk_grade > 16.0 or diff_score > 0.8:
                 return self._result("B5", "Complex research paper")
             return self._result("B4", "Research paper")
+
+        # COT Floor: Curriculum forbids COT in B0-B2
+        if has_cot_trace:
+            # If we have COT, we must be at least B3.
+            # We skip the check for lower bands and start potentially at B3
+            # But we still allow it to go higher (B4, B5) if other metrics support it.
+            pass # Logic handled below by essentially floor-clamping
             
         # 3. Code & Math Logic
         if has_code or has_math:
@@ -144,11 +157,6 @@ class BandAssignmentMetric(MetricPlugin):
         # Use Difficulty Level Mapping as the primary constraint
         mapped_band = self.logic_config.difficulty_level_map.get(diff_level, "B0")
         
-        # Verify valid inputs (Entropy/Diversity/Readability floors)
-        # We start checking from the Mapped Band downwards.
-        # e.g. If mapped to B4, we check if it meets B4 secondary stats. 
-        # If not, check B3, etc.
-        
         target_bands = ["B5", "B4", "B3", "B2", "B1", "B0"]
         start_index = target_bands.index(mapped_band)
         
@@ -164,9 +172,19 @@ class BandAssignmentMetric(MetricPlugin):
 
         for band in target_bands[start_index:]:
             if meets_secondary_thresholds(band):
+                # We found a candidate band based on complexity
+                
+                # ENFORCE FLOORS
+                # If has COT, cannot be below B3
+                if has_cot_trace and band in ["B0", "B1", "B2"]:
+                     return self._result("B3", "COT trace forces min B3")
+                     
                 return self._result(band, f"Mapped from {diff_level} + validated stats")
             
         # Default B0
+        if has_cot_trace:
+             return self._result("B3", "COT trace forces min B3 (fallback)")
+             
         return self._result("B0", "Baseline complexity")
 
     def _result(self, band: str, reason: str) -> Dict[str, Any]:

@@ -110,5 +110,26 @@ def test_entropy_diversity_filtering(metric):
             "diversity": {"rare_ratio": 0.05}
         }
     }
-    # Should fall back recursively L4(B4)->fail -> B3->fail -> ... -> B0
-    assert metric.compute(sample)["band"] == "B0"
+def test_cot_scanner_integration(metric):
+    """Test COT and Agentic scanner integration."""
+    
+    # Test COT Floor: Simple text (L0/B0) + COT -> Should be B3
+    sample_cot = {
+        "curriculum_tags": {
+            "difficulty": {"score": 0.1, "level": "L0"},
+            "readability": {"flesch_kincaid_grade": 2.0},
+            "cot_scanner": {"has_cot": True, "has_agentic": False}
+        }
+    }
+    # Even though difficulty is L0, COT implies reasoning -> B3
+    assert metric.compute(sample_cot)["band"] == "B3"
+    
+    # Test Agentic Override: Simple text + Agentic -> Should be B5
+    sample_agentic = {
+        "curriculum_tags": {
+            "difficulty": {"score": 0.1, "level": "L0"},
+            "readability": {"flesch_kincaid_grade": 2.0},
+            "cot_scanner": {"has_cot": False, "has_agentic": True}
+        }
+    }
+    assert metric.compute(sample_agentic)["band"] == "B5"
