@@ -52,7 +52,7 @@ class StratifiedSampler:
             # Simplified Greedy Approach:
             # 1. Calculate target tokens for each Band (e.g. B0: 30% of Total).
             # 2. Within that Band allowance, try to pick Modalities roughly proportional to global modality weights?
-            # Actually, `curriculum_proposed.yaml` provides Band weights AND Modality weights separately.
+            # Actually, `curriculum.yaml` provides Band weights AND Modality weights separately.
             # Ideally they should be satisfied jointly.
             # Let's iterate Bans. For Band `b`, we need `T_b = Total * Weight_b`.
             # We fill `T_b` by sampling from `(b, m)` buckets.

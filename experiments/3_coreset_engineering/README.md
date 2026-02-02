@@ -5,7 +5,7 @@ This directory contains the engineering pipeline for creating **Stage-Specific C
 The pipeline absorbs raw data chunks, scores them for difficulty, removes duplicates, and samples them into curriculum-aligned stages (1B -> 3B -> 8B -> 70B).
 
 **Key Features:**
-*   **Production Curriculum Support**: Parses `curriculum.yaml` (formerly `curriculum_proposed.yaml`) to enforce specific Profiles, Modalities (Code, CoT, etc.), and Difficulty Bands (B0-B5).
+*   **Production Curriculum Support**: Parses `curriculum.yaml` to enforce specific Profiles, Modalities (Code, CoT, etc.), and Difficulty Bands (B0-B5).
 *   **Stratified Sampling**: Ensures strict adherence to `band_weights` and `modality_weights`.
 *   **Reproducibility**: Deterministic pipeline with verifiable manifest outputs.
 
