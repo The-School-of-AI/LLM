@@ -51,14 +51,14 @@ def get_config() -> MoEModelConfig:
         stage=2,
         
         # Core dimensions (SAME as 1B)
-        hidden_size=2048,
+        hidden_size=4096,
         num_layers=20,
         
         # MoE Configuration
-        num_routed_experts=40,            # 8 Routed
+        num_routed_experts=8,            # 8 Routed
         num_shared_experts=2,            # 2 Shared
-        num_null_experts=1,              # 1 Null
-        moe_layer_frequency=2,           # MoE on ALL layers (Every Layer MoE)
+        num_null_experts=8,              # 1 Null
+        moe_layer_frequency=1,           # MoE on ALL layers (Every Layer MoE)
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
@@ -97,8 +97,8 @@ def get_config() -> MoEModelConfig:
         # Attention Configuration (SAME as 1B)
         attention=AttentionConfig(
             attention_type="gsa",
-            num_attention_heads=16,
-            num_kv_heads=4,               # 4:1 GQA
+            num_attention_heads=32,
+            num_kv_heads=8,               # 4:1 GQA
             head_dim=128,
             rope_theta=10000.0,
             attention_dropout=0.0,

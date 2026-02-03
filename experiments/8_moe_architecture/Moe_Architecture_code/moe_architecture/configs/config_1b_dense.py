@@ -40,7 +40,7 @@ def get_config() -> MoEModelConfig:
         
         # Core dimensions
         hidden_size=2048,
-        num_layers=20,
+        num_layers=16,
         
         # No MoE for dense model
         num_routed_experts=0,
@@ -50,7 +50,7 @@ def get_config() -> MoEModelConfig:
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=32000,
+            vocab_size=128000,
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -75,7 +75,7 @@ def get_config() -> MoEModelConfig:
             attention_type="gsa",
             num_attention_heads=16,      # Query heads
             num_kv_heads=4,              # 4:1 GQA ratio
-            head_dim=128,                # 2048 / 16
+            head_dim=256,                # 2048 / 16
             rope_theta=10000.0,
             attention_dropout=0.0,
             # GSA defaults (Table 1)

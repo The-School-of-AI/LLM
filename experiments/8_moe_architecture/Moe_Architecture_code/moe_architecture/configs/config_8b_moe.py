@@ -52,13 +52,13 @@ def get_config() -> MoEModelConfig:
         stage=3,
         
         # Core dimensions (SCALED 2× from 3B)
-        hidden_size=2048,                # 2× (was 2048)
-        num_layers=40,                   # 2× (was 24)
+        hidden_size=8192,                # 2× (was 2048)
+        num_layers=20,                   # 2× (was 24)
         
         # MoE Configuration (SAME expert count as 3B!)
-        num_routed_experts=40,            # SAME as 3B
+        num_routed_experts=8,            # SAME as 3B
         num_shared_experts=2,            # SAME as 3B
-        num_null_experts=1,              # SAME as 3B
+        num_null_experts=8,              # SAME as 3B
         moe_layer_frequency=1,           # MoE on ALL layers
         
         # Tokenizer (Team 6 specification)
@@ -98,7 +98,7 @@ def get_config() -> MoEModelConfig:
             attention_type="gsa",
             num_attention_heads=32,       # 2× (was 16)
             num_kv_heads=8,               # 2× (was 4) - maintain 4:1 GQA
-            head_dim=128,                 # SAME (4096/32 = 128)
+            head_dim=256,                 # SAME (4096/32 = 128)
             rope_theta=10000.0,
             attention_dropout=0.0,
             # GSA defaults (Table 1)

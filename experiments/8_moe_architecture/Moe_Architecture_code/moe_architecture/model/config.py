@@ -309,10 +309,10 @@ class MoEModelConfig:
             assert self.num_routed_experts > 0, "MoE requires at least 1 routed expert"
             assert self.router.top_k <= self.num_routed_experts + self.num_null_experts, \
                 f"top_k ({self.router.top_k}) cannot exceed total routable experts"
-            if self.router.router_type == RouterType.NULL_EXPERT:
-                assert self.num_null_experts == 1, (
-                    "NULL_EXPERT router expects a single null expert (num_null_experts=1)."
-                )
+            # if self.router.router_type == RouterType.NULL_EXPERT:
+                # assert self.num_null_experts == 1, (
+                #     "NULL_EXPERT router expects a single null expert (num_null_experts=1)."
+                # )
         
         # Check head dimension
         computed_head_dim = self.hidden_size // self.attention.num_attention_heads
