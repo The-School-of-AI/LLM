@@ -285,7 +285,9 @@ def main():
 
     # Show S3 info if using S3
     if cfg["storage"]["mode"] in ["s3", "both"]:
-        print(f"☁️  S3 bucket: s3://{cfg['aws']['s3_bucket']}/{cfg['aws']['s3_prefix']}")
+        print(
+            f"☁️  S3 bucket: s3://{cfg['aws']['s3_bucket']}/{cfg['aws']['s3_prefix']}"
+        )
         print(f"🌍 AWS region: {cfg['aws']['region']}")
 
     times = {}

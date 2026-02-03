@@ -111,9 +111,9 @@ class TestZeRoConfiguration:
     def test_zero_stage2_config_exists(self):
         """Test that ZeRO Stage 2 configuration file exists and is valid."""
         config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
-        assert os.path.exists(config_path), (
-            f"ZeRO Stage 2 config not found at {config_path}"
-        )
+        assert os.path.exists(
+            config_path
+        ), f"ZeRO Stage 2 config not found at {config_path}"
 
         with open(config_path, "r") as f:
             config = json.load(f)
@@ -129,9 +129,9 @@ class TestZeRoConfiguration:
     def test_zero_stage3_config_exists(self):
         """Test that ZeRO Stage 3 configuration file exists and is valid."""
         config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-3.json")
-        assert os.path.exists(config_path), (
-            f"ZeRO Stage 3 config not found at {config_path}"
-        )
+        assert os.path.exists(
+            config_path
+        ), f"ZeRO Stage 3 config not found at {config_path}"
 
         with open(config_path, "r") as f:
             config = json.load(f)
@@ -144,9 +144,9 @@ class TestZeRoConfiguration:
 
         # ZeRO-3 specific checks
         zero_config = config["zero_optimization"]
-        assert "offload_param" in zero_config, (
-            "ZeRO-3 should have offload_param configured"
-        )
+        assert (
+            "offload_param" in zero_config
+        ), "ZeRO-3 should have offload_param configured"
 
         print("✓ ZeRO Stage 3 config validated")
 
@@ -193,9 +193,9 @@ class TestDeepSpeedInitialization:
         # Validate initialization
         assert model_engine is not None, "Model engine not initialized"
         assert optimizer is not None, "Optimizer not initialized"
-        assert hasattr(model_engine, "device"), (
-            "Model engine should have device attribute"
-        )
+        assert hasattr(
+            model_engine, "device"
+        ), "Model engine should have device attribute"
 
         # Check ZeRO stage
         assert model_engine.zero_optimization_stage() == 2, "ZeRO stage should be 2"
@@ -437,9 +437,9 @@ class TestZeROMemoryEfficiency:
         print(f"  After training step: {memory_after_step / 1024**2:.2f} MB")
 
         # Basic sanity check - memory should be allocated
-        assert memory_after_step > initial_memory, (
-            "Memory should be allocated during training"
-        )
+        assert (
+            memory_after_step > initial_memory
+        ), "Memory should be allocated during training"
 
 
 class TestIntegration:
@@ -463,9 +463,9 @@ class TestIntegration:
         random_2 = torch.rand(10)
 
         # Should be identical
-        assert torch.allclose(random_1, random_2), (
-            "Random numbers should be identical with same seed"
-        )
+        assert torch.allclose(
+            random_1, random_2
+        ), "Random numbers should be identical with same seed"
 
         print("✓ Seed reproducibility confirmed")
 
