@@ -5,21 +5,11 @@
 # Any deviation requires escalation + re-freeze.
 # ============================================================
 
-version: "0.3"
+version: "0.1"
 owner_team: "Team 2: Curriculum Architects"
 status: "DRAFT"  # "FROZEN"
 frozen_on: "2026-02-02"
-change_policy: "STRUCTURE_IMMUTABLE"  # "NO_CHANGES_ALLOWED"
-languages:
-  primary: ["en"]
-  secondary:
-    - lang: "hi"
-      max_token_share: 0.08         # Hindi allowed but capped (staged)
-      earliest_stage: "3B"          # introduce later to avoid distorting early bands
-  excluded_langs: ["zh", "ja", "ko", "fr", "de", "es"]  # plus other non-en/hi by default
-  language_id_requirement:
-    provider: "dataset_claimed_clean"  # must come from dataset vendor/curator claims + docs
-    min_confidence: 0.90              # only if dataset provides it; otherwise reject/seg-request
+change_policy: "STRUCTURE_IMMUTABLE"  # "NO_CHANGES_ALLOWED"         
 
 # ============================================================
 # GLOBAL CONTRACT
@@ -55,14 +45,8 @@ language_and_context:
     secondary_languages:
       - lang: "hi"
         max_share: 0.08
-        earliest_stage: "3B"
-    excluded_languages:
-      - "zh"
-      - "ja"
-      - "ko"
-      - "fr"
-      - "de"
-      - "es"
+        earliest_stage: "1B"
+    excluded_languages: ["zh", "ja", "ko", "fr", "de", "es"]
     violation_action: "DROP_SAMPLE"
 
   context_policy:
