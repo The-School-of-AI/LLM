@@ -1,13 +1,12 @@
 import torch
 from datasets import load_dataset
+from moeint.moe_null_sim_harness.model import DeepSeekIsh, DeepSeekMoE
+from moeint.routing_health_metrics import RoutingAnalyzer, TokenGroups
 from torch import Tensor
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_sentencepiece import SentencePieceBackend
 from transformers.tokenization_utils_tokenizers import TokenizersBackend
-
-from moeint.moe_null_sim_harness.model import DeepSeekIsh, DeepSeekMoE
-from moeint.routing_health_metrics import RoutingAnalyzer, TokenGroups
 
 
 class Trainer:
@@ -15,9 +14,7 @@ class Trainer:
         self.device = (
             "cuda"
             if torch.cuda.is_available()
-            else "mps"
-            if torch.mps.is_available()
-            else "cpu"
+            else "mps" if torch.mps.is_available() else "cpu"
         )
         self.topk = 2
         self.num_real_experts = 4
