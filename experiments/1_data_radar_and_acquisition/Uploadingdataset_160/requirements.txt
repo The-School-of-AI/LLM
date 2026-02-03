@@ -1,0 +1,4 @@
+datasets>=2.16.0
+boto3
+pyyaml
+pytest>=7.0.0
