@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from curriculum_tags.metrics.difficulty import DifficultyMetric
 from curriculum_tags.metrics.modality import ModalityMetric
 from curriculum_tags.metrics.readability import ReadabilityMetric

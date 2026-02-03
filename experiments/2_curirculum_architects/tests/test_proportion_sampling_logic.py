@@ -6,7 +6,6 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-
 from scripts.calculate_proportions import sample_metadata
 
 

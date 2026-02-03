@@ -4,11 +4,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import pyarrow.parquet as pq
 import ray
 import s3fs
-from tqdm import tqdm
-
 from curriculum_tags import CurriculumTagger
+from tqdm import tqdm
 
 # ------------------------------------------------------------------------------
 # CONFIGURATION
@@ -74,7 +74,7 @@ def process_s3_file(file_path: str) -> dict:
         total_expected_rows = pq.ParquetFile(
             f"s3://{file_path}", filesystem=fs
         ).metadata.num_rows
-    except:
+    except Exception:
         total_expected_rows = 0
 
     start_time = time.time()

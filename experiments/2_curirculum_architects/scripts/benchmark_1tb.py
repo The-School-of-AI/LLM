@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 import ray
-from tqdm import tqdm
-
 from curriculum_tags import CurriculumTagger
+from tqdm import tqdm
 
 # ------------------------------------------------------------------------------
 # CONFIGURATION
@@ -79,7 +78,7 @@ def benchmark():
         print(f"Error: {INPUT_FILE} not found.")
         return
 
-    print(f"--- 1TB Scaling Benchmark (Distributed Mode) ---")
+    print("--- 1TB Scaling Benchmark (Distributed Mode) ---")
     print(f"Parallel Tasks: {NUM_PARALLEL_TASKS}")
     print(f"File: {INPUT_FILE} ({os.path.getsize(INPUT_FILE)/1e6:.1f} MB)")
 
@@ -134,12 +133,12 @@ def benchmark():
     tb_size_mb = 1024 * 1024
     hours_per_tb_laptop = (tb_size_mb / mb_per_sec) / 3600
 
-    print(f"\n--- Laptop Results (Aggregated) ---")
+    print("\n--- Laptop Results (Aggregated) ---")
     print(f"Total Time: {total_duration:.2f} seconds")
     print(f"Aggregate Throughput: {rows_per_sec:.2f} rows/sec")
     print(f"Aggregate Throughput: {mb_per_sec:.2f} MB/sec")
 
-    print(f"\n--- Extrapolation for 1TB ---")
+    print("\n--- Extrapolation for 1TB ---")
     print(f"Time for 1TB on THIS Laptop: {hours_per_tb_laptop:.2f} hours")
 
     # Cloud cluster estimate
@@ -154,7 +153,7 @@ def benchmark():
     cluster_mb_per_sec = avg_single_core_mb_per_sec * total_cluster_parallelism
     hours_per_tb_cluster = (tb_size_mb / cluster_mb_per_sec) / 3600
 
-    print(f"\n--- Cloud Estimate (10 Nodes, 320 CPUs) ---")
+    print("\n--- Cloud Estimate (10 Nodes, 320 CPUs) ---")
     print(f"Estimated Throughput: {cluster_mb_per_sec:.2f} MB/sec")
     print(f"Estimated Time: {hours_per_tb_cluster:.2f} hours")
     print(f"Estimated Time: {hours_per_tb_cluster * 60:.2f} minutes")

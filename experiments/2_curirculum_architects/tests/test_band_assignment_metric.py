@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from curriculum_tags.metrics.band_assignment import BandAssignmentMetric
 
 
@@ -174,7 +173,7 @@ def test_hard_constraints_filtering(metric):
 def test_entropy_diversity_filtering(metric):
     """Test that low entropy/diversity limits the mapped band."""
     # L4 -> should be B4...
-    sample = {
+    _ = {
         "curriculum_tags": {
             "difficulty": {"score": 0.8, "level": "L4"},
             "readability": {"flesch_kincaid_grade": 15.0},

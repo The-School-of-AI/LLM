@@ -1,7 +1,5 @@
 import pytest
-
 from curriculum_tags.metrics.diversity import DiversityMetric
-from curriculum_tags.utils.curriculum_loader import CurriculumConfig
 
 
 @pytest.fixture

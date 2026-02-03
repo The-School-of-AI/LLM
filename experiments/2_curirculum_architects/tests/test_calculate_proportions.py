@@ -2,9 +2,13 @@
 
 import math
 
-import pytest
-
-from scripts.calculate_proportions import alignment_weight, apply_floors_and_caps, model_capacity, renormalize
+import pytest  # noqa: F401
+from scripts.calculate_proportions import (
+    alignment_weight,
+    apply_floors_and_caps,
+    model_capacity,
+    renormalize,
+)
 
 
 def test_model_capacity():

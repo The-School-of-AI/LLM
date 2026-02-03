@@ -1,5 +1,4 @@
 import pytest
-
 from curriculum_tags.metrics.tokenizer_difficulty import TokenizerDifficultyMetric
 
 

@@ -1,12 +1,12 @@
 """Calculate curriculum band proportions based on model capacity."""
 
 import argparse
+import json
 import math
-import os
 import random
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import pyarrow.parquet as pq
 import yaml
@@ -190,9 +190,6 @@ def sample_metadata(
 
     # Convert to proportions
     return {k: v / valid_samples for k, v in counts.items()}
-
-
-import json
 
 
 def main():

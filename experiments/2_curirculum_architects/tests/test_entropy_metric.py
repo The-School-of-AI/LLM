@@ -1,7 +1,5 @@
 import pytest
-
 from curriculum_tags.metrics.entropy import EntropyMetric
-from curriculum_tags.utils.curriculum_loader import CurriculumConfig
 
 
 @pytest.fixture

@@ -57,7 +57,7 @@ def main():
     if in_venv:
         print("Using existing virtual environment.")
         python_exe = sys.executable
-        pip_exe = "pip"
+        # pip_exe = "pip"
     else:
         # Check for local .venv directory
         venv_path = Path(".venv")
@@ -69,10 +69,10 @@ def main():
         # Determine executable paths based on OS
         if sys.platform == "win32":
             python_exe = str(venv_path / "Scripts" / "python.exe")
-            pip_exe = str(venv_path / "Scripts" / "pip.exe")
+            # pip_exe = str(venv_path / "Scripts" / "pip.exe")
         else:
             python_exe = str(venv_path / "bin" / "python")
-            pip_exe = str(venv_path / "bin" / "pip")
+            # pip_exe = str(venv_path / "bin" / "pip")
 
     # 2. Install Package
     print_step(2, "Installing package in editable mode...")

@@ -7,7 +7,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 import yaml
-
 from curriculum_tags.core.plugin import MetricPlugin
 from curriculum_tags.core.tagger import CurriculumTagger
 from curriculum_tags.utils.curriculum_loader import CurriculumConfig

@@ -1,9 +1,8 @@
 """Metric for final band assignment based on aggregated signals."""
 
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from ..core.plugin import MetricPlugin
 
@@ -93,7 +92,7 @@ class BandAssignmentMetric(MetricPlugin):
                 try:
                     logic_config = BandAssignmentConfig.from_yaml(str(yaml_path))
                 except Exception as e:
-                    # print(f"Error loading band_assignment.yaml: {e}")
+                    print(f"Error loading band_assignment.yaml: {e}")
                     pass
 
         # 2. Allow programmatic override (e.g. from tests) doesn't easily map to dataclass yet
@@ -105,7 +104,7 @@ class BandAssignmentMetric(MetricPlugin):
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Compute the final band assignment."""
-        text = sample.get("text", "")
+        # text = sample.get("text", "")
         tags = sample.get("curriculum_tags", {})
 
         # 1. Extract Signals

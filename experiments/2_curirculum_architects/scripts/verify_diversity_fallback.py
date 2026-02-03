@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from curriculum_tags.metrics.band_assignment import BandAssignmentMetric
 
 
