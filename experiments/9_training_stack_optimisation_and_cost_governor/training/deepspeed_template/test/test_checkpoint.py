@@ -16,7 +16,7 @@ from unittest.mock import Mock, patch, MagicMock
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from config.aws.config import S3Config, get_default_config
+from aws.config import S3Config, get_default_config
 
 
 class TestS3Config:

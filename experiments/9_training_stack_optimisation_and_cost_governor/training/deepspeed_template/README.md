@@ -6,23 +6,31 @@ A modular and well-structured template for training language models using DeepSp
 
 ```
 deepspeed_template/
-├── config/
-│   └── deepspeed/
-│       ├── zero-2.json          # ZeRO Stage 2 configuration
-│       └── zero-3.json          # ZeRO Stage 3 configuration
+├── aws/
+│   └── config.py                # S3 configuration utilities
+├── deepspeed/
+│   ├── zero-1.json              # ZeRO Stage 1 configuration
+│   ├── zero-2.json              # ZeRO Stage 2 configuration
+│   ├── zero-2-moe.json          # ZeRO Stage 2 for MoE models
+│   └── zero-3.json              # ZeRO Stage 3 configuration
 ├── src/
 │   ├── __init__.py              # Package initialization
+│   ├── checkpoint.py            # Checkpoint management and S3 integration
 │   ├── data.py                  # Data loading and tokenization utilities
+│   ├── model.py                 # Model loading and custom MoE architecture
 │   ├── train.py                 # Training, evaluation, and generation functions
 │   └── utils.py                 # General utilities (seed setting, etc.)
 ├── test/
 │   ├── __init__.py              # Test package initialization
 │   ├── test_training_cpu.py    # CPU-only tests (no GPU required)
-│   └── test_training.py         # Full training tests (GPU required)
+│   ├── test_training_gpu.py    # GPU training tests
+│   └── test_checkpoint.py       # Checkpoint and S3 tests
 ├── assets/
 │   └── images/                  # Training verification screenshots
+├── config.yaml                  # Main configuration file (REQUIRED)
+├── config.example.yaml          # Example configuration with documentation
 ├── main.py                      # Main entry point
-├── requirements.txt             # Python dependencies (legacy)
+├── requirements.txt             # Python dependencies
 ├── pyproject.toml               # Project configuration (uv package manager)
 ├── uv.lock                      # Dependency lock file
 ├── .gitignore                   # Git ignore patterns
@@ -118,32 +126,69 @@ uv pip install tqdm>=4.65.0
 
 ## 🎯 Quick Start
 
-### Multi-GPU Training (ZeRO Stage 2)
+All configuration is done via the `config.yaml` file - no command line arguments needed!
 
-Uses all available GPUs:
+### 0. Setup Configuration File
+
+First, copy the example configuration:
 
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json
+cp config.example.yaml config.yaml
 ```
 
-Or specify number of GPUs:
+Or if `config.yaml` doesn't exist, it will be created with default values automatically.
+
+### 1. Configure Your Training
+
+Edit `config.yaml` to customize your training parameters:
+
+```yaml
+# config.yaml
+data:
+  dataset_name: "wikitext"
+  batch_size: 8
+  
+training:
+  num_epochs: 3
+  
+deepspeed:
+  config_path: "deepspeed/zero-2-moe.json"
+  
+checkpoint:
+  checkpoint_interval: 50
+  
+s3:
+  enabled: false  # Set to true to enable S3 checkpointing
+```
+
+### 2. Run Training
+
+**Multi-GPU Training (ZeRO Stage 2):**
 
 ```bash
-deepspeed --num_gpus=4 main.py --deepspeed_config config/deepspeed/zero-2.json
+# Uses all available GPUs
+deepspeed main.py
+
+# Or specify number of GPUs
+deepspeed --num_gpus=4 main.py
+```
+
+**Single GPU Training (for testing):**
+
+```bash
+python main.py
+```
+
+**Custom Config File:**
+
+```bash
+# Use a different config file
+deepspeed main.py --config config/my_custom_config.yaml
 ```
 
 ### Training with Custom Qwen2 MoE Model
 
-Train a custom 8-expert Mixture of Experts model from scratch:
-
-```bash
-deepspeed --num_gpus=4 main.py \
-    --use_qwen2_moe \
-    --deepspeed_config config/deepspeed/zero-3.json \
-    --batch_size 8 \
-    --max_length 512 \
-    --num_epochs 3
-```
+The default configuration uses a custom 8-expert Mixture of Experts model.
 
 **Model Specifications:**
 - **Architecture**: Qwen2 with Mixture of Experts (MoE)
@@ -154,30 +199,10 @@ deepspeed --num_gpus=4 main.py \
 - **Attention**: Grouped-query attention (12 heads, 4 KV heads)
 - **Features**: Gradient checkpointing enabled for memory efficiency
 
-### Advanced Training (ZeRO Stage 3)
+To train, simply configure `config.yaml` and run:
 
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-3.json
-```
-
-### Single GPU Training (for testing)
-
-```bash
-python main.py --deepspeed_config config/deepspeed/zero-2.json
-```
-
-### Custom Configuration
-
-```bash
-deepspeed --num_gpus=4 main.py \
-    --deepspeed_config config/deepspeed/zero-2.json \
-    --model_name distilgpt2 \
-    --num_epochs 3 \
-    --batch_size 16 \
-    --max_length 256 \
-    --seed 42 \
-    --save_checkpoint \
-    --output_dir ./my_checkpoints
+deepspeed --num_gpus=4 main.py
 ```
 
 ## 🧪 Running Tests
@@ -255,59 +280,97 @@ uv add pytest
 
 ## ⚙️ Configuration Options
 
+All configuration is done via `config.yaml`. Here's the complete structure:
+
+### Data Configuration
+```yaml
+data:
+  dataset_name: "wikitext"          # Dataset name from HuggingFace
+  dataset_config: "wikitext-2-raw-v1"  # Dataset configuration
+  batch_size: 8                      # Training batch size
+  max_length: 128                    # Maximum sequence length
+```
+
+### Training Configuration
+```yaml
+training:
+  num_epochs: 1                      # Number of training epochs
+  max_train_steps: null              # Max steps per epoch (null for full epoch)
+  max_eval_steps: null               # Max eval steps (null for full evaluation)
+  log_interval: 10                   # Log every N steps
+  seed: 42                           # Random seed for reproducibility
+```
+
+### DeepSpeed Configuration
+```yaml
+deepspeed:
+  config_path: "deepspeed/zero-2-moe.json"  # DeepSpeed config file
+  local_rank: -1                     # Local rank (set by DeepSpeed launcher)
+```
+
+### Model Configuration
+```yaml
+model:
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"  # Tokenizer from HuggingFace
+  # model_name: "distilgpt2"           # Uncomment for different model
+```
+
+### Checkpoint Configuration
+```yaml
+checkpoint:
+  output_dir: "./checkpoints"        # Checkpoint output directory
+  save_checkpoint: false             # Save checkpoint after training
+  checkpoint_interval: 50            # Save checkpoint every N steps
+  keep_last_n_checkpoints: 3         # Number of local checkpoints to keep
+  
+  # Resume Configuration
+  resume_from_checkpoint: null       # Set to checkpoint tag (e.g., "epoch0_step50")
+  resume_step: null                  # Step number to resume from
+```
+
+### S3 Configuration
+```yaml
+s3:
+  enabled: false                     # Enable S3 checkpoint upload/download
+  bucket: null                       # S3 bucket name (required if enabled=true)
+  prefix: "training/checkpoints"     # S3 folder path for checkpoints
+  region: "us-east-1"                # AWS region for S3
+  cleanup_after_upload: false        # Delete local checkpoints after S3 upload
+```
+
+### Generation Configuration
+```yaml
+generation:
+  test_generation: true              # Test text generation after training
+  generation_prompt: "The history of artificial intelligence begins with"
+```
+
 ### Command Line Arguments
 
-#### Training Arguments
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--model_name` | `distilgpt2` | HuggingFace model name |
-| `--use_qwen2_moe` | `False` | Use custom Qwen2 MoE model (8 experts, 300M params) |
-| `--dataset_name` | `wikitext` | Dataset name |
-| `--dataset_config` | `wikitext-2-raw-v1` | Dataset configuration |
-| `--batch_size` | `8` | Training batch size |
-| `--max_length` | `128` | Maximum sequence length |
-| `--num_epochs` | `1` | Number of training epochs |
-| `--seed` | `42` | Random seed for reproducibility |
-| `--deepspeed_config` | `config/deepspeed/zero-2.json` | DeepSpeed config path |
+The script only accepts two optional command line arguments:
 
-#### Checkpoint Arguments
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--save_checkpoint` | `False` | Save checkpoint after training |
-| `--output_dir` | `./checkpoints` | Checkpoint output directory |
-| `--checkpoint_interval` | `50` | Save checkpoint every N steps |
-
-#### Resume Arguments
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--resume_from_checkpoint` | `None` | Resume from checkpoint tag (e.g., 'epoch0_step50') |
-| `--resume_step` | `None` | Step number to resume from |
-
-#### S3 Arguments
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--use_s3` | `False` | Enable S3 checkpoint upload/download |
-| `--s3_bucket` | `None` | S3 bucket name for checkpoints |
-| `--s3_prefix` | `training/checkpoints` | S3 prefix/folder path |
-| `--s3_region` | `us-east-1` | AWS region for S3 |
-| `--cleanup_after_upload` | `False` | Delete local checkpoints after S3 upload |
-| `--keep_last_n_checkpoints` | `3` | Number of local checkpoints to keep |
-
-#### Generation Arguments
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--generation_prompt` | `The history of...` | Prompt for text generation |
+| `--config` | `config.yaml` | Path to configuration YAML file |
+| `--local_rank` | `-1` | Local rank (automatically set by DeepSpeed launcher) |
 
 ## 💾 Checkpointing & Resume
 
 ### Automatic Periodic Checkpoints
 
-Save checkpoints automatically during training every N steps:
+Configure checkpoints in `config.yaml`:
+
+```yaml
+checkpoint:
+  checkpoint_interval: 50          # Save every 50 steps
+  output_dir: "./checkpoints"
+  keep_last_n_checkpoints: 3
+```
+
+Then run:
 
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                  --checkpoint_interval 50 \
-                  --output_dir ./checkpoints
+deepspeed main.py
 ```
 
 This will save checkpoints like:
@@ -318,14 +381,23 @@ This will save checkpoints like:
 
 ### S3 Checkpointing
 
-Enable automatic background upload of checkpoints to S3:
+Enable automatic background upload of checkpoints to S3 in `config.yaml`:
+
+```yaml
+s3:
+  enabled: true
+  bucket: "my-training-bucket"
+  prefix: "experiments/run-1"
+  region: "us-east-1"
+  
+checkpoint:
+  checkpoint_interval: 100
+```
+
+Then run:
 
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                  --use_s3 \
-                  --s3_bucket my-training-bucket \
-                  --s3_prefix experiments/run-1 \
-                  --checkpoint_interval 100
+deepspeed main.py
 ```
 
 **Features:**
@@ -348,12 +420,19 @@ s3://my-training-bucket/experiments/run-1/
 
 ### Resume from Local Checkpoint
 
-Resume training from a previously saved checkpoint:
+Configure resume in `config.yaml`:
+
+```yaml
+checkpoint:
+  output_dir: "./checkpoints"
+  resume_from_checkpoint: "epoch0_step100"
+  resume_step: 100
+```
+
+Then run:
 
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                  --resume_from_checkpoint epoch0_step100 \
-                  --output_dir ./checkpoints
+deepspeed main.py
 ```
 
 The training will:
@@ -363,15 +442,24 @@ The training will:
 
 ### Resume from S3 Checkpoint
 
-Resume training with automatic download from S3:
+Configure S3 resume in `config.yaml`:
+
+```yaml
+s3:
+  enabled: true
+  bucket: "my-training-bucket"
+  prefix: "experiments/run-1"
+  region: "us-east-1"
+
+checkpoint:
+  resume_from_checkpoint: "epoch0_step100"
+  resume_step: 100
+```
+
+Then run:
 
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                  --use_s3 \
-                  --s3_bucket my-training-bucket \
-                  --s3_prefix experiments/run-1 \
-                  --resume_from_checkpoint epoch0_step100 \
-                  --resume_step 100
+deepspeed main.py
 ```
 
 The system will:
@@ -383,11 +471,17 @@ The system will:
 ### Advanced S3 Options
 
 **Cleanup old local checkpoints:**
-```bash
-deepspeed main.py --use_s3 \
-                  --s3_bucket my-bucket \
-                  --cleanup_after_upload \
-                  --keep_last_n_checkpoints 2
+
+Configure in `config.yaml`:
+
+```yaml
+s3:
+  enabled: true
+  bucket: "my-bucket"
+  cleanup_after_upload: true
+
+checkpoint:
+  keep_last_n_checkpoints: 2
 ```
 
 This will:
@@ -396,14 +490,15 @@ This will:
 - Save local disk space during long training runs
 
 **Environment Variables:**
+
+You can also use environment variables for AWS credentials:
+
 ```bash
-export S3_BUCKET_NAME=my-training-bucket
-export S3_PREFIX=experiments/run-1
-export S3_REGION=us-west-2
 export AWS_ACCESS_KEY_ID=your-key
 export AWS_SECRET_ACCESS_KEY=your-secret
+export AWS_DEFAULT_REGION=us-west-2
 
-deepspeed main.py --use_s3
+deepspeed main.py
 ```
 
 ### Checkpoint Management
@@ -412,7 +507,7 @@ The `S3CheckpointManager` provides:
 
 ```python
 from src.checkpoint import S3CheckpointManager
-from config.aws.config import S3Config
+from aws.config import S3Config
 
 # Initialize
 config = S3Config(
@@ -438,7 +533,7 @@ checkpoint_mgr.cleanup_old_checkpoints()
 
 ### DeepSpeed Configurations
 
-#### ZeRO Stage 2 (`config/deepspeed/zero-2.json`)
+#### ZeRO Stage 2 (`deepspeed/zero-2.json`)
 
 **What it does:**
 - Partitions optimizer states across GPUs
@@ -457,7 +552,7 @@ checkpoint_mgr.cleanup_old_checkpoints()
 - Mixed precision (FP16)
 - Learning rate warmup
 
-#### ZeRO Stage 3 (`config/deepspeed/zero-3.json`)
+#### ZeRO Stage 3 (`deepspeed/zero-3.json`)
 
 **What it does:**
 - Partitions optimizer states, gradients, AND model parameters
@@ -514,7 +609,7 @@ General utility functions:
 ### `main.py`
 
 Main orchestration script that handles:
-- Command-line argument parsing
+- Configuration loading from YAML file
 - Random seed initialization for reproducibility
 - Data loading with HuggingFace datasets
 - Tokenizer initialization
@@ -580,127 +675,259 @@ GPU 1: [Model Part 2] [Optimizer Part 2] [Gradients Part 2]
 
 ### 1. Quick Test Run (Single GPU)
 
+Configure `config.yaml`:
+
+```yaml
+training:
+  max_train_steps: 50   # Limit training steps for quick test
+  max_eval_steps: 20    # Limit eval steps
+  num_epochs: 1
+
+deepspeed:
+  config_path: "deepspeed/zero-2.json"
+```
+
+Run:
+
 ```bash
-# Train for 1 epoch with limited steps
-python main.py \
-    --deepspeed_config config/deepspeed/zero-2.json \
-    --max_train_steps 50 \
-    --max_eval_steps 20
+python main.py
 ```
 
 ### 2. Training Qwen2 MoE from Scratch (Multi-GPU)
 
+Configure `config.yaml`:
+
+```yaml
+data:
+  batch_size: 8
+  max_length: 1024
+
+training:
+  num_epochs: 5
+  seed: 42
+
+deepspeed:
+  config_path: "deepspeed/zero-3.json"
+
+checkpoint:
+  save_checkpoint: true
+  output_dir: "./checkpoints/qwen2_moe_run1"
+  checkpoint_interval: 100
+
+model:
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"
+```
+
+Run:
+
 ```bash
-# Train custom MoE model on 4 GPUs with checkpointing
-deepspeed --num_gpus=4 main.py \
-    --use_qwen2_moe \
-    --deepspeed_config config/deepspeed/zero-3.json \
-    --num_epochs 5 \
-    --batch_size 8 \
-    --max_length 1024 \
-    --save_checkpoint \
-    --output_dir ./checkpoints/qwen2_moe_run1 \
-    --seed 42
+deepspeed --num_gpus=4 main.py
 ```
 
 ### 3. Full Training with Checkpointing (Multi-GPU)
 
-```bash
-# Train and save checkpoint on 4 GPUs
-deepspeed --num_gpus=4 main.py \
-    --deepspeed_config config/deepspeed/zero-3.json \
-    --num_epochs 5 \
-    --batch_size 16 \
-    --save_checkpoint \
-    --output_dir ./checkpoints/run1
+Configure `config.yaml`:
+
+```yaml
+data:
+  batch_size: 16
+
+training:
+  num_epochs: 5
+
+deepspeed:
+  config_path: "deepspeed/zero-3.json"
+
+checkpoint:
+  save_checkpoint: true
+  output_dir: "./checkpoints/run1"
+  checkpoint_interval: 50
 ```
 
-### 4. Custom Model Training (Multi-GPU)
+Run:
 
 ```bash
-# Train a different model on all available GPUs
-deepspeed main.py \
-    --model_name gpt2 \
-    --deepspeed_config config/deepspeed/zero-3.json \
-    --batch_size 4 \
-    --max_length 512 \
-    --num_epochs 3
+deepspeed --num_gpus=4 main.py
 ```
 
-### 5. Training with S3 Checkpointing (Cloud Training)
+### 4. Training with S3 Checkpointing (Cloud Training)
 
-```bash
-# Train with automatic S3 upload every 100 steps
-deepspeed --num_gpus=4 main.py \
-    --deepspeed_config config/deepspeed/zero-2.json \
-    --use_s3 \
-    --s3_bucket my-ml-training \
-    --s3_prefix experiments/gpt2-wikitext/run-001 \
-    --checkpoint_interval 100 \
-    --num_epochs 10 \
-    --batch_size 16
+Configure `config.yaml`:
+
+```yaml
+data:
+  batch_size: 16
+
+training:
+  num_epochs: 10
+
+deepspeed:
+  config_path: "deepspeed/zero-2.json"
+
+checkpoint:
+  checkpoint_interval: 100
+  output_dir: "./checkpoints"
+
+s3:
+  enabled: true
+  bucket: "my-ml-training"
+  prefix: "experiments/gpt2-wikitext/run-001"
+  region: "us-east-1"
 ```
 
-### 6. Resume from S3 Checkpoint
+Run:
 
 ```bash
-# Resume interrupted training from S3
-deepspeed --num_gpus=4 main.py \
-    --deepspeed_config config/deepspeed/zero-2.json \
-    --use_s3 \
-    --s3_bucket my-ml-training \
-    --s3_prefix experiments/gpt2-wikitext/run-001 \
-    --resume_from_checkpoint epoch2_step500 \
-    --resume_step 500 \
-    --checkpoint_interval 100
+deepspeed --num_gpus=4 main.py
 ```
 
-### 7. Long Training with Checkpoint Cleanup
+### 5. Resume from S3 Checkpoint
 
-```bash
-# Long training run with automatic local cleanup
-deepspeed --num_gpus=4 main.py \
-    --deepspeed_config config/deepspeed/zero-3.json \
-    --use_s3 \
-    --s3_bucket my-ml-training \
-    --s3_prefix long-training/qwen2-moe \
-    --use_qwen2_moe \
-    --checkpoint_interval 50 \
-    --cleanup_after_upload \
-    --keep_last_n_checkpoints 2 \
-    --num_epochs 50 \
-    --batch_size 8
+Configure `config.yaml`:
+
+```yaml
+training:
+  num_epochs: 10
+
+deepspeed:
+  config_path: "deepspeed/zero-2.json"
+
+checkpoint:
+  checkpoint_interval: 100
+  resume_from_checkpoint: "epoch2_step500"
+  resume_step: 500
+
+s3:
+  enabled: true
+  bucket: "my-ml-training"
+  prefix: "experiments/gpt2-wikitext/run-001"
 ```
 
-### 8. Multi-Node Training with S3 (Advanced)
+Run:
 
 ```bash
-# On all nodes - automatically handles distributed S3 uploads
-deepspeed --num_nodes=4 --num_gpus=4 main.py \
-    --deepspeed_config config/deepspeed/zero-3.json \
-    --use_s3 \
-    --s3_bucket multi-node-training \
-    --s3_prefix distributed-run/node-4x4gpu \
-    --checkpoint_interval 200 \
-    --batch_size 32 \
-    --num_epochs 20
+deepspeed --num_gpus=4 main.py
+```
+
+### 6. Long Training with Checkpoint Cleanup
+
+Configure `config.yaml`:
+
+```yaml
+data:
+  batch_size: 8
+
+training:
+  num_epochs: 50
+
+deepspeed:
+  config_path: "deepspeed/zero-3.json"
+
+checkpoint:
+  checkpoint_interval: 50
+  keep_last_n_checkpoints: 2
+
+s3:
+  enabled: true
+  bucket: "my-ml-training"
+  prefix: "long-training/qwen2-moe"
+  cleanup_after_upload: true
+```
+
+Run:
+
+```bash
+deepspeed --num_gpus=4 main.py
+```
+
+### 7. Multi-Node Training with S3 (Advanced)
+
+Configure `config.yaml`:
+
+```yaml
+data:
+  batch_size: 32
+
+training:
+  num_epochs: 20
+
+deepspeed:
+  config_path: "deepspeed/zero-3.json"
+
+checkpoint:
+  checkpoint_interval: 200
+
+s3:
+  enabled: true
+  bucket: "multi-node-training"
+  prefix: "distributed-run/node-4x4gpu"
+```
+
+Run on all nodes:
+
+```bash
+deepspeed --num_nodes=4 --num_gpus=4 main.py
+```
+
+### 8. Using Multiple Config Files
+
+You can maintain multiple config files for different experiments:
+
+```bash
+# Create custom configs
+cp config.yaml config/experiment1.yaml
+cp config.yaml config/experiment2.yaml
+
+# Edit each config for different experiments
+# Then run with specific config:
+deepspeed main.py --config config/experiment1.yaml
+deepspeed main.py --config config/experiment2.yaml
 ```
 
 ## 🐛 Troubleshooting
 
 ### Out of Memory Errors
 
-1. Try Stage 3 instead of Stage 2
-2. Reduce `batch_size`
-3. Reduce `max_length`
-4. Enable gradient checkpointing (add to config)
+Edit `config.yaml`:
+
+1. Try Stage 3 instead of Stage 2:
+   ```yaml
+   deepspeed:
+     config_path: "deepspeed/zero-3.json"
+   ```
+
+2. Reduce batch size:
+   ```yaml
+   data:
+     batch_size: 4  # Reduce from 8
+   ```
+
+3. Reduce sequence length:
+   ```yaml
+   data:
+     max_length: 64  # Reduce from 128
+   ```
+
+4. Enable gradient checkpointing in DeepSpeed config
 
 ### Slow Training
 
-1. Try Stage 2 instead of Stage 3
-2. Increase `batch_size` if memory allows
-3. Disable CPU offloading if you have enough GPU memory
-4. Adjust `gradient_accumulation_steps`
+Edit `config.yaml`:
+
+1. Try Stage 2 instead of Stage 3:
+   ```yaml
+   deepspeed:
+     config_path: "deepspeed/zero-2.json"
+   ```
+
+2. Increase batch size if memory allows:
+   ```yaml
+   data:
+     batch_size: 16  # Increase from 8
+   ```
+
+3. Disable CPU offloading in DeepSpeed config if you have enough GPU memory
+4. Adjust `gradient_accumulation_steps` in DeepSpeed config
 
 ### Import Errors
 
@@ -774,8 +1001,9 @@ aws s3 mb s3://your-bucket-name --region us-east-1
 # List available checkpoints in S3
 aws s3 ls s3://your-bucket/your-prefix/ --recursive
 
-# Verify checkpoint tag name matches
-deepspeed main.py --resume_from_checkpoint epoch0_step100  # Must match exact tag
+# Verify checkpoint tag name matches in config.yaml
+checkpoint:
+  resume_from_checkpoint: "epoch0_step100"  # Must match exact tag
 ```
 
 **Multi-Node S3 Issues:**
@@ -815,14 +1043,18 @@ def get_dataloaders(dataset_name, dataset_config, tokenizer, batch_size, max_len
 
 ### Ensuring Reproducibility
 
-To ensure reproducible experiments across runs, always set the seed:
+To ensure reproducible experiments across runs, set the seed in `config.yaml`:
 
-```bash
-# All runs with the same seed will produce identical results
-deepspeed main.py --seed 42 --deepspeed_config config/deepspeed/zero-2.json
+```yaml
+training:
+  seed: 42  # All runs with the same seed will produce identical results
+```
 
-# Different seeds for different experimental runs
-deepspeed main.py --seed 123 --deepspeed_config config/deepspeed/zero-2.json
+For different experimental runs, use different seeds:
+
+```yaml
+training:
+  seed: 123  # Different seed for different experiment
 ```
 
 ### Adding Custom Metrics
@@ -851,7 +1083,7 @@ Feel free to customize this template for your specific needs. Key areas to exten
 
 - Customize data loading in `src/data.py` for your specific datasets
 - Add custom training strategies in `src/train.py`
-- Create new DeepSpeed configurations in `config/deepspeed/`
+- Create new DeepSpeed configurations in `deepspeed/`
 - Add evaluation metrics and monitoring
 - Implement additional model architectures
 - Extend utilities in `src/utils.py`

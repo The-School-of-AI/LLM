@@ -15,7 +15,7 @@ export AWS_DEFAULT_REGION=us-east-1
 
 # 3. Run training with S3 checkpointing
 deepspeed main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --s3_bucket my-training-bucket \
     --s3_prefix experiments/my-model \
     --checkpoint_interval 100
@@ -72,13 +72,13 @@ export S3_PREFIX=experiments/my-model
 export S3_REGION=us-east-1
 export KEEP_LAST_N_CHECKPOINTS=3
 
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2-moe.json
+deepspeed main.py --deepspeed_config deepspeed/zero-2-moe.json
 ```
 
 ### Method 3: Python Code
 
 ```python
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 config = S3Config(
@@ -96,7 +96,7 @@ checkpoint_mgr = S3CheckpointManager(config)
 ### Basic Training with Checkpointing
 
 ```python
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 # Setup
@@ -283,7 +283,7 @@ config = S3Config(
 ### Preset Configurations
 
 ```python
-from config.aws.config import get_default_config
+from aws.config import get_default_config
 
 # Development: Verbose logging, fewer checkpoints
 dev_config = get_default_config('development')

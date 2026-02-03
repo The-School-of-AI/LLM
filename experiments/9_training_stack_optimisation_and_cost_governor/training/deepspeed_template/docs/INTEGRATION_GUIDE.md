@@ -69,7 +69,7 @@ def main():
     # ========================================
     checkpoint_mgr = None
     if args.s3_bucket:
-        from config.aws.config import S3Config
+        from aws.config import S3Config
         from src.checkpoint import S3CheckpointManager
         
         s3_config = S3Config(
@@ -251,7 +251,7 @@ def train_epoch(
 ```bash
 # Train with S3 checkpointing
 deepspeed main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --s3_bucket my-training-checkpoints \
     --s3_prefix experiments/my-model \
     --checkpoint_interval 100 \
@@ -268,7 +268,7 @@ export AWS_DEFAULT_REGION=us-east-1
 
 # Train
 deepspeed main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --s3_bucket my-training-checkpoints \
     --s3_prefix experiments/my-model
 ```
@@ -278,7 +278,7 @@ deepspeed main.py \
 ```bash
 # Don't specify --s3_bucket to disable S3 uploads
 deepspeed main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --output_dir ./checkpoints
 ```
 
@@ -298,7 +298,7 @@ def main():
     global_step = 0
     
     if args.s3_bucket:
-        from config.aws.config import S3Config
+        from aws.config import S3Config
         from src.checkpoint import S3CheckpointManager
         
         s3_config = S3Config(
@@ -371,7 +371,7 @@ def parse_args():
 
 ```python
 # At the top, add import
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 def parse_args():
@@ -493,7 +493,7 @@ if __name__ == "__main__":
 
 ```bash
 deepspeed --num_gpus=2 main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --num_epochs 1 \
     --max_train_steps 50
 ```
@@ -507,7 +507,7 @@ export AWS_SECRET_ACCESS_KEY=your-secret
 
 # Run with S3
 deepspeed --num_gpus=2 main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --s3_bucket my-test-bucket \
     --s3_prefix test/checkpoint-test \
     --checkpoint_interval 10 \

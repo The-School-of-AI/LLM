@@ -22,7 +22,7 @@ import torch
 import torch.distributed as dist
 from botocore.exceptions import ClientError
 
-from config.aws.config import S3Config
+from aws.config import S3Config
 
 
 class S3CheckpointManager:
@@ -39,7 +39,7 @@ class S3CheckpointManager:
     - Graceful error handling
     
     Usage:
-        >>> from config.aws.config import S3Config
+        >>> from aws.config import S3Config
         >>> config = S3Config(bucket_name="my-bucket", s3_prefix="training")
         >>> checkpoint_mgr = S3CheckpointManager(config)
         >>> 

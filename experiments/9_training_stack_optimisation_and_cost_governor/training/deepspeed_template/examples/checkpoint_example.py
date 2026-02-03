@@ -14,7 +14,7 @@ from transformers import Qwen2Config, Qwen2ForCausalLM
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 
@@ -62,7 +62,7 @@ def main():
     # )
     
     # Option 3: Use preset configuration
-    # from config.aws.config import get_default_config
+    # from aws.config import get_default_config
     # s3_config = get_default_config('development')
     # s3_config.bucket_name = 'my-training-bucket'
     
@@ -78,7 +78,7 @@ def main():
     model_engine, optimizer, _, _ = deepspeed.initialize(
         model=model,
         model_parameters=model.parameters(),
-        config="config/deepspeed/zero-2-moe.json",
+        config="deepspeed/zero-2-moe.json",
     )
     
     global_rank = int(os.environ.get('RANK', 0))
@@ -188,7 +188,7 @@ def example_resume_training():
     model_engine, _, _, _ = deepspeed.initialize(
         model=model,
         model_parameters=model.parameters(),
-        config="config/deepspeed/zero-2-moe.json",
+        config="deepspeed/zero-2-moe.json",
     )
     
     # Find latest checkpoint

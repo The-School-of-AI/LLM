@@ -23,7 +23,7 @@ python scripts/verify_s3_setup.py --bucket my-training-bucket
 ### Training with S3 Checkpoints
 
 ```python
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 # Initialize
@@ -49,14 +49,14 @@ checkpoint_mgr.wait_for_uploads()
 
 **Basic Training with Periodic Checkpoints:**
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+deepspeed main.py --deepspeed_config deepspeed/zero-2.json \
                   --checkpoint_interval 50 \
                   --output_dir ./checkpoints
 ```
 
 **Training with S3 Upload:**
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+deepspeed main.py --deepspeed_config deepspeed/zero-2.json \
                   --use_s3 \
                   --s3_bucket my-training-bucket \
                   --s3_prefix experiments/run-1 \
@@ -65,14 +65,14 @@ deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
 
 **Resume from Local Checkpoint:**
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+deepspeed main.py --deepspeed_config deepspeed/zero-2.json \
                   --resume_from_checkpoint epoch0_step100 \
                   --output_dir ./checkpoints
 ```
 
 **Resume from S3 Checkpoint:**
 ```bash
-deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
+deepspeed main.py --deepspeed_config deepspeed/zero-2.json \
                   --use_s3 \
                   --s3_bucket my-training-bucket \
                   --s3_prefix experiments/run-1 \
@@ -84,7 +84,7 @@ deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
 
 ```bash
 deepspeed main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --s3_bucket my-training-bucket \
     --s3_prefix experiments/my-model \
     --checkpoint_interval 100
@@ -180,7 +180,7 @@ config = S3Config.from_env()
 ### Presets
 
 ```python
-from config.aws.config import get_default_config
+from aws.config import get_default_config
 
 config = get_default_config('development')  # Verbose, fewer checkpoints
 config = get_default_config('production')   # Less verbose, more checkpoints

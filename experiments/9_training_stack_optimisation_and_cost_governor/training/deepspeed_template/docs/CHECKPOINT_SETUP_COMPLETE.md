@@ -6,7 +6,7 @@ Your non-blocking checkpoint system with S3 upload has been successfully created
 
 ### Core Components
 
-1. **`config/aws/config.py`** - AWS/S3 Configuration
+1. **`aws/config.py`** - AWS/S3 Configuration
    - `S3Config` dataclass with all AWS settings
    - Support for environment variables
    - Preset configurations (dev, prod, test)
@@ -21,7 +21,7 @@ Your non-blocking checkpoint system with S3 upload has been successfully created
    - Progress tracking and logging
    - Load/save/list/cleanup operations
 
-3. **`config/aws/__init__.py`** - Package initialization
+3. **`aws/__init__.py`** - Package initialization
    - Proper Python package structure
    - Clean imports
 
@@ -148,7 +148,7 @@ test/
 ### Basic Usage in Training
 
 ```python
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 # Setup
@@ -174,7 +174,7 @@ checkpoint_mgr.wait_for_uploads()
 
 ```bash
 deepspeed main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --s3_bucket my-training-checkpoints \
     --s3_prefix experiments/my-model \
     --checkpoint_interval 100 \
@@ -241,7 +241,7 @@ See `docs/INTEGRATION_GUIDE.md` for complete step-by-step instructions.
 ## 📊 File Structure Created
 
 ```
-config/aws/
+aws/
 ├── __init__.py           # Package init with exports
 └── config.py             # S3Config class (270 lines)
 
@@ -440,7 +440,7 @@ python scripts/verify_s3_setup.py --bucket my-training-bucket
 
 # Run training with checkpointing
 deepspeed main.py \
-    --deepspeed_config config/deepspeed/zero-2-moe.json \
+    --deepspeed_config deepspeed/zero-2-moe.json \
     --s3_bucket my-training-bucket \
     --s3_prefix experiments/my-model \
     --checkpoint_interval 100

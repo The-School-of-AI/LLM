@@ -4,204 +4,139 @@ Main entry point for DeepSpeed training.
 This script initializes the model, loads data, and runs training with DeepSpeed.
 Supports both ZeRO Stage 2 and Stage 3 configurations, S3 checkpointing, and resume.
 
+All configuration is loaded from config.yaml by default.
+
 Usage:
-    # Basic multi-GPU training with Stage 2
-    deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json
+    # Run with default config.yaml
+    deepspeed main.py
     
-    # With custom settings and checkpoint interval
-    deepspeed --num_gpus=4 main.py --deepspeed_config config/deepspeed/zero-2.json \
-                                    --num_epochs 3 \
-                                    --batch_size 16 \
-                                    --checkpoint_interval 50
+    # Run with custom config file
+    deepspeed main.py --config config/my_config.yaml
     
-    # With S3 checkpointing (auto-uploads to S3)
-    deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                      --use_s3 \
-                      --s3_bucket my-training-bucket \
-                      --s3_prefix experiments/training-run-1 \
-                      --checkpoint_interval 100
-    
-    # Resume from local checkpoint
-    deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                      --resume_from_checkpoint epoch0_step50
-    
-    # Resume from S3 checkpoint (auto-downloads from S3)
-    deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                      --use_s3 \
-                      --s3_bucket my-training-bucket \
-                      --s3_prefix experiments/training-run-1 \
-                      --resume_from_checkpoint epoch0_step100 \
-                      --resume_step 100
-    
-    # S3 with cleanup (delete local checkpoints after upload)
-    deepspeed main.py --deepspeed_config config/deepspeed/zero-2.json \
-                      --use_s3 \
-                      --s3_bucket my-training-bucket \
-                      --cleanup_after_upload \
-                      --keep_last_n_checkpoints 2
+    # Multi-GPU training (specify number of GPUs)
+    deepspeed --num_gpus=4 main.py
+
+Configuration:
+    Edit config.yaml to customize:
+    - Dataset, batch size, epochs
+    - Model and tokenizer selection
+    - Checkpoint intervals and S3 settings
+    - DeepSpeed configuration file path
+    - Resume from checkpoint settings
 """
 
 import argparse
 import os
+from typing import Any, Dict
 
 import deepspeed
 import torch
+import yaml
+
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
 from src.model import get_model, get_qwen2_moe_model
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
-from config.aws.config import S3Config
+from aws.config import S3Config
+
+
+class Config:
+    """Configuration object that mimics argparse Namespace for compatibility."""
+    
+    def __init__(self, config_dict: Dict[str, Any]):
+        """Initialize config from dictionary."""
+        # Data configuration
+        self.dataset_name = config_dict['data']['dataset_name']
+        self.dataset_config = config_dict['data']['dataset_config']
+        self.batch_size = config_dict['data']['batch_size']
+        self.max_length = config_dict['data']['max_length']
+        
+        # Training configuration
+        self.num_epochs = config_dict['training']['num_epochs']
+        self.max_train_steps = config_dict['training']['max_train_steps']
+        self.max_eval_steps = config_dict['training']['max_eval_steps']
+        self.log_interval = config_dict['training']['log_interval']
+        self.seed = config_dict['training']['seed']
+        
+        # DeepSpeed configuration
+        self.deepspeed_config = config_dict['deepspeed']['config_path']
+        self.local_rank = config_dict['deepspeed']['local_rank']
+        
+        # Model configuration
+        self.tokenizer_name = config_dict['model'].get('tokenizer_name', 'Qwen/Qwen2.5-0.5B')
+        self.model_name = config_dict['model'].get('model_name', 'distilgpt2')
+        
+        # Checkpoint configuration
+        self.output_dir = config_dict['checkpoint']['output_dir']
+        self.save_checkpoint = config_dict['checkpoint']['save_checkpoint']
+        self.checkpoint_interval = config_dict['checkpoint']['checkpoint_interval']
+        self.keep_last_n_checkpoints = config_dict['checkpoint']['keep_last_n_checkpoints']
+        self.resume_from_checkpoint = config_dict['checkpoint']['resume_from_checkpoint']
+        self.resume_step = config_dict['checkpoint']['resume_step']
+        
+        # S3 configuration
+        self.use_s3 = config_dict['s3']['enabled']
+        self.s3_bucket = config_dict['s3']['bucket']
+        self.s3_prefix = config_dict['s3']['prefix']
+        self.s3_region = config_dict['s3']['region']
+        self.cleanup_after_upload = config_dict['s3']['cleanup_after_upload']
+        
+        # Generation configuration
+        self.test_generation = config_dict['generation']['test_generation']
+        self.generation_prompt = config_dict['generation']['generation_prompt']
+
+
+def load_config(config_path: str = "config.yaml") -> Config:
+    """
+    Load configuration from YAML file.
+    
+    Args:
+        config_path: Path to the YAML configuration file
+        
+    Returns:
+        Config object with all training parameters
+    """
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+    
+    with open(config_path, 'r') as f:
+        config_dict = yaml.safe_load(f)
+    
+    return Config(config_dict)
 
 
 def parse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="DeepSpeed Training Template")
-
-    # Data arguments
+    """Parse minimal command line arguments (only config file path)."""
+    parser = argparse.ArgumentParser(
+        description="DeepSpeed Training Template - Configuration via YAML"
+    )
     parser.add_argument(
-        "--dataset_name",
+        "--config",
         type=str,
-        default="wikitext",
-        help="Dataset name from HuggingFace datasets",
+        default="config.yaml",
+        help="Path to configuration YAML file (default: config.yaml)",
     )
     parser.add_argument(
-        "--dataset_config",
-        type=str,
-        default="wikitext-2-raw-v1",
-        help="Dataset configuration",
-    )
-    parser.add_argument("--batch_size", type=int, default=8, help="Training batch size")
-    parser.add_argument(
-        "--max_length", type=int, default=128, help="Maximum sequence length"
-    )
-
-    # Training arguments
-    parser.add_argument(
-        "--num_epochs", type=int, default=1, help="Number of training epochs"
-    )
-    parser.add_argument(
-        "--max_train_steps",
+        "--local_rank",
         type=int,
-        default=None,
-        help="Maximum training steps per epoch (for debugging)",
+        default=-1,
+        help="Local rank for distributed training (set by DeepSpeed launcher)",
     )
-    parser.add_argument(
-        "--max_eval_steps",
-        type=int,
-        default=None,
-        help="Maximum evaluation steps (for debugging)",
-    )
-    parser.add_argument(
-        "--log_interval", type=int, default=10, help="Log every N steps"
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility",
-    )
-
-    # DeepSpeed arguments
-    parser.add_argument(
-        "--deepspeed_config",
-        type=str,
-        default="config/deepspeed/zero-2-moe.json",
-        help="Path to DeepSpeed configuration file",
-    )
-    parser.add_argument(
-        "--local_rank", type=int, default=-1, help="Local rank for distributed training"
-    )
-
-    # Output arguments
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="./checkpoints",
-        help="Directory to save model checkpoints",
-    )
-    parser.add_argument(
-        "--save_checkpoint",
-        action="store_true",
-        help="Save model checkpoint after training",
-    )
-    parser.add_argument(
-        "--checkpoint_interval",
-        type=int,
-        default=50,
-        help="Save checkpoint every N steps during training (default: 50)",
-    )
-    
-    # Resume arguments
-    parser.add_argument(
-        "--resume_from_checkpoint",
-        type=str,
-        default=None,
-        help="Resume training from checkpoint (tag name, e.g., 'step_100' or 'epoch0_step50')",
-    )
-    parser.add_argument(
-        "--resume_step",
-        type=int,
-        default=None,
-        help="Step number to resume from (used with resume_from_checkpoint)",
-    )
-    
-    # S3 arguments
-    parser.add_argument(
-        "--use_s3",
-        action="store_true",
-        help="Enable S3 checkpoint upload/download",
-    )
-    parser.add_argument(
-        "--s3_bucket",
-        type=str,
-        default=None,
-        help="S3 bucket name for checkpoints",
-    )
-    parser.add_argument(
-        "--s3_prefix",
-        type=str,
-        default="training/checkpoints",
-        help="S3 prefix/folder path for checkpoints",
-    )
-    parser.add_argument(
-        "--s3_region",
-        type=str,
-        default="us-east-1",
-        help="AWS region for S3",
-    )
-    parser.add_argument(
-        "--cleanup_after_upload",
-        action="store_true",
-        help="Delete local checkpoints after successful S3 upload",
-    )
-    parser.add_argument(
-        "--keep_last_n_checkpoints",
-        type=int,
-        default=3,
-        help="Number of local checkpoints to keep",
-    )
-
-    # Generation arguments
-    parser.add_argument(
-        "--test_generation",
-        action="store_true",
-        default=True,
-        help="Test text generation after training",
-    )
-    parser.add_argument(
-        "--generation_prompt",
-        type=str,
-        default="The history of artificial intelligence begins with",
-        help="Prompt for text generation",
-    )
-
     return parser.parse_args()
 
 
 def main():
     """Main training pipeline."""
-    args = parse_args()
+    # Parse command line args (only --config and --local_rank)
+    cmd_args = parse_args()
+    
+    # Load configuration from YAML
+    args = load_config(cmd_args.config)
+    
+    # Override local_rank if provided via command line (DeepSpeed launcher sets this)
+    if cmd_args.local_rank != -1:
+        args.local_rank = cmd_args.local_rank
 
     # Set random seed for reproducibility
     set_seed(args.seed)
@@ -209,12 +144,14 @@ def main():
     print_rank_0("=" * 80)
     print_rank_0("DeepSpeed Training Template")
     print_rank_0("=" * 80)
+    print_rank_0(f"Configuration File: {cmd_args.config}")
     print_rank_0(f"DeepSpeed Version: {deepspeed.__version__}")
     print_rank_0(f"PyTorch Version: {torch.__version__}")
     print_rank_0(f"CUDA Available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print_rank_0(f"CUDA Devices: {torch.cuda.device_count()}")
     print_rank_0("\nConfiguration:")
+    print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  Batch Size: {args.batch_size}")
     print_rank_0(f"  Max Length: {args.max_length}")
@@ -234,10 +171,7 @@ def main():
     # Step 1: Load Data
     # ========================================
     print_rank_0("\n[1/5] Loading data...")
-    # Use Qwen2 tokenizer if using custom Qwen2 model, otherwise use model_name
-    tokenizer_name = "Qwen/Qwen2.5-0.5B"
-    # tokenizer_name = "distilgpt2"
-    tokenizer = get_tokenizer(tokenizer_name)
+    tokenizer = get_tokenizer(args.tokenizer_name)
     train_loader, eval_loader, test_loader, _ = get_dataloaders(
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,

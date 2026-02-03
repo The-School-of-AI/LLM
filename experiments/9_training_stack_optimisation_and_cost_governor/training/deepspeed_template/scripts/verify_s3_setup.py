@@ -197,7 +197,7 @@ def test_checkpoint_manager(bucket_name, region):
     print(f"\nTesting S3CheckpointManager...")
     
     try:
-        from config.aws.config import S3Config
+        from aws.config import S3Config
         from src.checkpoint import S3CheckpointManager
         
         # Create config
@@ -316,7 +316,7 @@ def main():
         print("\n🎉 All checks passed! S3 checkpoint system is ready to use.")
         print(f"\nYou can now run training with:")
         print(f"  deepspeed main.py \\")
-        print(f"    --deepspeed_config config/deepspeed/zero-2-moe.json \\")
+        print(f"    --deepspeed_config deepspeed/zero-2-moe.json \\")
         print(f"    --s3_bucket {args.bucket} \\")
         print(f"    --s3_prefix experiments/my-model \\")
         print(f"    --checkpoint_interval 100")

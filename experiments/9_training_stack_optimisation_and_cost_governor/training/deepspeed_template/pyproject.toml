@@ -11,6 +11,7 @@ dependencies = [
     "deepspeed>=0.18.5",
     "mpi4py>=4.1.1",
     "pytest>=9.0.2",
+    "pyyaml>=6.0.3",
     "torch>=2.10.0",
     "torchvision>=0.25.0",
     "transformers>=5.0.0",

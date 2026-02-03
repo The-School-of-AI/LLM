@@ -79,7 +79,7 @@ aws s3 mb s3://my-training-checkpoints
 ### 4. Basic Usage
 
 ```python
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 # Configure
@@ -151,7 +151,7 @@ config = S3Config.from_env()
 #### Method 3: Preset Configurations
 
 ```python
-from config.aws.config import get_default_config
+from aws.config import get_default_config
 
 # Development preset
 config = get_default_config('development')
@@ -237,12 +237,12 @@ The checkpoint system automatically detects multi-node setups and optimizes acco
 # Node 0
 deepspeed --num_gpus=8 --num_nodes=4 --node_rank=0 \
     --master_addr=node0 --master_port=29500 \
-    main.py --deepspeed_config config/deepspeed/zero-2-moe.json
+    main.py --deepspeed_config deepspeed/zero-2-moe.json
 
 # Node 1
 deepspeed --num_gpus=8 --num_nodes=4 --node_rank=1 \
     --master_addr=node0 --master_port=29500 \
-    main.py --deepspeed_config config/deepspeed/zero-2-moe.json
+    main.py --deepspeed_config deepspeed/zero-2-moe.json
 
 # ... (nodes 2, 3)
 ```
@@ -253,7 +253,7 @@ deepspeed --num_gpus=8 --num_nodes=4 --node_rank=1 \
 
 ```python
 # At the top of main.py
-from config.aws.config import S3Config
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 
 # In main() function, before training loop

@@ -110,7 +110,7 @@ class TestZeRoConfiguration:
 
     def test_zero_stage2_config_exists(self):
         """Test that ZeRO Stage 2 configuration file exists and is valid."""
-        config_path = os.path.join(PROJECT_ROOT, "config/deepspeed/zero-2.json")
+        config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
         assert os.path.exists(
             config_path
         ), f"ZeRO Stage 2 config not found at {config_path}"
@@ -128,7 +128,7 @@ class TestZeRoConfiguration:
 
     def test_zero_stage3_config_exists(self):
         """Test that ZeRO Stage 3 configuration file exists and is valid."""
-        config_path = os.path.join(PROJECT_ROOT, "config/deepspeed/zero-3.json")
+        config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-3.json")
         assert os.path.exists(
             config_path
         ), f"ZeRO Stage 3 config not found at {config_path}"
@@ -161,7 +161,7 @@ class TestZeRoConfiguration:
         ]
 
         for config_name in ["zero-2.json", "zero-3.json"]:
-            config_path = os.path.join(PROJECT_ROOT, f"config/deepspeed/{config_name}")
+            config_path = os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}")
             with open(config_path, "r") as f:
                 config = json.load(f)
 
@@ -182,7 +182,7 @@ class TestDeepSpeedInitialization:
         class Args:
             local_rank = -1
             deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
+                PROJECT_ROOT, "deepspeed/zero-2.json"
             )
 
         args = Args()
@@ -214,7 +214,7 @@ class TestDeepSpeedInitialization:
         class Args:
             local_rank = -1
             deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-3.json"
+                PROJECT_ROOT, "deepspeed/zero-3.json"
             )
 
         args = Args()
@@ -247,7 +247,7 @@ class TestTrainingLoop:
         class Args:
             local_rank = -1
             deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
+                PROJECT_ROOT, "deepspeed/zero-2.json"
             )
 
         args = Args()
@@ -282,7 +282,7 @@ class TestTrainingLoop:
         class Args:
             local_rank = -1
             deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
+                PROJECT_ROOT, "deepspeed/zero-2.json"
             )
 
         args = Args()
@@ -319,7 +319,7 @@ class TestTrainingLoop:
         class Args:
             local_rank = -1
             deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
+                PROJECT_ROOT, "deepspeed/zero-2.json"
             )
 
         args = Args()
@@ -370,7 +370,7 @@ class TestCheckpointing:
         class Args:
             local_rank = -1
             deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
+                PROJECT_ROOT, "deepspeed/zero-2.json"
             )
 
         args = Args()
@@ -413,7 +413,7 @@ class TestZeROMemoryEfficiency:
         class Args:
             local_rank = -1
             deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
+                PROJECT_ROOT, "deepspeed/zero-2.json"
             )
 
         args = Args()
