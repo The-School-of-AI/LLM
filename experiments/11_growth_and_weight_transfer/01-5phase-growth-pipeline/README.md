@@ -134,6 +134,8 @@ python run_growth_experiment.py --resume-phase 3  # Resumes from Phase 3
 - Checkpoints save both model weights and `samples_seen` count
 - On resume, the dataloader skips previously seen samples
 - Training continues from exactly where it left off
+- **Metrics saved to:** `checkpoints/experiment_results.json`
+- **Logs saved to:** `checkpoints/experiment.log`
 
 **Pro tip:** Use `screen` or `tmux` for long training runs:
 ```bash
@@ -161,7 +163,7 @@ python test_stateful_dataloader.py
 │   ├── moe_model.py          # MoE variant
 │   ├── growth.py             # All growth operations
 │   ├── yarn.py               # YaRN RoPE implementation
-│   └── dataset.py            # TinyStories dataset
+│   └── dataset.py            # Dataset loaders (dummy, tinystories, any HF)
 ├── train.py                  # Training loop
 ├── run_growth_experiment.py  # Main 5-phase experiment
 └── README.md
