@@ -6,7 +6,7 @@ for training with DeepSpeed optimization.
 """
 
 import torch
-from transformers import AutoModelForCausalLM, Qwen2Config, Qwen2ForCausalLM
+from transformers import AutoModelForCausalLM, Qwen2MoeConfig, Qwen2MoeForCausalLM
 
 from .utils import print_rank_0
 
@@ -32,22 +32,39 @@ def get_qwen2_moe_model(device=None, print_info=True):
         print_rank_0("  Creating Qwen2 MoE model from scratch...")
 
     # Configure Qwen2 model with MoE
-    config = Qwen2Config(
-        vocab_size=151936,
-        hidden_size=512,
-        num_hidden_layers=12,
-        num_attention_heads=8,
-        num_key_value_heads=2,
-        intermediate_size=1280,
-        max_position_embeddings=1024,
-        num_experts=8,
-        num_experts_per_tok=2,
-        use_cache=False,
-        torch_dtype=torch.bfloat16,
-    )
+    config = Qwen2MoeConfig(
+            # Vocabulary
+            vocab_size=151936,
+            
+            # Model architecture
+            hidden_size=512,
+            num_hidden_layers=12,
+            num_attention_heads=8,
+            num_key_value_heads=2,
+            max_position_embeddings=1024,
+            
+            # MoE architecture
+            moe_intermediate_size=2048,           # Per-expert FFN (4x hidden_size)
+            num_experts=8,                         # Total experts per layer
+            num_experts_per_tok=2,                 # Top-K routing
+            shared_expert_intermediate_size=2048,  # Shared expert FFN
+            
+            # Router configuration
+            norm_topk_prob=True,
+            output_router_logits=True,
+            router_jitter_noise=0.0,
+            
+            # Standard settings
+            rms_norm_eps=1e-6,
+            use_cache=False,
+            tie_word_embeddings=False,
+            rope_theta=1000000.0,
+            attention_dropout=0.0,
+            torch_dtype=torch.bfloat16,
+        )
 
     # Initialize model from config
-    model = Qwen2ForCausalLM(config)
+    model = Qwen2MoeForCausalLM(config)
 
     # Enable gradient checkpointing to save memory
     model.gradient_checkpointing_enable()
