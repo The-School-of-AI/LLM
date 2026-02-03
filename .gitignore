@@ -135,3 +135,6 @@ logs/
 
 *.pt 
 *.pth
+
+# macOS specific files
+*.DS_Store
