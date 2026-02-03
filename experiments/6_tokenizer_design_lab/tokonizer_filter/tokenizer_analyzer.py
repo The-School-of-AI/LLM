@@ -30,8 +30,7 @@ from pathlib import Path
 from typing import Dict
 
 # Import common utilities
-from utils import (VocabularyWrapper, categorize_token, check_language,
-                   is_english_char)
+from utils import VocabularyWrapper, categorize_token, check_language, is_english_char
 
 # Unicode ranges for world languages (comprehensive coverage)
 # Hardcoded language ranges for consistent detection across all tokenizers
