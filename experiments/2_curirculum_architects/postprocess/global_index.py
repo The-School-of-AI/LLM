@@ -13,7 +13,8 @@ BATCH_SIZE = 10000
 
 fs = s3fs.S3FileSystem()
 
-files = fs.glob(f"{INPUT_BUCKET}/*.parquet")
+files = [f for f in fs.glob(f"{INPUT_BUCKET}/*.parquet") if not f.endswith(".metadata.parquet")]
+
 if not files:
     raise RuntimeError(f"No parquet files found in {INPUT_BUCKET}")
 
