@@ -285,16 +285,18 @@ def main():
 
     # Show S3 info if using S3
     if cfg["storage"]["mode"] in ["s3", "both"]:
-        print(f"☁️  S3 bucket: s3://{cfg['aws']['s3_bucket']}/{cfg['aws']['s3_prefix']}")
+        print(
+            f"☁️  S3 bucket: s3://{cfg['aws']['s3_bucket']}/{cfg['aws']['s3_prefix']}"
+        )
         print(f"🌍 AWS region: {cfg['aws']['region']}")
 
     times = {}
     total_start = time.time()
 
     for name, dcfg in cfg["datasets"].items():
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"🚀 Processing: {name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         start = time.time()
 
         try:
@@ -316,16 +318,16 @@ def main():
 
     # Summary
     total_time = time.time() - total_start
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("📊 SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for k, v in times.items():
         if v >= 0:
             print(f"✅ {k}: {v:.2f}s")
         else:
             print(f"❌ {k}: Failed")
     print(f"\n⏱️  TOTAL TIME: {total_time:.2f}s")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print("🎉 Done!")
 
 

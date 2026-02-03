@@ -34,7 +34,7 @@ class TestConfiguration:
 
     def test_zero2_config_valid_json(self):
         """Validate ZeRO-2 config is valid JSON with correct structure."""
-        config_path = os.path.join(PROJECT_ROOT, "config/deepspeed/zero-2.json")
+        config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
         assert os.path.exists(config_path), f"Config not found: {config_path}"
 
         with open(config_path, "r") as f:
@@ -50,7 +50,7 @@ class TestConfiguration:
 
     def test_zero3_config_valid_json(self):
         """Validate ZeRO-3 config is valid JSON with correct structure."""
-        config_path = os.path.join(PROJECT_ROOT, "config/deepspeed/zero-3.json")
+        config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-3.json")
         assert os.path.exists(config_path), f"Config not found: {config_path}"
 
         with open(config_path, "r") as f:
@@ -67,7 +67,7 @@ class TestConfiguration:
     def test_zero_configs_optimizer_settings(self):
         """Verify optimizer configurations are properly set."""
         for config_name in ["zero-2.json", "zero-3.json"]:
-            config_path = os.path.join(PROJECT_ROOT, f"config/deepspeed/{config_name}")
+            config_path = os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}")
             with open(config_path, "r") as f:
                 config = json.load(f)
 
@@ -85,7 +85,7 @@ class TestConfiguration:
     def test_zero_configs_fp16_settings(self):
         """Verify FP16 settings are configured."""
         for config_name in ["zero-2.json", "zero-3.json"]:
-            config_path = os.path.join(PROJECT_ROOT, f"config/deepspeed/{config_name}")
+            config_path = os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}")
             with open(config_path, "r") as f:
                 config = json.load(f)
 
@@ -232,7 +232,7 @@ class TestZeROConfigurationDetails:
 
     def test_zero2_offload_optimizer(self):
         """Verify ZeRO-2 optimizer offload configuration."""
-        with open(os.path.join(PROJECT_ROOT, "config/deepspeed/zero-2.json"), "r") as f:
+        with open(os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json"), "r") as f:
             config = json.load(f)
 
         zero_config = config["zero_optimization"]
@@ -243,7 +243,7 @@ class TestZeROConfigurationDetails:
 
     def test_zero3_parameter_offload(self):
         """Verify ZeRO-3 parameter offload configuration."""
-        with open(os.path.join(PROJECT_ROOT, "config/deepspeed/zero-3.json"), "r") as f:
+        with open(os.path.join(PROJECT_ROOT, "deepspeed/zero-3.json"), "r") as f:
             config = json.load(f)
 
         zero_config = config["zero_optimization"]
@@ -256,9 +256,7 @@ class TestZeROConfigurationDetails:
     def test_gradient_accumulation_configured(self):
         """Verify gradient accumulation is properly configured."""
         for config_name in ["zero-2.json", "zero-3.json"]:
-            with open(
-                os.path.join(PROJECT_ROOT, f"config/deepspeed/{config_name}"), "r"
-            ) as f:
+            with open(os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}"), "r") as f:
                 config = json.load(f)
 
             assert "gradient_accumulation_steps" in config
@@ -269,9 +267,7 @@ class TestZeROConfigurationDetails:
     def test_gradient_clipping_configured(self):
         """Verify gradient clipping is configured."""
         for config_name in ["zero-2.json", "zero-3.json"]:
-            with open(
-                os.path.join(PROJECT_ROOT, f"config/deepspeed/{config_name}"), "r"
-            ) as f:
+            with open(os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}"), "r") as f:
                 config = json.load(f)
 
             assert "gradient_clipping" in config

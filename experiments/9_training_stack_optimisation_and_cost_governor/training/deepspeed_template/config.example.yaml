@@ -1,0 +1,130 @@
+# DeepSpeed Training Configuration - Example File
+# Copy this file to config.yaml and customize for your needs
+# All training parameters are defined here - no command line arguments needed
+
+# =============================================================================
+# Data Configuration
+# =============================================================================
+data:
+  dataset_name: "wikitext"              # Dataset name from HuggingFace datasets
+  dataset_config: "wikitext-2-raw-v1"   # Dataset configuration/subset
+  batch_size: 8                         # Training batch size per GPU
+  max_length: 128                       # Maximum sequence length for tokenization
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+training:
+  num_epochs: 1                         # Number of training epochs
+  max_train_steps: null                 # Max steps per epoch (null = full epoch, int for debugging)
+  max_eval_steps: null                  # Max evaluation steps (null = full eval, int for debugging)
+  log_interval: 10                      # Log training progress every N steps
+  seed: 42                              # Random seed for reproducibility
+
+# =============================================================================
+# DeepSpeed Configuration
+# =============================================================================
+deepspeed:
+  config_path: "deepspeed/zero-2-moe.json"  # Path to DeepSpeed JSON config
+  local_rank: -1                        # Local rank (automatically set by DeepSpeed launcher)
+  
+  # Available DeepSpeed configs:
+  # - deepspeed/zero-1.json      # ZeRO Stage 1 (basic optimizer partitioning)
+  # - deepspeed/zero-2.json      # ZeRO Stage 2 (optimizer + gradient partitioning)
+  # - deepspeed/zero-2-moe.json  # ZeRO Stage 2 for Mixture of Experts models
+  # - deepspeed/zero-3.json      # ZeRO Stage 3 (full model parallelism)
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model:
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"   # Tokenizer from HuggingFace Hub
+  # model_name: "distilgpt2"            # Uncomment to use a different model
+  
+  # Note: The code uses get_qwen2_moe_model() by default which creates a custom
+  # Mixture of Experts model. To use a pre-trained model from HuggingFace, modify
+  # main.py to use get_model(args.model_name) instead.
+
+# =============================================================================
+# Checkpoint Configuration
+# =============================================================================
+checkpoint:
+  output_dir: "./checkpoints"           # Directory to save checkpoints locally
+  save_checkpoint: false                # Save final checkpoint after training completes
+  checkpoint_interval: 50               # Save checkpoint every N training steps
+  keep_last_n_checkpoints: 3            # Number of recent checkpoints to keep locally
+  
+  # Resume from Checkpoint
+  resume_from_checkpoint: null          # Checkpoint tag to resume from (e.g., "epoch0_step50")
+  resume_step: null                     # Step number to resume from (required with S3 resume)
+  
+  # Examples:
+  # resume_from_checkpoint: "epoch0_step100"
+  # resume_from_checkpoint: "epoch1_end"
+  # resume_from_checkpoint: "final"
+
+# =============================================================================
+# S3 Configuration (Optional - for cloud checkpointing)
+# =============================================================================
+s3:
+  enabled: false                        # Enable S3 checkpoint upload/download
+  bucket: null                          # S3 bucket name (required if enabled=true)
+  prefix: "training/checkpoints"        # S3 folder path for organizing checkpoints
+  region: "us-east-1"                   # AWS region for S3 bucket
+  cleanup_after_upload: false           # Delete local checkpoints after successful S3 upload
+  
+  # S3 Configuration Examples:
+  # 
+  # Basic S3 setup:
+  #   enabled: true
+  #   bucket: "my-training-bucket"
+  #   prefix: "experiments/run-1"
+  #
+  # With cleanup (saves local disk space):
+  #   enabled: true
+  #   bucket: "my-training-bucket"
+  #   cleanup_after_upload: true
+  #
+  # Note: Requires AWS credentials configured via:
+  # - AWS CLI: aws configure
+  # - Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+  # - IAM role (on EC2 instances)
+
+# =============================================================================
+# Text Generation Configuration
+# =============================================================================
+generation:
+  test_generation: true                 # Test text generation after training
+  generation_prompt: "The history of artificial intelligence begins with"
+  
+  # Customize the prompt to test your model's capabilities
+  # Examples:
+  # - "Once upon a time"
+  # - "In the year 2050,"
+  # - "The future of technology is"
+
+# =============================================================================
+# Quick Start Examples
+# =============================================================================
+#
+# 1. Basic Training:
+#    - Copy this file to config.yaml
+#    - Run: deepspeed main.py
+#
+# 2. Multi-GPU Training:
+#    - Copy this file to config.yaml
+#    - Run: deepspeed --num_gpus=4 main.py
+#
+# 3. Training with S3:
+#    - Enable S3 above and set bucket name
+#    - Run: deepspeed --num_gpus=4 main.py
+#
+# 4. Resume Training:
+#    - Set resume_from_checkpoint above
+#    - Run: deepspeed main.py
+#
+# 5. Custom Config:
+#    - Create custom config file
+#    - Run: deepspeed main.py --config path/to/custom_config.yaml
+#
+# =============================================================================
