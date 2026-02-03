@@ -20,9 +20,8 @@ from typing import Any, Dict, Optional
 import boto3
 import torch
 import torch.distributed as dist
-from botocore.exceptions import ClientError
-
 from aws.config import S3Config
+from botocore.exceptions import ClientError
 
 
 class S3CheckpointManager:

@@ -21,10 +21,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 import torch
-from transformers import AutoModelForCausalLM
-
 from src.data import get_tokenizer, preprocess_function
 from src.utils import set_seed
+from transformers import AutoModelForCausalLM
 
 # Get project root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

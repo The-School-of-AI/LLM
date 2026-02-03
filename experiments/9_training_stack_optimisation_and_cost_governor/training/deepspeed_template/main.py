@@ -29,10 +29,9 @@ import argparse
 import os
 from typing import Any, Dict
 
+import deepspeed
 import torch
 import yaml
-
-import deepspeed
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer

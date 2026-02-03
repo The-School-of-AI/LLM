@@ -6,13 +6,13 @@ into your DeepSpeed training pipeline.
 """
 
 import os
+
 # Import checkpoint manager and config
 import sys
 
+import deepspeed
 import torch
 from transformers import Qwen2Config, Qwen2ForCausalLM
-
-import deepspeed
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
