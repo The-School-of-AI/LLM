@@ -235,6 +235,20 @@ def train_phase(
         
         # Checkpointing
         if step % checkpoint_every == 0:
+            # Calculate eval loss (model.eval() disables dropout)
+            model.eval()
+            with torch.no_grad():
+                try:
+                    eval_batch = next(iter(dataloader))
+                except StopIteration:
+                    eval_batch = batch  # Fallback to last training batch
+                eval_input_ids = eval_batch["input_ids"].to(device)
+                eval_labels = eval_batch.get("labels", eval_input_ids).to(device)
+                eval_outputs = model(eval_input_ids, labels=eval_labels)
+                eval_loss = eval_outputs["loss"].item()
+            model.train()
+            print(f"  📊 Eval Loss: {eval_loss:.4f} (true performance without dropout)")
+            
             # Calculate samples seen
             batch_size = dataloader.batch_size or 1
             steps_taken = step - start_step
