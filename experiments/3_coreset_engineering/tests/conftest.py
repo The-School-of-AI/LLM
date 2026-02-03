@@ -8,13 +8,12 @@ import pytest
 import sys
 import os
 import tempfile
+from pathlib import Path
 
-# Add src to path
-src_path = os.path.join(os.path.dirname(__file__), '..', 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
+# Add src to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-# Import reproducibility modules
+# Import reproducibility modules (after sys.path is set)
 from coreset_engine.reproducibility import SeedPolicy, ManifestFingerprinter
 
 

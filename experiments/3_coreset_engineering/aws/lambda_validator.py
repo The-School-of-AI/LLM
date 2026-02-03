@@ -11,7 +11,7 @@ import json
 import boto3
 import logging
 from datetime import datetime
-from typing import Dict, Any, Tuple
+from typing import Dict, Any
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

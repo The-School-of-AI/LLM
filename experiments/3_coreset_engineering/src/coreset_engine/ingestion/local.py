@@ -1,7 +1,7 @@
 import json
 import glob
 import os
-from typing import Iterator, Dict, Any, List, Optional
+from typing import Iterator, Dict, Any, Optional
 from .abstract import DataSource
 
 try:
@@ -96,6 +96,6 @@ class ParquetDataSource(DataSource):
             try:
                 meta = pq.read_metadata(f)
                 total += meta.num_rows
-            except:
+            except (OSError, IOError, ValueError):
                 pass
         return total

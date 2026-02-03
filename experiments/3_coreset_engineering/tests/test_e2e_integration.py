@@ -13,19 +13,16 @@ import os
 import json
 import tempfile
 import shutil
-from pathlib import Path
 import pytest
 import yaml
 import random
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from coreset_engine.selection.builder import CoresetBuilder
 from coreset_engine.selection.curriculum import CurriculumConfig
-from coreset_engine.selection.bucketer import DifficultyBucketer
-from coreset_engine.selection.sampler import StratifiedSampler
 from coreset_engine.ingestion.deduplicator import TextDeduplicator
 
 
@@ -336,7 +333,6 @@ class TestEndToEndPipeline:
             # Verify manifest structure has S3-compatible naming
             for stage in ['1B', '3B', '8B', '70B']:
                 # S3 path should follow pattern: manifests/{stage}/manifest.json
-                expected_path = f"manifests/{stage}/manifest.json"
                 # Just verify stage is in manifests
                 assert stage in manifests['stages']
 
@@ -408,7 +404,7 @@ class TestAWSIntegration:
         mock_boto_client.return_value = mock_lambda
         
         # Simulate Lambda invocation
-        response = mock_lambda.invoke(
+        mock_lambda.invoke(
             FunctionName='coreset-manifest-validator',
             InvocationType='Synchronous',
             Payload=json.dumps({'stage': '1B', 'manifest_path': 's3://bucket/manifests/1B/manifest.json'})

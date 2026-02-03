@@ -13,7 +13,6 @@ import os
 import json
 import tempfile
 import shutil
-from pathlib import Path
 import pytest
 import yaml
 
@@ -214,8 +213,6 @@ class TestCoresetBuilderRegressions:
         
         # Sample for 1B stage
         stage_1b = config.get_stage('1B')
-        target_tokens = stage_1b['target_tokens']
-        
         sampled = sampler.stratified_sample(bucketed, stage_1b, target_count=500)
         
         # Verify sample composition
@@ -311,8 +308,9 @@ class TestCoresetBuilderRegressions:
     def test_output_directory_creation(self, temp_dirs, mock_curriculum_yaml):
         """Test that builder creates output directory if it doesn't exist."""
         output_dir = os.path.join(temp_dirs['output'], 'nonexistent', 'nested', 'path')
-        
-        builder = CoresetBuilder(
+
+        # Test that builder creates directories
+        CoresetBuilder(
             config_path=mock_curriculum_yaml,
             data_dir=temp_dirs['input'],
             output_dir=output_dir

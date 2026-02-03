@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import json
 import os
 import glob
-from collections import defaultdict
 
 def load_manifest(manifest_path):
     """Loads a JSONL manifest into a DataFrame."""
@@ -18,7 +17,7 @@ def load_manifest(manifest_path):
                 if 'distribution' in item or 'total_tokens' in item:
                     continue # Skip summary footer
                 data.append(item)
-            except:
+            except (KeyError, ValueError, TypeError):
                 continue
     return pd.DataFrame(data)
 

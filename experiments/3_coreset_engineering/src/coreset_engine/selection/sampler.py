@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 import random
 from collections import defaultdict
 from .bucketer import BucketMapper
@@ -42,8 +42,7 @@ class StratifiedSampler:
             modality_weights = stage_config['modality_weights']
             
             selected_items = []
-            current_stage_tokens = 0
-            
+
             # Strategy:
             # We fundamentally stratify by BAND first (Difficulty is the primary constraint).
             # Within each Band, we try to respect Modality weights if possible.

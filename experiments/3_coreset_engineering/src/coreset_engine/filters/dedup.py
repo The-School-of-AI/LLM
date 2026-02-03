@@ -1,5 +1,4 @@
 import hashlib
-import struct
 from typing import List, Set
 
 class MinHash:

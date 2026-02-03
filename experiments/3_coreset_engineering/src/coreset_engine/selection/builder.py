@@ -1,10 +1,8 @@
 import logging
-import os
-from typing import Dict, Any
 from collections import defaultdict
 
 from coreset_engine.ingestion.local import JsonlDataSource
-from coreset_engine.scoring.perplexity import DifficultyScorer, QualityScorer
+from coreset_engine.scoring.perplexity import DifficultyScorer
 from coreset_engine.filters.dedup import DedupRegister
 from coreset_engine.selection.curriculum import CurriculumLoader
 from coreset_engine.selection.sampler import StratifiedSampler
