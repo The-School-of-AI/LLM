@@ -20,7 +20,8 @@ from pathlib import Path
 class AttentionType(Enum):
     """Available attention mechanisms."""
     GROUPED_QUERY = "grouped_query"      # GQA (default, like Qwen3/LLaMA3)
-    GATED_SPARSE = "gated_sparse"        # GSA from paper 2601.15305v1
+    GATED_SPARSE = "gated_sparse"        # GSA from paper 2601.15305v1 (original implementation)
+    DEEPSEEK_GSA = "deepseek_gsa"        # DeepSeek-style GSA (corrected implementation)
     DEEPSEEK_SPARSE = "deepseek_sparse"  # DeepSeek V3 MLA
 
 
@@ -64,6 +65,16 @@ class AttentionConfig:
     gsa_k_base: int = 2048             # Base selection budget
     gsa_k_min: int = 256               # Minimum k (high confidence)
     gsa_k_max: int = 4096              # Maximum k (low confidence)
+
+    # DeepSeek GSA specific (corrected implementation)
+    gsa_use_adaptive_k: bool = True              # Enable adaptive k selection
+    gsa_adaptive_k_method: str = "variance"      # "variance", "entropy", or "learned"
+    gsa_adaptive_k_temperature: float = 1.0      # Temperature for adaptive scaling
+    gsa_use_value_gate: bool = True              # Enable G2 (value gate)
+    gsa_use_output_gate: bool = True             # Enable G1 (output gate)
+    gsa_gate_activation: str = "sigmoid"         # Gate activation function
+    gsa_gate_bias_init: float = 0.5              # Initial gate bias
+    gsa_indexer_activation: str = "sigmoid"      # Indexer activation ("sigmoid" or "relu")
     
     # DeepSeek Sparse Attention specific
     ds_compressed_dim: int = 512      # Compressed KV dimension
@@ -155,9 +166,9 @@ class ModelConfig:
     model_version: str = "1.0.0"
     
     # Core architecture
-    vocab_size: int = 50304  # Divisible by 64 for efficiency
+    vocab_size: int = 128000  # Divisible by 64 for efficiency
     hidden_size: int = 2048
-    num_hidden_layers: int = 24
+    num_hidden_layers: int = 16
     max_position_embeddings: int = 4096
     
     # Normalization
@@ -305,18 +316,23 @@ def get_1b_base_config() -> ModelConfig:
     """1B base model - dense, standard architecture."""
     return ModelConfig(
         model_name="LLM-1B-Base",
-        vocab_size=50304,
+        vocab_size=128000,
         hidden_size=2048,
-        num_hidden_layers=24,
+        num_hidden_layers=16,
         max_position_embeddings=4096,
         attention=AttentionConfig(
             attention_type=AttentionType.GROUPED_QUERY,
             num_attention_heads=16,
             num_key_value_heads=4,
         ),
+        position=PositionConfig(
+            position_type=PositionEmbeddingType.YARN,
+            yarn_original_max_position=4096,
+            yarn_scale=8.0,
+        ),
         ffn=FFNConfig(
             ffn_type=FFNType.SWIGLU,
-            intermediate_size=5504,  # ~2.7x hidden for SwiGLU
+            intermediate_size=4096,  # ~2.7x hidden for SwiGLU
         ),
     )
 
@@ -333,6 +349,38 @@ def get_1b_gsa_config() -> ModelConfig:
     config.attention.gsa_k_base = 2048          # Base selection budget
     config.attention.gsa_k_min = 256            # Min k (confident)
     config.attention.gsa_k_max = 4096           # Max k (uncertain)
+    return config
+
+
+def get_1b_deepseek_gsa_config() -> ModelConfig:
+    """
+    1B model with DeepSeek-style GSA (corrected implementation).
+
+    Memory-optimized defaults:
+    - k_base=256, k_max=512 for MPS/limited memory
+    - For CUDA with more VRAM, you can increase these values
+    """
+    config = get_1b_base_config()
+    config.model_name = "LLM-1B-DeepSeek-GSA"
+    config.attention.attention_type = AttentionType.DEEPSEEK_GSA
+    # Indexer parameters
+    config.attention.gsa_indexer_dim = 64
+    config.attention.gsa_num_indexer_heads = 4
+    config.attention.gsa_indexer_activation = "sigmoid"
+    # Adaptive sparsity - very conservative defaults for MPS memory efficiency
+    # The sparse attention still provides benefits even with smaller k
+    # For CUDA with more VRAM, increase: k_base=512-1024, k_max=1024-2048
+    config.attention.gsa_k_base = 128   # Very small for MPS compatibility
+    config.attention.gsa_k_min = 32     # Minimum tokens to attend to
+    config.attention.gsa_k_max = 256    # Very small for MPS compatibility
+    config.attention.gsa_use_adaptive_k = True
+    config.attention.gsa_adaptive_k_method = "variance"
+    config.attention.gsa_adaptive_k_temperature = 1.0
+    # Gating
+    config.attention.gsa_use_value_gate = True
+    config.attention.gsa_use_output_gate = True
+    config.attention.gsa_gate_activation = "sigmoid"
+    config.attention.gsa_gate_bias_init = 0.5
     return config
 
 
@@ -378,9 +426,9 @@ def get_1b_full_config() -> ModelConfig:
     """1B model with ALL advanced features enabled."""
     config = ModelConfig(
         model_name="LLM-1B-Full",
-        vocab_size=50304,
+        vocab_size=128000,
         hidden_size=2048,
-        num_hidden_layers=24,
+        num_hidden_layers=16,
         max_position_embeddings=32768,
         attention=AttentionConfig(
         attention_type=AttentionType.GATED_SPARSE,
@@ -407,7 +455,7 @@ def get_1b_full_config() -> ModelConfig:
         ),
         head=HeadConfig(
             use_multi_token_prediction=True,
-            num_predict_tokens=4,
+            num_predict_tokens=2,
         ),
     )
     return config
@@ -417,7 +465,8 @@ def get_1b_full_config() -> ModelConfig:
 PRESET_CONFIGS = {
     "1b-base": get_1b_base_config,
     "1b-gsa": get_1b_gsa_config,
-    "1b-deepseek": get_1b_deepseek_config,
+    "1b-deepseek-gsa": get_1b_deepseek_gsa_config,  # DeepSeek-style GSA (recommended)
+    "1b-deepseek": get_1b_deepseek_config,          # DeepSeek V3 MLA
     "1b-mhc": get_1b_mhc_config,
     "1b-mtp": get_1b_mtp_config,
     "1b-yarn": get_1b_yarn_config,

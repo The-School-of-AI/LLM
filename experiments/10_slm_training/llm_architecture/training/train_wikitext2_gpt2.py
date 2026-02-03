@@ -142,6 +142,15 @@ def main() -> None:
     parser.add_argument("--warmup-steps", type=int, default=20)
     parser.add_argument("--no-amp", action="store_true")
 
+    # Device selection
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cuda", "mps", "cpu"],
+        help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu"
+    )
+
     # Experiment
     parser.add_argument(
         "--experiment-name",
@@ -183,12 +192,15 @@ def main() -> None:
             "Reduce --seq-length or increase --max-tokens."
         )
 
+    # Determine if we should pin memory (only for CUDA)
+    pin_memory = args.device == "cuda" or (args.device == "auto" and torch.cuda.is_available())
+
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=torch.cuda.is_available()
+        pin_memory=pin_memory
     )
 
     # Model config
@@ -203,6 +215,7 @@ def main() -> None:
         seq_length=args.seq_length,
         learning_rate=args.learning_rate,
         warmup_steps=args.warmup_steps,
+        device=args.device,
         experiment_name=args.experiment_name,
         checkpoint_dir=args.checkpoint_dir,
         seed=args.seed,

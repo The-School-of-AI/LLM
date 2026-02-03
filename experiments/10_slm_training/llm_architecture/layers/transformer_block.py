@@ -21,6 +21,7 @@ sys.path.append('..')
 # Import all attention variants
 from components.attention.grouped_query_attention import GroupedQueryAttention
 from components.attention.gated_sparse_attention import GatedSparseAttention
+from components.attention.deepseek_gsa import DeepSeekGSA, DeepSeekGSAConfig
 from components.attention.deepseek_sparse_attention import DeepSeekSparseAttention
 
 # Import FFN
@@ -113,7 +114,49 @@ class TransformerBlock(nn.Module):
                 k_min=attn_config.gsa_k_min,
                 k_max=attn_config.gsa_k_max,
             )
-            
+
+        elif attn_config.attention_type == AttentionType.DEEPSEEK_GSA:
+            # DeepSeek-style GSA with corrected implementation
+            # Determine if YaRN should be used based on position config
+            from config.model_config import PositionEmbeddingType
+            use_yarn = pos_config.position_type == PositionEmbeddingType.YARN
+
+            gsa_config = DeepSeekGSAConfig(
+                hidden_size=config.hidden_size,
+                num_attention_heads=attn_config.num_attention_heads,
+                num_key_value_heads=attn_config.num_key_value_heads,
+                head_dim=attn_config.head_dim,
+                indexer_dim=attn_config.gsa_indexer_dim,
+                num_indexer_heads=attn_config.gsa_num_indexer_heads,
+                indexer_activation=getattr(attn_config, 'gsa_indexer_activation', 'sigmoid'),
+                k_base=attn_config.gsa_k_base,
+                k_min=attn_config.gsa_k_min,
+                k_max=attn_config.gsa_k_max,
+                use_adaptive_k=getattr(attn_config, 'gsa_use_adaptive_k', True),
+                adaptive_k_method=getattr(attn_config, 'gsa_adaptive_k_method', 'variance'),
+                adaptive_k_temperature=getattr(attn_config, 'gsa_adaptive_k_temperature', 1.0),
+                use_value_gate=getattr(attn_config, 'gsa_use_value_gate', True),
+                use_output_gate=getattr(attn_config, 'gsa_use_output_gate', True),
+                gate_activation=getattr(attn_config, 'gsa_gate_activation', 'sigmoid'),
+                gate_bias_init=getattr(attn_config, 'gsa_gate_bias_init', 0.5),
+                max_position_embeddings=config.max_position_embeddings,
+                rope_theta=pos_config.rope_theta,
+                # YaRN configuration - passed from position config
+                use_yarn=use_yarn,
+                yarn_scale=pos_config.yarn_scale,
+                yarn_original_max_position=pos_config.yarn_original_max_position,
+                yarn_beta_fast=pos_config.yarn_beta_fast,
+                yarn_beta_slow=pos_config.yarn_beta_slow,
+                yarn_mscale=pos_config.yarn_mscale,
+                yarn_mscale_all_dim=pos_config.yarn_mscale_all_dim,
+                use_dynamic_yarn=False,  # Can be made configurable if needed
+                attention_dropout=attn_config.attention_dropout,
+                attention_bias=attn_config.attention_bias,
+                num_layers=config.num_hidden_layers,
+                layer_idx=layer_idx,
+            )
+            return DeepSeekGSA(gsa_config)
+
         elif attn_config.attention_type == AttentionType.DEEPSEEK_SPARSE:
             return DeepSeekSparseAttention(
                 **common_args,
