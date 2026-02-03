@@ -1,0 +1,29 @@
+/* Checkpoints CSS */
+.checkpoints-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.checkpoint-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* Incidents CSS */
+.overflow-x-auto {
+    overflow-x: auto;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+.border-border {
+    border-color: var(--color-border);
+}
+
+.hover\:bg-slate-700\/50:hover {
+    background-color: rgba(51, 65, 85, 0.5);
+}

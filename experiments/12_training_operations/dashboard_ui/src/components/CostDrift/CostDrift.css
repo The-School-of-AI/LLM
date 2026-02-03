@@ -1,0 +1,11 @@
+.cost-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.5rem;
+}
+
+.cost-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
