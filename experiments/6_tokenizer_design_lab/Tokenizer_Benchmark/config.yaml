@@ -1,0 +1,118 @@
+# Tokenizer Benchmark Configuration
+
+# =====================================================
+# CUSTOM TOKENIZER (PLACEHOLDER)
+# =====================================================
+custom_tokenizer:
+  name: "custom"
+  path: "tokenizers/custom.json"  # Your tokenizer file
+  type: "json"                    # json, sentencepiece, or huggingface
+
+# =====================================================
+# REFERENCE TOKENIZERS
+# =====================================================
+reference_tokenizers:
+  gpt4o:
+    name: "GPT-4o (tiktoken)"
+    backend: "tiktoken"
+    model: "gpt-4o"
+    
+  qwen:
+    name: "Qwen2.5"
+    backend: "huggingface"
+    model: "Qwen/Qwen2.5-7B"
+    
+  deepseek:
+    name: "DeepSeek-V3"
+    backend: "huggingface"
+    model: "deepseek-ai/DeepSeek-V3"
+
+# =====================================================
+# DATASETS (PLACEHOLDER)
+# =====================================================
+datasets:
+  english:
+    path: "datasets/english/"
+    description: "English prose and documents"
+    
+  indic:
+    path: "datasets/indic/"
+    description: "Indic languages (Hindi, Tamil, etc.)"
+    
+  code:
+    path: "datasets/code/"
+    description: "Source code (Python, JS, etc.)"
+    
+  json:
+    path: "datasets/json/"
+    description: "JSON and structured data"
+
+# =====================================================
+# PROBE GENERATION SETTINGS
+# =====================================================
+probes:
+  # Number of synthetic probes to generate per category
+  count_per_category: 500
+  
+  math:
+    enabled: true
+    include_latex: true
+    include_numeric_patterns: true
+    
+  mcq:
+    enabled: true
+    option_styles: ["A/B/C/D", "1/2/3/4", "bullet"]
+    
+  code:
+    enabled: true
+    languages: ["python", "javascript", "java", "cpp", "json"]
+    
+  indic:
+    enabled: true
+    scripts: ["devanagari", "tamil", "telugu", "kannada", "malayalam"]
+
+# =====================================================
+# METRICS CONFIGURATION
+# =====================================================
+metrics:
+  compression:
+    enabled: true
+    
+  fertility:
+    enabled: true
+    
+  speed:
+    enabled: true
+    iterations: 100
+    warmup_iterations: 10
+    
+  code_quality:
+    enabled: true
+
+# =====================================================
+# VALIDATION (BENCHMARK NEUTRALITY)
+# =====================================================
+validation:
+  # Check for benchmark mirroring
+  mirroring_detection:
+    enabled: true
+    sensitivity: "high"  # low, medium, high
+    
+  # Curriculum difficulty analysis
+  curriculum_analysis:
+    enabled: true
+    difficulty_bands: ["easy", "medium", "hard"]
+    
+  # Routing skew detection
+  routing_skew:
+    enabled: true
+    entropy_threshold: 0.8
+
+# =====================================================
+# OUTPUT SETTINGS
+# =====================================================
+output:
+  report_dir: "reports/"
+  format: ["html", "markdown"]
+  include_charts: true
+  include_raw_data: false

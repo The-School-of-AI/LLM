@@ -1,0 +1,138 @@
+<h1>Tokenizer Benchmark Report</h1>
+<p><em>Generated: 2026-02-03 11:42:30</em></p>
+<h2>Compression Metrics</h2>
+
+<style>
+.benchmark-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 20px 0;
+}
+.benchmark-table th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: 600;
+}
+.benchmark-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #e0e0e0;
+}
+.benchmark-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+.benchmark-table tr:hover {
+    background-color: #e8f4f8;
+}
+</style>
+
+<table class="benchmark-table">
+<thead><tr>
+<th>Tokenizer</th>
+<th>tokens_per_byte</th>
+<th>compression_ratio</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>mock</td>
+<td>0.2340</td>
+<td>4.6690</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Fertility Metrics</h2>
+
+<style>
+.benchmark-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 20px 0;
+}
+.benchmark-table th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: 600;
+}
+.benchmark-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #e0e0e0;
+}
+.benchmark-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+.benchmark-table tr:hover {
+    background-color: #e8f4f8;
+}
+</style>
+
+<table class="benchmark-table">
+<thead><tr>
+<th>Tokenizer</th>
+<th>fertility</th>
+<th>num_words</th>
+<th>num_tokens</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>mock</td>
+<td>1.8176</td>
+<td>30557.0000</td>
+<td>55539.0000</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Speed Metrics</h2>
+
+<style>
+.benchmark-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 20px 0;
+}
+.benchmark-table th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: 600;
+}
+.benchmark-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #e0e0e0;
+}
+.benchmark-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+.benchmark-table tr:hover {
+    background-color: #e8f4f8;
+}
+</style>
+
+<table class="benchmark-table">
+<thead><tr>
+<th>Tokenizer</th>
+<th>encode_tokens_per_sec</th>
+<th>decode_tokens_per_sec</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>mock</td>
+<td>29663243.3562</td>
+<td>54819915.1638</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Validation Results</h2><ul>
+<li><strong>probe_neutrality</strong>: ❌ FAIL</li>
+<li><strong>mock_curriculum</strong>: ✅ PASS</li>
+<li><strong>mock_routing</strong>: ✅ PASS</li>
+</ul>

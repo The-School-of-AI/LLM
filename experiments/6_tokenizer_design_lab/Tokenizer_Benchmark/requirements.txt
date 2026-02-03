@@ -1,0 +1,28 @@
+# Tokenizer Benchmark Framework - Dependencies
+
+# Core tokenizers
+tiktoken>=0.5.0          # GPT-4/GPT-4o tokenizer
+transformers>=4.36.0     # Qwen, DeepSeek, LLaMA tokenizers
+sentencepiece>=0.1.99    # SentencePiece support
+tokenizers>=0.15.0       # HuggingFace tokenizers library
+
+# Metrics and analysis
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Reporting
+jinja2>=3.1.0            # HTML report generation
+tabulate>=0.9.0          # Table formatting
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Utilities
+pyyaml>=6.0              # Config file parsing
+tqdm>=4.65.0             # Progress bars
+rich>=13.0.0             # Pretty console output
