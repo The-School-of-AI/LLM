@@ -8,7 +8,6 @@ import pytest
 import sys
 import os
 import tempfile
-from pathlib import Path
 
 # Add src to path
 src_path = os.path.join(os.path.dirname(__file__), '..', 'src')

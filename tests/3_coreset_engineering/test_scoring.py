@@ -1,4 +1,3 @@
-import pytest
 from coreset_engine.scoring.perplexity import DifficultyScorer
 
 def test_difficulty_scorer_defaults():
@@ -10,7 +9,6 @@ def test_difficulty_scorer_defaults():
     
     # CASE 2: Complex/Random Text (Should be HARD -> High Score)
     # Using a sentence with unique words and more entropy
-    complex_text = "The quick brown fox jumps over the lazy dog. Sphinx of black quartz, judge my vow."
     # artificially make it random-ish to ensure high entropy for test
     import random
     random_text = "".join([chr(random.randint(65, 90)) for _ in range(1000)])

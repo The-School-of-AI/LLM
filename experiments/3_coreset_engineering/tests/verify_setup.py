@@ -9,7 +9,6 @@ This script validates:
 4. No duplicate test directories remain
 """
 
-import os
 import sys
 from pathlib import Path
 

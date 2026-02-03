@@ -169,9 +169,6 @@ class TestDeterministicManifestGeneration:
         """Manifest indices must always be sorted."""
         indices = [0, 5, 10, 15, 20]
         
-        # Fingerprinting internally sorts
-        fp = ManifestFingerprinter.compute_indices_fingerprint(indices)
-        
         # Verify indices are in canonical sorted order
         assert indices == sorted(indices)
     
