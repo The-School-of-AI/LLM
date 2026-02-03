@@ -24,6 +24,7 @@ METRICS_CONFIG = str(Path(__file__).parent.parent / "metrics_config.yaml")
 BATCH_SIZE = 5000  # Smaller batch size for memory stability on diverse nodes
 NUM_CPUS = os.cpu_count() or 4
 MAX_INFLIGHT = NUM_CPUS * 2  # Pipeline depth
+MAX_FILES = None  # Set to None for unlimited, or a number to limit the run
 
 # Logging
 logging.basicConfig(
@@ -50,10 +51,8 @@ def process_s3_file(file_path: str) -> dict:
     """Processes a single parquet file directly from S3."""
     fs = s3fs.S3FileSystem()
     
-    # Initialize tagger inside the task to ensure thread safety/isolation
-    # Use a local logger for the remote task
-    task_logger = logging.getLogger(f"Worker-{task_id if 'task_id' in locals() else os.getpid()}")
-    task_logger.info(f"STARTING: {file_path}")
+    # Use print instead of logger for Ray worker visibility
+    print(f"  [Worker {os.getpid()}] STARTING: {file_path}")
     
     try:
         tagger = CurriculumTagger(
@@ -86,7 +85,7 @@ def process_s3_file(file_path: str) -> dict:
         if now - heartbeat_callback.last_log > 10:
             elapsed = now - start_time
             pct = (rows / total_expected_rows) * 100 if total_expected_rows > 0 else 0
-            task_logger.info(f"HEARTBEAT: {file_path} | {rows:,}/{total_expected_rows:,} ({pct:.1f}%) | {elapsed:.0f}s elapsed")
+            print(f"  [Worker {os.getpid()}] HEARTBEAT: {file_path} | {rows:,}/{total_expected_rows:,} ({pct:.1f}%) | {elapsed:.0f}s elapsed")
             heartbeat_callback.last_log = now
 
     try:
@@ -144,10 +143,15 @@ def process_s3_bucket():
 
     logger.info(f"Total files in source: {len(all_inputs)}")
     logger.info(f"Files already processed: {len(all_inputs) - len(to_process)}")
-    logger.info(f"Files to process: {len(to_process)}")
+    
+    if MAX_FILES is not None:
+        to_process = to_process[:MAX_FILES]
+        logger.info(f"Capping processing to {MAX_FILES} files due to MAX_FILES setting.")
+
+    logger.info(f"Files to process in this run: {len(to_process)}")
 
     if not to_process:
-        logger.info("All files are already processed. Exiting.")
+        logger.info("No files to process. Exiting.")
         return
 
     # Distributed Execution with Backpressure
