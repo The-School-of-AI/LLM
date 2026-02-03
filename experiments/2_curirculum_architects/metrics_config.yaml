@@ -48,7 +48,7 @@ metrics:
   - name: tokenizer_difficulty
     class: TokenizerDifficultyMetric
     module: tokenizer_difficulty
-    enabled: true
+    enabled: false
     output: |
       "tokenizer_difficulty": {
         "level": str,
