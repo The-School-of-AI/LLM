@@ -111,7 +111,7 @@ class BandAssignmentMetric(MetricPlugin):
         readability_tags = tags.get("readability", {})
         entropy_tags = tags.get("entropy", {})
         diversity_tags = tags.get("diversity", {})
-        cot_tags = tags.get("cot_scanner", {})
+        diversity_tags = tags.get("diversity", {})
         tokenizer_tags = tags.get("tokenizer_difficulty", {})
         structural_tags = tags.get("structural_density", {})
         
@@ -128,8 +128,9 @@ class BandAssignmentMetric(MetricPlugin):
         tokenizer_level = tokenizer_tags.get("level", "T0")
         structural_density = structural_tags.get("structural_density", 0.0)
         
-        has_cot_trace = cot_tags.get("has_cot", False)
-        has_agentic_trace = cot_tags.get("has_agentic", False)
+        # Extract consolidated reasoning signals from modality
+        has_cot_trace = modality_tags.get("has_cot", False) or modality_tags.get("has_reasoning", False)
+        has_agentic_trace = modality_tags.get("has_agentic", False)
 
         # Legacy Modality Signals (for compatibility)
         has_agentic = modality_tags.get("has_agentic", False)

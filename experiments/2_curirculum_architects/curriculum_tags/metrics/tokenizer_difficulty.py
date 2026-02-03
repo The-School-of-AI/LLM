@@ -12,43 +12,43 @@ class TokenizerDifficultyMetric(MetricPlugin):
 
     name = "tokenizer_difficulty"
 
-    #: Token ID based thresholds adapted from the notebook's curriculum band classifier.
-    #: We expose levels T0-T5 instead of B0-B5.
+    #: Token ID based thresholds calibrated for the current tokenizer.
+    #: Levels T0-T5 correspond to increasing difficulty.
     TOKEN_ID_THRESHOLDS: Dict[str, Dict[str, Any]] = {
         "T0": {
-            "avg_max": 5000,
-            "max_max": 10000,
-            "p95_max": 8000,
+            "avg_max": 6227,
+            "p95_max": 29826,
+            "max_max": 76039,
             "description": "T0: Very high frequency tokens, very simple language",
         },
         "T1": {
-            "avg_max": 10000,
-            "max_max": 20000,
-            "p95_max": 15000,
+            "avg_max": 7295,
+            "p95_max": 36256,
+            "max_max": 87078,
             "description": "T1: High frequency tokens, everyday language",
         },
         "T2": {
-            "avg_max": 20000,
-            "max_max": 40000,
-            "p95_max": 30000,
+            "avg_max": 8493,
+            "p95_max": 43655,
+            "max_max": 94111,
             "description": "T2: Medium frequency, structured knowledge",
         },
         "T3": {
-            "avg_max": 40000,
-            "max_max": 70000,
-            "p95_max": 60000,
+            "avg_max": 9806,
+            "p95_max": 51143,
+            "max_max": 97799,
             "description": "T3: Lower frequency, technical content",
         },
         "T4": {
-            "avg_max": 70000,
-            "max_max": 100000,
-            "p95_max": 90000,
+            "avg_max": 11270,
+            "p95_max": 59242,
+            "max_max": 99616,
             "description": "T4: Low frequency, complex reasoning",
         },
         "T5": {
             "avg_max": float("inf"),
-            "max_max": float("inf"),
             "p95_max": float("inf"),
+            "max_max": float("inf"),
             "description": "T5: Very low frequency, advanced/rare terms",
         },
     }

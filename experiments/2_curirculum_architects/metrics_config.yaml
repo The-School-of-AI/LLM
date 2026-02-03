@@ -80,6 +80,7 @@ metrics:
   - name: cot_scanner
     class: COTScannerMetric
     module: cot_scanner
+    enabled: false
     output: |
       "cot_scanner": {
         "has_cot": bool,
