@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Iterator, Dict, Any, Optional
+from typing import Any, Dict, Iterator, Optional
+
 
 class DataSource(ABC):
     """
