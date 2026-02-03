@@ -8,6 +8,9 @@ import pyarrow.parquet as pq
 
 from curriculum_tags import CurriculumTagger
 
+CSV_OUTPUT_PATH = Path(__file__).parent.parent / "processed_data" / "output.csv"
+REJECTED_CSV_OUTPUT_PATH = Path(__file__).parent.parent / "processed_data" / "rejected.csv"
+
 
 def create_sample_data(output_path: Path, num_samples: int = 100):
     """Create sample parquet file for demonstration."""
@@ -68,16 +71,21 @@ def process_parquet_demo():
             if total % 50 == 0:
                 print(f"   Processed {total} rows...")
 
+        output_csv = CSV_OUTPUT_PATH
         stats = tagger.process_parquet(
             input_path=input_file,
             output_path=output_file,
             batch_size=25,
             progress_callback=progress_callback,
+            output_csv_path=output_csv,
         )
         print("\n4. Processing complete!")
         print(f"   Total rows: {stats['total_rows']}")
         print(f"   Errors: {stats['error_count']}")
         print(f"   Output file: {stats['output_file']}")
+        if "main_csv_path" in stats:
+            print(f"   Main CSV: {stats['main_csv_path']} ({stats.get('main_csv_rows', 0)} rows)")
+            print(f"   Rejected CSV: {stats['rejected_csv_path']} ({stats.get('rejected_csv_rows', 0)} rows)")
 
         # Read and display sample results
         print("\n5. Sample tagged results:")
@@ -95,13 +103,17 @@ def process_parquet_demo():
             tags = row["curriculum_tags"]
             print(f"  Curriculum Version: {tags['version']}")
 
+            if "band_assignment" in tags:
+                ba = tags["band_assignment"]
+                print(f"  Band: {ba.get('band', '—')}")
+
             if "difficulty" in tags:
                 diff = tags["difficulty"]
-                print(f"  Difficulty Band: {diff['band']}")
+                print(f"  Difficulty Level: {diff.get('level', '—')} (score: {diff.get('score', '—')})")
 
             if "modality" in tags:
                 mod = tags["modality"]
-                print(f"  Primary Modality: {mod['primary_modality']}")
+                print(f"  Primary Modality: {mod.get('primary_modality', '—')}")
 
             print("-" * 80)
 

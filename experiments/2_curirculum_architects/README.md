@@ -36,7 +36,7 @@ The tagging system automatically analyzes each document and adds these labels ("
 | **Path** | `experiments/2_curirculum_architects/curriculum_tags/` |
 | **Purpose** | Auto-discovering plugin system that computes curriculum metadata tags for training datasets |
 | **Input Format** | JSONL records in Parquet files (normalized key/value pairs from Team 1) |
-| **Output** | Original Parquet files with added `curriculum_tags` field + separate metadata summary file |
+| **Output** | Original Parquet files with added `curriculum_tags` field + metadata Parquet + **optional flat CSV** (main + rejected log) |
 
 ### Current Metrics (Plugin-Based)
 
@@ -69,6 +69,7 @@ The tagging system automatically analyzes each document and adds these labels ("
 3. Assign curriculum band (B0-B5) based on computed metrics
 4. Write processed files back to S3 with updated tags
 5. Generate separate metadata file for analytics and statistics
+6. **Optional:** Write flat main CSV (uuid, id, file_path, band, other tags, checksum, schema_version) and rejected-files CSV (uuid, id, file_path, reason, details). See [OUTPUT_SCHEMA.md](./OUTPUT_SCHEMA.md).
 
 ### Setup/Dependency
 
@@ -290,6 +291,7 @@ uv run python scripts/s3_loader.py
 | Component | Path |
 |-----------|------|
 | Curriculum Policy | [`curriculum.yaml`](./curriculum.yaml) |
+| Output Schema (CSV) | [`OUTPUT_SCHEMA.md`](./OUTPUT_SCHEMA.md) |
 | Metrics Config | [`metrics_config.yaml`](./metrics_config.yaml) |
 | Tagging Library | [`metrics/README.md`](./curriculum_tags/metrics/README.md) |
 | Data Sampler | [`data_sampler/README.md`](./data_sampler/README.md) |

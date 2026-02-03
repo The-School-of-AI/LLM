@@ -126,7 +126,6 @@ class CurriculumTagger:
         for plugin in self.plugins:
             try:
                 tags = plugin.compute(sample)
-                print(f"id: {sample['id']}, tags: {tags}")
                 sample["curriculum_tags"][plugin.name] = tags
             except Exception as e:
                 sample["curriculum_tags"][plugin.name] = {"error": str(e)}
@@ -142,6 +141,7 @@ class CurriculumTagger:
         output_path: str | Path,
         batch_size: int = 10000,
         progress_callback: Optional[Callable[[int], None]] = None,
+        output_csv_path: Optional[str | Path] = None,
     ) -> Dict[str, Any]:
         """Process parquet file and add curriculum tags.
 
@@ -150,6 +150,7 @@ class CurriculumTagger:
             output_path: Output parquet file
             batch_size: Number of rows per batch
             progress_callback: Optional callback for progress (total_rows)
+            output_csv_path: If set, write flat main CSV and rejected CSV alongside Parquet
 
         Returns:
             Statistics about processing (rows, errors, etc.)
@@ -169,6 +170,7 @@ class CurriculumTagger:
         # Process in batches
         output_batches = []
         metadata_batches = []
+        all_tagged_records: List[Dict[str, Any]] = []
         total_rows = 0
         error_count = 0
 
@@ -191,6 +193,8 @@ class CurriculumTagger:
                     }
                     tagged_records.append(record)
                     error_count += 1
+
+            all_tagged_records.extend(tagged_records)
 
             # Prepare metadata records (id, curriculum_tags)
             for tagged in tagged_records:
@@ -215,11 +219,27 @@ class CurriculumTagger:
         metadata_table = pa.concat_tables(metadata_batches)
         pq.write_table(metadata_table, metadata_path)
 
-        return {
+        result: Dict[str, Any] = {
             "total_rows": total_rows,
             "error_count": error_count,
             "output_file": str(output_path),
         }
+
+        # Optional: write flat CSV (main + rejected)
+        if output_csv_path is not None:
+            from ..output.csv_writer import write_csv_output
+
+            csv_stats = write_csv_output(
+                all_tagged_records,
+                file_path=str(input_path),
+                output_csv_path=Path(output_csv_path),
+            )
+            result["main_csv_path"] = csv_stats["main_csv_path"]
+            result["rejected_csv_path"] = csv_stats["rejected_csv_path"]
+            result["main_csv_rows"] = csv_stats["main_row_count"]
+            result["rejected_csv_rows"] = csv_stats["rejected_row_count"]
+
+        return result
 
     def process_parquet_s3(
         self,
@@ -228,6 +248,7 @@ class CurriculumTagger:
         filesystem,
         batch_size: int = 10000,
         progress_callback: Optional[Callable[[int], None]] = None,
+        output_csv_path: Optional[str | Path] = None,
     ) -> dict:
         """Process S3 parquet file and add curriculum tags + metadata parquet."""
 
@@ -246,6 +267,7 @@ class CurriculumTagger:
 
         output_batches = []
         metadata_batches = []
+        all_tagged_records: List[Dict[str, Any]] = []
         total_rows = 0
         error_count = 0
 
@@ -268,6 +290,8 @@ class CurriculumTagger:
                     }
                     tagged_records.append(record)
                     error_count += 1
+
+            all_tagged_records.extend(tagged_records)
 
             # Prepare metadata records (id, curriculum_tags)
             for tagged in tagged_records:
@@ -300,12 +324,28 @@ class CurriculumTagger:
             pq.write_table(metadata_table, f)
         filesystem.mv(tmp_meta, metadata_path)
 
-        return {
+        result: Dict[str, Any] = {
             "total_rows": total_rows,
             "error_count": error_count,
             "output_file": output_path,
             "metadata_file": metadata_path,
         }
+
+        # Optional: write flat CSV (main + rejected) to local path
+        if output_csv_path is not None:
+            from ..output.csv_writer import write_csv_output
+
+            csv_stats = write_csv_output(
+                all_tagged_records,
+                file_path=input_path,
+                output_csv_path=Path(output_csv_path),
+            )
+            result["main_csv_path"] = csv_stats["main_csv_path"]
+            result["rejected_csv_path"] = csv_stats["rejected_csv_path"]
+            result["main_csv_rows"] = csv_stats["main_row_count"]
+            result["rejected_csv_rows"] = csv_stats["rejected_row_count"]
+
+        return result
 
     def process_batch(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process a batch of samples in memory.
