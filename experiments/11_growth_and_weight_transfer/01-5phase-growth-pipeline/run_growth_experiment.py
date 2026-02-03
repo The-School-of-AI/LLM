@@ -607,7 +607,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             dataloader=dataloader,
             num_steps=phase4_steps,
             start_step=total_steps,
-            learning_rate=config["training"]["learning_rate"] * 0.125,
+            learning_rate=config["training"]["learning_rate"] * 0.5,  # Higher LR for expert specialization
             weight_decay=config["training"]["weight_decay"],
             warmup_steps=50,
             max_grad_norm=config["training"]["max_grad_norm"],
