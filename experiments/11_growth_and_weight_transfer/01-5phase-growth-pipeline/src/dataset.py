@@ -345,6 +345,11 @@ def get_dataloader(
             num_samples=kwargs.get("num_samples", 10000),
         )
         sampler = StatefulSampler(dataset, shuffle=True, seed=seed)
+        # Handle skip_samples for resume
+        if skip_samples > 0:
+            sampler.current_index = skip_samples % len(dataset)
+            sampler.epoch = skip_samples // len(dataset)
+            print(f"  🔄 Resumed DummyDataset at position {sampler.current_index} (epoch {sampler.epoch})")
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
@@ -358,6 +363,11 @@ def get_dataloader(
             vocab_size=kwargs.get("vocab_size", 49152),
         )
         sampler = StatefulSampler(dataset, shuffle=True, seed=seed)
+        # Handle skip_samples for resume
+        if skip_samples > 0:
+            sampler.current_index = skip_samples % len(dataset)
+            sampler.epoch = skip_samples // len(dataset)
+            print(f"  🔄 Resumed TinyShakespeare at position {sampler.current_index} (epoch {sampler.epoch})")
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,

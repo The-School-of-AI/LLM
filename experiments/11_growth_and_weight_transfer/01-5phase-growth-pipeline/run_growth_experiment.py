@@ -31,16 +31,30 @@ from src.dataset import get_dataloader
 from train import train_phase, get_device, save_checkpoint, count_parameters
 
 
-def measure_loss(model, dataloader, device):
-    """Quick forward pass to measure current loss."""
+def measure_loss(model, dataloader, device, fixed_batch=None):
+    """
+    Quick forward pass to measure current loss.
+    
+    Args:
+        model: Model to evaluate
+        dataloader: DataLoader to get batch from (if fixed_batch is None)
+        device: Device to run on
+        fixed_batch: Optional pre-fetched batch to use (for consistent pre/post comparison)
+    
+    Returns:
+        loss value, and the batch used (for reuse in subsequent calls)
+    """
     model.eval()
     with torch.no_grad():
-        batch = next(iter(dataloader))
+        if fixed_batch is None:
+            batch = next(iter(dataloader))
+        else:
+            batch = fixed_batch
         input_ids = batch["input_ids"].to(device)
         labels = batch["labels"].to(device)
         model.to(device)
         output = model(input_ids, labels=labels)
-        return output["loss"].item()
+        return output["loss"].item(), batch
 
 
 def log_transition(name, pre_loss, post_loss, wandb_run=None, step=0):
@@ -399,7 +413,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             start_step = total_steps
         else:
             # Convert dense to MoE
-            pre_moe_loss = measure_loss(model, dataloader, device)
+            pre_moe_loss, comparison_batch = measure_loss(model, dataloader, device)
             
             moe_config = config["growth"]["dense_to_moe"]
             model = dense_to_moe(
@@ -408,7 +422,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
                 num_experts_per_tok=moe_config["num_experts_per_tok"],
             )
             
-            post_moe_loss = measure_loss(model, dataloader, device)
+            post_moe_loss, _ = measure_loss(model, dataloader, device, fixed_batch=comparison_batch)
             results["phase2_delta"] = log_transition("moe_conversion", pre_moe_loss, post_moe_loss, wandb_run, total_steps)
             
             remaining_steps = config["training"]["phase2_steps"]
@@ -453,7 +467,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         print("📌 PHASE 3: Add Ghost Layers + Scale Hidden Dimension")
         print("=" * 70)
         
-        pre_growth_loss = measure_loss(model, dataloader, device)
+        pre_growth_loss, comparison_batch = measure_loss(model, dataloader, device)
         
         # Step 3a: Add ghost layers
         layer_config = config["growth"]["add_layers"]
@@ -475,7 +489,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             noise_scale=dim_config.get("noise_scale", 0.01),
         )
         
-        post_growth_loss = measure_loss(model, dataloader, device)
+        post_growth_loss, _ = measure_loss(model, dataloader, device, fixed_batch=comparison_batch)
         results["phase3_delta"] = log_transition("layers_and_scale", pre_growth_loss, post_growth_loss, wandb_run, total_steps)
         
         phase3_steps = config["training"]["phase3_steps"]
@@ -514,7 +528,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         print("📌 PHASE 4: Expert Explosion (×Experts)")
         print("=" * 70)
         
-        pre_expert_loss = measure_loss(model, dataloader, device)
+        pre_expert_loss, comparison_batch = measure_loss(model, dataloader, device)
         
         expert_config = config["growth"]["add_experts"]
         print(f"\n🔧 Adding {expert_config['num_new_experts']} new experts per layer...")
@@ -524,7 +538,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
             clone_from=expert_config["clone_from"],
         )
         
-        post_expert_loss = measure_loss(model, dataloader, device)
+        post_expert_loss, _ = measure_loss(model, dataloader, device, fixed_batch=comparison_batch)
         results["phase4_delta"] = log_transition("expert_explosion", pre_expert_loss, post_expert_loss, wandb_run, total_steps)
         
         phase4_steps = config["training"]["phase4_steps"]
@@ -571,7 +585,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     # This proves YaRN didn't break the model's existing brain
     # -------------------------------------------------------------------------
     print("\n📋 Step 1: 'Do No Harm' Check (short context)")
-    pre_yarn_short_loss = measure_loss(model, dataloader, device)
+    pre_yarn_short_loss, comparison_batch = measure_loss(model, dataloader, device)
     print(f"  Pre-YaRN loss (256 context): {pre_yarn_short_loss:.4f}")
     
     # Apply YaRN context scaling
@@ -586,7 +600,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         beta=context_config.get("beta", 32.0),
     )
     
-    post_yarn_short_loss = measure_loss(model, dataloader, device)
+    post_yarn_short_loss, _ = measure_loss(model, dataloader, device, fixed_batch=comparison_batch)
     print(f"  Post-YaRN loss (256 context): {post_yarn_short_loss:.4f}")
     
     yarn_delta = post_yarn_short_loss - pre_yarn_short_loss
@@ -610,7 +624,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     )
     
     # Measure starting loss on LONG context (expected to be higher initially)
-    initial_long_loss = measure_loss(model, long_dataloader, device)
+    initial_long_loss, long_comparison_batch = measure_loss(model, long_dataloader, device)
     print(f"  Initial long context loss: {initial_long_loss:.4f} (expected higher)")
     
     phase5_steps = config["training"]["phase5_steps"]
@@ -643,7 +657,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     # STEP 3: "Capability" Check - Prove the model can now handle long context
     # -------------------------------------------------------------------------
     print("\n📋 Step 3: 'Capability' Check (long context)")
-    final_long_loss = measure_loss(model, long_dataloader, device)
+    final_long_loss, _ = measure_loss(model, long_dataloader, device, fixed_batch=long_comparison_batch)
     print(f"  Final long context loss: {final_long_loss:.4f}")
     
     capability_gain = initial_long_loss - final_long_loss
