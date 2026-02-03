@@ -10,7 +10,8 @@
         "iam:GetRole",
         "iam:AttachRolePolicy",
         "iam:DetachRolePolicy",
-        "iam:PassRole"
+        "iam:PassRole",
+        "iam:TagRole"
       ],
       "Resource": "arn:aws:iam::*:role/telegram-*"
     },
@@ -23,7 +24,8 @@
         "lambda:UpdateFunctionConfiguration",
         "lambda:DeleteFunction",
         "lambda:GetFunction",
-        "lambda:AddPermission"
+        "lambda:AddPermission",
+        "lambda:TagResource"
       ],
       "Resource": "arn:aws:lambda:*:*:function:telegram-*"
     },
@@ -34,7 +36,8 @@
         "sns:CreateTopic",
         "sns:DeleteTopic",
         "sns:Subscribe",
-        "sns:Publish"
+        "sns:Publish",
+        "sns:TagResource"
       ],
       "Resource": "arn:aws:sns:*:*:telegram-*"
     },
@@ -44,7 +47,8 @@
       "Action": [
         "cloudwatch:PutMetricAlarm",
         "cloudwatch:DeleteAlarms",
-        "cloudwatch:DescribeAlarms"
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:TagResource"
       ],
       "Resource": "*"
     },

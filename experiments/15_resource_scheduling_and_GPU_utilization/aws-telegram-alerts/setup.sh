@@ -25,6 +25,11 @@ SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-alerts}"
 LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-alert-forwarder}"
 LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-lambda-execution-role}"
 
+# Tags
+TAG_TEAM="Team15"
+TAG_TASK_ID="Issue339"
+TAG_WORKLOAD_TYPE="Monitoring"
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -73,7 +78,9 @@ if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" &>/dev/null; then
         "Principal": {"Service": "lambda.amazonaws.com"},
         "Action": "sts:AssumeRole"
       }]
-    }' > /dev/null
+    }' \
+    --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
+    > /dev/null
 
   aws iam attach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
@@ -208,6 +215,7 @@ else
     --timeout 30 \
     --memory-size 128 \
     --environment "Variables={TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}}" \
+    --tags Team=${TAG_TEAM},TaskId=${TAG_TASK_ID},WorkloadType=${TAG_WORKLOAD_TYPE} \
     --region "${AWS_REGION}" > /dev/null
 
   aws lambda wait function-active --function-name "${LAMBDA_FUNCTION_NAME}" --region "${AWS_REGION}"
@@ -221,7 +229,12 @@ LAMBDA_ARN="arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${LAMBDA_FUN
 #######################################
 log_info "Checking SNS topic..."
 
-SNS_TOPIC_ARN=$(aws sns create-topic --name "${SNS_TOPIC_NAME}" --region "${AWS_REGION}" --query 'TopicArn' --output text)
+SNS_TOPIC_ARN=$(aws sns create-topic \
+  --name "${SNS_TOPIC_NAME}" \
+  --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
+  --region "${AWS_REGION}" \
+  --query 'TopicArn' \
+  --output text)
 
 # Add Lambda permission (ignore if exists)
 aws lambda add-permission \
@@ -290,6 +303,7 @@ else
       --alarm-actions "${SNS_TOPIC_ARN}" \
       --ok-actions "${SNS_TOPIC_ARN}" \
       --treat-missing-data "notBreaching" \
+      --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
       --region "${AWS_REGION}"
 
     ((NEW_COUNT++))

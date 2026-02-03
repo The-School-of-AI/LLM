@@ -95,6 +95,5 @@ Time: 03-Feb-2026 09:30:45 PM IST
 # Specific account
 AWS_PROFILE=production ./teardown.sh
 ```
-
 ## References
 [How to get Telegram Bot Chat ID](https://gist.github.com/nafiesl/4ad622f344cd1dc3bb1ecbe468ff9f8a)
