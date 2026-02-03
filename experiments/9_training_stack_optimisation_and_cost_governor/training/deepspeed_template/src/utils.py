@@ -27,7 +27,7 @@ def set_seed(seed: int) -> None:
 def is_main_process() -> bool:
     """
     Check if current process is the main process (rank 0).
-    
+
     Returns:
         True if this is the main process or not in distributed mode, False otherwise
     """
@@ -41,7 +41,7 @@ def is_main_process() -> bool:
 def print_rank_0(*args, **kwargs):
     """
     Print only from rank 0 process.
-    
+
     This prevents duplicate output in multi-GPU setups.
     """
     if is_main_process():

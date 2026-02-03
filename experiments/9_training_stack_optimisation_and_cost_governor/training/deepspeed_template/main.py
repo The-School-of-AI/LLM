@@ -9,10 +9,10 @@ All configuration is loaded from config.yaml by default.
 Usage:
     # Run with default config.yaml
     deepspeed main.py
-    
+
     # Run with custom config file
     deepspeed main.py --config config/my_config.yaml
-    
+
     # Multi-GPU training (specify number of GPUs)
     deepspeed --num_gpus=4 main.py
 
@@ -29,80 +29,86 @@ import argparse
 import os
 from typing import Any, Dict
 
-import deepspeed
 import torch
 import yaml
 
+import deepspeed
+from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
 from src.model import get_qwen2_moe_model
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
-from aws.config import S3Config
 
 
 class Config:
     """Configuration object that mimics argparse Namespace for compatibility."""
-    
+
     def __init__(self, config_dict: Dict[str, Any]):
         """Initialize config from dictionary."""
         # Data configuration
-        self.dataset_name = config_dict['data']['dataset_name']
-        self.dataset_config = config_dict['data']['dataset_config']
-        self.batch_size = config_dict['data']['batch_size']
-        self.max_length = config_dict['data']['max_length']
-        
+        self.dataset_name = config_dict["data"]["dataset_name"]
+        self.dataset_config = config_dict["data"]["dataset_config"]
+        self.batch_size = config_dict["data"]["batch_size"]
+        self.max_length = config_dict["data"]["max_length"]
+
         # Training configuration
-        self.num_epochs = config_dict['training']['num_epochs']
-        self.max_train_steps = config_dict['training']['max_train_steps']
-        self.max_eval_steps = config_dict['training']['max_eval_steps']
-        self.log_interval = config_dict['training']['log_interval']
-        self.seed = config_dict['training']['seed']
-        
+        self.num_epochs = config_dict["training"]["num_epochs"]
+        self.max_train_steps = config_dict["training"]["max_train_steps"]
+        self.max_eval_steps = config_dict["training"]["max_eval_steps"]
+        self.log_interval = config_dict["training"]["log_interval"]
+        self.seed = config_dict["training"]["seed"]
+
         # DeepSpeed configuration
-        self.deepspeed_config = config_dict['deepspeed']['config_path']
-        self.local_rank = config_dict['deepspeed']['local_rank']
-        
+        self.deepspeed_config = config_dict["deepspeed"]["config_path"]
+        self.local_rank = config_dict["deepspeed"]["local_rank"]
+
         # Model configuration
-        self.tokenizer_name = config_dict['model'].get('tokenizer_name', 'Qwen/Qwen2.5-0.5B')
-        self.model_name = config_dict['model'].get('model_name', 'distilgpt2')
-        
+        self.tokenizer_name = config_dict["model"].get(
+            "tokenizer_name", "Qwen/Qwen2.5-0.5B"
+        )
+        self.model_name = config_dict["model"].get("model_name", "distilgpt2")
+
         # Checkpoint configuration
-        self.output_dir = config_dict['checkpoint']['output_dir']
-        self.save_checkpoint = config_dict['checkpoint']['save_checkpoint']
-        self.checkpoint_interval = config_dict['checkpoint']['checkpoint_interval']
-        self.keep_last_n_checkpoints = config_dict['checkpoint']['keep_last_n_checkpoints']
-        self.resume_from_checkpoint = config_dict['checkpoint']['resume_from_checkpoint']
-        self.resume_step = config_dict['checkpoint']['resume_step']
-        
+        self.output_dir = config_dict["checkpoint"]["output_dir"]
+        self.save_checkpoint = config_dict["checkpoint"]["save_checkpoint"]
+        self.checkpoint_interval = config_dict["checkpoint"]["checkpoint_interval"]
+        self.keep_last_n_checkpoints = config_dict["checkpoint"][
+            "keep_last_n_checkpoints"
+        ]
+        self.resume_from_checkpoint = config_dict["checkpoint"][
+            "resume_from_checkpoint"
+        ]
+        self.resume_step = config_dict["checkpoint"]["resume_step"]
+
         # S3 configuration
-        self.use_s3 = config_dict['s3']['enabled']
-        self.s3_bucket = config_dict['s3']['bucket']
-        self.s3_prefix = config_dict['s3']['prefix']
-        self.s3_region = config_dict['s3']['region']
-        self.cleanup_after_upload = config_dict['s3']['cleanup_after_upload']
-        
+        self.use_s3 = config_dict["s3"]["enabled"]
+        self.s3_bucket = config_dict["s3"]["bucket"]
+        self.s3_prefix = config_dict["s3"]["prefix"]
+        self.s3_region = config_dict["s3"]["region"]
+        self.cleanup_after_upload = config_dict["s3"]["cleanup_after_upload"]
+
         # Generation configuration
-        self.test_generation = config_dict['generation']['test_generation']
-        self.generation_prompt = config_dict['generation']['generation_prompt']
+        self.test_generation = config_dict["generation"]["test_generation"]
+        self.generation_prompt = config_dict["generation"]["generation_prompt"]
 
 
 def load_config(config_path: str = "config.yaml") -> Config:
     """
     Load configuration from YAML file.
-    
+
     Args:
         config_path: Path to the YAML configuration file
-        
+
     Returns:
         Config object with all training parameters
     """
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
-    
-    with open(config_path, 'r') as f:
+
+    with open(config_path, "r") as f:
         config_dict = yaml.safe_load(f)
-    
+
     return Config(config_dict)
 
 
@@ -130,10 +136,10 @@ def main():
     """Main training pipeline."""
     # Parse command line args (only --config and --local_rank)
     cmd_args = parse_args()
-    
+
     # Load configuration from YAML
     args = load_config(cmd_args.config)
-    
+
     # Override local_rank if provided via command line (DeepSpeed launcher sets this)
     if cmd_args.local_rank != -1:
         args.local_rank = cmd_args.local_rank
@@ -199,8 +205,12 @@ def main():
     )
     print_rank_0("  DeepSpeed engine initialized")
     print_rank_0(f"  Device: {model_engine.device}")
-    print_rank_0(f"  Global Rank: {torch.distributed.get_rank() if torch.distributed.is_initialized() else 0}")
-    print_rank_0(f"  World Size: {torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1}")
+    print_rank_0(
+        f"  Global Rank: {torch.distributed.get_rank() if torch.distributed.is_initialized() else 0}"
+    )
+    print_rank_0(
+        f"  World Size: {torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1}"
+    )
 
     # ========================================
     # Step 3.5: Initialize Checkpoint Manager
@@ -210,7 +220,7 @@ def main():
         print_rank_0("\n[3.5/5] Initializing S3 Checkpoint Manager...")
         if not args.s3_bucket:
             raise ValueError("--s3_bucket is required when --use_s3 is enabled")
-        
+
         s3_config = S3Config(
             bucket_name=args.s3_bucket,
             s3_prefix=args.s3_prefix,
@@ -221,14 +231,14 @@ def main():
         )
         checkpoint_manager = S3CheckpointManager(s3_config)
         print_rank_0("  S3 Checkpoint Manager initialized")
-    
+
     # ========================================
     # Step 3.6: Resume from Checkpoint
     # ========================================
     start_epoch = 0
     start_step = 0
     global_step = 0
-    
+
     if args.resume_from_checkpoint:
         print_rank_0("\n[3.6/5] Resuming from checkpoint...")
         try:
@@ -236,25 +246,24 @@ def main():
                 # Use S3CheckpointManager for resume
                 resume_step = args.resume_step if args.resume_step else 0
                 client_state = checkpoint_manager.load_checkpoint(
-                    model_engine,
-                    step=resume_step,
-                    tag=args.resume_from_checkpoint
+                    model_engine, step=resume_step, tag=args.resume_from_checkpoint
                 )
             else:
                 # Use local checkpoint loading
                 from src.train import load_checkpoint
+
                 client_state = load_checkpoint(
-                    model_engine,
-                    args.output_dir,
-                    tag=args.resume_from_checkpoint
+                    model_engine, args.output_dir, tag=args.resume_from_checkpoint
                 )
-            
+
             # Restore training state from client_state
             if client_state:
-                start_epoch = client_state.get('epoch', 0)
-                start_step = client_state.get('step', 0)
-                global_step = client_state.get('global_step', 0)
-                print_rank_0(f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}")
+                start_epoch = client_state.get("epoch", 0)
+                start_step = client_state.get("step", 0)
+                global_step = client_state.get("global_step", 0)
+                print_rank_0(
+                    f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}"
+                )
             else:
                 print_rank_0("  ⚠️  No client state found, starting fresh")
         except Exception as e:
@@ -267,7 +276,7 @@ def main():
     print_rank_0("\n[4/5] Training...")
     print_rank_0(f"Checkpoint interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"Starting from epoch {start_epoch}, global step {global_step}")
-    
+
     for epoch in range(start_epoch, args.num_epochs):
         print_rank_0(f"\n{'='*80}")
         print_rank_0(f"Epoch {epoch + 1}/{args.num_epochs}")
@@ -295,30 +304,31 @@ def main():
         eval_loss, eval_perplexity = evaluate(
             model_engine, eval_loader, phase="Validation", max_steps=args.max_eval_steps
         )
-        
+
         # Save epoch checkpoint
         if checkpoint_manager or args.save_checkpoint:
             epoch_tag = f"epoch{epoch}_end"
             print_rank_0("\nSaving end-of-epoch checkpoint...")
-            
+
             client_state = {
-                'epoch': epoch + 1,  # Next epoch to start from
-                'step': 0,
-                'global_step': global_step,
-                'avg_loss': avg_loss,
-                'eval_loss': eval_loss,
-                'eval_perplexity': eval_perplexity,
+                "epoch": epoch + 1,  # Next epoch to start from
+                "step": 0,
+                "global_step": global_step,
+                "avg_loss": avg_loss,
+                "eval_loss": eval_loss,
+                "eval_perplexity": eval_perplexity,
             }
-            
+
             if checkpoint_manager:
                 checkpoint_manager.save_checkpoint(
                     model_engine,
                     step=global_step,
                     tag=epoch_tag,
-                    client_state=client_state
+                    client_state=client_state,
                 )
             else:
                 from src.train import save_checkpoint
+
                 save_checkpoint(model_engine, args.output_dir, tag=epoch_tag)
 
     # ========================================
@@ -340,33 +350,31 @@ def main():
     # Save final checkpoint
     if args.save_checkpoint or checkpoint_manager:
         print_rank_0("\nSaving final checkpoint...")
-        
+
         client_state = {
-            'epoch': args.num_epochs,
-            'step': 0,
-            'global_step': global_step,
-            'test_loss': test_loss,
-            'test_perplexity': test_perplexity,
-            'training_complete': True,
+            "epoch": args.num_epochs,
+            "step": 0,
+            "global_step": global_step,
+            "test_loss": test_loss,
+            "test_perplexity": test_perplexity,
+            "training_complete": True,
         }
-        
+
         if checkpoint_manager:
             checkpoint_manager.save_checkpoint(
-                model_engine,
-                step=global_step,
-                tag="final",
-                client_state=client_state
+                model_engine, step=global_step, tag="final", client_state=client_state
             )
             # Wait for all uploads to complete
             print_rank_0("\nWaiting for S3 uploads to complete...")
             checkpoint_manager.wait_for_uploads()
-            
+
             # Cleanup old checkpoints
             if args.keep_last_n_checkpoints > 0:
                 print_rank_0("\nCleaning up old checkpoints...")
                 checkpoint_manager.cleanup_old_checkpoints()
         else:
             from src.train import save_checkpoint
+
             save_checkpoint(model_engine, args.output_dir, tag="final")
 
     # Summary

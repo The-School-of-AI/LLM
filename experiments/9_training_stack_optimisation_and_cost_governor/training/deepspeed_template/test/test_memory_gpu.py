@@ -1,27 +1,32 @@
 # test_memory_safe.py
-import torch
 import gc
 
+import torch
+
 from src.model import get_qwen2_moe_model
+
 
 def print_memory(stage):
     allocated = torch.cuda.memory_allocated() / 1e9
     reserved = torch.cuda.memory_reserved() / 1e9
-    print(f"{stage:30s} | Allocated: {allocated:5.2f} GB | Reserved: {reserved:5.2f} GB")
+    print(
+        f"{stage:30s} | Allocated: {allocated:5.2f} GB | Reserved: {reserved:5.2f} GB"
+    )
+
 
 # Clear memory
 torch.cuda.empty_cache()
 gc.collect()
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("Memory Test for Ultra-Safe MoE on T4 (16GB)")
-print("="*70 + "\n")
+print("=" * 70 + "\n")
 
 print_memory("Initial")
 
 # Create model using the MoE model from src/model.py
 print("\nCreating model...")
-model = get_qwen2_moe_model(device='cuda', print_info=True)
+model = get_qwen2_moe_model(device="cuda", print_info=True)
 print_memory("After model load (with gradient checkpointing)")
 
 # Create input
@@ -42,7 +47,7 @@ print_memory("After backward pass")
 
 # Peak memory
 peak = torch.cuda.max_memory_allocated() / 1e9
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print(f"PEAK GPU MEMORY: {peak:.2f} GB")
 print("AVAILABLE ON T4: 16.00 GB")
 print(f"HEADROOM: {16.0 - peak:.2f} GB")
@@ -56,4 +61,4 @@ elif peak < 15.0:
 else:
     print("❌ UNSAFE - Will likely OOM")
 
-print("="*70 + "\n")
+print("=" * 70 + "\n")

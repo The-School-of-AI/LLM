@@ -11,9 +11,18 @@ from tqdm import tqdm
 from .utils import is_main_process, print_rank_0
 
 
-def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=10, 
-                checkpoint_interval=None, output_dir=None, checkpoint_manager=None,
-                start_step=0, global_step=0):
+def train_epoch(
+    model_engine,
+    train_loader,
+    epoch,
+    max_steps=None,
+    log_interval=10,
+    checkpoint_interval=None,
+    output_dir=None,
+    checkpoint_manager=None,
+    start_step=0,
+    global_step=0,
+):
     """
     Train the model for one epoch.
 
@@ -38,16 +47,14 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
 
     # Only show progress bar on main process
     progress_bar = tqdm(
-        train_loader, 
-        desc=f"Epoch {epoch}",
-        disable=not is_main_process()
+        train_loader, desc=f"Epoch {epoch}", disable=not is_main_process()
     )
 
     for i, batch in enumerate(progress_bar):
         # Skip steps if resuming
         if i < start_step:
             continue
-        
+
         # Move batch to device
         input_ids = batch["input_ids"].to(model_engine.device)
         attention_mask = batch["attention_mask"].to(model_engine.device)
@@ -69,32 +76,38 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
         global_step += 1
 
         # Update progress bar
-        progress_bar.set_postfix({"loss": f"{loss.item():.4f}", "global_step": global_step})
+        progress_bar.set_postfix(
+            {"loss": f"{loss.item():.4f}", "global_step": global_step}
+        )
 
         # Log periodically
         if i % log_interval == 0:
-            print_rank_0(f"Epoch {epoch}, Step {i}, Global Step {global_step}, Loss: {loss.item():.4f}")
+            print_rank_0(
+                f"Epoch {epoch}, Step {i}, Global Step {global_step}, Loss: {loss.item():.4f}"
+            )
 
         # Save checkpoint periodically
         if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:
             checkpoint_tag = f"epoch{epoch}_step{i+1}"
-            print_rank_0(f"\nSaving checkpoint at epoch {epoch}, step {i+1}, global_step {global_step}...")
-            
+            print_rank_0(
+                f"\nSaving checkpoint at epoch {epoch}, step {i+1}, global_step {global_step}..."
+            )
+
             # Client state to save with checkpoint
             client_state = {
-                'epoch': epoch,
-                'step': i + 1,
-                'global_step': global_step,
-                'loss': loss.item(),
+                "epoch": epoch,
+                "step": i + 1,
+                "global_step": global_step,
+                "loss": loss.item(),
             }
-            
+
             if checkpoint_manager:
                 # Use S3CheckpointManager (will upload to S3 in background)
                 checkpoint_manager.save_checkpoint(
                     model_engine,
                     step=global_step,
                     tag=checkpoint_tag,
-                    client_state=client_state
+                    client_state=client_state,
                 )
             elif output_dir:
                 # Use basic checkpoint saving
@@ -129,11 +142,7 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     steps = 0
 
     # Only show progress bar on main process
-    progress_bar = tqdm(
-        data_loader, 
-        desc=phase,
-        disable=not is_main_process()
-    )
+    progress_bar = tqdm(data_loader, desc=phase, disable=not is_main_process())
 
     with torch.no_grad():
         for i, batch in enumerate(progress_bar):
@@ -163,7 +172,9 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     avg_loss = total_loss / steps
     avg_perplexity = total_perplexity / steps
 
-    print_rank_0(f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}")
+    print_rank_0(
+        f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}"
+    )
 
     return avg_loss, avg_perplexity
 
@@ -230,7 +241,9 @@ def generate_text(
             else ""
         )
 
-        print_rank_0(f"\nGenerated {output_ids.shape[1] - input_ids.shape[1]} new tokens")
+        print_rank_0(
+            f"\nGenerated {output_ids.shape[1] - input_ids.shape[1]} new tokens"
+        )
         print_rank_0(f"\nFull Output:\n{full_output}")
         print_rank_0(f"\nGenerated Continuation:\n{generated_text}")
     else:

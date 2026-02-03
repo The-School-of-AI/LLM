@@ -21,9 +21,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 import torch
+from transformers import AutoModelForCausalLM
+
 from src.data import get_tokenizer, preprocess_function
 from src.utils import set_seed
-from transformers import AutoModelForCausalLM
 
 # Get project root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -256,9 +257,7 @@ class TestZeROConfigurationDetails:
     def test_gradient_accumulation_configured(self):
         """Verify gradient accumulation is properly configured."""
         for config_name in ["zero-2.json", "zero-3.json"]:
-            with open(
-                os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}"), "r"
-            ) as f:
+            with open(os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}"), "r") as f:
                 config = json.load(f)
 
             assert "gradient_accumulation_steps" in config
@@ -269,9 +268,7 @@ class TestZeROConfigurationDetails:
     def test_gradient_clipping_configured(self):
         """Verify gradient clipping is configured."""
         for config_name in ["zero-2.json", "zero-3.json"]:
-            with open(
-                os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}"), "r"
-            ) as f:
+            with open(os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}"), "r") as f:
                 config = json.load(f)
 
             assert "gradient_clipping" in config

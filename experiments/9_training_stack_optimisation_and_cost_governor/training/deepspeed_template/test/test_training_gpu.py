@@ -17,7 +17,7 @@ Usage:
 
     # Run specific test
     pytest test_training_gpu.py::test_zero_stage2_config -v
-    
+
 Note: Most tests use @pytest.mark.skipif to automatically skip when CUDA is unavailable.
 For CPU-only testing, use test_training_cpu.py instead.
 """
@@ -31,13 +31,14 @@ import tempfile
 # Add parent directory to path to import src modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import deepspeed
 import pytest
 import torch
+from transformers import AutoModelForCausalLM
+
+import deepspeed
 from src.data import get_tokenizer
 from src.train import evaluate, save_checkpoint, train_epoch
 from src.utils import set_seed
-from transformers import AutoModelForCausalLM
 
 # Get project root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -181,9 +182,7 @@ class TestDeepSpeedInitialization:
         # Create minimal args
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -213,9 +212,7 @@ class TestDeepSpeedInitialization:
         # Create minimal args
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "deepspeed/zero-3.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-3.json")
 
         args = Args()
 
@@ -246,9 +243,7 @@ class TestTrainingLoop:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -281,9 +276,7 @@ class TestTrainingLoop:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -318,9 +311,7 @@ class TestTrainingLoop:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -369,9 +360,7 @@ class TestCheckpointing:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -412,9 +401,7 @@ class TestZeROMemoryEfficiency:
         # Initialize with ZeRO Stage 2
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 

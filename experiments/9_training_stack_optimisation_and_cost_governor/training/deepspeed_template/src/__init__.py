@@ -8,13 +8,8 @@ This package contains modules for training language models with DeepSpeed:
 """
 
 from .data import get_dataloaders, get_tokenizer
-from .train import (
-    evaluate,
-    generate_text,
-    load_checkpoint,
-    save_checkpoint,
-    train_epoch,
-)
+from .train import (evaluate, generate_text, load_checkpoint, save_checkpoint,
+                    train_epoch)
 from .utils import set_seed
 
 __all__ = [
