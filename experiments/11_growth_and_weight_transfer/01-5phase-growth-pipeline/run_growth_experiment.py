@@ -142,6 +142,54 @@ def find_latest_checkpoint(save_dir: str, config: dict = None) -> Tuple[Optional
     return latest_ckpt, latest_phase, latest_step, phase_complete
 
 
+def save_results(results: dict, save_dir: str = "./checkpoints"):
+    """Save experiment results to JSON for persistence across resumes."""
+    import json
+    os.makedirs(save_dir, exist_ok=True)
+    results_path = os.path.join(save_dir, "experiment_results.json")
+    with open(results_path, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"  📊 Saved results to {results_path}")
+
+
+def load_results(save_dir: str = "./checkpoints") -> dict:
+    """Load experiment results from JSON file."""
+    import json
+    results_path = os.path.join(save_dir, "experiment_results.json")
+    if os.path.exists(results_path):
+        with open(results_path, "r") as f:
+            results = json.load(f)
+        print(f"  📊 Loaded previous results from {results_path}")
+        return results
+    return {}
+
+
+def setup_logging(save_dir: str = "./checkpoints"):
+    """Setup file-based logging alongside console output."""
+    import logging
+    import sys
+    
+    os.makedirs(save_dir, exist_ok=True)
+    log_path = os.path.join(save_dir, "experiment.log")
+    
+    # Create a custom logger
+    logger = logging.getLogger("experiment")
+    logger.setLevel(logging.INFO)
+    
+    # File handler (append mode)
+    file_handler = logging.FileHandler(log_path, mode='a')
+    file_handler.setFormatter(logging.Formatter('%(asctime)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+    
+    # Stream handler (console)
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(logging.Formatter('%(message)s'))
+    
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    
+    return logger, log_path
+
+
 def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False, resume_phase: int = 0, resume_checkpoint_path: str = None):
     """Run the full 5-phase growth experiment.
     
@@ -197,13 +245,18 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         except ImportError:
             print("⚠️  WandB not installed. Skipping logging.")
     
+    # Setup file-based logging
+    save_dir = config["training"]["save_dir"]
+    _, log_path = setup_logging(save_dir)
+    print(f"📝 Logging to: {log_path}")
+    
     # Create dataloader (will be recreated with skip_samples if resuming)
     skip_samples = 0  # Will be set from checkpoint if resuming
     dataloader = None
     dataset = None
     
     total_steps = 0
-    results = {}
+    results = load_results(save_dir)  # Load previous results if any
     model = None  # Will be set based on resume_phase
     
     # =========================================================================
@@ -393,6 +446,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         
         total_steps = phase1_steps  # Phase 1 ends at phase1_steps
         print(f"\n✅ Phase 1 complete! Loss: {phase1_loss:.4f}")
+        save_results(results, save_dir)
     
     # =========================================================================
     # PHASE 2: Dense → MoE
@@ -455,6 +509,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         
         total_steps = config["training"]["phase1_steps"] + config["training"]["phase2_steps"]
         print(f"\n✅ Phase 2 complete! Loss: {phase2_loss:.4f}")
+        save_results(results, save_dir)
         
         # Clear memory
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
@@ -516,6 +571,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         total_steps += phase3_steps
         results["phase3_loss"] = phase3_loss
         print(f"\n✅ Phase 3 complete! Loss: {phase3_loss:.4f}")
+        save_results(results, save_dir)
         
         # Clear memory
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
@@ -565,6 +621,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         total_steps += phase4_steps
         results["phase4_loss"] = phase4_loss
         print(f"\n✅ Phase 4 complete! Loss: {phase4_loss:.4f}")
+        save_results(results, save_dir)
     
     # =========================================================================
     # PHASE 5: YaRN Context Extension ("Sandwich Protocol")
@@ -672,6 +729,7 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
     print("\n✅ Phase 5 complete!")
     print(f"  Short context preserved: {yarn_delta:+.4f}")
     print(f"  Long context capability: {initial_long_loss:.4f} → {final_long_loss:.4f} ({capability_gain:+.4f})")
+    save_results(results, save_dir)
     
     # =========================================================================
     # SUMMARY
