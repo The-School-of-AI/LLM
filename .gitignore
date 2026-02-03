@@ -136,3 +136,7 @@ logs/
 *.pt 
 *.pth*.pem
 xyz.pem
+*.pth
+
+# macOS specific files
+*.DS_Store
