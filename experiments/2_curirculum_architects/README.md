@@ -253,9 +253,9 @@ A **convenience tool** for exploring and sampling large datasets stored in AWS S
 
 - 🎲 Random sampling from S3 buckets
 - 🔍 Filtering by filename patterns (regex) and folder paths
-- 📊 Preview Parquet and JSONL files (S3 and local)
+- 📊 TODO: Preview Parquet and JSONL files (S3 and local)
 - 💾 Download with configurable limits
-- 🌐 Web interface (dark-themed UI)
+- 🌐 TODO:Web interface (dark-themed UI)
 - 🔓 Support for public S3 buckets (anonymous access)
 
 | Attribute | Details |
