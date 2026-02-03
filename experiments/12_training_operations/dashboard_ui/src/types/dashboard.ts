@@ -20,6 +20,7 @@ export interface RunStatus {
   tokensProcessed: number;
   wallClockRuntimeSeconds: number;
   lastUpdated: string; // ISO timestamp
+  source: string; // e.g. "Team 12 Cluster", "Auto-Recover"
 }
 
 export type RoutingHealth = 'OK' | 'DEGRADED' | 'UNKNOWN';
@@ -65,6 +66,7 @@ export interface Incident {
   timestamp: string;
   status: IncidentStatus;
   escalationTarget: string;
+  source: string; // e.g. "Watchdog", "SRE"
 }
 
 export type DriftStatus =

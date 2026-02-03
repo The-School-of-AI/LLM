@@ -26,14 +26,15 @@ export const handlers = [
         const now = new Date();
 
         const status: RunStatus = {
-            runId: 'run-v4-7b-ctx8k',
-            modelName: 'Llama-3-70b-v4',
+            runId: 'lightning-70b-sft-v1',
+            modelName: 'Lightning-70B',
             phase: 'post-train',
             state: 'RUNNING',
             currentStep: currentStep,
             tokensProcessed: currentStep * 4096 * 16, // Assuming 4k context * 16 BS
             wallClockRuntimeSeconds: (now.getTime() - startTime) / 1000,
             lastUpdated: now.toISOString(),
+            source: 'Team 12 Training Cluster (US-East)'
         };
         return HttpResponse.json(status);
     }),
@@ -78,7 +79,8 @@ export const handlers = [
                 eventType: 'Throughput degradation',
                 timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
                 status: 'RESOLVED',
-                escalationTarget: 'On-call (M. Smith)'
+                escalationTarget: 'On-call (M. Smith)',
+                source: 'Automated Watchdog'
             }
         ];
         return HttpResponse.json({ incidents }); // Note: Dashboard expects array directly or inside object? Let's check logic.

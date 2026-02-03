@@ -1,67 +1,69 @@
 import React from 'react';
-import type { Incident, IncidentSeverity, IncidentStatus } from '../../types/dashboard';
+import type { Incident } from '../../types/dashboard';
+import { AlertTriangle, CheckCircle, PauseCircle, ShieldAlert } from 'lucide-react';
 import { formatDateTime } from '../../utils/time';
-import { AlertOctagon, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
-import './Incidents.css';
 
 interface IncidentsProps {
     incidents: Incident[];
 }
 
-const SeverityBadge: React.FC<{ severity: IncidentSeverity }> = ({ severity }) => {
-    const colorClass = clsx({
-        'bg-danger': severity === 'SEV-1',
-        'bg-warning': severity === 'SEV-2',
-        'bg-primary': severity === 'SEV-3', // using primary (blue) for low severity
+const SeverityBadge: React.FC<{ severity: string }> = ({ severity }) => {
+    const badgeClass = clsx({
+        'badge-danger': severity === 'SEV-1',
+        'badge-warning': severity === 'SEV-2',
+        'badge-neutral': severity === 'SEV-3',
     });
-    return (
-        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold text-white ${colorClass}`}>
-            {severity}
-        </span>
-    );
+    return <span className={`badge ${badgeClass}`}>{severity}</span>;
 };
 
-const StatusIcon: React.FC<{ status: IncidentStatus }> = ({ status }) => {
-    switch (status) {
-        case 'OPEN': return <AlertCircle size={16} className="text-danger" />;
-        case 'PAUSED': return <Clock size={16} className="text-warning" />;
-        case 'RESOLVED': return <CheckCircle size={16} className="text-success" />;
-        default: return <Clock size={16} className="text-muted" />;
-    }
-}
+const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
+    if (status === 'RESOLVED') return <CheckCircle size={16} className="text-success" />;
+    if (status === 'PAUSED') return <PauseCircle size={16} className="text-warning" />;
+    return <AlertTriangle size={16} className="text-danger animate-pulse" />;
+};
 
 export const Incidents: React.FC<IncidentsProps> = ({ incidents }) => {
     return (
-        <div className="bg-surface border rounded p-4 mb-4">
-            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                <AlertOctagon size={20} /> Incidents & Events
-            </h2>
+        <div className="glass-panel p-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <ShieldAlert className="text-warning" size={20} />
+                Operational Incidents
+            </h3>
 
             {incidents.length === 0 ? (
-                <div className="text-muted text-center py-4">No recent incidents.</div>
+                <div className="text-sm text-dim italic text-center py-4">
+                    No active incidents reported.
+                </div>
             ) : (
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-muted border-b border-border">
-                            <tr>
-                                <th className="py-2 px-2">Severity</th>
-                                <th className="py-2 px-2">Status</th>
-                                <th className="py-2 px-2">Timestamp</th>
-                                <th className="py-2 px-2">Type</th>
-                                <th className="py-2 px-2">Escalation</th>
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="text-xs text-muted uppercase border-b border-border/50">
+                                <th className="pb-2 pl-2">Severity</th>
+                                <th className="pb-2">Event Type</th>
+                                <th className="pb-2">Source</th>
+                                <th className="pb-2">Status</th>
+                                <th className="pb-2 text-right pr-2">Logged</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="text-sm">
                             {incidents.map((inc) => (
-                                <tr key={inc.id} className="border-b border-border last:border-0 hover:bg-slate-700/50">
-                                    <td className="py-2 px-2"><SeverityBadge severity={inc.severity} /></td>
-                                    <td className="py-2 px-2 flex items-center gap-2">
-                                        <StatusIcon status={inc.status} /> {inc.status}
+                                <tr key={inc.id} className="border-b border-border/10 last:border-0 hover:bg-white/5 transition-colors">
+                                    <td className="py-3 pl-2"><SeverityBadge severity={inc.severity} /></td>
+                                    <td className="py-3 font-medium text-white">{inc.eventType}</td>
+                                    <td className="py-3 text-dim">{inc.source}</td>
+                                    <td className="py-3">
+                                        <div className="flex items-center gap-2">
+                                            <StatusIcon status={inc.status} />
+                                            <span className={clsx("text-xs font-bold", inc.status === 'RESOLVED' ? "text-success" : "text-white")}>
+                                                {inc.status}
+                                            </span>
+                                        </div>
                                     </td>
-                                    <td className="py-2 px-2 font-mono">{formatDateTime(inc.timestamp)}</td>
-                                    <td className="py-2 px-2">{inc.eventType}</td>
-                                    <td className="py-2 px-2">{inc.escalationTarget}</td>
+                                    <td className="py-3 text-right pr-2 text-muted font-mono text-xs">
+                                        {formatDateTime(inc.timestamp)}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

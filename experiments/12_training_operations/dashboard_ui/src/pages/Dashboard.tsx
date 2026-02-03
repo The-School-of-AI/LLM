@@ -39,7 +39,7 @@ const Dashboard: React.FC = () => {
                 const text = await res.text();
                 try {
                     return JSON.parse(text);
-                } catch (e) {
+                } catch {
                     console.error('[Dashboard] JSON Parse Error:', text.substring(0, 50));
                     throw new Error('Invalid JSON response (likely HTML fallback)');
                 }
