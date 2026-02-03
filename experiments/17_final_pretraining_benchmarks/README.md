@@ -90,10 +90,34 @@ Each benchmark in `configs/*.yaml` can specify:
 - `shots`: Number of few-shot examples.
 - `phases`: `[pretraining]` or `[sft]`.
 
+## 📊 Benchmark Analysis (NEW!)
+
+Before finalizing your evaluation pipeline, use the **Benchmark Analysis Toolkit** to investigate datasets:
+
+```bash
+cd benchmark_analysis
+./run_analysis.sh
+```
+
+This toolkit helps you:
+- **Count tokens** in test datasets (for FLOPs calculation)
+- **Identify evaluation metrics** (accuracy, F1, exact match, etc.)
+- **Estimate computational requirements** (GPU-hours, FLOPs)
+- **Generate reports** (CSV, JSON, Markdown)
+
+📖 **Documentation**: See `benchmark_analysis/INDEX.md` for complete guide
+
+**Quick Links**:
+- `benchmark_analysis/QUICKSTART.md` - Get started in 5 minutes
+- `benchmark_analysis/OVERVIEW.md` - Understand the toolkit
+- `benchmark_analysis/WORKFLOW.md` - Step-by-step process
+
+---
+
 ## 🚧 Future Work & TODOs
 
 - [ ] **Custom Scripts**: Implement logic for placeholders in `scripts/` (AIME 2025, IndicGLUE, SWE-bench, etc.).
-- [ ] **Benchmarks List Review**: Review `benchmarks-list.txt` to ensure it is exhaustive and aligns with project deliverables.
+- [x] **Benchmarks List Review**: ✅ Use `benchmark_analysis/` toolkit to analyze all 25 benchmarks
 - [ ] **YAML Config Audit**: Comprehensive review of all task parameters (shots, mode, paradigm) in `1b`, `3b`, `8b`, `70b`, and `sft` YAMLs vs `Paradigms.md`.
 - [ ] **Multi-GPU Support**: Add orchestration for native model parallelism and FSDP via `accelerate`.
 - [ ] **MSGS Benchmark**: Investigate missing MSGS tasks in `v0.4.x` and re-enable or find substitutes.
@@ -101,3 +125,4 @@ Each benchmark in `configs/*.yaml` can specify:
 
 ---
 *Refer to `benchmarks-list.txt` for the full list of 25 supported benchmarks.*
+*Use `benchmark_analysis/` to investigate token counts and metrics before finalizing configs.*

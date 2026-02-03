@@ -1,0 +1,22 @@
+# Benchmark Analysis Dependencies
+
+# Core ML/NLP libraries
+transformers>=4.36.0
+datasets>=2.16.0
+tokenizers>=0.15.0
+tiktoken>=0.5.0  # For cl100k_base tokenizer (GPT-4)
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP requests (for web scraping/API calls)
+requests>=2.31.0
+
+# Optional: For extended analysis
+# sentencepiece>=0.1.99  # For SentencePiece tokenizers
+# torch>=2.1.0  # If you need model-based analysis
+# scipy>=1.11.0  # For statistical analysis
+
+# Development tools
+tqdm>=4.66.0  # Progress bars
