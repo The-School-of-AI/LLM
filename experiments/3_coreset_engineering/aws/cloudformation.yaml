@@ -1,0 +1,225 @@
+# CloudFormation template for coreset-engineering infrastructure on AWS
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation stack for coreset-engineering ECS services and dependencies'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues: [staging, production]
+    Description: Environment name
+
+  ECRImageUri:
+    Type: String
+    Description: Docker image URI in ECR
+
+  TaskCpu:
+    Type: String
+    Default: '1024'
+    Description: Task CPU units (256, 512, 1024, 2048, 4096)
+
+  TaskMemory:
+    Type: String
+    Default: '2048'
+    Description: Task memory in MB
+
+  DesiredCount:
+    Type: Number
+    Default: 2
+    Description: Desired number of running tasks
+
+Mappings:
+  EnvironmentConfig:
+    staging:
+      LogRetention: 7
+      EnableDetailedMonitoring: true
+    production:
+      LogRetention: 30
+      EnableDetailedMonitoring: true
+
+Resources:
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/coreset-${Environment}'
+      RetentionInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'coreset-${Environment}'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # ECS Task Execution Role
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # ECS Task Role
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ArtifactBucket}'
+                  - !Sub 'arn:aws:s3:::${ArtifactBucket}/*'
+
+  # S3 Artifact Bucket
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'llm-coreset-artifacts-${AWS::AccountId}-${Environment}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: LLM-Coreset
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'coreset-builder-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: coreset-builder
+          Image: !Ref ECRImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          Environment:
+            - Name: ENVIRONMENT
+              Value: !Ref Environment
+            - Name: ARTIFACT_BUCKET
+              Value: !Ref ArtifactBucket
+            - Name: LOG_LEVEL
+              Value: INFO
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:8000/health || exit 1
+            Interval: 30
+            Timeout: 10
+            Retries: 3
+            StartPeriod: 60
+
+  # ECS Service
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: TaskDefinition
+    Properties:
+      ServiceName: !Sub 'coreset-builder-${Environment}'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !GetAtt TaskDefinition.TaskDefinitionArn
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Sub 'subnet-${Environment}1'
+            - !Sub 'subnet-${Environment}2'
+          SecurityGroups:
+            - !GetAtt ServiceSecurityGroup.GroupId
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for coreset service
+      VpcId: !Sub 'vpc-${Environment}'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 10.0.0.0/8
+      Tags:
+        - Key: Name
+          Value: !Sub 'coreset-service-sg-${Environment}'
+
+  # CloudWatch Alarm - Task Count
+  TaskCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'coreset-task-count-${Environment}'
+      MetricName: DesiredTaskCount
+      Namespace: ECS/ContainerInsights
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref DesiredCount
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+        - Name: ServiceName
+          Value: !GetAtt Service.Name
+
+Outputs:
+  ClusterName:
+    Description: ECS Cluster name
+    Value: !Ref ECSCluster
+
+  ServiceName:
+    Description: ECS Service name
+    Value: !GetAtt Service.Name
+
+  ArtifactBucket:
+    Description: S3 bucket for artifacts
+    Value: !Ref ArtifactBucket
+
+  LogGroup:
+    Description: CloudWatch Log Group
+    Value: !Ref LogGroup

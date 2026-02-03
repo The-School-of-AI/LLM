@@ -1,0 +1,229 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Coreset Engineering Manifest Schema",
+  "description": "Canonical schema for coreset manifests produced by Team 3. Ensures reproducibility and determinism across all stages.",
+  "version": "0.2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "manifest_type",
+    "frozen_on",
+    "metadata",
+    "stages",
+    "audit_trail"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "Manifest schema version (e.g., '0.2'). Must match REPRODUCIBILITY_POLICY.md",
+      "examples": ["0.2"]
+    },
+    "manifest_type": {
+      "type": "string",
+      "enum": ["coreset_engineering"],
+      "description": "Type of manifest produced by Team 3"
+    },
+    "frozen_on": {
+      "type": "string",
+      "format": "date",
+      "description": "Date when this manifest schema was frozen",
+      "examples": ["2026-02-02"]
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "curriculum_version",
+        "seed",
+        "execution_date",
+        "execution_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "curriculum_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "description": "Curriculum schema version (from Team 2)"
+        },
+        "curriculum_checksum": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "SHA256 checksum of curriculum.yaml used to generate manifest"
+        },
+        "seed": {
+          "type": "integer",
+          "enum": [42],
+          "description": "Global seed for determinism. MUST ALWAYS BE 42."
+        },
+        "execution_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of manifest generation"
+        },
+        "execution_id": {
+          "type": "string",
+          "pattern": "^run_[a-z0-9]+$",
+          "description": "Unique identifier for this pipeline execution"
+        }
+      }
+    },
+    "stages": {
+      "type": "object",
+      "required": ["1B", "3B", "8B", "70B"],
+      "additionalProperties": false,
+      "properties": {
+        "1B": {
+          "$ref": "#/definitions/stage"
+        },
+        "3B": {
+          "$ref": "#/definitions/stage"
+        },
+        "8B": {
+          "$ref": "#/definitions/stage"
+        },
+        "70B": {
+          "$ref": "#/definitions/stage"
+        }
+      },
+      "description": "Manifest for each training stage"
+    },
+    "audit_trail": {
+      "type": "object",
+      "required": ["reproducibility_checksum"],
+      "additionalProperties": true,
+      "properties": {
+        "reproducibility_checksum": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Combined checksum of seed_policy.yaml and curriculum.yaml for full reproducibility verification"
+        },
+        "version_history": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of schema versions this manifest is compatible with"
+        },
+        "schema_compliance": {
+          "type": "boolean",
+          "description": "Whether manifest passes JSON schema validation"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "stage": {
+      "type": "object",
+      "required": [
+        "manifest_fingerprint",
+        "indices",
+        "statistics"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "manifest_fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "SHA256 fingerprint of sorted indices for determinism verification"
+        },
+        "indices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Indices into dataset for this stage. MUST BE STRICTLY SORTED.",
+          "minItems": 1
+        },
+        "statistics": {
+          "type": "object",
+          "required": [
+            "total_samples",
+            "band_distribution",
+            "modality_distribution"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "total_samples": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Total number of samples in this stage"
+            },
+            "band_distribution": {
+              "type": "object",
+              "required": ["B0", "B1", "B2", "B3", "B4", "B5"],
+              "additionalProperties": false,
+              "properties": {
+                "B0": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of samples in band B0 (Nursery)"
+                },
+                "B1": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of samples in band B1 (Primary)"
+                },
+                "B2": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of samples in band B2 (HighSchool)"
+                },
+                "B3": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of samples in band B3 (Undergrad)"
+                },
+                "B4": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of samples in band B4 (Graduate)"
+                },
+                "B5": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of samples in band B5 (PhD)"
+                }
+              }
+            },
+            "modality_distribution": {
+              "type": "object",
+              "required": ["text", "code"],
+              "additionalProperties": false,
+              "properties": {
+                "text": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of text/natural language samples"
+                },
+                "code": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Count of code samples"
+                }
+              }
+            },
+            "weight_compliance": {
+              "type": "object",
+              "description": "Verification that band weights match curriculum targets",
+              "properties": {
+                "curriculum_target_weights": {
+                  "type": "object"
+                },
+                "actual_weights": {
+                  "type": "object"
+                },
+                "tolerance_percentage": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -20,156 +20,136 @@ The pipeline absorbs raw data chunks, scores them for difficulty, removes duplic
                                                 |
                                                 v
                                        +-------------------+
-                                       | Difficulty Scorer |
-                                       +-------------------+
-                                                |
-                                                v
-                                         +--------------+
-                                         |   Bucketer   |
-                                         +--------------+
-                                                |
-                                     (Assigns B0-B5 + Modality)
-                                                |
-                                                v
- +-------------------+             +-----------------------+
- | Curriculum Config | ----------->|   Stratified Sampler  | <--- [ Unified Bucket Pool ]
- +-------------------+             +-----------------------+
-                                                |
-                                  +-------------+-------------+
-                                  |             |             |
-                            +-----------+ +-----------+ +-----------+
-                            | Stage 1B  | | Stage 3B  | | Stage ... |
-                            +-----------+ +-----------+ +-----------+
-                                  |             |             |
-                                  v             v             v
-                           +---------------------------------------+
-                           |           Output Manifests            |
-                           +---------------------------------------+
-                                                |
-                                                v
-                                     +---------------------+
-                                     | Audit Visualization |
-                                     +---------------------+
-```
+                                      # Team 3: Coreset Engineering
 
-## Directory Structure
-- **src/**: Core Python package `coreset_engine`.
-    - `selection/curriculum.py`: Parses the YAML and resolves Stage Profiles.
-    - `selection/bucketer.py`: Maps data to B0-B5 bands based on difficulty scores.
-    - `selection/sampler.py`: Implements multidimensional sampling logic (Band + Modality).
-- **configs/**: Configuration files.
-    - `curriculum.yaml`: **Primary Production Config** (The "Brain" of the pipeline).
-    - `curriculum_proto.yaml`: Legacy/Prototype config (Archived).
-- **scripts/**: CLI entry points.
-    - `coreset_builder.py`: Main execution script.
-    - `generate_mock_data.py`: Generates test data with rich metadata.
-    - `audit_visuals.py`: Visualization suite.
-- **data/**: Local directory for input datasets.
-- **output/**: Generated manifests and indices.
-- **tests/**: Unit tests (located in `tests/3_coreset_engineering` at project root).
+                                      This folder contains the production coreset engineering pipeline, configurations, scripts, tests, and reproducibility artifacts for Module 3.
 
-## Usage
+                                      Key consolidated documentation:
 
-All commands should be run from the **project root**. We standardize on `uv run` for consistent environment management.
+                                      - `REPRODUCIBILITY_POLICY.md` — Reproducibility requirements and policies (seed policy, manifest fingerprints, audit trail).
+                                      - `IMPLEMENTATION_GUIDE.md` — Implementation notes and quick-start examples.
 
-### 1. Setup
-Ensure dependencies are installed:
-```bash
-uv sync
-```
-*(Or manually: `pip install PyYAML pandas matplotlib seaborn`)*
+                                      Quick links:
 
-### 2. Generate Mock Data
-Generate a mock dataset containing realistic metadata (Domains, Modalities, Difficulty Scores) to test the B0-B5 logic.
-```bash
-uv run experiments/3_coreset_engineering/scripts/generate_mock_data.py \
-    --count 10000 \
-    --output experiments/3_coreset_engineering/data/mock_input
-```
+                                      - Source: `src/coreset_engine/`
+                                      - Configs: `configs/` (includes `curriculum.yaml`)
+                                      - Scripts: `scripts/` (builder, mock data, audits)
+                                      - Tests: `tests/` (consolidated module tests and instructions)
 
-### 3. Run the Pipeline
-Run the builder using the Production Curriculum (`curriculum.yaml`):
-```bash
-uv run experiments/3_coreset_engineering/scripts/coreset_builder.py \
-    --config experiments/3_coreset_engineering/configs/curriculum.yaml \
-    --data experiments/3_coreset_engineering/data/mock_input \
-    --output experiments/3_coreset_engineering/output/manifests
-```
+                                      Running the module (recommended via `uv`):
 
-### 4. Visualization Audits (Post-Hoc)
-Generate quality and distribution reports (PNG charts) from the manifests to verify curriculum compliance:
-```bash
-uv run experiments/3_coreset_engineering/scripts/audit_visuals.py \
-    --manifest_dir experiments/3_coreset_engineering/output/manifests \
-    --output_dir experiments/3_coreset_engineering/output/audits
-```
+                                      ```powershell
+                                      uv sync
+                                      uv run experiments/3_coreset_engineering/scripts/coreset_builder.py \
+                                        --config experiments/3_coreset_engineering/configs/curriculum.yaml \
+                                        --data experiments/3_coreset_engineering/data/input \
+                                        --output experiments/3_coreset_engineering/output/manifests
+                                      ```
 
-**Generated Plots (`output/audits/`):**
-*   `{stage}_band_dist.png`: Difficulty Band Histogram (verifies Band Weights).
-*   `{stage}_modality_dist.png`: Modality Breakdown (verifies Modality Weights).
-*   `{stage}_score_box.png`: Quality Score box-and-whiskers per Band (verifies Bucketing).
+                                      Validate generated manifests (local/CI):
 
-### 5. Running Tests
-Run the unit tests specific to this experiment:
-```bash
-uv run --package coreset-engineering pytest tests/3_coreset_engineering
-```
+                                      ```powershell
+                                      python experiments/3_coreset_engineering/scripts/validate_manifests.py \
+                                        --manifest-dir experiments/3_coreset_engineering/output/manifests
+                                      ```
 
-## Configuration Details (`curriculum.yaml`)
+                                      Tests (module-level):
 
-This file is the "Brain" of the pipeline. It controls *what* data gets selected for *which* stage.
+                                      ```powershell
+                                      uv run pytest experiments/3_coreset_engineering/tests -v
+                                      ```
 
-### 1. Growth Schedule
-Defines the timeline of training.
-```yaml
-growth_schedule:
-  stages:
-    - name: "1B"
-      curriculum_profile: "base"           # Uses the 'base' profile
-    - name: "3B"
-      curriculum_profile: "harder_shift_1" # Switches to harder profile
-```
+                                      Notes:
+                                      - The detailed pipeline design and examples (previously duplicated in several READMEs) have been consolidated here and into `REPRODUCIBILITY_POLICY.md` and `IMPLEMENTATION_GUIDE.md`.
+                                      - If you need historical drafts or expanded examples, see `IMPLEMENTATION_GUIDE.md` and `REPRODUCIBILITY_POLICY.md`.
 
-### 2. Difficulty Bands (B0-B5)
-The canonical definition of difficulty ranges. The pipeline maps raw scores (e.g., compression ratio) to these bands.
-*   **B0 (Nursery)**: Very easy, repetitive text.
-*   **B1-B3**: Standard web/academic text.
-*   **B4 (Graduate)**: Technical text, basic code.
-*   **B5 (PhD)**: Advanced complex reasoning, heavy code, pseudo-code.
+                                      CI / Running in CI
+                                      ------------------
 
-### 3. Modalities
-Explicit definitions of data types.
-*   `general_text`: Standard NLP training data.
-*   `code`: Programming languages.
-*   `cot_reasoning`: Chain-of-Thought traces.
-*   `agentic_traces`: Tool use examples.
+                                      Minimum environment and setup:
 
-### 4. Stage Profiles (The Logic)
-This is where the sampling distribution is defined.
-```yaml
-stage_profiles:
-  base:  # 1B Stage
-    band_weights:     # MUST sum to 1.0 (approx)
-      B0: 0.30        # 30% Easy data
-      ...
-      B5: 0.02        # Only 2% Hard data
-    modality_weights: # Preferences within bands
-      general_text: 0.86
-      code: 0.12
-```
+                                      - **Python**: 3.12 (CI and local runs should use the same version).
+                                      - **uv**: recommended for reproducible installs. If `uv` is not available, install via `pip install uv` or use `python -m pip install -r requirements.txt`.
+                                      - Use locked dependencies in CI: `uv sync --frozen` (enforces `uv.lock`).
 
-## Output Artifacts
-Manifests are written to `output/manifests/`.
-*   `*_index.jsonl`: The actual dataset index used by DataLoaders. Contains `file_path`, `line_number`, `token_count`.
-*   `*_manifest.json`: Summary metadata including token counts and distribution stats.
+                                      Required environment variables / GitHub Secrets (set these in repo Settings → Secrets):
 
-## Code to Task Mapping (Summary)
+                                      - `AWS_ACCESS_KEY_ID` (if uploading/testing with S3)
+                                      - `AWS_SECRET_ACCESS_KEY`
+                                      - `AWS_DEFAULT_REGION`
+                                      - `S3_TEST_BUCKET` (optional, used by some integration tests)
 
-| L2 Task | Implementation File | Status / Note |
-| :--- | :--- | :--- |
-| **Exact & Near Dedup** | `filters/dedup.py` | Implements Exact (MD5) and MinHash logic. *Note: Current loop uses Exact Only for speed.* |
-| **Diversity Metrics** | `scoring/perplexity.py` | Uses Compression Ratio as a proxy for entropy/diversity. |
-| **Bucket Scoring** | `selection/bucketer.py` | Maps raw scores -> B0-B5 Bands. |
-| **Protected Slices** | `selection/sampler.py` | Enforced via `modality_weights`. (0.0 weight = excluded). |
-| **Coverage Audits** | `selection/builder.py` | Logs distribution stats (Band/Modality) to manifest footer. |
-| **Visual Audits** | `scripts/audit_visuals.py` | Generates PNGs for Band/Modality/Score distributions. |
+                                      Deterministic CI flags (recommended):
+
+                                      ```yaml
+                                      env:
+                                        PYTHONHASHSEED: '0'
+                                        PYTHONDONTWRITEBYTECODE: '1'
+                                      ```
+
+                                      Validate manifests in CI
+                                      ------------------------
+
+                                      Use the included validator to fail CI on manifest issues. The validator returns a non-zero exit code on validation failure so CI jobs fail fast:
+
+                                      ```powershell
+                                      python experiments/3_coreset_engineering/scripts/validate_manifests.py --manifest-dir output/manifests
+                                      ```
+
+                                      Coverage and artifacts
+                                      ----------------------
+
+                                      - Run tests with coverage and upload artifacts from CI (example given in Actions snippet).
+                                      - Consider caching pip/uv artifacts in CI to speed up installs.
+
+                                      Recommended GitHub Actions snippet
+                                      ---------------------------------
+
+                                      Use the snippet below as a starting point for a `coreset-deploy.yml` job (copy into `.github/workflows/`):
+
+                                      ```yaml
+                                      name: Coreset CI
+
+                                      on: [push, pull_request]
+
+                                      jobs:
+                                        test:
+                                          runs-on: ubuntu-latest
+                                          env:
+                                            PYTHONHASHSEED: '0'
+                                            PYTHONDONTWRITEBYTECODE: '1'
+                                          steps:
+                                            - uses: actions/checkout@v4
+                                            - name: Setup Python
+                                              uses: actions/setup-python@v4
+                                              with:
+                                                python-version: '3.12'
+                                            - name: Cache pip
+                                              uses: actions/cache@v4
+                                              with:
+                                                path: ~/.cache/pip
+                                                key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+                                            - name: Install uv & sync
+                                              run: |
+                                                python -m pip install --upgrade pip
+                                                pip install uv || true
+                                                uv sync --frozen
+                                            - name: Run tests
+                                              run: uv run pytest experiments/3_coreset_engineering/tests -v --maxfail=1
+                                            - name: Validate manifests
+                                              run: |
+                                                python experiments/3_coreset_engineering/scripts/validate_manifests.py --manifest-dir output/manifests
+                                            - name: Upload coverage
+                                              if: always()
+                                              uses: actions/upload-artifact@v4
+                                              with:
+                                                name: coreset-coverage
+                                                path: experiments/3_coreset_engineering/htmlcov
+                                      ```
+
+                                      Troubleshooting
+                                      ---------------
+
+                                      - If tests fail due to missing AWS access, ensure secrets are populated and the test-only bucket is available.
+                                      - Mismatched Python versions may cause subtle differences; ensure CI uses Python 3.12.
+                                      - If dependency resolution fails, run `uv sync` locally to surface issues and ensure `uv.lock` is committed.

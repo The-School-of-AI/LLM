@@ -1,0 +1,182 @@
+# seed_policy.yaml
+# Seed management and determinism enforcement for coreset engineering module
+# Owner: Team 3 (Coreset Engineering)
+# Coordinated with: Team 2 (Curriculum), Team 19 (Reproducibility)
+
+version: "0.2"
+owner_team: "Team 3: Coreset Engineering"
+frozen_on: "2026-02-02"
+
+# Global seed: immutable across all runs
+global_seed: 42
+seed_rationale: "Industry standard for reproducibility; used consistently across all experiments"
+
+# Seed initialization rules
+initialization:
+  # When to initialize
+  timing: "before_any_randomness"
+  location: "pipeline entry point (before data loading)"
+  frequency: "exactly once per execution"
+  
+  # How to initialize
+  method: "set_global_seed(42)"
+  libraries: ["random", "numpy", "torch", "torch.cuda"]
+  
+  # Validation
+  checkpoint: "Verify seed is set before manifest generation"
+  error_on_violation: true
+  error_message: "Seed was re-initialized mid-pipeline! This breaks reproducibility."
+
+# No reset rules (critical)
+reset_policy:
+  - rule_name: "no_mid_pipeline_reset"
+    applies_to: ["sampling", "deduplication", "bucketing", "band_assignment"]
+    violation_severity: "CRITICAL"
+    reason: "Resetting seed mid-pipeline breaks determinism"
+  
+  - rule_name: "no_random_seed_selection"
+    applies_to: ["manifest_generation", "stage_progression"]
+    violation_severity: "CRITICAL"
+    reason: "Seed must be deterministic, not random"
+
+# Deterministic iteration rules
+iteration_policy:
+  - operation: "band_assignment"
+    rule: "sort samples by id before assigning bands"
+    example: "for sample in sorted(samples, key=lambda x: x['id'])"
+    violation: "will produce non-deterministic band assignments"
+  
+  - operation: "modality_selection"
+    rule: "use configured weights deterministically, not randomized selection"
+    example: "Apply band_weights['B0'] = 0.4 deterministically"
+  
+  - operation: "stage_progression"
+    rule: "iterate over stages in sorted order (1B→3B→8B→70B)"
+    example: "for stage in ['1B', '3B', '8B', '70B']"
+  
+  - operation: "deduplication"
+    rule: "sort hashes before comparison"
+    example: "for doc_hash in sorted(unique_hashes)"
+
+# Manifest generation rules
+manifest_generation:
+  seed_requirement: "Seed must be 42"
+  ordering_requirement: "All indices must be sorted (ascending)"
+  fingerprinting: true
+  checksum_algorithm: "sha256"
+  
+  # Reproducibility verification
+  verification:
+    - Run identical pipeline twice
+    - Compare manifest fingerprints (must match exactly)
+    - If fingerprints differ, pipeline is non-deterministic
+
+# Randomness sealing
+randomness_sealing:
+  description: "All randomness must be seeded before use"
+  
+  sealed_operations:
+    - operation: "stratified_sampling"
+      status: "SEALED"
+      seed_requirement: 42
+      example: "random.seed(42); indices = random.sample(population, k)"
+    
+    - operation: "train_test_split"
+      status: "SEALED"
+      seed_requirement: 42
+    
+    - operation: "data_shuffling"
+      status: "SEALED"
+      seed_requirement: 42
+  
+  unsealed_operations: []
+  note: "If a new operation needs randomness, must add to sealed_operations list + update policy"
+
+# Curriculum interaction
+curriculum_policy:
+  curriculum_version: "0.2"
+  curriculum_locked: true
+  reason: "Curriculum is frozen to ensure reproducibility"
+  
+  curriculum_fingerprint: "computed at manifest generation time"
+  
+  if_curriculum_changes:
+    action: "Regenerate all manifests with new curriculum"
+    notification: "Teams 3, 10, 17, 18 must be notified"
+    version_bump: "Increment curriculum.version"
+
+# Stage progression rules
+stage_progression:
+  requirement: "Indices_1B ⊂ Indices_3B ⊂ Indices_8B ⊂ Indices_70B"
+  validation: "Run subset_test in regression suite"
+  enforcement: "Test fails if subset property violated"
+
+# Config checksum policy
+config_checksums:
+  curriculum_checksum:
+    algorithm: "sha256"
+    file: "configs/curriculum.yaml"
+    stored_in: "manifest.metadata.curriculum_checksum"
+  
+  seed_policy_checksum:
+    algorithm: "sha256"
+    file: "configs/seed_policy.yaml"
+    stored_in: "audit_trail.reproducibility_checksum"
+
+# Audit trail requirements
+audit_trail:
+  required_fields:
+    - execution_date: "ISO 8601 timestamp"
+    - execution_id: "Unique identifier (run_XXX_stage_YYY)"
+    - seed_value: "42 (must always be 42)"
+    - curriculum_version: "From curriculum.yaml"
+    - reproducibility_checksum: "Combined checksum of all config"
+  
+  optional_fields:
+    - git_commit: "For version tracking"
+    - user_id: "Who ran the pipeline (optional)"
+    - environment_hash: "Python version, library versions (optional)"
+
+# Testing requirements
+testing:
+  regression_tests:
+    - "test_deterministic_manifest_generation"
+    - "test_replay_identical_input"
+    - "test_fingerprint_consistency"
+    - "test_manifest_schema_compliance"
+    - "test_indices_are_sorted"
+    - "test_subset_property_maintained"
+  
+  ci_checks:
+    - "Validate manifest schema"
+    - "Verify seed policy compliance"
+    - "Check seed initialization timing"
+    - "Audit manifest fingerprints"
+
+# Common pitfalls & corrections
+pitfalls:
+  - pitfall: "Using Python's set() or dict without sorting"
+    fix: "Always use sorted() when iterating"
+    impact: "Non-deterministic ordering"
+  
+  - pitfall: "Calling random.seed() multiple times"
+    fix: "Call exactly once at pipeline start"
+    impact: "Different manifests on successive runs"
+  
+  - pitfall: "Relying on dict insertion order"
+    fix: "Explicitly sort dict keys before iteration"
+    impact: "Python 3.6+ preserves insertion order, but still non-portable"
+  
+  - pitfall: "Using np.random.shuffle() without seeding first"
+    fix: "Ensure random.seed(42) called before any randomness"
+    impact: "Non-deterministic shuffling"
+
+# Exemptions (none)
+exemptions: []
+note: "No exemptions allowed. Reproducibility is non-negotiable."
+
+# Contact for policy questions
+contacts:
+  team_3: "Team 3: Coreset Engineering"
+  team_2: "Team 2: Curriculum Architects (curriculum policy)"
+  team_19: "Team 19: Reproducibility (general reproducibility policy)"
