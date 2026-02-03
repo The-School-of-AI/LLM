@@ -6,13 +6,11 @@
     "quantization": "all",
     "zero_stage": 2,
     "cpu_offload": false,
-    
     "tflops_per_gpu": {
       "bf16": 989.0,
-      "fp8": 1979.0,  
+      "fp8": 1979.0,
       "nvfp4": 3500.0
     },
-    
     "_comment_zero_efficiency": "Throughput penalty by ZeRO stage. ZeRO-3 requires all-gather before each forward/backward pass.",
     "zero_efficiency": {
       "zero0": 1.00,
@@ -20,7 +18,6 @@
       "zero3": 0.70,
       "zero_infinity": 0.25
     },
-    
     "_comment_scaling_efficiency": "Communication overhead at scale. Efficiency drops due to all-reduce, gradient sync, and network limits.",
     "scaling_efficiency": {
       "base_gpus": 8,
@@ -41,13 +38,14 @@
         "vocab_size": 50257,
         "hidden_size": 2048,
         "intermediate_size": 5461,
-        "num_layers": 18,
+        "num_layers": 16,
         "num_heads": 16,
-        "num_experts": 0,
-        "top_k_experts": 0,
         "sequence_length": 4096,
         "tie_embeddings": true,
-        "actual_tokens": 20000000000
+        "num_experts": 0,
+        "top_k_experts": 0,
+        "actual_tokens": 20000000000,
+        "use_sparse_attention": false
       }
     },
     {
@@ -55,16 +53,18 @@
       "total_tokens": 40000000000,
       "architecture": {
         "vocab_size": 50257,
-        "hidden_size": 1536,
+        "hidden_size": 4096,
         "intermediate_size": 4864,
-        "num_layers": 16,
-        "num_heads": 16,
+        "num_layers": 20,
+        "num_heads": 32,
+        "num_kv_heads": 8,
         "num_experts": 8,
-        "top_k_experts": 4,
+        "top_k_experts": 2,
         "sequence_length": 4096,
         "tie_embeddings": true,
         "null_expert_prob": 0.50,
-        "actual_tokens": 40000000000
+        "actual_tokens": 40000000000,
+        "use_sparse_attention": false
       }
     },
     {
@@ -72,16 +72,18 @@
       "total_tokens": 100000000000,
       "architecture": {
         "vocab_size": 50257,
-        "hidden_size": 2048,
+        "hidden_size": 8192,
         "intermediate_size": 6400,
-        "num_layers": 24,
+        "num_layers": 20,
         "num_heads": 32,
+        "num_kv_heads": 8,
         "num_experts": 8,
-        "top_k_experts": 4,
+        "top_k_experts": 2,
         "sequence_length": 4096,
         "tie_embeddings": true,
         "null_expert_prob": 0.50,
-        "actual_tokens": 100000000000
+        "actual_tokens": 100000000000,
+        "use_sparse_attention": false
       }
     },
     {
@@ -89,16 +91,22 @@
       "total_tokens": 240000000000,
       "architecture": {
         "vocab_size": 64000,
-        "hidden_size": 4096,
+        "hidden_size": 8192,
         "intermediate_size": 11008,
-        "num_layers": 60,
+        "num_layers": 20,
         "num_heads": 32,
-        "num_experts": 8,
-        "top_k_experts": 4,
+        "num_experts": 256,
+        "top_k_experts": 8,
         "sequence_length": 4096,
         "tie_embeddings": true,
         "null_expert_prob": 0.50,
-        "actual_tokens": 240000000000
+        "actual_tokens": 240000000000,
+        "_comment_sparse_attention": "DeepSeek Sparse Attention (DSA) configuration - reduces attention from O(L²) to O(Lk)",
+        "use_sparse_attention": true,
+        "sparse_k_tokens": 2048,
+        "indexer_heads": 4,
+        "indexer_dim": 1024,
+        "mla_kv_lora_rank": 512
       }
     }
   ]

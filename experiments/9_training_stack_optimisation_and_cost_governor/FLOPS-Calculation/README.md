@@ -7,13 +7,13 @@ This tool calculates the estimated training time, FLOPs, and cloud costs for Lar
 - **MoE Support**: accurately models Active vs. Total parameters for sparse models.
 - **Cost Governor**: Estimates total cloud training costs based on configurable GPU pricing.
 - **Quantization Filtering**: Filter outputs by precision (BF16, FP8, NVFP4).
-- **Strict Configuration**: All parameters are defined in `flops_config.json`.
+- **Strict Configuration**: All parameters are defined in `config.json`.
 
 ## Usage
-1. **Configure**: Edit `flops_config.json` to match your hardware and model specs.
+1. **Configure**: Edit `config.json` to match your hardware and model specs.
 2. **Run**:
    ```bash
-   python3 compute_flops.py
+   python3 compute.py
    ```
 
 ## Output Snapshots
@@ -24,7 +24,7 @@ We keep simple text snapshots of recent runs:
 
 These are **reference outputs only** and should be regenerated after config changes.
 
-## Configuration (`flops_config.json`)
+## Configuration (`config.json`)
 
 ### Hardware & Cost
 ```json
@@ -48,13 +48,13 @@ Define your training stages. All parameters (Layers, Hidden Size, Experts, etc.)
       "vocab_size": 64000,
       "hidden_size": 2176,
       "num_layers": 24,
-      "num_experts": 80,      // Total Experts
-      "top_k_experts": 2,     // Active Experts per token
-      "num_moe_layers": 24,   // Optional: MoE layers out of total layers
-      "tie_embeddings": true, // Optional: LM head tied to embeddings
-      "target_total_params": 70000000000, // Optional: solve to hit total params
-      "target_params_per_expert": 8000000000, // Optional: target total/experts
-      "solve_for": "num_experts_from_per_expert", // Optional: "num_experts" or "num_experts_from_per_expert"
+      "num_experts": 80,                             // Total Experts
+      "top_k_experts": 2,                            // Active Experts per token
+      "num_moe_layers": 24,                          // Optional: MoE layers out of total layers
+      "tie_embeddings": true,                        // Optional: LM head tied to embeddings
+      "target_total_params": 70000000000,            // Optional: solve to hit total params
+      "target_params_per_expert": 8000000000,        // Optional: target total/experts
+      "solve_for": "num_experts_from_per_expert",    // Optional: "num_experts" or "num_experts_from_per_expert"
       "sequence_length": 4096
     }
   }
@@ -77,6 +77,51 @@ Attention_Term = 12 * Num_Layers * Hidden_Size * (Sequence_Length^2)
 Total_Per_Seq  = Linear_Term + Attention_Term
 ```
 *Total Training FLOPs* is then scaled by the total number of sequences (`Total_Tokens / Sequence_Length`).
+
+#### DeepSeek Sparse Attention (DSA)
+
+For models using sparse attention, the attention term changes from O(L^2) to O(Lk):
+
+**Dense Attention (default):**
+```python
+Attention_Term = 12 * Num_Layers * Hidden_Size * (Sequence_Length^2)
+```
+
+**Sparse Attention (DSA enabled):**
+```python
+# 1. Lightning Indexer: Fast token selection (still O(L^2) but optimized)
+Indexer_FLOPs = (2 * Sequence_Length^2 * Indexer_Heads * Indexer_Dim) / FP8_Speedup
+
+# 2. Sparse Core: Only attend to k selected tokens (O(Lk))
+Sparse_Core = 2 * Sequence_Length * k * Head_Dim * Num_Heads   # QK^T
+            + 3 * Sequence_Length * k * Num_Heads              # Softmax
+            + 2 * Sequence_Length * k * Head_Dim * Num_Heads   # Attn-V
+
+# 3. MLA Projections: Compress KV cache (optional)
+MLA_FLOPs = 2 * Sequence_Length * Hidden_Size * KV_Rank * 2    # if enabled
+
+Attention_Term = Num_Layers * (Indexer_FLOPs + Sparse_Core + MLA_FLOPs)
+```
+
+**Configuration:**
+```json
+{
+  "architecture": {
+    "use_sparse_attention": true,
+    "sparse_k_tokens": 2048,       // Number of tokens to attend to (k)
+    "indexer_heads": 4,            // Lightning indexer heads (2-4)
+    "indexer_dim": 1024,           // Indexer dimension (H/8 typical)
+    "mla_kv_lora_rank": 512        // MLA compression rank (0=disabled)
+  }
+}
+```
+
+**Key Points:**
+- **Lightning Indexer**: Scores all tokens using FP8 precision and fewer heads for speed
+- **Sparse k**: Typically set to L/32 to L/64 (e.g., 2048 for 128K context)
+- **MLA**: Compresses key-value cache to reduce memory bandwidth
+- **Reduction**: For 4096 context with k=2048, attention FLOPs reduce by ~6-8x
+
 Notes:
 - `Active_NonEmbedding_Params` excludes embeddings, but includes the output logits projection even if embeddings are tied.
 - If `include_softmax_flops=true`, a small extra softmax term is added.
@@ -127,3 +172,10 @@ In `compute_flops_growth.py`, token allocation uses the same per-token FLOPs for
 the main calculator, so growth budgets are consistent with attention-aware compute.
 By default, `preserve_total_tokens=true` rescales the allocated tokens so the final sum
 matches the original total token budget.
+
+## References
+
+1. [DeepSeek-V3: Scaling Open-Source Language Models](https://arxiv.org/abs/2512.02556)
+2. [MoE Architecture Specification](https://github.com/The-School-of-AI/LLM/blob/p8/8.5-70B-MoE-Large-Configuration-(The-Explosion)/experiments/8_moe_architecture/moe_arch_spec.md)
+3. [Chinchilla Scaling Laws: Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)
+4. [DeepSpeed ZeRO: Memory Optimization for Large-Scale Training](https://arxiv.org/abs/1910.02054)
