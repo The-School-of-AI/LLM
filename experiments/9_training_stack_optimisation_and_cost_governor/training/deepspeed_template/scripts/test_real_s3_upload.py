@@ -17,7 +17,6 @@ import os
 import sys
 import tempfile
 import time
-from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -105,12 +104,12 @@ def test_real_upload():
             
             # Queue for upload
             step = 100
-            print(f"📤 Queueing checkpoint for async upload...")
+            print("📤 Queueing checkpoint for async upload...")
             manager.upload_queue.put((checkpoint_dir, checkpoint_tag, step))
             with manager._upload_lock:
                 manager.active_uploads.append(step)
             
-            print(f"⏳ Waiting for upload to complete...\n")
+            print("⏳ Waiting for upload to complete...\n")
             
             # Wait for upload
             start_time = time.time()

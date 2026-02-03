@@ -35,7 +35,7 @@ import yaml
 
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
-from src.model import get_model, get_qwen2_moe_model
+from src.model import get_qwen2_moe_model
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 from aws.config import S3Config
@@ -160,7 +160,7 @@ def main():
     print_rank_0(f"  Output Directory: {args.output_dir}")
     print_rank_0(f"  Random Seed: {args.seed}")
     if args.use_s3:
-        print_rank_0(f"  S3 Enabled: Yes")
+        print_rank_0("  S3 Enabled: Yes")
         print_rank_0(f"  S3 Bucket: {args.s3_bucket}")
         print_rank_0(f"  S3 Prefix: {args.s3_prefix}")
     if args.resume_from_checkpoint:
@@ -299,7 +299,7 @@ def main():
         # Save epoch checkpoint
         if checkpoint_manager or args.save_checkpoint:
             epoch_tag = f"epoch{epoch}_end"
-            print_rank_0(f"\nSaving end-of-epoch checkpoint...")
+            print_rank_0("\nSaving end-of-epoch checkpoint...")
             
             client_state = {
                 'epoch': epoch + 1,  # Next epoch to start from

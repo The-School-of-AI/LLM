@@ -236,7 +236,8 @@ def example_with_environment_variables():
     s3_config.verbose = True
     s3_config.log_upload_progress = True
     
-    checkpoint_mgr = S3CheckpointManager(s3_config)
+    # Initialize checkpoint manager
+    _ = S3CheckpointManager(s3_config)
     
     # Rest of training code...
 

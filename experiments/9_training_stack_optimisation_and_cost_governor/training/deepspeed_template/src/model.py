@@ -56,8 +56,8 @@ def get_qwen2_moe_model(device=None, print_info=True):
     if print_info:
         num_params = sum(p.numel() for p in model.parameters())
         num_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        print_rank_0(f"  Model created: Qwen2 MoE")
-        print_rank_0(f"  Configuration:")
+        print_rank_0("  Model created: Qwen2 MoE")
+        print_rank_0("  Configuration:")
         print_rank_0(f"    - Hidden size: {config.hidden_size}")
         print_rank_0(f"    - Layers: {config.num_hidden_layers}")
         print_rank_0(f"    - Attention heads: {config.num_attention_heads}")
@@ -66,7 +66,7 @@ def get_qwen2_moe_model(device=None, print_info=True):
         print_rank_0(f"    - Active experts per token: {config.num_experts_per_tok}")
         print_rank_0(f"  Total parameters: {num_params:,}")
         print_rank_0(f"  Trainable parameters: {num_trainable_params:,}")
-        print_rank_0(f"  Gradient checkpointing: Enabled")
+        print_rank_0("  Gradient checkpointing: Enabled")
     
     # Move to device if specified
     if device is not None:

@@ -90,16 +90,16 @@ def check_bucket_access(bucket_name, region):
         # Check if bucket exists
         try:
             s3_client.head_bucket(Bucket=bucket_name)
-            print(f"  ✓ Bucket exists and is accessible")
+            print("  ✓ Bucket exists and is accessible")
         except ClientError as e:
             error_code = e.response['Error']['Code']
             if error_code == '404':
-                print(f"  ✗ Bucket does not exist")
+                print("  ✗ Bucket does not exist")
                 print(f"\n  Create with: aws s3 mb s3://{bucket_name}")
                 return False
             elif error_code == '403':
-                print(f"  ✗ Access denied to bucket")
-                print(f"\n  Check IAM permissions for S3 access")
+                print("  ✗ Access denied to bucket")
+                print("\n  Check IAM permissions for S3 access")
                 return False
             else:
                 print(f"  ✗ Error accessing bucket: {e}")
@@ -126,7 +126,7 @@ def check_bucket_access(bucket_name, region):
 
 def check_bucket_permissions(bucket_name, region):
     """Check S3 bucket permissions."""
-    print(f"\nChecking S3 permissions...")
+    print("\nChecking S3 permissions...")
     
     try:
         import boto3
@@ -144,7 +144,7 @@ def check_bucket_permissions(bucket_name, region):
                 Key=test_key,
                 Body=test_content
             )
-            print(f"    ✓ PutObject: OK")
+            print("    ✓ PutObject: OK")
         except ClientError as e:
             print(f"    ✗ PutObject: FAILED - {e}")
             return False
@@ -155,9 +155,9 @@ def check_bucket_permissions(bucket_name, region):
             response = s3_client.get_object(Bucket=bucket_name, Key=test_key)
             data = response['Body'].read()
             if data == test_content:
-                print(f"    ✓ GetObject: OK")
+                print("    ✓ GetObject: OK")
             else:
-                print(f"    ✗ GetObject: Data mismatch")
+                print("    ✗ GetObject: Data mismatch")
                 return False
         except ClientError as e:
             print(f"    ✗ GetObject: FAILED - {e}")
@@ -170,7 +170,7 @@ def check_bucket_permissions(bucket_name, region):
                 Bucket=bucket_name,
                 Prefix='checkpoint-test/'
             )
-            print(f"    ✓ ListObjects: OK")
+            print("    ✓ ListObjects: OK")
         except ClientError as e:
             print(f"    ✗ ListObjects: FAILED - {e}")
             return False
@@ -179,7 +179,7 @@ def check_bucket_permissions(bucket_name, region):
         print("  Testing DeleteObject permission...")
         try:
             s3_client.delete_object(Bucket=bucket_name, Key=test_key)
-            print(f"    ✓ DeleteObject: OK")
+            print("    ✓ DeleteObject: OK")
         except ClientError as e:
             print(f"    ✗ DeleteObject: FAILED - {e}")
             return False
@@ -194,7 +194,7 @@ def check_bucket_permissions(bucket_name, region):
 
 def test_checkpoint_manager(bucket_name, region):
     """Test S3CheckpointManager initialization."""
-    print(f"\nTesting S3CheckpointManager...")
+    print("\nTesting S3CheckpointManager...")
     
     try:
         from aws.config import S3Config
@@ -213,7 +213,7 @@ def test_checkpoint_manager(bucket_name, region):
             # Validate config
             print("  Validating configuration...")
             config.validate()
-            print(f"    ✓ Configuration valid")
+            print("    ✓ Configuration valid")
             
             # Initialize manager
             print("  Initializing checkpoint manager...")
@@ -224,7 +224,7 @@ def test_checkpoint_manager(bucket_name, region):
             os.environ['WORLD_SIZE'] = '1'
             
             manager = S3CheckpointManager(config)
-            print(f"    ✓ Manager initialized")
+            print("    ✓ Manager initialized")
             print(f"    ✓ World size: {manager.world_size}")
             print(f"    ✓ Global rank: {manager.global_rank}")
             print(f"    ✓ Local rank: {manager.local_rank}")
@@ -282,7 +282,7 @@ def main():
         
         if checks[-1][1]:  # Only continue if credentials are valid
             checks.append((
-                f"S3 bucket access",
+                "S3 bucket access",
                 check_bucket_access(args.bucket, args.region)
             ))
             
@@ -314,12 +314,12 @@ def main():
     
     if passed == total:
         print("\n🎉 All checks passed! S3 checkpoint system is ready to use.")
-        print(f"\nYou can now run training with:")
-        print(f"  deepspeed main.py \\")
-        print(f"    --deepspeed_config deepspeed/zero-2-moe.json \\")
+        print("\nYou can now run training with:")
+        print("  deepspeed main.py \\")
+        print("    --deepspeed_config deepspeed/zero-2-moe.json \\")
         print(f"    --s3_bucket {args.bucket} \\")
-        print(f"    --s3_prefix experiments/my-model \\")
-        print(f"    --checkpoint_interval 100")
+        print("    --s3_prefix experiments/my-model \\")
+        print("    --checkpoint_interval 100")
         sys.exit(0)
     else:
         print("\n⚠️  Some checks failed. Please fix the issues above.")

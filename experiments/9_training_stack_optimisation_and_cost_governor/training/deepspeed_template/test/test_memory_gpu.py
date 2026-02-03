@@ -44,7 +44,7 @@ print_memory("After backward pass")
 peak = torch.cuda.max_memory_allocated() / 1e9
 print("\n" + "="*70)
 print(f"PEAK GPU MEMORY: {peak:.2f} GB")
-print(f"AVAILABLE ON T4: 16.00 GB")
+print("AVAILABLE ON T4: 16.00 GB")
 print(f"HEADROOM: {16.0 - peak:.2f} GB")
 
 if peak < 12.0:

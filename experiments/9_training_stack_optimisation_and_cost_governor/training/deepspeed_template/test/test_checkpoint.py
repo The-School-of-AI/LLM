@@ -91,7 +91,7 @@ class TestS3Config:
             
             assert config.bucket_name == 'override-bucket'  # Overridden
             assert config.s3_prefix == 'env/prefix'  # From env
-            assert config.verbose == False  # Overridden
+            assert not config.verbose  # Overridden
     
     def test_get_default_config(self):
         """Test preset configurations."""
@@ -172,8 +172,8 @@ class TestS3CheckpointManager:
         assert manager.global_rank == 0
         assert manager.local_rank == 0
         assert manager.world_size == 1
-        assert manager.is_global_main == True
-        assert manager.is_local_main == True
+        assert manager.is_global_main
+        assert manager.is_local_main
     
     @patch('boto3.client')
     @patch('torch.distributed.is_initialized')
@@ -194,9 +194,9 @@ class TestS3CheckpointManager:
         manager = S3CheckpointManager(mock_s3_config)
         
         # Single node should upload all files
-        assert manager._should_upload_file('mp_rank_00_model_states.pt') == True
-        assert manager._should_upload_file('latest') == True
-        assert manager._should_upload_file('global_step.txt') == True
+        assert manager._should_upload_file('mp_rank_00_model_states.pt')
+        assert manager._should_upload_file('latest')
+        assert manager._should_upload_file('global_step.txt')
     
     @patch('boto3.client')
     @patch('torch.distributed.is_initialized')
@@ -228,15 +228,15 @@ class TestS3CheckpointManager:
             assert manager.node_rank == 1  # Second node
             
             # Node 1 should upload its rank files (4-7)
-            assert manager._should_upload_file('mp_rank_04_model_states.pt') == True
-            assert manager._should_upload_file('mp_rank_05_model_states.pt') == True
+            assert manager._should_upload_file('mp_rank_04_model_states.pt')
+            assert manager._should_upload_file('mp_rank_05_model_states.pt')
             
             # Node 1 should NOT upload node 0's files
-            assert manager._should_upload_file('mp_rank_00_model_states.pt') == False
+            assert not manager._should_upload_file('mp_rank_00_model_states.pt')
             
             # Metadata files: only node 0 uploads
-            assert manager._should_upload_file('latest') == False
-            assert manager._should_upload_file('global_step.txt') == False
+            assert not manager._should_upload_file('latest')
+            assert not manager._should_upload_file('global_step.txt')
 
 
 class TestCheckpointIntegration:
