@@ -26,7 +26,7 @@ stages:
     allowed_bands: ["Easy", "Medium"]
 
   - id: "stage_2_40M"
-    target_tokens: 40000000 # 40M
+    target_tokens: 40000000  # 40M
     domains:
       web: 0.4
       code: 0.3
@@ -36,7 +36,7 @@ stages:
     allowed_bands: ["Easy", "Medium", "Hard"]
 
   - id: "stage_3_100M"
-    target_tokens: 100000000 # 100M
+    target_tokens: 100000000  # 100M
     domains:
       web: 0.3
       code: 0.3
@@ -45,7 +45,7 @@ stages:
     allowed_bands: ["Medium", "Hard"]
 
   - id: "stage_4_MoE_50M"
-    target_tokens: 50000000 # 50M
+    target_tokens: 50000000  # 50M
     domains:
       web: 0.2
       code: 0.4
