@@ -1,0 +1,9 @@
+https://olmo-data.org/dolma-v1_7/cc_news_head/cc_news-0000.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_head/cc_news-0001.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_head/cc_news-0002.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_head/cc_news-0003.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_head/cc_news-0004.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_middle/cc_news-0000.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_middle/cc_news-0001.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_middle/cc_news-0002.json.gz
+https://olmo-data.org/dolma-v1_7/cc_news_tail/cc_news-0000.json.gz

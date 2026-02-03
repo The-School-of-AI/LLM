@@ -85,7 +85,12 @@ def get_domain(source: str) -> str:
 def passthrough_collate(batch):
     """Pass through batch items without conversion - handles datetime objects."""
     return batch
+ # Utility function to read URLs from a local file
 
+# Utility function to read URLs from a local file
+def read_urls_from_file(file_path: str) -> list:
+    with open(file_path, "r") as f:
+        return [line.strip() for line in f if line.strip()]
 
 def download(
     num_records: int = 10,
@@ -94,6 +99,7 @@ def download(
     output_format: OutputFormat = "json",
     storage_type: StorageType = "local",
     s3_storage: Optional[S3Storage] = None,
+    urls_file: Optional[str] = None,
 ) -> int:
     """Download records from Dolma v1.7 dataset.
     
@@ -127,17 +133,22 @@ def download(
         print(f"--- Downloading all available records from Dolma v1.7 ---")
     print(f"Chunk size: {chunk_size} records per file, format: {output_format}")
     
-    # Fetch the list of URLs for v1.7
-    urls_path = hf_hub_download(
-        repo_id="allenai/dolma", 
-        filename="urls/v1_7.txt", 
-        repo_type="dataset"
-    )
-    with open(urls_path, "r") as f:
-        urls = [line.strip() for line in f if line.strip()]
-    
+    # Get URLs from user file or default
+    if urls_file:
+        urls = read_urls_from_file(urls_file)
+        print(f"Loaded {len(urls)} URLs from {urls_file}")
+        print(f"urls to download: {urls}")
+    else:
+        urls_path = hf_hub_download(
+            repo_id="allenai/dolma", 
+            filename="urls/v1_7.txt", 
+            repo_type="dataset"
+        )
+        print(f"Loaded URLs from {urls_path}")
+        with open(urls_path, "r") as f:
+            urls = [line.strip() for line in f if line.strip()]
     # Load using the json builder since the data files are .json.gz
-    dataset = load_dataset("json", data_files=urls[:5], split="train", streaming=True)
+    dataset = load_dataset("json", data_files=urls, split="train", streaming=True)
     
     # Use DataLoader with prefetching for faster iteration
     dataloader = torch.utils.data.DataLoader(
@@ -156,6 +167,9 @@ def download(
     count = 0
     try:
         for batch in dataloader:
+            # Skip empty batches to avoid IndexError when accessing batch[0]
+            if not batch:
+                continue
             # Extract single example from batch (batch_size=1, custom collate returns list)
             example = batch[0]
             # Skip already downloaded records

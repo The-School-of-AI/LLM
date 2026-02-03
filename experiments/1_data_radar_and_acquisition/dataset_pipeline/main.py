@@ -65,6 +65,12 @@ def main():
         help="Dataset to download from: 'dolma', 'sangraha', 'indiccorp', or 'ncert'"
     )
     parser.add_argument(
+        "--dolma-urls-file",
+        type=str,
+        default=None,
+        help="Path to local file containing Dolma data URLs (one per line). If provided, overrides default Dolma URLs."
+    )
+    parser.add_argument(
         "--scope",
         type=str,
         choices=["test", "validate", "pre-prod", "production"],
@@ -160,7 +166,8 @@ def main():
         try:
             count = dolma.download(
                 num_records, resume=args.resume, chunk_size=chunk_size,
-                output_format=args.format, storage_type=args.storage, s3_storage=s3_storage
+                output_format=args.format, storage_type=args.storage, s3_storage=s3_storage,
+                urls_file=args.dolma_urls_file
             )
             logging.info(f"Downloaded {count} Dolma records")
         except KeyboardInterrupt:
