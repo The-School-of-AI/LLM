@@ -1,57 +1,85 @@
+import logging
+import os
+import time
+from datetime import datetime
+from pathlib import Path
+
 import ray
 import s3fs
 from tqdm import tqdm
 
 from curriculum_tags import CurriculumTagger
 
-# ------------------------
+# ------------------------------------------------------------------------------
 # CONFIGURATION
-# ------------------------
+# ------------------------------------------------------------------------------
 INPUT_S3_PREFIX = "s3://smita-erav4/parquet_raw"
 OUTPUT_S3_PREFIX = "s3://smita-erav4/parquet_processed"
-CURRICULUM_YAML = (
-    "/home/ubuntu/LLM/experiments/2_curirculum_architects/curriculum.yaml"  # "/home/ubuntu/curriculum.yaml"
+
+# Absolute path to the curriculum config
+CURRICULUM_YAML = str(Path(__file__).parent.parent / "curriculum.yaml")
+METRICS_CONFIG = str(Path(__file__).parent.parent / "metrics_config.yaml")
+
+# Scaling Parameters
+BATCH_SIZE = 5000  # Smaller batch size for memory stability on diverse nodes
+NUM_CPUS = os.cpu_count() or 4
+MAX_INFLIGHT = NUM_CPUS * 2  # Pipeline depth
+
+# Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(f"tagging_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"),
+        logging.StreamHandler()
+    ]
 )
-BATCH_SIZE = 100
-NUM_CPUS = 2  # parallelism = number of files processed at once
-MAX_INFLIGHT = NUM_CPUS * 2
+logger = logging.getLogger(__name__)
 
-# ------------------------
+# ------------------------------------------------------------------------------
 # INITIALIZE
-# ------------------------
-ray.init(num_cpus=NUM_CPUS)
+# ------------------------------------------------------------------------------
+if not ray.is_initialized():
+    ray.init(num_cpus=NUM_CPUS, ignore_reinit_error=True)
 
-
-# ------------------------
-# PROCESS ONE FILE
-# ------------------------
+# ------------------------------------------------------------------------------
+# PROCESS ONE FILE (Ray Task)
+# ------------------------------------------------------------------------------
 @ray.remote(num_cpus=1)
 def process_s3_file(file_path: str) -> dict:
+    """Processes a single parquet file directly from S3."""
     fs = s3fs.S3FileSystem()
-    tagger = CurriculumTagger(CURRICULUM_YAML)
+    
+    # Initialize tagger inside the task to ensure thread safety/isolation
+    try:
+        tagger = CurriculumTagger(
+            curriculum_path=CURRICULUM_YAML,
+            metrics_config_path=METRICS_CONFIG
+        )
+    except Exception as e:
+        return {"file": file_path, "status": "init_failed", "error": str(e)}
 
+    # Map input path to output path
     input_prefix = INPUT_S3_PREFIX.replace("s3://", "")
-    assert file_path.startswith(input_prefix)
-    # output_prefix = OUTPUT_S3_PREFIX.replace("s3://", "")
+    relative_path = file_path.replace(input_prefix, "").lstrip("/")
+    output_file = f"{OUTPUT_S3_PREFIX.rstrip('/')}/{relative_path}"
 
-    relative_path = file_path.replace(input_prefix, "")
-    output_file = OUTPUT_S3_PREFIX + relative_path
-
-    print(f"Processing file: {file_path}")
-    print(f"Output file: {output_file}")
-
+    start_time = time.time()
     try:
         stats = tagger.process_parquet_s3(
-            file_path,
-            output_file,
+            input_path=f"s3://{file_path}",
+            output_path=output_file,
             filesystem=fs,
             batch_size=BATCH_SIZE,
         )
-
+        
+        duration = time.time() - start_time
         return {
             "input_file": file_path,
             "output_file": output_file,
             "status": "success",
+            "duration_sec": round(duration, 2),
+            "rows_per_sec": round(stats['total_rows'] / duration, 2) if duration > 0 else 0,
             **stats,
         }
 
@@ -63,64 +91,102 @@ def process_s3_file(file_path: str) -> dict:
             "error": str(e),
         }
 
-
+# ------------------------------------------------------------------------------
+# MAIN PIPELINE 
+# ------------------------------------------------------------------------------
 def process_s3_bucket():
-    # List all input Parquet files on S3
     fs = s3fs.S3FileSystem()
-    # all_inputs = fs.ls(INPUT_S3_PREFIX)
-    all_inputs = [f for f in fs.ls(INPUT_S3_PREFIX) if f.endswith(".parquet")]
+    
+    logger.info(f"Scanning S3 bucket: {INPUT_S3_PREFIX}")
+    # List all parquet files recursively
+    all_inputs = [f for f in fs.glob(f"{INPUT_S3_PREFIX}/**/*.parquet") if not f.endswith(".metadata.parquet")]
+    
+    if not all_inputs:
+        logger.error("No parquet files found in the specified S3 path.")
+        return
 
-    all_files = []
+    # Filter out already processed files (Checkpointing)
+    logger.info("Checking for already processed files (checkpointing)...")
+    to_process = []
     for f in all_inputs:
-        rel = f.replace(INPUT_S3_PREFIX, "")
-        out = OUTPUT_S3_PREFIX + rel
+        input_prefix = INPUT_S3_PREFIX.replace("s3://", "")
+        rel = f.replace(input_prefix, "").lstrip("/")
+        out = f"{OUTPUT_S3_PREFIX.rstrip('/')}/{rel}"
+        
         if fs.exists(out):
-            print(f"[SKIP] Already exists: {rel}")
-        else:
-            all_files.append(f)
+            continue
+        to_process.append(f)
 
-    print(f"Found {len(all_files)} files to process.")
+    logger.info(f"Total files in source: {len(all_inputs)}")
+    logger.info(f"Files already processed: {len(all_inputs) - len(to_process)}")
+    logger.info(f"Files to process: {len(to_process)}")
 
+    if not to_process:
+        logger.info("All files are already processed. Exiting.")
+        return
+
+    # Distributed Execution with Backpressure
     pending = []
     failures = []
-    file_iter = iter(all_files)
+    success_count = 0
+    total_rows_processed = 0
+    file_iter = iter(to_process)
 
-    # Prime the pipeline
-    for _ in range(min(MAX_INFLIGHT, len(all_files))):
-        try:
-            f = next(file_iter)
-        except StopIteration:
-            break
-        pending.append(process_s3_file.remote(f))
-
-    pbar = tqdm(total=len(all_files), desc="Processing files")
-
-    while pending:
-        done, pending = ray.wait(pending, num_returns=1)
-
-        res = ray.get(done[0])
-
-        if res and res["status"] == "failed":
-            failures.append(res)
-
-        pbar.update(1)
-
-        # Refill pipeline
+    # Fill initial pipeline
+    for _ in range(min(MAX_INFLIGHT, len(to_process))):
         try:
             f = next(file_iter)
             pending.append(process_s3_file.remote(f))
         except StopIteration:
+            break
+
+    pbar = tqdm(total=len(to_process), desc="Scaling 1TB Tagging")
+
+    while pending:
+        done_ids, pending = ray.wait(pending, num_returns=1)
+        
+        for result_id in done_ids:
+            res = ray.get(result_id)
+            
+            if res["status"] == "success":
+                success_count += 1
+                total_rows_processed += res.get('total_rows', 0)
+                # Periodic logging for big runs
+                if success_count % 10 == 0:
+                    logger.info(f"Progress: {success_count}/{len(to_process)} files | Total Rows: {total_rows_processed}")
+            else:
+                failures.append(res)
+                logger.error(f"Failed file: {res.get('input_file')} | Error: {res.get('error')}")
+
+            pbar.update(1)
+
+        # Refill pipeline to maintain MAX_INFLIGHT
+        try:
+            while len(pending) < MAX_INFLIGHT:
+                f = next(file_iter)
+                pending.append(process_s3_file.remote(f))
+        except StopIteration:
             pass
 
-    print(f"Failures: {len(failures)}")
-    if failures:
-        print("Example failure:", failures[0])
     pbar.close()
+
+    # Final Report
+    logger.info("-" * 50)
+    logger.info("RUN SUMMARY")
+    logger.info("-" * 50)
+    logger.info(f"Successfully processed: {success_count} files")
+    logger.info(f"Total rows tagged: {total_rows_processed}")
+    logger.info(f"Failures encountered: {len(failures)}")
+    
+    if failures:
+        # Save failures to a separate file for targeted retry
+        failure_log = "failed_files.txt"
+        with open(failure_log, "w") as f:
+            for fail in failures:
+                f.write(f"{fail['input_file']}\t{fail.get('error')}\n")
+        logger.info(f"Full failure list saved to: {failure_log}")
+
     ray.shutdown()
 
-
-# ------------------------
-# MAIN
-# ------------------------
 if __name__ == "__main__":
     process_s3_bucket()
