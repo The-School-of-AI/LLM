@@ -246,6 +246,27 @@ def train_phase(
                 eval_labels = eval_batch.get("labels", eval_input_ids).to(device)
                 eval_outputs = model(eval_input_ids, labels=eval_labels)
                 eval_loss = eval_outputs["loss"].item()
+                
+                # Generate sample text (simple greedy/top-k decoding)
+                try:
+                    prompt = eval_input_ids[0:1, :10]  # First 10 tokens as prompt
+                    generated = prompt.clone()
+                    for _ in range(40):  # Generate 40 more tokens
+                        logits = model(generated)["logits"][:, -1, :]
+                        # Top-k sampling (k=50)
+                        top_k = torch.topk(logits, min(50, logits.size(-1)), dim=-1)
+                        probs = torch.softmax(top_k.values, dim=-1)
+                        next_token_idx = torch.multinomial(probs, 1)
+                        next_token = top_k.indices.gather(-1, next_token_idx)
+                        generated = torch.cat([generated, next_token], dim=-1)
+                    
+                    # Decode tokens to text (simple ASCII fallback if no tokenizer)
+                    tokens = generated[0].tolist()
+                    sample_text = "".join([chr(t % 128) if 32 <= (t % 128) < 127 else "?" for t in tokens])
+                    print(f"  📝 Sample: \"{sample_text[:80]}...\"")
+                except Exception as e:
+                    print(f"  📝 Sample generation failed: {e}")
+                    
             model.train()
             print(f"  📊 Eval Loss: {eval_loss:.4f} (true performance without dropout)")
             
