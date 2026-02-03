@@ -52,9 +52,7 @@ def calibrate_thresholds(local_tokenizer_path=None):
     # Initialize classifier
     try:
         if local_tokenizer_path:
-            classifier = CurriculumBandClassifier(
-                local_tokenizer_path=local_tokenizer_path
-            )
+            classifier = CurriculumBandClassifier(local_tokenizer_path=local_tokenizer_path)
         else:
             classifier = CurriculumBandClassifier()
     except Exception as e:
@@ -87,9 +85,7 @@ def calibrate_thresholds(local_tokenizer_path=None):
 
             print(f"  Sample {i}:")
             print(f"    Text: {text[:50]}...")
-            print(
-                f"    Avg: {stats['avg']:.1f}, Max: {stats['max']}, P95: {stats['p95']:.1f}"
-            )
+            print(f"    Avg: {stats['avg']:.1f}, Max: {stats['max']}, P95: {stats['p95']:.1f}")
 
         # Calculate statistics across all samples in this band
         band_stats[band] = {
@@ -102,15 +98,9 @@ def calibrate_thresholds(local_tokenizer_path=None):
         }
 
         print(f"\n  {band} Summary:")
-        print(
-            f"    Avg ID: mean={band_stats[band]['avg_mean']:.1f}, max={band_stats[band]['avg_max']:.1f}"
-        )
-        print(
-            f"    Max ID: mean={band_stats[band]['max_mean']:.1f}, max={band_stats[band]['max_max']}"
-        )
-        print(
-            f"    P95 ID: mean={band_stats[band]['p95_mean']:.1f}, max={band_stats[band]['p95_max']:.1f}"
-        )
+        print(f"    Avg ID: mean={band_stats[band]['avg_mean']:.1f}, max={band_stats[band]['avg_max']:.1f}")
+        print(f"    Max ID: mean={band_stats[band]['max_mean']:.1f}, max={band_stats[band]['max_max']}")
+        print(f"    P95 ID: mean={band_stats[band]['p95_mean']:.1f}, max={band_stats[band]['p95_max']:.1f}")
 
     # Suggest thresholds
     print("\n" + "=" * 60)
@@ -139,9 +129,7 @@ def calibrate_thresholds(local_tokenizer_path=None):
             print(f"        'avg_max': {avg_thresh},")
             print(f"        'max_max': {max_thresh},")
             print(f"        'p95_max': {p95_thresh},")
-            print(
-                f"        'description': '{classifier.TOKEN_ID_THRESHOLDS[band]['description']}'"
-            )
+            print(f"        'description': '{classifier.TOKEN_ID_THRESHOLDS[band]['description']}'")
             print("    },")
 
     print("}")

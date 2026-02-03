@@ -1,6 +1,7 @@
 """Main tagging engine for processing datasets."""
 
 import importlib
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -36,6 +37,14 @@ class CurriculumTagger:
         self.config = CurriculumConfig(curriculum_path)
         self.plugins = metrics if metrics is not None else self._load_metrics(curriculum_path, metrics_config_path)
 
+    def _get_builtin_defaults(self) -> List[MetricPlugin]:
+        """Return list of essential default metrics if no config found."""
+        from ..metrics.difficulty import DifficultyMetric
+        from ..metrics.modality import ModalityMetric
+        from ..metrics.readability import ReadabilityMetric
+
+        return [DifficultyMetric(self.config), ModalityMetric(self.config), ReadabilityMetric(self.config)]
+
     def _load_metrics(
         self, curriculum_path: str | Path, metrics_config_path: Optional[str | Path]
     ) -> List[MetricPlugin]:
@@ -70,7 +79,7 @@ class CurriculumTagger:
                 # Auto-import from metrics package
                 # If module is explicitly provided in config, use it
                 module_name = metric_def.get("module")
-                
+
                 if not module_name:
                     # Fallback convention: class DifficultyMetric in difficulty.py
                     # Simple heuristic: remove "Metric" and lowercase
@@ -79,8 +88,11 @@ class CurriculumTagger:
                     base_name = class_name
                     if base_name.endswith("Metric"):
                         base_name = base_name[:-6]
-                    module_name = base_name.lower()
-                
+                    # module_name = base_name.lower()
+
+                    # Convert CamelCase to snake_case for module name
+                    module_name = re.sub(r"(?<!^)(?=[A-Z])", "_", base_name).lower()
+
                 module_path = f"curriculum_tags.metrics.{module_name}"
 
                 module = importlib.import_module(module_path)
@@ -114,6 +126,7 @@ class CurriculumTagger:
         for plugin in self.plugins:
             try:
                 tags = plugin.compute(sample)
+                print(f"id: {sample['id']}, tags: {tags}")
                 sample["curriculum_tags"][plugin.name] = tags
             except Exception as e:
                 sample["curriculum_tags"][plugin.name] = {"error": str(e)}
@@ -206,6 +219,92 @@ class CurriculumTagger:
             "total_rows": total_rows,
             "error_count": error_count,
             "output_file": str(output_path),
+        }
+
+    def process_parquet_s3(
+        self,
+        input_path: str,
+        output_path: str,
+        filesystem,
+        batch_size: int = 10000,
+        progress_callback: Optional[Callable[[int], None]] = None,
+    ) -> dict:
+        """Process S3 parquet file and add curriculum tags + metadata parquet."""
+
+        # ---- Validate paths (S3 equivalent of Path.exists()) ----
+        if not filesystem.exists(input_path):
+            raise FileNotFoundError(f"S3 input not found: {input_path}")
+
+        output_prefix = output_path.rsplit("/", 1)[0]
+        if not filesystem.exists(output_prefix):
+            raise FileNotFoundError(f"S3 output prefix not found: {output_prefix}")
+
+        # Metadata path (string version of .with_suffix())
+        metadata_path = output_path.replace(".parquet", ".metadata.parquet")
+
+        parquet_file = pq.ParquetFile(input_path, filesystem=filesystem)
+
+        output_batches = []
+        metadata_batches = []
+        total_rows = 0
+        error_count = 0
+
+        for batch in parquet_file.iter_batches(batch_size=batch_size):
+            # Convert to Python dicts
+            records = batch.to_pylist()
+
+            # Tag each record
+            tagged_records = []
+            meta_records = []
+            for record in records:
+                try:
+                    tagged = self.tag_sample(record)
+                    tagged_records.append(tagged)
+                except Exception as e:
+                    # Keep original record but mark error
+                    record["curriculum_tags"] = {
+                        "version": self.config.version,
+                        "error": str(e),
+                    }
+                    tagged_records.append(record)
+                    error_count += 1
+
+            # Prepare metadata records (id, curriculum_tags)
+            for tagged in tagged_records:
+                meta_records.append({"id": tagged.get("id"), "curriculum_tags": tagged.get("curriculum_tags", {})})
+
+            # Convert back to Arrow tables
+            tagged_batch = pa.Table.from_pylist(tagged_records)
+            meta_batch = pa.Table.from_pylist(meta_records)
+            output_batches.append(tagged_batch)
+            metadata_batches.append(meta_batch)
+
+            total_rows += len(records)
+
+            if progress_callback:
+                progress_callback(total_rows)
+
+        # Combine and write
+        output_table = pa.concat_tables(output_batches)
+        metadata_table = pa.concat_tables(metadata_batches)
+
+        # Atomic write main parquet to s3
+        tmp_output = output_path + ".tmp"
+        with filesystem.open(tmp_output, "wb") as f:
+            pq.write_table(output_table, f)
+        filesystem.mv(tmp_output, output_path)
+
+        # Atomic write metadata parquet to s3
+        tmp_meta = metadata_path + ".tmp"
+        with filesystem.open(tmp_meta, "wb") as f:
+            pq.write_table(metadata_table, f)
+        filesystem.mv(tmp_meta, metadata_path)
+
+        return {
+            "total_rows": total_rows,
+            "error_count": error_count,
+            "output_file": output_path,
+            "metadata_file": metadata_path,
         }
 
     def process_batch(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

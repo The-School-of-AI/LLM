@@ -174,18 +174,14 @@ def compute_flesch_kincaid(text: str, tokens: List[str], sentence_count: int) ->
 
     syllables = sum(count_syllables(w) for w in words)
 
-    return (
-        0.39 * (len(words) / sentence_count) + 11.8 * (syllables / len(words)) - 15.59
-    )
+    return 0.39 * (len(words) / sentence_count) + 11.8 * (syllables / len(words)) - 15.59
 
 
 def compute_code_token_ratio(tokens: List[str]) -> float:
     if not tokens:
         return 0.0
 
-    code_like = sum(
-        1 for t in tokens if (t in CODE_TOKENS or (t.isidentifier() and "_" in t))
-    )
+    code_like = sum(1 for t in tokens if (t in CODE_TOKENS or (t.isidentifier() and "_" in t)))
 
     return code_like / len(tokens)
 
@@ -225,9 +221,7 @@ def extract_document_features(text: str) -> Dict:
 
     sentence_stats = extract_sentence_stats(text)
     features.update(sentence_stats)
-    features["flesch_kincaid_grade"] = compute_flesch_kincaid(
-        text, tokens, sentence_stats.get("sentence_count", 1)
-    )
+    features["flesch_kincaid_grade"] = compute_flesch_kincaid(text, tokens, sentence_stats.get("sentence_count", 1))
 
     features["gzip_compression_ratio"] = extract_compression_ratio(text)
     features["citation_count"] = compute_citation_count(text)
@@ -240,9 +234,7 @@ def extract_document_features(text: str) -> Dict:
     features["is_code_heavy"] = features.get("code_block_count", 0) >= 2
     features["is_math_heavy"] = features.get("math_symbol_ratio", 0) >= 0.01
     features["is_long_form"] = features.get("doc_token_count", 0) >= 1500
-    features["is_potential_cot"] = features.get(
-        "has_reasoning_markers"
-    ) or features.get("has_step_markers")
+    features["is_potential_cot"] = features.get("has_reasoning_markers") or features.get("has_step_markers")
     features["is_agentic_like"] = features.get("has_agent_markers")
 
     return features

@@ -14,7 +14,7 @@ def main():
     print("Auto-Loading Metrics from metrics_config.yaml")
     print("=" * 80)
     tagger = CurriculumTagger(curriculum_path)
-    print(f"✓ Loaded {len(tagger.plugins)} metrics automatically")
+    print(f"[OK] Loaded {len(tagger.plugins)} metrics automatically")
     for plugin in tagger.plugins:
         print(f"  - {plugin.name}")
 
@@ -50,7 +50,7 @@ def main():
         tagged = tagger.tag_sample(sample)
         print(json.dumps(tagged, indent=2))
         print("-" * 80)
-    print("\n✓ Tagging complete.")
+    print("\n[OK] Tagging complete.")
 
 
 if __name__ == "__main__":

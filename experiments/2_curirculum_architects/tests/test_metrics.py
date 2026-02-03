@@ -40,10 +40,10 @@ def test_difficulty_metric_simple_text(temp_config):
     sample = {"text": "Hello world"}
     result = metric.compute(sample)
 
-    assert "band" in result
+    assert "level" in result
     assert "score" in result
     assert "features" in result
-    assert result["band"] in ["B0", "B1", "B2", "B3", "B4", "B5"]
+    assert result["level"] in ["L0", "L1", "L2", "L3", "L4", "L5"]
 
 
 def test_difficulty_metric_complex_text(temp_config):
@@ -70,8 +70,8 @@ def test_difficulty_metric_short_text(temp_config):
     sample = {"text": "Hi"}
     result = metric.compute(sample)
 
-    # Short text defaults to B0
-    assert result["band"] == "B0"
+    # Short text defaults to L0
+    assert result["level"] == "L0"
 
 
 def test_modality_metric_code(temp_config):

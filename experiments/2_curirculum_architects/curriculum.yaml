@@ -118,7 +118,7 @@ difficulty_system:
   # Model Capacity Configuration
   model_capacity_config:
     min_params: 1000000000.0  # 1B
-    max_params: 70000000000.0 # 70B
+    max_params: 70000000000.0  # 70B
 
   bands:
     # avg_max: The highest allowed average token difficulty across the entire text.
@@ -285,10 +285,10 @@ growth_schedule:
 
     base:
       band_weights:
-        B0: 0.30
-        B1: 0.28
-        B2: 0.20
-        B3: 0.14
+        B0: 0.49
+        B1: 0.13
+        B2: 0.17
+        B3: 0.13
         B4: 0.06
         B5: 0.02
       modality_weights:
@@ -299,12 +299,12 @@ growth_schedule:
 
     harder_shift_1:
       band_weights:
-        B0: 0.22
-        B1: 0.24
-        B2: 0.22
-        B3: 0.18
-        B4: 0.10
-        B5: 0.04
+        B0: 0.43
+        B1: 0.15
+        B2: 0.19
+        B3: 0.15
+        B4: 0.06
+        B5: 0.02
       modality_weights:
         general_text: 0.78
         code: 0.18
@@ -313,12 +313,12 @@ growth_schedule:
 
     harder_shift_2:
       band_weights:
-        B0: 0.14
-        B1: 0.18
-        B2: 0.22
-        B3: 0.22
-        B4: 0.16
-        B5: 0.08
+        B0: 0.27
+        B1: 0.19
+        B2: 0.24
+        B3: 0.19
+        B4: 0.08
+        B5: 0.03
       modality_weights:
         general_text: 0.68
         code: 0.24
@@ -326,23 +326,22 @@ growth_schedule:
         agentic_traces: 0.03
 
     final_adaptive:
-      band_weights:
-        B0: 0.10
-        B1: 0.14
-        B2: 0.20
-        B3: 0.22
-        B4: 0.20
-        B5: 0.14
-      modality_weights:
-        general_text: 0.60
-        code: 0.28
-        cot_reasoning: 0.07
-        agentic_traces: 0.05
-      adaptive_knobs:
-        enabled: true
-        bounds:
-          band_delta_max: 0.03
-          modality_delta_max: 0.02
+      B0: 0.16
+      B1: 0.22
+      B2: 0.28
+      B3: 0.22
+      B4: 0.09
+      B5: 0.03
+    modality_weights:
+      general_text: 0.60
+      code: 0.28
+      cot_reasoning: 0.07
+      agentic_traces: 0.05
+    adaptive_knobs:
+      enabled: true
+      bounds:
+        band_delta_max: 0.03
+        modality_delta_max: 0.02
 
 # ============================================================
 # GUARDRAILS & SMOOTHING

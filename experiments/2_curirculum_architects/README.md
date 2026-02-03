@@ -1,346 +1,302 @@
-## This README has to be updated with final scripts information in the below format to maintain readability.
-1. Path
-2. Purpose
-3. Setup/dependency
-4. Run command
+# Team 2: Curriculum Architects — Capstone Progress Update
 
+> **Team Focus**: Building the "educational pathway" for training Large Language Models — deciding what data the model learns, when it learns it, and how to progressively increase difficulty.
 
-----
-# Metadata tagging system
+---
 
-> **Auto-discovering metadata tagging system for training datasets**
+## Overview
 
-Add curriculum metadata tags to TB-scale training data with automatic metric discovery and plugin chaining.
+Our team is responsible for **Curriculum Learning** — the idea that, just like students in school, AI models learn better when they start with simpler content and gradually progress to more complex material.
 
-## Setup
+We've developed three interconnected systems:
 
-**First time only:**
+| Component | Purpose |
+|-----------|---------|
+| **Metadata Tagging System** | Analyzes and labels every piece of training data with quality and difficulty metrics |
+| **Curriculum Constitution** | The "rulebook" defining how training data should be organized by difficulty level |
+| **Data Sampler** | Tool for exploring and sampling datasets from cloud storage |
+
+---
+
+## 1. Metadata Tagging System
+
+### What It Does (Non-Technical Summary)
+
+Think of this as a **quality inspector** for training data. Before we feed billions of documents to train an AI model, we need to know:
+- How difficult is this text? (Is it a children's book or a PhD thesis?)
+- What type of content is it? (Code, news, academic paper?)
+- Which "grade level" should it be assigned to?
+
+The tagging system automatically analyzes each document and adds these labels ("metadata tags") so the training pipeline knows when to use each piece of data.
+
+### Technical Details
+
+| Attribute | Details |
+|-----------|---------|
+| **Path** | `experiments/2_curirculum_architects/curriculum_tags/` |
+| **Purpose** | Auto-discovering plugin system that computes curriculum metadata tags for training datasets |
+| **Input Format** | JSONL records in Parquet files (normalized key/value pairs from Team 1) |
+| **Output** | Original Parquet files with added `curriculum_tags` field + separate metadata summary file |
+
+### Current Metrics (Plugin-Based)
+
+| Metric | What It Measures |
+|--------|------------------|
+| **Difficulty** | Overall text complexity score (0-1 scale) |
+| **Readability** | Flesch-Kincaid grade level, Flesch Reading Ease |
+| **Modality** | Content type classification (general text, code, math, etc.) |
+| **Band Assignment** | Maps difficulty to curriculum "grade level" (B0-B5) |
+| **Tokenizer Difficulty** | Token-level complexity analysis |
+| **Entropy** | Information density and predictability |
+| **Diversity** | Lexical richness (MTLD, vocabulary variety) |
+
+> [!NOTE]
+> The metrics are not fully exhaustive yet. This is a **plugin system** — we will finalize the complete metric set after receiving final data format specifications from Team 1.
+
+### How It Works
+
+### How It Works
+
+```
+┌─────────────────┐     ┌───────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+│  S3 Parquet     │ ──▶ │  CurriculumTagger │ ──▶ │  Tagged Parquet     │ ──▶ │  Team 3             │
+│  (from Team 1)  │     │  (runs metrics)   │     │  + Metadata File    │     │  (Coreset Eng.)     │
+└─────────────────┘     └───────────────────┘     └─────────────────────┘     └─────────────────────┘
+```
+
+1. Read Parquet files from S3 in **distributed manner** (batch processing)
+2. Apply each metric plugin in sequence (metrics can see results from previous metrics)
+3. Assign curriculum band (B0-B5) based on computed metrics
+4. Write processed files back to S3 with updated tags
+5. Generate separate metadata file for analytics and statistics
+
+### Setup/Dependency
+
 ```bash
 cd experiments/2_curirculum_architects
 uv pip install -e .
 ```
 
-See [SETUP.md](SETUP.md) for detailed setup instructions.
+### Run Command
 
-## Quick Start
-
-```python
-from curriculum_tags import CurriculumTagger
-
-# That's it! Auto-loads metrics from metrics_config.yaml
-tagger = CurriculumTagger("curriculum.yaml")
-
-# Tag your data
-sample = {"text": "Quantum mechanics...", "id": "123"}
-tagged = tagger.tag_sample(sample)
-print(tagged["curriculum_tags"])
-# {
-#   "difficulty": {"score": 0.89},
-#   "modality": {"primary_modality": "general_text", ...},
-#   "band_assignment": {"band": "B5", "reason": "Very high complexity text"},
-#   "readability": {"flesch_kincaid_grade": 29.7, ...}
-# }
-```
-
-## Features
-
-✅ **Full auto-discovery** - Metrics auto-import from files AND auto-load from config  
-✅ **Metric chaining** - Later metrics see results from earlier ones  
-✅ **Curriculum-driven** - Metrics use curriculum.yaml for classification thresholds  
-✅ **Scalable** - Efficiently process TBs of parquet data  
-✅ **Extensible** - Drop in custom metrics without touching any existing code
-
-## How It Works
-
-**Imports work naturally** with editable install:
-
-```python
-# Just import directly!
-from curriculum_tags import CurriculumTagger
-
-# Metrics auto-import too! No need to edit __init__.py
-from curriculum_tags import DifficultyMetric, YourCustomMetric
-
-# Or import specific components
-from curriculum_tags.metrics.difficulty import DifficultyMetric
-from curriculum_tags.utils.curriculum_loader import CurriculumConfig
-```
-
-**One-time setup** (run from project directory):
-```bash
-cd experiments/2_curirculum_architects
-uv pip install -e .
-```
-
-This installs the package in "editable" mode, so:
-- ✅ Changes to code take effect immediately
-- ✅ No PYTHONPATH needed
-- ✅ Works like any Python package
-- ✅ Not published - stays local to your project
-
-**Two-level auto-discovery:**
-1. **Import level**: Package scans `metrics/` directory and auto-imports all metric classes
-2. **Runtime level**: `CurriculumTagger` reads `metrics_config.yaml` and loads enabled metrics
-3. Convention: `DifficultyMetric` → `curriculum_tags/metrics/difficulty.py`
-4. No manual registration or import editing needed!
-
-
-## Contributing - Adding a New Metric
-
-### Step 1: Create your metric class
-
-`curriculum_tags/metrics/sentiment.py`:
-```python
-from curriculum_tags.core.plugin import MetricPlugin
-
-class SentimentMetric(MetricPlugin):
-    name = "sentiment"
-    
-    def compute(self, sample):
-        # Your logic here
-        return {"score": 0.75, "category": "positive"}
-```
-
-### Step 2: Add to metrics_config.yaml
-
-```yaml
-metrics:
-  - name: sentiment
-    class: SentimentMetric
-    enabled: true
-```
-
-### Step 3: Done!
-
-```python
-# Your metric is automatically imported!
-from curriculum_tags import SentimentMetric
-
-tagger = CurriculumTagger("curriculum.yaml")
-# Your metric is automatically loaded and used!
-```
-
-## Project Structure
-
-```
-experiments/2_curirculum_architects/
-├── curriculum.yaml              # Curriculum policy (bands, modalities, etc)
-├── metrics_config.yaml          # Metrics to load (auto-discovery)
-├── curriculum_tags/             # Main package (no src/ wrapper!)
-│   ├── __init__.py             # Package exports (enables imports)
-│   ├── core/
-│   │   ├── plugin.py           # MetricPlugin base class
-│   │   └── tagger.py           # CurriculumTagger (auto-discovery)
-│   ├── metrics/                # Built-in metrics
-│   │   ├── README.md           # How to add new metrics
-│   │   ├── difficulty.py
-│   │   ├── modality.py
-│   │   └── readability.py
-│   └── utils/
-│       └── curriculum_loader.py # CurriculumConfig (k1.k2.k3 access)
-├── examples/
-│   ├── basic_usage.py          # Simple auto-discovery example
-│   └── custom_plugin.py        # Add custom metrics
-└── tests/
-    ├── test_difficulty_metric.py
-    ├── test_modality_metric.py
-    └── test_readability_metric.py
-```
-
-## Running Examples
-
-All commands run from `experiments/2_curirculum_architects`:
+*(These are examples, not the actual runs. See `examples/` folder for more.)*
 
 ```bash
-cd experiments/2_curirculum_architects
-
-# One-time setup: Install in editable mode
-uv pip install -e .
-
-# Run examples (no PYTHONPATH needed!)
+# Basic usage
 uv run python examples/basic_usage.py
-uv run python examples/custom_plugin.py
 
-# Process parquet files
+# Process Parquet files
 uv run python examples/parquet_processing.py
 
 # Run tests
 uv run pytest tests/ -v
-
-# Run specific test
-uv run pytest tests/test_difficulty_metric.py -v
-
-# Format code (respects parent .pre-commit-config.yaml)
-uv run black curriculum_tags/ tests/ examples/
-uv run isort curriculum_tags/ tests/ examples/
-uv run ruff check --fix curriculum_tags/ tests/ examples/
 ```
-
-### Processing Parquet Files
-
-```python
-from curriculum_tags import CurriculumTagger
-
-tagger = CurriculumTagger("curriculum.yaml")
-
-# Process entire parquet file
-stats = tagger.process_parquet(
-    input_path="data/train.parquet",
-    output_path="data/train_tagged.parquet",
-    batch_size=10000
-)
-
-print(f"Processed {stats['total_rows']} rows")
-```
-
-### Batch Processing
-
-```python
-samples = [
-    {"id": "1", "text": "Sample 1"},
-    {"id": "2", "text": "Sample 2"},
-]
-
-tagged_samples = tagger.process_batch(samples)
-```
-
-### Calculating Band Proportions
-
-The `calculate_proportions.py` script calculates optimal curriculum band distributions for different model sizes based on the "Capacity-Aware Curriculum" logic.
-
-**Features:**
-- Samples metadata from processed parquet files (default 0.5% sample)
-- Aligns difficulty distribution to model capacity (1B, 3B, 8B, 70B stages)
-- Enforces curriculum floors defined in `curriculum.yaml`
-- Outputs results for all stages
-
-**Usage:**
-
-```bash
-# Calculate and print to console
-uv run python scripts/calculate_proportions.py data/train.metadata.parquet
-
-# Specify custom sampling rate (e.g. 10%)
-uv run python scripts/calculate_proportions.py data/train.metadata.parquet --sampling-rate 0.1
-
-# Save output to JSON
-uv run python scripts/calculate_proportions.py data/train.metadata.parquet --output-json proportions.json
-```
-
-**Output Example:**
-```text
-Stage: 8B (Params: 8.0B, Cap: 0.4895)
-----------------------------------------
-  B0: 0.1872
-  B1: 0.2107
-  B2: 0.2709
-...
-```
-
-## Configuration Files
-
-### metrics_config.yaml
-Controls which metrics run and in what order:
-```yaml
-metrics:
-  - name: difficulty
-    class: DifficultyMetric
-    enabled: true
-  - name: modality
-    class: ModalityMetric
-    enabled: true
-  - name: band_assignment
-    class: BandAssignmentMetric
-    enabled: true
-```
-
-### curriculum.yaml
-Policy and thresholds for classification:
-```yaml
-difficulty_system:
-  bands:
-    B0: {name: "Nursery", ...}
-    B1: {name: "Primary", ...}
-```
-
-Metrics access these values:
-```python
-self.config.get("difficulty_system.bands.B0.name")  # "Nursery"
-```
-
-## Architecture
-
-**Simple, no magic:**
-
-1. **MetricPlugin** - Base class with `compute(sample) -> dict`
-2. **CurriculumTagger** - Loads metrics from config, runs them in order
-3. **Metric chaining** - Each metric sees `sample["curriculum_tags"]` from previous metrics
-4. **Auto-discovery** - `importlib` dynamically loads classes from config
-## Testing
-
-All 49 tests pass:
-```bash
-uv run pytest tests/ -v
-```
-
-Organized by metric to avoid merge conflicts:
-- `test_difficulty_metric.py` - Difficulty classification
-- `test_modality_metric.py` - Modality detection  
-- `test_readability_metric.py` - Readability scores
-- `test_tagger.py` - Auto-discovery and chaining
-
-## Contributing
-
-1. Create metric in `src/curriculum_tags/metrics/`
-2. Add to `metrics_config.yaml`
-3. Add tests in `tests/test_yourmetric.py`
-4. Format: `uv run black src/ tests/`
-5. Submit PR
-
-**Naming convention:**
-- File: `sentiment.py` (lowercase, no "metric")
-- Class: `SentimentMetric` (PascalCase with "Metric")
-- Config: `class: SentimentMetric`
-
-Auto-discovery maps: `SentimentMetric` → `sentiment.py`
 
 ---
 
-**Built with simplicity in mind. No registries, no decorators - just clean Python.**
+## 2. Curriculum YAML Structure (The "Constitution")
 
-### Best Practices
+### What It Does (Non-Technical Summary)
 
-- **Keep it stateless**: Plugins should be stateless for parallel processing
-- **Handle edge cases**: Empty text, malformed data, etc.
-- **Return consistent schema**: Always return same keys
-- **Use curriculum config**: Leverage YAML config for thresholds/parameters
-- **Add tests**: Write unit tests for your plugin
+We think of the curriculum as a **court system, not a police force**. It doesn't enforce rules in real-time — instead, it defines the *principles* and *boundaries* that all other systems must follow.
 
-## Performance Considerations
+This YAML file is the **single source of truth** for training policy decisions:
+- What difficulty levels exist (like grades K-12 → PhD)
+- What types of content are allowed at each level
+- When to introduce new languages or advanced reasoning
 
-For large-scale datasets (TBs):
+### The Band System (Think: Education Levels)
 
-- **Use batch processing**: Default `batch_size=10000` is a good start
-- **Parallel processing**: Process multiple files in parallel
-- **Filter plugins**: Only load metrics you need
-- **Monitor memory**: Adjust batch size based on available RAM
-- **Stream processing**: Parquet format supports efficient streaming
+Our curriculum uses **six difficulty bands** (B0-B5) inspired by educational progression. Each band has specific constraints on readability, difficulty scores, entropy, and diversity metrics.
 
-## Example for parallel processing:
+#### Band Overview
 
-```python
-from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
+| Band | Name | Intent | Allowed Modalities |
+|------|------|--------|-------------------|
+| **B0** | Nursery | Surface language acquisition | General text |
+| **B1** | Primary | Fluent everyday language | General text, clean exposition |
+| **B2** | High School | Structured knowledge | General text, structured knowledge |
+| **B3** | Undergraduate | Reasoning emergence | Structured knowledge, technical text, code |
+| **B4** | Graduate | Explicit abstraction | Technical text, math, code, planning/reasoning |
+| **B5** | PhD | Planning & system reasoning | Hard reasoning, math, advanced code, planning |
 
-def process_file(file_path):
-    tagger = CurriculumTagger("curriculum.yaml")
-    output = file_path.with_suffix(".tagged.parquet")
-    return tagger.process_parquet(file_path, output)
+#### How Band Assignment Works
 
-files = list(Path("data/").glob("*.parquet"))
+The `BandAssignmentMetric` is the **final decision maker** that aggregates signals from all other metrics. It follows a strict hierarchical logic:
 
-with ProcessPoolExecutor(max_workers=8) as executor:
-    results = executor.map(process_file, files)
+**1. Modality Overrides (Highest Priority)**
+
+Certain content types force specific bands regardless of text complexity:
+
+| Signal | Target Band | Reason |
+|--------|-------------|---------|
+| Agentic Traces | **B5** | Agentic planning restricted to PhD level |
+| Research Papers | **B4/B5** | B5 if highly complex (FK Grade > 16), otherwise B4 |
+| Code/Math | **B2-B5** | B5 if Difficulty > 0.8, B4 if > 0.6, B3 if > 0.4, else B2 |
+
+**2. Quality Floors (Safety Nets)**
+
+- **COT Floor**: If Chain-of-Thought traces detected → minimum **B3** (prevents reasoning content from being misclassified as simple)
+
+**3. Constraint-Based Classification**
+
+For general text, we use multi-constraint matching. A sample qualifies for a band if it meets ALL criteria:
+
+| Band | Difficulty Levels | Readability (FK) | Difficulty Score | Entropy | Diversity |
+|------|------------------|------------------|------------------|---------|-----------|
+| **B0** | L0, L1 | 0.0 - 6.0 | 0.0 - 0.30 | 0.0 - 4.5 | 0.00 - 0.15 |
+| **B1** | L1, L2, L3 | 4.0 - 10.0 | 0.20 - 0.50 | 3.5 - 5.5 | 0.10 - 0.25 |
+| **B2** | L2, L3, L4 | 8.0 - 14.0 | 0.40 - 0.70 | 4.0 - 6.0 | 0.15 - 0.35 |
+| **B3** | L3, L4 | 12.0 - ∞ | 0.60 - 0.85 | 4.5 - ∞ | 0.20 - ∞ |
+| **B4** | L4, L5 | 14.0 - ∞ | 0.75 - ∞ | 5.0 - ∞ | 0.25 - ∞ |
+| **B5** | L5 | 16.0 - ∞ | 0.85 - ∞ | 5.5 - ∞ | 0.30 - ∞ |
+
+**Overlap Policy**: If a sample qualifies for multiple bands, we assign the **highest** band by default (configurable).
+
+> [!NOTE]
+> See [band_assignment.yaml](./band_assignment.yaml) and [BAND_ASSIGNMENT.md](./curriculum_tags/metrics/BAND_ASSIGNMENT.md) for complete implementation details.
+
+### Key Policies Defined
+
+| Policy Area | Description |
+|-------------|-------------|
+| **Language Policy** | Primary: English (92%), Secondary: Hindi (8%, introduced at 3B stage) |
+| **Context Length** | Minimum 4096 tokens for pre-training |
+| **Reasoning Rules** | Chain-of-thought forbidden until B3; Agentic content only in B4-B5 |
+| **Growth Schedule** | Defines data mix for 1B → 3B → 8B → 70B model stages |
+| **Safety Defaults** | Always downgrade on uncertainty, never upgrade |
+
+### Stage-Based Training
+
+As the model grows, the curriculum shifts toward harder content:
+
+```
+1B Stage:  30% B0, 28% B1, 20% B2, 14% B3, 6% B4, 2% B5  (focus on basics)
+    ↓
+70B Stage: 10% B0, 14% B1, 20% B2, 22% B3, 20% B4, 14% B5 (focus on reasoning)
 ```
 
-> Team 2 - Curriculum Architects
+| Attribute | Details |
+|-----------|---------|
+| **Path** | `experiments/2_curirculum_architects/curriculum.yaml` |
+| **Purpose** | Canonical policy document defining bands, modalities, language rules, and growth schedule |
+| **Status** | DRAFT (Frozen in two stages: Structure first, then Values) |
+
+**Freeze Policy:**
+1. **Structure**: Frozen after Sign-off by Rohan
+2. **Value**: Frozen after full insight into data statistics
+
+---
+
+## 3. Band Proportion Calculation
+### How We Calculate Stage Weights
+The `calculate_proportions.py` script determines the target data mix for a specific model size (e.g., 1B, 3B, 8B, 70B). It uses a mathematical approach to align model capacity with content difficulty.
+
+#### 1. Model Capacity Score ($C$)
+We normalize model size on a logarithmic scale (from 1B to 70B parameters) to a 0–1 score:
+$$C = \frac{\log(\text{params}) - \log(\text{min\_params})}{\log(\text{max\_params}) - \log(\text{min\_params})}$$
+
+#### 2. Alignment Weight ($W_a$)
+Each band has a "Difficulty Centroid" ($D_b$) defined in `curriculum.yaml`. We calculate the alignment between the model's current capacity ($C$) and the band's difficulty ($D_b$):
+$$W_a = \exp(-\lambda \cdot |D_b - C|)$$
+*$\lambda$ (lambda_align) controls how "sharp" the focus is on matched difficulty.*
+
+#### 3. Proportion Computation
+The final proportion for a band ($P_b$) is calculated by combining the base distribution (what occurs naturally in the data) with the alignment weight, then enforcing floors and caps:
+
+1.  **Raw Weight**: $R_b = \text{BaseDist}_b \cdot W_a$
+2.  **Constraint Enforcement**: $R'_b = \max(\min(R_b, \text{Cap}_b), \text{Floor}_b)$
+3.  **Renormalization**: $P_b = \frac{R'_b}{\sum R'_b}$
+
+#### Usage
+To compute proportions for a new dataset:
+```bash
+uv run python scripts/calculate_proportions.py data/your_file.parquet --recompute
+```
+
+---
+
+## 4. Tokenizer Calibration (The T-Scale)
+### What is Tokenizer Calibration?
+High-frequency words (e.g., "the", "and") are assigned low IDs by modern tokenizers (like Llama-3), while rare technical terms or complex symbols are assigned much higher IDs. We use this relationship to calibrate **Tokenizer Difficulty Levels (T0–T5)**.
+
+### Calibration Thresholds
+A document is assigned a T-level by comparing its token ID distribution against these three calibrated thresholds:
+
+| Level | Intent | Avg Token ID | Max Token ID | P95 Token ID |
+|-------|--------|--------------|--------------|--------------|
+| **T0** | Very Simple | < 5,000 | < 10,000 | < 8,000 |
+| **T1** | Everyday Language | < 10,000 | < 20,000 | < 15,000 |
+| **T2** | Structured Knowledge | < 20,000 | < 40,000 | < 30,000 |
+| **T3** | Technical Content | < 40,000 | < 70,000 | < 60,000 |
+| **T4** | Complex Reasoning | < 70,000 | < 100,000 | < 90,000 |
+| **T5** | Advanced / Rare | ∞ | ∞ | ∞ |
+
+### Why It Matters
+While the **Flesch-Kincaid (FK)** score measures linguistic complexity (sentence/word length), the **Tokenizer Level (T-Scale)** measures "vocabulary density." A text can have simple sentences (high FK) but very rare terminology (high T-level), making it a candidate for a higher Curriculum Band.
+
+> [!CAUTION]
+> The current thresholds are calibrated for the **Llama-3.3-70B** tokenizer. This calibration **MUST be re-done** once the final custom tokenizer is provided by **Team 7 (Tokenizer Lab)**, as token ID distributions and vocabulary ranges will shift.
+
+---
+
+## 5. Data Sampler
+
+### What It Does (Non-Technical Summary)
+
+A **convenience tool** for exploring and sampling large datasets stored in AWS S3. When you have terabytes of training data, you can't download everything — this tool lets you:
+- Randomly sample files from cloud storage
+- Preview file contents without downloading
+- Filter by filename patterns and folders
+
+### Features
+
+- 🎲 Random sampling from S3 buckets
+- 🔍 Filtering by filename patterns (regex) and folder paths
+- 📊 TODO: Preview Parquet and JSONL files (S3 and local)
+- 💾 Download with configurable limits
+- 🌐 TODO:Web interface (dark-themed UI)
+- 🔓 Support for public S3 buckets (anonymous access)
+
+| Attribute | Details |
+|-----------|---------|
+| **Path** | `experiments/2_curirculum_architects/scripts/` |
+| **Purpose** | Sample and preview large datasets from S3 and local storage |
+| **Interfaces** | CLI + Web UI |
+
+### Run Command
+
+
+```bash
+# Process S3 dataset with Ray (distributed)
+uv run python scripts/s3_loader.py
+```
+
+---
+
+## What's Next
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Finalize metric plugins | 🔄 In Progress | Waiting for final data format from Team 1 |
+| Freeze curriculum.yaml | 📋 Pending | Will freeze after Team 1 confirmation |
+| Band threshold calibration | 📋 Pending | Requires sample data run |
+| Integration testing | 📋 Pending | End-to-end pipeline with real data |
+
+---
+
+## Quick Reference: File Locations
+
+| Component | Path |
+|-----------|------|
+| Curriculum Policy | [`curriculum.yaml`](./curriculum.yaml) |
+| Metrics Config | [`metrics_config.yaml`](./metrics_config.yaml) |
+| Tagging Library | [`metrics/README.md`](./curriculum_tags/metrics/README.md) |
+| Data Sampler | [`data_sampler/README.md`](./data_sampler/README.md) |
+| Examples | [`examples/README.md`](./examples/README.md) |
+| Tests | `experiments/2_curirculum_architects/tests/` |
+
+---
+
+**Team 2 — Curriculum Architects**  
+*Building the educational pathway for LLM training*
