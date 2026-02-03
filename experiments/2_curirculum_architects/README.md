@@ -260,31 +260,16 @@ A **convenience tool** for exploring and sampling large datasets stored in AWS S
 
 | Attribute | Details |
 |-----------|---------|
-| **Path** | `experiments/2_curirculum_architects/data_sampler/` |
+| **Path** | `experiments/2_curirculum_architects/scripts/` |
 | **Purpose** | Sample and preview large datasets from S3 and local storage |
 | **Interfaces** | CLI + Web UI |
 
-### Setup/Dependency
-
-```bash
-cd experiments/2_curirculum_architects/data_sampler
-uv sync
-```
-
 ### Run Command
 
-*(These are examples, not the actual runs.)*
 
 ```bash
-# CLI - Sample files from S3
-uv run python -m src.cli sample my-bucket 50
-
-# CLI - Preview a file
-uv run python -m src.cli preview s3://my-bucket/data/file.parquet
-
-# Web Interface
-uv run python web/app.py
-# → Access at http://localhost:5000
+# Process S3 dataset with Ray (distributed)
+uv run python scripts/s3_loader.py
 ```
 
 ---
