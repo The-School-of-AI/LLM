@@ -51,6 +51,10 @@ def process_s3_file(file_path: str) -> dict:
     fs = s3fs.S3FileSystem()
     
     # Initialize tagger inside the task to ensure thread safety/isolation
+    # Use a local logger for the remote task
+    task_logger = logging.getLogger(f"Worker-{task_id if 'task_id' in locals() else os.getpid()}")
+    task_logger.info(f"STARTING: {file_path}")
+    
     try:
         tagger = CurriculumTagger(
             curriculum_path=CURRICULUM_YAML,
@@ -64,13 +68,34 @@ def process_s3_file(file_path: str) -> dict:
     relative_path = file_path.replace(input_prefix, "").lstrip("/")
     output_file = f"{OUTPUT_S3_PREFIX.rstrip('/')}/{relative_path}"
 
+    # Get total expected rows for percentage reporting
+    try:
+        total_expected_rows = pq.ParquetFile(f"s3://{file_path}", filesystem=fs).metadata.num_rows
+    except:
+        total_expected_rows = 0
+
     start_time = time.time()
+    
+    def heartbeat_callback(rows):
+        """Logs status every 10 seconds for long-running files."""
+        # We use a simple attribute on the callback function to track time
+        now = time.time()
+        if not hasattr(heartbeat_callback, 'last_log'):
+            heartbeat_callback.last_log = now
+        
+        if now - heartbeat_callback.last_log > 10:
+            elapsed = now - start_time
+            pct = (rows / total_expected_rows) * 100 if total_expected_rows > 0 else 0
+            task_logger.info(f"HEARTBEAT: {file_path} | {rows:,}/{total_expected_rows:,} ({pct:.1f}%) | {elapsed:.0f}s elapsed")
+            heartbeat_callback.last_log = now
+
     try:
         stats = tagger.process_parquet_s3(
             input_path=f"s3://{file_path}",
             output_path=output_file,
             filesystem=fs,
             batch_size=BATCH_SIZE,
+            progress_callback=heartbeat_callback
         )
         
         duration = time.time() - start_time
@@ -159,6 +184,11 @@ def process_s3_bucket():
                 logger.error(f"Failed file: {res.get('input_file')} | Error: {res.get('error')}")
 
             pbar.update(1)
+            pbar.set_postfix({
+                "rows": f"{total_rows_processed:,}",
+                "fails": len(failures),
+                "last_speed": f"{res.get('rows_per_sec', 0):.0f} r/s" if res["status"] == "success" else "ERR"
+            })
 
         # Refill pipeline to maintain MAX_INFLIGHT
         try:

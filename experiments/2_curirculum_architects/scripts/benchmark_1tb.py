@@ -31,11 +31,30 @@ def process_file_task(task_id: int):
         metrics_config_path=METRICS_CONFIG
     )
     
+    print(f"  [Task {task_id}] STARTING: {INPUT_FILE}")
+    
+    # Get total row count for percentage calculation
+    total_expected_rows = pq.ParquetFile(INPUT_FILE).metadata.num_rows
+    
     start = time.time()
+    
+    def heartbeat_callback(rows):
+        """Prints status every 10 seconds for long runs."""
+        now = time.time()
+        if not hasattr(heartbeat_callback, 'last_log'):
+            heartbeat_callback.last_log = now
+        
+        if now - heartbeat_callback.last_log > 10:
+            elapsed = now - start
+            pct = (rows / total_expected_rows) * 100 if total_expected_rows > 0 else 0
+            print(f"\n  [Task {task_id}] STILL RUNNING: {rows:,}/{total_expected_rows:,} ({pct:.1f}%) | {elapsed:.0f}s elapsed")
+            heartbeat_callback.last_log = now
+
     stats = tagger.process_parquet(
         input_path=INPUT_FILE,
         output_path=output_file,
-        batch_size=BATCH_SIZE
+        batch_size=BATCH_SIZE,
+        progress_callback=heartbeat_callback
     )
     duration = time.time() - start
     
@@ -70,11 +89,33 @@ def benchmark():
     # Launch tasks
     futures = [process_file_task.remote(i) for i in range(NUM_PARALLEL_TASKS)]
     
-    # Wait and gather
     results = []
-    for f in tqdm(futures, desc="Processing"):
-        results.append(ray.get(f))
+    pbar = tqdm(total=NUM_PARALLEL_TASKS, desc="Benchmarking")
+    
+    current_rows = 0
+    current_bytes = 0
+    
+    # Process futures as they complete
+    remaining = futures
+    while remaining:
+        done, remaining = ray.wait(remaining, num_returns=1)
+        res = ray.get(done[0])
+        results.append(res)
         
+        current_rows += res['rows']
+        current_bytes += res['bytes']
+        elapsed = time.time() - start_time
+        agg_mb_s = (current_bytes / (1024 * 1024)) / elapsed if elapsed > 0 else 0
+        
+        pbar.update(1)
+        pbar.set_postfix({
+            "t_rows": f"{current_rows:,}",
+            "agg_mb/s": f"{agg_mb_s:.1f}",
+            "last": f"{res['rows']/res['duration']:.0f} r/s"
+        })
+    
+    pbar.close()
+    
     total_duration = time.time() - start_time
     total_rows = sum(r['rows'] for r in results)
     total_bytes = sum(r['bytes'] for r in results)
