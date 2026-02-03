@@ -253,38 +253,23 @@ A **convenience tool** for exploring and sampling large datasets stored in AWS S
 
 - 🎲 Random sampling from S3 buckets
 - 🔍 Filtering by filename patterns (regex) and folder paths
-- 📊 Preview Parquet and JSONL files (S3 and local)
+- 📊 TODO: Preview Parquet and JSONL files (S3 and local)
 - 💾 Download with configurable limits
-- 🌐 Web interface (dark-themed UI)
+- 🌐 TODO:Web interface (dark-themed UI)
 - 🔓 Support for public S3 buckets (anonymous access)
 
 | Attribute | Details |
 |-----------|---------|
-| **Path** | `experiments/2_curirculum_architects/data_sampler/` |
+| **Path** | `experiments/2_curirculum_architects/scripts/` |
 | **Purpose** | Sample and preview large datasets from S3 and local storage |
 | **Interfaces** | CLI + Web UI |
 
-### Setup/Dependency
-
-```bash
-cd experiments/2_curirculum_architects/data_sampler
-uv sync
-```
-
 ### Run Command
 
-*(These are examples, not the actual runs.)*
 
 ```bash
-# CLI - Sample files from S3
-uv run python -m src.cli sample my-bucket 50
-
-# CLI - Preview a file
-uv run python -m src.cli preview s3://my-bucket/data/file.parquet
-
-# Web Interface
-uv run python web/app.py
-# → Access at http://localhost:5000
+# Process S3 dataset with Ray (distributed)
+uv run python scripts/s3_loader.py
 ```
 
 ---
