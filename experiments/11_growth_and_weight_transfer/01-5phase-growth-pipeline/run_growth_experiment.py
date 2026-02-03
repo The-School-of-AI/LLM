@@ -165,29 +165,31 @@ def load_results(save_dir: str = "./checkpoints") -> dict:
 
 
 def setup_logging(save_dir: str = "./checkpoints"):
-    """Setup file-based logging alongside console output."""
-    import logging
+    """Setup file-based logging by redirecting stdout to both console and file."""
     import sys
     
     os.makedirs(save_dir, exist_ok=True)
     log_path = os.path.join(save_dir, "experiment.log")
     
-    # Create a custom logger
-    logger = logging.getLogger("experiment")
-    logger.setLevel(logging.INFO)
+    class Tee:
+        """Write to both stdout and a log file."""
+        def __init__(self, filename, mode='a'):
+            self.file = open(filename, mode, buffering=1)  # Line buffered
+            self.stdout = sys.stdout
+        
+        def write(self, data):
+            self.stdout.write(data)
+            self.file.write(data)
+            self.file.flush()
+        
+        def flush(self):
+            self.stdout.flush()
+            self.file.flush()
     
-    # File handler (append mode)
-    file_handler = logging.FileHandler(log_path, mode='a')
-    file_handler.setFormatter(logging.Formatter('%(asctime)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+    # Redirect stdout to tee
+    sys.stdout = Tee(log_path, 'a')
     
-    # Stream handler (console)
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(logging.Formatter('%(message)s'))
-    
-    logger.addHandler(file_handler)
-    logger.addHandler(stream_handler)
-    
-    return logger, log_path
+    return None, log_path
 
 
 def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = False, resume_phase: int = 0, resume_checkpoint_path: str = None):
