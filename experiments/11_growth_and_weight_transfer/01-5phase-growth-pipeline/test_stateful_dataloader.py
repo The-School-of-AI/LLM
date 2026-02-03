@@ -83,3 +83,45 @@ else:
 print("\n" + "=" * 60)
 print("✅ ALL 4 TESTS PASSED!")
 print("=" * 60)
+
+# Test 5: Test skip_samples for DummyDataset
+print("\n📋 Test 5: Verify skip_samples works for DummyDataset")
+dl_fresh, _ = get_dataloader(
+    dataset_name="dummy", batch_size=4, max_length=64, 
+    skip_samples=0, return_dataset=True, num_samples=1000
+)
+first_batch_fresh = next(iter(dl_fresh))["input_ids"]
+
+dl_resumed, _ = get_dataloader(
+    dataset_name="dummy", batch_size=4, max_length=64, 
+    skip_samples=100, return_dataset=True, num_samples=1000
+)
+first_batch_resumed = next(iter(dl_resumed))["input_ids"]
+
+if torch.equal(first_batch_fresh, first_batch_resumed):
+    print("❌ FAIL: DummyDataset batches are identical - skip not working!")
+else:
+    print("✓ DummyDataset: First batches are DIFFERENT after skip!")
+
+# Test 6: Test skip_samples for TinyShakespeare
+print("\n📋 Test 6: Verify skip_samples works for TinyShakespeare")
+dl_fresh, _ = get_dataloader(
+    dataset_name="shakespeare", batch_size=4, max_length=64, 
+    skip_samples=0, return_dataset=True
+)
+first_batch_fresh = next(iter(dl_fresh))["input_ids"]
+
+dl_resumed, _ = get_dataloader(
+    dataset_name="shakespeare", batch_size=4, max_length=64, 
+    skip_samples=50, return_dataset=True
+)
+first_batch_resumed = next(iter(dl_resumed))["input_ids"]
+
+if torch.equal(first_batch_fresh, first_batch_resumed):
+    print("❌ FAIL: TinyShakespeare batches are identical - skip not working!")
+else:
+    print("✓ TinyShakespeare: First batches are DIFFERENT after skip!")
+
+print("\n" + "=" * 60)
+print("✅ ALL 6 TESTS PASSED!")
+print("=" * 60)
