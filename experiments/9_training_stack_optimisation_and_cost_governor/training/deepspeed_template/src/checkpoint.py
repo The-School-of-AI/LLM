@@ -96,9 +96,9 @@ class S3CheckpointManager:
 
     def _log_setup_info(self):
         """Log checkpoint manager configuration."""
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"{'S3 Checkpoint Manager Configuration':^70}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"  World Size:        {self.world_size} GPUs")
         print(f"  Number of Nodes:   {self.num_nodes}")
         print(f"  GPUs per Node:     {self.gpus_per_node}")
@@ -110,7 +110,7 @@ class S3CheckpointManager:
         print(
             f"  Upload Strategy:   {'Multi-node' if self.num_nodes > 1 else 'Single-node'}"
         )
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
 
     def _init_s3_client(self):
         """Initialize S3 client with configuration."""
@@ -218,8 +218,7 @@ class S3CheckpointManager:
 
         except Exception as e:
             print(
-                f"[Rank {self.global_rank}] "
-                f"❌ Failed to save checkpoint '{tag}': {e}"
+                f"[Rank {self.global_rank}] ❌ Failed to save checkpoint '{tag}': {e}"
             )
             raise
 
@@ -464,8 +463,7 @@ class S3CheckpointManager:
 
         except Exception as e:
             print(
-                f"[Rank {self.global_rank}] "
-                f"❌ Failed to load checkpoint '{tag}': {e}"
+                f"[Rank {self.global_rank}] ❌ Failed to load checkpoint '{tag}': {e}"
             )
             raise
 
@@ -515,9 +513,7 @@ class S3CheckpointManager:
                 )
 
         except Exception as e:
-            print(
-                f"[Rank {self.global_rank}] " f"❌ Failed to download checkpoint: {e}"
-            )
+            print(f"[Rank {self.global_rank}] ❌ Failed to download checkpoint: {e}")
             raise
 
     def _download_files_from_prefix(
@@ -592,9 +588,7 @@ class S3CheckpointManager:
 
                 self.upload_queue.join()
 
-                print(
-                    f"[{node_str}, Rank {self.global_rank}] " f"✓ All uploads complete!"
-                )
+                print(f"[{node_str}, Rank {self.global_rank}] ✓ All uploads complete!")
 
         # Synchronize all processes
         if dist.is_initialized():
@@ -650,10 +644,7 @@ class S3CheckpointManager:
                     shutil.rmtree(dir_path)
 
         except Exception as e:
-            print(
-                f"[Rank {self.global_rank}] "
-                f"⚠️  Error during checkpoint cleanup: {e}"
-            )
+            print(f"[Rank {self.global_rank}] ⚠️  Error during checkpoint cleanup: {e}")
 
     def list_available_checkpoints(self) -> list:
         """
@@ -690,7 +681,7 @@ class S3CheckpointManager:
             return sorted(list(checkpoints), key=lambda x: int(x.split("_")[1]))
 
         except Exception as e:
-            print(f"[Rank {self.global_rank}] " f"⚠️  Error listing checkpoints: {e}")
+            print(f"[Rank {self.global_rank}] ⚠️  Error listing checkpoints: {e}")
             return []
 
     def get_latest_checkpoint_step(self) -> Optional[int]:

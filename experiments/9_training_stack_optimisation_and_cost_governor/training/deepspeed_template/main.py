@@ -277,9 +277,9 @@ def main():
     print_rank_0(f"Starting from epoch {start_epoch}, global step {global_step}")
 
     for epoch in range(start_epoch, args.num_epochs):
-        print_rank_0(f"\n{'='*80}")
+        print_rank_0(f"\n{'=' * 80}")
         print_rank_0(f"Epoch {epoch + 1}/{args.num_epochs}")
-        print_rank_0(f"{'='*80}")
+        print_rank_0(f"{'=' * 80}")
 
         # Determine if we need to skip steps (only for first resumed epoch)
         epoch_start_step = start_step if epoch == start_epoch else 0

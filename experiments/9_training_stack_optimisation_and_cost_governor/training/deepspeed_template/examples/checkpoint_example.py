@@ -102,7 +102,10 @@ def main():
     for step in range(1, num_steps + 1):
         # Generate dummy batch
         input_ids = torch.randint(
-            0, 151936, (8, 512), device=model_engine.device  # batch_size=8, seq_len=512
+            0,
+            151936,
+            (8, 512),
+            device=model_engine.device,  # batch_size=8, seq_len=512
         )
         labels = input_ids.clone()
 

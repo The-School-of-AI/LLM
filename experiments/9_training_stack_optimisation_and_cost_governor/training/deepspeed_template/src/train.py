@@ -88,9 +88,9 @@ def train_epoch(
 
         # Save checkpoint periodically
         if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:
-            checkpoint_tag = f"epoch{epoch}_step{i+1}"
+            checkpoint_tag = f"epoch{epoch}_step{i + 1}"
             print_rank_0(
-                f"\nSaving checkpoint at epoch {epoch}, step {i+1}, global_step {global_step}..."
+                f"\nSaving checkpoint at epoch {epoch}, step {i + 1}, global_step {global_step}..."
             )
 
             # Client state to save with checkpoint
