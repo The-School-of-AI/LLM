@@ -1,7 +1,7 @@
 import torch
 from datasets import load_dataset
 from moeint.moe_null_sim_harness.model import DeepSeekIsh, DeepSeekMoE
-from moeint.routing_health_metrics import RoutingAnalyzer, TokenGroups
+from moeint.routing_health_metrics import RouterHealthAnalyzer, TokenGroups
 from torch import Tensor
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
@@ -18,6 +18,7 @@ class Trainer:
         )
         self.topk = 2
         self.num_real_experts = 4
+        self.num_null_experts = 2
 
         self.tokenizer: TokenizersBackend | SentencePieceBackend = (
             AutoTokenizer.from_pretrained("gpt2")
@@ -51,13 +52,16 @@ class Trainer:
             hidden_size=288,
             num_attention_heads=9,
             num_routed_experts=self.num_real_experts,
-            num_null_experts=2,
+            num_null_experts=self.num_null_experts,
             num_experts_per_tok=self.topk,
         ).to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr)
-        self.routing_analyzer = RoutingAnalyzer(
+        self.router_health_analyzer = RouterHealthAnalyzer(
             vocab_size=self.tokenizer.vocab_size,
             token_id_group_mapping=self._get_token_id_group_mapping(self.tokenizer),
+            num_real_experts=self.num_real_experts,
+            num_null_experts=self.num_null_experts,
+            topk=self.topk,
             device=self.device,
         )
 
@@ -76,14 +80,9 @@ class Trainer:
             )
 
             moe_router_logits = self._collect_moe_router_logits()
-            stats = self.routing_analyzer.analyze(
-                input_ids,
-                moe_router_logits,
-                num_real_experts=self.num_real_experts,
-                top_k=self.topk,
-            )
+            stats = self.router_health_analyzer.analyze(input_ids, moe_router_logits)
             print(
-                f"Step {step} | Loss: {loss.item():.4f} | L0 junk to null rate: {stats.null_expert_stats[0].junk_to_null_rate:.2f} | L0 null got junk rate: {stats.null_expert_stats[0].null_junk_rate:.2f}"
+                f"Step {step} | Loss: {loss.item():.4f} | L0 junk to null rate: {stats.null_experts_stats[0].junk_to_null_rate:.2f} | L0 null got junk rate: {stats.null_experts_stats[0].null_junk_rate:.2f}"
             )
 
             loss.backward()
