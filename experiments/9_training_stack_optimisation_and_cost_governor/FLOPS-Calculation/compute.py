@@ -13,6 +13,27 @@ class TrainingStage:
     description: str
 
     def calculate_params(self) -> dict:
+        """
+        Calculate total and active parameters for the model architecture.
+
+        Handles both dense and MoE architectures with support for:
+        - Null expert routing
+        - Shared and routed experts
+        - Dynamic expert count calculation
+        - Tied embeddings
+
+        Returns:
+            dict: Parameter counts including:
+                - total_params: All model parameters
+                - active_params: Parameters used per forward pass
+                - active_non_embed_params: Active params excluding embeddings
+                - embedding_params: Token embedding parameters
+                - lm_head_params: Language model head parameters
+                - num_moe_layers: Number of MoE layers
+                - dense_layers: Number of dense FFN layers
+                - num_experts: Total number of experts
+                - derived_num_experts: Calculated expert count (if solve_for mode)
+        """
         arch = self.architecture
         vocab = arch.get("vocab_size", 50257)
         hidden = arch.get("hidden_size", 2048)
@@ -155,18 +176,22 @@ class TrainingStage:
         }
 
     def calculate_memory_per_gpu(
-        self, params: Optional[dict] = None, num_gpus: int = 8, zero_stage: int = 2,
-        quantization: str = "bf16", cpu_offload: bool = False
+        self,
+        params: Optional[dict] = None,
+        num_gpus: int = 8,
+        zero_stage: int = 2,
+        quantization: str = "bf16",
+        cpu_offload: bool = False,
     ) -> dict:
         """
         Estimate memory footprint per GPU for training this stage.
-        
+
         Assumptions:
         - Model weights: Depends on quantization (BF16=2, FP8=1, NVFP4=0.5 bytes/param)
         - FP32 optimizer states (Adam): 8 bytes/param (momentum + variance, always FP32)
         - FP32 gradients: 4 bytes/param (gradient accumulation typically FP32)
         - Activations are NOT included (highly batch-size dependent)
-        
+
         ZeRO Stages:
         - ZeRO-0: No sharding (baseline)
         - ZeRO-2: Shard optimizer states + gradients
@@ -175,7 +200,7 @@ class TrainingStage:
         """
         params = params or self.calculate_params()
         total_params = params["total_params"]
-        
+
         # Bytes per parameter for model weights depends on quantization
         quantization = quantization.lower()
         if quantization == "fp8":
@@ -184,31 +209,31 @@ class TrainingStage:
             weight_bytes_per_param = 0.5
         else:  # bf16 or default
             weight_bytes_per_param = 2
-        
+
         model_bytes = total_params * weight_bytes_per_param
         optimizer_bytes = total_params * 8  # FP32 Adam (m + v) - always FP32
         gradient_bytes = total_params * 4  # FP32 gradients
-        
+
         cpu_memory_gb = 0.0
-        
+
         if cpu_offload:
             # ZeRO-Infinity Logic
             # 1. GPU Memory: Fixed buffer size (e.g., 2GB) + minimal active layer overhead
             #    It does NOT scale with model size in the same way.
             #    We assign a fixed buffer of ~4GB per GPU as a safe "working memory" estimate for large models.
-            memory_bytes = 4 * (1024**3) 
-            
+            memory_bytes = 4 * (1024**3)
+
             # 2. CPU/NVMe Memory: Holds all Parameters + Optimizer States + Gradients
             #    If multiple nodes, this is sharded across nodes.
             #    We assume "num_gpus" implies logical GPUs in the cluster.
             #    Total system memory required = Total Model State
             total_system_mem_bytes = model_bytes + optimizer_bytes + gradient_bytes
-            
+
             # CPU RAM required per GPU (assuming perfect sharding across available host RAM)
             # In reality, you need enough CPU RAM on the node to hold the shard.
             cpu_memory_bytes = total_system_mem_bytes / num_gpus
             cpu_memory_gb = cpu_memory_bytes / (1024**3)
-            
+
         elif zero_stage == 0:
             # No sharding - full memory on each GPU
             memory_bytes = model_bytes + optimizer_bytes + gradient_bytes
@@ -221,9 +246,9 @@ class TrainingStage:
         else:
             # Default to ZeRO-2
             memory_bytes = model_bytes + (optimizer_bytes + gradient_bytes) / num_gpus
-        
+
         memory_gb = memory_bytes / (1024**3)
-        
+
         return {
             "memory_per_gpu_gb": memory_gb,
             "cpu_memory_per_gpu_gb": cpu_memory_gb,
@@ -235,6 +260,27 @@ class TrainingStage:
         }
 
     def calculate_flops(self, params: Optional[dict] = None) -> float:
+        """
+        Calculate total FLOPs for training this stage.
+
+        Supports both dense and sparse attention mechanisms:
+        - Dense: O(L^2) complexity using standard transformer attention
+        - Sparse: O(Lk) complexity using DeepSeek Sparse Attention (DSA)
+
+        Formula breakdown:
+        - Linear layers: 6 * seq_len * active_non_embed_params
+        - Dense attention: 12 * layers * hidden_size * seq_len^2
+        - Sparse attention: indexer + sparse_core + MLA projections
+
+        Args:
+            params: Pre-calculated parameter dict (optional, will calculate if None)
+
+        Returns:
+            float: Total FLOPs for processing all tokens in this stage
+
+        Raises:
+            ValueError: If sequence_length or total_tokens <= 0
+        """
         params = params or self.calculate_params()
         arch = self.architecture
 
@@ -242,13 +288,92 @@ class TrainingStage:
         layers = arch.get("num_layers", 24)
         h = arch.get("hidden_size", 2048)
         s = arch.get("sequence_length", 4096)
+
+        # DeepSeek Sparse Attention (DSA) configuration
+        use_sparse_attn = arch.get("use_sparse_attention", False)
+        sparse_k_tokens = arch.get(
+            "sparse_k_tokens", s
+        )  # Number of tokens to attend to
+        indexer_heads = arch.get(
+            "indexer_heads", 4
+        )  # Lightning indexer heads (typically 2-4)
+        indexer_dim = arch.get(
+            "indexer_dim", h // 8
+        )  # Indexer dimension (much smaller)
+        mla_kv_lora_rank = arch.get(
+            "mla_kv_lora_rank", 0
+        )  # MLA compression rank (0 = disabled)
+
         if s <= 0:
             raise ValueError("sequence_length must be > 0.")
         if self.total_tokens <= 0:
             raise ValueError("total_tokens must be > 0.")
 
+        # Linear layer FLOPs
         flops_per_seq_linear = 6 * s * n_linear
-        flops_per_seq_attn = 12 * layers * h * (s**2)
+
+        # Attention FLOPs calculation
+        if use_sparse_attn:
+            # DeepSeek Sparse Attention (DSA) FLOPs
+
+            # 1. Lightning Indexer: O(L^2) but optimized
+            #    - Uses FP8 (2x speedup assumed)
+            #    - Fewer heads and smaller dimension
+            #    - Formula: 2 * seq_len^2 * indexer_heads * indexer_dim / fp8_speedup
+            fp8_speedup = 2.0  # FP8 vs BF16 computational speedup
+            indexer_flops = (2 * (s**2) * indexer_heads * indexer_dim) / fp8_speedup
+
+            # 2. Main Sparse Attention: O(Lk) instead of O(L^2)
+            #    - QK^T matmul: 2 * seq_len * k * head_dim
+            #    - Softmax: 3 * seq_len * k (approximate)
+            #    - Attention-V matmul: 2 * seq_len * k * head_dim
+            num_heads = arch.get("num_heads", 32)
+            head_dim = h // num_heads
+
+            # If MLA is enabled, KV dimension is compressed
+            if mla_kv_lora_rank > 0:
+                # MLA projects KV to lower dimension
+                kv_dim = mla_kv_lora_rank
+                # Additional projection FLOPs: compress and decompress
+                mla_projection_flops = 2 * s * h * kv_dim * 2  # 2x for K and V
+            else:
+                kv_dim = h
+                mla_projection_flops = 0
+
+            # Sparse attention core operations
+            qk_matmul_flops = 2 * s * sparse_k_tokens * head_dim * num_heads
+            softmax_flops = 3 * s * sparse_k_tokens * num_heads
+            attn_v_matmul_flops = 2 * s * sparse_k_tokens * head_dim * num_heads
+
+            sparse_attn_core = qk_matmul_flops + softmax_flops + attn_v_matmul_flops
+
+            # Total sparse attention FLOPs per layer
+            sparse_attn_per_layer = (
+                indexer_flops + sparse_attn_core + mla_projection_flops
+            )
+
+            # Total for all layers
+            flops_per_seq_attn = layers * sparse_attn_per_layer
+
+            # Store breakdown for debugging (optional)
+            self._attn_flops_breakdown = {
+                "indexer_flops": indexer_flops * layers,
+                "sparse_core_flops": sparse_attn_core * layers,
+                "mla_projection_flops": mla_projection_flops * layers,
+                "total_attn_flops": flops_per_seq_attn,
+                "sparse_k_tokens": sparse_k_tokens,
+                "reduction_vs_dense": (12 * layers * h * (s**2)) / flops_per_seq_attn,
+            }
+        else:
+            # Standard Dense Attention: O(L^2)
+            # Formula: 12 * layers * hidden_size * seq_len^2
+            # Breakdown:
+            #   - QK^T: 2 * L * H * S^2
+            #   - Softmax: 3 * L * S^2 (approximate)
+            #   - Attention-V: 2 * L * H * S^2
+            #   - Output projection: 2 * L * H * S
+            #   Total ≈ 12 * L * H * S^2 (dominant term)
+            flops_per_seq_attn = 12 * layers * h * (s**2)
 
         flops_per_seq_total = flops_per_seq_linear + flops_per_seq_attn
 
@@ -258,6 +383,18 @@ class TrainingStage:
 
 
 def load_config(config_path: str):
+    """
+    Load and parse JSON configuration file.
+
+    Args:
+        config_path: Path to JSON config file
+
+    Returns:
+        dict: Parsed configuration
+
+    Exits:
+        Exits with code 1 if file not found or JSON parsing fails
+    """
     try:
         with open(config_path, "r") as f:
             return json.load(f)
@@ -269,31 +406,28 @@ def load_config(config_path: str):
         sys.exit(1)
 
 
-def get_zero_efficiency(zero_stage: int, cpu_offload: bool, zero_efficiency_cfg: dict) -> float:
+def get_zero_efficiency(
+    zero_stage: int, cpu_offload: bool, zero_efficiency_cfg: dict
+) -> float:
     """
     Get the throughput efficiency multiplier for a ZeRO configuration.
-    
+
     ZeRO stages have different overheads:
     - ZeRO-0: No sharding, no overhead (baseline)
     - ZeRO-2: Shard optimizer + gradients, minimal overhead
     - ZeRO-3: Shard params too, requires all-gather before each forward/backward
     - ZeRO-Infinity: CPU/NVMe offload, significant PCIe bandwidth bottleneck
-    
-    Sources for default values:
-    - DeepSpeed ZeRO paper: https://arxiv.org/abs/1910.02054
-    - Microsoft benchmarks show ZeRO-3 is ~15-30% slower than ZeRO-2
-    - ZeRO-Infinity paper reports 2-5x slowdown for CPU offload
     """
     defaults = {
-        "zero0": 1.0,      # Baseline (data parallel only)
-        "zero2": 0.95,     # ~5% overhead for gradient sharding
-        "zero3": 0.70,     # ~30% overhead for param all-gather
-        "zero_infinity": 0.25  # ~75% overhead for CPU offload (PCIe bottleneck)
+        "zero0": 1.0,  # Baseline (data parallel only)
+        "zero2": 0.95,  # ~5% overhead for gradient sharding
+        "zero3": 0.70,  # ~30% overhead for param all-gather
+        "zero_infinity": 0.25,  # ~75% overhead for CPU offload (PCIe bottleneck)
     }
-    
+
     if cpu_offload:
         return zero_efficiency_cfg.get("zero_infinity", defaults["zero_infinity"])
-    
+
     key = f"zero{zero_stage}"
     return zero_efficiency_cfg.get(key, defaults.get(key, 0.70))
 
@@ -301,31 +435,26 @@ def get_zero_efficiency(zero_stage: int, cpu_offload: bool, zero_efficiency_cfg:
 def get_scaling_efficiency(num_gpus: int, scaling_cfg: dict) -> float:
     """
     Get the parallel efficiency multiplier for a given GPU count.
-    
+
     At larger GPU counts, communication overhead increases:
     - All-reduce time scales with ring size
     - Gradient synchronization becomes a bottleneck
     - Network bandwidth limits throughput
-    
-    Sources for default values:
-    - NVIDIA Megatron-LM paper: reports ~90% efficiency at 64 GPUs
-    - Google PaLM paper: ~80% efficiency at 6144 TPUs
-    - Meta OPT-175B: reported ~70% MFU at 992 GPUs
-    
+
     We use log-interpolation between reference points.
     """
     import math
-    
+
     defaults = {
         "base_gpus": 8,
         "efficiency_at_base": 1.0,
         "efficiency_at_64": 0.90,
         "efficiency_at_256": 0.80,
-        "efficiency_at_1024": 0.65
+        "efficiency_at_1024": 0.65,
     }
-    
+
     base = scaling_cfg.get("base_gpus", defaults["base_gpus"])
-    
+
     # Reference points: (gpu_count, efficiency)
     points = [
         (base, scaling_cfg.get("efficiency_at_base", defaults["efficiency_at_base"])),
@@ -333,10 +462,10 @@ def get_scaling_efficiency(num_gpus: int, scaling_cfg: dict) -> float:
         (256, scaling_cfg.get("efficiency_at_256", defaults["efficiency_at_256"])),
         (1024, scaling_cfg.get("efficiency_at_1024", defaults["efficiency_at_1024"])),
     ]
-    
+
     if num_gpus <= base:
         return points[0][1]
-    
+
     # Log-linear interpolation between points
     for i in range(len(points) - 1):
         g1, e1 = points[i]
@@ -345,7 +474,7 @@ def get_scaling_efficiency(num_gpus: int, scaling_cfg: dict) -> float:
             # Log interpolation
             t = math.log(num_gpus / g1) / math.log(g2 / g1)
             return e1 + t * (e2 - e1)
-    
+
     # Extrapolate beyond 1024 GPUs (continue the trend)
     g1, e1 = points[-2]
     g2, e2 = points[-1]
@@ -356,11 +485,24 @@ def get_scaling_efficiency(num_gpus: int, scaling_cfg: dict) -> float:
 
 def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> None:
     """
-    Allocate tokens to stages so total compute ~= largest stage from-scratch FLOPs.
-    Uses attention-aware FLOPs: F = (6*S*N_linear + 12*L*H*S^2) * (T/S)
-    
-    If a stage has 'actual_tokens' set, that value is used directly (user-defined
-    stabilization point). Otherwise, tokens are allocated from the budget.
+    Allocate tokens to stages using growth/expansion mode.
+
+    Implements the "paper" growth strategy where total compute budget equals
+    the FLOPs required to train the largest stage from scratch. Smaller stages
+    receive proportional token allocations.
+
+    Uses attention-aware FLOPs formula: F = (6*S*N_linear + 12*L*H*S²) * (T/S)
+
+    If a stage has 'actual_tokens' set in architecture, that value is used
+    directly (user-defined stabilization point). Otherwise, tokens are allocated
+    from the remaining budget.
+
+    Args:
+        stages: List of TrainingStage objects to allocate tokens to
+        growth_cfg: Growth configuration dict with 'mode' key
+
+    Raises:
+        ValueError: If growth mode is not 'paper'
     """
     if not stages:
         return
@@ -371,7 +513,7 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
 
     # Find the largest stage (by active params) to set the budget
     largest_stage = max(stages, key=lambda s: s.calculate_params()["active_params"])
-    
+
     # Budget = FLOPs to train the largest stage from scratch (using attention-aware formula)
     total_budget_flops = largest_stage.calculate_flops()
 
@@ -379,7 +521,7 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
     for stage in stages:
         # Check if user has set actual_tokens (explicit stabilization point)
         actual_tokens = stage.architecture.get("actual_tokens")
-        
+
         if actual_tokens is not None and actual_tokens > 0:
             # User-defined: use actual_tokens directly
             stage.total_tokens = float(actual_tokens)
@@ -394,31 +536,45 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
             L = arch.get("num_layers", 24)
             H = arch.get("hidden_size", 2048)
             S = arch.get("sequence_length", 4096)
-            
+
             # FLOPs per token = (6*N_linear + 12*L*H*S) for attention-aware
             flops_per_token = 6 * n_linear + 12 * L * H * S
-            
+
             # Max tokens this stage can afford with remaining budget
             t = remaining_flops / flops_per_token
             # Cap at max_tokens from config
             t = min(t, stage.total_tokens)
             stage.total_tokens = t
-            
+
             stage_flops = flops_per_token * t
             remaining_flops -= stage_flops
-        
+
         if remaining_flops <= 0:
             remaining_flops = 0
 
 
 def main() -> None:
+    """
+    Main Function for FLOPS calculator.
+
+    Loads configuration, calculates parameters and FLOPs for all training stages,
+    and displays results in a formatted table with:
+    - Token counts
+    - Parameter counts (total and active)
+    - Memory per GPU estimates
+    - Total FLOPs (ZFLOPs)
+    - Training duration (days)
+    - Cost estimates
+
+    Supports multiple precision modes (BF16, FP8, NVFP4) and various ZeRO stages.
+    """
     parser = argparse.ArgumentParser(
         description="Calculate training FLOPs and duration (growth/expansion mode)."
     )
     parser.add_argument(
         "--config",
         type=str,
-        default="experiments/9_training_stack_optimisation_and_cost_governor/FLOPS-Calculation/config.json",
+        default="config.json",
         help="Path to JSON config file",
     )
     args = parser.parse_args()
@@ -435,11 +591,11 @@ def main() -> None:
         tflops_mode = hardware.get("tflops_mode", "dense")
         zero_stage = hardware.get("zero_stage", 2)  # Default ZeRO-2
         cpu_offload = hardware.get("cpu_offload", False)  # ZeRO-Infinity
-        
+
         # Efficiency configs (can be overridden in config.json)
         zero_efficiency_cfg = hardware.get("zero_efficiency", {})
         scaling_cfg = hardware.get("scaling_efficiency", {})
-        
+
         # Calculate efficiency multipliers
         zero_eff = get_zero_efficiency(zero_stage, cpu_offload, zero_efficiency_cfg)
         scaling_eff = get_scaling_efficiency(num_gpus, scaling_cfg)
@@ -465,7 +621,7 @@ def main() -> None:
     # Effective MFU after all overheads
     effective_mfu = mfu * zero_eff * scaling_eff
     offload_str = " + CPU Offload" if cpu_offload else ""
-    
+
     print("=" * 120)
     print("ERA V4 Training Compute & Schedule Calculator (Growth/Expansion Mode)")
     print(
@@ -517,9 +673,11 @@ def main() -> None:
             total_seconds += stage_seconds
 
             # Calculate memory per GPU (varies by quantization)
-            mem_info = stage.calculate_memory_per_gpu(params, num_gpus, zero_stage, precision, cpu_offload)
+            mem_info = stage.calculate_memory_per_gpu(
+                params, num_gpus, zero_stage, precision, cpu_offload
+            )
             mem_per_gpu = mem_info["memory_per_gpu_gb"]
-            
+
             # Warning indicator if memory exceeds H100 80GB
             mem_warn = "⚠️" if mem_per_gpu > 80 else ""
 
