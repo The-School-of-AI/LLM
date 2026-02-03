@@ -23,23 +23,68 @@ def main():
 
     fs = s3fs.S3FileSystem()
 
+    # ------------------------
+    # Load curriculum first (needed for version)
+    # ------------------------
+    print("Loading curriculum...")
+    curriculum = load_curriculum(args.curriculum)
+    curriculum_version = curriculum.get("version", "unknown")
+
+    # Optional: add date later if you want
+    # run_date = datetime.date.today().isoformat()
+
+    # ------------------------
+    # Build canonical output prefix
+    # ------------------------
+    base_prefix = args.out_prefix.rstrip("/")
+
+    out_prefix = (
+        f"{base_prefix}"
+        f"/curriculum_{curriculum_version}"
+        f"/seed_{args.seed}"
+        # Later:
+        # f"/{run_date}"
+    )
+
+    print(f"Output prefix: {out_prefix}")
+
+    # ------------------------
+    # Load global index
+    # ------------------------
     print("Loading global index...")
     table = pq.read_table(args.index, filesystem=fs)
 
+    # ------------------------
+    # Deterministic shuffle
+    # ------------------------
     print("Shuffling deterministically...")
     shuffled = deterministic_shuffle(table, seed=args.seed)
 
-    shuffled_path = f"{args.out_prefix.rstrip('/')}/global_index_shuffled.parquet"
-    pq.write_table(shuffled, fs.open(shuffled_path, "wb"))
+    # Attach provenance metadata
+    shuffled = shuffled.replace_schema_metadata(
+        {
+            b"seed": str(args.seed).encode(),
+            b"curriculum_version": str(curriculum_version).encode(),
+        }
+    )
 
-    print("Loading curriculum...")
-    curriculum = load_curriculum(args.curriculum)
+    # ------------------------
+    # Write shuffled global index
+    # ------------------------
+    shuffled_path = f"{out_prefix}/global_index_shuffled.parquet"
+    print(f"Writing shuffled index to {shuffled_path}")
 
+    with fs.open(shuffled_path, "wb") as f:
+        pq.write_table(shuffled, f)
+
+    # ------------------------
+    # Build stage manifests
+    # ------------------------
     print("Building stage manifests...")
     build_stage_manifests(
         shuffled,
         curriculum,
-        args.out_prefix,
+        out_prefix,
         filesystem=fs,
     )
 
