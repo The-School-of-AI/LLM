@@ -138,55 +138,60 @@ class CurriculumTagger:
     def process_parquet(
         self,
         input_path: str | Path,
-        output_path: str | Path,
+        output_path: Optional[str | Path] = None,
         batch_size: int = 10000,
         progress_callback: Optional[Callable[[int], None]] = None,
         output_csv_path: Optional[str | Path] = None,
+        rejected_csv_path: Optional[str | Path] = None,
+        write_parquet: bool = False,
     ) -> Dict[str, Any]:
         """Process parquet file and add curriculum tags.
 
+        By default only CSV output is written (main + rejected). Parquet output
+        is optional and when enabled is pass-through (original rows, no curriculum_tags).
+
         Args:
             input_path: Input parquet file
-            output_path: Output parquet file
+            output_path: Output parquet file (required only when write_parquet=True)
             batch_size: Number of rows per batch
             progress_callback: Optional callback for progress (total_rows)
-            output_csv_path: If set, write flat main CSV and rejected CSV alongside Parquet
+            output_csv_path: If set, write flat main CSV and rejected CSV
+            rejected_csv_path: If set, path for rejected log CSV; else derived from output_csv_path
+            write_parquet: If True, write one Parquet at output_path with original rows
+                (no curriculum_tags). No metadata Parquet is written. Default False.
 
         Returns:
-            Statistics about processing (rows, errors, etc.)
+            Statistics: total_rows, error_count; output_file only if write_parquet;
+            main_csv_path, rejected_csv_path, main_csv_rows, rejected_csv_rows if CSV written.
         """
         input_path = Path(input_path)
-        output_path = Path(output_path)
 
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
 
-        # Prepare metadata parquet output path
-        metadata_path = output_path.with_suffix(".metadata.parquet")
+        if write_parquet and output_path is None:
+            raise ValueError("output_path is required when write_parquet=True")
+
+        if output_path is not None:
+            output_path = Path(output_path)
 
         # Read parquet file
         parquet_file = pq.ParquetFile(input_path)
 
-        # Process in batches
-        output_batches = []
-        metadata_batches = []
         all_tagged_records: List[Dict[str, Any]] = []
+        all_original_records: List[Dict[str, Any]] = []  # rows without curriculum_tags
         total_rows = 0
         error_count = 0
 
         for batch in parquet_file.iter_batches(batch_size=batch_size):
-            # Convert to Python dicts
             records = batch.to_pylist()
 
-            # Tag each record
             tagged_records = []
-            meta_records = []
             for record in records:
                 try:
                     tagged = self.tag_sample(record)
                     tagged_records.append(tagged)
                 except Exception as e:
-                    # Keep original record but mark error
                     record["curriculum_tags"] = {
                         "version": self.config.version,
                         "error": str(e),
@@ -195,37 +200,25 @@ class CurriculumTagger:
                     error_count += 1
 
             all_tagged_records.extend(tagged_records)
-
-            # Prepare metadata records (id, curriculum_tags)
+            # Pass-through: rows without curriculum_tags for optional Parquet output
             for tagged in tagged_records:
-                meta_records.append({"id": tagged.get("id"), "curriculum_tags": tagged.get("curriculum_tags", {})})
-
-            # Convert back to Arrow tables
-            tagged_batch = pa.Table.from_pylist(tagged_records)
-            meta_batch = pa.Table.from_pylist(meta_records)
-            output_batches.append(tagged_batch)
-            metadata_batches.append(meta_batch)
+                all_original_records.append({k: v for k, v in tagged.items() if k != "curriculum_tags"})
 
             total_rows += len(records)
 
             if progress_callback:
                 progress_callback(total_rows)
 
-        # Combine and write
-        output_table = pa.concat_tables(output_batches)
-        pq.write_table(output_table, output_path)
-
-        # Combine and write metadata table
-        metadata_table = pa.concat_tables(metadata_batches)
-        pq.write_table(metadata_table, metadata_path)
-
         result: Dict[str, Any] = {
             "total_rows": total_rows,
             "error_count": error_count,
-            "output_file": str(output_path),
         }
 
-        # Optional: write flat CSV (main + rejected)
+        if write_parquet and output_path is not None:
+            output_table = pa.Table.from_pylist(all_original_records)
+            pq.write_table(output_table, output_path)
+            result["output_file"] = str(output_path)
+
         if output_csv_path is not None:
             from ..output.csv_writer import write_csv_output
 
@@ -233,6 +226,7 @@ class CurriculumTagger:
                 all_tagged_records,
                 file_path=str(input_path),
                 output_csv_path=Path(output_csv_path),
+                rejected_csv_path=Path(rejected_csv_path) if rejected_csv_path is not None else None,
             )
             result["main_csv_path"] = csv_stats["main_csv_path"]
             result["rejected_csv_path"] = csv_stats["rejected_csv_path"]
@@ -244,46 +238,47 @@ class CurriculumTagger:
     def process_parquet_s3(
         self,
         input_path: str,
-        output_path: str,
-        filesystem,
+        output_path: Optional[str] = None,
+        filesystem=None,
         batch_size: int = 10000,
         progress_callback: Optional[Callable[[int], None]] = None,
         output_csv_path: Optional[str | Path] = None,
+        rejected_csv_path: Optional[str | Path] = None,
+        write_parquet: bool = False,
     ) -> dict:
-        """Process S3 parquet file and add curriculum tags + metadata parquet."""
+        """Process S3 parquet file; by default only CSV output (main + rejected).
 
-        # ---- Validate paths (S3 equivalent of Path.exists()) ----
+        When write_parquet=True, writes one pass-through Parquet (original rows,
+        no curriculum_tags) to output_path. No metadata Parquet is written.
+        """
+
         if not filesystem.exists(input_path):
             raise FileNotFoundError(f"S3 input not found: {input_path}")
 
-        output_prefix = output_path.rsplit("/", 1)[0]
-        if not filesystem.exists(output_prefix):
-            raise FileNotFoundError(f"S3 output prefix not found: {output_prefix}")
+        if write_parquet and output_path is None:
+            raise ValueError("output_path is required when write_parquet=True")
 
-        # Metadata path (string version of .with_suffix())
-        metadata_path = output_path.replace(".parquet", ".metadata.parquet")
+        if write_parquet and output_path is not None:
+            output_prefix = output_path.rsplit("/", 1)[0]
+            if not filesystem.exists(output_prefix):
+                raise FileNotFoundError(f"S3 output prefix not found: {output_prefix}")
 
         parquet_file = pq.ParquetFile(input_path, filesystem=filesystem)
 
-        output_batches = []
-        metadata_batches = []
         all_tagged_records: List[Dict[str, Any]] = []
+        all_original_records: List[Dict[str, Any]] = []
         total_rows = 0
         error_count = 0
 
         for batch in parquet_file.iter_batches(batch_size=batch_size):
-            # Convert to Python dicts
             records = batch.to_pylist()
 
-            # Tag each record
             tagged_records = []
-            meta_records = []
             for record in records:
                 try:
                     tagged = self.tag_sample(record)
                     tagged_records.append(tagged)
                 except Exception as e:
-                    # Keep original record but mark error
                     record["curriculum_tags"] = {
                         "version": self.config.version,
                         "error": str(e),
@@ -292,46 +287,27 @@ class CurriculumTagger:
                     error_count += 1
 
             all_tagged_records.extend(tagged_records)
-
-            # Prepare metadata records (id, curriculum_tags)
             for tagged in tagged_records:
-                meta_records.append({"id": tagged.get("id"), "curriculum_tags": tagged.get("curriculum_tags", {})})
-
-            # Convert back to Arrow tables
-            tagged_batch = pa.Table.from_pylist(tagged_records)
-            meta_batch = pa.Table.from_pylist(meta_records)
-            output_batches.append(tagged_batch)
-            metadata_batches.append(meta_batch)
+                all_original_records.append({k: v for k, v in tagged.items() if k != "curriculum_tags"})
 
             total_rows += len(records)
 
             if progress_callback:
                 progress_callback(total_rows)
 
-        # Combine and write
-        output_table = pa.concat_tables(output_batches)
-        metadata_table = pa.concat_tables(metadata_batches)
-
-        # Atomic write main parquet to s3
-        tmp_output = output_path + ".tmp"
-        with filesystem.open(tmp_output, "wb") as f:
-            pq.write_table(output_table, f)
-        filesystem.mv(tmp_output, output_path)
-
-        # Atomic write metadata parquet to s3
-        tmp_meta = metadata_path + ".tmp"
-        with filesystem.open(tmp_meta, "wb") as f:
-            pq.write_table(metadata_table, f)
-        filesystem.mv(tmp_meta, metadata_path)
-
         result: Dict[str, Any] = {
             "total_rows": total_rows,
             "error_count": error_count,
-            "output_file": output_path,
-            "metadata_file": metadata_path,
         }
 
-        # Optional: write flat CSV (main + rejected) to local path
+        if write_parquet and output_path is not None:
+            output_table = pa.Table.from_pylist(all_original_records)
+            tmp_output = output_path + ".tmp"
+            with filesystem.open(tmp_output, "wb") as f:
+                pq.write_table(output_table, f)
+            filesystem.mv(tmp_output, output_path)
+            result["output_file"] = output_path
+
         if output_csv_path is not None:
             from ..output.csv_writer import write_csv_output
 
@@ -339,6 +315,7 @@ class CurriculumTagger:
                 all_tagged_records,
                 file_path=input_path,
                 output_csv_path=Path(output_csv_path),
+                rejected_csv_path=Path(rejected_csv_path) if rejected_csv_path is not None else None,
             )
             result["main_csv_path"] = csv_stats["main_csv_path"]
             result["rejected_csv_path"] = csv_stats["rejected_csv_path"]

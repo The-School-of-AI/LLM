@@ -144,8 +144,33 @@ def test_plugin_chaining(temp_curriculum):
     assert tagged["curriculum_tags"]["second"]["doubled"] == 84
 
 
-def test_process_parquet(temp_curriculum, temp_parquet):
-    """Test processing parquet file."""
+def test_process_parquet_csv_only(temp_curriculum, temp_parquet):
+    """Test processing parquet with CSV output only (default: no Parquet)."""
+    config = CurriculumConfig(temp_curriculum)
+    plugins = [SimpleMetric(config)]
+
+    tagger = CurriculumTagger(temp_curriculum, metrics=plugins)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_csv = Path(tmpdir) / "output.csv"
+        stats = tagger.process_parquet(
+            temp_parquet,
+            output_csv_path=output_csv,
+            write_parquet=False,
+        )
+
+        assert stats["total_rows"] == 2
+        assert stats["error_count"] == 0
+        assert "output_file" not in stats
+        assert stats["main_csv_path"] == str(output_csv)
+        assert output_csv.exists()
+        assert Path(stats["rejected_csv_path"]).exists()
+        # SimpleMetric has no band_assignment, so rows go to rejected; main + rejected = 2
+        assert stats["main_csv_rows"] + stats["rejected_csv_rows"] == 2
+
+
+def test_process_parquet_with_pass_through_parquet(temp_curriculum, temp_parquet):
+    """Test write_parquet=True: pass-through Parquet (no curriculum_tags), no metadata Parquet."""
     config = CurriculumConfig(temp_curriculum)
     plugins = [SimpleMetric(config)]
 
@@ -155,25 +180,31 @@ def test_process_parquet(temp_curriculum, temp_parquet):
         output_path = Path(f.name)
 
     try:
-        stats = tagger.process_parquet(temp_parquet, output_path)
+        stats = tagger.process_parquet(
+            temp_parquet,
+            output_path=output_path,
+            write_parquet=True,
+        )
 
         assert stats["total_rows"] == 2
         assert stats["error_count"] == 0
-        assert Path(stats["output_file"]).exists()
+        assert stats["output_file"] == str(output_path)
+        assert "metadata_file" not in stats
 
-        # Verify output
         result_table = pq.read_table(output_path)
         result_data = result_table.to_pylist()
 
         assert len(result_data) == 2
-        assert all("curriculum_tags" in row for row in result_data)
+        # Pass-through: no curriculum_tags column
+        assert all("curriculum_tags" not in row for row in result_data)
+        assert all(row["id"] in ("1", "2") and "text" in row for row in result_data)
 
     finally:
-        output_path.unlink()
+        output_path.unlink(missing_ok=True)
 
 
 def test_process_parquet_with_errors(temp_curriculum, temp_parquet):
-    """Test handling errors during processing."""
+    """Test handling errors during processing; pass-through Parquet has no tags."""
 
     class ErrorMetric(MetricPlugin):
         name = "error_metric"
@@ -186,21 +217,25 @@ def test_process_parquet_with_errors(temp_curriculum, temp_parquet):
 
     tagger = CurriculumTagger(temp_curriculum, metrics=plugins)
 
-    with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
-        output_path = Path(f.name)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "out.parquet"
+        output_csv = Path(tmpdir) / "out.csv"
+        stats = tagger.process_parquet(
+            temp_parquet,
+            output_path=output_path,
+            output_csv_path=output_csv,
+            write_parquet=True,
+        )
 
-    try:
-        stats = tagger.process_parquet(temp_parquet, output_path)
-
-        # Should process but record errors
         assert stats["total_rows"] == 2
-        # Errors are caught and stored in tags
+        # Tagger catches plugin errors and stores in tags; error_count only for tag_sample re-raise
+        assert stats["error_count"] == 0
         result_table = pq.read_table(output_path)
         result_data = result_table.to_pylist()
-        assert all("error" in row["curriculum_tags"]["error_metric"] for row in result_data)
-
-    finally:
-        output_path.unlink()
+        # Pass-through Parquet: no curriculum_tags column
+        assert all("curriculum_tags" not in row for row in result_data)
+        # Rejected CSV: both rows have curriculum_tags.error (metric failed), so both rejected
+        assert stats.get("rejected_csv_rows", 0) == 2
 
 
 def test_process_nonexistent_file(temp_curriculum):
@@ -208,4 +243,4 @@ def test_process_nonexistent_file(temp_curriculum):
     tagger = CurriculumTagger(temp_curriculum, metrics=[])
 
     with pytest.raises(FileNotFoundError):
-        tagger.process_parquet("nonexistent.parquet", "output.parquet")
+        tagger.process_parquet("nonexistent.parquet")

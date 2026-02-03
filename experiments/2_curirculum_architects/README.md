@@ -36,7 +36,7 @@ The tagging system automatically analyzes each document and adds these labels ("
 | **Path** | `experiments/2_curirculum_architects/curriculum_tags/` |
 | **Purpose** | Auto-discovering plugin system that computes curriculum metadata tags for training datasets |
 | **Input Format** | JSONL records in Parquet files (normalized key/value pairs from Team 1) |
-| **Output** | Original Parquet files with added `curriculum_tags` field + metadata Parquet + **optional flat CSV** (main + rejected log) |
+| **Output** | **CSV only by default** (flat main CSV + rejected log). Optional pass-through Parquet (original rows, no curriculum_tags) when `write_parquet=True`. No metadata Parquet. See [OUTPUT_SCHEMA.md](./OUTPUT_SCHEMA.md). |
 
 ### Current Metrics (Plugin-Based)
 
@@ -59,17 +59,16 @@ The tagging system automatically analyzes each document and adds these labels ("
 
 ```
 ┌─────────────────┐     ┌───────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│  S3 Parquet     │ ──▶ │  CurriculumTagger │ ──▶ │  Tagged Parquet     │ ──▶ │  Team 3             │
-│  (from Team 1)  │     │  (runs metrics)   │     │  + Metadata File    │     │  (Coreset Eng.)     │
+│  S3 Parquet     │ ──▶ │  CurriculumTagger │ ──▶ │  Main CSV           │ ──▶ │  Team 3             │
+│  (from Team 1)  │     │  (runs metrics)   │     │  + Rejected CSV     │     │  (Coreset Eng.)     │
 └─────────────────┘     └───────────────────┘     └─────────────────────┘     └─────────────────────┘
 ```
 
-1. Read Parquet files from S3 in **distributed manner** (batch processing)
+1. Read Parquet files from S3 (or local) in **distributed manner** (batch processing)
 2. Apply each metric plugin in sequence (metrics can see results from previous metrics)
 3. Assign curriculum band (B0-B5) based on computed metrics
-4. Write processed files back to S3 with updated tags
-5. Generate separate metadata file for analytics and statistics
-6. **Optional:** Write flat main CSV (uuid, id, file_path, band, other tags, checksum, schema_version) and rejected-files CSV (uuid, id, file_path, reason, details). See [OUTPUT_SCHEMA.md](./OUTPUT_SCHEMA.md).
+4. **Default:** Write flat main CSV (uuid, id, file_path, band, other tags, checksum, schema_version) and rejected-files CSV. No Parquet output.
+5. **Optional:** Set `write_parquet=True` to also write one pass-through Parquet (original rows, no curriculum_tags). No metadata Parquet is written.
 
 ### Setup/Dependency
 

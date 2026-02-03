@@ -1,5 +1,10 @@
-"""Example of processing parquet files with curriculum tags."""
+"""Example of processing parquet files with curriculum tags.
 
+By default only CSV output is written (main + rejected). Set write_parquet=True
+to also write pass-through Parquet (original rows, no curriculum_tags).
+"""
+
+import csv
 import tempfile
 from pathlib import Path
 
@@ -8,8 +13,9 @@ import pyarrow.parquet as pq
 
 from curriculum_tags import CurriculumTagger
 
-CSV_OUTPUT_PATH = Path(__file__).parent.parent / "processed_data" / "output.csv"
-REJECTED_CSV_OUTPUT_PATH = Path(__file__).parent.parent / "processed_data" / "rejected.csv"
+PROCESSED_DATA_DIR = Path(__file__).parent.parent / "processed_data"
+CSV_OUTPUT_PATH = PROCESSED_DATA_DIR / "output.csv"
+REJECTED_CSV_OUTPUT_PATH = PROCESSED_DATA_DIR / "rejected.csv"
 
 
 def create_sample_data(output_path: Path, num_samples: int = 100):
@@ -48,10 +54,11 @@ def process_parquet_demo():
     # Path relative to this example file
     curriculum_path = Path(__file__).parent.parent / "curriculum.yaml"
 
-    # Create temporary files
+    # Input in temp dir; CSV output to processed_data folder
+    PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     with tempfile.TemporaryDirectory() as tmpdir:
         input_file = Path(tmpdir) / "input.parquet"
-        output_file = Path(tmpdir) / "output.parquet"
 
         # Create sample data
         print("\n1. Creating sample dataset...")
@@ -61,8 +68,8 @@ def process_parquet_demo():
         print("\n2. Initializing tagger...")
         tagger = CurriculumTagger(curriculum_path)
 
-        # Process file
-        print("\n3. Processing parquet file...")
+        # Process file (CSV only by default; output to processed_data)
+        print("\n3. Processing parquet file (CSV output to processed_data)...")
 
         processed_count = [0]
 
@@ -71,51 +78,44 @@ def process_parquet_demo():
             if total % 50 == 0:
                 print(f"   Processed {total} rows...")
 
-        output_csv = CSV_OUTPUT_PATH
         stats = tagger.process_parquet(
             input_path=input_file,
-            output_path=output_file,
             batch_size=25,
             progress_callback=progress_callback,
-            output_csv_path=output_csv,
+            output_csv_path=CSV_OUTPUT_PATH,
+            rejected_csv_path=REJECTED_CSV_OUTPUT_PATH,
+            write_parquet=False,
         )
         print("\n4. Processing complete!")
         print(f"   Total rows: {stats['total_rows']}")
         print(f"   Errors: {stats['error_count']}")
-        print(f"   Output file: {stats['output_file']}")
         if "main_csv_path" in stats:
             print(f"   Main CSV: {stats['main_csv_path']} ({stats.get('main_csv_rows', 0)} rows)")
             print(f"   Rejected CSV: {stats['rejected_csv_path']} ({stats.get('rejected_csv_rows', 0)} rows)")
+        if "output_file" in stats:
+            print(f"   Parquet: {stats['output_file']}")
 
-        # Read and display sample results
-        print("\n5. Sample tagged results:")
+        # Show first 3 rows from main CSV (in processed_data)
+        print("\n5. Sample tagged results (from CSV in processed_data):")
         print("=" * 80)
 
-        result_table = pq.read_table(output_file)
-        result_data = result_table.to_pylist()
-
-        # Show first 3 samples
-        for i, row in enumerate(result_data[:3]):
-            print(f"\nSample {i+1}:")
-            print(f"  ID: {row['id']}")
-            print(f"  Text: {row['text'][:50]}...")
-
-            tags = row["curriculum_tags"]
-            print(f"  Curriculum Version: {tags['version']}")
-
-            if "band_assignment" in tags:
-                ba = tags["band_assignment"]
-                print(f"  Band: {ba.get('band', '—')}")
-
-            if "difficulty" in tags:
-                diff = tags["difficulty"]
-                print(f"  Difficulty Level: {diff.get('level', '—')} (score: {diff.get('score', '—')})")
-
-            if "modality" in tags:
-                mod = tags["modality"]
-                print(f"  Primary Modality: {mod.get('primary_modality', '—')}")
-
-            print("-" * 80)
+        main_csv = stats.get("main_csv_path")
+        if main_csv and Path(main_csv).exists():
+            with open(main_csv, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+            for i, row in enumerate(rows[:3]):
+                print(f"\nSample {i+1}:")
+                print(f"  id: {row.get('id', '—')}")
+                print(f"  file_path: {row.get('file_path', '—')}")
+                print(f"  band: {row.get('band', '—')}")
+                print(
+                    f"  difficulty_level: {row.get('difficulty_level', '—')} (score: {row.get('difficulty_score', '—')})"
+                )
+                print(f"  primary_modality: {row.get('primary_modality', '—')}")
+                print("-" * 80)
+        else:
+            print("  (No main CSV path in stats or file missing)")
 
 
 if __name__ == "__main__":
