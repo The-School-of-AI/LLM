@@ -129,7 +129,9 @@ def test_plugin_chaining(temp_curriculum):
 
         def compute(self, sample):
             # Access first metric's result
-            first_value = sample.get("curriculum_tags", {}).get("first", {}).get("value")
+            first_value = (
+                sample.get("curriculum_tags", {}).get("first", {}).get("value")
+            )
             return {"doubled": first_value * 2 if first_value else 0}
 
     config = CurriculumConfig(temp_curriculum)
@@ -197,7 +199,9 @@ def test_process_parquet_with_errors(temp_curriculum, temp_parquet):
         # Errors are caught and stored in tags
         result_table = pq.read_table(output_path)
         result_data = result_table.to_pylist()
-        assert all("error" in row["curriculum_tags"]["error_metric"] for row in result_data)
+        assert all(
+            "error" in row["curriculum_tags"]["error_metric"] for row in result_data
+        )
 
     finally:
         output_path.unlink()

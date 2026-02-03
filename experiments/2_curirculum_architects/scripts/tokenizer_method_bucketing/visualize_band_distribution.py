@@ -85,7 +85,9 @@ def count_bands(records: list) -> dict:
             band = record["curriculum_band"]
             band_counts[band] += 1
         else:
-            print(f"Warning: Record missing 'curriculum_band' field: {record.get('id', 'unknown')}")
+            print(
+                f"Warning: Record missing 'curriculum_band' field: {record.get('id', 'unknown')}"
+            )
 
     # Ensure all bands are present (even if count is 0)
     for band in ["B0", "B1", "B2", "B3", "B4", "B5"]:
@@ -143,11 +145,14 @@ def create_band_distribution_plot(
 
     # Pie chart
     # Only show slices with non-zero values
-    non_zero_data = [(bands[i], counts[i], colors[i]) for i in range(len(bands)) if counts[i] > 0]
+    non_zero_data = [
+        (bands[i], counts[i], colors[i]) for i in range(len(bands)) if counts[i] > 0
+    ]
     if non_zero_data:
         pie_bands, pie_counts, pie_colors = zip(*non_zero_data)
         pie_labels = [
-            f"{BAND_NAMES[band]}\n{count:,} ({count / total * 100:.1f}%)" for band, count in zip(pie_bands, pie_counts)
+            f"{BAND_NAMES[band]}\n{count:,} ({count / total * 100:.1f}%)"
+            for band, count in zip(pie_bands, pie_counts)
         ]
 
         wedges, texts, autotexts = ax2.pie(
@@ -240,7 +245,9 @@ def visualize_dataset(
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Visualize band distribution from classified dataset")
+    parser = argparse.ArgumentParser(
+        description="Visualize band distribution from classified dataset"
+    )
     parser.add_argument(
         "--input",
         type=str,
@@ -260,7 +267,9 @@ def main():
         default="jsonl",
         help="Input file format (default: jsonl)",
     )
-    parser.add_argument("--title", type=str, default=None, help="Custom title for the plot")
+    parser.add_argument(
+        "--title", type=str, default=None, help="Custom title for the plot"
+    )
 
     args = parser.parse_args()
 

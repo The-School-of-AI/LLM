@@ -1,7 +1,8 @@
 """Tokenizer-based difficulty metric using curriculum-style bands."""
 
-import numpy as np
 from typing import Any, Dict, List, Tuple
+
+import numpy as np
 from transformers import AutoTokenizer
 
 from ..core.plugin import MetricPlugin
@@ -97,7 +98,7 @@ class TokenizerDifficultyMetric(MetricPlugin):
 
         # Tokenize (no special tokens, same as notebook)
         token_ids = self.tokenizer.encode(text, add_special_tokens=False)
-        
+
         if not token_ids:
             return self._empty_result()
 
@@ -133,7 +134,9 @@ class TokenizerDifficultyMetric(MetricPlugin):
             "token_count": int(len(tokens)),
         }
 
-    def _assign_level(self, token_stats: Dict[str, float]) -> Tuple[str, Dict[str, Any]]:
+    def _assign_level(
+        self, token_stats: Dict[str, float]
+    ) -> Tuple[str, Dict[str, Any]]:
         """Assign a T0-T5 level based on token ID thresholds.
 
         Logic ported from the notebook's `classify_band`, but renamed to T-levels.

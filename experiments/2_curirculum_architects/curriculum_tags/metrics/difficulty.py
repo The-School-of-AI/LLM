@@ -75,7 +75,10 @@ class DifficultyMetric(MetricPlugin):
         char_freq = Counter(text[:2000])  # Sample for efficiency
         total_chars = sum(char_freq.values())
         entropy = (
-            -sum((count / total_chars) * math.log2(count / total_chars) for count in char_freq.values())
+            -sum(
+                (count / total_chars) * math.log2(count / total_chars)
+                for count in char_freq.values()
+            )
             if total_chars > 0
             else 0.0
         )

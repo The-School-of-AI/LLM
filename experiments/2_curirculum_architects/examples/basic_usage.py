@@ -5,6 +5,7 @@ from pathlib import Path
 
 from curriculum_tags import CurriculumTagger
 
+
 def main():
     """Demonstrate curriculum tagging."""
     curriculum_path = Path(__file__).parent.parent / "curriculum.yaml"
@@ -20,7 +21,12 @@ def main():
 
     # Tag some samples
     samples = [
-        {"id": "sample_1", "text": "Hello world! This is a simple sentence.", "source": "example", "lang": "en"},
+        {
+            "id": "sample_1",
+            "text": "Hello world! This is a simple sentence.",
+            "source": "example",
+            "lang": "en",
+        },
         {
             "id": "sample_2",
             "text": """

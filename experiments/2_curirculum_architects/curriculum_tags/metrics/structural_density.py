@@ -14,7 +14,7 @@ class StructuralDensityMetric(MetricPlugin):
     # Regex patterns
     # Structural: Markdown, HTML, indentation, braces, etc.
     STRUCTURAL_PATTERN = re.compile(r"([{}<>\[\]`#*]|\n\s{2,})")
-    
+
     # Symbolic: Math operators, logic symbols
     SYMBOLIC_PATTERN = re.compile(r"[∑∫√≈≠≤≥→∞=+\-*/^|&!]")
 
@@ -22,24 +22,20 @@ class StructuralDensityMetric(MetricPlugin):
         """Compute structural and symbolic density."""
         text = sample.get("text", "")
         if not text:
-            return {
-                "structural_density": 0.0,
-                "symbolic_density": 0.0,
-                "char_count": 0
-            }
+            return {"structural_density": 0.0, "symbolic_density": 0.0, "char_count": 0}
 
         char_count = len(text)
-        
+
         # Count structural chars
         structural_matches = self.STRUCTURAL_PATTERN.findall(text)
         structural_count = sum(len(m) for m in structural_matches)
-        
+
         # Count symbolic chars
         symbolic_matches = self.SYMBOLIC_PATTERN.findall(text)
         symbolic_count = sum(len(m) for m in symbolic_matches)
-        
+
         return {
             "structural_density": round(structural_count / char_count, 4),
             "symbolic_density": round(symbolic_count / char_count, 4),
-            "char_count": char_count
+            "char_count": char_count,
         }

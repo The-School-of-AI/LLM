@@ -19,7 +19,7 @@ class EntropyMetric(MetricPlugin):
             score: Shannon entropy value
         """
         text = sample.get("text", "")
-        
+
         # Sample first 4000 chars for efficiency (matching old codebase default)
         s = text[:4000]
         if not s:
@@ -27,12 +27,10 @@ class EntropyMetric(MetricPlugin):
 
         freq = Counter(s)
         n = len(s)
-        
+
         entropy = 0.0
         for count in freq.values():
             p = count / n
             entropy -= p * math.log(p + 1e-12)
 
-        return {
-            "score": round(entropy, 3)
-        }
+        return {"score": round(entropy, 3)}

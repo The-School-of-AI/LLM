@@ -1,6 +1,5 @@
-
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add current directory to path so we can import curriculum_tags
@@ -8,12 +7,13 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from curriculum_tags import CurriculumTagger
 
+
 def test_metrics():
     print("Initializing CurriculumTagger...")
     # Initialize tagger (will load metrics from metrics_config.yaml)
     # We assume we are running from experiments/2_curirculum_architects/
     tagger = CurriculumTagger("curriculum.yaml")
-    
+
     # Sample text that should trigger various metrics
     sample_text = """
     Let's think step by step.
@@ -31,20 +31,21 @@ def test_metrics():
     
     ∑ x_i = 100
     """
-    
+
     sample = {"text": sample_text, "id": "test_1"}
-    
+
     print("\nProcessing sample...")
     tagged = tagger.tag_sample(sample)
-    
+
     tags = tagged.get("curriculum_tags", {})
     print("\nGenerated Tags:")
     import json
+
     print(json.dumps(tags, indent=2))
-    
+
     # assertions to verify metrics ran
     print("\nVerifying metrics...")
-    
+
     # Check Tokenizer Difficulty
     # Check Tokenizer Difficulty
     if "tokenizer_difficulty" in tags:
@@ -82,6 +83,7 @@ def test_metrics():
         print(f"   - Reason: {ba.get('reason')}")
     else:
         print("[FAIL] BandAssignmentMetric missing")
+
 
 if __name__ == "__main__":
     test_metrics()

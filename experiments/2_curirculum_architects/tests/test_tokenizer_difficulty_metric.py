@@ -75,4 +75,3 @@ def test_assign_level_T5_for_very_large_ids(metric):
     assert level == "T5"
     assert meta["level"] == "T5"
     assert "Exceeded all thresholds" not in meta.get("reason", "")
-

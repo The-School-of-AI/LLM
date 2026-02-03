@@ -49,7 +49,9 @@ def test_modality_reasoning_detection(temp_config):
     """Test modality detection for reasoning."""
     metric = ModalityMetric(temp_config)
 
-    reasoning_sample = {"text": "Let's think step by step. First, we need to analyze..."}
+    reasoning_sample = {
+        "text": "Let's think step by step. First, we need to analyze..."
+    }
     result = metric.compute(reasoning_sample)
 
     assert result["has_reasoning"] is True
@@ -86,21 +88,47 @@ def test_modality_research_paper_detection(temp_config):
     metric = ModalityMetric(temp_config)
 
     # Test with Abstract
-    assert metric.compute({"text": "Abstract: This paper presents..."})["has_research_paper"] is True
-    
+    assert (
+        metric.compute({"text": "Abstract: This paper presents..."})[
+            "has_research_paper"
+        ]
+        is True
+    )
+
     # Test with References
-    assert metric.compute({"text": "References: 1. Smith et al."})["has_research_paper"] is True
-    
+    assert (
+        metric.compute({"text": "References: 1. Smith et al."})["has_research_paper"]
+        is True
+    )
+
     # Test with arXiv/doi
-    assert metric.compute({"text": "See arXiv: 2101.12345 for details."})["has_research_paper"] is True
-    assert metric.compute({"text": "doi: 10.1145/1234567.1234568"})["has_research_paper"] is True
-    
+    assert (
+        metric.compute({"text": "See arXiv: 2101.12345 for details."})[
+            "has_research_paper"
+        ]
+        is True
+    )
+    assert (
+        metric.compute({"text": "doi: 10.1145/1234567.1234568"})["has_research_paper"]
+        is True
+    )
+
     # Test with et al.
-    assert metric.compute({"text": "As shown by Wang et al. (2023)..."})["has_research_paper"] is True
-    
+    assert (
+        metric.compute({"text": "As shown by Wang et al. (2023)..."})[
+            "has_research_paper"
+        ]
+        is True
+    )
+
     # Test with citations [1, 2]...[3] (Regex requires multiple blocks)
-    assert metric.compute({"text": "Recent works [1, 2] have shown results [3]."})["has_research_paper"] is True
-    
+    assert (
+        metric.compute({"text": "Recent works [1, 2] have shown results [3]."})[
+            "has_research_paper"
+        ]
+        is True
+    )
+
     # Test primary modality
     result = metric.compute({"text": "Abstract: Deep learning is hard. doi: 123"})
     assert result["has_research_paper"] is True

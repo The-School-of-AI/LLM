@@ -1,17 +1,20 @@
-
 import pytest
+
 from curriculum_tags.metrics.diversity import DiversityMetric
 from curriculum_tags.utils.curriculum_loader import CurriculumConfig
+
 
 @pytest.fixture
 def metric():
     config = {}
     return DiversityMetric(config)
 
+
 def test_empty_tokens(metric):
     result = metric.compute({"text": ""})
     assert result["rare_ratio"] == 0.0
     assert result["token_count"] == 0
+
 
 def test_all_unique(metric):
     # "a b c" -> all unique -> ratio 1.0
@@ -19,11 +22,13 @@ def test_all_unique(metric):
     assert result["rare_ratio"] == 1.0
     assert result["token_count"] == 3
 
+
 def test_all_repeated(metric):
     # "a a b b" -> no unique -> ratio 0.0
     result = metric.compute({"text": "a a b b"})
     assert result["rare_ratio"] == 0.0
     assert result["token_count"] == 4
+
 
 def test_mixed(metric):
     # "a b a" -> 'a' is repeated, 'b' is unique

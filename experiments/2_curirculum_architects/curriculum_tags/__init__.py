@@ -20,11 +20,17 @@ for _metric_file in _metrics_dir.glob("*.py"):
 
     try:
         # Import the module
-        _module = importlib.import_module(f".metrics.{_metric_file.stem}", package=__package__)
+        _module = importlib.import_module(
+            f".metrics.{_metric_file.stem}", package=__package__
+        )
 
         # Find all MetricPlugin subclasses in the module
         for _name, _obj in inspect.getmembers(_module, inspect.isclass):
-            if issubclass(_obj, MetricPlugin) and _obj is not MetricPlugin and _obj.__module__ == _module.__name__:
+            if (
+                issubclass(_obj, MetricPlugin)
+                and _obj is not MetricPlugin
+                and _obj.__module__ == _module.__name__
+            ):
                 _discovered_metrics[_name] = _obj
                 globals()[_name] = _obj
     except Exception:

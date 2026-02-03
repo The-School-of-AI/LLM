@@ -108,8 +108,16 @@ class CurriculumBandClassifier:
             print(f"Tokenizer type: {type(self.tokenizer.backend_tokenizer).__name__}")
 
         # Get vocabulary size for reference
-        vocab_size = len(self.tokenizer.get_vocab()) if hasattr(self.tokenizer, "get_vocab") else "unknown"
-        print(f"Vocabulary size: {vocab_size:,}" if isinstance(vocab_size, int) else f"Vocabulary size: {vocab_size}")
+        vocab_size = (
+            len(self.tokenizer.get_vocab())
+            if hasattr(self.tokenizer, "get_vocab")
+            else "unknown"
+        )
+        print(
+            f"Vocabulary size: {vocab_size:,}"
+            if isinstance(vocab_size, int)
+            else f"Vocabulary size: {vocab_size}"
+        )
 
     def tokenize_text(self, text: str) -> List[int]:
         """
@@ -158,7 +166,9 @@ class CurriculumBandClassifier:
             "count": len(token_ids),
         }
 
-    def classify_band(self, token_stats: Dict[str, float]) -> Tuple[str, Dict[str, Any]]:
+    def classify_band(
+        self, token_stats: Dict[str, float]
+    ) -> Tuple[str, Dict[str, Any]]:
         """
         Classify a sample into B0-B5 band based on token statistics.
 
@@ -178,7 +188,11 @@ class CurriculumBandClassifier:
             thresholds = self.TOKEN_ID_THRESHOLDS[band]
 
             # Check if sample fits this band
-            if avg_id <= thresholds["avg_max"] and max_id <= thresholds["max_max"] and p95_id <= thresholds["p95_max"]:
+            if (
+                avg_id <= thresholds["avg_max"]
+                and max_id <= thresholds["max_max"]
+                and p95_id <= thresholds["p95_max"]
+            ):
                 metadata = {
                     "band": band,
                     "description": thresholds["description"],
@@ -201,7 +215,9 @@ class CurriculumBandClassifier:
             "reason": "Exceeded all thresholds, classified as B5",
         }
 
-    def process_record(self, record: Dict[str, Any], text_field: str = "text") -> Dict[str, Any]:
+    def process_record(
+        self, record: Dict[str, Any], text_field: str = "text"
+    ) -> Dict[str, Any]:
         """
         Process a single dataset record and classify it.
 
@@ -214,7 +230,9 @@ class CurriculumBandClassifier:
         """
         # Extract text from record
         if text_field not in record:
-            raise ValueError(f"Field '{text_field}' not found in record. Available fields: {list(record.keys())}")
+            raise ValueError(
+                f"Field '{text_field}' not found in record. Available fields: {list(record.keys())}"
+            )
 
         text = record[text_field]
 
@@ -236,7 +254,9 @@ class CurriculumBandClassifier:
             # Return rejected record with metadata
             result = record.copy()
             result["rejected"] = True
-            result["rejection_reason"] = f"Token count ({token_count}) below minimum threshold ({MIN_TOKEN_COUNT})"
+            result["rejection_reason"] = (
+                f"Token count ({token_count}) below minimum threshold ({MIN_TOKEN_COUNT})"
+            )
             result["token_count"] = token_count
             result["token_stats"] = self.calculate_token_stats(token_ids)
             return result
@@ -285,7 +305,9 @@ class CurriculumBandClassifier:
         # Determine rejected output file path
         if rejected_output_file is None:
             output_path = Path(output_file)
-            rejected_output_file = str(output_path.parent / f"{output_path.stem}_rejected{output_path.suffix}")
+            rejected_output_file = str(
+                output_path.parent / f"{output_path.stem}_rejected{output_path.suffix}"
+            )
 
         # Read input file
         records = []
@@ -369,7 +391,9 @@ class CurriculumBandClassifier:
             print(f"{band:3s}: {count:6d} ({percentage:5.1f}%) - {desc}")
         print("=" * 60)
         print(f"Accepted: {total} records")
-        print(f"Rejected: {rejected_count} records (token count below minimum threshold)")
+        print(
+            f"Rejected: {rejected_count} records (token count below minimum threshold)"
+        )
         print(f"Total processed: {len(records)} records")
         print("=" * 60)
 
@@ -489,7 +513,10 @@ class CurriculumBandClassifier:
             indices, pie_counts = zip(*non_zero)
             pie_bands = [bands[i] for i in indices]
             pie_colors = [colors[b] for b in pie_bands]
-            pie_labels = [f"{band_names[b]}\n{c:,} ({c / total * 100:.1f}%)" for b, c in zip(pie_bands, pie_counts)]
+            pie_labels = [
+                f"{band_names[b]}\n{c:,} ({c / total * 100:.1f}%)"
+                for b, c in zip(pie_bands, pie_counts)
+            ]
 
             ax2.pie(
                 pie_counts,
@@ -558,7 +585,9 @@ def main():
     args = parser.parse_args()
 
     # Initialize classifier
-    classifier = CurriculumBandClassifier(model_id=args.model_id, local_tokenizer_path=args.local_tokenizer)
+    classifier = CurriculumBandClassifier(
+        model_id=args.model_id, local_tokenizer_path=args.local_tokenizer
+    )
 
     # Process dataset
     classifier.process_dataset(

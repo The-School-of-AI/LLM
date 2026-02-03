@@ -35,7 +35,11 @@ class CurriculumTagger:
                     Defaults to metrics_config.yaml in same dir as curriculum
         """
         self.config = CurriculumConfig(curriculum_path)
-        self.plugins = metrics if metrics is not None else self._load_metrics(curriculum_path, metrics_config_path)
+        self.plugins = (
+            metrics
+            if metrics is not None
+            else self._load_metrics(curriculum_path, metrics_config_path)
+        )
 
     def _get_builtin_defaults(self) -> List[MetricPlugin]:
         """Return list of essential default metrics if no config found."""
@@ -43,7 +47,11 @@ class CurriculumTagger:
         from ..metrics.modality import ModalityMetric
         from ..metrics.readability import ReadabilityMetric
 
-        return [DifficultyMetric(self.config), ModalityMetric(self.config), ReadabilityMetric(self.config)]
+        return [
+            DifficultyMetric(self.config),
+            ModalityMetric(self.config),
+            ReadabilityMetric(self.config),
+        ]
 
     def _load_metrics(
         self, curriculum_path: str | Path, metrics_config_path: Optional[str | Path]
@@ -194,7 +202,12 @@ class CurriculumTagger:
 
             # Prepare metadata records (id, curriculum_tags)
             for tagged in tagged_records:
-                meta_records.append({"id": tagged.get("id"), "curriculum_tags": tagged.get("curriculum_tags", {})})
+                meta_records.append(
+                    {
+                        "id": tagged.get("id"),
+                        "curriculum_tags": tagged.get("curriculum_tags", {}),
+                    }
+                )
 
             # Convert back to Arrow tables
             tagged_batch = pa.Table.from_pylist(tagged_records)
@@ -271,7 +284,12 @@ class CurriculumTagger:
 
             # Prepare metadata records (id, curriculum_tags)
             for tagged in tagged_records:
-                meta_records.append({"id": tagged.get("id"), "curriculum_tags": tagged.get("curriculum_tags", {})})
+                meta_records.append(
+                    {
+                        "id": tagged.get("id"),
+                        "curriculum_tags": tagged.get("curriculum_tags", {}),
+                    }
+                )
 
             # Convert back to Arrow tables
             tagged_batch = pa.Table.from_pylist(tagged_records)
