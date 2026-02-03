@@ -20,6 +20,10 @@ from common import (
     save_progress,
 )
 
+
+# Set block size to 0 for streaming HTTP files (fixes range request error)
+os.environ["HF_DATASETS_DOWNLOAD_BLOCK_SIZE"] = "0"
+
 # Authenticate with HuggingFace if token is available
 if os.environ.get("HF_TOKEN"):
     login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
