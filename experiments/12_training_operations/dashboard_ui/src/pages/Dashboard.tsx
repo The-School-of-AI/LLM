@@ -24,31 +24,43 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         try {
             setError(null);
-            const [runRes, liveRes, ckptRes, incRes, costRes] = await Promise.allSettled([
-                fetch('/api/run_status.json').then(r => r.json()),
-                fetch('/api/live_metrics.json').then(r => r.json()),
-                fetch('/api/checkpoints.json').then(r => r.json()),
-                fetch('/api/incidents.json').then(r => r.json()),
-                fetch('/api/cost.json').then(r => r.json())
+            console.log('[Dashboard] Fetching data...');
+            const responses = await Promise.all([
+                fetch('/api/run_status.json'),
+                fetch('/api/live_metrics.json'),
+                fetch('/api/checkpoints.json'),
+                fetch('/api/incidents.json'),
+                fetch('/api/cost.json')
             ]);
 
-            if (runRes.status === 'fulfilled') setRunStatus(runRes.value);
-            if (liveRes.status === 'fulfilled') setLiveMetrics(liveRes.value);
-            if (ckptRes.status === 'fulfilled') setCheckpointStatus(ckptRes.value);
-            if (incRes.status === 'fulfilled') setIncidents(incRes.value);
-            if (costRes.status === 'fulfilled') setCostStatus(costRes.value);
+            // Helper to safely parse JSON
+            const parseJson = async (res: Response) => {
+                if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+                const text = await res.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('[Dashboard] JSON Parse Error:', text.substring(0, 50));
+                    throw new Error('Invalid JSON response (likely HTML fallback)');
+                }
+            };
 
-            // If all failed, set an error (unless it was network error caught below)
-            const allFailed = [runRes, liveRes, ckptRes, incRes, costRes].every(r => r.status === 'rejected');
-            if (allFailed) {
-                setError("Could not connect to data endpoints.");
-            } else {
-                setLastFetchTime(new Date());
-            }
+            const [runStatusData, liveMetricsData, checkpointData, incidentsData, costData] = await Promise.all(
+                responses.map(parseJson)
+            );
+
+            setRunStatus(runStatusData);
+            setLiveMetrics(liveMetricsData);
+            setCheckpointStatus(checkpointData);
+            // Handle different response structures for incidents
+            setIncidents(Array.isArray(incidentsData) ? incidentsData : (incidentsData.incidents || []));
+            setCostStatus(costData);
+
+            setLastFetchTime(new Date());
 
         } catch (e) {
-            console.error(e);
-            setError("Failed to fetch data endpoints");
+            console.error('[Dashboard] Data fetch error:', e);
+            setError("Could not connect to data endpoints. Ensure mock server is running.");
         } finally {
             setLoading(false);
         }
