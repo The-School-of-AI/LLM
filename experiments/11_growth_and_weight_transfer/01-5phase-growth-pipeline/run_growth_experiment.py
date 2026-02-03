@@ -377,10 +377,11 @@ def run_experiment(config_path: str = "config/config.yaml", use_wandb: bool = Fa
         if resume_phase == 1:
             print("Starting fresh from Phase 1...")
         elif resume_phase > 1:
-            # Set dummy results for skipped phases
+            # Set placeholder results for skipped phases ONLY if not already loaded
             for i in range(1, resume_phase):
-                results[f"phase{i}_loss"] = 0.0
-                if i > 1:
+                if f"phase{i}_loss" not in results:
+                    results[f"phase{i}_loss"] = 0.0
+                if i > 1 and f"phase{i}_delta" not in results:
                     results[f"phase{i}_delta"] = 0.0
             print(f"Skipping phases 1-{resume_phase-1}, starting at Phase {resume_phase}\n")
     
