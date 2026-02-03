@@ -1,8 +1,59 @@
-# Tokenizer Design Lab - RRF Tokenizer Merge
+# Tokenizer Design Lab
 
 **Project:** P6 - Tokenizer Design Lab
 
-## Overview
+## Tokenizer Statistics
+Analysis of vocabulary compositions across major frontier Large Language Model (LLM) tokenizers with the primary objective - to identify the optimal tokenizer, or construct a unified vocabulary—that delivers **robust performance for English and Indic languages** while maintaining excellent support for **JSON structured outputs** and **function calling templates**.
+
+### Candidate Tokenizers
+
+| Model | HuggingFace Link |
+|-------|------------------|
+| DeepSeek V3.2 | https://huggingface.co/deepseek-ai/DeepSeek-V3.2 |
+| DeepSeek Coder 33B | https://huggingface.co/deepseek-ai/deepseek-coder-33b-instruct |
+| Qwen3 235B | https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507-FP8 |
+| Qwen3 Coder 480B | https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct |
+| Gemma 2 27B | https://huggingface.co/google/gemma-2-27b |
+| GPT-OSS 120B | https://huggingface.co/openai/gpt-oss-120b |
+| OLMo 3 32B | https://huggingface.co/allenai/Olmo-3-1125-32B |
+| SERA 32B | https://huggingface.co/allenai/SERA-32B-GA |
+| Mistral Large 3 675B | https://huggingface.co/mistralai/Mistral-Large-3-675B-Base-2512 |
+| ByteDance Seed 36B | https://huggingface.co/ByteDance-Seed/Seed-OSS-36B-Base |
+
+### Tokens Distribution
+
+#### Summary
+![Comprehensive Comparison](statistics/charts/comprehensive_comparison.png)
+
+
+#### Tokens > 32 Characters
+![Tokens Over 32 Characters](statistics/charts/tokens_over_32.png)
+
+---
+
+### Frequency Statistics
+This analysis investigates token overlap and placement patterns across tokenizers to understand vocabulary commonality:
+
+
+#### Token Position Consistency
+![General Tokenizer Correlation](statistics/charts/general_tokenizer_correlation.png)
+
+
+#### Model Count Impact on Consistency
+![Model Count Analysis](statistics/charts/model_count_analysis.png)
+
+### Summary
+1. Indic Support is average to poor across most Tokenizers. GPT-OSS stands out.
+
+2. Code and JSON Support is Universally Decent
+
+3. Common Tokens Show Positional Consistency
+
+4. Qwen, GPT-OSS, and OLMo show higher correlation, similarly Mistral, DeepSeek, and ByteDance cluster together more.
+
+6. Gemma has less Convergence as it uses SentencePiece tokenization.
+
+## RRF Tokenizer Merge
 
 This directory contains an implementation of Reciprocal Rank Fusion (RRF) based tokenizer merging that combines multiple tokenizers with gptoss as the primary source of truth. The merged tokenizer is optimized for Latin and Indic scripts with a 128K vocabulary size.
 

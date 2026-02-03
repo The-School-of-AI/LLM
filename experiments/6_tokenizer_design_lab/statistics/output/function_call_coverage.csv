@@ -1,0 +1,11 @@
+Tokenizer,Total Function Tokens,Function Keywords,Call Keywords,Parameter Keywords,Async Keywords,Parentheses,Tool/Action Tokens,Special Tokens
+qwen,254,54,49,56,53,27,4,11
+qwencode,254,54,49,56,53,27,4,11
+olmocode,254,54,49,56,53,27,4,11
+olmo,243,54,49,56,53,27,0,4
+gptoss,232,52,46,54,50,23,1,6
+mistral,181,43,38,40,37,14,7,2
+byted,176,44,39,40,35,16,2,0
+ds,175,44,34,37,31,14,9,6
+dscode,125,29,28,33,26,5,0,4
+gemma,118,26,25,27,29,9,0,2
