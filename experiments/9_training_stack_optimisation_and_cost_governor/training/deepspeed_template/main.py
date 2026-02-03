@@ -202,6 +202,10 @@ def main():
     model_engine, optimizer, _, _ = deepspeed.initialize(
         args=args, model=model, model_parameters=model.parameters()
     )
+    expert_count = sum(1 for n, m in model_engine.module.named_modules() 
+                   if 'experts' in n and hasattr(m, 'weight'))
+    print_rank_0(f"Rank {args.local_rank}: {expert_count} experts (expected: {8 // torch.distributed.get_world_size()})")
+    
     print_rank_0("  DeepSpeed engine initialized")
     print_rank_0(f"  Device: {model_engine.device}")
     print_rank_0(

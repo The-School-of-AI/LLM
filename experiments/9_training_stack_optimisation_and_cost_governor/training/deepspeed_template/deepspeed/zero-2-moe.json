@@ -51,5 +51,6 @@
     
     "gradient_clipping": 1.0,
     "steps_per_print": 10,
-    "wall_clock_breakdown": false
+    "wall_clock_breakdown": true,
+    "dump_state": true
 }
