@@ -21,14 +21,14 @@ Usage:
     # Complete pipeline: from filtered tokenizers to final vocab (RRF always used)
     python tokenizer_reindexing.py \\
         --input-dir filtered_tokenizer \\
-        --output reindexed_tokenizer_128k.json \\
+        --output merged_tokens/reindexed_tokenizer_128k.json \\
         --target-size 128000 \\
         --reserved-count 200
     
     # With long tokens CSV for reference
     python tokenizer_reindexing.py \\
         --input-dir filtered_tokenizer \\
-        --output reindexed_tokenizer_128k.json \\
+        --output merged_tokens/reindexed_tokenizer_128k.json \\
         --long-tokens-csv tokenizer_results/long_tokens_32plus.csv \\
         --target-size 128000
     
@@ -1254,7 +1254,7 @@ class TokenizerReindexer:
             print(f"\n💾 Reindexed vocabulary saved to: {output_path}")
     
     def save_mappings(self, output_path: Path):
-        """Save ID mappings for reference."""
+        """Save ID mappings for reference (optional)."""
         mapping_path = output_path.parent / f"{output_path.stem}_id_mapping.json"
         
         mapping_data = {
@@ -1271,315 +1271,11 @@ class TokenizerReindexer:
         
         if self.verbose:
             print(f"💾 ID mappings saved to: {mapping_path}")
-    
-    def save_documentation(self, output_path: Path):
-        """Save comprehensive documentation for downstream teams."""
-        doc_path = output_path.parent / f"{output_path.stem}_documentation.json"
-        
-        # Build comprehensive documentation
-        documentation = {
-            'metadata': {
-                'version': '1.0',
-                'created': datetime.now().isoformat(),
-                'description': 'Frequency-aware tokenizer with MoE-safe ID ordering',
-                'total_vocabulary_size': len(self.reindexed_vocab)
-            },
-            'special_tokens': {
-                'tokens': self.special_tokens_mgr.get_special_tokens(),
-                'descriptions': {
-                    token: self.special_tokens_mgr.get_token_description(token)
-                    for token in self.special_tokens_mgr.get_special_tokens()
-                },
-                'count': len(self.special_tokens_mgr.get_special_tokens())
-            },
-            'reserved_ids': {
-                'range': list(self.special_tokens_mgr.get_reserved_range()),
-                'count': (self.special_tokens_mgr.get_reserved_range()[1] - 
-                         self.special_tokens_mgr.get_reserved_range()[0] + 1),
-                'purpose': 'Reserved for future governance and special tokens',
-                'warning': 'DO NOT USE THESE IDS IN CURRENT MODELS'
-            },
-            'id_ranges': self.id_documentation,
-            'percentile_bands': self.percentile_bands,
-            'moe_routing_guidance': {
-                'description': 'Token IDs encode frequency: lower ID = higher frequency',
-                'benefit': 'Minimizes avoidable routing skew in MoE models',
-                'usage': 'Use percentile bands to inform expert routing decisions',
-                'bands_explanation': {
-                    'top_1_percent': 'Ultra-frequent tokens (articles, common words)',
-                    'top_10_percent': 'Frequent tokens (common vocabulary)',
-                    'top_50_percent': 'Moderate frequency (general vocabulary)',
-                    'bottom_10_percent': 'Rare tokens (specialized terms, tail)',
-                    'bottom_1_percent': 'Ultra-rare tokens (junk, boilerplate, edge cases)'
-                }
-            },
-            'usage_notes': {
-                'frequency_ordering': 'IDs are ordered by token frequency in approved datasets',
-                'smoothing': 'Frequency ordering is smoothed to avoid exact rank=frequency',
-                'moe_safe': 'ID ordering helps MoE models by encoding frequency information',
-                'data_control': 'This ID scheme is a data control surface, not a model feature'
-            }
-        }
-        
-        with open(doc_path, 'w', encoding='utf-8') as f:
-            json.dump(documentation, f, indent=2, ensure_ascii=False)
-        
-        if self.verbose:
-            print(f"📚 Documentation saved to: {doc_path}")
-    
-    def save_human_readable_report(self, output_path: Path):
-        """Save human-readable markdown report."""
-        report_path = output_path.parent / f"{output_path.stem}_REPORT.md"
-        
-        special_tokens = self.special_tokens_mgr.get_special_tokens()
-        reserved_start, reserved_end = self.special_tokens_mgr.get_reserved_range()
-        
-        # Get validation report
-        validation_report = self.validator.get_validation_report()
-        
-        report = f"""# Tokenizer Reindexing Report
-
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-**Vocabulary Size:** {len(self.reindexed_vocab):,} tokens  
-**Reindexing Strategy:** Frequency-based (MoE-safe)  
-**Max Token Length:** {self.max_token_length} characters
-
----
-
-## Validation Status
-
-"""
-        
-        if validation_report['passed']:
-            report += "✅ **Validation: PASSED**\n\n"
-        else:
-            report += "❌ **Validation: FAILED**\n\n"
-            report += "**Errors:**\n"
-            for error in validation_report['errors']:
-                report += f"- {error}\n"
-            report += "\n"
-        
-        if validation_report['warnings']:
-            report += "**Warnings:**\n"
-            for warning in validation_report['warnings']:
-                report += f"- {warning}\n"
-            report += "\n"
-        
-        report += """
----
-
-## Summary
-
-This tokenizer has been reindexed based on token frequency in approved datasets.
-Token IDs now encode frequency information: **lower ID = higher frequency**.
-
-This ordering strategy:
-- ✅ Minimizes avoidable routing skew in MoE models
-- ✅ Provides data control surface for training
-- ✅ Makes ID ranges semantically meaningful
-- ✅ Reserves space for future governance
-- ✅ All tokens ≤ {self.max_token_length} characters (validated)
-
----
-
-## ID Range Allocation
-
-### Special Tokens (IDs 0-99)
-
-**Count:** {len(special_tokens)} tokens  
-**Purpose:** Control tokens for formatting, instructions, and metadata
-
-| Token | ID | Description |
-|-------|-----|-------------|
-"""
-        
-        # Add special tokens table
-        for token, token_id in sorted(special_tokens.items(), key=lambda x: x[1])[:20]:
-            desc = self.special_tokens_mgr.get_token_description(token)
-            report += f"| `{token}` | {token_id} | {desc} |\n"
-        
-        if len(special_tokens) > 20:
-            report += f"\n... and {len(special_tokens) - 20} more special tokens\n"
-        
-        report += f"""
-
-### Reserved IDs ({reserved_start}-{reserved_end})
-
-**Location:** At the END of vocabulary (does not disrupt regular tokens)  
-**Count:** {reserved_end - reserved_start + 1} IDs  
-**Purpose:** Reserved for future governance needs  
-**Status:** ⚠️ **DO NOT USE** in current models
-
-These IDs are reserved for:
-- Future special tokens
-- Model versioning
-- Governance updates
-- Backward compatibility
-
----
-
-### Regular Vocabulary (IDs {self.special_tokens_mgr.get_regular_vocab_start()}+)
-
-**Count:** {len(self.reindexed_vocab) - len(special_tokens):,} tokens  
-**Ordering:** Frequency-based (high freq → low ID)
-
----
-
-## Percentile Bands (MoE Routing Guidance)
-
-Token IDs are organized into percentile bands based on frequency:
-
-"""
-        
-        # Add percentile bands table
-        report += "| Percentile | Description | ID Range | Tokens | Frequency Range |\n"
-        report += "|------------|-------------|----------|--------|------------------|\n"
-        
-        for band in self.percentile_bands:
-            p_start, p_end = band['percentile_range']
-            desc = band['description']
-            id_start, id_end = band['id_range']
-            count = band['token_count']
-            freq_low, freq_high = band['frequency_range']
-            
-            report += f"| {p_start}-{p_end}% | {desc} | {id_start:,}-{id_end:,} | {count:,} | {freq_low:,}-{freq_high:,} |\n"
-        
-        report += """
-
----
-
-## MoE Routing Guidance
-
-### How to Use This Information
-
-Token IDs encode frequency information that can help with MoE expert routing:
-
-1. **Ultra-frequent tokens (Top 1%, lowest IDs)**
-   - Common words: "the", "a", "is", "in"
-   - Basic punctuation: ",", ".", " "
-   - Should be handled efficiently by all experts
-
-2. **Frequent tokens (Top 10%)**
-   - General vocabulary
-   - Common code patterns
-   - Core language features
-
-3. **Moderate tokens (Top 50%)**
-   - General-purpose vocabulary
-   - Standard terminology
-   - Regular usage patterns
-
-4. **Rare tokens (Bottom 10%)**
-   - Specialized terms
-   - Domain-specific vocabulary
-   - Technical jargon
-
-5. **Tail tokens (Bottom 1%, highest IDs)**
-   - Ultra-rare tokens
-   - Boilerplate patterns
-   - Edge cases
-   - Potential noise/junk
-
-### MoE Expert Assignment Strategy
-
-You can use these percentile bands to inform expert routing:
-
-```python
-def get_expert_for_token(token_id):
-    if token_id < TOP_1_PERCENT_THRESHOLD:
-        return "general_expert"  # Ultra-frequent
-    elif token_id < TOP_10_PERCENT_THRESHOLD:
-        return "frequent_expert"  # Frequent
-    elif token_id < TOP_50_PERCENT_THRESHOLD:
-        return "moderate_expert"  # Moderate
-    else:
-        return "rare_expert"  # Rare/tail
-```
-
----
-
-## Frequency Statistics
-
-"""
-        
-        # Add frequency statistics
-        # Frequency data removed - using RRF with coverage, quality, and category signals
-        if False:  # Disabled - frequency analysis moved to generate_tokenizer_report.py
-            pass
-            
-            report += f"""
-**Total token occurrences analyzed:** {total_occurrences:,}  
-**Tokens with frequency data:** {tokens_with_freq:,}  
-**Tokens without frequency data:** {len(self.original_vocab) - tokens_with_freq:,}
-
-"""
-        
-        report += """
----
-
-## Usage Notes
-
-### For Model Training
-
-- Token IDs are ordered by frequency in approved datasets
-- This ordering provides a **data control surface** (not a model feature)
-- Lower IDs = higher frequency = should be learned earlier/better
-- Higher IDs = lower frequency = may need more attention during training
-
-### For MoE Models
-
-- ID ordering minimizes avoidable routing skew
-- Use percentile bands to inform expert specialization
-- Consider frequency when designing routing strategies
-
-### For Future Updates
-
-- Reserved IDs (100-299) available for new special tokens
-- Can add new tokens without breaking existing models
-- Maintain frequency-based ordering for new tokens
-
----
-
-## Technical Details
-
-### Reindexing Process
-
-1. **Special tokens preserved** at fixed IDs (0-99)
-2. **Reserved IDs allocated** for future governance (100-299)
-3. **Regular tokens reindexed** based on frequency
-4. **Smoothing applied** to avoid exact rank=frequency
-5. **Percentile bands calculated** for MoE routing
-
-### Data Sources
-
-- Approved datasets analyzed for token frequencies
-- Frequency-based ordering with smoothing factor
-- Fallback to alphabetical ordering if no frequency data
-
----
-
-## Contact & Support
-
-For questions about this tokenizer or the reindexing process, contact:
-- **Team:** Tokenizer Design Team
-- **Version:** 1.0
-- **Date:** January 31, 2026
-
----
-
-*This is a frequency-aware, MoE-safe tokenizer with 128k vocabulary.*
-"""
-        
-        with open(report_path, 'w', encoding='utf-8') as f:
-            f.write(report)
-        
-        if self.verbose:
-            print(f"📄 Human-readable report saved to: {report_path}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Reindex tokenizer based on frequency analysis",
+        description="Reindex tokenizer based on RRF algorithm",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -1590,27 +1286,12 @@ Examples:
       --target-size 128000 \\
       --reserved-count 200
   
-  # With long tokens CSV for reference/analysis
+  # With long tokens CSV for reference
   python tokenizer_reindexing.py \\
       --input-dir filtered_tokenizer \\
       --output reindexed_tokenizer_128k.json \\
-      --long-tokens-csv tokenizer_results/long_tokens_32plus_20260131_094902.csv \\
+      --long-tokens-csv tokenizer_results/long_tokens_32plus_*.csv \\
       --target-size 128000
-  
-  # Just reindexing (if you already have a merged vocab)
-  python tokenizer_reindexing.py \\
-      --input merged_tokens/merged_tokenizer_128k.json \\
-      --output reindexed_tokenizer_128k.json
-  
-  # With custom configurations
-  python tokenizer_reindexing.py \\
-      --input-dir filtered_tokenizer \\
-      --output reindexed_tokenizer_128k.json \\
-      --config tokenizer_config.json \\
-      --special-tokens-config special_tokens_config.json \\
-      --max-token-length 32 \\
-      --target-size 128000 \\
-      --reserved-count 200
         """
     )
     
@@ -1745,6 +1426,9 @@ Examples:
     output_path = Path(args.output)
     reindexer.save_vocabulary(output_path)
     
+    if args.save_mappings:
+        reindexer.save_mappings(output_path)
+    
     if verbose:
         print("\n" + "="*80)
         print("✅ REINDEXING COMPLETE")
@@ -1767,6 +1451,9 @@ Examples:
             print(f"  ⚠️  Tokens > {args.max_token_length} chars: {len(long_tokens)}")
         else:
             print(f"  ✅ All tokens ≤ {args.max_token_length} characters")
+        
+        if args.save_mappings:
+            print(f"\n  Optional: ID mappings saved")
     
     return 0
 

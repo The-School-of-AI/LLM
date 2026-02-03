@@ -1,0 +1,30 @@
+# Tokenizer Design Project - Requirements
+# Python 3.10+
+#
+# This project uses minimal dependencies. Most tokenizer work is done with
+# standard library and JSON manipulation.
+
+# ============================================================================
+# Core Dependencies (Required)
+# ============================================================================
+
+# Dataset downloading and processing
+datasets>=4.5.0
+boto3>=1.42.0
+
+# Configuration files
+PyYAML>=6.0.3
+
+# Testing
+pytest>=9.0.2
+
+# ============================================================================
+# Optional Dependencies (Used but has fallback in code)
+# ============================================================================
+
+# Progress bars (has fallback if not installed)
+tqdm>=4.67.0
+
+# Visualization for report generation (used in tokenizer_analyzer.py and generate_tokenizer_report_updated.py)
+# Has fallback if not installed, but recommended
+matplotlib>=3.10.0
