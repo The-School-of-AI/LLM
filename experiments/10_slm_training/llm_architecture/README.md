@@ -380,20 +380,12 @@ config = ModelConfig.load("config.json")
 | FFN (×16) | 201M |
 | Other | ~3M |
 
-### Memory Usage (seq_length=256, batch=1)
-
-| Configuration | MPS (M4 Pro) | CUDA |
-|---------------|--------------|------|
-| 1b-base (GQA) | ~4GB | ~3GB |
-| 1b-deepseek-gsa | ~4GB | ~3GB |
 
 ## References
 
 - [Gated Sparse Attention](https://arxiv.org/abs/2601.15305v1) - GSA paper
 - [YaRN](https://arxiv.org/abs/2309.00071) - Context extension
 - [Manifold Hyper-Connections](https://arxiv.org/abs/2512.24880) - mHC paper
-- [DeepSeek V3](https://arxiv.org/abs/2412.19437) - MLA and MTP
+- [DeepSeek V3](https://arxiv.org/abs/2412.19437) - MTP
 
-## License
 
-MIT License
