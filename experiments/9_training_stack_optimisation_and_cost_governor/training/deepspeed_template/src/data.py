@@ -11,6 +11,8 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
+from .utils import print_rank_0
+
 
 def get_tokenizer(model_name: str):
     """
@@ -84,7 +86,7 @@ def get_dataloaders(
         raise ValueError("tokenizer must be provided")
 
     # Load dataset
-    print(f"Loading dataset: {dataset_name} ({dataset_config})")
+    print_rank_0(f"Loading dataset: {dataset_name} ({dataset_config})")
     dataset = load_dataset(dataset_name, dataset_config)
 
     # Filter out empty examples
@@ -94,7 +96,7 @@ def get_dataloaders(
     dataset = dataset.filter(filter_empty)
 
     # Tokenize dataset
-    print("Tokenizing dataset...")
+    print_rank_0("Tokenizing dataset...")
     tokenized_dataset = dataset.map(
         lambda examples: tokenize_function(examples, tokenizer, max_length),
         batched=True,

@@ -17,7 +17,7 @@ Usage:
 
     # Run specific test
     pytest test_training_gpu.py::test_zero_stage2_config -v
-    
+
 Note: Most tests use @pytest.mark.skipif to automatically skip when CUDA is unavailable.
 For CPU-only testing, use test_training_cpu.py instead.
 """
@@ -110,7 +110,7 @@ class TestZeRoConfiguration:
 
     def test_zero_stage2_config_exists(self):
         """Test that ZeRO Stage 2 configuration file exists and is valid."""
-        config_path = os.path.join(PROJECT_ROOT, "config/deepspeed/zero-2.json")
+        config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
         assert os.path.exists(
             config_path
         ), f"ZeRO Stage 2 config not found at {config_path}"
@@ -128,7 +128,7 @@ class TestZeRoConfiguration:
 
     def test_zero_stage3_config_exists(self):
         """Test that ZeRO Stage 3 configuration file exists and is valid."""
-        config_path = os.path.join(PROJECT_ROOT, "config/deepspeed/zero-3.json")
+        config_path = os.path.join(PROJECT_ROOT, "deepspeed/zero-3.json")
         assert os.path.exists(
             config_path
         ), f"ZeRO Stage 3 config not found at {config_path}"
@@ -161,7 +161,7 @@ class TestZeRoConfiguration:
         ]
 
         for config_name in ["zero-2.json", "zero-3.json"]:
-            config_path = os.path.join(PROJECT_ROOT, f"config/deepspeed/{config_name}")
+            config_path = os.path.join(PROJECT_ROOT, f"deepspeed/{config_name}")
             with open(config_path, "r") as f:
                 config = json.load(f)
 
@@ -181,9 +181,7 @@ class TestDeepSpeedInitialization:
         # Create minimal args
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -213,9 +211,7 @@ class TestDeepSpeedInitialization:
         # Create minimal args
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-3.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-3.json")
 
         args = Args()
 
@@ -246,9 +242,7 @@ class TestTrainingLoop:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -281,9 +275,7 @@ class TestTrainingLoop:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -318,9 +310,7 @@ class TestTrainingLoop:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -369,9 +359,7 @@ class TestCheckpointing:
         # Initialize DeepSpeed
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 
@@ -412,9 +400,7 @@ class TestZeROMemoryEfficiency:
         # Initialize with ZeRO Stage 2
         class Args:
             local_rank = -1
-            deepspeed_config = os.path.join(
-                PROJECT_ROOT, "config/deepspeed/zero-2.json"
-            )
+            deepspeed_config = os.path.join(PROJECT_ROOT, "deepspeed/zero-2.json")
 
         args = Args()
 

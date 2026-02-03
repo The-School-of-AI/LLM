@@ -1,0 +1,51 @@
+# DeepSpeed Training Configuration
+# All training parameters are defined here - no command line arguments needed
+
+# Data Configuration
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-2-raw-v1"
+  batch_size: 8
+  max_length: 128
+
+# Training Configuration
+training:
+  num_epochs: 1
+  max_train_steps: null  # Set to a number for debugging, null for full epoch
+  max_eval_steps: null   # Set to a number for debugging, null for full evaluation
+  log_interval: 10
+  seed: 42
+
+# DeepSpeed Configuration
+deepspeed:
+  config_path: "deepspeed/zero-2-moe.json"
+  local_rank: -1
+
+# Model Configuration
+model:
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"  # or "distilgpt2"
+  # model_name: "distilgpt2"  # Uncomment if using different model
+
+# Checkpoint Configuration
+checkpoint:
+  output_dir: "./checkpoints"
+  save_checkpoint: false
+  checkpoint_interval: 100  # Save checkpoint every N steps
+  keep_last_n_checkpoints: 3
+  
+  # Resume Configuration
+  resume_from_checkpoint: null  # Set to checkpoint tag name (e.g., "epoch0_step50")
+  resume_step: null             # Step number to resume from
+
+# S3 Configuration
+s3:
+  enabled: false
+  bucket: null                    # Set your S3 bucket name (required if enabled=true)
+  prefix: "training/checkpoints"  # S3 folder path for checkpoints
+  region: "us-east-1"
+  cleanup_after_upload: false     # Delete local checkpoints after S3 upload
+  
+# Generation Configuration
+generation:
+  test_generation: false
+  generation_prompt: "The history of artificial intelligence begins with"
