@@ -326,17 +326,18 @@ growth_schedule:
         agentic_traces: 0.03
 
     final_adaptive:
-      B0: 0.16
-      B1: 0.22
-      B2: 0.28
-      B3: 0.22
-      B4: 0.09
-      B5: 0.03
-    modality_weights:
-      general_text: 0.60
-      code: 0.28
-      cot_reasoning: 0.07
-      agentic_traces: 0.05
+      band_weights:
+        B0: 0.16
+        B1: 0.22
+        B2: 0.28
+        B3: 0.22
+        B4: 0.09
+        B5: 0.03
+      modality_weights:
+        general_text: 0.60
+        code: 0.28
+        cot_reasoning: 0.07
+        agentic_traces: 0.05
     adaptive_knobs:
       enabled: true
       bounds:
