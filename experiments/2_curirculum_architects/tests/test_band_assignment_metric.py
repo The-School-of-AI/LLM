@@ -145,14 +145,14 @@ def test_entropy_diversity_filtering(metric):
         }
     }
 def test_cot_scanner_integration(metric):
-    """Test COT and Agentic scanner integration."""
+    """Test COT and Agentic scanner integration (Consolidated into Modality)."""
     
     # Test COT Floor: Simple text (L0/B0) + COT -> Should be B3
     sample_cot = {
         "curriculum_tags": {
             "difficulty": {"score": 0.1, "level": "L0"},
             "readability": {"flesch_kincaid_grade": 2.0},
-            "cot_scanner": {"has_cot": True, "has_agentic": False}
+            "modality": {"has_cot": True, "has_agentic": False, "primary_modality": "reasoning"}
         }
     }
     # Even though difficulty is L0, COT implies reasoning -> B3
@@ -163,7 +163,7 @@ def test_cot_scanner_integration(metric):
         "curriculum_tags": {
             "difficulty": {"score": 0.1, "level": "L0"},
             "readability": {"flesch_kincaid_grade": 2.0},
-            "cot_scanner": {"has_cot": False, "has_agentic": True}
+            "modality": {"has_cot": False, "has_agentic": True, "primary_modality": "agentic_traces"}
         }
     }
     assert metric.compute(sample_agentic)["band"] == "B5"
