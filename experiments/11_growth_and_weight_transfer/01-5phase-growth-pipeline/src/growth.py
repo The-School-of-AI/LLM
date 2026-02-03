@@ -358,13 +358,15 @@ def _transfer_mlp_weights(old_mlp, new_mlp, old_hidden, new_hidden, old_inter, n
 def add_experts(
     moe_model: SmolLM2MoE,
     num_new_experts: int,
-    clone_from: str = "random",
+    clone_from: str = "random",  # Ignored - always clones for function preservation
+    noise_std: float = 0.01,
 ) -> SmolLM2MoE:
     """
     Add more experts to an existing MoE model (expert explosion).
     
     Strategy:
     - Clone existing experts into new experts with small noise
+    - CRITICAL: Also clone router weights from source expert
     - This preserves behavior while adding capacity
     """
     old_num_experts = moe_model.config.num_experts
@@ -372,33 +374,47 @@ def add_experts(
     
     for layer in moe_model.layers:
         moe_block = layer.moe
+        old_gate = moe_block.router.gate.weight.data
+        
+        new_gate_rows = []  # Store cloned router weights
         
         for i in range(num_new_experts):
+            # 1. Pick a parent expert to clone from
             source_idx = torch.randint(0, old_num_experts, (1,)).item()
             source_expert = moe_block.experts[source_idx]
             
+            # 2. Clone the expert (the "employee")
             new_expert = copy.deepcopy(source_expert)
+            
             with torch.no_grad():
+                # 3. CRITICAL FIX: Clone the router weights (the "boss's instructions")
+                # This ensures the router knows how to route to the new expert
+                source_gate_weight = old_gate[source_idx].clone()
+                new_gate_row = source_gate_weight + (torch.randn_like(source_gate_weight) * noise_std)
+                new_gate_rows.append(new_gate_row)
+                
+                # 4. Add noise to expert weights for future specialization
                 for param in new_expert.parameters():
-                    param.add_(torch.randn_like(param) * 0.01)
+                    param.add_(torch.randn_like(param) * noise_std)
             
             moe_block.experts.append(new_expert)
         
-        # Expand router
-        old_gate = moe_block.router.gate.weight.data
-        new_gate_weights = torch.randn(num_new_experts, old_gate.shape[1]) * 0.01
-        new_gate = torch.cat([old_gate, new_gate_weights.to(old_gate.device)], dim=0)
+        # 5. Stack and concatenate router weights
+        new_gate_weights = torch.stack(new_gate_rows).to(old_gate.device)
+        combined_gate = torch.cat([old_gate, new_gate_weights], dim=0)
         
+        # 6. Create new router with combined weights
         moe_block.router.gate = nn.Linear(
             moe_block.hidden_size, new_num_experts, bias=False
         )
-        moe_block.router.gate.weight.data = new_gate
+        moe_block.router.gate.weight.data = combined_gate
         moe_block.num_experts = new_num_experts
     
     moe_model.config.num_experts = new_num_experts
     
     print(f"✓ Added {num_new_experts} experts per layer")
     print(f"  - Experts: {old_num_experts} → {new_num_experts}")
+    print(f"  - Router weights: cloned from source experts (function-preserving)")
     print(f"  - New parameter count: {moe_model.num_parameters():,}")
     
     return moe_model
