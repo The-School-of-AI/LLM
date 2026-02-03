@@ -72,7 +72,7 @@ growth:
   # Phase 4: Expert explosion
   add_experts:
     num_new_experts: 4  # 4 → 8 experts
-    clone_from: "random"
+    clone_from: "copy"  # Changed from "random" to reflect actual code behavior
   
   # Phase 5: YaRN Context Extension
   scale_context:
