@@ -319,6 +319,11 @@ class ExpertContainer(nn.Module):
     - Shared experts (always active)
     - Null experts (zero-compute pathway)
     
+    Fine-Grained Segmentation (DeepSeek-MoE):
+    - When fine_grained_factor > 1, creates more smaller experts
+    - effective_num_experts = base_num × fine_grained_factor
+    - effective_intermediate_size = base_intermediate_size / fine_grained_factor
+    
     Provides efficient batched expert computation.
     """
     
@@ -327,24 +332,32 @@ class ExpertContainer(nn.Module):
         self.config = config
         
         # ============================================================
+        # Fine-Grained Expert Segmentation
+        # ============================================================
+        fg_factor = config.expert.fine_grained_factor
+        effective_intermediate = config.effective_intermediate_size
+        effective_num_routed = config.effective_num_routed_experts
+        
+        # ============================================================
         # Create Experts
         # ============================================================
         
-        # Routed experts
+        # Routed experts (fine-grained: more smaller experts)
         self.routed_experts = nn.ModuleList([
             GatedExpert(
                 hidden_size=config.hidden_size,
-                intermediate_size=config.expert.intermediate_size,
+                intermediate_size=effective_intermediate,  # Smaller when fine-grained
                 config=config.expert
             )
-            for _ in range(config.num_routed_experts)
+            for _ in range(effective_num_routed)  # More experts when fine-grained
         ])
         
-        # Shared experts (if any)
+        # Shared experts (use full intermediate size, not fine-grained)
+        # Shared experts handle common patterns, so they stay full-size
         self.shared_experts = nn.ModuleList([
             SharedExpert(
                 hidden_size=config.hidden_size,
-                intermediate_size=config.expert.intermediate_size,
+                intermediate_size=effective_intermediate,  # Also fine-grained for consistency
                 config=config.expert
             )
             for _ in range(config.num_shared_experts)
@@ -356,11 +369,15 @@ class ExpertContainer(nn.Module):
             for _ in range(config.num_null_experts)
         ])
         
-        # Expert index boundaries
+        # Expert index boundaries (using effective counts)
         self.routed_start = 0
-        self.routed_end = config.num_routed_experts
+        self.routed_end = effective_num_routed
         self.null_start = self.routed_end
         self.null_end = self.null_start + config.num_null_experts
+        
+        # Store fine-grained info for reference
+        self.fine_grained_factor = fg_factor
+        self.effective_intermediate_size = effective_intermediate
     
     def get_expert(self, idx: int) -> nn.Module:
         """Get expert by global index (routed or null)."""

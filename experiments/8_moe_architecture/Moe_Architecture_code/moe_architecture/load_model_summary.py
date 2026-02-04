@@ -69,6 +69,122 @@ def get_layer_params(module: nn.Module) -> dict:
     return breakdown
 
 
+def calculate_active_params(model: MoETransformer) -> dict:
+    """
+    Calculate active parameters per forward pass for a single token.
+    
+    For MoE models, only top-k experts are activated per token, plus shared experts.
+    This is the metric that models like Mixtral, DeepSeek advertise.
+    
+    Returns:
+        Dict with active params breakdown and total
+    """
+    config = model.config
+    active_params = {}
+    
+    # 1. Embeddings (always active)
+    if hasattr(model, 'embed_tokens'):
+        active_params['embeddings'] = count_parameters(model.embed_tokens)
+    
+    # 2. LM Head (always active)
+    if hasattr(model, 'lm_head'):
+        active_params['lm_head'] = count_parameters(model.lm_head)
+    
+    # 3. Final Norm (always active)
+    if hasattr(model, 'norm'):
+        active_params['final_norm'] = count_parameters(model.norm)
+    
+    # 4. Per-layer active params
+    active_params['attention_per_layer'] = 0
+    active_params['ffn_per_layer'] = 0
+    active_params['norms_per_layer'] = 0
+    active_params['router_per_layer'] = 0
+    
+    if hasattr(model, 'layers') and len(model.layers) > 0:
+        layer = model.layers[0]  # Use first layer as template
+        
+        # Attention is always fully active
+        if hasattr(layer, 'self_attn'):
+            active_params['attention_per_layer'] = count_parameters(layer.self_attn)
+        elif hasattr(layer, 'attention'):
+            active_params['attention_per_layer'] = count_parameters(layer.attention)
+        
+        # Layer norms (always active)
+        if hasattr(layer, 'input_layernorm'):
+            active_params['norms_per_layer'] += count_parameters(layer.input_layernorm)
+        if hasattr(layer, 'post_attention_layernorm'):
+            active_params['norms_per_layer'] += count_parameters(layer.post_attention_layernorm)
+        
+        # FFN / MoE Block
+        if hasattr(layer, 'ffn'):
+            ffn = layer.ffn
+            
+            # Check if it's an MoE block
+            if hasattr(ffn, 'router') and hasattr(ffn, 'experts'):
+                # MoE Layer - only count active experts
+                
+                # Router params (always active)
+                if hasattr(ffn, 'router'):
+                    active_params['router_per_layer'] = count_parameters(ffn.router)
+                
+                # Get expert params
+                experts_container = ffn.experts
+                single_expert_params = 0
+                
+                # Routed experts - only top_k are active
+                if hasattr(experts_container, 'routed_experts') and len(experts_container.routed_experts) > 0:
+                    single_expert_params = count_parameters(experts_container.routed_experts[0])
+                
+                # Active routed experts = top_k
+                top_k = config.router.top_k if hasattr(config, 'router') else 2
+                active_routed = top_k * single_expert_params
+                
+                # Shared experts (always active)
+                shared_params = 0
+                if hasattr(experts_container, 'shared_experts'):
+                    for shared in experts_container.shared_experts:
+                        shared_params += count_parameters(shared)
+                
+                # Null experts (negligible, but count them)
+                null_params = 0
+                if hasattr(experts_container, 'null_experts'):
+                    for null_exp in experts_container.null_experts:
+                        null_params += count_parameters(null_exp)
+                
+                active_params['ffn_per_layer'] = active_routed + shared_params + null_params
+                active_params['active_routed_experts'] = active_routed
+                active_params['shared_experts'] = shared_params
+                active_params['single_expert_params'] = single_expert_params
+                active_params['top_k'] = top_k
+                
+            else:
+                # Dense FFN - all params active
+                active_params['ffn_per_layer'] = count_parameters(ffn)
+    
+    # Calculate totals
+    num_layers = config.num_layers
+    
+    active_params['total_per_layer'] = (
+        active_params['attention_per_layer'] +
+        active_params['ffn_per_layer'] +
+        active_params['norms_per_layer'] +
+        active_params['router_per_layer']
+    )
+    
+    active_params['total_layers'] = active_params['total_per_layer'] * num_layers
+    
+    active_params['total'] = (
+        active_params.get('embeddings', 0) +
+        active_params.get('lm_head', 0) +
+        active_params.get('final_norm', 0) +
+        active_params['total_layers']
+    )
+    
+    active_params['num_layers'] = num_layers
+    
+    return active_params
+
+
 def print_model_summary(model: MoETransformer, config_name: str):
     """Print detailed model summary."""
     print("\n" + "=" * 70)
@@ -79,19 +195,48 @@ def print_model_summary(model: MoETransformer, config_name: str):
     total_params = count_parameters(model)
     trainable_params = count_parameters(model, trainable_only=True)
     
+    # Calculate active parameters
+    active_info = calculate_active_params(model)
+    active_total = active_info['total']
+    
     print(f"\n📊 PARAMETER COUNTS:")
     print(f"   Total Parameters:     {total_params:>15,} ({format_params(total_params)})")
     print(f"   Trainable Parameters: {trainable_params:>15,} ({format_params(trainable_params)})")
     print(f"   Non-trainable:        {total_params - trainable_params:>15,}")
     
+    # Active parameters (key MoE metric!)
+    print(f"\n⚡ ACTIVE PARAMETERS (per forward pass per token):")
+    print(f"   Active Parameters:    {active_total:>15,} ({format_params(active_total)})")
+    if total_params > 0:
+        activation_ratio = (active_total / total_params) * 100
+        print(f"   Activation Ratio:     {activation_ratio:>14.1f}%")
+    
+    # For MoE, show detailed breakdown
+    config = model.config
+    if hasattr(config, 'num_routed_experts') and config.num_routed_experts > 0:
+        print(f"\n   Active Breakdown (per layer):")
+        print(f"      Attention:         {active_info['attention_per_layer']:>12,} ({format_params(active_info['attention_per_layer'])})")
+        print(f"      Router:            {active_info['router_per_layer']:>12,} ({format_params(active_info['router_per_layer'])})")
+        if 'top_k' in active_info:
+            top_k = active_info['top_k']
+            single_exp = active_info.get('single_expert_params', 0)
+            shared = active_info.get('shared_experts', 0)
+            print(f"      Top-{top_k} Experts:     {active_info.get('active_routed_experts', 0):>12,} ({format_params(active_info.get('active_routed_experts', 0))}) [{top_k} × {format_params(single_exp)}]")
+            print(f"      Shared Experts:    {shared:>12,} ({format_params(shared)})")
+        print(f"      Norms:             {active_info['norms_per_layer']:>12,} ({format_params(active_info['norms_per_layer'])})")
+        print(f"      ─────────────────────────────────────")
+        print(f"      Per Layer Total:   {active_info['total_per_layer']:>12,} ({format_params(active_info['total_per_layer'])})")
+        print(f"      × {active_info['num_layers']} layers =      {active_info['total_layers']:>12,} ({format_params(active_info['total_layers'])})")
+    
     # Memory estimate (assuming float32)
     memory_fp32 = total_params * 4 / (1024**3)  # GB
     memory_fp16 = total_params * 2 / (1024**3)  # GB
-    memory_bf16 = total_params * 2 / (1024**3)  # GB
+    active_memory_fp16 = active_total * 2 / (1024**3)  # GB
     
     print(f"\n💾 MEMORY ESTIMATES (model weights only):")
-    print(f"   FP32: {memory_fp32:.2f} GB")
-    print(f"   FP16/BF16: {memory_fp16:.2f} GB")
+    print(f"   Total Model (FP32):   {memory_fp32:.2f} GB")
+    print(f"   Total Model (FP16):   {memory_fp16:.2f} GB")
+    print(f"   Active Params (FP16): {active_memory_fp16:.2f} GB  ← Compute footprint per token")
     
     # Model configuration
     config = model.config
@@ -106,11 +251,45 @@ def print_model_summary(model: MoETransformer, config_name: str):
     # MoE specific info
     if hasattr(config, 'num_routed_experts') and config.num_routed_experts > 0:
         print(f"\n🔀 MoE CONFIGURATION:")
-        print(f"   Routed Experts:  {config.num_routed_experts}")
+        fg_factor = getattr(config.expert, 'fine_grained_factor', 1)
+        if fg_factor > 1:
+            # Fine-grained segmentation active
+            print(f"   ── Fine-Grained Segmentation (DeepSeek-MoE) ──")
+            print(f"   Base Routed Experts:     {config.num_routed_experts}")
+            print(f"   Fine-Grained Factor:     {fg_factor}× ")
+            print(f"   Effective Experts (N):   {config.num_routed_experts * fg_factor}")
+            print(f"   Base Top-K:              {config.router.top_k}")
+            print(f"   Effective Top-K (k_max): {config.router.top_k * fg_factor}")
+            print(f"   Base Intermediate:       {config.expert.intermediate_size}")
+            print(f"   Effective Intermediate:  {config.expert.intermediate_size // fg_factor}")
+            print(f"   ──────────────────────────────────────────────")
+        else:
+            print(f"   Routed Experts:  {config.num_routed_experts}")
+            print(f"   Top-K:           {config.router.top_k}")
+            print(f"   Intermediate:    {config.expert.intermediate_size}")
         print(f"   Shared Experts:  {config.num_shared_experts}")
         print(f"   Null Experts:    {config.num_null_experts}")
-        print(f"   Top-K:           {config.router.top_k}")
-        print(f"   Intermediate:    {config.expert.intermediate_size}")
+        
+        # Null Expert Paper Metrics (arXiv:2601.15370v1)
+        if hasattr(config.router, 'data_sparsity') and config.router.data_sparsity < 1.0:
+            rho = config.router.data_sparsity
+            effective_n = config.num_routed_experts * fg_factor
+            effective_k_max = config.router.top_k * fg_factor
+            
+            # Compute null copies: M = N × (1-ρ)/ρ
+            if config.router.null_copies > 0:
+                null_copies = config.router.null_copies
+            else:
+                null_copies = int(round(effective_n * (1 - rho) / rho))
+            
+            expected_k_real = effective_k_max * rho
+            
+            print(f"\n   ── Null Expert Data Sparsity (arXiv:2601.15370) ──")
+            print(f"   Data Sparsity (ρ):       {rho}")
+            print(f"   Null Copies (M):         {null_copies}")
+            print(f"   E[K_real]:               {expected_k_real:.1f} (expected active real experts)")
+            print(f"   Total Active/Token:      {expected_k_real + config.num_shared_experts:.1f} (incl. {config.num_shared_experts} shared)")
+            print(f"   ─────────────────────────────────────────────────")
     
     # Layer-by-layer breakdown
     print(f"\n📋 PARAMETER BREAKDOWN BY COMPONENT:")
@@ -161,7 +340,7 @@ def print_model_summary(model: MoETransformer, config_name: str):
     
     print("\n" + "=" * 70)
     
-    return total_params
+    return total_params, active_total
 
 
 def print_torchsummary_style(model: MoETransformer, config_name: str):
@@ -211,18 +390,18 @@ def load_and_summarize(config_name: str, device: torch.device, detailed: bool = 
         print(f"   Model moved to {device}")
         
         # Print summary
-        total_params = print_model_summary(model, config_name)
+        total_params, active_params = print_model_summary(model, config_name)
         
         if detailed:
             print_torchsummary_style(model, config_name)
         
-        return model, total_params
+        return model, total_params, active_params
         
     except Exception as e:
         print(f"   ❌ Error loading {config_name}: {e}")
         import traceback
         traceback.print_exc()
-        return None, 0
+        return None, 0, 0
 
 
 def main():
@@ -273,8 +452,8 @@ def main():
         
         results = {}
         for cfg in configs_to_load:
-            model, params = load_and_summarize(cfg, device, args.detailed)
-            results[cfg] = params
+            model, params, active = load_and_summarize(cfg, device, args.detailed)
+            results[cfg] = (params, active)
             # Clear model from memory
             if model is not None:
                 del model
@@ -284,15 +463,16 @@ def main():
                     torch.cuda.empty_cache()
         
         # Summary table
-        print("\n\n" + "=" * 70)
+        print("\n\n" + "=" * 85)
         print("COMPARISON TABLE")
-        print("=" * 70)
-        print(f"{'Configuration':<20} {'Parameters':<20} {'Memory (FP16)':<15}")
-        print("-" * 55)
-        for cfg, params in results.items():
+        print("=" * 85)
+        print(f"{'Configuration':<15} {'Total Params':<18} {'Active Params':<18} {'Activation %':<12} {'Memory (FP16)':<15}")
+        print("-" * 85)
+        for cfg, (params, active) in results.items():
             mem_gb = params * 2 / (1024**3)
-            print(f"{cfg:<20} {format_params(params):<20} {mem_gb:.2f} GB")
-        print("=" * 70)
+            act_ratio = (active / params * 100) if params > 0 else 0
+            print(f"{cfg:<15} {format_params(params):<18} {format_params(active):<18} {act_ratio:>10.1f}%  {mem_gb:.2f} GB")
+        print("=" * 85)
         
     else:
         # Load single config

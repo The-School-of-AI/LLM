@@ -1,31 +1,29 @@
 """
-Stage 4: 70B MoE-64 Model Configuration
-=======================================
+Stage 4: 70B MoE Model Configuration
+====================================
 
-Expert expansion stage: 8 experts → 64 experts.
-Each of the 8 parent experts becomes 8 children (8×8=64).
+Expert explosion stage: SAME model structure as 8B, only explode experts.
+This massively increases capacity while preserving compute efficiency.
 
-Architecture:
-- 80 layers
-- 4096 hidden dimension (same as 8B)
-- 64 routed experts (expanded from 8!)
-- 4 shared + 2 null
-- Top-4 routing (increased from Top-2)
+Architecture (DeepSeek-faithful + Null Experts paper):
+- SAME hidden_size, num_layers as 8B (structure preserved)
+- Expand experts: 32 → 256 effective (64 base × 4 fine-grained)
+- Reduce shared experts: 2 → 1 (paper: decays at scale)
 
 Key Transition (8B → 70B):
-- Each of 8 experts copied to 8 children
-- Fresh GSA router for 64 experts
-- Noise added for children divergence
-- Top-K increased: 2→4 (because √64=8, use 0.5×8=4)
+- Same hidden_size (5120), same num_layers (24)
+- Expert explosion: 8 base → 64 base (×4 = 256 effective)
+- Same ρ=0.5, E[K_real]=8
+- Null copies scaled: M = 256 (from formula)
 
-Mathematical Rationale:
-- 64 experts: 8 parents × 8 children
-- Top-4: K = 0.5 × √64 = 4
-- 4 shared: 6.25% of routed (appropriate for large MoE)
-- 2 null: ceil(0.20 × 4 / 0.6) = 2
+Paper Parameters:
+- Segments (m) = 4
+- Real routed experts (N) = 256
+- Shared experts (Ks) = 1
+- k_max = 16 (effective), ρ = 0.5
+- E[K_real] = 8, Total active ≈ 9
 
-This is EXPERT EXPANSION, not dimension scaling.
-We increase the number of experts for fine-grained specialization.
+Active Parameter Target: ~2.4B
 """
 
 from model.config import (
@@ -42,27 +40,29 @@ from model.config import (
 
 
 def get_config() -> MoEModelConfig:
-    """Get 70B MoE-64 model configuration."""
+    """Get 70B MoE model configuration (expert explosion from 8B)."""
     
     return MoEModelConfig(
         # Model identification
-        model_name="team8_70b_moe64",
+        model_name="team8_70b_moe256",
         model_type=ModelType.MOE,
         stage=4,
         
-        # Core dimensions (same as 8B for hidden, more layers)
-        hidden_size=2048,                # SAME as 8B
-        num_layers=40,                   # FIXED depth (same as 8B)
+        # Core dimensions (SAME as 8B! - structure preserved)
+        hidden_size=3072,                # SAME as 8B
+        num_layers=56,                   # SAME as 8B # 24
         
-        # MoE Configuration (EXPANDED experts!)
-        num_routed_experts=512,           # 8× expansion (was 8)
-        num_shared_experts=4,            # 2× expansion (was 2)
-        num_null_experts=1,              # Single null expert for null-copy routing
+        # MoE Configuration (EXPLODED experts for 70B)
+        # Base 512 experts × 4 fine-grained factor = 2048 effective routed experts
+        # Total params: 2048 experts × 3 × 6144 × 64 × 28 layers ≈ 70B
+        num_routed_experts=256,          # EXPLODED (was 8) - 64× expansion
+        num_shared_experts=1,            # REDUCED (was 2) - paper: decays at scale
+        num_null_experts=1,              # Single null (M=2048 copies in router)
         moe_layer_frequency=1,           # MoE on ALL layers
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=32000,
+            vocab_size=128000,            # Standardized
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -73,34 +73,40 @@ def get_config() -> MoEModelConfig:
             common_word_range=(300, 1000),
         ),
         
-        # Null Expert Router Configuration (data sparsity)
+        # Null Expert Router Configuration (arXiv:2601.15370v1)
+        # Paper formula: M = N × (1-ρ)/ρ, E[K_real] = k_max × ρ
+        # With N=2048, ρ=0.5, k_max=16: M=2048 null copies, E[K_real]=8
         router=RouterConfig(
             router_type=RouterType.NULL_EXPERT,
-            top_k=4,
-            data_sparsity=0.8,
-            null_copies=256,
+            top_k=4,                     # Same k_max base (×4 = 16 effective)
+            data_sparsity=0.5,           # ρ = 0.5 (paper stable region)
+            null_copies=0,               # Auto-derive: M = 2048 × (1-0.5)/0.5 = 2048
             use_aux_loss=True,
-            aux_loss_weight=0.01,
+            aux_loss_weight=0.02,
+            router_z_loss_weight=0.001,
         ),
         
-        # Expert Configuration
+        # Expert Configuration (fine-grained, sized for 2.4B active target)
+        # Active = 9 experts/token × 3 × 6144 × 64 × 28 ≈ 2.4B
+        # Total = 2048 experts × 3 × 6144 × 64 × 28 ≈ 70B  
+        # (8/3)*8192 ~ 22016 -> 22016/64 = 344
         expert=ExpertConfig(
-            intermediate_size=512,       # Reduced to 2048 (Fine-Grained)
-            use_dual_gating=False,         # G1+G2 for collapse prevention
+            intermediate_size=512,       # Base size, effective = 64 (small for low active)
+            fine_grained_factor=4,       # DeepSeek-MoE style
+            use_dual_gating=False,
             gate_bias_init=0.0,
             expert_init_std=0.02,
-            noise_std_for_expansion=1e-3, # Slightly more noise for divergence
+            noise_std_for_expansion=1e-3, # More noise for expert divergence
         ),
         
-        # Attention Configuration (same as 8B)
+        # Attention Configuration (SAME as 8B)
         attention=AttentionConfig(
             attention_type="gsa",
-            num_attention_heads=32,
-            num_kv_heads=8,               # 4:1 GQA
-            head_dim=128,
+            num_attention_heads=16,      # Same as 8B
+            num_kv_heads=4,
+            head_dim=512,
             rope_theta=10000.0,
             attention_dropout=0.0,
-            # GSA defaults (Table 1)
             gsa_indexer_dim=64,
             gsa_indexer_heads=4,
             gsa_k_base=2048,
@@ -110,30 +116,24 @@ def get_config() -> MoEModelConfig:
         
         # Compute Budget
         compute_budget=ComputeBudget(
-            max_params_total=int(80e9),     # 80B ceiling
-            max_params_active=int(15e9),    # ~15B active
-            target_tokens=int(2e12),        # 2T tokens
+            max_params_total=int(75e9),     # 75B ceiling
+            max_params_active=int(2.5e9),   # ~2.4B active target
+            target_tokens=int(2e12),
             max_sequence_length=4096,
         ),
         
-        # Telemetry (Team 7 Integration)
+        # Telemetry (stricter for 256 experts)
         telemetry=TelemetryConfig(
             log_every_n_steps=100,
-            
-            # Health checks (stricter for 64 experts)
-            dead_expert_threshold=0.005,    # <0.5% = dead (stricter)
-            overload_expert_threshold=2.5,  # >2.5× average = overloaded
+            dead_expert_threshold=0.005,    # Stricter (<0.5% = dead)
+            overload_expert_threshold=2.5,
             min_router_entropy=0.75,        # Higher entropy needed
             max_gini_coefficient=0.4,       # Stricter balance
-            
-            # Null routing alerts
             junk_null_rate_alert_low=0.5,
             junk_null_rate_alert_high=0.9,
             signal_null_rate_alert=0.15,
-            
-            # Auto-correction
             enable_auto_correction=True,
-            correction_strength=0.05,       # Gentler correction at scale
+            correction_strength=0.05,       # Gentler at scale
         ),
         
         # Training
@@ -149,177 +149,41 @@ def get_config() -> MoEModelConfig:
 CONFIG = get_config()
 
 
-# Parameter breakdown
 """
-70B MoE-64 Parameter Breakdown:
-===============================
+70B MoE Expert Explosion Strategy:
+==================================
 
-EXPERT EXPANSION from 8B:
-  - Routed experts: 8 → 64 (8× expansion)
-  - Shared experts: 2 → 4 (2× expansion)
-  - Null experts: 1 → 2
-  - Top-K: 2 → 4
-  - Layers: 48 → 80
+Key Insight: Keep model structure, only increase experts.
+This preserves compute per token while massively scaling capacity.
 
-Expert Configuration:
-  - 64 routed experts
-  - 4 shared experts
-  - 2 null experts (0 params)
-  - Top-4 active per token
+From 8B:            To 70B:
+- hidden=5120   →   hidden=5120 (SAME!)
+- layers=24     →   layers=24 (SAME!)
+- experts=32    →   experts=256 (8× expansion)
+- shared=2      →   shared=1 (paper: decay at scale)
+- ρ=0.5, M=32   →   ρ=0.5, M=256 (scaled with N)
+- E[K_real]=8   →   E[K_real]=8 (SAME!)
 
-Per Expert:
-  - W1: 4096 × 11008 = 45.1M
-  - W2: 11008 × 4096 = 45.1M
-  - W3: 4096 × 11008 = 45.1M
-  - Dual gating: ~33M
-  - Per expert: ~168M (with gating)
-  - Or ~135M without gating
+Parameter Calculation:
+- Embeddings: 32K × 5120 = 163M
+- Per expert (fine-grained): 3 × 5120 × 320 = 4.9M
+- Routed experts per layer: 256 × 4.9M = 1.25B
+- Shared expert per layer: 1 × 4.9M (×4 for full) = 19.6M
+- Attention per layer: ~80M
+- Per layer total: ~1.35B
+- 24 layers: 24 × 1.35B = 32.4B
+- Plus embeddings, router: ~35B
 
-Without gating (to fit budget):
-  - Per expert: ~135M
+Note: Adjust intermediate_size to hit ~70B total.
+Current config may need tuning.
 
-Per MoE Layer:
-  - Routed: 64 × 135M = 8.64B
-  - Shared: 4 × 135M = 0.54B
-  - Attention: ~67M
-  - Router: ~8M (larger for 64 experts)
-  - Per layer: ~9.3B
+Active Parameters (~2.4B target):
+- E[K_real] = 8 routed + 1 shared = 9 active experts
+- Per expert active: 4.9M
+- Per layer active: 9 × 4.9M + 80M (attention) = 124M
+- Total active: 24 × 124M + embeddings ≈ 3B
 
-Total (80 layers): 80 × 9.3B = 744B (way too high!)
-
-REALISTIC CONFIGURATION for ~70B:
-Need to use smaller experts or MoE on fewer layers.
-
-Option 1: MoE every 4th layer (20 MoE, 60 dense)
-  - MoE: 20 × 9.3B = 186B (still too high)
-
-Option 2: Smaller expert intermediate
-  intermediate = 4096 (1:1 ratio)
-  Per expert: 3 × 4096 × 4096 = 50.3M
-  Per MoE layer: 64×50 + 4×50 + 67M = 3.47B
-  Total (80 layers MoE): 80 × 3.47B = 278B (too high)
-
-Option 3: Even smaller or sparse experts
-  intermediate = 2048 (0.5:1 ratio)
-  Per expert: 3 × 4096 × 2048 = 25.2M
-  Per MoE layer: 64×25 + 4×25 + 67M = 1.77B
-  MoE every 2nd layer: 40 × 1.77B + 40 × 0.54B = 70.8B + 21.6B = 92B
-  
-  Still high. Need moe_freq=4:
-  20 MoE × 1.77B + 60 dense × 0.54B = 35.4B + 32.4B = 67.8B ✓
-
-FINAL REALISTIC CONFIG:
-  - moe_layer_frequency=4 (20 MoE layers)
-  - intermediate_size=512 (or fine-grained experts)
-  - 64 routed + 4 shared experts
-  - Top-4 routing
-  - ~70B total parameters
-  - ~12B active parameters
-
-Active Parameters (per forward):
-  - 4 shared + 4 routed = 8 experts active
-  - Per MoE layer: 8 × 25M = 0.2B
-  - 20 MoE layers × 0.2B + 60 dense × 0.54B + attention + embeddings
-  - ≈ 4B + 32B + attention ≈ 12B active
-"""
-
-
-# Expert hierarchy for 8→64 expansion
-"""
-EXPERT HIERARCHY (8 Parents → 64 Children):
-===========================================
-
-Parent 0 (Code Expert):
-  ├── Child 0.0: Python code
-  ├── Child 0.1: JavaScript code
-  ├── Child 0.2: C/C++ code
-  ├── Child 0.3: Java code
-  ├── Child 0.4: SQL queries
-  ├── Child 0.5: Shell scripts
-  ├── Child 0.6: HTML/CSS
-  └── Child 0.7: Other code
-
-Parent 1 (Math Expert):
-  ├── Child 1.0: Arithmetic
-  ├── Child 1.1: Algebra
-  ├── Child 1.2: Calculus
-  ├── Child 1.3: Statistics
-  ├── Child 1.4: Linear algebra
-  ├── Child 1.5: Number theory
-  ├── Child 1.6: Geometry
-  └── Child 1.7: Applied math
-
-... (6 more parent groups)
-
-Total: 8 parents × 8 children = 64 experts
-"""
-
-
-# Expansion procedure from 8B MoE
-"""
-EXPANSION: 8B MoE-8 → 70B MoE-64
-================================
-
-Step 1: Load 8B MoE Checkpoint
-    moe_8b = load_checkpoint("8b_moe8.pt")
-
-Step 2: Expand Each Expert to 8 Children
-    for parent_idx in range(8):
-        parent_expert = moe_8b.experts[parent_idx]
-        
-        for child_idx in range(8):
-            global_idx = parent_idx * 8 + child_idx
-            
-            # Copy parent weights
-            new_experts[global_idx].w1.data = parent_expert.w1.data.clone()
-            new_experts[global_idx].w2.data = parent_expert.w2.data.clone()
-            new_experts[global_idx].w3.data = parent_expert.w3.data.clone()
-            
-            # Add larger noise for child divergence
-            noise_std = 1e-3
-            new_experts[global_idx].w1.data += torch.randn_like(...) * noise_std
-            new_experts[global_idx].w2.data += torch.randn_like(...) * noise_std
-            new_experts[global_idx].w3.data += torch.randn_like(...) * noise_std
-
-Step 3: Initialize New Router for 64 Experts
-    # Option A: Fresh random init
-    new_router = GSARouter(config_64_experts)
-    
-    # Option B: Hierarchical warm-start (recommended)
-    for parent_idx in range(8):
-        parent_key = moe_8b.router.expert_keys[parent_idx]
-        
-        for child_idx in range(8):
-            global_idx = parent_idx * 8 + child_idx
-            # Child key = parent key + small offset
-            new_router.expert_keys[global_idx] = parent_key + randn() * 0.1
-
-Step 4: Expand Shared Experts (2 → 4)
-    # Copy existing 2, initialize 2 new from average
-    shared_avg = (moe_8b.shared[0] + moe_8b.shared[1]) / 2
-    new_shared = [moe_8b.shared[0], moe_8b.shared[1], shared_avg.clone(), shared_avg.clone()]
-    # Add noise to new ones
-    new_shared[2].add_(randn() * 1e-4)
-    new_shared[3].add_(randn() * 1e-4)
-
-Step 5: Add Null Expert
-    # Now have 2 null experts instead of 1
-    # Second null initialized fresh
-
-Step 6: Add More Layers (48 → 80)
-    # Initialize new layers with MoE structure
-    # Can use layer duplication or fresh init
-
-HIERARCHICAL ROUTING PRESERVATION:
-    With hierarchical key init, tokens that routed to Parent_i
-    will initially prefer children {i.0, i.1, ..., i.7}.
-    
-    Over training, children specialize into sub-categories
-    while maintaining parent's general domain.
-    
-    Example: Token "def" routes to Code Parent
-    → Initially may route to any Code Child
-    → After training: routes specifically to Python Child
+Tune intermediate_size down to hit 2.4B active.
 """
 
 
@@ -327,11 +191,9 @@ if __name__ == "__main__":
     config = get_config()
     print(config.summary())
     
-    print(f"\nExpansion from 8B:")
-    print(f"  Experts: 8 → {config.num_routed_experts} (8× expansion)")
-    print(f"  Shared: 2 → {config.num_shared_experts} (2× expansion)")
-    print(f"  Top-K: 2 → {config.router.top_k} (2× expansion)")
-    print(f"  Null: 1 → {config.num_null_experts}")
-    print(f"\nExpert Hierarchy:")
-    print(f"  8 parent groups × 8 children = 64 total")
-    print(f"  Active ratio: {config.active_expert_ratio:.1%}")
+    print(f"\nExpert Explosion from 8B:")
+    print(f"  Hidden: 5120 → {config.hidden_size} (SAME!)")
+    print(f"  Layers: 24 → {config.num_layers} (SAME!)")
+    print(f"  Experts: 32 → {config.effective_num_routed_experts} (8× explosion)")
+    print(f"  Null copies: 32 → M derived from N=256")
+    print(f"  E[K_real]: 8 (preserved)")

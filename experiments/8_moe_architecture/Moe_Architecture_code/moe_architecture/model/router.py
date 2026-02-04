@@ -51,8 +51,10 @@ class GSARouter(nn.Module):
         self.config = config
         self.router_config = config.router
         
+        # Fine-grained segmentation: use effective expert counts
         # Total experts in routing pool (routed + null, NOT shared)
-        self.num_routable = config.num_routed_experts + config.num_null_experts
+        self.num_routable = config.effective_num_routed_experts + config.num_null_experts
+        self.fine_grained_factor = config.expert.fine_grained_factor
         
         # Router dimensions
         self.hidden_size = config.hidden_size
@@ -100,7 +102,7 @@ class GSARouter(nn.Module):
         
         # Initialize null expert bias slightly higher
         if config.num_null_experts > 0:
-            null_start = config.num_routed_experts
+            null_start = config.effective_num_routed_experts  # Use effective count
             with torch.no_grad():
                 self.expert_bias[null_start:] = self.router_config.null_bias_init
         
@@ -119,8 +121,8 @@ class GSARouter(nn.Module):
         self.register_buffer('expert_counts', torch.zeros(self.num_routable))
         self.register_buffer('total_tokens', torch.tensor(0, dtype=torch.long))
         
-        # Null expert indices for telemetry
-        self.null_indices = set(range(config.num_routed_experts, self.num_routable))
+        # Null expert indices for telemetry (using effective counts)
+        self.null_indices = set(range(config.effective_num_routed_experts, self.num_routable))
         
         # Initialize weights
         self._init_weights()
@@ -220,10 +222,12 @@ class GSARouter(nn.Module):
         # Step 6: Compute adaptive top-k (GSA adaptive sparsity)
         # k = clamp(k_base × Var / V̄, k_min, k_max)
         # ============================================================
+        # Use effective top-k for fine-grained segmentation
+        base_top_k = self.router_config.top_k * self.fine_grained_factor
         if self.router_config.use_adaptive_top_k and self.training:
             top_k = self._compute_adaptive_k(aggregated_scores)
         else:
-            top_k = self.router_config.top_k
+            top_k = base_top_k
         
         # ============================================================
         # Step 7: Select top-k experts using adjusted scores
@@ -479,7 +483,9 @@ class NullExpertRouter(nn.Module):
         self.config = config
         self.router_config = config.router
 
-        self.num_real = config.num_routed_experts
+        # Fine-grained segmentation: use effective expert counts
+        self.num_real = config.effective_num_routed_experts
+        self.fine_grained_factor = config.expert.fine_grained_factor
         self.null_index = self.num_real  # single null expert index
 
         self.num_null_copies = self._compute_null_copies()
@@ -533,8 +539,9 @@ class NullExpertRouter(nn.Module):
         # Softmax over expanded logits
         probs = F.softmax(expanded_logits, dim=-1)
 
-        # Top-k selection over expanded logits (kmax)
-        top_k = min(self.router_config.top_k, expanded_logits.shape[-1])
+        # Top-k selection over expanded logits (kmax) - use effective top-k
+        effective_top_k = self.router_config.top_k * self.fine_grained_factor
+        top_k = min(effective_top_k, expanded_logits.shape[-1])
         _, top_k_indices = torch.topk(expanded_logits, k=top_k, dim=-1)
 
         selected_probs = probs.gather(-1, top_k_indices)

@@ -140,8 +140,18 @@ class ExpertConfig:
     
     Each expert is a SwiGLU FFN with optional dual gating (G1+G2)
     from the GSA paper for collapse prevention.
+    
+    Fine-Grained Segmentation (DeepSeek-MoE):
+    - Instead of N experts with intermediate_size=d, use (N×m) experts with d/m
+    - Same total params, but more specialized experts
+    - fine_grained_factor=1 (standard), =4 (fine-grained, DeepSeek default)
     """
-    intermediate_size: int = 512       # FFN intermediate dimension
+    intermediate_size: int = 512       # FFN intermediate dimension (base, before segmentation)
+    
+    # Fine-Grained Expert Segmentation (DeepSeek-MoE style)
+    # - fine_grained_factor=1: standard MoE (N experts, each with intermediate_size)
+    # - fine_grained_factor=m: N×m fine-grained experts, each with intermediate_size/m
+    fine_grained_factor: int = 4       # m in DeepSeek paper (1=standard, 4=fine-grained)
     
     # Dual Gating (from GSA paper Section 3.5)
     use_dual_gating: bool = False        # Enable G1 (output) + G2 (input) gates
@@ -322,16 +332,24 @@ class MoEModelConfig:
     
     def _compute_derived_values(self):
         """Compute derived configuration values."""
-        # Total experts in routing pool
-        self.total_routable_experts = self.num_routed_experts + self.num_null_experts
-        self.total_experts = self.num_routed_experts + self.num_shared_experts + self.num_null_experts
+        # Fine-Grained Expert Segmentation (DeepSeek-MoE style)
+        fg_factor = self.expert.fine_grained_factor
+        
+        # Effective values after fine-grained segmentation
+        self.effective_num_routed_experts = self.num_routed_experts * fg_factor
+        self.effective_intermediate_size = self.expert.intermediate_size // fg_factor
+        self.effective_top_k = self.router.top_k * fg_factor
+        
+        # Total experts in routing pool (using effective counts)
+        self.total_routable_experts = self.effective_num_routed_experts + self.num_null_experts
+        self.total_experts = self.effective_num_routed_experts + self.num_shared_experts + self.num_null_experts
         
         # Number of MoE layers (exact count based on placement rule)
         self.num_moe_layers = self.num_moe_layers_count
         self.num_dense_layers = self.num_layers - self.num_moe_layers
         
-        # Expert size (SwiGLU has 3 weight matrices)
-        self.expert_params = 3 * self.hidden_size * self.expert.intermediate_size
+        # Expert size (SwiGLU has 3 weight matrices) - using effective intermediate size
+        self.expert_params = 3 * self.hidden_size * self.effective_intermediate_size
         if self.expert.use_dual_gating:
             # Two gating projections with bias terms
             self.expert_params += 2 * (self.hidden_size * self.hidden_size + self.hidden_size)
@@ -339,9 +357,9 @@ class MoEModelConfig:
         # Approximate total parameters
         self._estimate_parameters()
         
-        # Active expert ratio
+        # Active expert ratio (using effective counts)
         if self.model_type == ModelType.MOE:
-            active_experts = self.num_shared_experts + self.router.top_k
+            active_experts = self.num_shared_experts + self.effective_top_k
             self.active_expert_ratio = active_experts / self.total_experts
         else:
             self.active_expert_ratio = 1.0
@@ -373,18 +391,18 @@ class MoEModelConfig:
         # LayerNorm parameters per layer
         norm_params_per_layer = self.hidden_size * 4  # 2 norms × 2 params each
         
-        # FFN/Expert parameters
-        expert_ffn_params = 3 * self.hidden_size * self.expert.intermediate_size
+        # FFN/Expert parameters (using effective intermediate size for fine-grained)
+        expert_ffn_params = 3 * self.hidden_size * self.effective_intermediate_size
         expert_gating_params = 0
         if self.expert.use_dual_gating:
             expert_gating_params = 2 * (self.hidden_size * self.hidden_size + self.hidden_size)
         moe_expert_params = expert_ffn_params + expert_gating_params
-        dense_ffn_params = expert_ffn_params
+        dense_ffn_params = 3 * self.hidden_size * self.expert.intermediate_size  # Dense uses full size
 
         if self.model_type == ModelType.MOE:
-            # MoE layers
+            # MoE layers (using effective expert count)
             moe_params_per_layer = (
-                self.num_routed_experts * moe_expert_params +
+                self.effective_num_routed_experts * moe_expert_params +  # Fine-grained experts
                 self.num_shared_experts * moe_expert_params +
                 self.hidden_size * self.total_routable_experts  # Router
             )
@@ -396,10 +414,10 @@ class MoEModelConfig:
                 self.num_dense_layers * (attn_params_per_layer + dense_ffn_per_layer + norm_params_per_layer)
             )
             
-            # Active parameters (per forward pass)
+            # Active parameters (per forward pass) - using effective top-k
             active_moe_per_layer = (
                 self.num_shared_experts * moe_expert_params +
-                self.router.top_k * moe_expert_params
+                self.effective_top_k * moe_expert_params
             )
             self.estimated_active_params = (
                 embed_params +
@@ -542,12 +560,23 @@ class MoEModelConfig:
         ]
         
         if self.model_type == ModelType.MOE:
+            fg_factor = self.expert.fine_grained_factor
             lines.extend([
                 f"MoE Configuration:",
-                f"  Routed Experts: {self.num_routed_experts}",
+                f"  Base Routed Experts: {self.num_routed_experts}",
+            ])
+            if fg_factor > 1:
+                lines.extend([
+                    f"  Fine-Grained Factor: {fg_factor}× (DeepSeek-MoE style)",
+                    f"  Effective Experts:   {self.effective_num_routed_experts}",
+                    f"  Effective Top-K:     {self.effective_top_k}",
+                    f"  Effective FFN Size:  {self.effective_intermediate_size}",
+                ])
+            else:
+                lines.append(f"  Top-K: {self.router.top_k}")
+            lines.extend([
                 f"  Shared Experts: {self.num_shared_experts}",
                 f"  Null Experts: {self.num_null_experts}",
-                f"  Top-K: {self.router.top_k}",
                 f"  Router Type: {self.router.router_type.value}",
                 f"  Active Ratio: {self.active_expert_ratio:.1%}",
                 f"",

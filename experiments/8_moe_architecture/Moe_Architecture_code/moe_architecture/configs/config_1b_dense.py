@@ -9,7 +9,7 @@ Architecture:
 - Pure dense transformer (no MoE)
 - 24 layers
 - 2048 hidden dimension
-- SwiGLU FFN with 5504 intermediate
+- SwiGLU FFN with 5504 intermediate (8/3 * 2048 - Swiglu hidden layer expansion rule)
 
 Training Target:
 - ~100B tokens for foundation
@@ -75,7 +75,7 @@ def get_config() -> MoEModelConfig:
             attention_type="gsa",
             num_attention_heads=16,      # Query heads
             num_kv_heads=4,              # 4:1 GQA ratio
-            head_dim=256,                # 2048 / 16
+            head_dim=128,                # 2048 / 16
             rope_theta=10000.0,
             attention_dropout=0.0,
             # GSA defaults (Table 1)

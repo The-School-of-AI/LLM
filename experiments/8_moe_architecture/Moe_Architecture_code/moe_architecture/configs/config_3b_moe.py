@@ -51,18 +51,19 @@ def get_config() -> MoEModelConfig:
         stage=2,
         
         # Core dimensions (SAME as 1B)
-        hidden_size=4096,
-        num_layers=20,
+        hidden_size=2048,
+        num_layers=32,
         
-        # MoE Configuration
-        num_routed_experts=8,            # 8 Routed
-        num_shared_experts=2,            # 2 Shared
-        num_null_experts=8,              # 1 Null
+        # MoE Configuration (DeepSeek-faithful + Null Experts paper)
+        # Base 8 experts × 4 fine-grained factor = 32 effective routed experts
+        num_routed_experts=20,            # N_seg = 8 per segment
+        num_shared_experts=2,            # Ks = 2 shared (always active)
+        num_null_experts=1,              # Single null expert (M copies in router)
         moe_layer_frequency=1,           # MoE on ALL layers (Every Layer MoE)
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=32000,
+            vocab_size=128000,
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -74,20 +75,28 @@ def get_config() -> MoEModelConfig:
             common_word_range=(300, 1000),
         ),
         
-        # GSA-Style Router Configuration
+        # Null Expert Router Configuration (arXiv:2601.15370v1)
+        # Paper formula: M = N × (1-ρ)/ρ, E[K_real] = k_max × ρ
+        # With N=32, ρ=0.5, k_max=16: M=32 null copies, E[K_real]=8 (matches DeepSeek)
         router=RouterConfig(
             router_type=RouterType.NULL_EXPERT,
-            # Token-choice with null copies (2601.15370v1)
-            top_k=4,                     # kmax
-            data_sparsity=0.8,           # ρ (expected real experts = kmax * ρ)
-            null_copies=20,               # 0 = derive from ρ
-            use_aux_loss=True,
-            aux_loss_weight=0.01,
+            top_k=2,                     # Base k_max (×4 fine-grained = 8 effective)
+            data_sparsity=0.5,           # ρ = 0.5 (paper stable region)
+            null_copies=0,               # 0 = derive from formula M = N×(1-ρ)/ρ
+            use_aux_loss=False,
+            aux_loss_weight=0.02,        # Paper recommends ~2e-2
+            router_z_loss_weight=0.001,  # Paper recommends z-loss ~1e-3
         ),
         
         # Expert Configuration (with dual gating)
         expert=ExpertConfig(
-            intermediate_size=512,       # Reduced to 2048 (Fine-Grained) previously 5504
+            # Swiglu hidden layer expansion rule
+            # Intermediate size without experts and segments = (8/3 * 2048) ~ 5504 (divisible by 2)
+            # Fine grained segments = 4, which means intermediate size will copied to 4 segments
+            # Each segment intermediate size after copy = 5504
+            # Each segment with 16 routing experts will have 5504 / 20 = 275 intermediate parameters
+            intermediate_size=512,       # 275 will be too small intermediate layer hence taking 512      
+            fine_grained_factor=4,       # DeepSeek-MoE style: 4× more experts, 4× smaller each
             use_dual_gating=False,        # Disabled for efficiency
             gate_bias_init=0.0,           # σ(0) = 0.5 at init
             expert_init_std=0.02,
