@@ -136,8 +136,8 @@ If you want to model **communication overhead explicitly**, you can provide:
     "ep_bandwidth_gbps": 200,
     "ep_latency_ms": 0.5,
     "ep_comm_multiplier": 1.0,
-    "offload_bandwidth_gbps": null,
-    "offload_latency_ms": 0.0,
+    "offload_bandwidth_gbps": 256,
+    "offload_latency_ms": 1.0,
     "offload_bytes_per_step": null
   },
   "performance": {
@@ -146,6 +146,7 @@ If you want to model **communication overhead explicitly**, you can provide:
   }
 }
 ```
+Defaults reflect a **typical IB 200G cluster** plus **PCIe Gen4 offload**. Adjust for your actual fabric.
 When `use_explicit_comm_model=true`, the calculator:
 - uses `compute_mfu` for **pure compute**
 - **adds explicit DP/EP/offload communication time** on top
