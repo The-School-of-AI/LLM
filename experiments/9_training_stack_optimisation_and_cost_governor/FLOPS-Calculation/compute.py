@@ -58,6 +58,7 @@ class TrainingStage:
         router_cfg = arch.get("router") or {}
         position_cfg = arch.get("position") or {}
         position_cfg = arch.get("position") or {}
+        position_cfg = arch.get("position") or {}
         expert_cfg = arch.get("expert") or {}
         head_cfg = arch.get("head") or {}
         position_cfg = arch.get("position") or {}
