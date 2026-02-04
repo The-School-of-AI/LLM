@@ -12,7 +12,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
     con = duckdb.connect(database=':memory:')
     
     # Increase maximum object size to handle large JSON objects (up to 4GB)
-    con.execute("SET maximum_object_size = '4GB';")
+    con.execute("SET maximum_object_size = '6GB';")
     
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
