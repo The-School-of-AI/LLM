@@ -300,7 +300,7 @@ else
       --comparison-operator "LessThanThreshold" \
       --evaluation-periods "${EVALUATION_PERIODS}" \
       --dimensions "Name=InstanceId,Value=${instance_id}" \
-      --alarm-actions "${SNS_TOPIC_ARN}" \
+      --alarm-actions "${SNS_TOPIC_ARN}" "arn:aws:automate:${AWS_REGION}:ec2:stop" \
       --ok-actions "${SNS_TOPIC_ARN}" \
       --treat-missing-data "notBreaching" \
       --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
