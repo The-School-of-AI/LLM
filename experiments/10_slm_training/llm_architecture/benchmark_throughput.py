@@ -645,13 +645,15 @@ def generate_insights(
             insights.bottleneck = "MEMORY_BOUND: Peak memory >90% of device capacity"
             insights.warnings.append("⚠️ Memory pressure - consider gradient checkpointing")
         else:
-            avg_mfu = statistics.mean([r.throughput.mfu for r in inference_results if r.throughput.mfu > 0])
-            if avg_mfu > 0.5:
-                insights.bottleneck = "COMPUTE_BOUND: Good MFU indicates efficient utilization"
-            elif avg_mfu > 0:
-                insights.bottleneck = f"SUB_OPTIMAL: MFU of {avg_mfu:.1%} - optimization opportunities exist"
+            mfu_values = [r.throughput.mfu for r in inference_results if r.throughput.mfu > 0]
+            if mfu_values:
+                avg_mfu = statistics.mean(mfu_values)
+                if avg_mfu > 0.5:
+                    insights.bottleneck = "COMPUTE_BOUND: Good MFU indicates efficient utilization"
+                else:
+                    insights.bottleneck = f"SUB_OPTIMAL: MFU of {avg_mfu:.1%} - optimization opportunities exist"
             else:
-                insights.bottleneck = "UNKNOWN: Insufficient data for analysis"
+                insights.bottleneck = "UNKNOWN: MFU not available (CPU or unsupported device)"
     
     attention_type = config.attention.attention_type
     if attention_type == AttentionType.GROUPED_QUERY:
