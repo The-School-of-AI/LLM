@@ -144,17 +144,39 @@ Notes:
 ### Optional Architecture Knobs
 These keys are optional and default to current behavior if omitted:
 - `num_kv_heads`: Enable GQA/MQA parameter counting (defaults to `num_heads`).
+- `attention_type`: `gqa`, `gsa`, `deepseek_gsa`, or `deepseek_mla` (MLA uses KV compression).
 - `ffn_type`: One of `swiglu`, `geglu`, `glu`, `gelu`, `relu` (defaults to `swiglu`).
 - `ffn_multiplier`: Numeric override for FFN matrix count (e.g., 2 or 3).
+- `moe_intermediate_size`: Expert FFN intermediate size (defaults to `intermediate_size`).
+- `num_shared_experts`: Always-active experts per MoE layer.
+- `moe_layer_frequency`: MoE every N layers (used if `num_moe_layers` omitted).
+- `lm_head_multiplier`: Multiplies LM head params/FLOPs (e.g., MTP-style multi-heads).
 - `moe_capacity_factor`: >1 models MoE padding/overflow compute.
 - `attention_window`: Sliding-window attention size.
 - `attention_sparsity`: Fraction (0,1] of tokens attended per token (ignored if `attention_window` set).
+- `attention_flops_multiplier`: Scales attention FLOPs for kernel speedups/overheads.
+- `linear_flops_multiplier`: Scales linear FLOPs (e.g., fused kernels).
 - `recompute_multiplier`: Activation checkpointing multiplier on total FLOPs.
 - `attention_kernel_multiplier`: Scales attention term for FlashAttention-like kernels.
 - `flash_attention_multiplier`: Alias for `attention_kernel_multiplier`.
 - `quantization_flops_multiplier`: Scales total FLOPs for quantization overheads.
 - `moe_routing_overhead_ratio`: Adds overhead as a ratio of MoE expert compute.
 - `moe_routing_flops_per_token`: Adds fixed overhead per-token per-layer.
+
+#### Gated Sparse Attention (GSA) / DeepSeek GSA
+When `attention_type` is `gsa` or `deepseek_gsa`, the calculator uses sparse attention (O(Lk)) and supports:
+- `gsa_k_base`, `gsa_k_min`, `gsa_k_max`: Base and clamp bounds for adaptive k.
+- `gsa_k_tokens`: Explicit k (overrides base/min/max).
+- `gsa_use_adaptive_k`: Enable adaptive k (uses base/min/max).
+- `gsa_num_indexer_heads`, `gsa_indexer_dim`: Lightning indexer config.
+- `gsa_use_value_gate`, `gsa_use_output_gate`: Adds G2/G1 gate projection params.
+- `indexer_fp8_speedup`: FP8 speedup factor for indexer (default 2.0).
+
+#### DeepSeek MLA
+Set `attention_type: deepseek_mla` and provide either:
+- `mla_kv_lora_rank`, or
+- `ds_compressed_dim` (alias)
+to model KV compression in attention FLOPs.
 
 ### 3. Cost Calculation
 ```python
