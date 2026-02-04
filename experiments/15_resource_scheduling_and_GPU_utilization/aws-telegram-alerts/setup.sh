@@ -21,9 +21,9 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 CPU_THRESHOLD="${CPU_THRESHOLD:-10}"
 EVALUATION_PERIODS="${EVALUATION_PERIODS:-3}"
 PERIOD_SECONDS="${PERIOD_SECONDS:-300}"
-SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-alerts}"
-LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-alert-forwarder}"
-LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-lambda-execution-role}"
+SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-idle-alert-topic}"
+LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-cpu-idle-alert-forwarder}"
+LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-cpu-alert-lambda-execution-role}"
 
 # Tags
 TAG_TEAM="Team15"
@@ -286,7 +286,7 @@ else
       continue
     fi
 
-    alarm_name="cpu-idle-${instance_id}"
+    alarm_name="${instance_name}-cpu-idle"
     log_info "Creating alarm for ${instance_id} (${instance_name})..."
 
     aws cloudwatch put-metric-alarm \
