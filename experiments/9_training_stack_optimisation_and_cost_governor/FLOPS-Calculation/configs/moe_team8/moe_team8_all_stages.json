@@ -1,7 +1,7 @@
 {
   "hardware": {
-    "num_gpus": 32,
-    "price_per_gpu_hour": 2.5,
+    "num_gpus": 48,
+    "price_per_gpu_hour": 4,
     "mfu": 0.3,
     "quantization": "all",
     "zero_stage": 2,
@@ -14,7 +14,7 @@
     "_comment": "Update hardware to match your cluster"
   },
   "growth": {
-    "mode": "paper"
+    "mode": "none"
   },
   "stages": [
     {
