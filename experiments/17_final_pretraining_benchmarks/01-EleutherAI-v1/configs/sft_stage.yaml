@@ -1,7 +1,7 @@
 stage: "sft_70b"
-description: "Final SFT alignment benchmarks (After 70B stage)"
+description: "Final SFT alignment benchmarks (Post-70B Training)"
 benchmarks:
-  # Harness Benchmarks
+  # Standard Harness Benchmarks
   - name: "MMLU"
     enabled: true
     harness_task: "mmlu"
@@ -15,13 +15,6 @@ benchmarks:
     cot: true
     phases: ["sft"]
 
-  - name: "GPQA Diamond"
-    enabled: true
-    harness_task: "gpqa_diamond"
-    shots: 10
-    cot: true
-    phases: ["sft"]
-
   - name: "GSM8K"
     enabled: true
     harness_task: "gsm8k"
@@ -31,9 +24,10 @@ benchmarks:
 
   - name: "BBH (Big Bench Hard)"
     enabled: true
-    harness_task: "bbh"
-    shots: 3
+    harness_task: "bbh_cot_fewshot"
+    shots: 5
     cot: true
+    tasks: ["all_23_tasks"]
     phases: ["sft"]
 
   - name: "ARC-Challenge"
@@ -52,13 +46,25 @@ benchmarks:
     enabled: true
     harness_task: "ifeval"
     shots: 0
-    paradigm: "Nested/Complex Constraints"
     phases: ["sft"]
 
-  - name: "APPS"
+  - name: "HumanEval"
     enabled: true
-    harness_task: "apps"
-    shots: 10
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+    shots: 0
+    phases: ["sft"]
+
+  - name: "MSGS"
+    enabled: true
+    harness_task: "msgs"
+    shots: 0
+    phases: ["sft"]
+
+  - name: "BLiMP"
+    enabled: true
+    harness_task: "blimp"
+    shots: 0
+    tasks: ["wh_island", "adjunct_island", "complex_np_island", "npi_present_1", "npi_present_2", "superlative_quantifiers_1"]
     phases: ["sft"]
 
   - name: "TruthfulQA"
@@ -68,47 +74,77 @@ benchmarks:
     shots: 0
     phases: ["sft"]
 
-  # Custom Benchmarks Pipeline (Alignment & Advanced Reasoning)
-  - name: "HumanEval"
+  - name: "HellaSwag"
     enabled: true
-    custom_script: "scripts/humaneval.py"
-    paradigm: "HumanEval+ (Rigorous)"
+    harness_task: "hellaswag"
+    shots: 0
     phases: ["sft"]
 
+  - name: "Winogrande"
+    enabled: true
+    harness_task: "winogrande"
+    shots: 0
+    phases: ["sft"]
+
+  - name: "PIQA"
+    enabled: true
+    harness_task: "piqa"
+    shots: 0
+    phases: ["sft"]
+
+  - name: "LAMBADA"
+    enabled: true
+    harness_task: "lambada_openai"
+    shots: 0
+    phases: ["sft"]
+
+  # Custom Benchmarks Pipeline
   - name: "SimpleQA_Verified"
     enabled: true
-    custom_script: "scripts/simpleqa.py"
-    mode: "Hard Filtering / Uncertainty Aware"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
+    paradigm: "Hard Filtering"
     phases: ["sft"]
 
   - name: "AIME 2025"
     enabled: true
-    custom_script: "scripts/aime2025.py"
-    paradigm: "8-shot CoT / SC (N=40) / Tools"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
+    paradigm: "8-shot CoT"
     phases: ["sft"]
 
-  - name: "L-Eval (Long Context Evaluation Suite)"
+  - name: "IndicGLUE"
     enabled: true
-    custom_script: "scripts/leval.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
+    tasks: ["indic-wnli", "indic-copa", "xquad-in"]
+    phases: ["sft"]
+
+  - name: "IndicQA"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
+    paradigm: "5-10 shot"
+    phases: ["sft"]
+
+  - name: "L-Eval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
     phases: ["sft"]
 
   - name: "RULER"
     enabled: true
-    custom_script: "scripts/ruler.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
     tasks: ["longchat_qa"]
     phases: ["sft"]
 
   - name: "Indic-Bias (FairITales)"
     enabled: true
-    custom_script: "scripts/indic_bias.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
     phases: ["sft"]
 
   - name: "HELM Safety"
     enabled: true
-    custom_script: "scripts/helm_safety.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/helm_safety.py"
     phases: ["sft"]
 
   - name: "SWE-bench Verified"
     enabled: true
-    custom_script: "scripts/swebench.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
     phases: ["sft"]

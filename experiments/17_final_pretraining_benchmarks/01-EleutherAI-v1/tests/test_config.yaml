@@ -1,8 +1,8 @@
 stage: "test"
-description: "Minimal test configuration for pipeline verification"
+description: "HumanEval Test Run"
 benchmarks:
-  - name: "HellaSwag"
+  - name: "HumanEval"
     enabled: true
-    harness_task: "hellaswag"
-    shots: 0
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+    shots: 5
     phases: ["pretraining"]

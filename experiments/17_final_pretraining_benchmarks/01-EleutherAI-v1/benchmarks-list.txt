@@ -1,6 +1,7 @@
 Benchmark
 MMLU
 TriviaQA
+MMLU-Pro
 GPQA Diamond
 GSM8K
 BBH (Big Bench Hard)
@@ -9,9 +10,10 @@ MATH
 IFEval
 SimpleQA_Verified
 HumanEval
-APPS
+APPS (Automated Programming Progress Standard)
 AIME 2025
-MSGS
+"MSGS (Mixed Signals Generalization Set)
+(Diagnostics)"
 BLiMP
 IndicGLUE
 IndicQA
@@ -19,7 +21,9 @@ L-Eval (Long Context Evaluation Suite)
 RULER
 TruthfulQA
 Indic-Bias (FairITales)
-HELM Safety
-SWE-bench Verified
+IndicMMLU-Pro
 HellaSwag
 Winogrande
+PIQA
+LAMBADA (language modeling)
+Tools and Agent-TBD

@@ -51,7 +51,7 @@ The `--batch_size` parameter has a major impact on total evaluation time. **We r
 Every execution creates a unique, timestamped directory to prevent data loss and ensure clean logs:
 
 ```text
-results/
+benchmark-results/
 └── [stage]/                 (e.g., 1b, 8b)
     └── [phase]/             (e.g., pretraining, sft)
         └── [timestamp]/     (e.g., 20240201_123000)
@@ -118,6 +118,17 @@ This toolkit helps you:
 
 - [ ] **Custom Scripts**: Implement logic for placeholders in `scripts/` (AIME 2025, IndicGLUE, SWE-bench, etc.).
 - [x] **Benchmarks List Review**: ✅ Use `benchmark_analysis/` toolkit to analyze all 25 benchmarks
+- [ ] **Custom Scripts Implementation**:
+    - [ ] `simpleqa.py` (SimpleQA Verified)
+    - [ ] `aime2025.py` (AIME 2025)
+    - [ ] `indic_glue.py` (IndicGLUE: iitp-movie-reviews, bbc-news-articles, article-genre-classification)
+    - [ ] `indic_qa.py` (IndicQA)
+    - [ ] `leval.py` (L-Eval)
+    - [ ] `ruler.py` (RULER)
+    - [ ] `indic_bias.py` (Indic-Bias / FairITales)
+    - [ ] `swebench.py` (SWE-bench)
+    - [ ] `helm_safety.py` (HELM Safety)
+- [ ] **Benchmarks List Review**: Review `benchmarks-list.txt` to ensure it is exhaustive and aligns with project deliverables.
 - [ ] **YAML Config Audit**: Comprehensive review of all task parameters (shots, mode, paradigm) in `1b`, `3b`, `8b`, `70b`, and `sft` YAMLs vs `Paradigms.md`.
 - [ ] **Multi-GPU Support**: Add orchestration for native model parallelism and FSDP via `accelerate`.
 - [ ] **MSGS Benchmark**: Investigate missing MSGS tasks in `v0.4.x` and re-enable or find substitutes.
