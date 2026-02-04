@@ -9,7 +9,7 @@ Target: 1B Parameter Model
 Inspired by: Qwen3 1.7B, SmolLM2, LLaMA 3, DeepSeek V3
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Optional, Literal, List, Dict, Any
 from enum import Enum
 import json
@@ -270,6 +270,10 @@ class ModelConfig:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ModelConfig':
         """Create from dictionary."""
+        # Filter out non-model config keys (e.g., training config)
+        valid_fields = {f.name for f in fields(cls)}
+        data = {k: v for k, v in data.items() if k in valid_fields}
+        
         # Convert string enums back
         if 'attention' in data:
             if 'attention_type' in data['attention']:
