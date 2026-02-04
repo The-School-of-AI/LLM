@@ -896,15 +896,20 @@ class DeepSeekGSA(nn.Module):
             )
             # Apply dropout (Triton kernel doesn't include dropout)
             if self.training and self.attention_dropout > 0:
-                # Note: dropout is applied differently with Triton
-                # For simplicity, we skip dropout in Triton path
-                pass
+                pass # Dropout skipped in Triton path for now
             return output, None
         else:
-            # Fall back to PyTorch implementation
-            return self._sparse_attention_pytorch(
-                q, k, v, indices, mask, attention_mask, kv_seq_len, output_attentions
-            )
+            # Fall back to Optimized PyTorch implementation (chunked) from kernels module
+            if pytorch_sparse_attention is not None:
+                output, _ = pytorch_sparse_attention(
+                    q, k, v, indices, mask, scale=self.scale
+                )
+                return output, None
+            else:
+                 # Fall back to naive implementation (legacy)
+                return self._sparse_attention_pytorch(
+                    q, k, v, indices, mask, attention_mask, kv_seq_len, output_attentions
+                )
 
     def _sparse_attention_pytorch(
         self,

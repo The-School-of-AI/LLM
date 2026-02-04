@@ -346,21 +346,21 @@ Note: CLI arguments always override config file values.
         print("[GSA] Triton kernels disabled, using PyTorch fallback")
 
     # Training config
-    training_config = TrainingConfig(
-        max_steps=args.max_steps,
-        batch_size=args.batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation,
-        seq_length=args.seq_length,
-        learning_rate=args.learning_rate,
-        warmup_steps=args.warmup_steps,
-        device=args.device,
-        experiment_name=args.experiment_name,
-        checkpoint_dir=args.checkpoint_dir,
-        seed=args.seed,
-        log_interval=args.log_interval,
-        save_interval=args.save_interval,
-        use_amp=not args.no_amp
-    )
+    # training_config = TrainingConfig(
+    #     max_steps=args.max_steps,
+    #     batch_size=args.batch_size,
+    #     gradient_accumulation_steps=args.gradient_accumulation,
+    #     seq_length=args.seq_length,
+    #     learning_rate=args.learning_rate,
+    #     warmup_steps=args.warmup_steps,
+    #     device=args.device,
+    #     experiment_name=args.experiment_name,
+    #     checkpoint_dir=args.checkpoint_dir,
+    #     seed=args.seed,
+    #     log_interval=args.log_interval,
+    #     save_interval=args.save_interval,
+    #     use_amp=not args.no_amp
+    # )
 
     model = LLM(model_config)
     model.gradient_checkpointing_enable()
