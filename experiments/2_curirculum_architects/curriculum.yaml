@@ -5,7 +5,7 @@
 # Any deviation requires escalation + re-freeze.
 # ============================================================
 
-version: "0.1"
+version: "0.4"
 owner_team: "Team 2: Curriculum Architects"
 status: "DRAFT"  # "FROZEN"
 frozen_on: "2026-02-02"
