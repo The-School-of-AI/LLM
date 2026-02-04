@@ -1,7 +1,87 @@
 # This is a CODEOWNERS file. It assigns responsibility for code review to specific users or teams.
 
-# Global owners for the entire repository
+## Global owners for the entire repository
+
 *       @The-School-of-AI/llm-repo-owners
 
-# Owners for specific folders
+## Owners for specific folders
 
+/experiments/1_data_radar_and_acquisition/                               @guptavik @ShanmugaSuntharam
+/docs/1_data_radar_and_acquisition/                                      @guptavik @ShanmugaSuntharam
+/tests/1_data_radar_and_acquisition/                                     @guptavik @ShanmugaSuntharam
+
+/experiments/2_curirculum_architects/                                    @u6yuvi
+/docs/2_curirculum_architects/                                           @u6yuvi
+/tests/2_curirculum_architects/                                          @u6yuvi
+
+/experiments/3_coreset_engineering/                                      @pankaj1311
+/docs/3_coreset_engineering/                                             @pankaj1311
+/tests/3_coreset_engineering/                                            @pankaj1311
+
+/experiments/4_synthetic_data_and_self_distillation/                     @rahulni
+/docs/4_synthetic_data_and_self_distillation/                            @rahulni
+/tests/4_synthetic_data_and_self_distillation/                           @rahulni
+
+/experiments/5_data_qa_and_leakage_control/                              @abi2024 @safal-singh
+/docs/5_data_qa_and_leakage_control/                                     @abi2024 @safal-singh
+/tests/5_data_qa_and_leakage_control/                                    @abi2024 @safal-singh
+
+/experiments/6_tokenizer_design_lab/                                     @wayoutisin
+/docs/6_tokenizer_design_lab/                                            @wayoutisin
+/tests/6_tokenizer_design_lab/                                           @wayoutisin
+
+/experiments/7_token_MOE_interaction_analysis/                           @ShanmugaSuntharam
+/docs/7_token_MOE_interaction_analysis/                                  @ShanmugaSuntharam
+/tests/7_token_MOE_interaction_analysis/                                 @ShanmugaSuntharam
+
+/experiments/8_moe_architecture/                                         @ajebaraj @abi2024
+/docs/8_moe_architecture/                                                @ajebaraj @abi2024
+/tests/8_MOE_architecture/                                               @ajebaraj @abi2024
+
+/experiments/9_training_stack_optimisation_and_cost_governor/            @wayoutisin @nav13n
+/docs/9_training_stack_optimisation_and_cost_governor/                   @wayoutisin @nav13n
+/tests/9_training_stack_optimisation_and_cost_governor/                  @wayoutisin @nav13n
+
+/experiments/10_slm_training/                                            @rahulni @pankaj1311
+/docs/10_slm_training/                                                   @rahulni @pankaj1311
+/tests/10_slm_training/                                                  @rahulni @pankaj1311
+
+/experiments/11_growth_and_weight_transfer/                              @safal-singh
+/docs/11_growth_and_weight_transfer/                                     @safal-singh
+/tests/11_growth_and_weight_transfer/                                    @safal-singh
+
+/experiments/12_training_operations/                                     @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/docs/12_training_operations/                                            @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/tests/12_training_operations/                                           @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+
+/experiments/13_aws_org_and_iam/                                         @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/docs/13_aws_org_and_iam/                                                @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/tests/13_aws_org_and_iam/                                               @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+
+/experiments/14_cost_monitoring_forecasting_accounting/                  @kalaiyarasan1988 @vnaren13
+/docs/14_cost_monitoring_forecasting_accounting/                         @kalaiyarasan1988 @vnaren13
+/tests/14_cost_monitoring_forecasting_accounting/                        @kalaiyarasan1988 @vnaren13
+
+/experiments/15_resource_scheduling_and_GPU_utilization/                 @guptavik @RAMNATHAI
+/docs/15_resource_scheduling_and_GPU_utilization/                        @guptavik @RAMNATHAI
+/tests/15_resource_scheduling_and_GPU_utilization/                       @guptavik @RAMNATHAI
+
+/experiments/16_lightweight_evaluation_and_early_warning_signals/        @Mayur-S-Gaidhane
+/docs/16_lightweight_evaluation_and_early_warning_signals/               @Mayur-S-Gaidhane
+/tests/16_lightweight_evaluation_and_early_warning_signals/              @Mayur-S-Gaidhane
+
+/experiments/17_final_pretraining_benchmarks/                            @kalaiyarasan1988 @nav13n @RAMNATHAI
+/docs/17_final_pretraining_benchmarks/                                   @kalaiyarasan1988 @nav13n @RAMNATHAI
+/tests/17_final_pretraining_benchmarks/                                  @kalaiyarasan1988 @nav13n @RAMNATHAI
+
+/experiments/18_sft_and_rl_alignment_and_final_benchmarks/               @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/docs/18_sft_and_rl_alignment_and_final_benchmarks/                      @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/tests/18_sft_and_rl_alignment_and_final_benchmarks/                     @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+
+/experiments/19_reproducibility_provenance_and_experiment_tracking/      @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/docs/19_reproducibility_provenance_and_experiment_tracking/             @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/tests/19_reproducibility_provenance_and_experiment_tracking/            @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+
+/experiments/20_research_narrative/                                      @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/docs/20_research_narrative/                                             @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi
+/tests/20_research_narrative/                                            @pankaj1311 @kalaiyarasan1988 @ShanmugaSuntharam @wayoutisin @u6yuvi

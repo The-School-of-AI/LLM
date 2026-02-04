@@ -19,5 +19,12 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
+      - name: Validate JSON files
+        run: |
+          find . -type f -name "*.json" -print0 |
+          while IFS= read -r -d '' file; do
+          python -m json.tool "$file" > /dev/null
+          done
+
       - name: Run hooks
         run: pre-commit run --all-files

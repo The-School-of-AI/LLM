@@ -1,3 +1,5 @@
+minimum_pre_commit_version: 2.20.0
+
 repos:
   - repo: https://github.com/psf/black
     rev: 24.8.0
@@ -14,3 +16,19 @@ repos:
     rev: v0.5.0
     hooks:
       - id: ruff
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-json
+  
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
