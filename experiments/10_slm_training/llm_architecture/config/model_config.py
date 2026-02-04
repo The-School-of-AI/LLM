@@ -152,6 +152,9 @@ class HeadConfig:
     - Better quality than tied weights, especially for larger models
     """
 
+    # Embedding tying (kept for YAML compatibility, but typically False)
+    tie_word_embeddings: bool = False  # DeepSeek V3 recommends untied
+    
     # Multi-token prediction (DeepSeek style)
     use_multi_token_prediction: bool = False
     num_predict_tokens: int = 1  # >1 enables multi-token prediction
