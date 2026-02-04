@@ -626,7 +626,11 @@ def run_training(
     if model_config_overrides:
         for key, value in model_config_overrides.items():
             if hasattr(model_config, key):
-                setattr(model_config, key, value)
+                # Handle nested dataclass configs (attention, position, ffn, etc.)
+                if hasattr(value, '__dataclass_fields__'):
+                    setattr(model_config, key, value)
+                else:
+                    setattr(model_config, key, value)
     
     # Create model
     model = LLM(model_config)
@@ -712,6 +716,25 @@ Note: CLI arguments always override config file values.
         default=None,
         choices=["auto", "cuda", "mps", "cpu"],
         help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu"
+    )
+
+    # GSA-specific overrides for memory tuning
+    parser.add_argument(
+        "--gsa-k-base",
+        type=int,
+        default=None,
+        help="Override GSA k_base (default: from preset, try 256-512 for long sequences)"
+    )
+    parser.add_argument(
+        "--gsa-k-max",
+        type=int,
+        default=None,
+        help="Override GSA k_max (default: from preset, try 512-1024 for long sequences)"
+    )
+    parser.add_argument(
+        "--no-triton",
+        action="store_true",
+        help="Disable Triton kernels (use PyTorch fallback for GSA)"
     )
 
     # Experiment

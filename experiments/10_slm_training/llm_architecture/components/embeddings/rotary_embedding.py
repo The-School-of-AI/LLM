@@ -17,15 +17,16 @@ from typing import Optional, Tuple
 class RotaryEmbedding(nn.Module):
     """
     Rotary Position Embedding (RoPE).
-    
+
     Encodes position information by rotating query and key vectors.
-    
+
     Features:
     - Relative position encoding
     - Linear extrapolation beyond training length
     - Efficient computation via complex multiplication
+    - torch.compile compatible (pre-computed cache)
     """
-    
+
     def __init__(
         self,
         dim: int,
@@ -40,16 +41,14 @@ class RotaryEmbedding(nn.Module):
         self.max_position_embeddings = max_position_embeddings
         self.base = base
         self.scaling_factor = scaling_factor
-        
+
         # Compute inverse frequencies
         inv_freq = self._compute_inv_freq(device, dtype)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
-        
-        # Cache for cos and sin
-        self._seq_len_cached = 0
-        self._cos_cached: Optional[torch.Tensor] = None
-        self._sin_cached: Optional[torch.Tensor] = None
-        
+
+        # Pre-compute full cos/sin cache for torch.compile compatibility
+        self._precompute_cos_sin_cache(max_position_embeddings, device, dtype)
+
     def _compute_inv_freq(
         self,
         device: Optional[torch.device] = None,
@@ -62,29 +61,35 @@ class RotaryEmbedding(nn.Module):
             )
         )
         return inv_freq
-    
-    def _update_cos_sin_cache(
+
+    def _precompute_cos_sin_cache(
         self,
-        seq_len: int,
-        device: torch.device,
+        max_seq_len: int,
+        device: Optional[torch.device],
         dtype: torch.dtype
     ):
-        """Update cached cos and sin values."""
-        if seq_len > self._seq_len_cached:
-            self._seq_len_cached = seq_len
-            
-            # Create position indices
-            t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
-            t = t / self.scaling_factor
-            
-            # Compute frequencies: [seq_len, dim/2]
-            freqs = torch.outer(t, self.inv_freq)
-            
-            # Compute cos and sin: [seq_len, dim]
-            emb = torch.cat([freqs, freqs], dim=-1)
-            self._cos_cached = emb.cos().to(dtype)
-            self._sin_cached = emb.sin().to(dtype)
-    
+        """
+        Pre-compute full cos/sin cache at initialization.
+
+        This makes the module torch.compile compatible by avoiding
+        data-dependent control flow during forward pass.
+        """
+        # Create position indices
+        t = torch.arange(max_seq_len, device=device, dtype=self.inv_freq.dtype)
+        t = t / self.scaling_factor
+
+        # Compute frequencies: [max_seq_len, dim/2]
+        freqs = torch.outer(t, self.inv_freq)
+
+        # Compute cos and sin: [max_seq_len, dim]
+        emb = torch.cat([freqs, freqs], dim=-1)
+        cos_cached = emb.cos().to(dtype)
+        sin_cached = emb.sin().to(dtype)
+
+        # Register as buffers for proper device/dtype handling
+        self.register_buffer("cos_cached", cos_cached, persistent=False)
+        self.register_buffer("sin_cached", sin_cached, persistent=False)
+
     def forward(
         self,
         x: torch.Tensor,
@@ -92,28 +97,30 @@ class RotaryEmbedding(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get rotary embeddings for given positions.
-        
+
         Args:
             x: Input tensor of shape [batch, seq_len, ...] (used for seq_len and device)
             position_ids: Optional position indices [batch, seq_len]
-            
+
         Returns:
             Tuple of (cos, sin) tensors for rotation
         """
         seq_len = x.shape[1]
-        
-        # Update cache if needed
-        self._update_cos_sin_cache(seq_len, x.device, x.dtype)
-        
+
+        # Ensure cache is on correct device (handles model.to(device) after init)
+        if self.cos_cached.device != x.device:
+            self.cos_cached = self.cos_cached.to(x.device)
+            self.sin_cached = self.sin_cached.to(x.device)
+
         if position_ids is not None:
             # Use provided positions
-            cos = self._cos_cached[position_ids]
-            sin = self._sin_cached[position_ids]
+            cos = self.cos_cached[position_ids]
+            sin = self.sin_cached[position_ids]
         else:
             # Use sequential positions
-            cos = self._cos_cached[:seq_len].unsqueeze(0)
-            sin = self._sin_cached[:seq_len].unsqueeze(0)
-            
+            cos = self.cos_cached[:seq_len].unsqueeze(0)
+            sin = self.sin_cached[:seq_len].unsqueeze(0)
+
         return cos, sin
 
 

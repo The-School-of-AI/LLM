@@ -201,6 +201,25 @@ Note: CLI arguments always override config file values.
         help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu"
     )
 
+    # GSA-specific overrides for memory tuning
+    parser.add_argument(
+        "--gsa-k-base",
+        type=int,
+        default=None,
+        help="Override GSA k_base (default: from preset, try 256-512 for long sequences)"
+    )
+    parser.add_argument(
+        "--gsa-k-max",
+        type=int,
+        default=None,
+        help="Override GSA k_max (default: from preset, try 512-1024 for long sequences)"
+    )
+    parser.add_argument(
+        "--no-triton",
+        action="store_true",
+        help="Disable Triton kernels (use PyTorch fallback for GSA)"
+    )
+
     # Experiment
     parser.add_argument("--experiment-name", type=str, default=None)
     parser.add_argument("--checkpoint-dir", type=str, default=None)
@@ -314,6 +333,34 @@ Note: CLI arguments always override config file values.
 
     # Update vocab size from tokenizer
     model_config.vocab_size = len(tokenizer)
+
+    # Override GSA k values if provided (for memory tuning)
+    if args.gsa_k_base is not None:
+        model_config.attention.gsa_k_base = args.gsa_k_base
+        print(f"[GSA] Overriding k_base to {args.gsa_k_base}")
+    if args.gsa_k_max is not None:
+        model_config.attention.gsa_k_max = args.gsa_k_max
+        print(f"[GSA] Overriding k_max to {args.gsa_k_max}")
+    if args.no_triton:
+        model_config.attention.gsa_use_triton_kernels = False
+        print("[GSA] Triton kernels disabled, using PyTorch fallback")
+
+    # Training config
+    training_config = TrainingConfig(
+        max_steps=args.max_steps,
+        batch_size=args.batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation,
+        seq_length=args.seq_length,
+        learning_rate=args.learning_rate,
+        warmup_steps=args.warmup_steps,
+        device=args.device,
+        experiment_name=args.experiment_name,
+        checkpoint_dir=args.checkpoint_dir,
+        seed=args.seed,
+        log_interval=args.log_interval,
+        save_interval=args.save_interval,
+        use_amp=not args.no_amp
+    )
 
     model = LLM(model_config)
     model.gradient_checkpointing_enable()

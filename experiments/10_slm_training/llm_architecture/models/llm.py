@@ -32,7 +32,7 @@ from components.embeddings.yarn_embedding import YaRNRotaryEmbedding
 from components.normalization.rms_norm import RMSNorm
 from components.attention.grouped_query_attention import create_causal_mask
 from components.heads.multi_token_head import (
-    StandardLMHead,
+    LMHead,
     MultiTokenPredictionHead,
     MTPLoss
 )
@@ -100,25 +100,24 @@ class LLM(nn.Module):
         # Final normalization
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         
-        # Output head
+        # Output head - always untied (following DeepSeek V3)
+        # This ensures consistent behavior as model scales (only FFN grows)
         if config.head.use_multi_token_prediction:
             self.lm_head = MultiTokenPredictionHead(
                 hidden_size=config.hidden_size,
                 vocab_size=config.vocab_size,
                 num_predict_tokens=config.head.num_predict_tokens,
-                share_embeddings=config.head.tie_word_embeddings,
-                embedding_weights=self.embed_tokens.weight if config.head.tie_word_embeddings else None
+                init_std=config.initializer_range
             )
             self.mtp_loss = MTPLoss(
                 num_predict_tokens=config.head.num_predict_tokens,
                 aux_loss_weight=config.head.mtp_loss_weight
             )
         else:
-            self.lm_head = StandardLMHead(
+            self.lm_head = LMHead(
                 hidden_size=config.hidden_size,
                 vocab_size=config.vocab_size,
-                tie_weights=config.head.tie_word_embeddings,
-                embedding_weights=self.embed_tokens.weight if config.head.tie_word_embeddings else None
+                init_std=config.initializer_range
             )
             self.mtp_loss = None
         

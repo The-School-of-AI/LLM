@@ -75,7 +75,8 @@ class AttentionConfig:
     gsa_gate_activation: str = "sigmoid"         # Gate activation function
     gsa_gate_bias_init: float = 0.5              # Initial gate bias
     gsa_indexer_activation: str = "sigmoid"      # Indexer activation ("sigmoid" or "relu")
-    
+    gsa_use_triton_kernels: bool = True          # Use Triton kernels for long sequences (if available)
+
     # DeepSeek Sparse Attention specific
     ds_compressed_dim: int = 512      # Compressed KV dimension
     ds_rope_head_dim: int = 32        # RoPE dimension for decoupled attention
@@ -142,15 +143,19 @@ class ConnectionConfig:
 
 @dataclass
 class HeadConfig:
-    """Configuration for output heads."""
-    
+    """
+    Configuration for output heads.
+
+    Design (following DeepSeek V3, arXiv:2412.19437):
+    - Untied embeddings: Input and output embeddings are always separate
+    - This ensures consistent behavior as model scales (FFN grows, head stays same)
+    - Better quality than tied weights, especially for larger models
+    """
+
     # Multi-token prediction (DeepSeek style)
     use_multi_token_prediction: bool = False
     num_predict_tokens: int = 1  # >1 enables multi-token prediction
     mtp_loss_weight: float = 0.3  # Weight for auxiliary MTP loss
-    
-    # Tie embeddings
-    tie_word_embeddings: bool = True
 
 
 @dataclass
@@ -356,9 +361,14 @@ def get_1b_deepseek_gsa_config() -> ModelConfig:
     """
     1B model with DeepSeek-style GSA (corrected implementation).
 
-    Memory-optimized defaults:
-    - k_base=256, k_max=512 for MPS/limited memory
-    - For CUDA with more VRAM, you can increase these values
+    Default k values are tuned for CUDA GPUs with 40GB+ VRAM.
+    For MPS or limited memory, override via CLI:
+        --gsa-k-base 128 --gsa-k-max 256
+
+    Memory scaling guide (for seq_length=4096):
+    - k_base=256, k_max=512:  ~8GB VRAM per batch
+    - k_base=512, k_max=1024: ~16GB VRAM per batch
+    - k_base=1024, k_max=2048: ~32GB VRAM per batch
     """
     config = get_1b_base_config()
     config.model_name = "LLM-1B-DeepSeek-GSA"
@@ -367,12 +377,11 @@ def get_1b_deepseek_gsa_config() -> ModelConfig:
     config.attention.gsa_indexer_dim = 64
     config.attention.gsa_num_indexer_heads = 4
     config.attention.gsa_indexer_activation = "sigmoid"
-    # Adaptive sparsity - very conservative defaults for MPS memory efficiency
-    # The sparse attention still provides benefits even with smaller k
-    # For CUDA with more VRAM, increase: k_base=512-1024, k_max=1024-2048
-    config.attention.gsa_k_base = 128   # Very small for MPS compatibility
-    config.attention.gsa_k_min = 32     # Minimum tokens to attend to
-    config.attention.gsa_k_max = 256    # Very small for MPS compatibility
+    # Adaptive sparsity - defaults tuned for CUDA with good VRAM
+    # k values scale memory linearly: O(batch * seq * k * heads * head_dim)
+    config.attention.gsa_k_base = 512   # Good balance for 40GB+ GPUs
+    config.attention.gsa_k_min = 64     # Minimum tokens to attend to
+    config.attention.gsa_k_max = 1024   # Cap for very long sequences
     config.attention.gsa_use_adaptive_k = True
     config.attention.gsa_adaptive_k_method = "variance"
     config.attention.gsa_adaptive_k_temperature = 1.0
@@ -412,13 +421,73 @@ def get_1b_mtp_config() -> ModelConfig:
 
 
 def get_1b_yarn_config() -> ModelConfig:
-    """1B model with YaRN for extended context."""
+    """1B model with YaRN for extended context (32K)."""
     config = get_1b_base_config()
     config.model_name = "LLM-1B-YaRN"
     config.max_position_embeddings = 32768
     config.position.position_type = PositionEmbeddingType.YARN
     config.position.yarn_original_max_position = 4096
     config.position.yarn_scale = 8.0
+    return config
+
+
+def get_1b_deepseek_gsa_128k_config() -> ModelConfig:
+    """
+    1B model with DeepSeek GSA optimized for 128K context length.
+
+    Uses Triton kernels by default for memory efficiency.
+    YaRN extends 4K base to 128K with scale factor 32.
+
+    Memory requirements (approximate):
+    - Triton kernels: ~40GB VRAM for batch_size=1
+    - PyTorch fallback: ~60GB+ VRAM (use Triton for long sequences)
+    """
+    config = get_1b_deepseek_gsa_config()
+    config.model_name = "LLM-1B-DeepSeek-GSA-128K"
+    config.max_position_embeddings = 131072  # 128K
+    # YaRN configuration for 128K context
+    config.position.position_type = PositionEmbeddingType.YARN
+    config.position.yarn_original_max_position = 4096
+    config.position.yarn_scale = 32.0  # 4K -> 128K
+    config.position.yarn_beta_fast = 32.0
+    config.position.yarn_beta_slow = 1.0
+    config.position.yarn_mscale = 1.0
+    # GSA tuned for long sequences - larger k for better quality
+    config.attention.gsa_k_base = 1024
+    config.attention.gsa_k_min = 128
+    config.attention.gsa_k_max = 2048
+    # Triton kernels required for memory efficiency at this scale
+    config.attention.gsa_use_triton_kernels = True
+    return config
+
+
+def get_1b_deepseek_gsa_256k_config() -> ModelConfig:
+    """
+    1B model with DeepSeek GSA optimized for 256K context length.
+
+    Uses Triton kernels by default for memory efficiency.
+    YaRN extends 4K base to 256K with scale factor 64.
+
+    Memory requirements (approximate):
+    - Triton kernels: ~60GB+ VRAM for batch_size=1
+    - Recommended: Use gradient checkpointing and small batch sizes
+    """
+    config = get_1b_deepseek_gsa_config()
+    config.model_name = "LLM-1B-DeepSeek-GSA-256K"
+    config.max_position_embeddings = 262144  # 256K
+    # YaRN configuration for 256K context
+    config.position.position_type = PositionEmbeddingType.YARN
+    config.position.yarn_original_max_position = 4096
+    config.position.yarn_scale = 64.0  # 4K -> 256K
+    config.position.yarn_beta_fast = 32.0
+    config.position.yarn_beta_slow = 1.0
+    config.position.yarn_mscale = 0.707  # sqrt(0.5) for very long contexts
+    # GSA tuned for very long sequences
+    config.attention.gsa_k_base = 1024
+    config.attention.gsa_k_min = 128
+    config.attention.gsa_k_max = 4096
+    # Triton kernels required for memory efficiency at this scale
+    config.attention.gsa_use_triton_kernels = True
     return config
 
 
@@ -431,14 +500,14 @@ def get_1b_full_config() -> ModelConfig:
         num_hidden_layers=16,
         max_position_embeddings=32768,
         attention=AttentionConfig(
-        attention_type=AttentionType.GATED_SPARSE,
-        num_attention_heads=16,
-        num_key_value_heads=4,
-        gsa_indexer_dim=64,         # d_I (was gsa_num_slots)
-        gsa_num_indexer_heads=4,    # H_I
-        gsa_k_base=2048,            # Base selection budget
-        gsa_k_min=256,              # Min k
-        gsa_k_max=4096,             # Max k
+            attention_type=AttentionType.GATED_SPARSE,
+            num_attention_heads=16,
+            num_key_value_heads=4,
+            gsa_indexer_dim=64,
+            gsa_num_indexer_heads=4,
+            gsa_k_base=2048,
+            gsa_k_min=256,
+            gsa_k_max=4096,
         ),
         position=PositionConfig(
             position_type=PositionEmbeddingType.YARN,
@@ -465,8 +534,10 @@ def get_1b_full_config() -> ModelConfig:
 PRESET_CONFIGS = {
     "1b-base": get_1b_base_config,
     "1b-gsa": get_1b_gsa_config,
-    "1b-deepseek-gsa": get_1b_deepseek_gsa_config,  # DeepSeek-style GSA (recommended)
-    "1b-deepseek": get_1b_deepseek_config,          # DeepSeek V3 MLA
+    "1b-deepseek-gsa": get_1b_deepseek_gsa_config,        # DeepSeek-style GSA (recommended)
+    "1b-deepseek-gsa-128k": get_1b_deepseek_gsa_128k_config,  # 128K context
+    "1b-deepseek-gsa-256k": get_1b_deepseek_gsa_256k_config,  # 256K context
+    "1b-deepseek": get_1b_deepseek_config,                # DeepSeek MLA
     "1b-mhc": get_1b_mhc_config,
     "1b-mtp": get_1b_mtp_config,
     "1b-yarn": get_1b_yarn_config,

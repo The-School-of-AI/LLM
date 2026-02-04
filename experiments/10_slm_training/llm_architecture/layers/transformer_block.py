@@ -154,6 +154,8 @@ class TransformerBlock(nn.Module):
                 attention_bias=attn_config.attention_bias,
                 num_layers=config.num_hidden_layers,
                 layer_idx=layer_idx,
+                # Triton kernel optimization
+                use_triton_kernels=getattr(attn_config, 'gsa_use_triton_kernels', True),
             )
             return DeepSeekGSA(gsa_config)
 

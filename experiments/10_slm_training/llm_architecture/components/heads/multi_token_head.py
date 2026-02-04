@@ -1,16 +1,21 @@
 """
-Multi-Token Prediction Heads
-=============================
+Language Model Heads
+====================
 
-Implementation of multi-token prediction as used in DeepSeek.
+Implementation of LM heads following GSA paper (arXiv:2601.15305v1) and
+DeepSeek 3.2 (arXiv:2512.02556v1) architecture.
 
-Key innovations:
-1. Predict multiple future tokens simultaneously
-2. Auxiliary training signal improves representations
-3. Speculative decoding capability
-4. Better sample efficiency
+Design Decisions:
+1. **Untied Embeddings**: Input and output embeddings are separate (not shared).
+   This follows the GSA reference implementation which uses untied weights by
+   default. Since FFN layers will grow while LM head stays the same, untied
+   weights provide consistent behavior across model sizes.
 
-Reference: DeepSeek-V2/V3 architectures
+2. **No Bias**: Modern LLMs don't use bias in the output projection.
+
+3. **Proper Initialization**: Uses normal initialization with configurable std.
+
+Reference: GSA (arXiv:2601.15305v1), DeepSeek 3.2 (arXiv:2512.02556v1)
 """
 
 import torch
@@ -20,40 +25,53 @@ import math
 from typing import Optional, Tuple, List, Dict, Any
 
 
-class StandardLMHead(nn.Module):
+class LMHead(nn.Module):
     """
-    Standard language model head.
-    
-    Single token prediction: hidden_states -> logits
+    Language Model Head with untied embeddings.
+
+    Projects hidden states to vocabulary logits using an independent
+    output projection (not tied to input embeddings).
+
+    This follows DeepSeek V3's design choice for better quality and
+    consistent behavior as models scale.
+
+    Args:
+        hidden_size: Model hidden dimension
+        vocab_size: Vocabulary size
+        bias: Whether to use bias (default: False, following modern LLMs)
+        init_std: Standard deviation for weight initialization
     """
-    
+
     def __init__(
         self,
         hidden_size: int,
         vocab_size: int,
         bias: bool = False,
-        tie_weights: bool = True,
-        embedding_weights: Optional[nn.Parameter] = None
+        init_std: float = 0.02
     ):
         super().__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
-        self.tie_weights = tie_weights
-        
-        if tie_weights and embedding_weights is not None:
-            # Share weights with embedding layer
-            self.lm_head = nn.Linear(hidden_size, vocab_size, bias=bias)
-            self.lm_head.weight = embedding_weights
-        else:
-            self.lm_head = nn.Linear(hidden_size, vocab_size, bias=bias)
-    
+
+        # Independent output projection (untied from input embeddings)
+        self.lm_head = nn.Linear(hidden_size, vocab_size, bias=bias)
+
+        # Initialize weights
+        self._init_weights(init_std)
+
+    def _init_weights(self, std: float):
+        """Initialize with normal distribution."""
+        nn.init.normal_(self.lm_head.weight, mean=0.0, std=std)
+        if self.lm_head.bias is not None:
+            nn.init.zeros_(self.lm_head.bias)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """
         Compute logits for next token prediction.
-        
+
         Args:
             hidden_states: [batch, seq_len, hidden_size]
-            
+
         Returns:
             logits: [batch, seq_len, vocab_size]
         """
@@ -62,66 +80,65 @@ class StandardLMHead(nn.Module):
 
 class MultiTokenPredictionHead(nn.Module):
     """
-    Multi-Token Prediction (MTP) Head.
-    
+    Multi-Token Prediction (MTP) Head following DeepSeek V3.
+
     Predicts multiple future tokens simultaneously using:
-    1. Separate projection heads for each future position
-    2. Shared hidden representations
-    3. Position-aware prediction
-    
+    1. Main head for t+1 prediction
+    2. Auxiliary heads for t+2, t+3, ... predictions
+    3. Transformation network for auxiliary predictions
+
+    All heads use untied embeddings (independent from input embeddings).
+
     Benefits:
     - Improved representation learning
     - Auxiliary training signal
     - Enables speculative decoding
+
+    Args:
+        hidden_size: Model hidden dimension
+        vocab_size: Vocabulary size
+        num_predict_tokens: Number of future tokens to predict (default: 4)
+        init_std: Standard deviation for weight initialization
     """
-    
+
     def __init__(
         self,
         hidden_size: int,
         vocab_size: int,
         num_predict_tokens: int = 4,
-        share_embeddings: bool = True,
-        embedding_weights: Optional[nn.Parameter] = None,
-        use_separate_heads: bool = True
+        init_std: float = 0.02
     ):
         super().__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.num_predict_tokens = num_predict_tokens
-        self.use_separate_heads = use_separate_heads
-        
-        # Main prediction head (token t+1)
+        self.init_std = init_std
+
+        # Main prediction head (token t+1) - untied
         self.main_head = nn.Linear(hidden_size, vocab_size, bias=False)
-        
-        if share_embeddings and embedding_weights is not None:
-            self.main_head.weight = embedding_weights
-        
-        # Auxiliary heads for tokens t+2, t+3, ...
-        if use_separate_heads:
-            # Separate head for each future position
-            self.aux_heads = nn.ModuleList([
-                nn.Linear(hidden_size, vocab_size, bias=False)
-                for _ in range(num_predict_tokens - 1)
-            ])
-            
-            # Optionally share with main head
-            if share_embeddings and embedding_weights is not None:
-                for head in self.aux_heads:
-                    head.weight = embedding_weights
-        else:
-            # Shared head with position embedding
-            self.position_embed = nn.Embedding(num_predict_tokens, hidden_size)
-            self.shared_aux_head = nn.Linear(hidden_size, vocab_size, bias=False)
-            if share_embeddings and embedding_weights is not None:
-                self.shared_aux_head.weight = embedding_weights
-        
-        # Transform from hidden to prediction space
+        self._init_linear(self.main_head)
+
+        # Auxiliary heads for tokens t+2, t+3, ... - each untied
+        self.aux_heads = nn.ModuleList([
+            nn.Linear(hidden_size, vocab_size, bias=False)
+            for _ in range(num_predict_tokens - 1)
+        ])
+        for head in self.aux_heads:
+            self._init_linear(head)
+
+        # Transform from hidden to prediction space for auxiliary tokens
         self.prediction_transform = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.GELU(),
             nn.Linear(hidden_size, hidden_size)
         )
-        
+
+    def _init_linear(self, module: nn.Linear):
+        """Initialize linear layer with normal distribution."""
+        nn.init.normal_(module.weight, mean=0.0, std=self.init_std)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -129,47 +146,38 @@ class MultiTokenPredictionHead(nn.Module):
     ) -> Tuple[torch.Tensor, Optional[List[torch.Tensor]]]:
         """
         Compute multi-token predictions.
-        
+
         Args:
             hidden_states: [batch, seq_len, hidden_size]
             return_aux: Whether to return auxiliary predictions
-            
+
         Returns:
             main_logits: [batch, seq_len, vocab_size] for t+1
             aux_logits: List of [batch, seq_len, vocab_size] for t+2, t+3, ...
         """
         # Main prediction (standard next token)
         main_logits = self.main_head(hidden_states)
-        
+
         if not return_aux:
             return main_logits, None
-        
+
         # Transform for auxiliary predictions
         transformed = self.prediction_transform(hidden_states)
-        
+
         # Auxiliary predictions
-        aux_logits = []
-        
-        if self.use_separate_heads:
-            for head in self.aux_heads:
-                aux_logits.append(head(transformed))
-        else:
-            # Use shared head with position-specific modifications
-            for i in range(1, self.num_predict_tokens):
-                pos_embed = self.position_embed.weight[i].unsqueeze(0).unsqueeze(0)
-                pos_transformed = transformed + pos_embed
-                aux_logits.append(self.shared_aux_head(pos_transformed))
-        
+        aux_logits = [head(transformed) for head in self.aux_heads]
+
         return main_logits, aux_logits
 
 
 class MTPLoss(nn.Module):
     """
     Loss computation for Multi-Token Prediction.
-    
+
     Combines main next-token loss with auxiliary future-token losses.
+    Uses decaying weights for further predictions.
     """
-    
+
     def __init__(
         self,
         num_predict_tokens: int = 4,
@@ -182,7 +190,7 @@ class MTPLoss(nn.Module):
         self.aux_loss_weight = aux_loss_weight
         self.aux_decay = aux_decay
         self.ignore_index = ignore_index
-        
+
     def forward(
         self,
         main_logits: torch.Tensor,
@@ -191,18 +199,18 @@ class MTPLoss(nn.Module):
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute MTP loss.
-        
+
         Args:
             main_logits: [batch, seq_len, vocab_size]
             aux_logits: List of [batch, seq_len, vocab_size]
             labels: [batch, seq_len] - target token IDs
-            
+
         Returns:
             total_loss: Combined loss
             loss_dict: Dictionary with individual losses
         """
         batch_size, seq_len = labels.shape
-        
+
         # Main loss (t+1 prediction)
         # Shift: logits[:-1] predicts labels[1:]
         main_loss = F.cross_entropy(
@@ -210,168 +218,40 @@ class MTPLoss(nn.Module):
             labels[:, 1:].contiguous().view(-1),
             ignore_index=self.ignore_index
         )
-        
+
         loss_dict = {'main_loss': main_loss}
         total_loss = main_loss
-        
+
         # Auxiliary losses (t+2, t+3, ...)
         if aux_logits is not None:
             aux_total = 0.0
-            
+
             for i, aux_log in enumerate(aux_logits):
                 offset = i + 2  # t+2, t+3, ...
-                
+
                 if seq_len <= offset:
                     continue
-                
+
                 # Shift appropriately: logits[:-offset] predicts labels[offset:]
                 aux_loss = F.cross_entropy(
                     aux_log[:, :-offset].contiguous().view(-1, aux_log.size(-1)),
                     labels[:, offset:].contiguous().view(-1),
                     ignore_index=self.ignore_index
                 )
-                
+
                 # Decaying weight for further predictions
                 weight = self.aux_loss_weight * (self.aux_decay ** i)
                 aux_total += weight * aux_loss
-                
+
                 loss_dict[f'aux_loss_{offset}'] = aux_loss
-            
+
             loss_dict['aux_total'] = aux_total
             total_loss = main_loss + aux_total
-        
+
         loss_dict['total_loss'] = total_loss
-        
+
         return total_loss, loss_dict
 
 
-class SpeculativeDecodingHead(nn.Module):
-    """
-    Head optimized for speculative decoding.
-    
-    Can predict multiple tokens in parallel for faster inference.
-    Uses tree-based verification for acceptance.
-    """
-    
-    def __init__(
-        self,
-        hidden_size: int,
-        vocab_size: int,
-        num_speculative_tokens: int = 4,
-        embedding_weights: Optional[nn.Parameter] = None
-    ):
-        super().__init__()
-        self.hidden_size = hidden_size
-        self.vocab_size = vocab_size
-        self.num_speculative_tokens = num_speculative_tokens
-        
-        # Main LM head
-        self.lm_head = nn.Linear(hidden_size, vocab_size, bias=False)
-        if embedding_weights is not None:
-            self.lm_head.weight = embedding_weights
-        
-        # Speculative prediction network
-        self.spec_network = nn.GRU(
-            input_size=hidden_size,
-            hidden_size=hidden_size,
-            num_layers=1,
-            batch_first=True
-        )
-        
-        # Token embedding for speculative chain
-        self.token_embed = nn.Embedding(vocab_size, hidden_size)
-        
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        speculative: bool = False,
-        temperature: float = 1.0
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """
-        Forward pass with optional speculative tokens.
-        
-        Args:
-            hidden_states: [batch, seq_len, hidden_size]
-            speculative: Whether to generate speculative tokens
-            temperature: Sampling temperature
-            
-        Returns:
-            main_logits: Standard next-token logits
-            spec_tokens: Speculative token IDs if speculative=True
-        """
-        main_logits = self.lm_head(hidden_states)
-        
-        if not speculative:
-            return main_logits, None
-        
-        # Generate speculative tokens autoregressively
-        batch_size = hidden_states.size(0)
-        last_hidden = hidden_states[:, -1:, :]  # [batch, 1, hidden]
-        
-        spec_tokens = []
-        current_hidden = last_hidden
-        
-        for _ in range(self.num_speculative_tokens):
-            # Predict next token
-            logits = self.lm_head(current_hidden[:, -1, :])  # [batch, vocab]
-            
-            # Sample (or argmax for greedy)
-            if temperature > 0:
-                probs = F.softmax(logits / temperature, dim=-1)
-                next_token = torch.multinomial(probs, 1)  # [batch, 1]
-            else:
-                next_token = logits.argmax(dim=-1, keepdim=True)
-            
-            spec_tokens.append(next_token)
-            
-            # Embed token and update hidden
-            token_embed = self.token_embed(next_token)  # [batch, 1, hidden]
-            current_hidden, _ = self.spec_network(token_embed, current_hidden.transpose(0, 1))
-            current_hidden = current_hidden.transpose(0, 1)
-        
-        spec_tokens = torch.cat(spec_tokens, dim=1)  # [batch, num_spec]
-        
-        return main_logits, spec_tokens
-    
-    def verify_speculative(
-        self,
-        hidden_states: torch.Tensor,
-        spec_tokens: torch.Tensor,
-        target_logits: torch.Tensor
-    ) -> Tuple[torch.Tensor, int]:
-        """
-        Verify speculative tokens against target model.
-        
-        Args:
-            hidden_states: Hidden states from target model
-            spec_tokens: Speculative token predictions
-            target_logits: Logits from target model
-            
-        Returns:
-            accepted_tokens: Verified tokens
-            num_accepted: Number of accepted tokens
-        """
-        batch_size, num_spec = spec_tokens.shape
-        
-        # Get target predictions
-        target_probs = F.softmax(target_logits, dim=-1)
-        
-        # Check each speculative token
-        accepted = []
-        for i in range(num_spec):
-            spec_tok = spec_tokens[:, i]
-            target_prob = target_probs[:, i].gather(1, spec_tok.unsqueeze(-1)).squeeze(-1)
-            
-            # Accept if probability is high enough (simplified acceptance)
-            accept_mask = target_prob > 0.1
-            
-            if not accept_mask.all():
-                break
-            
-            accepted.append(spec_tok)
-        
-        if accepted:
-            accepted_tokens = torch.stack(accepted, dim=1)
-            return accepted_tokens, len(accepted)
-        else:
-            return spec_tokens[:, :0], 0
+# Backward compatibility aliases
+StandardLMHead = LMHead
