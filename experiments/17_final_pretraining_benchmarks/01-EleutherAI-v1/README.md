@@ -90,8 +90,34 @@ Each benchmark in `configs/*.yaml` can specify:
 - `shots`: Number of few-shot examples.
 - `phases`: `[pretraining]` or `[sft]`.
 
+## 📊 Benchmark Analysis (NEW!)
+
+Before finalizing your evaluation pipeline, use the **Benchmark Analysis Toolkit** to investigate datasets:
+
+```bash
+cd benchmark_analysis
+./run_analysis.sh
+```
+
+This toolkit helps you:
+- **Count tokens** in test datasets (for FLOPs calculation)
+- **Identify evaluation metrics** (accuracy, F1, exact match, etc.)
+- **Estimate computational requirements** (GPU-hours, FLOPs)
+- **Generate reports** (CSV, JSON, Markdown)
+
+📖 **Documentation**: See `benchmark_analysis/INDEX.md` for complete guide
+
+**Quick Links**:
+- `benchmark_analysis/QUICKSTART.md` - Get started in 5 minutes
+- `benchmark_analysis/OVERVIEW.md` - Understand the toolkit
+- `benchmark_analysis/WORKFLOW.md` - Step-by-step process
+
+---
+
 ## 🚧 Future Work & TODOs
 
+- [ ] **Custom Scripts**: Implement logic for placeholders in `scripts/` (AIME 2025, IndicGLUE, SWE-bench, etc.).
+- [x] **Benchmarks List Review**: ✅ Use `benchmark_analysis/` toolkit to analyze all 25 benchmarks
 - [ ] **Custom Scripts Implementation**:
     - [ ] `simpleqa.py` (SimpleQA Verified)
     - [ ] `aime2025.py` (AIME 2025)
@@ -109,4 +135,6 @@ Each benchmark in `configs/*.yaml` can specify:
 - [ ] **Visualizer**: Create a simple utility to compare `incremental_results.json` files across different model stages.
 
 ---
+*Refer to `benchmarks-list.txt` for the full list of 25 supported benchmarks.*
+*Use `benchmark_analysis/` to investigate token counts and metrics before finalizing configs.*
 *Refer to `01-EleutherAI-v1/benchmarks-list.txt` for the full list of 25 supported benchmarks.*

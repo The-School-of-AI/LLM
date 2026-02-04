@@ -1,0 +1,33 @@
+# Downloaded datasets (can be large)
+data/*
+!data/.gitkeep
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter notebooks (if you create any)
+.ipynb_checkpoints/
+*.ipynb
+
+# Temporary files
+*.log
+*.tmp
