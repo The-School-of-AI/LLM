@@ -155,6 +155,25 @@ Otherwise, it uses the simpler multiplicative efficiency model:
 effective_mfu = mfu × zero_efficiency × scaling_efficiency
 ```
 
+#### CPU Offload (ZeRO‑Infinity)
+When `hardware.cpu_offload=true`, you can choose **what gets offloaded** and how much **GPU buffer** to reserve:
+```json
+"hardware": {
+  "cpu_offload": true,
+  "cpu_offload_config": {
+    "offload_params": true,
+    "offload_optimizer": true,
+    "offload_gradients": true,
+    "gpu_buffer_gb": 4.0
+  }
+}
+```
+Notes:
+- Offload moves **parameters, optimizer states, and/or gradients** to CPU/NVMe.
+- GPU memory becomes **buffer + any non‑offloaded state**.
+- CPU memory is reported **per GPU** (total offloaded state ÷ number of GPUs).
+- Throughput penalty is modeled via `zero_efficiency.zero_infinity`.
+
 ### Architecture
 Define your training stages. All parameters (Layers, Hidden Size, Experts, etc.) must be specified.
 ```json
@@ -188,6 +207,8 @@ You can optionally model **gradient accumulation and activation memory**:
     "gradient_accumulation_steps": 1,
     "activation_precision": "bf16",
     "activation_multiplier": 2.0,
+    "activation_checkpointing": false,
+    "activation_checkpointing_factor": 1.0,
     "activation_bytes_per_element": null,
     "include_activation_memory": false
   }
@@ -196,6 +217,7 @@ You can optionally model **gradient accumulation and activation memory**:
 Notes:
 - FLOPs are still token‑based, so GA does **not** change total FLOPs.
 - Activation memory is included **only** when `include_activation_memory=true`.
+- If `activation_checkpointing=true` and no factor is provided, a default **0.5** multiplier is used.
 
 ## Methodology
 
