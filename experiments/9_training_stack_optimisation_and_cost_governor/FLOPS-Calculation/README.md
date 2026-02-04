@@ -257,6 +257,45 @@ to model KV compression in attention FLOPs.
 Cost = (Total_FLOPs / Effective_Cluster_PFLOPS) * Price_Per_GPU_Hour * Num_GPUs
 ```
 
+### 3.1 Precision & Memory Assumptions
+By default:
+- **BF16 / FP8 / NVFP4** affect **model weights only** (bytes per parameter) and peak TFLOPS.
+- **Optimizer states** and **gradients** are assumed **FP32**.
+
+Default bytes per parameter:
+- Weights: BF16=2, FP8=1, NVFP4=0.5 (from `quantization`)
+- Optimizer states (Adam): 2 states × FP32 = **8 bytes**
+- Gradients: FP32 = **4 bytes**
+
+This matches the code in `calculate_memory_per_gpu`.
+
+#### Mixed Precision Overrides
+You can override these with optional keys inside `architecture`:
+
+```json
+{
+  "architecture": {
+    "weight_precision": "bf16",
+    "optimizer_precision": "fp32",
+    "optimizer_states_count": 2,
+    "optimizer_state_multiplier": 1.0,
+    "gradient_precision": "fp32",
+    "master_weights": true,
+    "master_weights_precision": "fp32"
+  }
+}
+```
+
+Additional optional overrides:
+- `weight_bytes_per_param` (float, overrides weight precision)
+- `optimizer_state_bytes_per_param` (float, total bytes across all optimizer states)
+- `gradient_bytes_per_param` (float, overrides gradient precision)
+
+These can also be placed under a nested block:
+```json
+"precision": { ... }
+```
+
 ### 4. Null Expert Probability
 The `null_expert_prob` defines the fraction of tokens that skip the MoE layer (e.g., due to low router confidence or auxiliary-free load balancing).
 - **How to determine**:
