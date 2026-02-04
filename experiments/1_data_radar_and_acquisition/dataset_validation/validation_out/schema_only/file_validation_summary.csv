@@ -1,0 +1,6 @@
+file,ok_parquet,ok_schema,ok_utf8,rows,error,schema_mismatch,utf8_issues
+.\records_00000.parquet,True,True,True,10000,,,
+.\records_00003.parquet,True,True,True,10000,,,
+.\records_00006.parquet,True,True,True,10000,,,
+.\records_00009.parquet,True,True,True,10000,,,
+.\records_00012.parquet,True,True,True,406,,,

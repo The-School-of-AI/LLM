@@ -1,0 +1,18 @@
+{
+    "columns": {
+      "id": "string",
+      "hash": "string",
+      "dataset": "string",
+      "domain": "string",
+      "source": "string",
+      "text": "string",
+      "language": "string",
+      "metadata": "string",
+      "added": "string",
+      "created": "string",
+      "version": "string"
+    },
+    "required_non_null": ["id", "hash", "dataset", "domain", "text", "language"],
+    "nullable_fields": ["source", "added", "created", "version"]
+  }
+  
