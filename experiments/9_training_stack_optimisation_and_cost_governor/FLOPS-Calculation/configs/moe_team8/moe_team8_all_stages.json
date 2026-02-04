@@ -66,7 +66,16 @@
         "num_null_experts": 0,
         "top_k": 0,
         "moe_layer_frequency": 0,
-        "_comment": "Dense stage; MoE fields set to zero"
+        "_comment": "Dense stage; MoE fields set to zero",
+        "precision": {
+          "weight_precision": "auto",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "optimizer_state_multiplier": 1.0,
+          "gradient_precision": "fp32",
+          "master_weights": false,
+          "master_weights_precision": "fp32"
+        }
       }
     },
     {
@@ -117,7 +126,16 @@
         "num_null_experts": 20,
         "top_k": 4,
         "moe_layer_frequency": 1,
-        "null_expert_params_per_expert": 1
+        "null_expert_params_per_expert": 1,
+        "precision": {
+          "weight_precision": "auto",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "optimizer_state_multiplier": 1.0,
+          "gradient_precision": "fp32",
+          "master_weights": false,
+          "master_weights_precision": "fp32"
+        }
       }
     },
     {
@@ -168,7 +186,16 @@
         "num_null_experts": 20,
         "top_k": 4,
         "moe_layer_frequency": 1,
-        "null_expert_params_per_expert": 1
+        "null_expert_params_per_expert": 1,
+        "precision": {
+          "weight_precision": "auto",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "optimizer_state_multiplier": 1.0,
+          "gradient_precision": "fp32",
+          "master_weights": false,
+          "master_weights_precision": "fp32"
+        }
       }
     },
     {
@@ -219,7 +246,16 @@
         "num_null_experts": 256,
         "top_k": 8,
         "moe_layer_frequency": 1,
-        "null_expert_params_per_expert": 1
+        "null_expert_params_per_expert": 1,
+        "precision": {
+          "weight_precision": "auto",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "optimizer_state_multiplier": 1.0,
+          "gradient_precision": "fp32",
+          "master_weights": false,
+          "master_weights_precision": "fp32"
+        }
       }
     }
   ]

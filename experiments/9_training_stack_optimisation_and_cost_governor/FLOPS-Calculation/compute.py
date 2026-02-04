@@ -431,7 +431,9 @@ class TrainingStage:
         if weight_bytes_per_param is None:
             weight_precision = _get_prec_value("weight_precision")
             if weight_precision:
-                weight_bytes_per_param = _bytes_for_precision(weight_precision)
+                wp = str(weight_precision).strip().lower()
+                if wp not in ("auto", "default", ""):
+                    weight_bytes_per_param = _bytes_for_precision(weight_precision)
             else:
                 quantization = quantization.lower()
                 if quantization == "fp8":
