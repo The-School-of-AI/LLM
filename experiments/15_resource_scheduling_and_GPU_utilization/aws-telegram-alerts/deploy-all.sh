@@ -1,26 +1,28 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 #######################################
 # Deploy to multiple AWS accounts
 # Reads AWS profile names from accounts.txt
 #######################################
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ACCOUNTS_FILE="${1:-${SCRIPT_DIR}/accounts.txt}"
 
 # Check for required env vars
-[[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && { echo -e "${RED}[ERROR]${NC} TELEGRAM_BOT_TOKEN not set"; exit 1; }
-[[ -z "${TELEGRAM_CHAT_ID:-}" ]] && { echo -e "${RED}[ERROR]${NC} TELEGRAM_CHAT_ID not set"; exit 1; }
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  echo "[ERROR] TELEGRAM_BOT_TOKEN not set"
+  exit 1
+fi
+
+if [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+  echo "[ERROR] TELEGRAM_CHAT_ID not set"
+  exit 1
+fi
 
 # Check accounts file
-if [[ ! -f "${ACCOUNTS_FILE}" ]]; then
-  echo -e "${RED}[ERROR]${NC} Accounts file not found: ${ACCOUNTS_FILE}"
+if [ ! -f "${ACCOUNTS_FILE}" ]; then
+  echo "[ERROR] Accounts file not found: ${ACCOUNTS_FILE}"
   echo ""
   echo "Create accounts.txt with one AWS profile per line:"
   echo "  profile1"
@@ -29,37 +31,45 @@ if [[ ! -f "${ACCOUNTS_FILE}" ]]; then
   exit 1
 fi
 
-# Read profiles (skip empty lines and comments)
-mapfile -t PROFILES < <(grep -v '^\s*#' "${ACCOUNTS_FILE}" | grep -v '^\s*$')
+# Read profiles (skip comments and empty lines)
+PROFILES=$(grep -v '^\s*#' "${ACCOUNTS_FILE}" | grep -v '^\s*$' || true)
 
-if [[ ${#PROFILES[@]} -eq 0 ]]; then
-  echo -e "${RED}[ERROR]${NC} No profiles found in ${ACCOUNTS_FILE}"
+if [ -z "${PROFILES}" ]; then
+  echo "[ERROR] No profiles found in ${ACCOUNTS_FILE}"
   exit 1
 fi
 
+PROFILE_COUNT=$(echo "${PROFILES}" | wc -l | tr -d ' ')
+
 echo ""
 echo "=========================================="
-echo "Deploying to ${#PROFILES[@]} account(s)"
+echo "Deploying to ${PROFILE_COUNT} account(s)"
 echo "=========================================="
 
 SUCCESS=0
 FAILED=0
 
-for PROFILE in "${PROFILES[@]}"; do
-  PROFILE=$(echo "${PROFILE}" | xargs)  # trim whitespace
+echo "${PROFILES}" | while read -r PROFILE; do
+  PROFILE=$(echo "${PROFILE}" | xargs)
   
   echo ""
-  echo -e "${YELLOW}>>> ${PROFILE}${NC}"
+  echo ">>> ${PROFILE}"
   
-  if AWS_PROFILE="${PROFILE}" "${SCRIPT_DIR}/setup.sh" \
-    --telegram-token "${TELEGRAM_BOT_TOKEN}" \
-    --telegram-chat-id "${TELEGRAM_CHAT_ID}" \
-    ${AWS_REGION:+--region "${AWS_REGION}"} \
-    ${CPU_THRESHOLD:+--cpu-threshold "${CPU_THRESHOLD}"}; then
-    ((SUCCESS++))
+  ARGS="--telegram-token ${TELEGRAM_BOT_TOKEN} --telegram-chat-id ${TELEGRAM_CHAT_ID}"
+  
+  if [ -n "${AWS_REGION:-}" ]; then
+    ARGS="${ARGS} --region ${AWS_REGION}"
+  fi
+  
+  if [ -n "${CPU_THRESHOLD:-}" ]; then
+    ARGS="${ARGS} --cpu-threshold ${CPU_THRESHOLD}"
+  fi
+  
+  if AWS_PROFILE="${PROFILE}" "${SCRIPT_DIR}/setup.sh" ${ARGS}; then
+    SUCCESS=$((SUCCESS + 1))
   else
-    echo -e "${RED}[FAILED]${NC} ${PROFILE}"
-    ((FAILED++))
+    echo "[FAILED] ${PROFILE}"
+    FAILED=$((FAILED + 1))
   fi
 done
 
@@ -67,9 +77,11 @@ echo ""
 echo "=========================================="
 echo "Summary"
 echo "=========================================="
-echo -e "Success: ${GREEN}${SUCCESS}${NC}"
-echo -e "Failed:  ${RED}${FAILED}${NC}"
+echo "Success: ${SUCCESS}"
+echo "Failed:  ${FAILED}"
 echo ""
 
-[[ ${FAILED} -gt 0 ]] && exit 1
+if [ "${FAILED}" -gt 0 ]; then
+  exit 1
+fi
 exit 0

@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 #######################################
 # Teardown resources (single or all accounts)
@@ -8,81 +8,121 @@ set -euo pipefail
 #   ./teardown.sh --all        # All accounts in accounts.txt
 #######################################
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
 AWS_REGION="${AWS_REGION:-us-east-1}"
 SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-idle-alert-topic}"
 LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-cpu-idle-alert-forwarder}"
 LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-cpu-alert-lambda-execution-role}"
+EVENTBRIDGE_LAMBDA_NAME="${EVENTBRIDGE_LAMBDA_NAME:-ec2-launch-alarm-creator}"
+EVENTBRIDGE_RULE_NAME="${EVENTBRIDGE_RULE_NAME:-ec2-launch-cpu-alarm-rule}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ACCOUNTS_FILE="${SCRIPT_DIR}/accounts.txt"
 
 teardown_account() {
-  local AWS_ACCOUNT_ID
   AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
   echo "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 
-  # Delete alarms
+  # Delete CloudWatch alarms
   echo "  Deleting alarms..."
   ALARMS=$(aws cloudwatch describe-alarms \
-    --alarm-name-prefix "cpu-idle-" \
-    --query "MetricAlarms[].AlarmName" \
+    --query "MetricAlarms[?ends_with(AlarmName, '-cpu-idle')].AlarmName" \
     --output text \
     --region "${AWS_REGION}" 2>/dev/null || echo "")
-  [[ -n "${ALARMS}" ]] && aws cloudwatch delete-alarms --alarm-names ${ALARMS} --region "${AWS_REGION}"
+  if [ -n "${ALARMS}" ]; then
+    aws cloudwatch delete-alarms --alarm-names ${ALARMS} --region "${AWS_REGION}"
+  fi
 
-  # Delete SNS subscriptions first
+  # Delete EventBridge rule targets first
+  echo "  Deleting EventBridge rule..."
+  aws events remove-targets \
+    --rule "${EVENTBRIDGE_RULE_NAME}" \
+    --ids "1" \
+    --region "${AWS_REGION}" 2>/dev/null || true
+
+  # Delete EventBridge rule
+  aws events delete-rule \
+    --name "${EVENTBRIDGE_RULE_NAME}" \
+    --region "${AWS_REGION}" 2>/dev/null || true
+
+  # Delete EventBridge Lambda
+  echo "  Deleting EventBridge Lambda..."
+  aws lambda delete-function \
+    --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
+    --region "${AWS_REGION}" 2>/dev/null || true
+
+  # Delete SNS topic
   echo "  Deleting SNS topic..."
-  aws sns delete-topic --topic-arn "arn:aws:sns:${AWS_REGION}:${AWS_ACCOUNT_ID}:${SNS_TOPIC_NAME}" --region "${AWS_REGION}" 2>/dev/null || true
+  aws sns delete-topic \
+    --topic-arn "arn:aws:sns:${AWS_REGION}:${AWS_ACCOUNT_ID}:${SNS_TOPIC_NAME}" \
+    --region "${AWS_REGION}" 2>/dev/null || true
 
-  # Delete Lambda
-  echo "  Deleting Lambda..."
-  aws lambda delete-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "${AWS_REGION}" 2>/dev/null || true
+  # Delete Telegram forwarder Lambda
+  echo "  Deleting Telegram forwarder Lambda..."
+  aws lambda delete-function \
+    --function-name "${LAMBDA_FUNCTION_NAME}" \
+    --region "${AWS_REGION}" 2>/dev/null || true
 
   # Delete IAM role
   echo "  Deleting IAM role..."
-  aws iam detach-role-policy --role-name "${LAMBDA_ROLE_NAME}" \
-    --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 2>/dev/null || true
-  aws iam delete-role --role-name "${LAMBDA_ROLE_NAME}" 2>/dev/null || true
+  aws iam delete-role-policy \
+    --role-name "${LAMBDA_ROLE_NAME}" \
+    --policy-name "AlarmCreationPolicy" 2>/dev/null || true
 
-  echo -e "  ${GREEN}Done${NC}"
+  aws iam detach-role-policy \
+    --role-name "${LAMBDA_ROLE_NAME}" \
+    --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 2>/dev/null || true
+
+  aws iam delete-role \
+    --role-name "${LAMBDA_ROLE_NAME}" 2>/dev/null || true
+
+  echo "  Done"
 }
 
 # Check for --all flag
-if [[ "${1:-}" == "--all" ]]; then
+if [ "${1:-}" = "--all" ]; then
   # Multi-account mode
-  if [[ ! -f "${ACCOUNTS_FILE}" ]]; then
-    echo -e "${RED}[ERROR]${NC} accounts.txt not found"
+  if [ ! -f "${ACCOUNTS_FILE}" ]; then
+    echo "[ERROR] accounts.txt not found"
     exit 1
   fi
 
-  mapfile -t PROFILES < <(grep -v '^\s*#' "${ACCOUNTS_FILE}" | grep -v '^\s*$')
+  # Read profiles (skip comments and empty lines)
+  PROFILES=$(grep -v '^\s*#' "${ACCOUNTS_FILE}" | grep -v '^\s*$' || true)
 
-  if [[ ${#PROFILES[@]} -eq 0 ]]; then
-    echo -e "${RED}[ERROR]${NC} No profiles in accounts.txt"
+  if [ -z "${PROFILES}" ]; then
+    echo "[ERROR] No profiles in accounts.txt"
     exit 1
   fi
 
-  echo "This will DELETE resources from ${#PROFILES[@]} account(s):"
-  for p in "${PROFILES[@]}"; do echo "  - $p"; done
+  PROFILE_COUNT=$(echo "${PROFILES}" | wc -l | tr -d ' ')
+
+  echo "This will DELETE resources from ${PROFILE_COUNT} account(s):"
+  echo "${PROFILES}" | while read -r p; do echo "  - $p"; done
   echo ""
-  read -p "Continue? (y/N): " confirm
-  [[ "${confirm}" != "y" ]] && exit 0
+  echo "Resources to be deleted:"
+  echo "  - CloudWatch alarms (*-cpu-idle)"
+  echo "  - EventBridge rule: ${EVENTBRIDGE_RULE_NAME}"
+  echo "  - Lambda: ${EVENTBRIDGE_LAMBDA_NAME}"
+  echo "  - Lambda: ${LAMBDA_FUNCTION_NAME}"
+  echo "  - SNS topic: ${SNS_TOPIC_NAME}"
+  echo "  - IAM role: ${LAMBDA_ROLE_NAME}"
+  echo ""
+  printf "Continue? (y/N): "
+  read -r confirm
+  if [ "${confirm}" != "y" ]; then
+    exit 0
+  fi
 
   echo ""
-  for PROFILE in "${PROFILES[@]}"; do
+  echo "${PROFILES}" | while read -r PROFILE; do
     PROFILE=$(echo "${PROFILE}" | xargs)
-    echo -e "${YELLOW}>>> ${PROFILE}${NC}"
-    AWS_PROFILE="${PROFILE}" teardown_account || echo -e "${RED}[FAILED]${NC} ${PROFILE}"
+    echo ">>> ${PROFILE}"
+    AWS_PROFILE="${PROFILE}" teardown_account || echo "[FAILED] ${PROFILE}"
     echo ""
   done
 
-  echo -e "${GREEN}Teardown complete${NC}"
+  echo "Teardown complete"
 else
   # Single account mode
   AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -90,13 +130,18 @@ else
   echo "Account: ${AWS_ACCOUNT_ID}"
   echo ""
   echo "This will DELETE:"
-  echo "  - All cpu-idle-* CloudWatch alarms"
-  echo "  - SNS topic: ${SNS_TOPIC_NAME}"
+  echo "  - CloudWatch alarms (*-cpu-idle)"
+  echo "  - EventBridge rule: ${EVENTBRIDGE_RULE_NAME}"
+  echo "  - Lambda: ${EVENTBRIDGE_LAMBDA_NAME}"
   echo "  - Lambda: ${LAMBDA_FUNCTION_NAME}"
+  echo "  - SNS topic: ${SNS_TOPIC_NAME}"
   echo "  - IAM role: ${LAMBDA_ROLE_NAME}"
   echo ""
-  read -p "Continue? (y/N): " confirm
-  [[ "${confirm}" != "y" ]] && exit 0
+  printf "Continue? (y/N): "
+  read -r confirm
+  if [ "${confirm}" != "y" ]; then
+    exit 0
+  fi
 
   teardown_account
 fi
