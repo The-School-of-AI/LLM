@@ -50,7 +50,8 @@
           "yarn_scale": 8.0,
           "yarn_beta_fast": 32.0,
           "yarn_beta_slow": 1.0,
-          "yarn_mscale": 1.0
+          "yarn_mscale": 1.0,
+          "yarn_flops_multiplier": 1.0
         },
         "head": {
           "use_multi_token_prediction": false

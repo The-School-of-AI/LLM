@@ -273,6 +273,17 @@ Set `attention_type: deepseek_mla` and provide either:
 - `ds_compressed_dim` (alias)
 to model KV compression in attention FLOPs.
 
+#### YaRN (Position) Overhead
+If you are using YaRN from the start and want to model any extra overhead beyond
+sequence length, set:
+```json
+"position": {
+  "position_type": "yarn",
+  "yarn_flops_multiplier": 1.0
+}
+```
+`yarn_flops_multiplier` scales the **attention** FLOPs term when `position_type` is `yarn`.
+
 ### 3. Cost Calculation
 ```python
 Cost = (Total_FLOPs / Effective_Cluster_PFLOPS) * Price_Per_GPU_Hour * Num_GPUs

@@ -71,6 +71,10 @@
           "gradient_precision": "fp32",
           "master_weights": false,
           "master_weights_precision": "fp32"
+        },
+        "position": {
+          "position_type": "yarn",
+          "yarn_flops_multiplier": 1.0
         }
       }
     }
