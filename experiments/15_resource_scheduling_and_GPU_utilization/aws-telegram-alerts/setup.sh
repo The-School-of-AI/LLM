@@ -159,7 +159,7 @@ def format_alarm(alarm, account_id):
         dim_str = 'N/A'
 
     lines = [
-        "{} *CPU Idle Alert {}*".format(emoji, dim_str),
+        "{} *CPU Idle Alert {}*".format(emoji, name),
         "",
         "*Account:* {}".format(account_id),
         "*Alarm:* {}".format(name),
