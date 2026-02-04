@@ -94,13 +94,15 @@ def estimate_parameters(config) -> Dict[str, float]:
     # Routed experts total
     routed_experts_per_layer = num_routed * params_per_expert
     
-    # Shared experts (use full intermediate, not fine-grained)
-    shared_intermediate = config.expert.intermediate_size  # Full size for shared
-    params_per_shared = 3 * d * shared_intermediate
+    # Shared experts (ALSO use fine-grained intermediate, same as routed)
+    # See expert.py line 360: intermediate_size=effective_intermediate
+    params_per_shared = 3 * d * intermediate_eff  # Same as routed!
     shared_experts_per_layer = num_shared * params_per_shared
     
-    # Router
-    router_params = d * (num_routed + 1) + (num_routed + 1)  # Linear + bias
+    # Router (routes over effective experts + null)
+    # Linear layer: hidden -> (num_routed + num_null) with bias
+    num_null = 1  # Fixed single null expert
+    router_params = d * (num_routed + num_null) + (num_routed + num_null)
     
     # Total per layer
     per_layer_total = (
@@ -128,8 +130,10 @@ def estimate_parameters(config) -> Dict[str, float]:
     components['total'] = total_params
     
     # ===== Active Parameters (per forward pass) =====
-    # Active experts = E[K_real] routed + all shared
-    active_routed = e_k_real * params_per_expert
+    # Active routed = base top_k experts (matches load_model_summary.py line 139)
+    # load_model_summary.py uses config.router.top_k, not effective_top_k
+    base_top_k = config.router.top_k
+    active_routed = base_top_k * params_per_expert
     active_shared = num_shared * params_per_shared
     
     active_per_layer = (

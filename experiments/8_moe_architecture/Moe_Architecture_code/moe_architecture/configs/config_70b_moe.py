@@ -7,14 +7,14 @@ This massively increases capacity while preserving compute efficiency.
 
 Architecture (DeepSeek-faithful + Null Experts paper):
 - SAME hidden_size, num_layers as 8B (structure preserved)
-- Expand experts: 32 → 256 effective (64 base × 4 fine-grained)
+- Expand experts: 26 → 280 effective (70 base × 4 fine-grained)
 - Reduce shared experts: 2 → 1 (paper: decays at scale)
 
 Key Transition (8B → 70B):
-- Same hidden_size (5120), same num_layers (24)
-- Expert explosion: 8 base → 64 base (×4 = 256 effective)
+- Same intermediate_size (4096), same num_layers (32)
+- Expert explosion: 26 base → 70 base (×4 = 280 effective)
 - Same ρ=0.5, E[K_real]=8
-- Null copies scaled: M = 256 (from formula)
+- Null copies scaled: M = 280 (from formula)
 
 Paper Parameters:
 - Segments (m) = 4
@@ -50,14 +50,14 @@ def get_config() -> MoEModelConfig:
         
         # Core dimensions (SAME as 8B! - structure preserved)
         hidden_size=2560,                # SAME as 8B
-        num_layers=32,                   # SAME as 8B # 24
+        num_layers=32,                   # SAME as 8B 
         
         # MoE Configuration (EXPLODED experts for 70B)
-        # Base 512 experts × 4 fine-grained factor = 2048 effective routed experts
-        # Total params: 2048 experts × 3 × 6144 × 64 × 28 layers ≈ 70B
-        num_routed_experts=64,          # EXPLODED (was 8) - 64× expansion
+        # Base 70 experts × 4 fine-grained factor = 280 effective routed experts
+        # Total params: 280 experts × 3 × 6144 × 64 × 32 layers ≈ 70B
+        num_routed_experts=70,          # EXPLODED Total:280
         num_shared_experts=1,            # REDUCED (was 2) - paper: decays at scale
-        num_null_experts=1,              # Single null (M=2048 copies in router)
+        num_null_experts=1,              # Single null (M=N=280 copies in router)
         moe_layer_frequency=1,           # MoE on ALL layers
         
         # Tokenizer (Team 6 specification)
@@ -75,12 +75,12 @@ def get_config() -> MoEModelConfig:
         
         # Null Expert Router Configuration (arXiv:2601.15370v1)
         # Paper formula: M = N × (1-ρ)/ρ, E[K_real] = k_max × ρ
-        # With N=2048, ρ=0.5, k_max=16: M=2048 null copies, E[K_real]=8
+        # With N=280, ρ=0.5, k_max=16: M=280 null copies, E[K_real]=16
         router=RouterConfig(
             router_type=RouterType.NULL_EXPERT,
             top_k=4,                     # Same k_max base (×4 = 16 effective)
             data_sparsity=0.5,           # ρ = 0.5 (paper stable region)
-            null_copies=0,               # Auto-derive: M = 2048 × (1-0.5)/0.5 = 2048
+            null_copies=0,               # Auto-derive: M = 280 × (1-0.5)/0.5 = 280
             use_aux_loss=True,
             aux_loss_weight=0.02,
             router_z_loss_weight=0.001,
@@ -88,10 +88,9 @@ def get_config() -> MoEModelConfig:
         
         # Expert Configuration (fine-grained, sized for 2.4B active target)
         # Active = 9 experts/token × 3 × 6144 × 64 × 28 ≈ 2.4B
-        # Total = 2048 experts × 3 × 6144 × 64 × 28 ≈ 70B  
-        # (8/3)*8192 ~ 22016 -> 22016/64 = 344
+        # Total = 280 experts × 3 × 6144 × 64 × 28 ≈ 70B  
         expert=ExpertConfig(
-            intermediate_size=4096,       # Base size, effective = 64 (small for low active)
+            intermediate_size=4096,       
             fine_grained_factor=4,       # DeepSeek-MoE style
             use_dual_gating=False,
             gate_bias_init=0.0,
@@ -143,48 +142,6 @@ def get_config() -> MoEModelConfig:
         rms_norm_eps=1e-6,
         torch_dtype="bfloat16",
     )
-
-
-# Call get_config() when needed, not at import time
-# to avoid validation warnings during package import
-
-
-"""
-70B MoE Expert Explosion Strategy:
-==================================
-
-Key Insight: Keep model structure, only increase experts.
-This preserves compute per token while massively scaling capacity.
-
-From 8B:            To 70B:
-- hidden=5120   →   hidden=5120 (SAME!)
-- layers=24     →   layers=24 (SAME!)
-- experts=32    →   experts=256 (8× expansion)
-- shared=2      →   shared=1 (paper: decay at scale)
-- ρ=0.5, M=32   →   ρ=0.5, M=256 (scaled with N)
-- E[K_real]=8   →   E[K_real]=8 (SAME!)
-
-Parameter Calculation:
-- Embeddings: 32K × 5120 = 163M
-- Per expert (fine-grained): 3 × 5120 × 320 = 4.9M
-- Routed experts per layer: 256 × 4.9M = 1.25B
-- Shared expert per layer: 1 × 4.9M (×4 for full) = 19.6M
-- Attention per layer: ~80M
-- Per layer total: ~1.35B
-- 24 layers: 24 × 1.35B = 32.4B
-- Plus embeddings, router: ~35B
-
-Note: Adjust intermediate_size to hit ~70B total.
-Current config may need tuning.
-
-Active Parameters (~2.4B target):
-- E[K_real] = 8 routed + 1 shared = 9 active experts
-- Per expert active: 4.9M
-- Per layer active: 9 × 4.9M + 80M (attention) = 124M
-- Total active: 24 × 124M + embeddings ≈ 3B
-
-Tune intermediate_size down to hit 2.4B active.
-"""
 
 
 if __name__ == "__main__":
