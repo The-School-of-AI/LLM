@@ -65,6 +65,13 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
+# Try importing psutil for CPU memory tracking
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -237,7 +244,20 @@ def get_device_info(device: str) -> Dict[str, Any]:
         info.update({
             "name": "Apple MPS",
             "backend": "Metal Performance Shaders",
+            "theoretical_tflops_fp16": _estimate_mps_tflops("fp16"),
+            "theoretical_tflops_fp32": _estimate_mps_tflops("fp32"),
         })
+    
+    elif device == "cpu":
+        import platform
+        cpu_name = platform.processor() or "Unknown CPU"
+        info.update({
+            "name": cpu_name,
+            "num_threads": torch.get_num_threads(),
+            "num_interop_threads": torch.get_num_interop_threads(),
+        })
+        if HAS_PSUTIL:
+            info["total_memory_gb"] = psutil.virtual_memory().total / 1e9
         
     return info
 
@@ -245,14 +265,30 @@ def get_device_info(device: str) -> Dict[str, Any]:
 def _estimate_cuda_tflops(props, precision: str) -> float:
     """Estimate theoretical peak TFLOPS for CUDA device."""
     sm_count = props.multi_processor_count
-    if props.major >= 8:
+    # Use actual clock speed if available, otherwise estimate
+    clock_ghz = getattr(props, 'clock_rate', 1500000) / 1e6  # kHz to GHz
+    
+    if props.major >= 9:  # Hopper (H100)
+        flops_per_sm = 512 if precision == "fp16" else 128
+    elif props.major >= 8:  # Ampere (A100, RTX 30xx)
         flops_per_sm = 256 if precision == "fp16" else 64
-    elif props.major >= 7:
+    elif props.major >= 7:  # Volta/Turing (V100, T4, RTX 20xx)
         flops_per_sm = 128 if precision == "fp16" else 64
-    else:
-        flops_per_sm = 64
-    clock_ghz = 1.5
-    return sm_count * flops_per_sm * clock_ghz / 1000
+    else:  # Pascal and older
+        flops_per_sm = 64 if precision == "fp16" else 32
+    
+    return sm_count * flops_per_sm * clock_ghz * 2 / 1000  # *2 for FMA
+
+
+def _estimate_mps_tflops(precision: str) -> float:
+    """Estimate theoretical peak TFLOPS for Apple MPS (conservative)."""
+    # Conservative estimates for Apple Silicon
+    # M1: ~2.6 TFLOPS FP32, ~5.2 TFLOPS FP16
+    # M1 Pro/Max: ~5-10 TFLOPS FP32
+    # M2: ~3.6 TFLOPS FP32
+    # M3 Max: ~14 TFLOPS FP32
+    # Default to M1-class conservative estimate
+    return 5.0 if precision == "fp16" else 2.5
 
 
 def synchronize(device: str):
@@ -263,14 +299,33 @@ def synchronize(device: str):
         torch.xpu.synchronize()
     elif device == "mps":
         torch.mps.synchronize()
+    # CPU is synchronous by default, no action needed
 
 
-def get_peak_memory_gb(device: str) -> float:
+# CPU memory tracking state
+_cpu_memory_baseline_gb: float = 0.0
+_cpu_peak_memory_gb: float = 0.0
+
+
+def get_peak_memory_gb(device: str, model: nn.Module = None, dtype: torch.dtype = None) -> float:
     """Get peak memory allocated in GB."""
+    global _cpu_peak_memory_gb
     if device == "cuda":
         return torch.cuda.max_memory_allocated() / 1e9
     if device == "xpu" and _has_xpu_backend():
         return torch.xpu.max_memory_allocated() / 1e9
+    if device == "cpu":
+        # For CPU, estimate from model parameters if provided (more accurate)
+        if model is not None:
+            bytes_per_param = 4  # default float32
+            if dtype in (torch.float16, torch.bfloat16):
+                bytes_per_param = 2
+            param_memory = sum(p.numel() * bytes_per_param for p in model.parameters())
+            return param_memory / 1e9
+        elif HAS_PSUTIL:
+            current = psutil.Process().memory_info().rss / 1e9
+            _cpu_peak_memory_gb = max(_cpu_peak_memory_gb, current - _cpu_memory_baseline_gb)
+            return _cpu_peak_memory_gb
     return 0.0
 
 
@@ -280,11 +335,15 @@ def get_reserved_memory_gb(device: str) -> float:
         return torch.cuda.max_memory_reserved() / 1e9
     if device == "xpu" and _has_xpu_backend():
         return torch.xpu.max_memory_reserved() / 1e9
+    if device == "cpu" and HAS_PSUTIL:
+        return psutil.Process().memory_info().rss / 1e9
     return 0.0
 
 
 def reset_memory_stats(device: str):
     """Reset memory statistics."""
+    global _cpu_memory_baseline_gb, _cpu_peak_memory_gb
+    gc.collect()
     if device == "cuda":
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.empty_cache()
@@ -293,7 +352,9 @@ def reset_memory_stats(device: str):
         torch.xpu.empty_cache()
     elif device == "mps":
         torch.mps.empty_cache()
-    gc.collect()
+    elif device == "cpu" and HAS_PSUTIL:
+        _cpu_memory_baseline_gb = psutil.Process().memory_info().rss / 1e9
+        _cpu_peak_memory_gb = 0.0
 
 
 # =============================================================================
@@ -479,6 +540,7 @@ def run_inference_benchmark(
     warmup_iters: int,
     benchmark_iters: int,
     device: str,
+    dtype: torch.dtype = torch.float32,
 ) -> BenchmarkResult:
     """Run inference benchmark with comprehensive metrics."""
     
@@ -503,8 +565,11 @@ def run_inference_benchmark(
             _ = model(input_ids)
             synchronize(device)
             latencies.append((time.perf_counter() - start) * 1000)
+            # Track peak memory during execution (important for CPU)
+            if device == "cpu" and HAS_PSUTIL:
+                get_peak_memory_gb(device)
     
-    result.memory.peak_allocated_gb = get_peak_memory_gb(device)
+    result.memory.peak_allocated_gb = get_peak_memory_gb(device, model=model, dtype=dtype)
     result.memory.peak_reserved_gb = get_reserved_memory_gb(device)
     
     total_time_sec = sum(latencies) / 1000
@@ -590,7 +655,7 @@ def run_training_benchmark(
         synchronize(device)
         latencies.append((time.perf_counter() - start) * 1000)
     
-    result.memory.peak_allocated_gb = get_peak_memory_gb(device)
+    result.memory.peak_allocated_gb = get_peak_memory_gb(device, model=model, dtype=dtype)
     result.memory.peak_reserved_gb = get_reserved_memory_gb(device)
     
     dtype_size = 2 if dtype in [torch.float16, torch.bfloat16] else 4
@@ -814,7 +879,7 @@ def benchmark_throughput(
                 continue
             
             try:
-                result = run_inference_benchmark(model, config, batch_size, seq_len, warmup_iters, benchmark_iters, device)
+                result = run_inference_benchmark(model, config, batch_size, seq_len, warmup_iters, benchmark_iters, device, torch_dtype)
                 print(f"{seq_len:<8} {result.throughput.tokens_per_sec:<12,.0f} {result.throughput.samples_per_sec:<10.2f} "
                       f"{result.latency.mean_ms:<12.2f} {result.latency.p95_ms:<10.2f} "
                       f"{result.memory.peak_allocated_gb:<10.2f} {result.throughput.tflops_achieved:<8.2f}")
