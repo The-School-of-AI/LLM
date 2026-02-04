@@ -36,21 +36,60 @@ class TrainingStage:
                 - derived_num_experts: Calculated expert count (if solve_for mode)
         """
         arch = self.architecture
+        attention_cfg = arch.get("attention") or {}
+        router_cfg = arch.get("router") or {}
+        expert_cfg = arch.get("expert") or {}
+        head_cfg = arch.get("head") or {}
+        position_cfg = arch.get("position") or {}
+
         vocab = arch.get("vocab_size", 50257)
         hidden = arch.get("hidden_size", 2048)
         intermediate = arch.get("intermediate_size", 4 * hidden)
-        layers = arch.get("num_layers", 24)
-        num_heads = arch.get("num_heads")
-        num_kv_heads = arch.get("num_kv_heads", num_heads)
-        attention_type = str(arch.get("attention_type", "")).strip().lower()
-        experts = arch.get("num_experts", arch.get("num_routed_experts", 0))
-        top_k = arch.get("top_k_experts", arch.get("top_k", 1))
-        num_shared_experts = arch.get("num_shared_experts", 0)
-        null_prob = arch.get("null_expert_prob", 0.0)
+        layers = arch.get("num_layers", arch.get("num_hidden_layers", 24))
+
+        attention_type = str(
+            arch.get("attention_type", attention_cfg.get("attention_type", ""))
+        ).strip().lower()
+        if attention_type in ("grouped_query", "grouped_query_attention"):
+            attention_type = "gqa"
+        if attention_type in ("deepseek_sparse", "deepseek_mla", "mla", "deepseek"):
+            attention_type = "deepseek_mla"
+
+        num_heads = arch.get("num_heads", attention_cfg.get("num_attention_heads"))
+        num_kv_heads = arch.get(
+            "num_kv_heads", attention_cfg.get("num_key_value_heads", num_heads)
+        )
+
+        experts = arch.get(
+            "num_experts",
+            arch.get("num_routed_experts", router_cfg.get("num_routed_experts", 0)),
+        )
+        num_shared_experts = arch.get(
+            "num_shared_experts", router_cfg.get("num_shared_experts", 0)
+        )
+        num_null_experts = arch.get(
+            "num_null_experts", router_cfg.get("num_null_experts", 0)
+        )
+
+        top_k = arch.get(
+            "top_k_experts", arch.get("top_k", router_cfg.get("top_k", 1))
+        )
+        use_adaptive_top_k = bool(router_cfg.get("use_adaptive_top_k", False))
+        if use_adaptive_top_k:
+            top_k = router_cfg.get("top_k_max", top_k)
+
+        null_prob = arch.get("null_expert_prob", router_cfg.get("null_expert_prob", 0.0))
+        if "null_expert_prob" not in arch and "null_expert_prob" not in router_cfg:
+            data_sparsity = router_cfg.get("data_sparsity", arch.get("data_sparsity"))
+            if data_sparsity is not None:
+                null_prob = max(0.0, min(1.0, 1.0 - float(data_sparsity)))
+
         num_moe_layers = arch.get("num_moe_layers")
         if num_moe_layers is None:
             if experts > 0 or num_shared_experts > 0:
-                moe_layer_frequency = arch.get("moe_layer_frequency", 1)
+                moe_layer_frequency = arch.get(
+                    "moe_layer_frequency", arch.get("moe_frequency", 1)
+                )
                 num_moe_layers = (
                     int(math.ceil(layers / moe_layer_frequency))
                     if moe_layer_frequency
@@ -76,7 +115,17 @@ class TrainingStage:
             raise ValueError("num_moe_layers must be between 0 and num_layers.")
 
         embedding_params = vocab * hidden
-        lm_head_multiplier = arch.get("lm_head_multiplier", 1)
+        lm_head_multiplier = arch.get(
+            "lm_head_multiplier", head_cfg.get("lm_head_multiplier")
+        )
+        if lm_head_multiplier is None and head_cfg.get(
+            "use_multi_token_prediction", False
+        ):
+            lm_head_multiplier = head_cfg.get(
+                "num_prediction_heads", head_cfg.get("mtp_heads", 2)
+            )
+        if lm_head_multiplier is None:
+            lm_head_multiplier = 1
         lm_head_params = 0 if tie_embeddings else vocab * hidden * lm_head_multiplier
         include_lm_head_flops = arch.get("include_lm_head_flops", True)
         lm_head_params_for_flops = (
@@ -104,9 +153,14 @@ class TrainingStage:
         ) or bool(arch.get("use_gsa", False))
         use_sparse_attn = bool(arch.get("use_sparse_attention", False)) or gsa_enabled
         indexer_heads = arch.get(
-            "gsa_num_indexer_heads", arch.get("indexer_heads")
+            "gsa_num_indexer_heads",
+            attention_cfg.get(
+                "gsa_num_indexer_heads", arch.get("indexer_heads")
+            ),
         )
-        indexer_dim = arch.get("gsa_indexer_dim", arch.get("indexer_dim"))
+        indexer_dim = arch.get(
+            "gsa_indexer_dim", attention_cfg.get("gsa_indexer_dim", arch.get("indexer_dim"))
+        )
         if use_sparse_attn and indexer_heads and indexer_dim:
             indexer_params = (
                 hidden * indexer_heads * indexer_dim * 2 + hidden * indexer_heads
@@ -114,16 +168,29 @@ class TrainingStage:
             attn_params_per_layer += indexer_params
 
         if gsa_enabled:
-            use_value_gate = arch.get("gsa_use_value_gate", True)
-            use_output_gate = arch.get("gsa_use_output_gate", True)
+            use_value_gate = arch.get(
+                "gsa_use_value_gate",
+                attention_cfg.get("gsa_use_value_gate", True),
+            )
+            use_output_gate = arch.get(
+                "gsa_use_output_gate",
+                attention_cfg.get("gsa_use_output_gate", True),
+            )
             if use_value_gate:
                 attn_params_per_layer += hidden * hidden * kv_ratio
             if use_output_gate:
                 attn_params_per_layer += hidden * hidden
 
-        attn_params_per_layer += float(arch.get("attn_extra_params_per_layer", 0))
+        attn_params_per_layer += float(
+            arch.get(
+                "attn_extra_params_per_layer",
+                attention_cfg.get("attn_extra_params_per_layer", 0),
+            )
+        )
 
-        moe_intermediate = arch.get("moe_intermediate_size", intermediate)
+        moe_intermediate = arch.get(
+            "moe_intermediate_size", expert_cfg.get("intermediate_size", intermediate)
+        )
         ffn_params_dense = 3 * hidden * intermediate
         ffn_params_per_expert = 3 * hidden * moe_intermediate
 
@@ -131,6 +198,12 @@ class TrainingStage:
         active_ffn_params_moe = 0
         router_params = 0
         shared_expert_params = num_shared_experts * ffn_params_per_expert
+        null_expert_params_per_expert = arch.get(
+            "null_expert_params_per_expert",
+            router_cfg.get("null_expert_params_per_expert", 0),
+        )
+        null_expert_params = num_null_experts * null_expert_params_per_expert
+        router_type = str(router_cfg.get("router_type", "")).strip().lower()
         if (
             experts > 0
             or num_shared_experts > 0
@@ -141,8 +214,26 @@ class TrainingStage:
                 "num_experts_from_per_expert",
             ):
                 router_params = hidden * experts
+                if router_type in ("gsa", "gsa_router", "gsa_style"):
+                    router_heads = int(router_cfg.get("num_router_heads", 4))
+                    router_dim = int(router_cfg.get("router_dim", 64))
+                    router_keys = (experts + num_null_experts) * router_dim
+                    router_params += (
+                        hidden * router_heads * router_dim
+                        + hidden * router_heads
+                        + router_keys
+                        + router_heads
+                    )
+                router_params_multiplier = float(
+                    router_cfg.get("router_params_multiplier", 1.0)
+                )
+                router_params_extra = float(router_cfg.get("router_params_extra", 0))
+                router_params = router_params * router_params_multiplier + router_params_extra
             total_ffn_params_moe = (
-                experts * ffn_params_per_expert + shared_expert_params + router_params
+                experts * ffn_params_per_expert
+                + shared_expert_params
+                + router_params
+                + null_expert_params
             )
             active_ffn_params_moe = (
                 top_k * ffn_params_per_expert + shared_expert_params + router_params
@@ -165,7 +256,7 @@ class TrainingStage:
                 + lm_head_params
                 + layers * attn_params_per_layer
                 + dense_layers * ffn_params_dense
-                + num_moe_layers * shared_expert_params
+                + num_moe_layers * (shared_expert_params + null_expert_params)
             )
             per_expert_per_layer = ffn_params_per_expert + hidden
             derived_experts = (target_total_params - base_params) / (
@@ -184,7 +275,10 @@ class TrainingStage:
                 raise ValueError("top_k_experts cannot exceed derived num_experts.")
             router_params = hidden * experts
             total_ffn_params_moe = (
-                experts * ffn_params_per_expert + shared_expert_params + router_params
+                experts * ffn_params_per_expert
+                + shared_expert_params
+                + router_params
+                + null_expert_params
             )
             active_ffn_params_moe = (
                 top_k * ffn_params_per_expert + shared_expert_params + router_params
@@ -204,7 +298,10 @@ class TrainingStage:
                 raise ValueError("top_k_experts cannot exceed derived num_experts.")
             router_params = hidden * experts
             total_ffn_params_moe = (
-                experts * ffn_params_per_expert + shared_expert_params + router_params
+                experts * ffn_params_per_expert
+                + shared_expert_params
+                + router_params
+                + null_expert_params
             )
             active_ffn_params_moe = (
                 top_k * ffn_params_per_expert + shared_expert_params + router_params
@@ -374,12 +471,27 @@ class TrainingStage:
         params = params or self.calculate_params()
         arch = self.architecture
 
-        n_linear = params.get("active_linear_params", params["active_non_embed_params"])
-        layers = arch.get("num_layers", 24)
-        h = arch.get("hidden_size", 2048)
-        s = arch.get("sequence_length", 4096)
+        attention_cfg = arch.get("attention") or {}
+        router_cfg = arch.get("router") or {}
 
-        attention_type = str(arch.get("attention_type", "")).strip().lower()
+        n_linear = params.get("active_linear_params", params["active_non_embed_params"])
+        layers = arch.get("num_layers", arch.get("num_hidden_layers", 24))
+        h = arch.get("hidden_size", 2048)
+        s = arch.get(
+            "sequence_length",
+            arch.get(
+                "seq_length", arch.get("max_position_embeddings", 4096)
+            ),
+        )
+
+        attention_type = str(
+            arch.get("attention_type", attention_cfg.get("attention_type", ""))
+        ).strip().lower()
+        if attention_type in ("grouped_query", "grouped_query_attention"):
+            attention_type = "gqa"
+        if attention_type in ("deepseek_sparse", "deepseek_mla", "mla", "deepseek"):
+            attention_type = "deepseek_mla"
+
         gsa_enabled = attention_type in (
             "gsa",
             "gated_sparse",
@@ -392,15 +504,20 @@ class TrainingStage:
         sparse_k_tokens = arch.get("sparse_k_tokens", s)
 
         if gsa_enabled:
-            gsa_k_tokens = arch.get("gsa_k_tokens")
-            gsa_k_base = arch.get("gsa_k_base")
-            gsa_k_min = arch.get("gsa_k_min", gsa_k_base)
-            gsa_k_max = arch.get("gsa_k_max", gsa_k_base)
+            gsa_k_tokens = arch.get("gsa_k_tokens", attention_cfg.get("gsa_k_tokens"))
+            gsa_k_base = arch.get("gsa_k_base", attention_cfg.get("gsa_k_base"))
+            gsa_k_min = arch.get("gsa_k_min", attention_cfg.get("gsa_k_min", gsa_k_base))
+            gsa_k_max = arch.get("gsa_k_max", attention_cfg.get("gsa_k_max", gsa_k_base))
             if gsa_k_tokens is not None:
                 sparse_k_tokens = gsa_k_tokens
             elif gsa_k_base is not None:
                 k = gsa_k_base
-                if bool(arch.get("gsa_use_adaptive_k", False)):
+                if bool(
+                    arch.get(
+                        "gsa_use_adaptive_k",
+                        attention_cfg.get("gsa_use_adaptive_k", False),
+                    )
+                ):
                     if gsa_k_min is not None:
                         k = max(k, gsa_k_min)
                     if gsa_k_max is not None:
@@ -408,14 +525,25 @@ class TrainingStage:
                 sparse_k_tokens = k
 
         if gsa_enabled:
-            indexer_heads = arch.get("gsa_num_indexer_heads", arch.get("indexer_heads", 4))
-            indexer_dim = arch.get("gsa_indexer_dim", arch.get("indexer_dim", 64))
+            indexer_heads = arch.get(
+                "gsa_num_indexer_heads",
+                attention_cfg.get("gsa_num_indexer_heads", arch.get("indexer_heads", 4)),
+            )
+            indexer_dim = arch.get(
+                "gsa_indexer_dim",
+                attention_cfg.get("gsa_indexer_dim", arch.get("indexer_dim", 64)),
+            )
         else:
-            indexer_heads = arch.get("indexer_heads", 4)
-            indexer_dim = arch.get("indexer_dim", h // 8)
+            indexer_heads = arch.get("indexer_heads", attention_cfg.get("indexer_heads", 4))
+            indexer_dim = arch.get(
+                "indexer_dim", attention_cfg.get("indexer_dim", h // 8)
+            )
 
         mla_kv_lora_rank = arch.get(
-            "mla_kv_lora_rank", arch.get("ds_compressed_dim", 0)
+            "mla_kv_lora_rank",
+            attention_cfg.get(
+                "mla_kv_lora_rank", arch.get("ds_compressed_dim", 0)
+            ),
         )  # MLA compression rank (0 = disabled)
 
         if s <= 0:
@@ -436,7 +564,9 @@ class TrainingStage:
         if attention_multiplier <= 0:
             raise ValueError("attention_flops_multiplier must be > 0.")
 
-        num_heads = arch.get("num_heads", 32)
+        num_heads = arch.get(
+            "num_heads", attention_cfg.get("num_attention_heads", 32)
+        )
         if num_heads <= 0:
             raise ValueError("num_heads must be > 0.")
         head_dim = h / num_heads
@@ -454,7 +584,12 @@ class TrainingStage:
             #    - Uses FP8 (2x speedup assumed)
             #    - Fewer heads and smaller dimension
             #    - Formula: 2 * seq_len^2 * indexer_heads * indexer_dim / fp8_speedup
-            fp8_speedup = float(arch.get("indexer_fp8_speedup", 2.0))
+            fp8_speedup = float(
+                arch.get(
+                    "indexer_fp8_speedup",
+                    attention_cfg.get("indexer_fp8_speedup", 2.0),
+                )
+            )
             indexer_flops = (2 * (s**2) * indexer_heads * indexer_dim) / fp8_speedup
 
             # 2. Main Sparse Attention: O(Lk) instead of O(L^2)

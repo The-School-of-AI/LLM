@@ -16,6 +16,16 @@ This tool calculates the estimated training time, FLOPs, and cloud costs for Lar
    python3 compute.py
    ```
 
+### Sample Configs
+Preset-ready configs are available under:
+- `experiments/9_training_stack_optimisation_and_cost_governor/FLOPS-Calculation/configs/1b_presets/`
+- `experiments/9_training_stack_optimisation_and_cost_governor/FLOPS-Calculation/configs/moe_team8/`
+
+Run any preset with:
+```bash
+python3 compute.py --config configs/1b_presets/1b_deepseek_gsa.json
+```
+
 ## Output Snapshots
 We keep simple text snapshots of recent runs:
 - `last_run.txt`: baseline run for `flops_config.json`
@@ -148,9 +158,13 @@ These keys are optional and default to current behavior if omitted:
 - `ffn_type`: One of `swiglu`, `geglu`, `glu`, `gelu`, `relu` (defaults to `swiglu`).
 - `ffn_multiplier`: Numeric override for FFN matrix count (e.g., 2 or 3).
 - `moe_intermediate_size`: Expert FFN intermediate size (defaults to `intermediate_size`).
+- `num_routed_experts`: Alias for `num_experts`.
 - `num_shared_experts`: Always-active experts per MoE layer.
+- `num_null_experts`: Null experts per MoE layer (params are optional and tiny).
 - `moe_layer_frequency`: MoE every N layers (used if `num_moe_layers` omitted).
 - `lm_head_multiplier`: Multiplies LM head params/FLOPs (e.g., MTP-style multi-heads).
+- `router_type`: If set to `gsa`/`gsa_router`, adds extra router params based on `router_dim` and `num_router_heads`.
+- `router_dim`, `num_router_heads`: Router projection dimensions (used when `router_type` is GSA-style).
 - `moe_capacity_factor`: >1 models MoE padding/overflow compute.
 - `attention_window`: Sliding-window attention size.
 - `attention_sparsity`: Fraction (0,1] of tokens attended per token (ignored if `attention_window` set).
@@ -162,6 +176,15 @@ These keys are optional and default to current behavior if omitted:
 - `quantization_flops_multiplier`: Scales total FLOPs for quantization overheads.
 - `moe_routing_overhead_ratio`: Adds overhead as a ratio of MoE expert compute.
 - `moe_routing_flops_per_token`: Adds fixed overhead per-token per-layer.
+
+#### Nested Config Compatibility (YAML-style)
+If you pass `attention`, `router`, `expert`, or `head` objects (like your YAMLs), the calculator reads common fields from those too:
+- `attention.attention_type`, `attention.num_attention_heads`, `attention.num_key_value_heads`
+- `attention.gsa_*`, `attention.indexer_*`, `attention.mla_kv_lora_rank`, `attention.ds_compressed_dim`
+- `router.top_k`, `router.top_k_max`, `router.use_adaptive_top_k`, `router.data_sparsity`
+- `router.router_type`, `router.num_router_heads`, `router.router_dim`
+- `expert.intermediate_size`
+- `head.use_multi_token_prediction`, `head.num_prediction_heads`
 
 #### Gated Sparse Attention (GSA) / DeepSeek GSA
 When `attention_type` is `gsa` or `deepseek_gsa`, the calculator uses sparse attention (O(Lk)) and supports:
