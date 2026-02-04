@@ -1,6 +1,6 @@
 """
 Training Script for 1B LLM - Nsight Systems (nsys) Optimized
-============================================================
+=============================================================
 
 This version is optimized for Nsight Systems timeline profiling.
 Includes CUDA Profiler API calls (cudaProfilerStart/Stop) to control
@@ -15,7 +15,6 @@ Features:
 - Metrics tracking (loss, tokens/sec)
 - Checkpointing
 - Experiment logging
-- Multi-device support (CUDA, MPS, CPU)
 """
 
 import os
@@ -33,7 +32,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-from torch.amp import autocast, GradScaler
+from torch.cuda.amp import autocast, GradScaler
 import torch.cuda.profiler as profiler
 
 # Add project root to path (go up from nsightSystemProfile -> profiling -> project root)
@@ -42,38 +41,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
 from models.llm import LLM, create_model
 
+try:
+    from datasets import load_dataset
+    from transformers import AutoTokenizer
+except ImportError as exc:
+    raise ImportError(
+        "Missing dependencies. Install with: pip install datasets transformers"
+    ) from exc
 
-def get_best_device(preferred: str = "auto") -> torch.device:
-    """
-    Get the best available device.
 
-    Args:
-        preferred: "auto", "cuda", "mps", or "cpu"
-
-    Returns:
-        torch.device for the selected device
-    """
-    if preferred == "auto":
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            return torch.device("mps")
-        else:
-            return torch.device("cpu")
-    elif preferred == "cuda":
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        else:
-            print("Warning: CUDA not available, falling back to CPU")
-            return torch.device("cpu")
-    elif preferred == "mps":
-        if torch.backends.mps.is_available():
-            return torch.device("mps")
-        else:
-            print("Warning: MPS not available, falling back to CPU")
-            return torch.device("cpu")
-    else:
-        return torch.device("cpu")
+def set_seed(seed: int) -> None:
+    """Set random seed for reproducibility."""
+    import random
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 @dataclass
@@ -108,9 +91,6 @@ class TrainingConfig:
     # Precision
     use_amp: bool = True
     amp_dtype: str = "bfloat16"  # bfloat16, float16
-    
-    # Device selection
-    device: str = "auto"  # "auto", "cuda", "mps", "cpu"
     
     # Checkpointing
     save_interval: int = 1000
@@ -233,38 +213,55 @@ class LRScheduler:
             return self.max_lr
 
 
-class RandomTextDataset(Dataset):
-    """
-    Random dataset for testing/development.
-    
-    In production, replace with real tokenized dataset.
-    """
-    
-    def __init__(
-        self,
-        vocab_size: int,
-        seq_length: int,
-        num_samples: int,
-        seed: int = 42
-    ):
-        self.vocab_size = vocab_size
+class TokenBlockDataset(Dataset):
+    """Simple fixed-length token block dataset."""
+
+    def __init__(self, token_ids: List[int], seq_length: int, stride: int):
+        self.token_ids = token_ids
         self.seq_length = seq_length
-        self.num_samples = num_samples
-        
-        # Pre-generate for reproducibility
-        torch.manual_seed(seed)
-        self.data = torch.randint(0, vocab_size, (num_samples, seq_length))
-        
+        self.stride = stride
+        if len(token_ids) < seq_length:
+            self.num_blocks = 0
+        else:
+            self.num_blocks = (len(token_ids) - seq_length) // stride + 1
+
     def __len__(self) -> int:
-        return self.num_samples
-    
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        tokens = self.data[idx]
-        return {
-            'input_ids': tokens,
-            # Model forward already shifts for next-token prediction.
-            'labels': tokens.clone()
-        }
+        return self.num_blocks
+
+    def __getitem__(self, idx: int):
+        start = idx * self.stride
+        end = start + self.seq_length
+        block = self.token_ids[start:end]
+        input_ids = torch.tensor(block, dtype=torch.long)
+        labels = input_ids.clone()
+        return {"input_ids": input_ids, "labels": labels}
+
+
+def build_token_ids(
+    split: str,
+    tokenizer,
+    add_eos: bool = True,
+    max_tokens: Optional[int] = None
+) -> List[int]:
+    """Load and tokenize WikiText-2 dataset."""
+    dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split=split)
+    token_ids: List[int] = []
+    eos_id = tokenizer.eos_token_id
+
+    for text in dataset["text"]:
+        if not text:
+            continue
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        if not ids:
+            continue
+        token_ids.extend(ids)
+        if add_eos and eos_id is not None:
+            token_ids.append(eos_id)
+        if max_tokens is not None and len(token_ids) >= max_tokens:
+            token_ids = token_ids[:max_tokens]
+            break
+
+    return token_ids
 
 
 class Trainer:
@@ -292,15 +289,14 @@ class Trainer:
         self.eval_dataloader = eval_dataloader
         self.config = training_config
         self.model_config = model_config
-
-        # Device - supports CUDA, MPS (Apple Silicon), and CPU
-        self.device = get_best_device(training_config.device)
+        
+        # Device
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
-        model.gradient_checkpointing_enable()
-
+        
         # Optimizer
         self.optimizer = self._create_optimizer()
-
+        
         # LR Scheduler
         self.lr_scheduler = LRScheduler(
             optimizer=self.optimizer,
@@ -310,21 +306,11 @@ class Trainer:
             min_lr=training_config.min_learning_rate,
             style=training_config.lr_decay_style
         )
-
-        # Mixed precision - CUDA supports both float16 and bfloat16, MPS supports float16 only
-        self.use_amp = training_config.use_amp and (
-            self.device.type == "cuda" or
-            (self.device.type == "mps" and training_config.amp_dtype == "float16")
-        )
+        
+        # Mixed precision
+        self.use_amp = training_config.use_amp and torch.cuda.is_available()
         self.amp_dtype = getattr(torch, training_config.amp_dtype)
-
-        # GradScaler only works with CUDA float16
-        scaler_enabled = (
-            self.use_amp and
-            self.device.type == "cuda" and
-            training_config.amp_dtype == "float16"
-        )
-        self.scaler = GradScaler("cuda", enabled=scaler_enabled)
+        self.scaler = GradScaler(enabled=self.use_amp and training_config.amp_dtype == "float16")
         
         # Logging
         self.logger = MetricsLogger(
@@ -416,34 +402,33 @@ class Trainer:
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
             
-            # Forward pass with device-aware autocast
-            with autocast(device_type=self.device.type, enabled=self.use_amp, dtype=self.amp_dtype):
+            # Forward pass
+            with autocast(enabled=self.use_amp, dtype=self.amp_dtype):
                 outputs = self.model(input_ids=input_ids, labels=labels)
-                micro_loss = outputs.loss
-                loss = micro_loss / self.config.gradient_accumulation_steps
-
-            # Backward pass (GradScaler only for CUDA float16)
-            if self.scaler.is_enabled():
+                loss = outputs.loss / self.config.gradient_accumulation_steps
+            
+            # Backward pass
+            if self.use_amp and self.config.amp_dtype == "float16":
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
-
-            accumulation_loss += micro_loss.item()
+            
+            accumulation_loss += loss.item()
             accumulation_steps += 1
-
+            
             # Gradient accumulation step
             if accumulation_steps >= self.config.gradient_accumulation_steps:
                 # Gradient clipping
-                if self.scaler.is_enabled():
+                if self.use_amp and self.config.amp_dtype == "float16":
                     self.scaler.unscale_(self.optimizer)
-
+                
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(),
                     self.config.gradient_clip
                 ).item()
-
+                
                 # Optimizer step
-                if self.scaler.is_enabled():
+                if self.use_amp and self.config.amp_dtype == "float16":
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
@@ -463,8 +448,8 @@ class Trainer:
                 )
                 self.tokens_seen += tokens_in_step
                 
-                # Profiling control (CUDA Profiler API for Nsight Systems)
-                if self.profile_start is not None and self.device.type == "cuda":
+                # Profiling control
+                if self.profile_start is not None:
                     if self.global_step == self.profile_start:
                         print(f"\n🔍 Starting CUDA profiler at step {self.global_step}")
                         profiler.start()
@@ -486,7 +471,7 @@ class Trainer:
                 metrics = TrainingMetrics(
                     step=self.global_step,
                     epoch=self.epoch,
-                    loss=accumulation_loss / max(1, accumulation_steps),
+                    loss=accumulation_loss * self.config.gradient_accumulation_steps,
                     learning_rate=current_lr,
                     tokens_per_second=tokens_per_second,
                     samples_per_second=samples_per_second,
@@ -592,7 +577,12 @@ class Trainer:
 def run_training(
     model_preset: str = "1b-base",
     training_config: Optional[TrainingConfig] = None,
-    model_config_overrides: Optional[Dict] = None
+    model_config_overrides: Optional[Dict] = None,
+    tokenizer_name: str = "gpt2",
+    dataset_split: str = "train",
+    stride: Optional[int] = None,
+    max_tokens: Optional[int] = None,
+    num_workers: int = 2
 ) -> Tuple[LLM, TrainingMetrics]:
     """
     Run training with specified configuration.
@@ -601,6 +591,11 @@ def run_training(
         model_preset: Model preset name
         training_config: Training configuration
         model_config_overrides: Overrides for model config
+        tokenizer_name: Hugging Face tokenizer name
+        dataset_split: WikiText-2 split to use
+        stride: Stride between blocks (default: seq_length)
+        max_tokens: Cap total tokens for testing
+        num_workers: Number of DataLoader workers
         
     Returns:
         Trained model and final metrics
@@ -609,12 +604,24 @@ def run_training(
     if training_config is None:
         training_config = TrainingConfig()
     
-    torch.manual_seed(training_config.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(training_config.seed)
+    set_seed(training_config.seed)
+    
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    # Load and tokenize WikiText-2
+    token_ids = build_token_ids(
+        split=dataset_split,
+        tokenizer=tokenizer,
+        add_eos=True,
+        max_tokens=max_tokens
+    )
     
     # Create model config
     model_config = get_preset_config(model_preset)
+    model_config.vocab_size = len(tokenizer)  # Use tokenizer vocab size
     if model_config_overrides:
         for key, value in model_config_overrides.items():
             if hasattr(model_config, key):
@@ -624,19 +631,21 @@ def run_training(
     model = LLM(model_config)
     
     # Create dataset
-    dataset = RandomTextDataset(
-        vocab_size=model_config.vocab_size,
-        seq_length=training_config.seq_length,
-        num_samples=training_config.max_steps * training_config.batch_size * 2,
-        seed=training_config.seed
-    )
+    stride_val = training_config.seq_length if stride is None else stride
+    dataset = TokenBlockDataset(token_ids, seq_length=training_config.seq_length, stride=stride_val)
+    
+    if len(dataset) == 0:
+        raise ValueError(
+            "Not enough tokens for the chosen seq-length. "
+            "Reduce --seq-length or increase --max-tokens."
+        )
     
     dataloader = DataLoader(
         dataset,
         batch_size=training_config.batch_size,
         shuffle=True,
-        num_workers=4,
-        pin_memory=True
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available()
     )
     
     # Create trainer
@@ -655,7 +664,9 @@ def run_training(
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Train 1B LLM (Nsight Systems optimized)")
+    parser = argparse.ArgumentParser(
+        description="Train 1B LLM on WikiText-2 with GPT-2 tokenizer (Nsight Systems optimized)"
+    )
     
     # Model
     parser.add_argument(
@@ -665,33 +676,60 @@ def main():
         choices=list(PRESET_CONFIGS.keys()),
         help="Model preset"
     )
+    parser.add_argument(
+        "--tokenizer",
+        type=str,
+        default="gpt2",
+        help="Hugging Face tokenizer name (default: gpt2)"
+    )
+    
+    # Dataset
+    parser.add_argument(
+        "--dataset-split",
+        type=str,
+        default="train",
+        choices=["train", "validation", "test"],
+        help="WikiText-2 split"
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=None,
+        help="Stride between blocks (default: seq-length)"
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help="Cap total tokens for a tiny smoke test"
+    )
     
     # Training
-    parser.add_argument("--max-steps", type=int, default=10000)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--gradient-accumulation", type=int, default=4)
-    parser.add_argument("--seq-length", type=int, default=1024)
+    parser.add_argument("--max-steps", type=int, default=200)
+    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--gradient-accumulation", type=int, default=1)
+    parser.add_argument("--seq-length", type=int, default=256)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--warmup-steps", type=int, default=500)
-
-    # Device
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="auto",
-        choices=["auto", "cuda", "mps", "cpu"],
-        help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu"
-    )
-
+    parser.add_argument("--warmup-steps", type=int, default=20)
+    
     # Experiment
-    parser.add_argument("--experiment-name", type=str, default="1b_training_nsys")
-    parser.add_argument("--checkpoint-dir", type=str, default="./checkpoints")
+    parser.add_argument(
+        "--experiment-name",
+        type=str,
+        default="wikitext2_nsys"
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default="./checkpoints/wikitext2_nsys"
+    )
     parser.add_argument("--seed", type=int, default=42)
-
-    # Logging
+    
+    # Logging / DataLoader
     parser.add_argument("--log-interval", type=int, default=10)
-    parser.add_argument("--save-interval", type=int, default=1000)
-
+    parser.add_argument("--save-interval", type=int, default=200)
+    parser.add_argument("--num-workers", type=int, default=2)
+    
     # Profiling
     parser.add_argument(
         "--profile-steps",
@@ -701,7 +739,7 @@ def main():
     )
     
     args = parser.parse_args()
-
+    
     # Create training config
     training_config = TrainingConfig(
         max_steps=args.max_steps,
@@ -710,7 +748,6 @@ def main():
         seq_length=args.seq_length,
         learning_rate=args.learning_rate,
         warmup_steps=args.warmup_steps,
-        device=args.device,
         experiment_name=args.experiment_name,
         checkpoint_dir=args.checkpoint_dir,
         seed=args.seed,
@@ -722,7 +759,12 @@ def main():
     # Run training
     model, metrics = run_training(
         model_preset=args.preset,
-        training_config=training_config
+        training_config=training_config,
+        tokenizer_name=args.tokenizer,
+        dataset_split=args.dataset_split,
+        stride=args.stride,
+        max_tokens=args.max_tokens,
+        num_workers=args.num_workers
     )
     
     print(f"\nTraining complete! Final loss: {metrics.loss:.4f}")
