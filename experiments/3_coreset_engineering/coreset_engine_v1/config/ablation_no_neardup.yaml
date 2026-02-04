@@ -1,0 +1,88 @@
+# ============================================================
+# Ablation Configuration - No Near-Deduplication
+# ============================================================
+# Purpose: Study effect of near-dedup on final coreset quality
+# Expected: +5-15% more data retained, but with subtle redundancy
+
+dedup:
+  enable_exact_dedup: true
+  enable_near_dedup: false    # ← ABLATION: Disabled
+  hash_algorithm: xxhash64
+  parallel_workers: 32
+
+diversity:
+  enable_diversity_weighting: true
+  diversity_metric: entropy
+  rare_token_boost: 1.5
+  tail_token_boost: 2.0
+  domain_diversity_weight: 0.3
+  language_diversity_weight: 0.2
+
+selection:
+  strategy: stratified_density_aware
+  include_protected_slices: true
+  protected_preservation_override:
+    B4: 0.95
+    B5: 0.95
+    code: 0.90
+    agentic: 0.90
+    indic: 0.85
+  bucket_internal_sampling: stratified
+  non_overlap_enforcement: true
+
+curriculum:
+  curriculum_yaml_path: config/curriculum.yaml
+  freeze_curriculum: true
+  enforce_rolling_window: true
+  rolling_window_tolerance: 0.03
+  deterministic_seed: 42
+  seed_scope:
+    - sampling
+    - shuffling
+    - stage_transition
+
+io:
+  input_dataset_path: /data/datasets
+  input_metadata_path: /data/metadata
+  output_coreset_path: /output/coresets_ablation_no_neardup
+  output_manifest_path: /output/manifests_ablation_no_neardup
+  output_index_format: parquet
+  num_parallel_loaders: 16
+
+validation:
+  enable_curriculum_validation: true
+  enable_coverage_validation: true
+  enable_determinism_check: true
+  enable_overlap_check: true
+  strict_mode: true
+  validation_tolerance: 0.01
+
+reproducibility:
+  enable_reproducibility_checks: true
+  save_config_hash: true
+  save_seed: true
+  save_algorithm_version: true
+  emit_reproducibility_manifest: true
+  version: "1.0.0"
+
+ablation:
+  enable_ablation_mode: true
+  ablation_variant: no_neardup
+  track_metrics:
+    - compression_ratio
+    - band_coverage
+    - domain_coverage
+    - protected_preservation
+  save_intermediate_results: true
+
+stages:
+  "1B":
+    stage_name: "1B"
+    target_tokens: 20000000000
+  
+  "70B":
+    stage_name: "70B"
+    target_tokens: 240000000000
+
+pipeline_version: "1.0.0"
+config_name: "ablation_no_neardup"

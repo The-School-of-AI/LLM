@@ -1,0 +1,13 @@
+
+version: "0.0.1"
+status: "FROZEN"
+stages:
+  "1B":
+    total_tokens: 20000000000
+    band_ratios:
+      B0: 0.10
+      B1: 0.15
+      B2: 0.20
+      B3: 0.25
+      B4: 0.15
+      B5: 0.15

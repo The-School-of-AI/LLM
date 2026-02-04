@@ -1,0 +1,251 @@
+version: "0.0.1"
+owner: "Team 2 — Curriculum Architects"
+status: "FROZEN"
+frozen_on: "2026-02-03"
+change_policy: "NO_CHANGES_POST_FREEZE"
+
+# ============================================================
+# GLOBAL GUARANTEES
+# ============================================================
+guarantees:
+  deterministic_sampling: true
+  deterministic_batch_content: true
+  deterministic_data_order: true
+  seed_required: true
+  seed_scope: ["sampling", "shuffling", "stage_transition"]
+  reproducibility_enforced_by: "Team 19"
+
+# ============================================================
+# LANGUAGE POLICY (HARD)
+# ============================================================
+languages:
+  primary:
+    - code: "en"
+      max_token_share: 0.92
+  secondary:
+    - code: "hi"
+      max_token_share: 0.08
+      earliest_stage: "3B"
+  explicitly_excluded:
+    - "zh"
+    - "ja"
+    - "ko"
+    - "fr"
+    - "de"
+    - "es"
+  violation_action: "DROP_SAMPLE"
+
+# ============================================================
+# CONTEXT POLICY
+# ============================================================
+context:
+  min_tokens: 4096
+  max_tokens_pretrain: 4096
+  long_context_reserved_for_later: true
+  short_context_pretraining: false
+
+# ============================================================
+# TOKENIZER PROXY INTERFACE (TEAM 6 — HARD CONTRACT)
+# ============================================================
+tokenizer_proxy:
+  owner_team: "Team 6"
+  vocab_size: 128000
+  id_semantics: "lower_id = higher_global_frequency"
+  required_exports:
+    - token_id
+    - token_string
+    - global_frequency_rank
+    - frequency_percentile
+  frequency_bands:
+    junk:
+      percentile: [0, 5]
+    boilerplate:
+      percentile: [5, 20]
+    normal:
+      percentile: [20, 80]
+    rare:
+      percentile: [80, 95]
+    tail:
+      percentile: [95, 100]
+
+# ============================================================
+# PERPLEXITY DEFINITION (AUTHORITATIVE)
+# ============================================================
+perplexity:
+  computation:
+    model: "frozen_1.3B_reference_lm"
+    context_tokens: 4096
+    stride: 4096
+    loss: "mean_nll"
+    formula: "exp(mean_nll)"
+  normalization:
+    language: "en"
+    length_normalized: true
+  invalid_if:
+    - contains_nan
+    - contains_inf
+
+# ============================================================
+# PERPLEXITY FILTERING RULES (HARD)
+# ============================================================
+perplexity_filters:
+  global_reject:
+    ppl_min: 1.1
+    ppl_max: 2000
+  band_specific:
+    B0: { ppl_range: [1.1, 30] }
+    B1: { ppl_range: [10, 60] }
+    B2: { ppl_range: [30, 120] }
+    B3: { ppl_range: [80, 300] }
+    B4: { ppl_range: [200, 800] }
+    B5: { ppl_range: [400, 1500] }
+  violation_action: "REJECT_SAMPLE"
+
+# ============================================================
+# DIFFICULTY BAND DEFINITIONS (CANONICAL)
+# ============================================================
+difficulty_bands:
+  B0:
+    name: "Nursery"
+    allowed_domains: ["clean_web", "basic_text"]
+    code_allowed: false
+    cot_allowed: false
+    agentic_allowed: false
+    tokenizer_constraints:
+      max_rare_token_percent: 2
+      max_tail_token_percent: 0.5
+
+  B1:
+    name: "Primary"
+    allowed_domains: ["clean_web", "narrative"]
+    code_allowed: false
+    cot_allowed: false
+    agentic_allowed: false
+    tokenizer_constraints:
+      max_rare_token_percent: 5
+      max_tail_token_percent: 1
+
+  B2:
+    name: "HighSchool"
+    allowed_domains: ["structured_knowledge", "intro_technical"]
+    code_allowed: "light"
+    cot_allowed: false
+    agentic_allowed: false
+    tokenizer_constraints:
+      max_rare_token_percent: 10
+      max_tail_token_percent: 2
+
+  B3:
+    name: "Undergraduate"
+    allowed_domains: ["technical", "code", "reasoning"]
+    code_allowed: true
+    cot_allowed: "gated"
+    agentic_allowed: false
+    tokenizer_constraints:
+      max_rare_token_percent: 20
+      max_tail_token_percent: 5
+
+  B4:
+    name: "Graduate"
+    allowed_domains: ["math", "algorithms", "deep_technical"]
+    code_allowed: true
+    cot_allowed: "allowed_capped"
+    agentic_allowed: false
+    tokenizer_constraints:
+      min_rare_token_percent: 15
+      min_tail_token_percent: 5
+
+  B5:
+    name: "PhD"
+    allowed_domains: ["advanced_reasoning", "system_design", "agentic"]
+    code_allowed: true
+    cot_allowed: "allowed_capped"
+    agentic_allowed: "limited"
+    tokenizer_constraints:
+      min_rare_token_percent: 25
+      min_tail_token_percent: 10
+
+# ============================================================
+# CHAIN-OF-THOUGHT (CoT) RULES
+# ============================================================
+cot_policy:
+  trigger_token: "<think>"
+  max_tokens:
+    B3: 64
+    B4: 128
+    B5: 256
+  sampling_weight:
+    distilled_view: 0.8
+    cot_view: 0.2
+
+# ============================================================
+# SYNTHETIC DATA RULES (TEAM 4 INTERFACE)
+# ============================================================
+synthetic_data:
+  allowed_bands: ["B3", "B4", "B5"]
+  max_stage_share: 0.10
+  min_stage_share: 0.05
+  requires_tests_defined: true
+  requires_team5_clearance: true
+
+# ============================================================
+# STAGE DEFINITIONS & RATIOS (HARD NUMBERS)
+# ============================================================
+stages:
+  "1B":
+    total_tokens: 20000000000
+    band_ratios:
+      B0: 0.45
+      B1: 0.30
+      B2: 0.20
+      B3: 0.05
+      B4: 0.00
+      B5: 0.00
+
+  "3B":
+    total_tokens: 40000000000
+    band_ratios:
+      B0: 0.25
+      B1: 0.25
+      B2: 0.25
+      B3: 0.15
+      B4: 0.10
+      B5: 0.00
+
+  "8B":
+    total_tokens: 100000000000
+    band_ratios:
+      B0: 0.10
+      B1: 0.20
+      B2: 0.25
+      B3: 0.20
+      B4: 0.20
+      B5: 0.05
+
+  "70B":
+    total_tokens: 240000000000
+    band_ratios:
+      B0: 0.05
+      B1: 0.10
+      B2: 0.20
+      B3: 0.25
+      B4: 0.25
+      B5: 0.15
+
+# ============================================================
+# ROLLING WINDOW CONSTRAINTS (ANTI-SHOCK)
+# ============================================================
+rolling_window:
+  window_tokens: 1000000
+  max_band_delta: 0.03
+  max_domain_delta: 0.05
+  enforcement: "HARD_REJECT"
+
+# ============================================================
+# FAILURE MODES
+# ============================================================
+violations:
+  curriculum_violation: "REJECT_SAMPLE"
+  ratio_violation: "HALT_PIPELINE"
+  nondeterminism_detected: "ESCALATE_TEAM19"
+  tokenizer_proxy_missing: "BLOCK_TRAINING"
