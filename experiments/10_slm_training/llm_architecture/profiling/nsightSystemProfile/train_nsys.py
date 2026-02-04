@@ -32,7 +32,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 import torch.cuda.profiler as profiler
 
 # Add project root to path (go up from nsightSystemProfile -> profiling -> project root)
@@ -383,7 +383,7 @@ class Trainer:
         print(f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}")
         print(f"{'='*60}\n")
         
-        accumulation_loss = 0.0
+        # Initialize loss accumulation on GPU to avoid CPU-GPU sync\n        accumulation_loss = torch.zeros(1, device=self.device)
         accumulation_steps = 0
         step_start_time = time.time()
         
@@ -398,12 +398,12 @@ class Trainer:
                 data_iter = iter(self.train_dataloader)
                 batch = next(data_iter)
             
-            # Move to device
-            input_ids = batch['input_ids'].to(self.device)
-            labels = batch['labels'].to(self.device)
+            # Move to device (non-blocking for async H2D transfer)
+            input_ids = batch['input_ids'].to(self.device, non_blocking=True)
+            labels = batch['labels'].to(self.device, non_blocking=True)
             
-            # Forward pass
-            with autocast(enabled=self.use_amp, dtype=self.amp_dtype):
+            # Forward pass with device-aware autocast (fixes FutureWarning)
+            with autocast(device_type='cuda', enabled=self.use_amp, dtype=self.amp_dtype):
                 outputs = self.model(input_ids=input_ids, labels=labels)
                 loss = outputs.loss / self.config.gradient_accumulation_steps
             
@@ -413,7 +413,8 @@ class Trainer:
             else:
                 loss.backward()
             
-            accumulation_loss += loss.item()
+            # Accumulate loss on GPU to avoid synchronization (critical optimization!)
+            accumulation_loss += loss.detach()  # Keep on GPU, sync only at logging
             accumulation_steps += 1
             
             # Gradient accumulation step
@@ -434,7 +435,7 @@ class Trainer:
                 else:
                     self.optimizer.step()
                 
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)  # Faster than memset
                 
                 # LR update
                 current_lr = self.lr_scheduler.step()
@@ -467,11 +468,12 @@ class Trainer:
                     self.config.gradient_accumulation_steps
                 ) / step_time
                 
-                # Log metrics
+                # Log metrics (sync here: convert accumulated GPU tensor to CPU)
+                loss_value = (accumulation_loss / accumulation_steps).item()
                 metrics = TrainingMetrics(
                     step=self.global_step,
                     epoch=self.epoch,
-                    loss=accumulation_loss * self.config.gradient_accumulation_steps,
+                    loss=loss_value,
                     learning_rate=current_lr,
                     tokens_per_second=tokens_per_second,
                     samples_per_second=samples_per_second,
@@ -500,8 +502,8 @@ class Trainer:
                 if metrics.loss < self.best_loss:
                     self.best_loss = metrics.loss
                 
-                # Reset accumulation
-                accumulation_loss = 0.0
+                # Reset accumulation (tensor for GPU accumulation)
+                accumulation_loss = torch.zeros(1, device=self.device)
                 accumulation_steps = 0
                 step_start_time = time.time()
         
