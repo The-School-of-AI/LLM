@@ -401,19 +401,82 @@ class TrainingStage:
         """
         params = params or self.calculate_params()
         total_params = params["total_params"]
+        arch = self.architecture
+        precision_cfg = arch.get("precision") or {}
 
-        # Bytes per parameter for model weights depends on quantization
-        quantization = quantization.lower()
-        if quantization == "fp8":
-            weight_bytes_per_param = 1
-        elif quantization == "nvfp4":
-            weight_bytes_per_param = 0.5
-        else:  # bf16 or default
-            weight_bytes_per_param = 2
+        def _get_prec_value(key: str, default=None):
+            if key in arch:
+                return arch.get(key)
+            return precision_cfg.get(key, default)
 
-        model_bytes = total_params * weight_bytes_per_param
-        optimizer_bytes = total_params * 8  # FP32 Adam (m + v) - always FP32
-        gradient_bytes = total_params * 4  # FP32 gradients
+        def _bytes_for_precision(precision: str) -> float:
+            prec = str(precision).strip().lower()
+            mapping = {
+                "fp32": 4,
+                "f32": 4,
+                "bf16": 2,
+                "fp16": 2,
+                "f16": 2,
+                "fp8": 1,
+                "int8": 1,
+                "i8": 1,
+                "nvfp4": 0.5,
+                "int4": 0.5,
+                "i4": 0.5,
+            }
+            return mapping.get(prec, 4)
+
+        # Model weights precision (defaults to quantization selection)
+        weight_bytes_per_param = _get_prec_value("weight_bytes_per_param")
+        if weight_bytes_per_param is None:
+            weight_precision = _get_prec_value("weight_precision")
+            if weight_precision:
+                weight_bytes_per_param = _bytes_for_precision(weight_precision)
+            else:
+                quantization = quantization.lower()
+                if quantization == "fp8":
+                    weight_bytes_per_param = 1
+                elif quantization == "nvfp4":
+                    weight_bytes_per_param = 0.5
+                else:  # bf16 or default
+                    weight_bytes_per_param = 2
+
+        model_bytes = total_params * float(weight_bytes_per_param)
+
+        # Optional FP32 master weights (common for mixed precision training)
+        master_weights = bool(_get_prec_value("master_weights", False))
+        master_weights_precision = _get_prec_value("master_weights_precision", "fp32")
+        master_bytes = (
+            total_params * _bytes_for_precision(master_weights_precision)
+            if master_weights
+            else 0
+        )
+
+        # Optimizer states (defaults to FP32 Adam: 2 states)
+        optimizer_state_bytes_per_param = _get_prec_value(
+            "optimizer_state_bytes_per_param"
+        )
+        if optimizer_state_bytes_per_param is None:
+            optimizer_precision = _get_prec_value("optimizer_precision", "fp32")
+            optimizer_states_count = int(
+                _get_prec_value("optimizer_states_count", 2)
+            )
+            optimizer_state_bytes_per_param = optimizer_states_count * _bytes_for_precision(
+                optimizer_precision
+            )
+        optimizer_state_multiplier = float(
+            _get_prec_value("optimizer_state_multiplier", 1.0)
+        )
+        optimizer_bytes = (
+            total_params * float(optimizer_state_bytes_per_param) * optimizer_state_multiplier
+        )
+
+        # Gradients (defaults to FP32)
+        gradient_bytes_per_param = _get_prec_value("gradient_bytes_per_param")
+        if gradient_bytes_per_param is None:
+            gradient_precision = _get_prec_value("gradient_precision", "fp32")
+            gradient_bytes_per_param = _bytes_for_precision(gradient_precision)
+        gradient_bytes = total_params * float(gradient_bytes_per_param)
 
         cpu_memory_gb = 0.0
 
@@ -428,7 +491,9 @@ class TrainingStage:
             #    If multiple nodes, this is sharded across nodes.
             #    We assume "num_gpus" implies logical GPUs in the cluster.
             #    Total system memory required = Total Model State
-            total_system_mem_bytes = model_bytes + optimizer_bytes + gradient_bytes
+            total_system_mem_bytes = (
+                model_bytes + master_bytes + optimizer_bytes + gradient_bytes
+            )
 
             # CPU RAM required per GPU (assuming perfect sharding across available host RAM)
             # In reality, you need enough CPU RAM on the node to hold the shard.
@@ -437,16 +502,22 @@ class TrainingStage:
 
         elif zero_stage == 0:
             # No sharding - full memory on each GPU
-            memory_bytes = model_bytes + optimizer_bytes + gradient_bytes
+            memory_bytes = model_bytes + master_bytes + optimizer_bytes + gradient_bytes
         elif zero_stage == 2:
             # ZeRO-2: Shard optimizer + gradients, replicate model
-            memory_bytes = model_bytes + (optimizer_bytes + gradient_bytes) / num_gpus
+            memory_bytes = (
+                model_bytes + master_bytes + (optimizer_bytes + gradient_bytes) / num_gpus
+            )
         elif zero_stage == 3:
             # ZeRO-3: Shard everything
-            memory_bytes = (model_bytes + optimizer_bytes + gradient_bytes) / num_gpus
+            memory_bytes = (
+                model_bytes + master_bytes + optimizer_bytes + gradient_bytes
+            ) / num_gpus
         else:
             # Default to ZeRO-2
-            memory_bytes = model_bytes + (optimizer_bytes + gradient_bytes) / num_gpus
+            memory_bytes = (
+                model_bytes + master_bytes + (optimizer_bytes + gradient_bytes) / num_gpus
+            )
 
         memory_gb = memory_bytes / (1024**3)
 
@@ -456,6 +527,7 @@ class TrainingStage:
             "zero_stage": zero_stage,
             "quantization": quantization,
             "model_gb": model_bytes / (1024**3),
+            "master_weights_gb": master_bytes / (1024**3),
             "optimizer_gb": optimizer_bytes / (1024**3),
             "gradient_gb": gradient_bytes / (1024**3),
         }
