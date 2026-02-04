@@ -6,6 +6,12 @@
     "quantization": "all",
     "zero_stage": 2,
     "cpu_offload": false,
+    "cpu_offload_config": {
+      "offload_params": true,
+      "offload_optimizer": true,
+      "offload_gradients": true,
+      "gpu_buffer_gb": 4.0
+    },
     "tflops_per_gpu": {
       "bf16": 989.0,
       "fp8": 1979.0,
@@ -103,6 +109,8 @@
           "gradient_accumulation_steps": 1,
           "activation_precision": "bf16",
           "activation_multiplier": 2.0,
+          "activation_checkpointing": false,
+          "activation_checkpointing_factor": 1.0,
           "include_activation_memory": false
         }
       }

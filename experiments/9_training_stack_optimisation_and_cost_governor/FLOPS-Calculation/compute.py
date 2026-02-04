@@ -401,6 +401,7 @@ class TrainingStage:
         zero_stage: int = 2,
         quantization: str = "bf16",
         cpu_offload: bool = False,
+        cpu_offload_config: Optional[dict] = None,
     ) -> dict:
         """
         Estimate memory footprint per GPU for training this stage.
@@ -409,13 +410,14 @@ class TrainingStage:
         - Model weights: Depends on quantization (BF16=2, FP8=1, NVFP4=0.5 bytes/param)
         - FP32 optimizer states (Adam): 8 bytes/param (momentum + variance, always FP32)
         - FP32 gradients: 4 bytes/param (gradient accumulation typically FP32)
-        - Activations are NOT included (highly batch-size dependent)
+        - Activations are NOT included (highly batch-size dependent) unless enabled
+        - Activation checkpointing reduces activation memory when configured
 
         ZeRO Stages:
         - ZeRO-0: No sharding (baseline)
         - ZeRO-2: Shard optimizer states + gradients
         - ZeRO-3: Shard everything (params + optimizer + gradients)
-        - ZeRO-Infinity (cpu_offload=True): Move everything to CPU/NVMe, keep minimal buffer on GPU.
+        - ZeRO-Infinity (cpu_offload=True): Move selected state to CPU/NVMe, keep a GPU buffer.
         """
         params = params or self.calculate_params()
         total_params = params["total_params"]
@@ -502,60 +504,80 @@ class TrainingStage:
             if act_bytes is None:
                 act_prec = training_cfg.get("activation_precision", "bf16")
                 act_bytes = bytes_for_precision(act_prec)
+            checkpoint_factor = training_cfg.get("activation_checkpointing_factor")
+            if checkpoint_factor is None:
+                checkpoint_factor = 0.5 if training_cfg.get("activation_checkpointing") else 1.0
+            checkpoint_factor = float(checkpoint_factor)
+            if checkpoint_factor <= 0:
+                raise ValueError("activation_checkpointing_factor must be > 0.")
             activation_bytes = (
-                micro_batch * seq_len * hidden * layers * activation_multiplier * act_bytes
+                micro_batch
+                * seq_len
+                * hidden
+                * layers
+                * activation_multiplier
+                * act_bytes
+                * checkpoint_factor
             )
 
         cpu_memory_gb = 0.0
 
-        if cpu_offload:
-            # ZeRO-Infinity Logic
-            # 1. GPU Memory: Fixed buffer size (e.g., 2GB) + minimal active layer overhead
-            #    It does NOT scale with model size in the same way.
-            #    We assign a fixed buffer of ~4GB per GPU as a safe "working memory" estimate for large models.
-            memory_bytes = 4 * (1024**3)
-
-            # 2. CPU/NVMe Memory: Holds all Parameters + Optimizer States + Gradients
-            #    If multiple nodes, this is sharded across nodes.
-            #    We assume "num_gpus" implies logical GPUs in the cluster.
-            #    Total system memory required = Total Model State
-            total_system_mem_bytes = (
-                model_bytes + master_bytes + optimizer_bytes + gradient_bytes
-            )
-
-            # CPU RAM required per GPU (assuming perfect sharding across available host RAM)
-            # In reality, you need enough CPU RAM on the node to hold the shard.
-            cpu_memory_bytes = total_system_mem_bytes / num_gpus
-            cpu_memory_gb = cpu_memory_bytes / (1024**3)
-
-        elif zero_stage == 0:
-            # No sharding - full memory on each GPU
-            memory_bytes = (
-                model_bytes
-                + master_bytes
-                + optimizer_bytes
-                + gradient_bytes
-                + activation_bytes
-            )
-        elif zero_stage == 2:
-            # ZeRO-2: Shard optimizer + gradients, replicate model
-            memory_bytes = (
-                model_bytes
-                + master_bytes
-                + (optimizer_bytes + gradient_bytes) / num_gpus
-                + activation_bytes
-            )
+        # Per-GPU bytes for each component under the chosen ZeRO stage
+        if zero_stage == 0:
+            model_gpu_bytes = model_bytes
+            master_gpu_bytes = master_bytes
+            optimizer_gpu_bytes = optimizer_bytes
+            gradient_gpu_bytes = gradient_bytes
         elif zero_stage == 3:
-            # ZeRO-3: Shard everything
-            memory_bytes = (
-                model_bytes + master_bytes + optimizer_bytes + gradient_bytes
-            ) / num_gpus + activation_bytes
+            model_gpu_bytes = model_bytes / num_gpus
+            master_gpu_bytes = master_bytes / num_gpus
+            optimizer_gpu_bytes = optimizer_bytes / num_gpus
+            gradient_gpu_bytes = gradient_bytes / num_gpus
         else:
-            # Default to ZeRO-2
+            # Default to ZeRO-2: shard optimizer + gradients, replicate model
+            model_gpu_bytes = model_bytes
+            master_gpu_bytes = master_bytes
+            optimizer_gpu_bytes = optimizer_bytes / num_gpus
+            gradient_gpu_bytes = gradient_bytes / num_gpus
+
+        if cpu_offload:
+            cpu_offload_cfg = cpu_offload_config or {}
+            offload_params = bool(cpu_offload_cfg.get("offload_params", True))
+            offload_optimizer = bool(cpu_offload_cfg.get("offload_optimizer", True))
+            offload_gradients = bool(cpu_offload_cfg.get("offload_gradients", True))
+            gpu_buffer_gb = float(cpu_offload_cfg.get("gpu_buffer_gb", 4.0))
+            if gpu_buffer_gb <= 0:
+                raise ValueError("cpu_offload_config.gpu_buffer_gb must be > 0.")
+            gpu_buffer_bytes = gpu_buffer_gb * (1024**3)
+
+            offloaded_bytes_total = 0.0
+            if offload_params:
+                offloaded_bytes_total += model_bytes + master_bytes
+                model_gpu_bytes = 0.0
+                master_gpu_bytes = 0.0
+            if offload_optimizer:
+                offloaded_bytes_total += optimizer_bytes
+                optimizer_gpu_bytes = 0.0
+            if offload_gradients:
+                offloaded_bytes_total += gradient_bytes
+                gradient_gpu_bytes = 0.0
+
+            remaining_gpu_bytes = (
+                model_gpu_bytes
+                + master_gpu_bytes
+                + optimizer_gpu_bytes
+                + gradient_gpu_bytes
+            )
+            base_gpu_bytes = max(remaining_gpu_bytes, gpu_buffer_bytes)
+            memory_bytes = base_gpu_bytes + activation_bytes
+            cpu_memory_bytes = offloaded_bytes_total / num_gpus
+            cpu_memory_gb = cpu_memory_bytes / (1024**3)
+        else:
             memory_bytes = (
-                model_bytes
-                + master_bytes
-                + (optimizer_bytes + gradient_bytes) / num_gpus
+                model_gpu_bytes
+                + master_gpu_bytes
+                + optimizer_gpu_bytes
+                + gradient_gpu_bytes
                 + activation_bytes
             )
 
@@ -1189,11 +1211,15 @@ def main() -> None:
         print(
             f"Effective Cluster Performance: {effective_flops_per_sec/1e15:.2f} PFLOPS (after all overheads)"
         )
-        mem_header = "Mem/CPU(GB)" if cpu_offload else "Mem/GPU"
         print(f"{'-'*120}")
-        print(
-            f"{'Stage':<20} | {'Tokens (B)':<10} | {'Total Params':<12} | {'Active Params':<12} | {mem_header:<10} | {'ZFLOPs':<7} | {'Days':<6} | {'Cost ($)':<12}"
-        )
+        if cpu_offload:
+            print(
+                f"{'Stage':<20} | {'Tokens (B)':<10} | {'Total Params':<12} | {'Active Params':<12} | {'Mem/GPU (GB)':<12} | {'Mem/CPU (GB)':<12} | {'ZFLOPs':<7} | {'Days':<6} | {'Cost ($)':<12}"
+            )
+        else:
+            print(
+                f"{'Stage':<20} | {'Tokens (B)':<10} | {'Total Params':<12} | {'Active Params':<12} | {'Mem/GPU (GB)':<12} | {'ZFLOPs':<7} | {'Days':<6} | {'Cost ($)':<12}"
+            )
         print(f"{'-'*120}")
 
         total_flops = 0.0
@@ -1220,31 +1246,44 @@ def main() -> None:
 
             # Calculate memory per GPU (varies by quantization)
             mem_info = stage.calculate_memory_per_gpu(
-                params, num_gpus, zero_stage, precision, cpu_offload
+                params,
+                num_gpus,
+                zero_stage,
+                precision,
+                cpu_offload,
+                hardware.get("cpu_offload_config"),
             )
             mem_per_gpu = mem_info["memory_per_gpu_gb"]
 
             # Warning indicator if memory exceeds H100 80GB
             mem_warn = "⚠️" if mem_per_gpu > 80 else ""
 
-            # Format memory string
-            mem_str = f"{mem_per_gpu:<6.1f}{mem_warn:<2}"
+            # Format memory string(s)
+            mem_str_gpu = f"{mem_per_gpu:<6.1f}{mem_warn:<2}"
             if cpu_offload:
                 cpu_mem_gb = mem_info.get("cpu_memory_per_gpu_gb", 0)
-                mem_str = f"{mem_per_gpu:<4.1f}|{cpu_mem_gb:<4.0f}{mem_warn:<1}"
-
-            print(
-                f"{stage.name:<20} | {stage.total_tokens/1e9:<10.1f} | {params['total_params']/1e9:<5.1f} B       | {params['active_params']/1e9:<5.1f} B       | {mem_str:<10} | {stage_flops/1e21:<7.2f} | {stage_days:<6.2f} | ${stage_cost:,.0f}"
-            )
+                mem_str_cpu = f"{cpu_mem_gb:<6.1f}"
+                print(
+                    f"{stage.name:<20} | {stage.total_tokens/1e9:<10.1f} | {params['total_params']/1e9:<5.1f} B       | {params['active_params']/1e9:<5.1f} B       | {mem_str_gpu:<12} | {mem_str_cpu:<12} | {stage_flops/1e21:<7.2f} | {stage_days:<6.2f} | ${stage_cost:,.0f}"
+                )
+            else:
+                print(
+                    f"{stage.name:<20} | {stage.total_tokens/1e9:<10.1f} | {params['total_params']/1e9:<5.1f} B       | {params['active_params']/1e9:<5.1f} B       | {mem_str_gpu:<12} | {stage_flops/1e21:<7.2f} | {stage_days:<6.2f} | ${stage_cost:,.0f}"
+                )
 
         total_days = total_seconds / (24 * 3600)
         total_hours = total_seconds / 3600
         total_cost = total_hours * num_gpus * price_per_gpu_hour
 
         print(f"{'-'*120}")
-        print(
-            f"{'TOTAL':<20} | {'-':<10} | {'-':<12} | {'-':<12} | {'-':<8} | {total_flops/1e21:<7.2f} | {total_days:<6.2f} | ${total_cost:,.0f}"
-        )
+        if cpu_offload:
+            print(
+                f"{'TOTAL':<20} | {'-':<10} | {'-':<12} | {'-':<12} | {'-':<12} | {'-':<12} | {total_flops/1e21:<7.2f} | {total_days:<6.2f} | ${total_cost:,.0f}"
+            )
+        else:
+            print(
+                f"{'TOTAL':<20} | {'-':<10} | {'-':<12} | {'-':<12} | {'-':<12} | {total_flops/1e21:<7.2f} | {total_days:<6.2f} | ${total_cost:,.0f}"
+            )
         print(f"{'='*120}\n")
 
 
