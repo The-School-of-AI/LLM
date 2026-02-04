@@ -26,10 +26,10 @@ PROFILE_STEPS="10-15"  # 20 steps to capture multiple iterations
 
 # Training hyperparameters (optimized for profiling)
 MAX_STEPS=100
-BATCH_SIZE=2
+BATCH_SIZE=1
 GRADIENT_ACCUMULATION=4
 GRADIENT_CLIP=0          # ⭐ DISABLED - Testing sync impact
-SEQ_LENGTH=256
+SEQ_LENGTH=512
 LEARNING_RATE=3e-4
 EXPERIMENT_NAME="profiling_${PROFILE_NAME}"
 
