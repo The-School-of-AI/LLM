@@ -57,11 +57,8 @@ class TrainingStage:
         attention_cfg = arch.get("attention") or {}
         router_cfg = arch.get("router") or {}
         position_cfg = arch.get("position") or {}
-        position_cfg = arch.get("position") or {}
-        position_cfg = arch.get("position") or {}
         expert_cfg = arch.get("expert") or {}
         head_cfg = arch.get("head") or {}
-        position_cfg = arch.get("position") or {}
 
         vocab = arch.get("vocab_size", 50257)
         hidden = arch.get("hidden_size", 2048)
@@ -589,6 +586,7 @@ class TrainingStage:
 
         attention_cfg = arch.get("attention") or {}
         router_cfg = arch.get("router") or {}
+        position_cfg = arch.get("position") or {}
 
         n_linear = params.get("active_linear_params", params["active_non_embed_params"])
         layers = arch.get("num_layers", arch.get("num_hidden_layers", 24))
