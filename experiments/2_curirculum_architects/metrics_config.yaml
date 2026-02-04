@@ -6,6 +6,12 @@ version: "0.1"
 
 # Metrics are applied in order - later metrics can use results from earlier ones
 metrics:
+  - name: rejection_policy
+    class: RejectionPolicyMetric
+    module: rejection_policy
+    enabled: true
+    level: 0
+
   - name: difficulty
     class: DifficultyMetric
     enabled: true
