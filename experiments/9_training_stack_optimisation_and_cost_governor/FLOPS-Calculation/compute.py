@@ -786,7 +786,9 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
     if not stages:
         return
 
-    mode = str(growth_cfg.get("mode", "paper")).strip().lower()
+    mode = str(growth_cfg.get("mode", "none")).strip().lower()
+    if mode in ("none", "off", "false", "0", ""):
+        return
     if mode != "paper":
         raise ValueError("Only growth mode 'paper' is supported in this script.")
 
@@ -886,7 +888,7 @@ def main() -> None:
         print("Please ensure flops_config_growth.json contains all necessary fields.")
         sys.exit(1)
 
-    growth_cfg = config.get("growth", {"mode": "paper"})
+    growth_cfg = config.get("growth", {"mode": "none"})
     apply_growth_allocation(stages, growth_cfg)
 
     # Effective MFU after all overheads
