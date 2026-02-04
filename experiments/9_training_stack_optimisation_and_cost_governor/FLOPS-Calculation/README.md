@@ -32,6 +32,27 @@ Run any preset with:
 python3 compute.py --config configs/1b_presets/1b_deepseek_gsa.json
 ```
 
+#### 1B Presets (when to use which)
+| File | Use when you want... |
+|------|-----------------------|
+| `1b_base.json` | Baseline 1B with GQA + YaRN (default). |
+| `1b_deepseek_gsa.json` | DeepSeek GSA (recommended sparse attention). |
+| `1b_gsa.json` | Original GSA (non‑DeepSeek) variant. |
+| `1b_deepseek_mla.json` | DeepSeek MLA (KV compression). |
+| `1b_mhc.json` | Manifold hyper‑connections (mHC) variant. |
+| `1b_yarn.json` | Extended context (32K) using YaRN. |
+| `1b_mtp.json` | Multi‑token prediction (extra LM heads). |
+| `1b_full.json` | All features enabled (GSA + MHC + MTP + 32K). |
+
+#### Team‑8 MoE configs
+| File | Use when you want... |
+|------|-----------------------|
+| `stage1_1b_dense.json` | Stage‑1 only (dense). |
+| `stage2_3b_moe.json` | Stage‑2 only (3B MoE). |
+| `stage3_8b_moe.json` | Stage‑3 only (8B MoE). |
+| `stage4_70b_moe.json` | Stage‑4 only (70B MoE). |
+| `moe_team8_all_stages.json` | Combined 1B→70B plan (all stages). |
+
 ### Config Formats and Precedence
 The calculator accepts **two shapes**. You can use either in `architecture`:
 
