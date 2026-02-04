@@ -1,20 +1,16 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 #######################################
 # AWS CloudWatch CPU Alerts to Telegram
 # Idempotent - safe to run multiple times
 # Only creates alarms for new instances
+# Auto-creates alarms on new EC2 launches via EventBridge
 #######################################
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_info() { echo "[INFO] $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_error() { echo "[ERROR] $1"; }
 
 # Default values
 AWS_REGION="${AWS_REGION:-us-east-1}"
@@ -24,6 +20,8 @@ PERIOD_SECONDS="${PERIOD_SECONDS:-300}"
 SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-idle-alert-topic}"
 LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-cpu-idle-alert-forwarder}"
 LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-cpu-alert-lambda-execution-role}"
+EVENTBRIDGE_LAMBDA_NAME="${EVENTBRIDGE_LAMBDA_NAME:-ec2-launch-alarm-creator}"
+EVENTBRIDGE_RULE_NAME="${EVENTBRIDGE_RULE_NAME:-ec2-launch-cpu-alarm-rule}"
 
 # Tags
 TAG_TEAM="Team15"
@@ -31,13 +29,13 @@ TAG_TASK_ID="Issue339"
 TAG_WORKLOAD_TYPE="Monitoring"
 
 # Parse arguments
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case $1 in
     --telegram-token) TELEGRAM_BOT_TOKEN="$2"; shift 2 ;;
     --telegram-chat-id) TELEGRAM_CHAT_ID="$2"; shift 2 ;;
     --region) AWS_REGION="$2"; shift 2 ;;
     --cpu-threshold) CPU_THRESHOLD="$2"; shift 2 ;;
-    --env-file) source "$2"; shift 2 ;;
+    --env-file) . "$2"; shift 2 ;;
     --help)
       echo "Usage: $0 --telegram-token TOKEN --telegram-chat-id CHAT_ID [options]"
       echo ""
@@ -56,8 +54,15 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required parameters
-[[ -z "${TELEGRAM_BOT_TOKEN:-}" ]] && { log_error "TELEGRAM_BOT_TOKEN is required"; exit 1; }
-[[ -z "${TELEGRAM_CHAT_ID:-}" ]] && { log_error "TELEGRAM_CHAT_ID is required"; exit 1; }
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  log_error "TELEGRAM_BOT_TOKEN is required"
+  exit 1
+fi
+
+if [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+  log_error "TELEGRAM_CHAT_ID is required"
+  exit 1
+fi
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 log_info "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
@@ -67,7 +72,7 @@ log_info "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 #######################################
 log_info "Checking IAM role..."
 
-if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" &>/dev/null; then
+if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" >/dev/null 2>&1; then
   log_info "Creating IAM role..."
   aws iam create-role \
     --role-name "${LAMBDA_ROLE_NAME}" \
@@ -86,16 +91,68 @@ if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" &>/dev/null; then
     --role-name "${LAMBDA_ROLE_NAME}" \
     --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 
+  # Add inline policy for CloudWatch alarms and EC2 describe
+  aws iam put-role-policy \
+    --role-name "${LAMBDA_ROLE_NAME}" \
+    --policy-name "AlarmCreationPolicy" \
+    --policy-document '{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "cloudwatch:PutMetricAlarm",
+            "cloudwatch:DescribeAlarms",
+            "cloudwatch:TagResource"
+          ],
+          "Resource": "*"
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "ec2:DescribeInstances"
+          ],
+          "Resource": "*"
+        }
+      ]
+    }'
+
   log_info "Waiting for role to propagate..."
   sleep 10
+else
+  # Ensure inline policy exists for existing role
+  aws iam put-role-policy \
+    --role-name "${LAMBDA_ROLE_NAME}" \
+    --policy-name "AlarmCreationPolicy" \
+    --policy-document '{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "cloudwatch:PutMetricAlarm",
+            "cloudwatch:DescribeAlarms",
+            "cloudwatch:TagResource"
+          ],
+          "Resource": "*"
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "ec2:DescribeInstances"
+          ],
+          "Resource": "*"
+        }
+      ]
+    }' 2>/dev/null || true
 fi
 
 LAMBDA_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${LAMBDA_ROLE_NAME}"
 
 #######################################
-# Step 2: Create/Update Lambda
+# Step 2: Create/Update Telegram Forwarder Lambda
 #######################################
-log_info "Checking Lambda function..."
+log_info "Checking Telegram forwarder Lambda..."
 
 TEMP_DIR=$(mktemp -d)
 cat > "${TEMP_DIR}/lambda_function.py" << 'PYTHON_EOF'
@@ -192,8 +249,8 @@ PYTHON_EOF
 
 cd "${TEMP_DIR}" && zip -q lambda.zip lambda_function.py
 
-if aws lambda get-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "${AWS_REGION}" &>/dev/null; then
-  log_info "Updating Lambda..."
+if aws lambda get-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+  log_info "Updating Telegram forwarder Lambda..."
   aws lambda update-function-code \
     --function-name "${LAMBDA_FUNCTION_NAME}" \
     --zip-file "fileb://lambda.zip" \
@@ -205,7 +262,7 @@ if aws lambda get-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "$
     --environment "Variables={TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}}" \
     --region "${AWS_REGION}" > /dev/null
 else
-  log_info "Creating Lambda..."
+  log_info "Creating Telegram forwarder Lambda..."
   aws lambda create-function \
     --function-name "${LAMBDA_FUNCTION_NAME}" \
     --runtime "python3.12" \
@@ -221,11 +278,11 @@ else
   aws lambda wait function-active --function-name "${LAMBDA_FUNCTION_NAME}" --region "${AWS_REGION}"
 fi
 
-cd - > /dev/null && rm -rf "${TEMP_DIR}"
+cd - > /dev/null
 LAMBDA_ARN="arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${LAMBDA_FUNCTION_NAME}"
 
 #######################################
-# Step 3: Create SNS Topic (if not exists)
+# Step 3: Create SNS Topic
 #######################################
 log_info "Checking SNS topic..."
 
@@ -236,7 +293,7 @@ SNS_TOPIC_ARN=$(aws sns create-topic \
   --query 'TopicArn' \
   --output text)
 
-# Add Lambda permission (ignore if exists)
+# Add Lambda permission for SNS
 aws lambda add-permission \
   --function-name "${LAMBDA_FUNCTION_NAME}" \
   --statement-id "sns-invoke" \
@@ -245,7 +302,7 @@ aws lambda add-permission \
   --source-arn "${SNS_TOPIC_ARN}" \
   --region "${AWS_REGION}" 2>/dev/null || true
 
-# Subscribe Lambda (idempotent)
+# Subscribe Lambda to SNS
 aws sns subscribe \
   --topic-arn "${SNS_TOPIC_ARN}" \
   --protocol "lambda" \
@@ -253,18 +310,201 @@ aws sns subscribe \
   --region "${AWS_REGION}" > /dev/null
 
 #######################################
-# Step 4: Create alarms for NEW instances only
+# Step 4: Create EventBridge Lambda (auto-alarm on EC2 launch)
 #######################################
-log_info "Checking for new instances..."
+log_info "Checking EventBridge Lambda..."
 
-# Get existing alarm instance IDs
+cat > "${TEMP_DIR}/eventbridge_lambda.py" << PYTHON_EOF
+import json
+import os
+import boto3
+import urllib.request
+import urllib.parse
+from datetime import datetime, timedelta
+
+cloudwatch = boto3.client('cloudwatch')
+ec2 = boto3.client('ec2')
+
+# Configuration from environment
+CPU_THRESHOLD = int(os.environ.get('CPU_THRESHOLD', '10'))
+EVALUATION_PERIODS = int(os.environ.get('EVALUATION_PERIODS', '3'))
+PERIOD_SECONDS = int(os.environ.get('PERIOD_SECONDS', '300'))
+SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+AWS_ACCOUNT_ID = os.environ.get('AWS_ACCOUNT_ID', 'Unknown')
+TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
+TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
+
+TAG_TEAM = "${TAG_TEAM}"
+TAG_TASK_ID = "${TAG_TASK_ID}"
+TAG_WORKLOAD_TYPE = "${TAG_WORKLOAD_TYPE}"
+
+def lambda_handler(event, context):
+    instance_id = event['detail']['instance-id']
+    region = event['region']
+    
+    # Get instance name
+    instance_name = get_instance_name(instance_id)
+    alarm_name = "{}-cpu-idle".format(instance_name)
+    
+    # Check if alarm already exists
+    existing = cloudwatch.describe_alarms(AlarmNames=[alarm_name])
+    if existing['MetricAlarms']:
+        return {'statusCode': 200, 'body': 'Alarm already exists'}
+    
+    # Create alarm
+    cloudwatch.put_metric_alarm(
+        AlarmName=alarm_name,
+        AlarmDescription="CPU below {}% for {}".format(CPU_THRESHOLD, instance_name),
+        MetricName='CPUUtilization',
+        Namespace='AWS/EC2',
+        Statistic='Average',
+        Period=PERIOD_SECONDS,
+        Threshold=CPU_THRESHOLD,
+        ComparisonOperator='LessThanThreshold',
+        EvaluationPeriods=EVALUATION_PERIODS,
+        Dimensions=[{'Name': 'InstanceId', 'Value': instance_id}],
+        AlarmActions=[SNS_TOPIC_ARN, "arn:aws:automate:{}:ec2:stop".format(region)],
+        OKActions=[SNS_TOPIC_ARN],
+        TreatMissingData='notBreaching',
+        Tags=[
+            {'Key': 'Team', 'Value': TAG_TEAM},
+            {'Key': 'TaskId', 'Value': TAG_TASK_ID},
+            {'Key': 'WorkloadType', 'Value': TAG_WORKLOAD_TYPE}
+        ]
+    )
+    
+    # Notify Telegram
+    notify_telegram(instance_id, instance_name, alarm_name, region)
+    
+    return {'statusCode': 200, 'body': 'Alarm created: {}'.format(alarm_name)}
+
+def get_instance_name(instance_id):
+    try:
+        response = ec2.describe_instances(InstanceIds=[instance_id])
+        tags = response['Reservations'][0]['Instances'][0].get('Tags', [])
+        for tag in tags:
+            if tag['Key'] == 'Name':
+                return tag['Value']
+    except Exception:
+        pass
+    return instance_id
+
+def notify_telegram(instance_id, instance_name, alarm_name, region):
+    ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    time_str = ist_time.strftime('%d-%b-%Y %I:%M:%S %p IST')
+    
+    lines = [
+        "🆕 *Alarm Auto-Created*",
+        "",
+        "*Account:* {}".format(AWS_ACCOUNT_ID),
+        "*Instance:* {} ({})".format(instance_name, instance_id),
+        "*Alarm:* {}".format(alarm_name),
+        "*Region:* {}".format(region),
+        "*Threshold:* CPU < {}%".format(CPU_THRESHOLD),
+        "",
+        "*Time:* {}".format(time_str)
+    ]
+    text = "\n".join(lines)
+    
+    url = "https://api.telegram.org/bot{}/sendMessage".format(TELEGRAM_BOT_TOKEN)
+    data = urllib.parse.urlencode({
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': text,
+        'parse_mode': 'Markdown'
+    }).encode()
+    req = urllib.request.Request(url, data=data)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            r.read()
+    except Exception:
+        pass
+PYTHON_EOF
+
+cd "${TEMP_DIR}" && zip -q eventbridge_lambda.zip eventbridge_lambda.py
+
+if aws lambda get-function --function-name "${EVENTBRIDGE_LAMBDA_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+  log_info "Updating EventBridge Lambda..."
+  aws lambda update-function-code \
+    --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
+    --zip-file "fileb://eventbridge_lambda.zip" \
+    --region "${AWS_REGION}" > /dev/null
+
+  sleep 5
+  aws lambda update-function-configuration \
+    --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
+    --environment "Variables={CPU_THRESHOLD=${CPU_THRESHOLD},EVALUATION_PERIODS=${EVALUATION_PERIODS},PERIOD_SECONDS=${PERIOD_SECONDS},SNS_TOPIC_ARN=${SNS_TOPIC_ARN},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}}" \
+    --region "${AWS_REGION}" > /dev/null
+else
+  log_info "Creating EventBridge Lambda..."
+  aws lambda create-function \
+    --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
+    --runtime "python3.12" \
+    --role "${LAMBDA_ROLE_ARN}" \
+    --handler "eventbridge_lambda.lambda_handler" \
+    --zip-file "fileb://eventbridge_lambda.zip" \
+    --timeout 30 \
+    --memory-size 128 \
+    --environment "Variables={CPU_THRESHOLD=${CPU_THRESHOLD},EVALUATION_PERIODS=${EVALUATION_PERIODS},PERIOD_SECONDS=${PERIOD_SECONDS},SNS_TOPIC_ARN=${SNS_TOPIC_ARN},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}}" \
+    --tags Team=${TAG_TEAM},TaskId=${TAG_TASK_ID},WorkloadType=${TAG_WORKLOAD_TYPE} \
+    --region "${AWS_REGION}" > /dev/null
+
+  aws lambda wait function-active --function-name "${EVENTBRIDGE_LAMBDA_NAME}" --region "${AWS_REGION}"
+fi
+
+EVENTBRIDGE_LAMBDA_ARN="arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${EVENTBRIDGE_LAMBDA_NAME}"
+
+#######################################
+# Step 5: Create EventBridge Rule
+#######################################
+log_info "Checking EventBridge rule..."
+
+# Create rule for EC2 running state
+aws events put-rule \
+  --name "${EVENTBRIDGE_RULE_NAME}" \
+  --event-pattern '{
+    "source": ["aws.ec2"],
+    "detail-type": ["EC2 Instance State-change Notification"],
+    "detail": {
+      "state": ["running"]
+    }
+  }' \
+  --state ENABLED \
+  --description "Triggers alarm creation when EC2 instance starts" \
+  --region "${AWS_REGION}" > /dev/null
+
+# Tag the rule
+aws events tag-resource \
+  --resource-arn "arn:aws:events:${AWS_REGION}:${AWS_ACCOUNT_ID}:rule/${EVENTBRIDGE_RULE_NAME}" \
+  --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
+  --region "${AWS_REGION}" 2>/dev/null || true
+
+# Add Lambda permission for EventBridge
+aws lambda add-permission \
+  --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
+  --statement-id "eventbridge-invoke" \
+  --action "lambda:InvokeFunction" \
+  --principal "events.amazonaws.com" \
+  --source-arn "arn:aws:events:${AWS_REGION}:${AWS_ACCOUNT_ID}:rule/${EVENTBRIDGE_RULE_NAME}" \
+  --region "${AWS_REGION}" 2>/dev/null || true
+
+# Add Lambda as target
+aws events put-targets \
+  --rule "${EVENTBRIDGE_RULE_NAME}" \
+  --targets "Id=1,Arn=${EVENTBRIDGE_LAMBDA_ARN}" \
+  --region "${AWS_REGION}" > /dev/null
+
+cd - > /dev/null && rm -rf "${TEMP_DIR}"
+
+#######################################
+# Step 6: Create alarms for existing instances
+#######################################
+log_info "Checking for existing instances..."
+
 EXISTING_ALARMS=$(aws cloudwatch describe-alarms \
-  --alarm-name-prefix "cpu-idle-" \
-  --query "MetricAlarms[].Dimensions[?Name=='InstanceId'].Value | []" \
+  --query "MetricAlarms[?ends_with(AlarmName, '-cpu-idle')].Dimensions[?Name=='InstanceId'].Value | []" \
   --output text \
   --region "${AWS_REGION}" 2>/dev/null | tr '\t' '\n' | sort -u)
 
-# Get running instances
 RUNNING_INSTANCES=$(aws ec2 describe-instances \
   --filters "Name=instance-state-name,Values=running" \
   --query 'Reservations[].Instances[].[InstanceId,Tags[?Key==`Name`].Value | [0]]' \
@@ -274,15 +514,16 @@ RUNNING_INSTANCES=$(aws ec2 describe-instances \
 NEW_COUNT=0
 SKIP_COUNT=0
 
-if [[ -z "${RUNNING_INSTANCES}" ]]; then
+if [ -z "${RUNNING_INSTANCES}" ]; then
   log_warn "No running instances found"
 else
-  while IFS=$'\t' read -r instance_id instance_name; do
-    instance_name="${instance_name:-unnamed}"
+  echo "${RUNNING_INSTANCES}" | while IFS='	' read -r instance_id instance_name; do
+    if [ -z "${instance_name}" ] || [ "${instance_name}" = "None" ]; then
+      instance_name="${instance_id}"
+    fi
 
-    # Check if alarm already exists
     if echo "${EXISTING_ALARMS}" | grep -q "^${instance_id}$"; then
-      ((SKIP_COUNT++))
+      SKIP_COUNT=$((SKIP_COUNT + 1))
       continue
     fi
 
@@ -306,8 +547,8 @@ else
       --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
       --region "${AWS_REGION}"
 
-    ((NEW_COUNT++))
-  done <<< "${RUNNING_INSTANCES}"
+    NEW_COUNT=$((NEW_COUNT + 1))
+  done
 fi
 
 #######################################
@@ -315,10 +556,11 @@ fi
 #######################################
 echo ""
 echo "=========================================="
-echo -e "${GREEN}Complete${NC}"
+echo "Complete"
 echo "=========================================="
 echo "Account:            ${AWS_ACCOUNT_ID}"
 echo "Region:             ${AWS_REGION}"
-echo "New alarms created: ${NEW_COUNT}"
-echo "Existing (skipped): ${SKIP_COUNT}"
+echo ""
+echo "EventBridge rule:   ${EVENTBRIDGE_RULE_NAME}"
+echo "  → New EC2 instances will automatically get CPU idle alarms"
 echo ""

@@ -1,13 +1,41 @@
-# AWS CloudWatch CPU Alerts to Telegram
+# AWS CloudWatch CPU Idle Alerts to Telegram
 
-Monitors EC2 idle CPU and sends alerts to Telegram. Idempotent—run anytime to add alarms for new instances only.
+Monitors EC2 idle CPU and sends alerts to Telegram. Automatically creates alarms for new EC2 instances via EventBridge.
+
+## Architecture
+
+```
+                                    ┌─────────────────────────────────────────┐
+                                    │           On EC2 Launch                 │
+EC2 Instance Starts ──► EventBridge ──► Lambda ──► Creates CloudWatch Alarm   │
+                                    │              + Notifies Telegram        │
+                                    └─────────────────────────────────────────┘
+
+                                    ┌─────────────────────────────────────────┐
+                                    │           On CPU Idle                   │
+CloudWatch Alarm ──► SNS ──► Lambda ──► Telegram Alert                        │
+       │                            │                                         │
+       └──► EC2 Stop Action         │                                         │
+                                    └─────────────────────────────────────────┘
+```
+
+## What Gets Created
+
+| Resource | Name | Purpose |
+|----------|------|---------|
+| IAM Role | telegram-cpu-alert-lambda-execution-role | Lambda execution |
+| Lambda | telegram-cpu-idle-alert-forwarder | Forwards alarms to Telegram |
+| Lambda | ec2-launch-alarm-creator | Auto-creates alarms on EC2 launch |
+| SNS Topic | telegram-cpu-idle-alert-topic | Bridges CloudWatch to Lambda |
+| EventBridge Rule | ec2-launch-cpu-alarm-rule | Triggers on EC2 start |
+| CloudWatch Alarms | {instance-name}-cpu-idle | One per EC2 instance |
 
 ## Files
 
 ```
 setup.sh          # Deploy to single account
 deploy-all.sh     # Deploy to multiple accounts
-teardown.sh       # Remove all resources
+teardown.sh       # Remove all resources (supports --all)
 accounts.txt      # List of AWS profiles
 iam-policy.json   # IAM policy for setup user
 ```
@@ -31,12 +59,12 @@ Attach `iam-policy.json` to IAM users/roles that will run the setup scripts.
 chmod +x setup.sh
 
 ./setup.sh \
-  --telegram-token "123456789:ABCdef..." \
-  --telegram-chat-id "-1001234567890" \
-  --region "ap-south-1"
+  --telegram-token 123456789:ABCdef... \
+  --telegram-chat-id -1001234567890 \
+  --region ap-south-1
 ```
 
-Run again after launching new instances—it skips existing alarms.
+After running once, new EC2 instances automatically get alarms via EventBridge.
 
 ## Multiple Accounts
 
@@ -51,9 +79,9 @@ Run again after launching new instances—it skips existing alarms.
    ```bash
    chmod +x deploy-all.sh
 
-   export TELEGRAM_BOT_TOKEN="123456789:ABCdef..."
-   export TELEGRAM_CHAT_ID="-1001234567890"
-   export AWS_REGION="ap-south-1"
+   export TELEGRAM_BOT_TOKEN=123456789:ABCdef...
+   export TELEGRAM_CHAT_ID=-1001234567890
+   export AWS_REGION=ap-south-1
 
    ./deploy-all.sh
    ```
@@ -67,13 +95,14 @@ Run again after launching new instances—it skips existing alarms.
 | `--region` | us-east-1 | AWS region |
 | `--cpu-threshold` | 10 | Alert when CPU < this % |
 
-## Alert Format
+## Alert Messages
 
+**When alarm triggers (CPU idle):**
 ```
-🚨 CloudWatch Alarm
+🚨 CPU Idle Alert
 
 Account: 123456789012
-Alarm: cpu-idle-i-0abc123
+Alarm: my-server-cpu-idle
 Status: ALARM
 Region: ap-south-1
 
@@ -86,14 +115,34 @@ Reason: Threshold crossed...
 Time: 03-Feb-2026 09:30:45 PM IST
 ```
 
+**When new EC2 launches:**
+```
+🆕 Alarm Auto-Created
+
+Account: 123456789012
+Instance: my-server (i-0abc123)
+Alarm: my-server-cpu-idle
+Region: ap-south-1
+Threshold: CPU < 10%
+
+Time: 03-Feb-2026 09:30:45 PM IST
+```
+
 ## Teardown
 
 ```bash
 # Single account
 ./teardown.sh
 
-# Specific account
-AWS_PROFILE=production ./teardown.sh
+# All accounts
+./teardown.sh --all
 ```
-## References
-[How to get Telegram Bot Chat ID](https://gist.github.com/nafiesl/4ad622f344cd1dc3bb1ecbe468ff9f8a)
+
+## Tags
+
+All resources are tagged with:
+```
+Team = Team15
+TaskId = Issue339
+WorkloadType = Monitoring
+```

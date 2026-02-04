@@ -10,6 +10,8 @@
         "iam:GetRole",
         "iam:AttachRolePolicy",
         "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
         "iam:PassRole",
         "iam:TagRole"
       ],
@@ -27,7 +29,10 @@
         "lambda:AddPermission",
         "lambda:TagResource"
       ],
-      "Resource": "arn:aws:lambda:*:*:function:telegram-*"
+      "Resource": [
+        "arn:aws:lambda:*:*:function:telegram-*",
+        "arn:aws:lambda:*:*:function:ec2-launch-*"
+      ]
     },
     {
       "Sid": "SNS",
@@ -51,6 +56,19 @@
         "cloudwatch:TagResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "EventBridge",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutRule",
+        "events:DeleteRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:DescribeRule",
+        "events:TagResource"
+      ],
+      "Resource": "arn:aws:events:*:*:rule/ec2-launch-*"
     },
     {
       "Sid": "EC2",
