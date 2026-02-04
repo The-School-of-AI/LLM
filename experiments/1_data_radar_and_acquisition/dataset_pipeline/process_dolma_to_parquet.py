@@ -3,7 +3,7 @@ import argparse
 import os
 import glob
 
-def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
+def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7", source=None):
     """
     Processes local Dolma .json.gz files into the specified Parquet schema.
     """
@@ -49,6 +49,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
         # 1. read_json_auto handles decompression and JSON parsing
         # 2. sha256() computes the required content hash
         # 3. CAST(metadata AS VARCHAR) ensures the JSON object becomes a string
+        source_expr = "source" if source is None else f"COALESCE(source, '{source}')"
         query = f"""
             COPY (
                 SELECT 
@@ -56,7 +57,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
                     sha256(text) AS hash,
                     'dolma' AS dataset,
                     '{domain}' AS domain,
-                    source,
+                    {source_expr} AS source,
                     text,
                     'en' AS language,
                     CAST(metadata AS VARCHAR) AS metadata,
@@ -84,6 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True, help="Output directory for Parquet files")
     parser.add_argument("--domain", required=True, help="Domain tag (e.g. 'web', 'code', 'math')")
     parser.add_argument("--version", default="1.7", help="Dataset version tag")
+    parser.add_argument("--source", help="Source tag to use if not present in the data (e.g. 'books', 'web')")
 
     args = parser.parse_args()
 
@@ -91,5 +93,6 @@ if __name__ == "__main__":
         input_glob=args.input,
         output_dir=args.output,
         domain=args.domain,
-        version=args.version
+        version=args.version,
+        source=args.source
     )
