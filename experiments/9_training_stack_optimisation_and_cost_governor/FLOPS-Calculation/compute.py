@@ -6,6 +6,24 @@ import sys
 from typing import Optional
 
 
+def bytes_for_precision(precision: str) -> float:
+    prec = str(precision).strip().lower()
+    mapping = {
+        "fp32": 4,
+        "f32": 4,
+        "bf16": 2,
+        "fp16": 2,
+        "f16": 2,
+        "fp8": 1,
+        "int8": 1,
+        "i8": 1,
+        "nvfp4": 0.5,
+        "int4": 0.5,
+        "i4": 0.5,
+    }
+    return mapping.get(prec, 4)
+
+
 @dataclasses.dataclass
 class TrainingStage:
     name: str
@@ -404,28 +422,12 @@ class TrainingStage:
         total_params = params["total_params"]
         arch = self.architecture
         precision_cfg = arch.get("precision") or {}
+        training_cfg = arch.get("training") or {}
 
         def _get_prec_value(key: str, default=None):
             if key in arch:
                 return arch.get(key)
             return precision_cfg.get(key, default)
-
-        def _bytes_for_precision(precision: str) -> float:
-            prec = str(precision).strip().lower()
-            mapping = {
-                "fp32": 4,
-                "f32": 4,
-                "bf16": 2,
-                "fp16": 2,
-                "f16": 2,
-                "fp8": 1,
-                "int8": 1,
-                "i8": 1,
-                "nvfp4": 0.5,
-                "int4": 0.5,
-                "i4": 0.5,
-            }
-            return mapping.get(prec, 4)
 
         # Model weights precision (defaults to quantization selection)
         weight_bytes_per_param = _get_prec_value("weight_bytes_per_param")
@@ -434,7 +436,7 @@ class TrainingStage:
             if weight_precision:
                 wp = str(weight_precision).strip().lower()
                 if wp not in ("auto", "default", ""):
-                    weight_bytes_per_param = _bytes_for_precision(weight_precision)
+                    weight_bytes_per_param = bytes_for_precision(weight_precision)
             if weight_bytes_per_param is None:
                 quantization = str(quantization).lower()
                 if quantization == "fp8":
@@ -450,7 +452,7 @@ class TrainingStage:
         master_weights = bool(_get_prec_value("master_weights", False))
         master_weights_precision = _get_prec_value("master_weights_precision", "fp32")
         master_bytes = (
-            total_params * _bytes_for_precision(master_weights_precision)
+            total_params * bytes_for_precision(master_weights_precision)
             if master_weights
             else 0
         )
@@ -464,7 +466,7 @@ class TrainingStage:
             optimizer_states_count = int(
                 _get_prec_value("optimizer_states_count", 2)
             )
-            optimizer_state_bytes_per_param = optimizer_states_count * _bytes_for_precision(
+            optimizer_state_bytes_per_param = optimizer_states_count * bytes_for_precision(
                 optimizer_precision
             )
         optimizer_state_multiplier = float(
@@ -478,8 +480,32 @@ class TrainingStage:
         gradient_bytes_per_param = _get_prec_value("gradient_bytes_per_param")
         if gradient_bytes_per_param is None:
             gradient_precision = _get_prec_value("gradient_precision", "fp32")
-            gradient_bytes_per_param = _bytes_for_precision(gradient_precision)
+            gradient_bytes_per_param = bytes_for_precision(gradient_precision)
         gradient_bytes = total_params * float(gradient_bytes_per_param)
+
+        # Activation memory (optional, depends on batch size)
+        include_activation_memory = bool(
+            training_cfg.get("include_activation_memory", False)
+        )
+        activation_bytes = 0.0
+        if include_activation_memory:
+            micro_batch = float(training_cfg.get("micro_batch_size", 1))
+            seq_len = float(
+                training_cfg.get(
+                    "seq_length",
+                    arch.get("sequence_length", arch.get("max_position_embeddings", 4096)),
+                )
+            )
+            hidden = float(arch.get("hidden_size", 2048))
+            layers = float(arch.get("num_layers", arch.get("num_hidden_layers", 24)))
+            activation_multiplier = float(training_cfg.get("activation_multiplier", 2.0))
+            act_bytes = training_cfg.get("activation_bytes_per_element")
+            if act_bytes is None:
+                act_prec = training_cfg.get("activation_precision", "bf16")
+                act_bytes = bytes_for_precision(act_prec)
+            activation_bytes = (
+                micro_batch * seq_len * hidden * layers * activation_multiplier * act_bytes
+            )
 
         cpu_memory_gb = 0.0
 
@@ -505,21 +531,33 @@ class TrainingStage:
 
         elif zero_stage == 0:
             # No sharding - full memory on each GPU
-            memory_bytes = model_bytes + master_bytes + optimizer_bytes + gradient_bytes
+            memory_bytes = (
+                model_bytes
+                + master_bytes
+                + optimizer_bytes
+                + gradient_bytes
+                + activation_bytes
+            )
         elif zero_stage == 2:
             # ZeRO-2: Shard optimizer + gradients, replicate model
             memory_bytes = (
-                model_bytes + master_bytes + (optimizer_bytes + gradient_bytes) / num_gpus
+                model_bytes
+                + master_bytes
+                + (optimizer_bytes + gradient_bytes) / num_gpus
+                + activation_bytes
             )
         elif zero_stage == 3:
             # ZeRO-3: Shard everything
             memory_bytes = (
                 model_bytes + master_bytes + optimizer_bytes + gradient_bytes
-            ) / num_gpus
+            ) / num_gpus + activation_bytes
         else:
             # Default to ZeRO-2
             memory_bytes = (
-                model_bytes + master_bytes + (optimizer_bytes + gradient_bytes) / num_gpus
+                model_bytes
+                + master_bytes
+                + (optimizer_bytes + gradient_bytes) / num_gpus
+                + activation_bytes
             )
 
         memory_gb = memory_bytes / (1024**3)
@@ -533,6 +571,7 @@ class TrainingStage:
             "master_weights_gb": master_bytes / (1024**3),
             "optimizer_gb": optimizer_bytes / (1024**3),
             "gradient_gb": gradient_bytes / (1024**3),
+            "activation_gb": activation_bytes / (1024**3),
         }
 
     def flops_per_token(self, params: Optional[dict] = None) -> float:
@@ -915,6 +954,139 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
             remaining_flops = 0
 
 
+def estimate_communication_time(
+    stage: TrainingStage,
+    params: dict,
+    hardware: dict,
+    quantization: str,
+    num_gpus: int,
+    cpu_offload: bool,
+) -> dict:
+    arch = stage.architecture
+    training_cfg = arch.get("training") or {}
+    precision_cfg = arch.get("precision") or {}
+    comm_cfg = hardware.get("communication", {}) or {}
+    parallel_cfg = hardware.get("parallelism", {}) or {}
+
+    micro_batch = float(training_cfg.get("micro_batch_size", 1))
+    grad_accum = float(training_cfg.get("gradient_accumulation_steps", 1))
+    seq_len = float(
+        training_cfg.get(
+            "seq_length",
+            arch.get("sequence_length", arch.get("max_position_embeddings", 4096)),
+        )
+    )
+
+    tp = int(parallel_cfg.get("tensor_parallel_size", parallel_cfg.get("tp", 1)))
+    pp = int(parallel_cfg.get("pipeline_parallel_size", parallel_cfg.get("pp", 1)))
+    ep = int(parallel_cfg.get("expert_parallel_size", parallel_cfg.get("ep", 1)))
+    dp = parallel_cfg.get("data_parallel_size")
+    if dp is None:
+        denom = max(1, tp * pp * ep)
+        dp = max(1, int(num_gpus // denom))
+
+    if micro_batch <= 0 or seq_len <= 0 or dp <= 0:
+        return {"comm_time_s": 0.0}
+
+    tokens_per_micro_step_per_gpu = micro_batch * seq_len
+    micro_steps = stage.total_tokens / (tokens_per_micro_step_per_gpu * dp)
+    optimizer_steps = micro_steps / max(1.0, grad_accum)
+
+    # Gradient bytes per param
+    grad_bytes = precision_cfg.get("gradient_bytes_per_param")
+    if grad_bytes is None:
+        grad_precision = precision_cfg.get("gradient_precision", "fp32")
+        grad_bytes = bytes_for_precision(grad_precision)
+    gradient_bytes_total = params["total_params"] * float(grad_bytes)
+
+    # DP communication (approximate all-reduce)
+    dp_comm_multiplier = float(comm_cfg.get("dp_comm_multiplier", 1.0))
+    dp_comm_bytes_per_step = 0.0
+    if dp > 1:
+        dp_comm_bytes_per_step = (
+            gradient_bytes_total * (2 * (dp - 1) / dp) * dp_comm_multiplier
+        )
+    dp_bandwidth = comm_cfg.get("dp_bandwidth_gbps")
+    dp_latency = float(comm_cfg.get("dp_latency_ms", 0.0)) / 1000.0
+    dp_comm_time = 0.0
+    if dp_comm_bytes_per_step > 0 and dp_bandwidth:
+        dp_comm_time = optimizer_steps * (
+            dp_comm_bytes_per_step / (float(dp_bandwidth) * 1e9) + dp_latency
+        )
+
+    # EP communication (approximate dispatch + combine)
+    ep_comm_multiplier = float(comm_cfg.get("ep_comm_multiplier", 1.0))
+    top_k = arch.get("top_k_experts", arch.get("top_k", 1))
+    hidden = float(arch.get("hidden_size", 2048))
+    act_bytes = training_cfg.get("activation_bytes_per_element")
+    if act_bytes is None:
+        act_prec = training_cfg.get(
+            "activation_precision", precision_cfg.get("weight_precision", "bf16")
+        )
+        act_bytes = bytes_for_precision(act_prec)
+    ep_comm_bytes_per_micro = 0.0
+    if ep > 1 and top_k > 0:
+        ep_fraction = (ep - 1) / ep
+        ep_comm_bytes_per_micro = (
+            2
+            * top_k
+            * tokens_per_micro_step_per_gpu
+            * hidden
+            * act_bytes
+            * ep_fraction
+            * ep_comm_multiplier
+        )
+    ep_bandwidth = comm_cfg.get("ep_bandwidth_gbps")
+    ep_latency = float(comm_cfg.get("ep_latency_ms", 0.0)) / 1000.0
+    ep_comm_time = 0.0
+    if ep_comm_bytes_per_micro > 0 and ep_bandwidth:
+        ep_comm_time = micro_steps * (
+            ep_comm_bytes_per_micro / (float(ep_bandwidth) * 1e9) + ep_latency
+        )
+
+    # Optional offload communication model (approximate)
+    offload_comm_time = 0.0
+    offload_bandwidth = comm_cfg.get("offload_bandwidth_gbps")
+    offload_latency = float(comm_cfg.get("offload_latency_ms", 0.0)) / 1000.0
+    if cpu_offload and offload_bandwidth:
+        offload_bytes_per_step = comm_cfg.get("offload_bytes_per_step")
+        if offload_bytes_per_step is None:
+            weight_bytes = precision_cfg.get("weight_bytes_per_param")
+            if weight_bytes is None:
+                weight_precision = precision_cfg.get("weight_precision")
+                if weight_precision and str(weight_precision).lower() not in (
+                    "auto",
+                    "default",
+                    "",
+                ):
+                    weight_bytes = bytes_for_precision(weight_precision)
+                else:
+                    q = str(quantization).lower()
+                    weight_bytes = 1 if q == "fp8" else 0.5 if q == "nvfp4" else 2
+            opt_state_bytes = precision_cfg.get("optimizer_state_bytes_per_param")
+            if opt_state_bytes is None:
+                opt_precision = precision_cfg.get("optimizer_precision", "fp32")
+                opt_states = int(precision_cfg.get("optimizer_states_count", 2))
+                opt_state_bytes = opt_states * bytes_for_precision(opt_precision)
+            offload_bytes_per_step = (
+                params["total_params"]
+                * (float(weight_bytes) + float(opt_state_bytes) + float(grad_bytes))
+                / max(1, num_gpus)
+            )
+        offload_comm_time = optimizer_steps * (
+            float(offload_bytes_per_step) / (float(offload_bandwidth) * 1e9)
+            + offload_latency
+        )
+
+    total_comm_time = dp_comm_time + ep_comm_time + offload_comm_time
+    return {
+        "comm_time_s": total_comm_time,
+        "dp_comm_time_s": dp_comm_time,
+        "ep_comm_time_s": ep_comm_time,
+        "offload_comm_time_s": offload_comm_time,
+    }
+
+
 def main() -> None:
     """
     Main Function for FLOPS calculator.
@@ -961,6 +1133,11 @@ def main() -> None:
         # Calculate efficiency multipliers
         zero_eff = get_zero_efficiency(zero_stage, cpu_offload, zero_efficiency_cfg)
         scaling_eff = get_scaling_efficiency(num_gpus, scaling_cfg)
+        performance_cfg = hardware.get("performance", {})
+        use_explicit_comm_model = bool(
+            performance_cfg.get("use_explicit_comm_model", False)
+        )
+        compute_mfu = float(performance_cfg.get("compute_mfu", mfu))
 
         stages = []
         for stage_conf in config["stages"]:
@@ -980,8 +1157,8 @@ def main() -> None:
     growth_cfg = config.get("growth", {"mode": "none"})
     apply_growth_allocation(stages, growth_cfg)
 
-    # Effective MFU after all overheads
-    effective_mfu = mfu * zero_eff * scaling_eff
+    # Effective MFU after all overheads (or compute MFU if explicit comm model)
+    effective_mfu = compute_mfu if use_explicit_comm_model else mfu * zero_eff * scaling_eff
     offload_str = " + CPU Offload" if cpu_offload else ""
 
     print("=" * 120)
@@ -1025,7 +1202,14 @@ def main() -> None:
         for stage in stages:
             params = stage.calculate_params()
             stage_flops = stage.calculate_flops(params)
-            stage_seconds = stage_flops / effective_flops_per_sec
+            if use_explicit_comm_model:
+                compute_seconds = stage_flops / effective_flops_per_sec
+                comm_info = estimate_communication_time(
+                    stage, params, hardware, precision, num_gpus, cpu_offload
+                )
+                stage_seconds = compute_seconds + comm_info["comm_time_s"]
+            else:
+                stage_seconds = stage_flops / effective_flops_per_sec
             stage_days = stage_seconds / (24 * 3600)
 
             stage_hours = stage_seconds / 3600

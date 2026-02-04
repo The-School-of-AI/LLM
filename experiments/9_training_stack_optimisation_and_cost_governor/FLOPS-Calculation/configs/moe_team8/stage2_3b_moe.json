@@ -11,7 +11,28 @@
       "fp8": 1979.0,
       "nvfp4": 3500.0
     },
-    "_comment": "Update hardware to match your cluster"
+    "_comment": "Update hardware to match your cluster",
+    "parallelism": {
+      "tensor_parallel_size": 1,
+      "pipeline_parallel_size": 1,
+      "expert_parallel_size": 1,
+      "data_parallel_size": null
+    },
+    "communication": {
+      "dp_bandwidth_gbps": 200,
+      "dp_latency_ms": 0.5,
+      "dp_comm_multiplier": 1.0,
+      "ep_bandwidth_gbps": 200,
+      "ep_latency_ms": 0.5,
+      "ep_comm_multiplier": 1.0,
+      "offload_bandwidth_gbps": null,
+      "offload_latency_ms": 0.0,
+      "offload_bytes_per_step": null
+    },
+    "performance": {
+      "use_explicit_comm_model": false,
+      "compute_mfu": 0.3
+    }
   },
   "stages": [
     {
@@ -75,6 +96,13 @@
         "position": {
           "position_type": "yarn",
           "yarn_flops_multiplier": 1.0
+        },
+        "training": {
+          "micro_batch_size": 1,
+          "gradient_accumulation_steps": 1,
+          "activation_precision": "bf16",
+          "activation_multiplier": 2.0,
+          "include_activation_memory": false
         }
       }
     }
