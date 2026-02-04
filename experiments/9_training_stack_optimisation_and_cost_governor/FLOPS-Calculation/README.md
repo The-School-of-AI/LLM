@@ -7,13 +7,19 @@ This tool calculates the estimated training time, FLOPs, and cloud costs for Lar
 - **MoE Support**: accurately models Active vs. Total parameters for sparse models.
 - **Cost Governor**: Estimates total cloud training costs based on configurable GPU pricing.
 - **Quantization Filtering**: Filter outputs by precision (BF16, FP8, NVFP4).
-- **Strict Configuration**: All parameters are defined in `config.json`.
+- **Flexible Configs**: Supports both flat JSON and nested YAML-style JSON.
 
 ## Usage
-1. **Configure**: Edit `config.json` to match your hardware and model specs.
+1. **Pick a config**:
+   - `config.json` is a **starter template** (single stage).
+   - Team presets live under `configs/` (recommended).
 2. **Run**:
    ```bash
    python3 compute.py
+   ```
+   Or specify a preset:
+   ```bash
+   python3 compute.py --config configs/moe_team8/moe_team8_all_stages.json
    ```
 
 ### Sample Configs
@@ -26,6 +32,43 @@ Run any preset with:
 python3 compute.py --config configs/1b_presets/1b_deepseek_gsa.json
 ```
 
+### Config Formats and Precedence
+The calculator accepts **two shapes**. You can use either in `architecture`:
+
+**1) Flat (legacy/simple):**
+```json
+{
+  "architecture": {
+    "hidden_size": 2048,
+    "num_layers": 16,
+    "num_heads": 16,
+    "num_kv_heads": 4,
+    "attention_type": "gqa"
+  }
+}
+```
+
+**2) Nested (YAML-style, matches team configs):**
+```json
+{
+  "architecture": {
+    "hidden_size": 2048,
+    "num_layers": 16,
+    "attention": {
+      "attention_type": "grouped_query",
+      "num_attention_heads": 16,
+      "num_key_value_heads": 4
+    },
+    "router": { "top_k": 2 },
+    "expert": { "intermediate_size": 512 },
+    "head": { "use_multi_token_prediction": false }
+  }
+}
+```
+
+**Precedence rule:** If a value exists both at the top level and inside a nested block,
+the **top-level value wins**. Otherwise the nested value is used.
+
 ## Output Snapshots
 We keep simple text snapshots of recent runs:
 - `last_run.txt`: baseline run for `flops_config.json`
@@ -34,7 +77,7 @@ We keep simple text snapshots of recent runs:
 
 These are **reference outputs only** and should be regenerated after config changes.
 
-## Configuration (`config.json`)
+## Configuration Format
 
 ### Hardware & Cost
 ```json
