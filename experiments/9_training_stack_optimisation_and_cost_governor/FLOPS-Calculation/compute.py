@@ -609,6 +609,8 @@ class TrainingStage:
         attention_cfg = arch.get("attention") or {}
         router_cfg = arch.get("router") or {}
         position_cfg = arch.get("position") or {}
+        training_cfg = arch.get("training") or {}
+        head_cfg = arch.get("head") or {}
 
         n_linear = params.get("active_linear_params", params["active_non_embed_params"])
         layers = arch.get("num_layers", arch.get("num_hidden_layers", 24))
@@ -627,6 +629,8 @@ class TrainingStage:
             attention_type = "gqa"
         if attention_type in ("deepseek_sparse", "deepseek_mla", "mla", "deepseek"):
             attention_type = "deepseek_mla"
+        
+        router_type = str(router_cfg.get("router_type", "")).strip().lower()
 
         gsa_enabled = attention_type in (
             "gsa",
@@ -740,7 +744,14 @@ class TrainingStage:
                     attention_cfg.get("indexer_fp8_speedup", 2.0),
                 )
             )
+            
             indexer_flops = (2 * (s**2) * indexer_heads * indexer_dim) / fp8_speedup
+
+            # Sort/TopK selection: O(L × k × log(k))
+            sort_flops = s * sparse_k_tokens * math.log2(sparse_k_tokens) * 10  # ~10 ops per comparison
+            # Index gathering: O(L × k)
+            gather_flops = s * sparse_k_tokens * 2  # Index and gather
+            indexer_flops += sort_flops + gather_flops
 
             # 2. Main Sparse Attention: O(Lk) instead of O(L^2)
             #    - QK^T matmul: 2 * seq_len * k * head_dim
@@ -762,21 +773,29 @@ class TrainingStage:
             sparse_attn_core = qk_matmul_flops + softmax_flops + attn_v_matmul_flops
 
             # Total sparse attention FLOPs per layer (training = fwd + bwd)
-            training_multiplier = 3.0
+            base_multiplier = 3.0  # Forward (1x) + Backward (2x)
+            if bool(training_cfg.get("gradient_checkpointing", False)):
+                base_multiplier += 1.0  # Extra forward recompute
+            if bool(head_cfg.get("use_multi_token_prediction", False)):
+                mtp_heads = int(head_cfg.get("mtp_heads", 2))
+                base_multiplier += mtp_heads - 1  # Extra forward passes
+            if router_type in ("aux_loss", "load_balance"):
+                base_multiplier += 0.1  # ~10% overhead for aux loss backward
+            
             sparse_attn_per_layer = (
                 indexer_flops + sparse_attn_core + mla_projection_flops
-            ) * training_multiplier
+            ) * base_multiplier
 
             # Total for all layers
             flops_per_seq_attn = layers * sparse_attn_per_layer * attention_multiplier
 
             # Store breakdown for debugging (optional)
             self._attn_flops_breakdown = {
-                "indexer_flops": indexer_flops * layers * training_multiplier,
-                "sparse_core_flops": sparse_attn_core * layers * training_multiplier,
+                "indexer_flops": indexer_flops * layers * base_multiplier,
+                "sparse_core_flops": sparse_attn_core * layers * base_multiplier,
                 "mla_projection_flops": mla_projection_flops
                 * layers
-                * training_multiplier,
+                * base_multiplier,
                 "total_attn_flops": flops_per_seq_attn,
                 "sparse_k_tokens": sparse_k_tokens,
                 "reduction_vs_dense": (12 * layers * h * (s**2)) / flops_per_seq_attn,
@@ -796,7 +815,81 @@ class TrainingStage:
             ) * 3.0
             flops_per_seq_attn = layers * dense_attn_per_layer * attention_multiplier
 
-        flops_per_seq_total = flops_per_seq_linear + flops_per_seq_attn
+        # =========================================================================
+        # MoE Router FLOPs (if MoE layers exist)
+        # =========================================================================
+        # Each MoE layer requires:
+        #   - Router forward: hidden × num_experts matmul
+        #   - Softmax: ~3 × num_experts per token
+        #   - TopK selection: ~5 × top_k per token
+        #   - Dispatch index computation: ~2 × top_k per token
+        # =========================================================================
+        num_moe_layers = params.get("num_moe_layers", 0)
+        num_experts = params.get("num_experts", 0)
+        top_k = arch.get("top_k_experts", arch.get("top_k", router_cfg.get("top_k", 1)))
+        
+        flops_per_seq_router = 0.0
+        if num_moe_layers > 0 and num_experts > 0:
+            # Router linear projection: 2 * S * hidden * num_experts (forward matmul)
+            router_linear_flops = 2 * s * h * num_experts
+            # Softmax over experts: ~3 * S * num_experts
+            router_softmax_flops = 3 * s * num_experts
+            # TopK selection: ~5 * S * top_k (comparison + selection)
+            router_topk_flops = 5 * s * top_k
+            # Dispatch index computation: ~2 * S * top_k
+            router_dispatch_flops = 2 * s * top_k
+            
+            router_flops_per_layer = (
+                router_linear_flops + router_softmax_flops + 
+                router_topk_flops + router_dispatch_flops
+            )
+            # Training multiplier (same as attention)
+            router_training_mult = 3.0
+            flops_per_seq_router = num_moe_layers * router_flops_per_layer * router_training_mult
+
+        # =========================================================================
+        # LayerNorm / RMSNorm FLOPs
+        # =========================================================================
+        # For each transformer layer:
+        #   - Pre-attention norm: LayerNorm=5*S*H, RMSNorm=3*S*H
+        #   - Pre-FFN norm: LayerNorm=5*S*H, RMSNorm=3*S*H
+        # Plus final output norm (1 layer)
+        #
+        # LayerNorm (5 ops per element):
+        #   1. Compute mean: S ops (sum) + 1 (divide)
+        #   2. Compute variance: S ops (squared diff sum) + 1 (divide)
+        #   3. Normalize: S ops (subtract mean, divide by std)
+        #   4. Scale: S ops (multiply by gamma)
+        #   5. Shift: S ops (add beta)
+        #
+        # RMSNorm (3 ops per element):
+        #   1. Compute RMS: S ops (squared sum) + 1 (sqrt)
+        #   2. Normalize: S ops (divide by RMS)
+        #   3. Scale: S ops (multiply by gamma)
+        # =========================================================================
+        norm_type = str(arch.get("normalization", arch.get("norm_type", "layernorm"))).strip().lower()
+        
+        if norm_type in ("rmsnorm", "rms", "rms_norm"):
+            # RMSNorm: 3 * S * H per normalization
+            norm_flops_per_instance = 3 * s * h
+        else:
+            # LayerNorm: 5 * S * H per normalization
+            norm_flops_per_instance = 5 * s * h
+        
+        # 2 norms per layer (pre-attention, pre-FFN) + 1 final output norm
+        num_norms = layers * 2 + 1
+        norm_training_mult = 3.0  # Forward (1x) + Backward (2x)
+        flops_per_seq_norm = num_norms * norm_flops_per_instance * norm_training_mult
+
+        # =========================================================================
+        # Total FLOPs
+        # =========================================================================
+        flops_per_seq_total = (
+            flops_per_seq_linear + 
+            flops_per_seq_attn + 
+            flops_per_seq_router + 
+            flops_per_seq_norm
+        )
 
         return flops_per_seq_total / s
 
