@@ -119,6 +119,41 @@ These are **reference outputs only** and should be regenerated after config chan
 }
 ```
 
+#### Parallelism & Communication (optional)
+If you want to model **communication overhead explicitly**, you can provide:
+```json
+"hardware": {
+  "parallelism": {
+    "tensor_parallel_size": 1,
+    "pipeline_parallel_size": 1,
+    "expert_parallel_size": 1,
+    "data_parallel_size": null   // auto = num_gpus / (tp*pp*ep)
+  },
+  "communication": {
+    "dp_bandwidth_gbps": 200,
+    "dp_latency_ms": 0.5,
+    "dp_comm_multiplier": 1.0,
+    "ep_bandwidth_gbps": 200,
+    "ep_latency_ms": 0.5,
+    "ep_comm_multiplier": 1.0,
+    "offload_bandwidth_gbps": null,
+    "offload_latency_ms": 0.0,
+    "offload_bytes_per_step": null
+  },
+  "performance": {
+    "use_explicit_comm_model": false,
+    "compute_mfu": 0.30
+  }
+}
+```
+When `use_explicit_comm_model=true`, the calculator:
+- uses `compute_mfu` for **pure compute**
+- **adds explicit DP/EP/offload communication time** on top
+Otherwise, it uses the simpler multiplicative efficiency model:
+```
+effective_mfu = mfu × zero_efficiency × scaling_efficiency
+```
+
 ### Architecture
 Define your training stages. All parameters (Layers, Hidden Size, Experts, etc.) must be specified.
 ```json
@@ -142,6 +177,24 @@ Define your training stages. All parameters (Layers, Hidden Size, Experts, etc.)
   }
 ]
 ```
+
+#### Training / Batch (optional)
+You can optionally model **gradient accumulation and activation memory**:
+```json
+"architecture": {
+  "training": {
+    "micro_batch_size": 1,
+    "gradient_accumulation_steps": 1,
+    "activation_precision": "bf16",
+    "activation_multiplier": 2.0,
+    "activation_bytes_per_element": null,
+    "include_activation_memory": false
+  }
+}
+```
+Notes:
+- FLOPs are still token‑based, so GA does **not** change total FLOPs.
+- Activation memory is included **only** when `include_activation_memory=true`.
 
 ## Methodology
 
