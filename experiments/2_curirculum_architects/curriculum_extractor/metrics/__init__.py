@@ -1,16 +1,16 @@
 """Metrics for curriculum metadata extraction."""
 
+from .band_assignment import BandAssignmentMetric
 from .difficulty import DifficultyMetric
+from .diversity import DiversityMetric
+from .entropy import EntropyMetric
 from .modality import ModalityMetric
 from .readability import ReadabilityMetric
-from .entropy import EntropyMetric
-from .diversity import DiversityMetric
 from .structural_density import StructuralDensityMetric
-from .band_assignment import BandAssignmentMetric
 
 __all__ = [
     "DifficultyMetric",
-    "ModalityMetric", 
+    "ModalityMetric",
     "ReadabilityMetric",
     "EntropyMetric",
     "DiversityMetric",

@@ -5,28 +5,26 @@ from typing import Any, Callable, Dict, List, Optional
 
 try:
     import ray
-    from ray import ObjectRef
+
     RAY_AVAILABLE = True
 except ImportError:
     RAY_AVAILABLE = False
 
-import pyarrow.parquet as pq
 import s3fs
 
 from .extractor import CurriculumExtractor
 from .state_manager import StateManager
-from .writers import MetadataWriter, RejectionWriter
 
 
 class DistributedExtractor:
     """Distributed extraction using Ray for parallel processing.
-    
+
     Designed for processing ~1TB of parquet data from S3 efficiently:
     - Parallel file processing across workers
     - State management for fault tolerance
     - Incremental processing (skip already processed files)
     """
-    
+
     def __init__(
         self,
         curriculum_path: str | Path,
@@ -38,7 +36,7 @@ class DistributedExtractor:
         metrics_config_path: Optional[str | Path] = None,
     ):
         """Initialize distributed extractor.
-        
+
         Args:
             curriculum_path: Path to curriculum YAML
             metadata_output_path: S3/local path for metadata output
@@ -49,29 +47,35 @@ class DistributedExtractor:
             metrics_config_path: Optional path to metrics config
         """
         if not RAY_AVAILABLE:
-            raise ImportError("Ray is required for distributed processing. Install with: pip install ray[default]")
-            
+            raise ImportError(
+                "Ray is required for distributed processing. Install with: pip install ray[default]"
+            )
+
         self.curriculum_path = str(curriculum_path)
         self.metadata_output_path = metadata_output_path
         self.rejection_output_path = rejection_output_path
         self.state_path = state_path
         self.s3_bucket = s3_bucket
         self.num_workers = num_workers
-        self.metrics_config_path = str(metrics_config_path) if metrics_config_path else None
-        
+        self.metrics_config_path = (
+            str(metrics_config_path) if metrics_config_path else None
+        )
+
         # Initialize filesystem
         self.fs = s3fs.S3FileSystem() if s3_bucket else None
-        
+
         # Initialize state manager
         self.state_manager = StateManager(state_path, self.fs)
-        
-    def list_input_files(self, input_path: str, pattern: str = "*.parquet") -> List[str]:
+
+    def list_input_files(
+        self, input_path: str, pattern: str = "*.parquet"
+    ) -> List[str]:
         """List parquet files in input path.
-        
+
         Args:
             input_path: S3 or local path to input directory
             pattern: Glob pattern for files
-            
+
         Returns:
             List of file paths
         """
@@ -82,7 +86,7 @@ class DistributedExtractor:
         else:
             # Local path
             return [str(p) for p in Path(input_path).glob(pattern)]
-    
+
     def process_files(
         self,
         input_files: List[str],
@@ -90,12 +94,12 @@ class DistributedExtractor:
         progress_callback: Optional[Callable[[str, int], None]] = None,
     ) -> Dict[str, Any]:
         """Process files in parallel with Ray.
-        
+
         Args:
             input_files: List of input file paths
             batch_size: Rows per batch for processing
             progress_callback: Optional callback(file_path, rows_processed)
-            
+
         Returns:
             Processing statistics
         """
@@ -107,10 +111,10 @@ class DistributedExtractor:
                 num_cpus=self.num_workers,  # Limit to requested workers
                 object_store_memory=2 * 1024 * 1024 * 1024,  # 2GB object store
             )
-        
+
         # Filter to pending files
         pending_files = self.state_manager.register_files(input_files)
-        
+
         if not pending_files:
             return {
                 "status": "completed",
@@ -118,13 +122,13 @@ class DistributedExtractor:
                 "total_files": len(input_files),
                 "processed_files": 0,
             }
-        
+
         # Create Ray references
         curriculum_ref = ray.put(self.curriculum_path)
         metrics_config_ref = ray.put(self.metrics_config_path)
         metadata_path_ref = ray.put(self.metadata_output_path)
         rejection_path_ref = ray.put(self.rejection_output_path)
-        
+
         # Process files in parallel
         @ray.remote
         def process_single_file(
@@ -138,7 +142,7 @@ class DistributedExtractor:
         ) -> Dict[str, Any]:
             """Process a single file (runs on worker)."""
             fs = s3fs.S3FileSystem() if use_s3 else None
-            
+
             extractor = CurriculumExtractor(
                 curriculum_path=curriculum_path,
                 metrics_config_path=metrics_config_path,
@@ -146,7 +150,7 @@ class DistributedExtractor:
                 rejection_output_path=rejection_output,
                 filesystem=fs,
             )
-            
+
             try:
                 if use_s3:
                     result = extractor.process_parquet_s3(
@@ -165,7 +169,7 @@ class DistributedExtractor:
                     "status": "failed",
                     "error": str(e),
                 }
-        
+
         # Submit tasks
         futures = []
         for file_path in pending_files:
@@ -179,20 +183,20 @@ class DistributedExtractor:
                 self.s3_bucket is not None,
             )
             futures.append(future)
-        
+
         # Collect results
         results = []
         completed = 0
         failed = 0
         total_rows = 0
         total_rejected = 0
-        
+
         for future in futures:
             result = ray.get(future)
             results.append(result)
-            
+
             file_path = result["file"]
-            
+
             if result.get("status") == "completed":
                 completed += 1
                 total_rows += result.get("processed_rows", 0)
@@ -204,11 +208,13 @@ class DistributedExtractor:
                 )
             elif result.get("status") == "failed":
                 failed += 1
-                self.state_manager.mark_failed(file_path, result.get("error", "Unknown"))
-                
+                self.state_manager.mark_failed(
+                    file_path, result.get("error", "Unknown")
+                )
+
             if progress_callback:
                 progress_callback(file_path, result.get("processed_rows", 0))
-        
+
         return {
             "status": "completed",
             "total_files": len(pending_files),
@@ -218,11 +224,11 @@ class DistributedExtractor:
             "total_rows_rejected": total_rejected,
             "results": results,
         }
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get processing statistics."""
         return self.state_manager.get_stats()
-    
+
     def reset_state(self) -> None:
         """Reset all state for full refresh."""
         self.state_manager.reset()
@@ -237,7 +243,7 @@ def run_distributed_extraction(
     batch_size: int = 10000,
 ) -> Dict[str, Any]:
     """Convenience function to run distributed extraction.
-    
+
     Args:
         input_path: Path to input parquet files (directory)
         curriculum_path: Path to curriculum YAML
@@ -245,14 +251,14 @@ def run_distributed_extraction(
         s3_mode: Whether to use S3
         num_workers: Number of parallel workers
         batch_size: Batch size for processing
-        
+
     Returns:
         Processing statistics
     """
     metadata_path = f"{output_base_path}/metadata"
     rejection_path = f"{output_base_path}/rejections"
     state_path = f"{output_base_path}/state"
-    
+
     extractor = DistributedExtractor(
         curriculum_path=curriculum_path,
         metadata_output_path=metadata_path,
@@ -261,13 +267,13 @@ def run_distributed_extraction(
         s3_bucket="dummy" if s3_mode else None,
         num_workers=num_workers,
     )
-    
+
     input_files = extractor.list_input_files(input_path)
     print(f"Found {len(input_files)} input files")
-    
+
     def progress(file: str, rows: int):
         print(f"Processed {file}: {rows} rows")
-    
+
     return extractor.process_files(
         input_files=input_files,
         batch_size=batch_size,

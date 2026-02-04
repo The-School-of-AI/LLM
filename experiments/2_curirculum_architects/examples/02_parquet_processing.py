@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 from curriculum_extractor import CurriculumExtractor
 from curriculum_extractor.core.state_manager import StateManager
 
@@ -38,28 +37,41 @@ processed by the curriculum extraction pipeline. The content varies
 to demonstrate different difficulty levels and modalities. Some 
 documents contain technical terms while others are more casual.
             """
-        
-        records.append({
-            "id": f"record_{i:04d}",
-            "text": text,
-            "source": "test_data",
-            "lang": "en",
-        })
-    
+
+        records.append(
+            {
+                "id": f"record_{i:04d}",
+                "text": text,
+                "source": "test_data",
+                "lang": "en",
+            }
+        )
+
     table = pa.Table.from_pylist(records)
     parquet_path = output_path / "sample_data.parquet"
     pq.write_table(table, parquet_path)
-    
+
     return parquet_path
 
 
 def main():
     """Demonstrate parquet processing with state management, with user input for parquet file and output dir."""
-    import argparse
 
-    parser = argparse.ArgumentParser(description="Parquet file processing with state management.")
-    parser.add_argument("--parquet", type=str, default=None, help="Path to input parquet file. If not provided, a sample will be created.")
-    parser.add_argument("--output", type=str, default=None, help="Output directory for metadata, rejections, and state. Defaults to ./downloads/02_parquet_processing/")
+    parser = argparse.ArgumentParser(
+        description="Parquet file processing with state management."
+    )
+    parser.add_argument(
+        "--parquet",
+        type=str,
+        default=None,
+        help="Path to input parquet file. If not provided, a sample will be created.",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Output directory for metadata, rejections, and state. Defaults to ./downloads/02_parquet_processing/",
+    )
     args = parser.parse_args()
 
     curriculum_path = Path(__file__).parent.parent / "curriculum.yaml"
@@ -80,7 +92,9 @@ def main():
     if args.parquet:
         parquet_path = Path(args.parquet)
         if not parquet_path.exists():
-            raise FileNotFoundError(f"Provided parquet file does not exist: {parquet_path}")
+            raise FileNotFoundError(
+                f"Provided parquet file does not exist: {parquet_path}"
+            )
         print(f"\n[OK] Using user-provided parquet file: {parquet_path}")
     else:
         parquet_path = create_sample_parquet(data_dir, num_records=100)
@@ -106,7 +120,7 @@ def main():
         track_timing=True,
     )
 
-    print(f"\n[OK] Initialized extractor with:")
+    print("\n[OK] Initialized extractor with:")
     print(f"     - {len(extractor.plugins)} metrics")
     print(f"     - State management: {state_dir}")
     print(f"     - Metadata output: {metadata_dir}")
@@ -127,11 +141,13 @@ def main():
     if result.get("timing"):
         print("\nTiming:")
         for name, stats in result["timing"].items():
-            print(f"  {name}: {stats['mean_ms']:.2f}ms avg, {stats['total_seconds']:.2f}s total")
+            print(
+                f"  {name}: {stats['mean_ms']:.2f}ms avg, {stats['total_seconds']:.2f}s total"
+            )
 
     # Check state
     stats = state_manager.get_stats()
-    print(f"\nState Manager Stats:")
+    print("\nState Manager Stats:")
     print(f"  Completed files: {stats['completed_files']}")
     print(f"  Total rows processed: {stats['total_rows_processed']}")
     print(f"  Total rows rejected: {stats['total_rows_rejected']}")

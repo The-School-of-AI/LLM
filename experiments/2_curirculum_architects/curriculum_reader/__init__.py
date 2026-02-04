@@ -6,9 +6,9 @@ This package provides:
 - Analysis utilities for curriculum statistics
 """
 
-from .core.reader import MetadataReader, RejectionReader
-from .core.batch_creator import BatchCreator, BatchConfig
 from .core.analyzer import MetadataAnalyzer
+from .core.batch_creator import BatchConfig, BatchCreator
+from .core.reader import MetadataReader, RejectionReader
 
 __all__ = [
     "MetadataReader",

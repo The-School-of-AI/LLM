@@ -19,10 +19,10 @@ def main():
     print("=" * 80)
     print("CURRICULUM EXTRACTOR - Basic Usage")
     print("=" * 80)
-    
+
     # Initialize extractor with timing enabled
     extractor = CurriculumExtractor(curriculum_path, track_timing=True)
-    
+
     print(f"\n[OK] Loaded {len(extractor.plugins)} metrics:")
     for plugin in extractor.plugins:
         print(f"  - {plugin.name} (level {plugin.level})")
@@ -72,21 +72,23 @@ codes such as the surface code.
         print(f"\n--- Sample: {sample['id']} ---")
         print(f"Source: {sample['source']}")
         print(f"Text preview: {sample['text'][:50].strip()}...")
-        
+
         # Extract metadata - record is NOT modified
-        metadata, rejection = extractor.extract_record(sample, source_file="example.parquet")
-        
+        metadata, rejection = extractor.extract_record(
+            sample, source_file="example.parquet"
+        )
+
         if rejection:
-            print(f"\n  ❌ REJECTED")
+            print("\n  ❌ REJECTED")
             print(f"     Reason: {rejection.rejected_reason}")
             print(f"     Rejected at: {rejection.rejected_at}")
         else:
-            print(f"\n  ✓ EXTRACTED")
+            print("\n  ✓ EXTRACTED")
             # Show key metrics
             for key, value in metadata.items():
                 if not key.startswith("opt_"):  # Skip optional columns
                     print(f"     {key}: {value}")
-    
+
     # Show timing stats
     timing = extractor.get_timing_stats()
     if timing:

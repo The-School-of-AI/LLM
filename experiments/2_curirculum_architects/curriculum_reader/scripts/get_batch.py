@@ -41,7 +41,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 
 def parse_args():
@@ -50,106 +49,112 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    
+
     parser.add_argument(
-        "--metadata", "-m",
+        "--metadata",
+        "-m",
         required=True,
         help="Path to metadata layer",
     )
-    
+
     parser.add_argument(
-        "--batch", "-b",
+        "--batch",
+        "-b",
         type=int,
         help="Batch number to retrieve (0-indexed)",
     )
-    
+
     parser.add_argument(
-        "--next", "-n",
+        "--next",
+        "-n",
         action="store_true",
         help="Get next batch (auto-increment)",
     )
-    
+
     parser.add_argument(
-        "--seed", "-s",
+        "--seed",
+        "-s",
         type=int,
         default=42,
         help="Random seed for deterministic ordering (default: 42)",
     )
-    
+
     parser.add_argument(
         "--batch-size",
         type=int,
         default=1024,
         help="Batch size (default: 1024)",
     )
-    
+
     parser.add_argument(
         "--stratify",
         help="Column to stratify by (e.g., band_assignment_band)",
     )
-    
+
     parser.add_argument(
         "--filter",
         help="Filter expression (e.g., \"band_assignment_band == 'B3'\")",
     )
-    
+
     parser.add_argument(
         "--columns",
         help="Comma-separated list of columns to include",
     )
-    
+
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Output file (parquet or jsonl)",
     )
-    
+
     parser.add_argument(
         "--state-path",
         help="Path to store batch state for auto-increment",
     )
-    
+
     parser.add_argument(
         "--info",
         action="store_true",
         help="Show batch info without retrieving data",
     )
-    
+
     parser.add_argument(
         "--s3",
         action="store_true",
         help="Enable S3 mode",
     )
-    
+
     parser.add_argument(
         "--json",
         action="store_true",
         help="Output in JSON format (to stdout)",
     )
-    
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    
-    from curriculum_reader import MetadataReader, BatchCreator, BatchConfig
-    from curriculum_reader.core.batch_creator import StratifiedBatchCreator
+
     import pyarrow.dataset as ds
     import pyarrow.parquet as pq
-    
+    from curriculum_reader import BatchConfig, BatchCreator, MetadataReader
+    from curriculum_reader.core.batch_creator import StratifiedBatchCreator
+
     # Initialize reader
     fs = None
     if args.s3:
         import s3fs
+
         fs = s3fs.S3FileSystem()
-    
+
     metadata_reader = MetadataReader(args.metadata, filesystem=fs)
-    
+
     # Parse columns
     columns = None
     if args.columns:
         columns = [c.strip() for c in args.columns.split(",")]
-    
+
     # Parse filter (simplified - real implementation would need proper parsing)
     filter_expr = None
     if args.filter:
@@ -164,7 +169,7 @@ def main():
                 filter_expr = ds.field(col) == val
         except Exception as e:
             print(f"Warning: Could not parse filter: {e}")
-    
+
     # Create config
     config = BatchConfig(
         batch_size=args.batch_size,
@@ -174,10 +179,10 @@ def main():
         filter_expr=filter_expr,
         stratify_by=args.stratify,
     )
-    
+
     # Create batch creator
     state_path = Path(args.state_path) if args.state_path else None
-    
+
     if args.stratify:
         creator = StratifiedBatchCreator(
             reader=metadata_reader,
@@ -190,7 +195,7 @@ def main():
             config=config,
             state_path=state_path,
         )
-    
+
     # Show info
     if args.info:
         print(f"\n{'='*60}")
@@ -205,7 +210,7 @@ def main():
             print(f"Stratified by: {args.stratify}")
         print(f"{'='*60}")
         return 0
-    
+
     # Get batch
     batch_number = None
     if args.batch is not None:
@@ -215,59 +220,68 @@ def main():
     else:
         print("Error: Specify --batch <number> or --next")
         return 1
-    
-    print(f"Retrieving batch {batch_number if batch_number is not None else '(next)'}...")
+
+    print(
+        f"Retrieving batch {batch_number if batch_number is not None else '(next)'}..."
+    )
     print(f"  Seed: {config.seed}")
     print(f"  Batch size: {config.batch_size}")
-    
+
     table = creator.get_batch(batch_number)
-    
+
     print(f"  Retrieved {len(table)} records")
-    
+
     # Get actual batch number (in case of auto-increment)
-    actual_batch = batch_number if batch_number is not None else (creator.state.current_batch - 1)
-    
+    actual_batch = (
+        batch_number if batch_number is not None else (creator.state.current_batch - 1)
+    )
+
     # Output
     if args.output:
         output_path = Path(args.output)
-        
+
         if output_path.suffix == ".parquet":
             pq.write_table(table, output_path)
             print(f"Wrote to {output_path}")
-            
+
         elif output_path.suffix in (".jsonl", ".json"):
             records = table.to_pylist()
             with open(output_path, "w") as f:
                 for record in records:
                     f.write(json.dumps(record) + "\n")
             print(f"Wrote to {output_path}")
-            
+
     elif args.json:
         records = table.to_pylist()
-        print(json.dumps({
-            "batch_number": actual_batch,
-            "seed": config.seed,
-            "count": len(records),
-            "records": records[:10] if len(records) > 10 else records,
-            "truncated": len(records) > 10,
-        }, indent=2))
-        
+        print(
+            json.dumps(
+                {
+                    "batch_number": actual_batch,
+                    "seed": config.seed,
+                    "count": len(records),
+                    "records": records[:10] if len(records) > 10 else records,
+                    "truncated": len(records) > 10,
+                },
+                indent=2,
+            )
+        )
+
     else:
         # Print sample
-        print(f"\nSample records (first 5):")
+        print("\nSample records (first 5):")
         print("-" * 60)
         records = table.to_pylist()
         for i, record in enumerate(records[:5]):
             print(f"\n[{i}] uuid: {record.get('uuid', 'N/A')[:16]}...")
             print(f"    id: {record.get('id', 'N/A')}")
-            if 'band_assignment_band' in record:
+            if "band_assignment_band" in record:
                 print(f"    band: {record.get('band_assignment_band')}")
-            if 'difficulty_score' in record:
+            if "difficulty_score" in record:
                 print(f"    difficulty: {record.get('difficulty_score')}")
-    
+
     # Show next batch info
     print(f"\nNext batch number: {creator.state.current_batch}")
-    
+
     return 0
 
 

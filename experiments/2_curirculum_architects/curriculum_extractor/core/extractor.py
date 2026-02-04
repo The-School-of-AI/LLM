@@ -10,16 +10,15 @@ Key Design Principles:
 import importlib
 import re
 import time
-import uuid as uuid_lib
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 
-from .plugin import ExtractionResult, MetricPlugin, ReadOnlyRecord
+from ..utils.curriculum_loader import CurriculumConfig
+from .plugin import MetricPlugin, ReadOnlyRecord
 from .state_manager import StateManager
 from .writers import (
     MetadataRecord,
@@ -28,19 +27,18 @@ from .writers import (
     RejectionWriter,
     generate_uuid,
 )
-from ..utils.curriculum_loader import CurriculumConfig
 
 
 class MetricTiming:
     """Track timing information for metrics."""
-    
+
     def __init__(self):
         self.timings: Dict[str, List[float]] = defaultdict(list)
-        
+
     def record(self, metric_name: str, elapsed: float):
         """Record a timing measurement."""
         self.timings[metric_name].append(elapsed)
-        
+
     def get_stats(self) -> Dict[str, Dict[str, float]]:
         """Get timing statistics per metric."""
         stats = {}
@@ -66,7 +64,7 @@ class CurriculumExtractor:
     - Level-based execution for potential parallelism
     - State management for incremental processing
     - Outputs flattened columns (no nested structs)
-    
+
     Note: Band assignment is NOT performed during extraction.
     Use the band_assignment script to assign bands after extraction.
     """
@@ -102,20 +100,20 @@ class CurriculumExtractor:
             if metrics is not None
             else self._load_metrics(curriculum_path, metrics_config_path)
         )
-        
+
         # Sort plugins by level for ordered execution
         self.plugins = sorted(self.plugins, key=lambda p: p.level)
-        
+
         # Group plugins by level for potential parallel execution
         self._plugins_by_level: Dict[int, List[MetricPlugin]] = defaultdict(list)
         for plugin in self.plugins:
             self._plugins_by_level[plugin.level].append(plugin)
-        
+
         self.state_manager = state_manager
         self.fs = filesystem
         self.track_timing = track_timing
         self.timing = MetricTiming() if track_timing else None
-        
+
         # Initialize writers if paths provided
         self.metadata_writer = (
             MetadataWriter(metadata_output_path, filesystem)
@@ -144,7 +142,7 @@ class CurriculumExtractor:
         self, curriculum_path: str | Path, metrics_config_path: Optional[str | Path]
     ) -> List[MetricPlugin]:
         """Auto-discover and load metrics from config file.
-        
+
         Note: BandAssignmentMetric is excluded as band assignment
         happens in a separate post-processing step.
         """
@@ -171,7 +169,7 @@ class CurriculumExtractor:
             class_name = metric_def.get("class")
             if not class_name:
                 continue
-                
+
             # Skip band assignment - it's done in post-processing
             if class_name == "BandAssignmentMetric":
                 continue
@@ -191,17 +189,17 @@ class CurriculumExtractor:
                 metric_class = getattr(module, class_name)
 
                 metric_instance = metric_class(self.config)
-                
+
                 # Override level if specified in config
                 if "level" in metric_def:
                     metric_instance.level = metric_def["level"]
-                    
+
                 loaded_metrics.append(metric_instance)
 
             except (ImportError, AttributeError) as e:
                 print(f"Warning: Could not load metric {class_name}: {e}")
                 continue
-                
+
         if not loaded_metrics:
             raise ValueError("No valid metrics loaded from configuration.")
         return loaded_metrics
@@ -228,7 +226,7 @@ class CurriculumExtractor:
         """
         record_id = record.get("id", "unknown")
         record_uuid = generate_uuid()
-        
+
         # Wrap record as read-only to prevent modifications
         readonly_record = ReadOnlyRecord(record)
 
@@ -237,22 +235,22 @@ class CurriculumExtractor:
 
         # Process metrics level by level
         sorted_levels = sorted(self._plugins_by_level.keys())
-        
+
         for level in sorted_levels:
             level_plugins = self._plugins_by_level[level]
-            
+
             # Execute plugins at this level
             # (Could be parallelized in future, but sequential for now)
             for plugin in level_plugins:
                 try:
                     start_time = time.perf_counter() if self.timing else 0
-                    
+
                     result = plugin.extract(readonly_record)
-                    
+
                     if self.timing:
                         elapsed = time.perf_counter() - start_time
                         self.timing.record(plugin.name, elapsed)
-                    
+
                     # Check for rejection - stop immediately
                     if result.rejected:
                         return None, RejectionRecord(
@@ -262,7 +260,7 @@ class CurriculumExtractor:
                             rejected_reason=result.rejection_reason or "Unknown",
                             rejected_at=plugin.name,
                         )
-                    
+
                     # Flatten metrics for output
                     flattened = plugin.flatten_metrics(result.metrics)
                     all_metrics.update(flattened)
@@ -310,10 +308,10 @@ class CurriculumExtractor:
 
         try:
             parquet_file = pq.ParquetFile(input_path)
-            
+
             metadata_records: List[MetadataRecord] = []
             rejection_records: List[RejectionRecord] = []
-            
+
             total_rows = 0
             error_count = 0
 
@@ -322,16 +320,18 @@ class CurriculumExtractor:
 
                 for record in records:
                     metadata, rejection = self.extract_record(record, source_file)
-                    
+
                     if rejection:
                         rejection_records.append(rejection)
                     else:
-                        metadata_records.append(MetadataRecord(
-                            uuid=generate_uuid(),
-                            id=record.get("id", "unknown"),
-                            file_path=source_file,
-                            metrics=metadata,
-                        ))
+                        metadata_records.append(
+                            MetadataRecord(
+                                uuid=generate_uuid(),
+                                id=record.get("id", "unknown"),
+                                file_path=source_file,
+                                metrics=metadata,
+                            )
+                        )
 
                     total_rows += 1
 
@@ -341,7 +341,7 @@ class CurriculumExtractor:
             # Write metadata layer
             if self.metadata_writer and metadata_records:
                 self.metadata_writer.write_records(metadata_records, source_file)
-                
+
             # Write rejection layer
             if self.rejection_writer and rejection_records:
                 self.rejection_writer.write_records(rejection_records, source_file)
@@ -361,10 +361,10 @@ class CurriculumExtractor:
                 "rejected_rows": len(rejection_records),
                 "error_count": error_count,
             }
-            
+
             if self.timing:
                 result["timing"] = self.timing.get_stats()
-                
+
             return result
 
         except Exception as e:
@@ -379,20 +379,22 @@ class CurriculumExtractor:
         progress_callback: Optional[Callable[[int], None]] = None,
     ) -> Dict[str, Any]:
         """Process S3 parquet file and extract metadata.
-        
+
         Args:
             input_path: S3 path to input parquet (e.g., s3://bucket/path/file.parquet)
             batch_size: Number of rows per batch
             progress_callback: Optional progress callback
-            
+
         Returns:
             Statistics about processing
         """
         if not self.fs:
-            raise ValueError("Filesystem not configured. Pass filesystem to constructor.")
-            
+            raise ValueError(
+                "Filesystem not configured. Pass filesystem to constructor."
+            )
+
         source_file = input_path
-        
+
         if not self.fs.exists(input_path):
             raise FileNotFoundError(f"S3 input not found: {input_path}")
 
@@ -408,10 +410,10 @@ class CurriculumExtractor:
 
         try:
             parquet_file = pq.ParquetFile(input_path, filesystem=self.fs)
-            
+
             metadata_records: List[MetadataRecord] = []
             rejection_records: List[RejectionRecord] = []
-            
+
             total_rows = 0
 
             for batch in parquet_file.iter_batches(batch_size=batch_size):
@@ -419,16 +421,18 @@ class CurriculumExtractor:
 
                 for record in records:
                     metadata, rejection = self.extract_record(record, source_file)
-                    
+
                     if rejection:
                         rejection_records.append(rejection)
                     else:
-                        metadata_records.append(MetadataRecord(
-                            uuid=generate_uuid(),
-                            id=record.get("id", "unknown"),
-                            file_path=source_file,
-                            metrics=metadata,
-                        ))
+                        metadata_records.append(
+                            MetadataRecord(
+                                uuid=generate_uuid(),
+                                id=record.get("id", "unknown"),
+                                file_path=source_file,
+                                metrics=metadata,
+                            )
+                        )
 
                     total_rows += 1
 
@@ -438,7 +442,7 @@ class CurriculumExtractor:
             # Write metadata layer
             if self.metadata_writer and metadata_records:
                 self.metadata_writer.write_records(metadata_records, source_file)
-                
+
             # Write rejection layer
             if self.rejection_writer and rejection_records:
                 self.rejection_writer.write_records(rejection_records, source_file)
@@ -457,10 +461,10 @@ class CurriculumExtractor:
                 "processed_rows": len(metadata_records),
                 "rejected_rows": len(rejection_records),
             }
-            
+
             if self.timing:
                 result["timing"] = self.timing.get_stats()
-                
+
             return result
 
         except Exception as e:
@@ -484,28 +488,32 @@ class CurriculumExtractor:
         """
         processed = []
         rejected = []
-        
+
         for record in records:
             metadata, rejection = self.extract_record(record, source_file)
-            
+
             if rejection:
-                rejected.append({
-                    "uuid": rejection.uuid,
-                    "id": rejection.id,
-                    "file_path": rejection.file_path,
-                    "rejected_reason": rejection.rejected_reason,
-                    "rejected_at": rejection.rejected_at,
-                })
+                rejected.append(
+                    {
+                        "uuid": rejection.uuid,
+                        "id": rejection.id,
+                        "file_path": rejection.file_path,
+                        "rejected_reason": rejection.rejected_reason,
+                        "rejected_at": rejection.rejected_at,
+                    }
+                )
             else:
-                processed.append({
-                    "uuid": generate_uuid(),
-                    "id": record.get("id", "unknown"),
-                    "file_path": source_file,
-                    **metadata,
-                })
-                
+                processed.append(
+                    {
+                        "uuid": generate_uuid(),
+                        "id": record.get("id", "unknown"),
+                        "file_path": source_file,
+                        **metadata,
+                    }
+                )
+
         return processed, rejected
-    
+
     def get_timing_stats(self) -> Optional[Dict[str, Dict[str, float]]]:
         """Get timing statistics if tracking is enabled."""
         if self.timing:
@@ -522,7 +530,7 @@ def create_extractor_from_config(
     track_timing: bool = False,
 ) -> CurriculumExtractor:
     """Factory function to create an extractor with common configuration.
-    
+
     Args:
         curriculum_path: Path to curriculum YAML
         state_path: Path for state management
@@ -530,19 +538,20 @@ def create_extractor_from_config(
         rejection_output_path: Path for rejection layer
         s3_bucket: Optional S3 bucket for S3 mode
         track_timing: Whether to track timing per metric
-        
+
     Returns:
         Configured CurriculumExtractor instance
     """
     filesystem = None
     if s3_bucket:
         import s3fs
+
         filesystem = s3fs.S3FileSystem()
-        
+
     state_manager = None
     if state_path:
         state_manager = StateManager(state_path, filesystem)
-        
+
     return CurriculumExtractor(
         curriculum_path=curriculum_path,
         state_manager=state_manager,

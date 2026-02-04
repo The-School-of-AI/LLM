@@ -23,9 +23,21 @@ def sample_curriculum_config():
             "bands": [
                 {"id": "B0", "name": "Nursery", "description": "Basic content"},
                 {"id": "B1", "name": "Elementary", "description": "Elementary content"},
-                {"id": "B2", "name": "Middle School", "description": "Middle school content"},
-                {"id": "B3", "name": "High School", "description": "High school content"},
-                {"id": "B4", "name": "Undergraduate", "description": "Undergraduate content"},
+                {
+                    "id": "B2",
+                    "name": "Middle School",
+                    "description": "Middle school content",
+                },
+                {
+                    "id": "B3",
+                    "name": "High School",
+                    "description": "High school content",
+                },
+                {
+                    "id": "B4",
+                    "name": "Undergraduate",
+                    "description": "Undergraduate content",
+                },
                 {"id": "B5", "name": "Graduate", "description": "Graduate content"},
             ]
         },
@@ -42,12 +54,12 @@ def sample_curriculum_config():
                 "modality",
                 "band_assignment",
             ]
-        }
+        },
     }
-    
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.dump(config, f)
         path = Path(f.name)
-    
+
     yield path
     path.unlink()

@@ -9,11 +9,10 @@ from typing import Any, Dict, List, Optional
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-
 # Define the 5 optional columns for future metrics
 OPTIONAL_METRIC_COLUMNS = [
     "opt_metric_1",
-    "opt_metric_2", 
+    "opt_metric_2",
     "opt_metric_3",
     "opt_metric_4",
     "opt_metric_5",
@@ -23,6 +22,7 @@ OPTIONAL_METRIC_COLUMNS = [
 @dataclass
 class MetadataRecord:
     """A single metadata record for the output layer."""
+
     uuid: str
     id: str  # Original record ID from JSONL
     file_path: str  # Source parquet file
@@ -32,6 +32,7 @@ class MetadataRecord:
 @dataclass
 class RejectionRecord:
     """A single rejection record."""
+
     uuid: str
     id: str  # Original record ID from JSONL
     file_path: str  # Source parquet file
@@ -41,7 +42,7 @@ class RejectionRecord:
 
 class OutputWriter:
     """Base class for output writers."""
-    
+
     def __init__(
         self,
         output_path: str | Path,
@@ -49,7 +50,7 @@ class OutputWriter:
         partition_by_file: bool = True,
     ):
         """Initialize output writer.
-        
+
         Args:
             output_path: Base path for output files
             filesystem: Optional s3fs filesystem for S3 support
@@ -58,7 +59,7 @@ class OutputWriter:
         self.output_path = str(output_path)
         self.fs = filesystem
         self.partition_by_file = partition_by_file
-        
+
     def _ensure_dir(self, path: str) -> None:
         """Ensure directory exists."""
         if self.fs:
@@ -70,7 +71,7 @@ class OutputWriter:
 
 class MetadataWriter(OutputWriter):
     """Writer for the metadata layer.
-    
+
     Output schema:
     - uuid: string (generated UUID for this metadata record)
     - id: string (original record ID from JSONL)
@@ -78,7 +79,7 @@ class MetadataWriter(OutputWriter):
     - <flattened_metrics>: various types (one column per metric value)
     - opt_metric_1..5: nullable columns for future metrics
     """
-    
+
     def __init__(
         self,
         output_path: str | Path,
@@ -87,7 +88,7 @@ class MetadataWriter(OutputWriter):
         known_columns: Optional[List[str]] = None,
     ):
         """Initialize metadata writer.
-        
+
         Args:
             output_path: Base path for metadata files
             filesystem: Optional s3fs for S3 support
@@ -98,7 +99,7 @@ class MetadataWriter(OutputWriter):
         self.known_columns = known_columns or []
         self._buffer: List[Dict[str, Any]] = []
         self._buffer_size = 10000
-        
+
     def _get_file_partition(self, source_file: str) -> str:
         """Extract file name for partitioning."""
         # Get just the file name without extension
@@ -106,24 +107,24 @@ class MetadataWriter(OutputWriter):
         # Clean up any problematic characters
         name = name.replace("/", "_").replace("\\", "_")
         return name
-    
+
     def write_records(
         self,
         records: List[MetadataRecord],
         source_file: str,
     ) -> str:
         """Write metadata records to output.
-        
+
         Args:
             records: List of metadata records to write
             source_file: Source file path (for partitioning)
-            
+
         Returns:
             Path to written file
         """
         if not records:
             return ""
-            
+
         # Build rows with flattened schema
         rows = []
         for record in records:
@@ -134,17 +135,17 @@ class MetadataWriter(OutputWriter):
             }
             # Add all flattened metrics
             row.update(record.metrics)
-            
+
             # Add optional columns (None for now)
             for opt_col in OPTIONAL_METRIC_COLUMNS:
                 if opt_col not in row:
                     row[opt_col] = None
-                    
+
             rows.append(row)
-        
+
         # Convert to Arrow table
         table = pa.Table.from_pylist(rows)
-        
+
         # Determine output path
         if self.partition_by_file:
             partition = self._get_file_partition(source_file)
@@ -155,7 +156,7 @@ class MetadataWriter(OutputWriter):
             self._ensure_dir(self.output_path)
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
             output_file = f"{self.output_path}/metadata_{timestamp}.parquet"
-        
+
         # Write with atomic semantics
         if self.fs:
             tmp_file = output_file + ".tmp"
@@ -166,52 +167,52 @@ class MetadataWriter(OutputWriter):
             tmp_file = output_file + ".tmp"
             pq.write_table(table, tmp_file)
             Path(tmp_file).rename(output_file)
-            
+
         return output_file
-    
+
     def append_record(self, record: MetadataRecord, source_file: str) -> Optional[str]:
         """Append a record to buffer, flush when full.
-        
+
         Args:
             record: Metadata record to append
             source_file: Source file for partitioning
-            
+
         Returns:
             Path to written file if buffer was flushed, None otherwise
         """
         self._buffer.append((record, source_file))
-        
+
         if len(self._buffer) >= self._buffer_size:
             return self.flush()
         return None
-    
+
     def flush(self) -> Optional[str]:
         """Flush buffered records to disk."""
         if not self._buffer:
             return None
-            
+
         # Group by source file
         by_file: Dict[str, List[MetadataRecord]] = {}
         for record, source_file in self._buffer:
             if source_file not in by_file:
                 by_file[source_file] = []
             by_file[source_file].append(record)
-        
+
         self._buffer.clear()
-        
+
         # Write each group
         written_files = []
         for source_file, records in by_file.items():
             path = self.write_records(records, source_file)
             if path:
                 written_files.append(path)
-                
+
         return written_files[0] if len(written_files) == 1 else None
 
 
 class RejectionWriter(OutputWriter):
     """Writer for the rejection layer.
-    
+
     Output schema:
     - uuid: string (generated UUID)
     - id: string (original record ID)
@@ -219,7 +220,7 @@ class RejectionWriter(OutputWriter):
     - rejected_reason: string (reason for rejection)
     - rejected_at: string (metric name that caused rejection)
     """
-    
+
     def __init__(
         self,
         output_path: str | Path,
@@ -229,30 +230,30 @@ class RejectionWriter(OutputWriter):
         super().__init__(output_path, filesystem, partition_by_file)
         self._buffer: List[tuple] = []
         self._buffer_size = 10000
-        
+
     def _get_file_partition(self, source_file: str) -> str:
         """Extract file name for partitioning."""
         name = Path(source_file).stem
         name = name.replace("/", "_").replace("\\", "_")
         return name
-    
+
     def write_records(
         self,
         records: List[RejectionRecord],
         source_file: str,
     ) -> str:
         """Write rejection records to output.
-        
+
         Args:
             records: List of rejection records
             source_file: Source file path (for partitioning)
-            
+
         Returns:
             Path to written file
         """
         if not records:
             return ""
-            
+
         rows = [
             {
                 "uuid": r.uuid,
@@ -263,9 +264,9 @@ class RejectionWriter(OutputWriter):
             }
             for r in records
         ]
-        
+
         table = pa.Table.from_pylist(rows)
-        
+
         # Determine output path
         if self.partition_by_file:
             partition = self._get_file_partition(source_file)
@@ -276,7 +277,7 @@ class RejectionWriter(OutputWriter):
             self._ensure_dir(self.output_path)
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
             output_file = f"{self.output_path}/rejections_{timestamp}.parquet"
-        
+
         # Write with atomic semantics
         if self.fs:
             tmp_file = output_file + ".tmp"
@@ -287,36 +288,36 @@ class RejectionWriter(OutputWriter):
             tmp_file = output_file + ".tmp"
             pq.write_table(table, tmp_file)
             Path(tmp_file).rename(output_file)
-            
+
         return output_file
-    
+
     def append_record(self, record: RejectionRecord, source_file: str) -> Optional[str]:
         """Append a record to buffer."""
         self._buffer.append((record, source_file))
-        
+
         if len(self._buffer) >= self._buffer_size:
             return self.flush()
         return None
-    
+
     def flush(self) -> Optional[str]:
         """Flush buffered records."""
         if not self._buffer:
             return None
-            
+
         by_file: Dict[str, List[RejectionRecord]] = {}
         for record, source_file in self._buffer:
             if source_file not in by_file:
                 by_file[source_file] = []
             by_file[source_file].append(record)
-        
+
         self._buffer.clear()
-        
+
         written_files = []
         for source_file, records in by_file.items():
             path = self.write_records(records, source_file)
             if path:
                 written_files.append(path)
-                
+
         return written_files[0] if len(written_files) == 1 else None
 
 
