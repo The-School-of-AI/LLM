@@ -49,7 +49,6 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7", exte
         # 1. read_json_auto handles decompression and JSON parsing
         # 2. sha256() computes the required content hash
         # 3. CAST(metadata AS VARCHAR) ensures the JSON object becomes a string
-        source_expr = "source" if external_source is None else f"COALESCE(source, '{external_source}')"
         query = f"""
             COPY (
                 SELECT 
@@ -57,7 +56,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7", exte
                     sha256(text) AS hash,
                     'dolma' AS dataset,
                     '{domain}' AS domain,
-                    {source_expr} AS source,
+                    '{external_source}' AS source,
                     text,
                     'en' AS language,
                     CAST(metadata AS VARCHAR) AS metadata,
@@ -85,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True, help="Output directory for Parquet files")
     parser.add_argument("--domain", required=True, help="Domain tag (e.g. 'web', 'code', 'math')")
     parser.add_argument("--version", default="1.7", help="Dataset version tag")
-    parser.add_argument("--external_source", help="External source tag to use if not present in the data (e.g. 'books', 'web')")
+    parser.add_argument("--external_source", required=True, help="Source tag to use for all records (e.g. 'books', 'web')")
 
     args = parser.parse_args()
 
