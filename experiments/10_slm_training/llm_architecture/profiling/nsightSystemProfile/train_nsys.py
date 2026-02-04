@@ -107,6 +107,10 @@ class TrainingConfig:
     # Profiling
     profile_steps: Optional[str] = None  # e.g., "10-20" to profile steps 10 through 20
     profiler_type: str = "nsys"  # "nsys" (Nsight Systems) or "ncu" (Nsight Compute)
+    
+    # Performance optimizations
+    use_torch_compile: bool = False  # Use torch.compile() for graph optimization (PyTorch 2.0+)
+    torch_compile_mode: str = "reduce-overhead"  # default, reduce-overhead, max-autotune
 
 
 @dataclass
@@ -325,6 +329,15 @@ class Trainer:
         self.best_loss = float('inf')
         self.start_time = None
         
+        # Apply torch.compile if enabled (PyTorch 2.0+)
+        if training_config.use_torch_compile:
+            if hasattr(torch, 'compile'):
+                print(f"🔧 Applying torch.compile(mode='{training_config.torch_compile_mode}')...")
+                self.model = torch.compile(self.model, mode=training_config.torch_compile_mode)
+                print("✅ Model compiled (first iteration will be slower due to compilation)")
+            else:
+                print("⚠️ torch.compile not available (requires PyTorch 2.0+), skipping")
+        
         # Profiling
         self.profile_start = None
         self.profile_end = None
@@ -420,14 +433,17 @@ class Trainer:
             
             # Gradient accumulation step
             if accumulation_steps >= self.config.gradient_accumulation_steps:
-                # Gradient clipping
-                if self.use_amp and self.config.amp_dtype == "float16":
-                    self.scaler.unscale_(self.optimizer)
-                
-                grad_norm = torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.gradient_clip
-                ).item()
+                # Gradient clipping (only if enabled - major sync point!)
+                if self.config.gradient_clip > 0:
+                    if self.use_amp and self.config.amp_dtype == "float16":
+                        self.scaler.unscale_(self.optimizer)
+                    
+                    grad_norm = torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.config.gradient_clip
+                    ).item()
+                else:
+                    grad_norm = 0.0  # No clipping
                 
                 # Optimizer step
                 if self.use_amp and self.config.amp_dtype == "float16":
@@ -701,6 +717,24 @@ def main():
         help="Stride between blocks (default: seq-length)"
     )
     parser.add_argument(
+        "--gradient-clip",
+        type=float,
+        default=1.0,
+        help="Gradient clipping threshold (0 to disable, reduces sync but may affect stability)"
+    )
+    parser.add_argument(
+        "--use-torch-compile",
+        action="store_true",
+        help="Enable torch.compile() for graph optimization (requires PyTorch 2.0+)"
+    )
+    parser.add_argument(
+        "--torch-compile-mode",
+        type=str,
+        default="reduce-overhead",
+        choices=["default", "reduce-overhead", "max-autotune"],
+        help="torch.compile mode (default, reduce-overhead, max-autotune)"
+    )
+    parser.add_argument(
         "--max-tokens",
         type=int,
         default=None,
@@ -751,12 +785,15 @@ def main():
         seq_length=args.seq_length,
         learning_rate=args.learning_rate,
         warmup_steps=args.warmup_steps,
+        gradient_clip=args.gradient_clip,
         experiment_name=args.experiment_name,
         checkpoint_dir=args.checkpoint_dir,
         seed=args.seed,
         log_interval=args.log_interval,
         save_interval=args.save_interval,
-        profile_steps=args.profile_steps
+        profile_steps=args.profile_steps,
+        use_torch_compile=args.use_torch_compile,
+        torch_compile_mode=args.torch_compile_mode
     )
     
     # Run training

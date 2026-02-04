@@ -107,7 +107,11 @@ class TrainingConfig:
     
     # Profiling
     profile_steps: Optional[str] = None  # e.g., "10-20" to profile steps 10 through 20
-    profiler_type: str = "nsys"  # "nsys" (Nsight Systems) or "ncu" (Nsight Compute)
+    profiler_type: str = "ncu"  # "nsys" (Nsight Systems) or "ncu" (Nsight Compute)
+    
+    # Performance optimizations
+    use_torch_compile: bool = False  # Use torch.compile() for graph optimization (PyTorch 2.0+)
+    torch_compile_mode: str = "reduce-overhead"  # default, reduce-overhead, max-autotune
 
 
 @dataclass
@@ -294,6 +298,15 @@ class Trainer:
         # Device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
+
+        # Apply torch.compile if enabled (PyTorch 2.0+)
+        if training_config.use_torch_compile:
+            if hasattr(torch, 'compile'):
+                print(f"🔧 Applying torch.compile(mode='{training_config.torch_compile_mode}')...")
+                self.model = torch.compile(self.model, mode=training_config.torch_compile_mode)
+                print("✅ Model compiled (first iteration will be slower due to compilation)")
+            else:
+                print("⚠️ torch.compile not available (requires PyTorch 2.0+), skipping")
         
         # Optimizer
         self.optimizer = self._create_optimizer()
@@ -421,14 +434,16 @@ class Trainer:
             
             # Gradient accumulation step
             if accumulation_steps >= self.config.gradient_accumulation_steps:
-                # Gradient clipping
-                if self.use_amp and self.config.amp_dtype == "float16":
-                    self.scaler.unscale_(self.optimizer)
-                
-                grad_norm = torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.gradient_clip
-                ).item()
+                # Gradient clipping (only if enabled - major sync point!)
+                if self.config.gradient_clip > 0:
+                    if self.use_amp and self.config.amp_dtype == "float16":
+                        self.scaler.unscale_(self.optimizer)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.config.gradient_clip
+                    ).item()
+                else:
+                    grad_norm = 0.0  # No clipping
                 
                 # Optimizer step
                 if self.use_amp and self.config.amp_dtype == "float16":
@@ -742,6 +757,7 @@ def main():
     args = parser.parse_args()
     
     # Create training config
+    # Create training config
     training_config = TrainingConfig(
         max_steps=args.max_steps,
         batch_size=args.batch_size,
@@ -749,12 +765,15 @@ def main():
         seq_length=args.seq_length,
         learning_rate=args.learning_rate,
         warmup_steps=args.warmup_steps,
+        gradient_clip=args.gradient_clip,
         experiment_name=args.experiment_name,
         checkpoint_dir=args.checkpoint_dir,
         seed=args.seed,
         log_interval=args.log_interval,
         save_interval=args.save_interval,
-        profile_steps=args.profile_steps
+        profile_steps=args.profile_steps,
+        use_torch_compile=args.use_torch_compile,
+        torch_compile_mode=args.torch_compile_mode
     )
     
     # Run training
