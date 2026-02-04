@@ -1,6 +1,5 @@
 """Tests for exact deduplication."""
 
-import pytest
 from src.deduplication.exact_dedup import ExactDeduplicator
 
 
