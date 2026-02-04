@@ -13,7 +13,11 @@ BATCH_SIZE = 10000
 
 fs = s3fs.S3FileSystem()
 
-files = [f for f in fs.glob(f"{INPUT_BUCKET}/*.parquet") if not f.endswith(".metadata.parquet")]
+files = [
+    f
+    for f in fs.glob(f"{INPUT_BUCKET}/*.parquet")
+    if not f.endswith(".metadata.parquet")
+]
 
 if not files:
     raise RuntimeError(f"No parquet files found in {INPUT_BUCKET}")
@@ -36,11 +40,23 @@ for f in files:
     row_offset = 0
     mini_rows = []
 
-    for batch in pf.iter_batches(batch_size=BATCH_SIZE, columns=["id", "curriculum_tags"]):
+    for batch in pf.iter_batches(
+        batch_size=BATCH_SIZE, columns=["id", "curriculum_tags"]
+    ):
         ids = batch.column("id").to_pylist()
-        bands = batch.column("curriculum_tags").field("band_assignment").field("band").to_pylist()
+        bands = (
+            batch.column("curriculum_tags")
+            .field("band_assignment")
+            .field("band")
+            .to_pylist()
+        )
 
-        mini_rows.extend([{"id": ids[i], "band": bands[i], "file": f, "row": row_offset + i} for i in range(len(ids))])
+        mini_rows.extend(
+            [
+                {"id": ids[i], "band": bands[i], "file": f, "row": row_offset + i}
+                for i in range(len(ids))
+            ]
+        )
         row_offset += len(ids)
 
     # Write mini-index for this file
