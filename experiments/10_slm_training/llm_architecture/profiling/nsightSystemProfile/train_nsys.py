@@ -383,7 +383,8 @@ class Trainer:
         print(f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}")
         print(f"{'='*60}\n")
         
-        # Initialize loss accumulation on GPU to avoid CPU-GPU sync\n        accumulation_loss = torch.zeros(1, device=self.device)
+        # Initialize loss accumulation on GPU to avoid CPU-GPU sync
+        accumulation_loss = torch.zeros(1, device=self.device)
         accumulation_steps = 0
         step_start_time = time.time()
         
