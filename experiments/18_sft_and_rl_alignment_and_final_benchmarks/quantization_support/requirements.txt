@@ -1,0 +1,92 @@
+# =============================================================================
+# QLoRA Training Requirements
+# Team 18: SFT, RL-Style Alignment & Final Post-Training Benchmarks
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Core ML Framework
+# -----------------------------------------------------------------------------
+torch>=2.1.0
+
+# -----------------------------------------------------------------------------
+# Transformers & Model Loading
+# -----------------------------------------------------------------------------
+transformers>=4.36.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+
+# -----------------------------------------------------------------------------
+# PEFT (Parameter-Efficient Fine-Tuning)
+# -----------------------------------------------------------------------------
+peft>=0.7.0
+
+# -----------------------------------------------------------------------------
+# TRL (Transformer Reinforcement Learning)
+# -----------------------------------------------------------------------------
+trl>=0.7.0
+
+# -----------------------------------------------------------------------------
+# Quantization Support
+# -----------------------------------------------------------------------------
+# bitsandbytes is required for 4-bit and 8-bit quantization
+# Note: Limited support on Apple Silicon (MPS)
+# For CUDA: pip install bitsandbytes
+# For CPU-only or MPS: training without quantization is recommended
+bitsandbytes>=0.41.0
+
+# -----------------------------------------------------------------------------
+# Data Processing
+# -----------------------------------------------------------------------------
+datasets>=2.15.0
+
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+pyyaml>=6.0
+
+# -----------------------------------------------------------------------------
+# Utilities
+# -----------------------------------------------------------------------------
+numpy>=1.24.0
+tqdm>=4.65.0
+
+# -----------------------------------------------------------------------------
+# Optional: Monitoring & Logging
+# -----------------------------------------------------------------------------
+# Uncomment if using wandb for experiment tracking
+# wandb>=0.16.0
+
+# Uncomment if using tensorboard
+# tensorboard>=2.15.0
+
+# -----------------------------------------------------------------------------
+# Optional: Flash Attention (for faster training on compatible GPUs)
+# -----------------------------------------------------------------------------
+# Requires CUDA and compatible GPU (Ampere or newer)
+# pip install flash-attn --no-build-isolation
+# flash-attn>=2.3.0
+
+# -----------------------------------------------------------------------------
+# Development & Testing
+# -----------------------------------------------------------------------------
+# pytest>=7.4.0
+# black>=23.0.0
+# isort>=5.12.0
+
+# =============================================================================
+# Installation Notes
+# =============================================================================
+#
+# For NVIDIA CUDA GPUs:
+#   pip install -r requirements.txt
+#
+# For Apple Silicon (M1/M2/M3):
+#   pip install torch transformers accelerate peft trl datasets pyyaml numpy tqdm
+#   # Note: bitsandbytes has limited MPS support
+#   # Training will use BF16 without quantization
+#
+# For CPU-only:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install transformers accelerate peft trl datasets pyyaml numpy tqdm
+#
+# =============================================================================

@@ -1,0 +1,300 @@
+# =============================================================================
+# QLoRA Training Configuration
+# Team 18: SFT, RL-Style Alignment & Final Post-Training Benchmarks
+# =============================================================================
+# This is the default configuration file. Override settings by:
+# 1. Creating a custom YAML file and using --config
+# 2. Using CLI arguments (highest priority)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Model Configuration
+# -----------------------------------------------------------------------------
+model:
+  # Model name or path (HuggingFace Hub ID or local path)
+  name: "microsoft/phi-2"
+  
+  # Whether to trust remote code (required for some models)
+  trust_remote_code: true
+  
+  # Torch dtype for model weights (when not quantized)
+  # Options: auto, bfloat16, float16, float32
+  torch_dtype: "auto"
+  
+  # Device mapping strategy
+  # Options: auto, cuda, cuda:0, mps, cpu
+  device_map: "auto"
+  
+  # Attention implementation
+  # Options: eager, flash_attention_2, sdpa
+  # Note: flash_attention_2 requires compatible GPU and package
+  attn_implementation: "eager"
+  
+  # Maximum context lengths
+  max_seq_length: 512
+  max_prompt_length: 256
+  max_completion_length: 256
+
+# -----------------------------------------------------------------------------
+# Quantization Configuration
+# -----------------------------------------------------------------------------
+quantization:
+  # Master switch for quantization
+  # Set to false for Apple Silicon (MPS) or when debugging
+  enabled: true
+  
+  # Quantization bit width
+  # Options: 4, 8
+  # 4-bit: Maximum memory savings, slight quality trade-off
+  # 8-bit: Better quality, less memory savings
+  bits: 4
+  
+  # Quantization type (for 4-bit only)
+  # Options: nf4, fp4
+  # nf4: Normal Float 4-bit (recommended for most cases)
+  # fp4: Float Point 4-bit (alternative)
+  quant_type: "nf4"
+  
+  # Compute dtype for quantized operations
+  # Options: bfloat16, float16, float32
+  # bfloat16: Recommended for Ampere+ GPUs
+  # float16: For older GPUs without native BF16
+  compute_dtype: "bfloat16"
+  
+  # Enable double quantization for additional memory savings
+  # Quantizes the quantization constants (~0.4 bits/param savings)
+  double_quant: true
+  
+  # Modules to exclude from quantization (regex patterns supported)
+  # These layers remain in full precision
+  exclude_modules:
+    - "lm_head"
+    - "embed_tokens"
+    - ".*layernorm.*"
+    - ".*norm.*"
+  
+  # Modules to save in full precision during training
+  # Useful if you want to fine-tune embeddings
+  modules_to_save: []
+  # Example: ["embed_tokens", "lm_head"]
+
+# -----------------------------------------------------------------------------
+# LoRA Configuration
+# -----------------------------------------------------------------------------
+lora:
+  # LoRA rank (r)
+  # Higher rank = more parameters = more capacity = more memory
+  # Typical values: 8, 16, 32, 64, 128
+  r: 64
+  
+  # LoRA alpha (scaling factor)
+  # The actual scaling is alpha/r
+  # Typical: alpha = 2 * r
+  alpha: 128
+  
+  # LoRA dropout
+  # Regularization during training
+  dropout: 0.05
+  
+  # Bias handling
+  # Options: none, all, lora_only
+  # none: Don't train any bias terms (recommended)
+  # all: Train all bias terms
+  # lora_only: Train bias only in LoRA layers
+  bias: "none"
+  
+  # Task type
+  # Options: CAUSAL_LM, SEQ_2_SEQ_LM, TOKEN_CLS, SEQ_CLS
+  task_type: "CAUSAL_LM"
+  
+  # Target modules to apply LoRA
+  # These are the linear layers that get LoRA adapters
+  # Model-specific - these work for Llama, Mistral, phi-2, etc.
+  target_modules:
+    - "q_proj"      # Query projection
+    - "k_proj"      # Key projection
+    - "v_proj"      # Value projection
+    - "o_proj"      # Output projection
+    - "gate_proj"   # MLP gate (Llama-style)
+    - "up_proj"     # MLP up projection
+    - "down_proj"   # MLP down projection
+    # For phi-2 specifically, you may also use:
+    # - "fc1"       # MLP first layer
+    # - "fc2"       # MLP second layer
+    # - "dense"     # Attention output
+
+# -----------------------------------------------------------------------------
+# Training Configuration
+# -----------------------------------------------------------------------------
+training:
+  # Output directory for checkpoints and logs
+  output_dir: "./outputs"
+  
+  # Training method
+  # Options: sft, grpo, dpo
+  method: "sft"
+  
+  # -----------------------------
+  # Batch Settings
+  # -----------------------------
+  # Per-device batch size
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  
+  # Gradient accumulation steps
+  # Effective batch size = per_device_batch_size * gradient_accumulation_steps * num_gpus
+  gradient_accumulation_steps: 4
+  
+  # -----------------------------
+  # Learning Rate
+  # -----------------------------
+  learning_rate: 2.0e-5
+  
+  # LR scheduler type
+  # Options: linear, cosine, cosine_with_restarts, polynomial, constant, constant_with_warmup
+  lr_scheduler_type: "cosine"
+  
+  # Warmup ratio (fraction of total steps)
+  warmup_ratio: 0.1
+  
+  # Weight decay for AdamW
+  weight_decay: 0.01
+  
+  # -----------------------------
+  # Training Duration
+  # -----------------------------
+  # Number of training epochs
+  num_train_epochs: 1
+  
+  # Maximum training steps (-1 for full epochs)
+  max_steps: -1
+  
+  # -----------------------------
+  # Precision Settings
+  # -----------------------------
+  # Use BF16 mixed precision (recommended for Ampere+ GPUs)
+  bf16: true
+  
+  # Use FP16 mixed precision (for older GPUs)
+  fp16: false
+  
+  # Enable gradient checkpointing to save memory
+  # Trades compute for memory
+  gradient_checkpointing: true
+  
+  # Maximum gradient norm for clipping
+  max_grad_norm: 1.0
+  
+  # -----------------------------
+  # Logging and Saving
+  # -----------------------------
+  logging_steps: 10
+  save_steps: 100
+  save_total_limit: 3
+  
+  # Evaluation settings
+  eval_strategy: "steps"  # Options: no, steps, epoch
+  eval_steps: 100
+  
+  # Reporting
+  # Options: none, tensorboard, wandb, all
+  report_to: "none"
+  
+  # Random seed for reproducibility
+  seed: 42
+  
+  # Dataloader settings
+  dataloader_num_workers: 0  # 0 works best with MPS
+  
+  # -----------------------------
+  # GRPO-Specific Settings
+  # -----------------------------
+  grpo:
+    # Number of completions to generate per prompt
+    num_generations: 4
+    
+    # KL divergence coefficient (0 = disabled)
+    beta: 0.0
+    
+    # Generation temperature
+    temperature: 0.7
+    
+    # Top-p sampling
+    top_p: 0.9
+    
+    # Clipping parameter
+    epsilon: 0.2
+  
+  # -----------------------------
+  # DPO-Specific Settings
+  # -----------------------------
+  dpo:
+    # Beta parameter for DPO loss
+    beta: 0.1
+    
+    # Label smoothing
+    label_smoothing: 0.0
+
+# -----------------------------------------------------------------------------
+# Data Configuration
+# -----------------------------------------------------------------------------
+data:
+  # Dataset name (HuggingFace Hub ID)
+  dataset_name: "OpenAssistant/oasst1"
+  
+  # Dataset split to use
+  dataset_split: "train"
+  
+  # Maximum number of samples (null for all)
+  max_samples: null
+  
+  # Validation split ratio (from training data)
+  val_split_ratio: 0.1
+  
+  # Text column name in dataset
+  text_column: "text"
+  
+  # Prompt template (for SFT)
+  # Use {text} as placeholder for the input text
+  prompt_template: "User: {text}\nAssistant:"
+  
+  # Dataset-specific filters
+  filters:
+    # Language filter (for multilingual datasets)
+    language: "en"
+    
+    # Minimum quality score (for datasets with quality labels)
+    min_quality: 0.5
+
+# -----------------------------------------------------------------------------
+# Hardware Configuration
+# -----------------------------------------------------------------------------
+hardware:
+  # Enable automatic hardware detection and configuration
+  auto_detect: true
+  
+  # Fallback to CPU if no GPU available
+  fallback_to_cpu: true
+  
+  # On Apple Silicon (MPS), automatically disable quantization and use BF16
+  mps_fallback_to_bf16: true
+  
+  # Force specific device (overrides auto_detect)
+  # Options: null (auto), cuda, cuda:0, cuda:1, mps, cpu
+  force_device: null
+
+# -----------------------------------------------------------------------------
+# Hub Configuration (for pushing to HuggingFace)
+# -----------------------------------------------------------------------------
+hub:
+  # Whether to push to HuggingFace Hub after training
+  push_to_hub: false
+  
+  # Hub model ID (username/model-name)
+  hub_model_id: null
+  
+  # Hub token (use environment variable HF_TOKEN instead for security)
+  # hub_token: null
+  
+  # Private repository
+  private: false
