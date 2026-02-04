@@ -94,5 +94,5 @@ if __name__ == "__main__":
         output_dir=args.output,
         domain=args.domain,
         version=args.version,
-        source=args.source
+        external_source=args.external_source
     )
