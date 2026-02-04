@@ -93,6 +93,7 @@ INDICGLUE_CONFIGS = [
 
 def analyze_indicglue(
     tokenizer_name: str = "Xenova/gpt-4",
+    split: str = "test",
     output_dir: Path = None,
     configs_to_analyze: list = None,
 ):
@@ -101,6 +102,7 @@ def analyze_indicglue(
 
     Args:
         tokenizer_name: Tokenizer to use for counting (default: Xenova/gpt-4 using cl100k_base)
+        split: Dataset split to analyze - test/train/validation (default: test)
         output_dir: Directory to save results
         configs_to_analyze: List of configs to analyze (defaults to all)
     """
@@ -111,6 +113,7 @@ def analyze_indicglue(
     print("IndicGLUE Benchmark Analysis")
     print("=" * 80)
     print(f"\nTotal configs to analyze: {len(configs_to_analyze)}")
+    print(f"Split: {split}")
     print(f"Tokenizer: {tokenizer_name}\n")
 
     # Initialize utilities
@@ -132,7 +135,7 @@ def analyze_indicglue(
 
         try:
             stats = counter.count_dataset(
-                "ai4bharat/indic_glue", split="test", name=config
+                "ai4bharat/indic_glue", split=split, name=config
             )
 
             results.append(
@@ -140,7 +143,7 @@ def analyze_indicglue(
                     "config": config,
                     "status": "success",
                     "dataset_name": "ai4bharat/indic_glue",
-                    "split": "test",
+                    "split": split,
                     "num_samples": stats["num_samples"],
                     "total_tokens": stats["total_tokens"],
                     "mean_tokens": stats["mean_tokens"],
@@ -182,6 +185,7 @@ def analyze_indicglue(
     summary = {
         "benchmark": "IndicGLUE",
         "dataset_name": "ai4bharat/indic_glue",
+        "split": split,
         "total_configs": len(configs_to_analyze),
         "successful_configs": successful,
         "failed_configs": failed,
@@ -212,11 +216,12 @@ def analyze_indicglue(
     print("SUMMARY")
     print("=" * 80)
     print("Benchmark: IndicGLUE")
+    print(f"Split: {split}")
     print(f"Total configs: {len(configs_to_analyze)}")
     print(f"  ✓ Successful: {successful}")
     print(f"  ✗ Failed: {failed}")
     print("\nAggregate Statistics:")
-    print(f"  Total test samples: {total_samples:,}")
+    print(f"  Total samples ({split}): {total_samples:,}")
     print(f"  Total tokens: {total_tokens:,}")
     print(f"  Average tokens/sample: {avg_tokens:.2f}")
     print(f"\nEvaluation Metric: {metric_info.get('metric', 'Unknown')}")
@@ -235,6 +240,13 @@ def main():
         type=str,
         default="Xenova/gpt-4",
         help="Tokenizer to use (default: Xenova/gpt-4 using cl100k_base for FLOPS)",
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        choices=["train", "validation", "test"],
+        help="Dataset split to analyze (default: test). Useful for data/training teams.",
     )
     parser.add_argument("--output-dir", type=str, help="Output directory for results")
     parser.add_argument(
@@ -255,12 +267,15 @@ def main():
         # Pass only the selected config
         analyze_indicglue(
             tokenizer_name=args.tokenizer,
+            split=args.split,
             output_dir=output_dir,
             configs_to_analyze=[args.config],
         )
     else:
         # Analyze all configs
-        analyze_indicglue(tokenizer_name=args.tokenizer, output_dir=output_dir)
+        analyze_indicglue(
+            tokenizer_name=args.tokenizer, split=args.split, output_dir=output_dir
+        )
 
 
 if __name__ == "__main__":
