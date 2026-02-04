@@ -1,6 +1,5 @@
 """Tests for coreset pipeline."""
 
-import pytest
 from src.coreset_builder.pipeline import CoresetPipeline
 
 
