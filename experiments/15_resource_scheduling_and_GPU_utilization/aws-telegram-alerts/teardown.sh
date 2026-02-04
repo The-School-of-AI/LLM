@@ -14,9 +14,9 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
-SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-alerts}"
-LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-alert-forwarder}"
-LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-lambda-execution-role}"
+SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-idle-alert-topic}"
+LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-cpu-idle-alert-forwarder}"
+LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-cpu-alert-lambda-execution-role}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ACCOUNTS_FILE="${SCRIPT_DIR}/accounts.txt"
