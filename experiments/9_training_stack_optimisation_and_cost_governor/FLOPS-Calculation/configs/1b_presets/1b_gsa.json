@@ -1,0 +1,48 @@
+{
+  "hardware": {
+    "num_gpus": 8,
+    "price_per_gpu_hour": 2.5,
+    "mfu": 0.3,
+    "quantization": "all",
+    "zero_stage": 2,
+    "cpu_offload": false,
+    "tflops_per_gpu": {
+      "bf16": 989.0,
+      "fp8": 1979.0,
+      "nvfp4": 3500.0
+    },
+    "_comment": "Update hardware to match your cluster"
+  },
+  "stages": [
+    {
+      "name": "1B GSA",
+      "total_tokens": 20000000000,
+      "architecture": {
+        "vocab_size": 128000,
+        "hidden_size": 2048,
+        "intermediate_size": 4096,
+        "num_layers": 16,
+        "num_heads": 16,
+        "num_kv_heads": 4,
+        "sequence_length": 4096,
+        "tie_embeddings": true,
+        "attention_type": "gsa",
+        "position_type": "yarn",
+        "yarn_original_max_position": 4096,
+        "yarn_scale": 8.0,
+        "yarn_beta_fast": 32.0,
+        "yarn_beta_slow": 1.0,
+        "yarn_mscale": 1.0,
+        "gsa_num_indexer_heads": 4,
+        "gsa_indexer_dim": 64,
+        "gsa_k_base": 128,
+        "gsa_k_min": 32,
+        "gsa_k_max": 256,
+        "gsa_use_adaptive_k": true,
+        "gsa_use_value_gate": true,
+        "gsa_use_output_gate": true
+      },
+      "_comment": "Token count is a placeholder; update when final"
+    }
+  ]
+}
