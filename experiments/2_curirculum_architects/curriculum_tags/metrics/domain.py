@@ -8,7 +8,7 @@ from ..core.plugin import MetricPlugin
 
 class DomainMetric(MetricPlugin):
     """Assigns domain tags based on modality and content heuristics.
-    
+
     Domains are defined in curriculum.yaml:
     - general_web_clean
     - encyclopedic
@@ -25,27 +25,27 @@ class DomainMetric(MetricPlugin):
     # Regex patterns for heuristic classification of general text
     RE_DIALOGUE = re.compile(
         r"^(User|Assistant|System|Human|AI|A|B):|^(Q|A)\.|<\|user\|>|<\|assistant\|>",
-        re.IGNORECASE | re.MULTILINE
+        re.IGNORECASE | re.MULTILINE,
     )
-    
+
     RE_ENCYCLOPEDIC = re.compile(
         r"\[\d+\]|\[edit\]|Coordinates:|External links|See also|References|Bibliography",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
-    
+
     RE_TECHNICAL = re.compile(
         r"\b(API|SDK|DOI|ISBN|Usage:|Installation:|Arguments:|Returns:)\b",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Determine domain based on modality signals and text features."""
-        
+
         # 1. Get Modality Signals (High Confidence)
         tags = sample.get("curriculum_tags", {})
         modality_tags = tags.get("modality", {})
         primary_modality = modality_tags.get("primary_modality")
-        
+
         # Also check boolean flags if primary isn't set (robustness)
         has_code = modality_tags.get("has_code", False)
         has_math = modality_tags.get("has_math", False)
@@ -61,24 +61,24 @@ class DomainMetric(MetricPlugin):
             primary_domain = "planning_reasoning_curated"
             confidence = 1.0
             reason = "modality_signal"
-            
+
         elif primary_modality == "code" or (has_code and not has_math):
             # Pure code is likely a repo
             primary_domain = "code_repos"
             confidence = 0.95
             reason = "modality_signal"
-            
+
         elif primary_modality == "math" or (has_math and not has_code):
             primary_domain = "math_science"
             confidence = 0.9
             reason = "modality_signal"
-            
+
         elif primary_modality == "research_papers" or has_research:
             # Research papers are usually math/science
             primary_domain = "math_science"
             confidence = 0.9
             reason = "modality_signal"
-            
+
         elif primary_modality == "technical_text":
             # Could be docs or math/science. Default to technical_docs for now unless it looks like a paper
             if has_research:
@@ -91,22 +91,22 @@ class DomainMetric(MetricPlugin):
         # 3. Fallback: Heuristics for General Text
         if not primary_domain:
             text = sample.get("text", "")
-            
+
             # Check Dialogue
             if self.RE_DIALOGUE.search(text):
                 primary_domain = "dialogue_chat"
                 confidence = 0.85
-                
+
             # Check Encyclopedic
             elif self.RE_ENCYCLOPEDIC.search(text):
                 primary_domain = "encyclopedic"
                 confidence = 0.8
-                
+
             # Check Technical Docs (Weak signal)
             elif self.RE_TECHNICAL.search(text):
                 primary_domain = "technical_docs"
                 confidence = 0.6
-                
+
             else:
                 # Default
                 primary_domain = "general_web_clean"
@@ -116,5 +116,5 @@ class DomainMetric(MetricPlugin):
         return {
             "primary_domain": primary_domain,
             "confidence": confidence,
-            "reason": reason
+            "reason": reason,
         }

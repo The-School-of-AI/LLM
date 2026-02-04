@@ -8,67 +8,126 @@
 
 Our team is responsible for **Curriculum Learning** — the idea that, just like students in school, AI models learn better when they start with simpler content and gradually progress to more complex material.
 
-We've developed three interconnected systems:
+We've developed a comprehensive data curation pipeline:
 
 | Component | Purpose |
 |-----------|---------|
-| **Metadata Tagging System** | Analyzes and labels every piece of training data with quality and difficulty metrics |
-| **Curriculum Constitution** | The "rulebook" defining how training data should be organized by difficulty level |
-| **Data Sampler** | Tool for exploring and sampling datasets from cloud storage |
+| **curriculum_extractor** | Read-only extraction of metrics from source data |
+| **curriculum_reader** | Reading metadata layer for batch creation |
+| **Lightning Dataset Sampler** | Browser-based parquet viewer for exploration |
+| **Curriculum Constitution** | The "rulebook" defining difficulty levels |
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        CURRICULUM PIPELINE                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─────────────┐      ┌──────────────────┐      ┌──────────────────┐    │
+│  │   Source    │──────│  curriculum_     │──────│    Metadata      │    │
+│  │   Parquet   │ READ │  extractor       │WRITE │    Layer         │    │
+│  │   Files     │ ONLY │                  │      │    (.parquet)    │    │
+│  └─────────────┘      └──────────────────┘      └──────────────────┘    │
+│                                │                         │               │
+│                                │                         ▼               │
+│                       ┌────────┴────────┐      ┌──────────────────┐     │
+│                       │                 │      │  assign_bands.py │     │
+│                       ▼                 ▼      │  (post-process)  │     │
+│                  ┌─────────┐      ┌─────────┐  └──────────────────┘     │
+│                  │ Level 0 │      │ Level N │           │               │
+│                  │ Metrics │ ···  │ Metrics │           ▼               │
+│                  └─────────┘      └─────────┘  ┌──────────────────┐     │
+│                                                │  curriculum_     │     │
+│                                                │  reader          │     │
+│                                                │  (batch creation)│     │
+│                                                └──────────────────┘     │
+│                                                         │               │
+│                                                         ▼               │
+│                                                ┌──────────────────┐     │
+│                                                │  Training Loop   │     │
+│                                                │  (deterministic) │     │
+│                                                └──────────────────┘     │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Design Principles
+
+| Principle | Description |
+|-----------|-------------|
+| **Read-Only Records** | Source records are NEVER modified. `ReadOnlyRecord` wrapper ensures immutability |
+| **Early Rejection** | Processing stops at first rejection, saving compute |
+| **Level-Based Metrics** | Metrics grouped by level; same level can run in parallel |
+| **Metadata Separation** | Metrics stored separately from source data |
+| **Post-Processing Bands** | Band assignment happens after extraction, not during |
+| **Deterministic Batching** | Training batches are reproducible with same seed |
 
 ---
 
-## 1. Metadata Tagging System
+## 1. Curriculum Extractor
 
-### What It Does (Non-Technical Summary)
+### What It Does
 
-Think of this as a **quality inspector** for training data. Before we feed billions of documents to train an AI model, we need to know:
-- How difficult is this text? (Is it a children's book or a PhD thesis?)
-- What type of content is it? (Code, news, academic paper?)
-- Which "grade level" should it be assigned to?
-
-The tagging system automatically analyzes each document and adds these labels ("metadata tags") so the training pipeline knows when to use each piece of data.
-
-### Technical Details
+The **curriculum_extractor** package extracts metrics from source data while keeping source records completely immutable.
 
 | Attribute | Details |
 |-----------|---------|
-| **Path** | `experiments/2_curirculum_architects/curriculum_tags/` |
-| **Purpose** | Auto-discovering plugin system that computes curriculum metadata tags for training datasets |
-| **Input Format** | JSONL records in Parquet files (normalized key/value pairs from Team 1) |
-| **Output** | Original Parquet files with added `curriculum_tags` field + separate metadata summary file |
+| **Path** | `experiments/2_curirculum_architects/curriculum_extractor/` |
+| **Purpose** | Read-only extraction of curriculum metrics |
+| **Input Format** | JSONL records in Parquet files |
+| **Output** | Separate metadata parquet files (source unchanged) |
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `ReadOnlyRecord` | Immutable wrapper that prevents any modifications |
+| `ExtractionResult` | Frozen dataclass with metrics and rejection info |
+| `MetricPlugin` | Base class with level support for ordered execution |
+| `RecordExtractor` | Main extraction engine with early rejection |
 
 ### Current Metrics (Plugin-Based)
 
-| Metric | What It Measures |
-|--------|------------------|
-| **Difficulty** | Overall text complexity score (0-1 scale) |
-| **Readability** | Flesch-Kincaid grade level, Flesch Reading Ease |
-| **Modality** | Content type classification (general text, code, math, etc.) |
-| **Band Assignment** | Maps difficulty to curriculum "grade level" (B0-B5) |
-| **Tokenizer Difficulty** | Token-level complexity analysis |
-| **Entropy** | Information density and predictability |
-| **Diversity** | Lexical richness (MTLD, vocabulary variety) |
+| Metric | Level | What It Measures | Can Reject |
+|--------|-------|------------------|------------|
+| **LengthFilter** | 0 | Token/char length bounds | Yes |
+| **LanguageFilter** | 0 | Language detection | Yes |
+| **ContentFilter** | 0 | Blocklist/patterns | Yes |
+| **PerplexityScorer** | 1 | Language model perplexity | No |
+| **QualityClassifier** | 1 | ML quality score | No |
+| **DomainClassifier** | 2 | Content domain | No |
+| **ReadabilityScorer** | 1 | Flesch-Kincaid grade level | No |
+| **DiversityScorer** | 1 | Lexical richness (MTLD) | No |
+| **EntropyScorer** | 1 | Information density | No |
 
-> [!NOTE]
-> The metrics are not fully exhaustive yet. This is a **plugin system** — we will finalize the complete metric set after receiving final data format specifications from Team 1.
-
-### How It Works
-
-### How It Works
+### How Levels Work
 
 ```
-┌─────────────────┐     ┌───────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│  S3 Parquet     │ ──▶ │  CurriculumTagger │ ──▶ │  Tagged Parquet     │ ──▶ │  Team 3             │
-│  (from Team 1)  │     │  (runs metrics)   │     │  + Metadata File    │     │  (Coreset Eng.)     │
-└─────────────────┘     └───────────────────┘     └─────────────────────┘     └─────────────────────┘
+Record → Level 0 (fast filters) → Level 1 (quality) → Level 2 (content)
+              ↓                        ↓                    ↓
+         If rejected              If rejected          If rejected
+              ↓                        ↓                    ↓
+         STOP (skip L1, L2)       STOP (skip L2)      Return result
 ```
 
-1. Read Parquet files from S3 in **distributed manner** (batch processing)
-2. Apply each metric plugin in sequence (metrics can see results from previous metrics)
-3. Assign curriculum band (B0-B5) based on computed metrics
-4. Write processed files back to S3 with updated tags
-5. Generate separate metadata file for analytics and statistics
+### Quick Start
+
+```python
+from curriculum_extractor.core.extractor import RecordExtractor
+
+# Initialize extractor
+extractor = RecordExtractor("curriculum.yaml")
+
+# Process record (read-only!)
+record = {"id": "doc1", "text": "Sample document..."}
+result = extractor.extract_record(record)
+
+if result.rejected:
+    print(f"Rejected: {result.rejection_reason}")
+else:
+    print(f"Metrics: {result.metrics}")
+```
 
 ### Setup/Dependency
 
@@ -77,16 +136,17 @@ cd experiments/2_curirculum_architects
 uv pip install -e .
 ```
 
-### Run Command
-
-*(These are examples, not the actual runs. See `examples/` folder for more.)*
+### Run Commands
 
 ```bash
 # Basic usage
-uv run python examples/basic_usage.py
+uv run python examples/01_basic_extraction.py
 
 # Process Parquet files
-uv run python examples/parquet_processing.py
+uv run python examples/02_parquet_processing.py
+
+# Run benchmark
+uv run python examples/07_benchmarking.py
 
 # Run tests
 uv run pytest tests/ -v
@@ -94,7 +154,127 @@ uv run pytest tests/ -v
 
 ---
 
-## 2. Curriculum YAML Structure (The "Constitution")
+## 2. Curriculum Reader
+
+### What It Does
+
+The **curriculum_reader** package reads metadata from the extraction layer and creates training batches.
+
+| Attribute | Details |
+|-----------|---------|
+| **Path** | `experiments/2_curirculum_architects/curriculum_reader/` |
+| **Purpose** | Read metadata layer and create deterministic training batches |
+| **Input** | Metadata parquet files from curriculum_extractor |
+| **Output** | Batches of records with source data joined |
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `MetadataReader` | Read and query metadata layer |
+| `BatchCreator` | Create deterministic batches with stratification |
+| `MetadataAnalyzer` | Statistics and distributions |
+| `RejectionReader` | Analyze rejection patterns |
+
+### Quick Start
+
+```python
+from curriculum_reader.batch_creator import BatchCreator
+
+creator = BatchCreator(
+    metadata_dir="./metadata",
+    source_dir="./source",
+    batch_size=1000,
+    seed=42,  # Deterministic
+)
+
+# Generate batches with band proportions
+for batch in creator.create_batches(
+    band_proportions={"high": 0.5, "medium": 0.3, "low": 0.2}
+):
+    for record in batch:
+        train(record)
+```
+
+---
+
+## 3. Band Assignment (Post-Processing)
+
+### What It Does
+
+Band assignment happens **after** extraction by reading the metadata layer. This separates concerns and allows re-assignment without re-extraction.
+
+```bash
+# Assign bands to metadata
+python -m curriculum_extractor.scripts.assign_bands \
+    --curriculum curriculum.yaml \
+    --metadata ./metadata \
+    --output ./metadata_with_bands
+```
+
+### Quick Start
+
+```python
+from curriculum_extractor.scripts.assign_bands import BandAssigner
+
+# Configure bands
+bands = [
+    {"name": "B0", "min_score": 0.0, "max_score": 0.20},
+    {"name": "B1", "min_score": 0.20, "max_score": 0.40},
+    {"name": "B2", "min_score": 0.40, "max_score": 0.60},
+    {"name": "B3", "min_score": 0.60, "max_score": 0.75},
+    {"name": "B4", "min_score": 0.75, "max_score": 0.90},
+    {"name": "B5", "min_score": 0.90, "max_score": 1.0},
+]
+
+# Assign bands to metadata
+assigner = BandAssigner("curriculum.yaml", bands)
+stats = assigner.process_metadata_directory("./metadata")
+print(f"Band distribution: {stats}")
+```
+
+---
+
+## 4. Lightning Dataset Sampler
+
+### What It Does
+
+A **browser-based tool** for exploring parquet files. Runs on GitHub Pages with no backend required.
+
+| Feature | Description |
+|---------|-------------|
+| 🔗 S3 URL | Load from signed S3 URLs |
+| 🌐 HTTP URL | Load from any HTTP endpoint |
+| 📁 Local File | Drag & drop or file picker |
+| 👁️ Views | Toggle raw text / JSON / metadata |
+| 🎲 Random | Jump to random record |
+| 🔍 Search | Find by record ID or content |
+| ⏱️ Timing | Console logs for performance |
+
+| Attribute | Details |
+|-----------|---------|
+| **Path** | `experiments/2_curirculum_architects/lightning_dataset_sampler/` |
+| **Tech Stack** | Vite + Apache Arrow (browser WASM) |
+| **Deploy** | GitHub Pages via workflow |
+
+### Run Locally
+
+```bash
+cd lightning_dataset_sampler
+npm install
+npm run dev
+```
+
+### Deploy to GitHub Pages
+
+```bash
+npm run build
+# Or push to trigger .github/workflows/deploy-sampler.yml
+```
+
+---
+
+## 5. Curriculum YAML Structure (The "Constitution")
 
 ### What It Does (Non-Technical Summary)
 
@@ -240,29 +420,6 @@ While the **Flesch-Kincaid (FK)** score measures linguistic complexity (sentence
 
 ---
 
-## 5. Modality vs. Domain Strategy
-
-A common question is the difference between these two tagging systems. We distinguish them as **Form vs. Topic**:
-
-### 1. Modality = The "Format" (How)
-**Modality describes the structural form or syntax of the data.**
-It answers the question: *"What kind of cognitive processing is required to parse this?"*
-
-*   **Examples**: `code` (requires distinct syntax parsing), `math` (requires symbolic logic), `agentic_traces` (requires state-tracking).
-*   **Purpose**: Targets **Capability Acquisition**. Providing "code" modality allows the model to learn the *skill* of coding.
-
-### 2. Domain = The "Topic/Source" (What)
-**Domain describes the subject matter or provenance of the data.**
-It answers the question: *"What body of knowledge does this belong to?"*
-
-*   **Examples**: `encyclopedic` (factual knowledge), `code_repos` (software libraries), `news_nonpolitical` (current events).
-*   **Purpose**: Targets **Knowledge Coverage**. Providing "encyclopedic" domain allows the model to learn *facts*.
-
-### The Intersection (Why we sync them)
-While distinct, they are highly correlated. Our `DomainMetric` uses modality as a strong signal (e.g., `code` → `code_repos`), but uses text heuristics to distinguish `general_text` into domains like `encyclopedic` vs `dialogue_chat`.
-
----
-
 ## 6. Data Sampler
 
 ### What It Does (Non-Technical Summary)
@@ -297,6 +454,60 @@ uv run python scripts/s3_loader.py
 
 ---
 
+## 7. Benchmarking
+
+Run performance benchmarks with per-metric timing and memory tracking:
+
+```bash
+# Run benchmark
+python -m curriculum_extractor.scripts.benchmark \
+    --curriculum curriculum.yaml \
+    --input ./sample_data \
+    --batch-size 1000 \
+    --max-records 10000
+```
+
+### Example Output
+
+```
+================================================================================
+PIPELINE BENCHMARK RESULTS
+================================================================================
+
+Results:
+  Total records: 100,000
+  Rejected: 12,345 (12.3%)
+  Total time: 45.23s
+  Throughput: 2,211 records/sec
+  
+Per-Metric Timing:
+  length_filter (L0):     avg=0.05ms, total=5.00s
+  language_filter (L0):   avg=0.12ms, total=12.00s
+  perplexity (L1):        avg=0.45ms, total=39.42s
+  domain_classifier (L2): avg=0.23ms, total=20.15s
+  
+Memory:
+  Peak: 1.2 GB
+```
+
+---
+
+## Examples
+
+Comprehensive examples are in [examples/](examples/):
+
+| Example | Description |
+|---------|-------------|
+| [01_basic_extraction.py](examples/01_basic_extraction.py) | Basic read-only extraction with timing |
+| [02_parquet_processing.py](examples/02_parquet_processing.py) | StateManager for incremental processing |
+| [03_custom_metrics.py](examples/03_custom_metrics.py) | Creating custom metrics with rejection |
+| [04_band_assignment.py](examples/04_band_assignment.py) | Post-processing band assignment |
+| [05_metadata_analysis.py](examples/05_metadata_analysis.py) | MetadataAnalyzer usage |
+| [06_batch_creation.py](examples/06_batch_creation.py) | Deterministic batch creation |
+| [07_benchmarking.py](examples/07_benchmarking.py) | Running performance benchmarks |
+
+---
+
 ## What's Next
 
 | Item | Status | Notes |
@@ -305,6 +516,7 @@ uv run python scripts/s3_loader.py
 | Freeze curriculum.yaml | 📋 Pending | Will freeze after Team 1 confirmation |
 | Band threshold calibration | 📋 Pending | Requires sample data run |
 | Integration testing | 📋 Pending | End-to-end pipeline with real data |
+| Lightning Sampler Deploy | 📋 Pending | Deploy to GitHub Pages |
 
 ---
 
@@ -314,10 +526,34 @@ uv run python scripts/s3_loader.py
 |-----------|------|
 | Curriculum Policy | [`curriculum.yaml`](./curriculum.yaml) |
 | Metrics Config | [`metrics_config.yaml`](./metrics_config.yaml) |
-| Tagging Library | [`metrics/README.md`](./curriculum_tags/metrics/README.md) |
-| Data Sampler | [`data_sampler/README.md`](./data_sampler/README.md) |
-| Examples | [`examples/README.md`](./examples/README.md) |
-| Tests | `experiments/2_curirculum_architects/tests/` |
+| **Extraction Package** | [`curriculum_extractor/`](./curriculum_extractor/) |
+| **Reader Package** | [`curriculum_reader/`](./curriculum_reader/) |
+| **Lightning Sampler** | [`lightning_dataset_sampler/`](./lightning_dataset_sampler/) |
+| Band Assignment Script | [`curriculum_extractor/scripts/assign_bands.py`](./curriculum_extractor/scripts/assign_bands.py) |
+| Benchmark Script | [`curriculum_extractor/scripts/benchmark.py`](./curriculum_extractor/scripts/benchmark.py) |
+| Examples | [`examples/`](./examples/) |
+| Tests | `tests/` |
+
+---
+
+## Changelog
+
+### v2.0.0 (Current)
+
+- **Breaking**: Records are now read-only (no plugin chaining)
+- **Breaking**: Band assignment moved to post-processing
+- **Added**: Level-based metric execution for potential parallelism
+- **Added**: Early rejection for efficiency
+- **Added**: Per-metric timing in benchmark
+- **Added**: Lightning Dataset Sampler webapp
+- **Added**: curriculum_reader package
+- **Added**: Comprehensive examples (01-07)
+
+### v1.0.0
+
+- Initial implementation with plugin chaining
+- Basic curriculum configuration
+- StateManager for incremental processing
 
 ---
 
