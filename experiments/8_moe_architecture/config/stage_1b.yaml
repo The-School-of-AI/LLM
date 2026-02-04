@@ -1,0 +1,41 @@
+stage_name: "1B"
+target_tokens: 20_000_000_000  # 20B tokens
+
+# Curriculum ratios (adjust based on Team 2 specs)
+curriculum_ratios:
+  bands:
+    B0: 0.40
+    B1: 0.30
+    B2: 0.20
+    B3: 0.07
+    B4: 0.02
+    B5: 0.01
+  
+  domains:
+    clean_web: 0.50
+    code: 0.20
+    math: 0.10
+    reasoning: 0.10
+    agentic: 0.05
+    indic: 0.05
+
+# Protected slices (minimum counts)
+protected_slices:
+  B4: 400_000_000  # tokens
+  B5: 200_000_000
+  agentic: 1_000_000_000
+  code_reasoning: 500_000_000
+
+# Deduplication settings
+deduplication:
+  exact: true
+  near:
+    enabled: true
+    threshold: 0.85
+    num_perm: 128
+
+# Selection strategy
+selection:
+  method: "stratified"
+  rolling_window_size: 10_000  # chunks
+  max_ratio_deviation: 0.05  # 5% tolerance

@@ -1,0 +1,37 @@
+stage_name: "8B"
+target_tokens: 100_000_000_000  # 100B tokens
+
+curriculum_ratios:
+  bands:
+    B0: 0.20
+    B1: 0.25
+    B2: 0.30
+    B3: 0.15
+    B4: 0.06
+    B5: 0.04
+  
+  domains:
+    clean_web: 0.30
+    code: 0.30
+    math: 0.15
+    reasoning: 0.15
+    agentic: 0.07
+    indic: 0.03
+
+protected_slices:
+  B4: 6_000_000_000
+  B5: 4_000_000_000
+  agentic: 7_000_000_000
+  code_reasoning: 5_000_000_000
+
+deduplication:
+  exact: true
+  near:
+    enabled: true
+    threshold: 0.85
+    num_perm: 128
+
+selection:
+  method: "stratified"
+  rolling_window_size: 10_000
+  max_ratio_deviation: 0.05

@@ -1,0 +1,34 @@
+# Core dependencies
+numpy>=1.24.0
+torch>=2.0.0
+pandas>=2.0.0
+
+# Deduplication and hashing
+datasketch>=1.6.0
+xxhash>=3.2.0
+
+# Optional: embeddings for protected slices
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.4
+
+# Data processing
+datasets>=2.14.0
+tokenizers>=0.13.0
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.65.0
+jsonlines>=3.1.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Code quality
+ruff>=0.1.0
+mypy>=1.5.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+jupyter>=1.0.0

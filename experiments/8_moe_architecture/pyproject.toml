@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coreset-engineering"
+version = "0.1.0"
+description = "Coreset selection pipeline for LLM training data"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24.0",
+    "torch>=2.0.0",
+    "pandas>=2.0.0",
+    "datasketch>=1.6.0",
+    "xxhash>=3.2.0",
+    "sentence-transformers>=2.2.0",
+    "faiss-cpu>=1.7.4",
+    "datasets>=2.14.0",
+    "tokenizers>=0.13.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.65.0",
+    "jsonlines>=3.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+]
+viz = [
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "jupyter>=1.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = "datasketch.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "xxhash.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=src --cov-report=term-missing"

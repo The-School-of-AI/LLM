@@ -1,0 +1,37 @@
+stage_name: "MoE_16B"
+target_tokens: 240_000_000_000  # 240B tokens
+
+curriculum_ratios:
+  bands:
+    B0: 0.10
+    B1: 0.20
+    B2: 0.30
+    B3: 0.20
+    B4: 0.12
+    B5: 0.08
+  
+  domains:
+    clean_web: 0.20
+    code: 0.35
+    math: 0.17
+    reasoning: 0.17
+    agentic: 0.08
+    indic: 0.03
+
+protected_slices:
+  B4: 28_800_000_000
+  B5: 19_200_000_000
+  agentic: 19_200_000_000
+  code_reasoning: 20_000_000_000
+
+deduplication:
+  exact: true
+  near:
+    enabled: true
+    threshold: 0.85
+    num_perm: 128
+
+selection:
+  method: "stratified"
+  rolling_window_size: 10_000
+  max_ratio_deviation: 0.05
