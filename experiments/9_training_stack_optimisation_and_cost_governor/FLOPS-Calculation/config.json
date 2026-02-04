@@ -1,6 +1,7 @@
 {
+  "_comment": "Starter config. For team presets use configs/1b_presets or configs/moe_team8.",
   "hardware": {
-    "num_gpus": 24,
+    "num_gpus": 8,
     "price_per_gpu_hour": 2.50,
     "mfu": 0.30,
     "quantization": "all",
@@ -11,14 +12,14 @@
       "fp8": 1979.0,
       "nvfp4": 3500.0
     },
-    "_comment_zero_efficiency": "Throughput penalty by ZeRO stage. ZeRO-3 requires all-gather before each forward/backward pass.",
+    "_comment_zero_efficiency": "Optional; override if you have better profiling data.",
     "zero_efficiency": {
       "zero0": 1.00,
       "zero2": 0.95,
       "zero3": 0.70,
       "zero_infinity": 0.25
     },
-    "_comment_scaling_efficiency": "Communication overhead at scale. Efficiency drops due to all-reduce, gradient sync, and network limits.",
+    "_comment_scaling_efficiency": "Optional; override if you have better profiling data.",
     "scaling_efficiency": {
       "base_gpus": 8,
       "efficiency_at_base": 1.00,
@@ -27,91 +28,33 @@
       "efficiency_at_1024": 0.65
     }
   },
-  "growth": {
-    "mode": "paper"
-  },
   "stages": [
     {
-      "name": "1B Dense",
+      "name": "Example 1B Base",
       "total_tokens": 20000000000,
       "architecture": {
-        "vocab_size": 50257,
+        "vocab_size": 50304,
         "hidden_size": 2048,
-        "intermediate_size": 5461,
+        "intermediate_size": 4096,
         "num_layers": 16,
-        "num_heads": 16,
         "sequence_length": 4096,
         "tie_embeddings": true,
-        "num_experts": 0,
-        "top_k_experts": 0,
-        "actual_tokens": 20000000000,
-        "use_sparse_attention": false
-      }
-    },
-    {
-      "name": "3B MoE",
-      "total_tokens": 40000000000,
-      "architecture": {
-        "vocab_size": 50257,
-        "hidden_size": 2048,
-        "intermediate_size": 5461,
-        "num_layers": 16,
-        "num_heads": 16,
-        "num_experts": 0,
-        "top_k_experts": 2,
-        "sequence_length": 4096,
-        "tie_embeddings": true,
-        "null_expert_prob": 0.50,
-        "num_moe_layers": 16,
-        "target_total_params": 3000000000,
-        "solve_for": "num_experts",
-        "actual_tokens": 40000000000,
-        "use_sparse_attention": false
-      }
-    },
-    {
-      "name": "8B MoE",
-      "total_tokens": 100000000000,
-      "architecture": {
-        "vocab_size": 50257,
-        "hidden_size": 2048,
-        "intermediate_size": 10240,
-        "num_layers": 24,
-        "num_heads": 16,
-        "num_experts": 5,
-        "top_k_experts": 2,
-        "sequence_length": 4096,
-        "tie_embeddings": true,
-        "null_expert_prob": 0.50,
-        "num_moe_layers": 24,
-        "actual_tokens": 100000000000,
-        "use_sparse_attention": false
-      }
-    },
-    {
-      "name": "70B MoE",
-      "total_tokens": 240000000000,
-      "architecture": {
-        "vocab_size": 50257,
-        "hidden_size": 2048,
-        "intermediate_size": 10240,
-        "num_layers": 24,
-        "num_heads": 16,
-        "num_experts": 0,
-        "top_k_experts": 8,
-        "sequence_length": 4096,
-        "tie_embeddings": true,
-        "null_expert_prob": 0.50,
-        "num_moe_layers": 24,
-        "target_total_params": 70000000000,
-        "solve_for": "num_experts",
-        "actual_tokens": 240000000000,
-        "_comment_sparse_attention": "DeepSeek Sparse Attention (DSA) configuration - reduces attention from O(L²) to O(Lk)",
-        "use_sparse_attention": true,
-        "sparse_k_tokens": 2048,
-        "indexer_heads": 4,
-        "indexer_dim": 256,
-        "mla_kv_lora_rank": 256
+        "attention": {
+          "attention_type": "grouped_query",
+          "num_attention_heads": 16,
+          "num_key_value_heads": 4
+        },
+        "position": {
+          "position_type": "yarn",
+          "yarn_original_max_position": 4096,
+          "yarn_scale": 8.0,
+          "yarn_beta_fast": 32.0,
+          "yarn_beta_slow": 1.0,
+          "yarn_mscale": 1.0
+        },
+        "head": {
+          "use_multi_token_prediction": false
+        }
       }
     }
   ]
