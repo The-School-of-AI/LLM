@@ -69,6 +69,14 @@ The calculator accepts **two shapes**. You can use either in `architecture`:
 **Precedence rule:** If a value exists both at the top level and inside a nested block,
 the **top-level value wins**. Otherwise the nested value is used.
 
+### Growth Mode (Opt‑In)
+By default, **tokens are NOT reallocated**. The calculator uses the token counts you provide.
+To enable growth reallocation, set:
+```json
+"growth": { "mode": "paper" }
+```
+If you omit `growth` or set `mode` to `none`, no reallocation occurs.
+
 ## Output Snapshots
 We keep simple text snapshots of recent runs:
 - `last_run.txt`: baseline run for `flops_config.json`
