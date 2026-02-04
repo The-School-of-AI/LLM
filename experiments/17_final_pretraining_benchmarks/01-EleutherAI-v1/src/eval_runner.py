@@ -81,13 +81,51 @@ def generate_summary_report(results, run_dir):
                     s = st.get('score', 'N/A')
                     f.write(f"| &nbsp;&nbsp;&nbsp;&nbsp;↳ {st['task']} | {b['status']} | {s} | - |\n")
             
+            
+    
+    # ---------------------------------------------------------
+    # Add CSV-Friendly Section for Comparative Analysis
+    # ---------------------------------------------------------
+    with open(report_path, 'a') as f:
+        f.write("\n\n## Competitive Analysis Data (CSV Format)\n")
+        f.write("Use this data to compare across multiple runs/models.\n\n")
+        f.write("```csv\n")
+        f.write("Stage,Phase,Model,Timestamp,Benchmark,Subtask,Metric,Score\n")
+        
+        stage = results['metadata']['stage']
+        phase = results['metadata']['phase']
+        timestamp = results['metadata']['timestamp']
+        # Extract model name from args
+        model_name = "unknown"
+        if "pretrained=" in results['metadata']['model_args']:
+            try:
+                model_name = results['metadata']['model_args'].split("pretrained=")[1].split(",")[0]
+            except:
+                pass
+
+        for b in results['benchmarks']:
+            bench_name = b['name']
+            
+            # Aggregate Row
+            agg_score = b.get('score', 'N/A')
+            f.write(f"{stage},{phase},{model_name},{timestamp},{bench_name},AGGREGATE,primary,{agg_score}\n")
+            
+            # Subtask Rows
+            if b.get('subtasks'):
+                for st in b['subtasks']:
+                    task_name = st['task']
+                    score = st.get('score', 'N/A')
+                    f.write(f"{stage},{phase},{model_name},{timestamp},{bench_name},{task_name},primary,{score}\n")
+        
+        f.write("```\n")
+
     return report_path
 
 def load_config(config_path):
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
-def run_harness_benchmark(benchmark_info, model_args, logger, run_dir, limit=None, device=None, batch_size="1", is_test=False):
+def run_harness_benchmark(benchmark_info, model_args, logger, run_dir, limit=None, device=None, batch_size="1"):
     """
     Executes a benchmark using the lm-evaluation-harness.
     Captures aggregate and granular (subject/subset) results.
@@ -109,17 +147,6 @@ def run_harness_benchmark(benchmark_info, model_args, logger, run_dir, limit=Non
     
     task_str = ",".join(task_list)
 
-    if is_test:
-        logger.info(f"  [Simulation] Would run tasks: {task_str}, shots: {shots}, limit: {limit}, device: {device}, batch_size: {batch_size}")
-        sim_subtasks = [{"task": t, "score": 0.5} for t in task_list] if len(task_list) > 1 else []
-        return {
-            "name": benchmark_info['name'],
-            "type": "harness",
-            "task": task_str,
-            "status": "simulation",
-            "score": 0.5,
-            "subtasks": sim_subtasks
-        }
     
     # Robustness: Strip 'device' from model_args if it exists there to prevent lm-eval crash
     if "device=" in model_args:
@@ -246,20 +273,13 @@ def run_harness_benchmark(benchmark_info, model_args, logger, run_dir, limit=Non
         logger.error(f"  [Error] {str(e)}")
         return {"name": benchmark_info['name'], "type": "harness", "status": "failed", "error": str(e)}
 
-def run_custom_benchmark(benchmark_info, model_args, logger, config_dir=None, is_test=False):
+def run_custom_benchmark(benchmark_info, model_args, logger, config_dir=None, limit=None, device=None):
     """
     Executes a custom benchmark not covered by lm-evaluation-harness.
     """
     name = benchmark_info['name']
     script = benchmark_info.get('custom_script')
     
-    if is_test:
-        logger.info(f"  [Simulation] Would run custom script for {name} via {script}")
-        return {
-            "name": name,
-            "type": "custom",
-            "status": "simulation"
-        }
 
     logger.info(f"  [Custom] Running {name}...")
     
@@ -283,8 +303,13 @@ def run_custom_benchmark(benchmark_info, model_args, logger, config_dir=None, is
         if os.path.exists(venv_python): py_exec = venv_python
         elif os.path.exists(parent_venv): py_exec = parent_venv
 
-        result = subprocess.run([py_exec, resolved_script, "--model_args", model_args], 
-                                capture_output=True, text=True, check=True)
+        cmd = [py_exec, resolved_script, "--model_args", model_args]
+        if limit:
+            cmd += ["--limit", str(limit)]
+        if device:
+            cmd += ["--device", device]
+            
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
     except Exception as e:
         logger.error(f"  [Error] {str(e)}")
@@ -296,11 +321,10 @@ def main():
     parser.add_argument("--phase", type=str, choices=["pretraining", "sft"], required=True, help="Training phase")
     parser.add_argument("--model_args", type=str, default="", help="Model args for harness (e.g. 'pretrained=eleutherai/polyglot-ko-1.3b')")
     parser.add_argument("--device", type=str, default=None, help="Device to use for evaluation (e.g. 'cuda:0', 'cpu')")
-    parser.add_argument("--test", action="store_true", help="Simulation mode (no model loading)")
     parser.add_argument("--trial", action="store_true", help="Rapid trial run (sets --limit 5)")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of samples per task (for testing ONLY)")
     parser.add_argument("--batch_size", type=str, default="1", help="Batch size for harness (default: 1, use 'auto' for auto-detection)")
-    parser.add_argument("--output_dir", type=str, default="results", help="Top-level output directory")
+    parser.add_argument("--output_dir", type=str, default="benchmark-results", help="Top-level output directory")
     
     args = parser.parse_args()
     
@@ -334,8 +358,7 @@ def main():
             "model_args": args.model_args,
             "device": args.device,
             "limit": args.limit,
-            "batch_size": args.batch_size,
-            "is_test": args.test
+            "batch_size": args.batch_size
         },
         "benchmarks": []
     }
@@ -347,9 +370,9 @@ def main():
 
     for b in active_benchmarks:
         if b.get('harness_task'):
-            res = run_harness_benchmark(b, args.model_args, logger, run_dir, limit=args.limit, device=args.device, batch_size=args.batch_size, is_test=args.test)
+            res = run_harness_benchmark(b, args.model_args, logger, run_dir, limit=args.limit, device=args.device, batch_size=args.batch_size)
         elif b.get('custom_script'):
-            res = run_custom_benchmark(b, args.model_args, logger, config_dir=os.path.dirname(args.config), is_test=args.test)
+            res = run_custom_benchmark(b, args.model_args, logger, config_dir=os.path.dirname(args.config), limit=args.limit, device=args.device)
         else:
             res = {"name": b['name'], "status": "skipped", "reason": "No harness task or custom script provided"}
         

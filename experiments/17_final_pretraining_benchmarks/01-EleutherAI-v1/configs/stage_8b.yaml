@@ -1,7 +1,7 @@
 stage: "8b"
 description: "Pre-training benchmarks for 8B model (Reasoning Emergence)"
 benchmarks:
-  # Harness Benchmarks
+  # Standard Harness Benchmarks
   - name: "MMLU"
     enabled: true
     harness_task: "mmlu"
@@ -11,14 +11,6 @@ benchmarks:
   - name: "TriviaQA"
     enabled: true
     harness_task: "triviaqa"
-    shots: 5
-    cot: true
-    subset: "medium-hard"
-    phases: ["pretraining"]
-
-  - name: "GPQA Diamond"
-    enabled: true
-    harness_task: "gpqa_diamond"
     shots: 5
     cot: true
     phases: ["pretraining"]
@@ -32,7 +24,7 @@ benchmarks:
 
   - name: "BBH (Big Bench Hard)"
     enabled: true
-    harness_task: "bbh"
+    harness_task: "bbh_cot_fewshot"
     shots: 3
     cot: true
     tasks: ["logical_deduction", "tracking_shuffled_objects", "geometric_shapes", "formal_fallacies", "multi_step_arithmetic", "temporal_sequences", "penguins_in_a_table"]
@@ -48,6 +40,18 @@ benchmarks:
     enabled: true
     harness_task: "hendrycks_math"
     shots: 4
+    phases: ["pretraining"]
+
+  - name: "IFEval"
+    enabled: true
+    harness_task: "ifeval"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "HumanEval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+    shots: 0
     phases: ["pretraining"]
 
   - name: "MSGS"
@@ -82,20 +86,55 @@ benchmarks:
     shots: 0
     phases: ["pretraining"]
 
+  - name: "PIQA"
+    enabled: true
+    harness_task: "piqa"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "LAMBADA"
+    enabled: true
+    harness_task: "lambada_openai"
+    shots: 0
+    phases: ["pretraining"]
+
   # Custom Benchmarks Pipeline
+  - name: "SimpleQA_Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
+    paradigm: "Uncertainty-Aware"
+    phases: ["pretraining"]
+
   - name: "AIME 2025"
     enabled: true
-    custom_script: "scripts/aime2025.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
     paradigm: "5-8 shot"
     phases: ["pretraining"]
 
   - name: "IndicGLUE"
     enabled: true
-    custom_script: "scripts/indic_glue.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
     tasks: ["amnesty-ner", "cvit-pib-sentence-retrieval", "indic-headline-prediction"]
     phases: ["pretraining"]
 
   - name: "IndicQA"
     enabled: true
-    custom_script: "scripts/indic_qa.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
+    paradigm: "3-5 shot"
+    phases: ["pretraining"]
+
+  - name: "L-Eval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
+    phases: ["pretraining"]
+
+  - name: "RULER"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
+    tasks: ["common_words_extraction"]
+    phases: ["pretraining"]
+
+  - name: "Indic-Bias (FairITales)"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
     phases: ["pretraining"]

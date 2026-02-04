@@ -1,7 +1,7 @@
 stage: "1b"
 description: "Pre-training benchmarks for 1B model (Base Capability Profile)"
 benchmarks:
-  # Harness Benchmarks
+  # Standard Harness Benchmarks
   - name: "MMLU"
     enabled: true
     harness_task: "mmlu"
@@ -21,16 +21,35 @@ benchmarks:
     shots: 5
     phases: ["pretraining"]
 
+  - name: "BBH (Big Bench Hard)"
+    enabled: true
+    harness_task: "bbh_zeroshot"
+    shots: 0
+    tasks: ["boolean_expressions", "sports_understanding", "word_sorting", "date_understanding", "object_counting"]
+    phases: ["pretraining"]
+
   - name: "ARC-Challenge"
     enabled: true
     harness_task: "arc_challenge"
     shots: 0
     phases: ["pretraining"]
 
-  - name: "MSGS"
-    enabled: false
-    harness_task: "msgs"
+  - name: "MATH"
+    enabled: true
+    harness_task: "hendrycks_math"
     shots: 0
+    phases: ["pretraining"]
+
+  - name: "IFEval"
+    enabled: true
+    harness_task: "ifeval"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "HumanEval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+    shots: 5
     phases: ["pretraining"]
 
   - name: "BLiMP"
@@ -50,29 +69,62 @@ benchmarks:
   - name: "HellaSwag"
     enabled: true
     harness_task: "hellaswag"
-    shots: 0
+    shots: 5
     phases: ["pretraining"]
 
   - name: "Winogrande"
     enabled: true
     harness_task: "winogrande"
+    shots: 5
+    phases: ["pretraining"]
+
+  - name: "PIQA"
+    enabled: true
+    harness_task: "piqa"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "LAMBADA"
+    enabled: true
+    harness_task: "lambada_openai"
     shots: 0
     phases: ["pretraining"]
 
   # Custom Benchmarks Pipeline
+  - name: "SimpleQA_Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
+    phases: ["pretraining"]
+
   - name: "AIME 2025"
     enabled: true
-    custom_script: "scripts/aime2025.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
     paradigm: "0-shot (Baseline)"
     phases: ["pretraining"]
 
   - name: "IndicGLUE"
     enabled: true
-    custom_script: "scripts/indic_glue.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
     tasks: ["iitp-movie-reviews", "bbc-news-articles", "article-genre-classification"]
     phases: ["pretraining"]
 
   - name: "IndicQA"
     enabled: true
-    custom_script: "scripts/indic_qa.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
+    phases: ["pretraining"]
+
+  - name: "L-Eval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
+    phases: ["pretraining"]
+
+  - name: "RULER"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
+    tasks: ["niah_single_1"]
+    phases: ["pretraining"]
+
+  - name: "Indic-Bias (FairITales)"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
     phases: ["pretraining"]

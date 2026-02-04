@@ -1,7 +1,7 @@
 stage: "70b"
 description: "Pre-training benchmarks for 70B model (Frontier Phase)"
 benchmarks:
-  # Harness Benchmarks
+  # Standard Harness Benchmarks
   - name: "MMLU"
     enabled: true
     harness_task: "mmlu"
@@ -13,15 +13,6 @@ benchmarks:
     harness_task: "triviaqa"
     shots: 5
     cot: true
-    subset: "full"
-    phases: ["pretraining"]
-
-  - name: "GPQA Diamond"
-    enabled: true
-    harness_task: "gpqa_diamond"
-    shots: 10
-    cot: true
-    self_consistency: true
     phases: ["pretraining"]
 
   - name: "GSM8K"
@@ -33,8 +24,8 @@ benchmarks:
 
   - name: "BBH (Big Bench Hard)"
     enabled: true
-    harness_task: "bbh"
-    shots: 3
+    harness_task: "bbh_cot_fewshot"
+    shots: 5
     cot: true
     tasks: ["all_23_tasks"]
     phases: ["pretraining"]
@@ -49,6 +40,18 @@ benchmarks:
     enabled: true
     harness_task: "hendrycks_math"
     shots: 8
+    phases: ["pretraining"]
+
+  - name: "IFEval"
+    enabled: true
+    harness_task: "ifeval"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "HumanEval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+    shots: 0
     phases: ["pretraining"]
 
   - name: "MSGS"
@@ -83,20 +86,65 @@ benchmarks:
     shots: 0
     phases: ["pretraining"]
 
+  - name: "PIQA"
+    enabled: true
+    harness_task: "piqa"
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "LAMBADA"
+    enabled: true
+    harness_task: "lambada_openai"
+    shots: 0
+    phases: ["pretraining"]
+
   # Custom Benchmarks Pipeline
+  - name: "SimpleQA_Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
+    paradigm: "Hard Filtering"
+    phases: ["pretraining"]
+
   - name: "AIME 2025"
     enabled: true
-    custom_script: "scripts/aime2025.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
     paradigm: "8-shot CoT"
     phases: ["pretraining"]
 
   - name: "IndicGLUE"
     enabled: true
-    custom_script: "scripts/indic_glue.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
     tasks: ["indic-wnli", "indic-copa", "xquad-in"]
     phases: ["pretraining"]
 
   - name: "IndicQA"
     enabled: true
-    custom_script: "scripts/indic_qa.py"
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
+    paradigm: "5-10 shot"
+    phases: ["pretraining"]
+
+  - name: "L-Eval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
+    phases: ["pretraining"]
+
+  - name: "RULER"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
+    tasks: ["longchat_qa"]
+    phases: ["pretraining"]
+
+  - name: "Indic-Bias (FairITales)"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
+    phases: ["pretraining"]
+
+  - name: "HELM Safety"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/helm_safety.py"
+    phases: ["pretraining"]
+
+  - name: "SWE-bench Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
     phases: ["pretraining"]
