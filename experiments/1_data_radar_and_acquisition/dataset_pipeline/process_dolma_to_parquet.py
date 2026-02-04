@@ -56,7 +56,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
                 FROM read_json_auto('{file_path}',
                 format='newline_delimited', 
                 compression='gzip',
-                maximum_object_size=101073741824  -- Set to 1GB per line/object
+                maximum_object_size=1073741824  -- Set to 1GB per line/object
                 )
             ) TO '{output_path}' (FORMAT 'parquet');
         """
