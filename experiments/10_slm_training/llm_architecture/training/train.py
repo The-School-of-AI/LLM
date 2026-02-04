@@ -241,7 +241,7 @@ class RandomTextDataset(Dataset):
         
         # Pre-generate for reproducibility
         torch.manual_seed(seed)
-        self.data = torch.randint(0, vocab_size, (num_samples, seq_length + 1))
+        self.data = torch.randint(0, vocab_size, (num_samples, seq_length))
         
     def __len__(self) -> int:
         return self.num_samples
@@ -249,8 +249,9 @@ class RandomTextDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         tokens = self.data[idx]
         return {
-            'input_ids': tokens[:-1],
-            'labels': tokens[1:]
+            'input_ids': tokens,
+            # Model forward already shifts for next-token prediction.
+            'labels': tokens.clone()
         }
 
 
@@ -389,7 +390,8 @@ class Trainer:
             # Forward pass with device-aware autocast
             with autocast(device_type=self.device.type, enabled=self.use_amp, dtype=self.amp_dtype):
                 outputs = self.model(input_ids=input_ids, labels=labels)
-                loss = outputs.loss / self.config.gradient_accumulation_steps
+                micro_loss = outputs.loss
+                loss = micro_loss / self.config.gradient_accumulation_steps
 
             # Backward pass (GradScaler only for CUDA float16)
             if self.scaler.is_enabled():
@@ -397,7 +399,7 @@ class Trainer:
             else:
                 loss.backward()
 
-            accumulation_loss += loss.item()
+            accumulation_loss += micro_loss.item()
             accumulation_steps += 1
 
             # Gradient accumulation step
@@ -444,7 +446,7 @@ class Trainer:
                 metrics = TrainingMetrics(
                     step=self.global_step,
                     epoch=self.epoch,
-                    loss=accumulation_loss * self.config.gradient_accumulation_steps,
+                    loss=accumulation_loss / max(1, accumulation_steps),
                     learning_rate=current_lr,
                     tokens_per_second=tokens_per_second,
                     samples_per_second=samples_per_second,

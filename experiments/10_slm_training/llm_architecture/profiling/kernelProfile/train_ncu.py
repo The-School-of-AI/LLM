@@ -15,6 +15,7 @@ Features:
 - Metrics tracking (loss, tokens/sec)
 - Checkpointing
 - Experiment logging
+- Multi-device support (CUDA, MPS, CPU)
 """
 
 import os
@@ -32,7 +33,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 # Note: CUDA Profiler API not needed for Nsight Compute (ncu)
 # ncu handles profiling externally without needing cudaProfilerStart/Stop
 
@@ -41,6 +42,39 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
 from models.llm import LLM, create_model
+
+
+def get_best_device(preferred: str = "auto") -> torch.device:
+    """
+    Get the best available device.
+
+    Args:
+        preferred: "auto", "cuda", "mps", or "cpu"
+
+    Returns:
+        torch.device for the selected device
+    """
+    if preferred == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            return torch.device("mps")
+        else:
+            return torch.device("cpu")
+    elif preferred == "cuda":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        else:
+            print("Warning: CUDA not available, falling back to CPU")
+            return torch.device("cpu")
+    elif preferred == "mps":
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        else:
+            print("Warning: MPS not available, falling back to CPU")
+            return torch.device("cpu")
+    else:
+        return torch.device("cpu")
 
 
 @dataclass
@@ -76,6 +110,9 @@ class TrainingConfig:
     use_amp: bool = True
     amp_dtype: str = "bfloat16"  # bfloat16, float16
     
+    # Device selection
+    device: str = "auto"  # "auto", "cuda", "mps", "cpu"
+    
     # Checkpointing
     save_interval: int = 1000
     checkpoint_dir: str = "./checkpoints"
@@ -90,7 +127,7 @@ class TrainingConfig:
     
     # Profiling
     profile_steps: Optional[str] = None  # e.g., "10-20" to profile steps 10 through 20
-    profiler_type: str = "nsys"  # "nsys" (Nsight Systems) or "ncu" (Nsight Compute)
+    profiler_type: str = "ncu"  # "nsys" (Nsight Systems) or "ncu" (Nsight Compute)
 
 
 @dataclass
@@ -217,7 +254,7 @@ class RandomTextDataset(Dataset):
         
         # Pre-generate for reproducibility
         torch.manual_seed(seed)
-        self.data = torch.randint(0, vocab_size, (num_samples, seq_length + 1))
+        self.data = torch.randint(0, vocab_size, (num_samples, seq_length))
         
     def __len__(self) -> int:
         return self.num_samples
@@ -225,8 +262,9 @@ class RandomTextDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         tokens = self.data[idx]
         return {
-            'input_ids': tokens[:-1],
-            'labels': tokens[1:]
+            'input_ids': tokens,
+            # Model forward already shifts for next-token prediction.
+            'labels': tokens.clone()
         }
 
 
@@ -255,14 +293,15 @@ class Trainer:
         self.eval_dataloader = eval_dataloader
         self.config = training_config
         self.model_config = model_config
-        
-        # Device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        # Device - supports CUDA, MPS (Apple Silicon), and CPU
+        self.device = get_best_device(training_config.device)
         self.model = self.model.to(self.device)
-        
+        model.gradient_checkpointing_enable()
+
         # Optimizer
         self.optimizer = self._create_optimizer()
-        
+
         # LR Scheduler
         self.lr_scheduler = LRScheduler(
             optimizer=self.optimizer,
@@ -272,11 +311,21 @@ class Trainer:
             min_lr=training_config.min_learning_rate,
             style=training_config.lr_decay_style
         )
-        
-        # Mixed precision
-        self.use_amp = training_config.use_amp and torch.cuda.is_available()
+
+        # Mixed precision - CUDA supports both float16 and bfloat16, MPS supports float16 only
+        self.use_amp = training_config.use_amp and (
+            self.device.type == "cuda" or
+            (self.device.type == "mps" and training_config.amp_dtype == "float16")
+        )
         self.amp_dtype = getattr(torch, training_config.amp_dtype)
-        self.scaler = GradScaler(enabled=self.use_amp and training_config.amp_dtype == "float16")
+
+        # GradScaler only works with CUDA float16
+        scaler_enabled = (
+            self.use_amp and
+            self.device.type == "cuda" and
+            training_config.amp_dtype == "float16"
+        )
+        self.scaler = GradScaler("cuda", enabled=scaler_enabled)
         
         # Logging
         self.logger = MetricsLogger(
@@ -304,7 +353,7 @@ class Trainer:
                 print(f"Profiler type: {self.profiler_type}")
                 if self.profiler_type == "ncu":
                     print("⚠️  Note: Running with Nsight Compute (ncu)")
-                    print("   CUDA Profiler API calls will be skipped")
+                    print("   ncu handles profiling externally - no API calls needed")
             except (ValueError, IndexError):
                 print(f"Warning: Invalid profile_steps format '{training_config.profile_steps}', ignoring")
         
@@ -368,33 +417,34 @@ class Trainer:
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
             
-            # Forward pass
-            with autocast(enabled=self.use_amp, dtype=self.amp_dtype):
+            # Forward pass with device-aware autocast
+            with autocast(device_type=self.device.type, enabled=self.use_amp, dtype=self.amp_dtype):
                 outputs = self.model(input_ids=input_ids, labels=labels)
-                loss = outputs.loss / self.config.gradient_accumulation_steps
-            
-            # Backward pass
-            if self.use_amp and self.config.amp_dtype == "float16":
+                micro_loss = outputs.loss
+                loss = micro_loss / self.config.gradient_accumulation_steps
+
+            # Backward pass (GradScaler only for CUDA float16)
+            if self.scaler.is_enabled():
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
-            
-            accumulation_loss += loss.item()
+
+            accumulation_loss += micro_loss.item()
             accumulation_steps += 1
-            
+
             # Gradient accumulation step
             if accumulation_steps >= self.config.gradient_accumulation_steps:
                 # Gradient clipping
-                if self.use_amp and self.config.amp_dtype == "float16":
+                if self.scaler.is_enabled():
                     self.scaler.unscale_(self.optimizer)
-                
+
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(),
                     self.config.gradient_clip
                 ).item()
-                
+
                 # Optimizer step
-                if self.use_amp and self.config.amp_dtype == "float16":
+                if self.scaler.is_enabled():
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
@@ -420,7 +470,7 @@ class Trainer:
                     if self.global_step == self.profile_start:
                         print(f"\n🔍 Profiling active (steps {self.profile_start}-{self.profile_end}) - ncu mode")
                     elif self.global_step == self.profile_end:
-                        print(f"🔍 Profiling complete - ncu will process results\n")
+                        print(f"🔍 Profiling range complete - ncu will process results\n")
                 
                 # Calculate metrics
                 step_time = time.time() - step_start_time
@@ -434,7 +484,7 @@ class Trainer:
                 metrics = TrainingMetrics(
                     step=self.global_step,
                     epoch=self.epoch,
-                    loss=accumulation_loss * self.config.gradient_accumulation_steps,
+                    loss=accumulation_loss / max(1, accumulation_steps),
                     learning_rate=current_lr,
                     tokens_per_second=tokens_per_second,
                     samples_per_second=samples_per_second,
@@ -603,7 +653,7 @@ def run_training(
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Train 1B LLM")
+    parser = argparse.ArgumentParser(description="Train 1B LLM (Nsight Compute optimized)")
     
     # Model
     parser.add_argument(
@@ -621,16 +671,25 @@ def main():
     parser.add_argument("--seq-length", type=int, default=1024)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--warmup-steps", type=int, default=500)
-    
+
+    # Device
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cuda", "mps", "cpu"],
+        help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu"
+    )
+
     # Experiment
-    parser.add_argument("--experiment-name", type=str, default="1b_training")
+    parser.add_argument("--experiment-name", type=str, default="1b_training_ncu")
     parser.add_argument("--checkpoint-dir", type=str, default="./checkpoints")
     parser.add_argument("--seed", type=int, default=42)
-    
+
     # Logging
     parser.add_argument("--log-interval", type=int, default=10)
     parser.add_argument("--save-interval", type=int, default=1000)
-    
+
     # Profiling
     parser.add_argument(
         "--profile-steps",
@@ -640,7 +699,7 @@ def main():
     )
     
     args = parser.parse_args()
-    
+
     # Create training config
     training_config = TrainingConfig(
         max_steps=args.max_steps,
@@ -649,6 +708,7 @@ def main():
         seq_length=args.seq_length,
         learning_rate=args.learning_rate,
         warmup_steps=args.warmup_steps,
+        device=args.device,
         experiment_name=args.experiment_name,
         checkpoint_dir=args.checkpoint_dir,
         seed=args.seed,
