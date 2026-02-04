@@ -240,7 +240,30 @@ While the **Flesch-Kincaid (FK)** score measures linguistic complexity (sentence
 
 ---
 
-## 5. Data Sampler
+## 5. Modality vs. Domain Strategy
+
+A common question is the difference between these two tagging systems. We distinguish them as **Form vs. Topic**:
+
+### 1. Modality = The "Format" (How)
+**Modality describes the structural form or syntax of the data.**
+It answers the question: *"What kind of cognitive processing is required to parse this?"*
+
+*   **Examples**: `code` (requires distinct syntax parsing), `math` (requires symbolic logic), `agentic_traces` (requires state-tracking).
+*   **Purpose**: Targets **Capability Acquisition**. Providing "code" modality allows the model to learn the *skill* of coding.
+
+### 2. Domain = The "Topic/Source" (What)
+**Domain describes the subject matter or provenance of the data.**
+It answers the question: *"What body of knowledge does this belong to?"*
+
+*   **Examples**: `encyclopedic` (factual knowledge), `code_repos` (software libraries), `news_nonpolitical` (current events).
+*   **Purpose**: Targets **Knowledge Coverage**. Providing "encyclopedic" domain allows the model to learn *facts*.
+
+### The Intersection (Why we sync them)
+While distinct, they are highly correlated. Our `DomainMetric` uses modality as a strong signal (e.g., `code` → `code_repos`), but uses text heuristics to distinguish `general_text` into domains like `encyclopedic` vs `dialogue_chat`.
+
+---
+
+## 6. Data Sampler
 
 ### What It Does (Non-Technical Summary)
 

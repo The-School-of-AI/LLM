@@ -35,6 +35,17 @@ metrics:
         # one of ["text", "code", "math", "reasoning", "agentic", "research_paper"]
       }
     
+  - name: domain
+    class: DomainMetric
+    module: domain
+    enabled: true
+    output: |
+      "domain": {
+        "primary_domain": str,
+        "confidence": float,
+        "reason": str
+      }
+    
   - name: readability
     class: ReadabilityMetric
     enabled: true
