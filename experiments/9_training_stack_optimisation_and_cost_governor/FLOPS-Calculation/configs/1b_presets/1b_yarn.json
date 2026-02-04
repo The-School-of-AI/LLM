@@ -32,7 +32,16 @@
         "yarn_scale": 8.0,
         "yarn_beta_fast": 32.0,
         "yarn_beta_slow": 1.0,
-        "yarn_mscale": 1.0
+        "yarn_mscale": 1.0,
+        "precision": {
+          "weight_precision": "auto",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "optimizer_state_multiplier": 1.0,
+          "gradient_precision": "fp32",
+          "master_weights": false,
+          "master_weights_precision": "fp32"
+        }
       },
       "_comment": "Token count is a placeholder; update when final"
     }

@@ -2,8 +2,8 @@
   "_comment": "Starter config. For team presets use configs/1b_presets or configs/moe_team8.",
   "hardware": {
     "num_gpus": 8,
-    "price_per_gpu_hour": 2.50,
-    "mfu": 0.30,
+    "price_per_gpu_hour": 2.5,
+    "mfu": 0.3,
     "quantization": "all",
     "zero_stage": 2,
     "cpu_offload": false,
@@ -14,17 +14,17 @@
     },
     "_comment_zero_efficiency": "Optional; override if you have better profiling data.",
     "zero_efficiency": {
-      "zero0": 1.00,
+      "zero0": 1.0,
       "zero2": 0.95,
-      "zero3": 0.70,
+      "zero3": 0.7,
       "zero_infinity": 0.25
     },
     "_comment_scaling_efficiency": "Optional; override if you have better profiling data.",
     "scaling_efficiency": {
       "base_gpus": 8,
-      "efficiency_at_base": 1.00,
-      "efficiency_at_64": 0.90,
-      "efficiency_at_256": 0.80,
+      "efficiency_at_base": 1.0,
+      "efficiency_at_64": 0.9,
+      "efficiency_at_256": 0.8,
       "efficiency_at_1024": 0.65
     }
   },
@@ -54,6 +54,15 @@
         },
         "head": {
           "use_multi_token_prediction": false
+        },
+        "precision": {
+          "weight_precision": "auto",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "optimizer_state_multiplier": 1.0,
+          "gradient_precision": "fp32",
+          "master_weights": false,
+          "master_weights_precision": "fp32"
         }
       }
     }

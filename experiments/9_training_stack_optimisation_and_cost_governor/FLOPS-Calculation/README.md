@@ -296,7 +296,7 @@ You can override these with optional keys inside `architecture`:
 ```json
 {
   "architecture": {
-    "weight_precision": "bf16",
+    "weight_precision": "auto",
     "optimizer_precision": "fp32",
     "optimizer_states_count": 2,
     "optimizer_state_multiplier": 1.0,
@@ -306,6 +306,9 @@ You can override these with optional keys inside `architecture`:
   }
 }
 ```
+
+`weight_precision: "auto"` means **use the selected quantization** (BF16/FP8/NVFP4)
+for model weights instead of hard-coding a precision.
 
 Additional optional overrides:
 - `weight_bytes_per_param` (float, overrides weight precision)
