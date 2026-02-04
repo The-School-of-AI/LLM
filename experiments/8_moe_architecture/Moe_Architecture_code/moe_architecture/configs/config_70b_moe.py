@@ -49,20 +49,20 @@ def get_config() -> MoEModelConfig:
         stage=4,
         
         # Core dimensions (SAME as 8B! - structure preserved)
-        hidden_size=3072,                # SAME as 8B
-        num_layers=56,                   # SAME as 8B # 24
+        hidden_size=2560,                # SAME as 8B
+        num_layers=32,                   # SAME as 8B # 24
         
         # MoE Configuration (EXPLODED experts for 70B)
         # Base 512 experts × 4 fine-grained factor = 2048 effective routed experts
         # Total params: 2048 experts × 3 × 6144 × 64 × 28 layers ≈ 70B
-        num_routed_experts=256,          # EXPLODED (was 8) - 64× expansion
+        num_routed_experts=64,          # EXPLODED (was 8) - 64× expansion
         num_shared_experts=1,            # REDUCED (was 2) - paper: decays at scale
         num_null_experts=1,              # Single null (M=2048 copies in router)
         moe_layer_frequency=1,           # MoE on ALL layers
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=128000,            # Standardized
+            vocab_size=49152,            # Standardized
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -91,7 +91,7 @@ def get_config() -> MoEModelConfig:
         # Total = 2048 experts × 3 × 6144 × 64 × 28 ≈ 70B  
         # (8/3)*8192 ~ 22016 -> 22016/64 = 344
         expert=ExpertConfig(
-            intermediate_size=512,       # Base size, effective = 64 (small for low active)
+            intermediate_size=4096,       # Base size, effective = 64 (small for low active)
             fine_grained_factor=4,       # DeepSeek-MoE style
             use_dual_gating=False,
             gate_bias_init=0.0,
@@ -103,8 +103,8 @@ def get_config() -> MoEModelConfig:
         attention=AttentionConfig(
             attention_type="gsa",
             num_attention_heads=16,      # Same as 8B
-            num_kv_heads=4,
-            head_dim=512,
+            num_kv_heads=8,
+            head_dim=160,
             rope_theta=10000.0,
             attention_dropout=0.0,
             gsa_indexer_dim=64,
@@ -145,8 +145,8 @@ def get_config() -> MoEModelConfig:
     )
 
 
-# Configuration instance
-CONFIG = get_config()
+# Call get_config() when needed, not at import time
+# to avoid validation warnings during package import
 
 
 """

@@ -7,9 +7,10 @@ This model's FFN weights become the template for all experts in Stage 2.
 
 Architecture:
 - Pure dense transformer (no MoE)
-- 24 layers
+- 16 layers
 - 2048 hidden dimension
-- SwiGLU FFN with 5504 intermediate (8/3 * 2048 - Swiglu hidden layer expansion rule)
+- SwiGLU FFN with 8192 intermediate Following 4x expansion 
+-Not following: (8/3 * 2048 ~ 5504- Swiglu hidden layer expansion rule)
 
 Training Target:
 - ~100B tokens for foundation
@@ -50,7 +51,7 @@ def get_config() -> MoEModelConfig:
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=128000,
+            vocab_size=49152,
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -65,7 +66,7 @@ def get_config() -> MoEModelConfig:
         
         # FFN configuration (becomes expert template)
         expert=ExpertConfig(
-            intermediate_size=4096,      # ≈ 2.7 × hidden_size
+            intermediate_size=8192,      # ≈ 4 × hidden_size (Following 4x expansion)
             use_dual_gating=False,       # No gating in dense model
             expert_init_std=0.02,
         ),
@@ -91,7 +92,7 @@ def get_config() -> MoEModelConfig:
             max_params_total=int(1.5e9),     # 1.5B ceiling
             max_params_active=int(1.5e9),    # Same (dense)
             target_tokens=int(100e9),        # 100B tokens
-            max_sequence_length=4096,
+            max_sequence_length=2048,
         ),
         
         # Telemetry (minimal for dense)
@@ -100,7 +101,7 @@ def get_config() -> MoEModelConfig:
         ),
         
         # Training
-        max_position_embeddings=4096,
+        max_position_embeddings=2048,
         hidden_dropout=0.0,
         initializer_range=0.02,
         rms_norm_eps=1e-6,
@@ -108,8 +109,8 @@ def get_config() -> MoEModelConfig:
     )
 
 
-# Configuration instance
-CONFIG = get_config()
+# Call get_config() when needed, not at import time
+# to avoid validation warnings during package import
 
 
 
