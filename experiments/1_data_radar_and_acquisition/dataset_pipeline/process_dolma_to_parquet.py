@@ -19,7 +19,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
     con.execute("SET preserve_insertion_order = false")
     
     # 3. Increase memory limit if your hardware allows, or keep it strict to force spilling.
-    con.execute("SET memory_limit = '6GB'") 
+    con.execute("SET memory_limit = '22GB'") 
     
     # 4. Ensure plenty of swap space on your SSD.
     os.makedirs("./duckdb_temp/", exist_ok=True)
@@ -68,7 +68,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
                 compression='gzip',
                 maximum_object_size=1073741824  -- Set to 1GB per line/object 
                 )
-            ) TO '{output_path}' (FORMAT 'parquet');
+            ) TO '{output_path}' (FORMAT 'parquet', COMPRESSION 'ZSTD');
         """
         
         try:
