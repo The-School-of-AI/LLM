@@ -9,15 +9,15 @@ The evaluator automatically detects and uses a local `.venv` if present.
 ```bash
 # Recommended: create and setup venv
 python3 -m venv .venv
-source .venv/bin/python3
-pip install -r requirements.txt
+source .venv/bin/activate
+pip install -r 01-EleutherAI-v1/requirements.txt
 ```
 
 ### 2. Run a Trial (Quick Verification)
 Run a limited execution (5 samples per task) to ensure weights and metrics load correctly:
 ```bash
-python3 src/eval_runner.py \
-    --config configs/stage_1b.yaml \
+python3 01-EleutherAI-v1/src/eval_runner.py \
+    --config 01-EleutherAI-v1/configs/stage_1b.yaml \
     --phase pretraining \
     --model_args "pretrained=HuggingFaceTB/SmolLM2-135M" \
     --device "cpu" \
@@ -27,8 +27,8 @@ python3 src/eval_runner.py \
 ### 3. Full Execution (Production)
 Run the full benchmarking suite on your checkpoint:
 ```bash
-python3 src/eval_runner.py \
-    --config configs/stage_1b.yaml \
+python3 01-EleutherAI-v1/src/eval_runner.py \
+    --config 01-EleutherAI-v1/configs/stage_1b.yaml \
     --phase pretraining \
     --model_args "pretrained=path/to/checkpoint" \
     --device "cuda:0" \
@@ -126,3 +126,4 @@ This toolkit helps you:
 ---
 *Refer to `benchmarks-list.txt` for the full list of 25 supported benchmarks.*
 *Use `benchmark_analysis/` to investigate token counts and metrics before finalizing configs.*
+*Refer to `01-EleutherAI-v1/benchmarks-list.txt` for the full list of 25 supported benchmarks.*

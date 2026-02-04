@@ -142,9 +142,16 @@ def run_harness_benchmark(benchmark_info, model_args, logger, run_dir, limit=Non
     task_filename = task_list[0] if task_list else base_task
     task_output_path = os.path.join(harness_raw_dir, f"{task_filename}.json")
 
-    # Determine python executable (prefer .venv)
+    # Determine python executable (prefer .venv in root or current dir)
     venv_python = os.path.join(os.getcwd(), ".venv", "bin", "python3")
-    py_exec = venv_python if os.path.exists(venv_python) else sys.executable
+    # Also check parent dir (if running from a subdirectory like 01-EleutherAI-v1)
+    parent_venv = os.path.join(os.path.dirname(os.getcwd()), ".venv", "bin", "python3")
+    
+    py_exec = sys.executable
+    if os.path.exists(venv_python):
+        py_exec = venv_python
+    elif os.path.exists(parent_venv):
+        py_exec = parent_venv
 
     # Construct lm-eval command
     cmd = [
@@ -239,7 +246,7 @@ def run_harness_benchmark(benchmark_info, model_args, logger, run_dir, limit=Non
         logger.error(f"  [Error] {str(e)}")
         return {"name": benchmark_info['name'], "type": "harness", "status": "failed", "error": str(e)}
 
-def run_custom_benchmark(benchmark_info, model_args, logger, is_test=False):
+def run_custom_benchmark(benchmark_info, model_args, logger, config_dir=None, is_test=False):
     """
     Executes a custom benchmark not covered by lm-evaluation-harness.
     """
@@ -255,13 +262,28 @@ def run_custom_benchmark(benchmark_info, model_args, logger, is_test=False):
         }
 
     logger.info(f"  [Custom] Running {name}...")
-    if not script or not os.path.exists(script):
-        logger.warning(f"  [Warning] Script {script} not found")
+    
+    # Resolve script path
+    resolved_script = script
+    if script and not os.path.isabs(script):
+        # Try relative to CWD first, then relative to config_dir
+        if not os.path.exists(resolved_script) and config_dir:
+            resolved_script = os.path.join(config_dir, script)
+            
+    if not resolved_script or not os.path.exists(resolved_script):
+        logger.warning(f"  [Warning] Script {script} not found (tried {resolved_script})")
         return {"name": name, "type": "custom", "status": "failed", "error": f"Script {script} not found"}
 
     try:
         # Expect custom script to output JSON to stdout or a specific file
-        result = subprocess.run(["python3", script, "--model_args", model_args], 
+        # Use same python as harness if possible
+        venv_python = os.path.join(os.getcwd(), ".venv", "bin", "python3")
+        parent_venv = os.path.join(os.path.dirname(os.getcwd()), ".venv", "bin", "python3")
+        py_exec = sys.executable
+        if os.path.exists(venv_python): py_exec = venv_python
+        elif os.path.exists(parent_venv): py_exec = parent_venv
+
+        result = subprocess.run([py_exec, resolved_script, "--model_args", model_args], 
                                 capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
     except Exception as e:
@@ -327,7 +349,7 @@ def main():
         if b.get('harness_task'):
             res = run_harness_benchmark(b, args.model_args, logger, run_dir, limit=args.limit, device=args.device, batch_size=args.batch_size, is_test=args.test)
         elif b.get('custom_script'):
-            res = run_custom_benchmark(b, args.model_args, logger, is_test=args.test)
+            res = run_custom_benchmark(b, args.model_args, logger, config_dir=os.path.dirname(args.config), is_test=args.test)
         else:
             res = {"name": b['name'], "status": "skipped", "reason": "No harness task or custom script provided"}
         
