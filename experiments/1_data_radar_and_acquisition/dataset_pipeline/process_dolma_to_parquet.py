@@ -11,8 +11,8 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
     # Using ':memory:' for metadata, the actual processing happens on disk streams
     con = duckdb.connect(database=':memory:')
     
-    # Increase maximum memory to handle large JSON objects (up to 8GB)
-    con.execute("SET max_memory = '8GB';")
+    # Increase maximum memory to handle large JSON objects (up to 6GB)
+    con.execute("SET max_memory = '6GB';")
     
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
