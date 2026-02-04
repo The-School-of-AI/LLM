@@ -39,6 +39,8 @@ class TrainingStage:
         hidden = arch.get("hidden_size", 2048)
         intermediate = arch.get("intermediate_size", 4 * hidden)
         layers = arch.get("num_layers", 24)
+        num_heads = arch.get("num_heads")
+        num_kv_heads = arch.get("num_kv_heads", num_heads)
         experts = arch.get("num_experts", 0)
         top_k = arch.get("top_k_experts", 1)
         null_prob = arch.get("null_expert_prob", 0.0)
@@ -50,7 +52,10 @@ class TrainingStage:
 
         if experts < 0 or top_k < 0:
             raise ValueError("num_experts and top_k_experts must be >= 0.")
-        if experts == 0:
+        if experts == 0 and solve_for not in (
+            "num_experts",
+            "num_experts_from_per_expert",
+        ):
             num_moe_layers = 0
         if experts > 0 and top_k > experts:
             raise ValueError("top_k_experts cannot exceed num_experts.")
@@ -59,14 +64,27 @@ class TrainingStage:
 
         embedding_params = vocab * hidden
         lm_head_params = 0 if tie_embeddings else vocab * hidden
+        include_lm_head_flops = arch.get("include_lm_head_flops", True)
+        lm_head_params_for_flops = vocab * hidden if include_lm_head_flops else 0
 
-        attn_params_per_layer = 4 * hidden * hidden
+        if num_heads is not None and num_kv_heads is not None:
+            if num_kv_heads <= 0:
+                raise ValueError("num_kv_heads must be > 0.")
+            if num_kv_heads > num_heads:
+                raise ValueError("num_kv_heads cannot exceed num_heads.")
+            if num_heads % num_kv_heads != 0:
+                raise ValueError("num_kv_heads must divide num_heads for GQA/MQA.")
+            kv_ratio = num_kv_heads / num_heads
+            attn_params_per_layer = hidden * hidden * (2 + 2 * kv_ratio)
+        else:
+            attn_params_per_layer = 4 * hidden * hidden
 
         ffn_params_per_expert = 3 * hidden * intermediate
         ffn_params_dense = ffn_params_per_expert
 
         total_ffn_params_moe = 0
         active_ffn_params_moe = 0
+        router_params = 0
         if experts > 0 or solve_for in ("num_experts", "num_experts_from_per_expert"):
             router_params = hidden * experts
             total_ffn_params_moe = experts * ffn_params_per_expert + router_params
@@ -143,13 +161,32 @@ class TrainingStage:
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params
         )
+        active_linear_params = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * active_ffn_params_moe
+            + lm_head_params_for_flops
+        )
         active_params_base = embedding_params + active_non_embed_params
 
         params_null_path = (
             embedding_params
             + layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
             + lm_head_params
+        )
+        params_null_path_non_embed = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
+            + lm_head_params
+        )
+        params_null_path_linear = (
+            layers * attn_params_per_layer
+            + dense_layers * ffn_params_dense
+            + num_moe_layers * router_params
+            + lm_head_params_for_flops
         )
 
         effective_active_params = (
@@ -157,16 +194,16 @@ class TrainingStage:
         ) * active_params_base + null_prob * params_null_path
         effective_active_non_embed_params = (
             1 - null_prob
-        ) * active_non_embed_params + null_prob * (
-            layers * attn_params_per_layer
-            + dense_layers * ffn_params_dense
-            + lm_head_params
-        )
+        ) * active_non_embed_params + null_prob * params_null_path_non_embed
+        effective_active_linear_params = (
+            1 - null_prob
+        ) * active_linear_params + null_prob * params_null_path_linear
 
         return {
             "total_params": total_params,
             "active_params": effective_active_params,
             "active_non_embed_params": effective_active_non_embed_params,
+            "active_linear_params": effective_active_linear_params,
             "embedding_params": embedding_params,
             "lm_head_params": lm_head_params,
             "num_moe_layers": num_moe_layers,
@@ -259,32 +296,18 @@ class TrainingStage:
             "gradient_gb": gradient_bytes / (1024**3),
         }
 
-    def calculate_flops(self, params: Optional[dict] = None) -> float:
+    def flops_per_token(self, params: Optional[dict] = None) -> float:
         """
-        Calculate total FLOPs for training this stage.
+        Calculate per-token FLOPs for this stage.
 
         Supports both dense and sparse attention mechanisms:
         - Dense: O(L^2) complexity using standard transformer attention
         - Sparse: O(Lk) complexity using DeepSeek Sparse Attention (DSA)
-
-        Formula breakdown:
-        - Linear layers: 6 * seq_len * active_non_embed_params
-        - Dense attention: 12 * layers * hidden_size * seq_len^2
-        - Sparse attention: indexer + sparse_core + MLA projections
-
-        Args:
-            params: Pre-calculated parameter dict (optional, will calculate if None)
-
-        Returns:
-            float: Total FLOPs for processing all tokens in this stage
-
-        Raises:
-            ValueError: If sequence_length or total_tokens <= 0
         """
         params = params or self.calculate_params()
         arch = self.architecture
 
-        n_linear = params["active_non_embed_params"]
+        n_linear = params.get("active_linear_params", params["active_non_embed_params"])
         layers = arch.get("num_layers", 24)
         h = arch.get("hidden_size", 2048)
         s = arch.get("sequence_length", 4096)
@@ -306,8 +329,6 @@ class TrainingStage:
 
         if s <= 0:
             raise ValueError("sequence_length must be > 0.")
-        if self.total_tokens <= 0:
-            raise ValueError("total_tokens must be > 0.")
 
         # Linear layer FLOPs
         flops_per_seq_linear = 6 * s * n_linear
@@ -328,38 +349,41 @@ class TrainingStage:
             #    - Softmax: 3 * seq_len * k (approximate)
             #    - Attention-V matmul: 2 * seq_len * k * head_dim
             num_heads = arch.get("num_heads", 32)
-            head_dim = h // num_heads
+            head_dim = h / num_heads
 
             # If MLA is enabled, KV dimension is compressed
             if mla_kv_lora_rank > 0:
-                # MLA projects KV to lower dimension
-                kv_dim = mla_kv_lora_rank
+                kv_dim = float(mla_kv_lora_rank)
+                attn_dim = kv_dim / num_heads
                 # Additional projection FLOPs: compress and decompress
                 mla_projection_flops = 2 * s * h * kv_dim * 2  # 2x for K and V
             else:
-                kv_dim = h
+                attn_dim = head_dim
                 mla_projection_flops = 0
 
             # Sparse attention core operations
-            qk_matmul_flops = 2 * s * sparse_k_tokens * head_dim * num_heads
+            qk_matmul_flops = 2 * s * sparse_k_tokens * attn_dim * num_heads
             softmax_flops = 3 * s * sparse_k_tokens * num_heads
-            attn_v_matmul_flops = 2 * s * sparse_k_tokens * head_dim * num_heads
+            attn_v_matmul_flops = 2 * s * sparse_k_tokens * attn_dim * num_heads
 
             sparse_attn_core = qk_matmul_flops + softmax_flops + attn_v_matmul_flops
 
-            # Total sparse attention FLOPs per layer
+            # Total sparse attention FLOPs per layer (training = fwd + bwd)
+            training_multiplier = 3.0
             sparse_attn_per_layer = (
                 indexer_flops + sparse_attn_core + mla_projection_flops
-            )
+            ) * training_multiplier
 
             # Total for all layers
             flops_per_seq_attn = layers * sparse_attn_per_layer
 
             # Store breakdown for debugging (optional)
             self._attn_flops_breakdown = {
-                "indexer_flops": indexer_flops * layers,
-                "sparse_core_flops": sparse_attn_core * layers,
-                "mla_projection_flops": mla_projection_flops * layers,
+                "indexer_flops": indexer_flops * layers * training_multiplier,
+                "sparse_core_flops": sparse_attn_core * layers * training_multiplier,
+                "mla_projection_flops": mla_projection_flops
+                * layers
+                * training_multiplier,
                 "total_attn_flops": flops_per_seq_attn,
                 "sparse_k_tokens": sparse_k_tokens,
                 "reduction_vs_dense": (12 * layers * h * (s**2)) / flops_per_seq_attn,
@@ -377,9 +401,17 @@ class TrainingStage:
 
         flops_per_seq_total = flops_per_seq_linear + flops_per_seq_attn
 
-        num_sequences = self.total_tokens / s
+        return flops_per_seq_total / s
 
-        return flops_per_seq_total * num_sequences
+    def calculate_flops(self, params: Optional[dict] = None) -> float:
+        """
+        Calculate total FLOPs for training this stage.
+        """
+        params = params or self.calculate_params()
+        if self.total_tokens <= 0:
+            raise ValueError("total_tokens must be > 0.")
+
+        return self.flops_per_token(params) * self.total_tokens
 
 
 def load_config(config_path: str):
@@ -529,16 +561,8 @@ def apply_growth_allocation(stages: list[TrainingStage], growth_cfg: dict) -> No
             remaining_flops -= stage_flops
         else:
             # Budget allocation: calculate how many tokens this stage can afford
-            # Using attention-aware formula is complex to invert, so we iterate
             params = stage.calculate_params()
-            n_linear = params["active_non_embed_params"]
-            arch = stage.architecture
-            L = arch.get("num_layers", 24)
-            H = arch.get("hidden_size", 2048)
-            S = arch.get("sequence_length", 4096)
-
-            # FLOPs per token = (6*N_linear + 12*L*H*S) for attention-aware
-            flops_per_token = 6 * n_linear + 12 * L * H * S
+            flops_per_token = stage.flops_per_token(params)
 
             # Max tokens this stage can afford with remaining budget
             t = remaining_flops / flops_per_token
