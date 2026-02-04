@@ -12,11 +12,21 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
     con = duckdb.connect(database=':memory:')
     
     # --- FIX 1: Increase Disk Swap Limits ---
+    # 1. Limit threads to 1 or 2. Processing 8 books at once in RAM is what kills the process.
+    con.execute("SET threads = 1") 
+    
+    # 2. Disable insertion order. This allows DuckDB to process rows more efficiently.
+    con.execute("SET preserve_insertion_order = false")
+    
+    # 3. Increase memory limit if your hardware allows, or keep it strict to force spilling.
+    con.execute("SET memory_limit = '6GB'") 
+    
+    # 4. Ensure plenty of swap space on your SSD.
     os.makedirs("./duckdb_temp/", exist_ok=True)
     con.execute("SET temp_directory = './duckdb_temp/'")
-    con.execute("SET max_memory = '6GB'") # Limit RAM usage to 4GB
-    # Tell DuckDB it can use up to 100GB of disk space to swap data
-    con.execute("SET max_temp_directory_size = '100GB'")
+     # Tell DuckDB it can use up to 100GB of disk space to swap data
+    con.execute("SET max_temp_directory_size = '200GB'")   
+
     
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
@@ -56,7 +66,7 @@ def process_dolma_to_parquet(input_glob, output_dir, domain, version="1.7"):
                 FROM read_json_auto('{file_path}',
                 format='newline_delimited', 
                 compression='gzip',
-                maximum_object_size=1073741824  -- Set to 1GB per line/object
+                maximum_object_size=1073741824  -- Set to 1GB per line/object 
                 )
             ) TO '{output_path}' (FORMAT 'parquet');
         """
