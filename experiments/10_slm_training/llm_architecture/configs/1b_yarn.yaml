@@ -89,3 +89,52 @@ head:
   num_predict_tokens: 1
   mtp_loss_weight: 0.3
   tie_word_embeddings: true
+
+# -----------------------------------------------------------------------------
+# Training Configuration
+# -----------------------------------------------------------------------------
+training:
+  max_steps: 10000
+  max_epochs: null
+  batch_size: 2
+  gradient_accumulation_steps: 16
+  seq_length: 4096                   # Extended context training
+  
+  # Optimizer
+  learning_rate: 1.0e-4              # Lower LR for long context
+  min_learning_rate: 1.0e-5
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  eps: 1.0e-8
+  
+  # LR Schedule
+  warmup_steps: 500
+  lr_decay_style: "cosine"
+  
+  # Regularization
+  gradient_clip: 1.0
+  dropout: 0.0
+  
+  # Precision
+  use_amp: true
+  amp_dtype: "bfloat16"
+  
+  # Device
+  device: "auto"
+  
+  # Checkpointing
+  save_interval: 1000
+  checkpoint_dir: "./checkpoints/1b_yarn"
+  
+  # Logging
+  log_interval: 10
+  eval_interval: 500
+  
+  # Experiment
+  experiment_name: "1b_yarn_32k"
+  seed: 42
+
+# =============================================================================
+# End of Configuration
+# =============================================================================

@@ -9,6 +9,12 @@ Complete training loop with:
 - Metrics tracking (loss, tokens/sec)
 - Checkpointing
 - Experiment logging
+
+Supports two configuration modes:
+1. Preset mode: --preset 1b-base (uses Python preset configs)
+2. YAML mode: --config configs/1b_base.yaml (uses YAML config files)
+
+CLI arguments always override config file values.
 """
 
 import os
@@ -19,7 +25,7 @@ import math
 import argparse
 from pathlib import Path
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from typing import Optional, Dict, Any, List, Tuple
 
 import torch
@@ -27,12 +33,54 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torch.amp import autocast, GradScaler
+import yaml
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
 from models.llm import LLM, create_model
+
+
+def load_config_from_yaml(config_path: str) -> Tuple[ModelConfig, Dict[str, Any]]:
+    """
+    Load model and training config from YAML file.
+    
+    Args:
+        config_path: Path to YAML configuration file
+        
+    Returns:
+        Tuple of (ModelConfig, training_config_dict)
+    """
+    with open(config_path, 'r') as f:
+        config_data = yaml.safe_load(f)
+    
+    # Extract training config (if present)
+    training_data = config_data.pop('training', {})
+    
+    # Load model config
+    model_config = ModelConfig.from_dict(config_data)
+    
+    return model_config, training_data
+
+
+def training_config_from_dict(data: Dict[str, Any]) -> 'TrainingConfig':
+    """
+    Create TrainingConfig from dictionary, ignoring unknown keys.
+    
+    Args:
+        data: Dictionary with training configuration values
+        
+    Returns:
+        TrainingConfig instance
+    """
+    # Get valid field names from TrainingConfig
+    valid_fields = {f.name for f in fields(TrainingConfig)}
+    
+    # Filter to only valid fields
+    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+    
+    return TrainingConfig(**filtered_data)
 
 
 def get_best_device(preferred: str = "auto") -> torch.device:
@@ -615,66 +663,140 @@ def run_training(
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Train 1B LLM")
+    parser = argparse.ArgumentParser(
+        description="Train 1B LLM",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Using YAML config file (recommended)
+  python train.py --config ../configs/1b_base.yaml
+  python train.py --config ../configs/1b_deepseek_gsa.yaml --batch-size 4
+  
+  # Using preset (legacy mode)
+  python train.py --preset 1b-base --max-steps 10000
+  
+  # YAML config with CLI overrides
+  python train.py --config ../configs/1b_gsa.yaml --learning-rate 1e-4 --device cuda
+
+Note: CLI arguments always override config file values.
+        """
+    )
     
-    # Model
+    # Configuration source (mutually exclusive conceptually, but --config takes precedence)
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to YAML config file (e.g., configs/1b_base.yaml). Takes precedence over --preset."
+    )
     parser.add_argument(
         "--preset",
         type=str,
         default="1b-base",
         choices=list(PRESET_CONFIGS.keys()),
-        help="Model preset"
+        help="Model preset (used if --config not provided)"
     )
     
-    # Training
-    parser.add_argument("--max-steps", type=int, default=10000)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--gradient-accumulation", type=int, default=4)
-    parser.add_argument("--seq-length", type=int, default=1024)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--warmup-steps", type=int, default=500)
+    # Training (can override config file)
+    parser.add_argument("--max-steps", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument("--gradient-accumulation", type=int, default=None)
+    parser.add_argument("--seq-length", type=int, default=None)
+    parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument("--warmup-steps", type=int, default=None)
 
     # Device
     parser.add_argument(
         "--device",
         type=str,
-        default="auto",
+        default=None,
         choices=["auto", "cuda", "mps", "cpu"],
         help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu"
     )
 
     # Experiment
-    parser.add_argument("--experiment-name", type=str, default="1b_training")
-    parser.add_argument("--checkpoint-dir", type=str, default="./checkpoints")
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--experiment-name", type=str, default=None)
+    parser.add_argument("--checkpoint-dir", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None)
 
     # Logging
-    parser.add_argument("--log-interval", type=int, default=10)
-    parser.add_argument("--save-interval", type=int, default=1000)
+    parser.add_argument("--log-interval", type=int, default=None)
+    parser.add_argument("--save-interval", type=int, default=None)
 
     args = parser.parse_args()
 
-    # Create training config
-    training_config = TrainingConfig(
-        max_steps=args.max_steps,
-        batch_size=args.batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation,
-        seq_length=args.seq_length,
-        learning_rate=args.learning_rate,
-        warmup_steps=args.warmup_steps,
-        device=args.device,
-        experiment_name=args.experiment_name,
-        checkpoint_dir=args.checkpoint_dir,
-        seed=args.seed,
-        log_interval=args.log_interval,
-        save_interval=args.save_interval
+    # Load configuration
+    if args.config:
+        # YAML config mode
+        print(f"Loading configuration from: {args.config}")
+        model_config, training_dict = load_config_from_yaml(args.config)
+        training_config = training_config_from_dict(training_dict) if training_dict else TrainingConfig()
+    else:
+        # Preset mode (legacy)
+        print(f"Using preset: {args.preset}")
+        model_config = get_preset_config(args.preset)
+        training_config = TrainingConfig()
+
+    # CLI overrides (only if explicitly provided)
+    if args.max_steps is not None:
+        training_config.max_steps = args.max_steps
+    if args.batch_size is not None:
+        training_config.batch_size = args.batch_size
+    if args.gradient_accumulation is not None:
+        training_config.gradient_accumulation_steps = args.gradient_accumulation
+    if args.seq_length is not None:
+        training_config.seq_length = args.seq_length
+    if args.learning_rate is not None:
+        training_config.learning_rate = args.learning_rate
+    if args.warmup_steps is not None:
+        training_config.warmup_steps = args.warmup_steps
+    if args.device is not None:
+        training_config.device = args.device
+    if args.experiment_name is not None:
+        training_config.experiment_name = args.experiment_name
+    if args.checkpoint_dir is not None:
+        training_config.checkpoint_dir = args.checkpoint_dir
+    if args.seed is not None:
+        training_config.seed = args.seed
+    if args.log_interval is not None:
+        training_config.log_interval = args.log_interval
+    if args.save_interval is not None:
+        training_config.save_interval = args.save_interval
+
+    # Set seed
+    torch.manual_seed(training_config.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(training_config.seed)
+    
+    # Create model
+    model = LLM(model_config)
+    
+    # Create dataset
+    dataset = RandomTextDataset(
+        vocab_size=model_config.vocab_size,
+        seq_length=training_config.seq_length,
+        num_samples=training_config.max_steps * training_config.batch_size * 2,
+        seed=training_config.seed
     )
     
-    # Run training
-    model, metrics = run_training(
-        model_preset=args.preset,
-        training_config=training_config
+    dataloader = DataLoader(
+        dataset,
+        batch_size=training_config.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True
     )
+    
+    # Create trainer
+    trainer = Trainer(
+        model=model,
+        train_dataloader=dataloader,
+        training_config=training_config,
+        model_config=model_config
+    )
+    
+    # Train
+    metrics = trainer.train()
     
     print(f"\nTraining complete! Final loss: {metrics.loss:.4f}")
 

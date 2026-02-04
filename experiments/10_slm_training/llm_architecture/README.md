@@ -14,23 +14,25 @@ A modular, production-ready 1B parameter Large Language Model with state-of-the-
 
 ```bash
 # Install dependencies
-pip install torch>=2.0.0 transformers datasets
+pip install torch>=2.0.0 transformers datasets pyyaml
 
-# Train with DeepSeek GSA on MPS (Apple Silicon)
+# Train with YAML config (recommended)
+python training/train_wikitext2_gpt2.py --config configs/1b_deepseek_gsa.yaml
+
+# Train with YAML config and CLI overrides
+python training/train_wikitext2_gpt2.py \
+    --config configs/1b_base.yaml \
+    --device cuda \
+    --batch-size 4 \
+    --max-steps 1000
+
+# Train with preset (legacy mode)
 python training/train_wikitext2_gpt2.py \
     --preset 1b-deepseek-gsa \
     --device mps \
     --seq-length 256 \
     --batch-size 1 \
     --max-steps 100
-
-# Train with standard GQA on CUDA
-python training/train_wikitext2_gpt2.py \
-    --preset 1b-base \
-    --device cuda \
-    --seq-length 512 \
-    --batch-size 4 \
-    --max-steps 1000
 ```
 
 ## Architecture
@@ -72,7 +74,31 @@ Logits
 
 ## Model Configurations
 
-### Available Presets
+### Configuration Methods
+
+The pipeline supports **two configuration methods**:
+
+#### 1. YAML Config Files (Recommended)
+
+YAML files in `configs/` contain both model architecture and training parameters:
+
+```bash
+# Use complete config from YAML
+python training/train.py --config configs/1b_deepseek_gsa.yaml
+
+# Override specific values via CLI
+python training/train.py --config configs/1b_gsa.yaml --batch-size 8 --learning-rate 1e-4
+```
+
+#### 2. Python Presets (Legacy)
+
+Programmatic presets for quick experimentation:
+
+```bash
+python training/train.py --preset 1b-base --max-steps 5000
+```
+
+### Available Configurations
 
 | Preset | Attention | Position | Description |
 |--------|-----------|----------|-------------|
@@ -82,7 +108,59 @@ Logits
 | `1b-deepseek` | DeepSeek MLA | YaRN | Multi-head latent attention with KV compression |
 | `1b-mhc` | GQA | YaRN | Manifold hyper-connections |
 | `1b-yarn` | GQA | YaRN | Extended context (32K) |
+| `1b-mtp` | GQA | YaRN | Multi-token prediction |
 | `1b-full` | GSA | YaRN | All features enabled |
+
+### YAML Config Structure
+
+Each YAML config file contains:
+
+```yaml
+# Model identification
+model_name: "LLM-1B-Base"
+model_version: "1.0.0"
+
+# Core architecture
+vocab_size: 50304
+hidden_size: 2048
+num_hidden_layers: 24
+max_position_embeddings: 4096
+
+# Component configs
+attention:
+  attention_type: "grouped_query"  # Options: grouped_query, gated_sparse, deepseek_gsa, deepseek_sparse
+  num_attention_heads: 16
+  num_key_value_heads: 4
+  # ... more attention params
+
+position:
+  position_type: "rope"  # Options: rope, yarn
+  # ... position params
+
+ffn:
+  ffn_type: "swiglu"  # Options: swiglu, gelu, moe
+  # ... ffn params
+
+connection:
+  connection_type: "residual"  # Options: residual, mhc
+  # ... connection params
+
+head:
+  use_multi_token_prediction: false
+  # ... head params
+
+# Training configuration (optional, can be overridden via CLI)
+training:
+  max_steps: 10000
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  seq_length: 1024
+  learning_rate: 3.0e-4
+  warmup_steps: 500
+  device: "auto"
+  checkpoint_dir: "./checkpoints/1b_base"
+  experiment_name: "1b_base"
+```
 
 ### Base Configuration
 
@@ -147,6 +225,15 @@ config.attention.gsa_k_max = 1024
 llm_architecture/
 ├── config/
 │   └── model_config.py           # Configuration classes and presets
+├── configs/                      # YAML configuration files
+│   ├── 1b_base.yaml             # Base GQA model
+│   ├── 1b_deepseek_gsa.yaml     # DeepSeek GSA (recommended)
+│   ├── 1b_deepseek.yaml         # DeepSeek MLA
+│   ├── 1b_gsa.yaml              # Original GSA
+│   ├── 1b_mhc.yaml              # Manifold hyper-connections
+│   ├── 1b_mtp.yaml              # Multi-token prediction
+│   ├── 1b_yarn.yaml             # Extended context (32K)
+│   └── 1b_full.yaml             # All features enabled
 ├── components/
 │   ├── attention/
 │   │   ├── grouped_query_attention.py    # GQA
@@ -170,8 +257,8 @@ llm_architecture/
 ├── models/
 │   └── llm.py
 └── training/
-    ├── train.py
-    └── train_wikitext2_gpt2.py
+    ├── train.py                  # Main training script
+    └── train_wikitext2_gpt2.py   # WikiText-2 smoke test
 ```
 
 ### Attention Mechanisms
@@ -259,7 +346,47 @@ ConnectionConfig(
 
 ## Training
 
-### Basic Training
+### Config-Driven Training (Recommended)
+
+The recommended approach is to use YAML config files that contain both model and training configurations:
+
+```bash
+# Full training with YAML config
+python training/train.py --config configs/1b_deepseek_gsa.yaml
+
+# WikiText-2 smoke test with config
+python training/train_wikitext2_gpt2.py --config configs/1b_base.yaml
+
+# Override specific parameters
+python training/train.py \
+    --config configs/1b_gsa.yaml \
+    --batch-size 4 \
+    --learning-rate 1e-4 \
+    --device cuda
+```
+
+**CLI arguments always override config file values.**
+
+### Available CLI Overrides
+
+| Argument | Description |
+|----------|-------------|
+| `--config` | Path to YAML config file |
+| `--preset` | Model preset (if --config not provided) |
+| `--max-steps` | Maximum training steps |
+| `--batch-size` | Batch size per device |
+| `--gradient-accumulation` | Gradient accumulation steps |
+| `--seq-length` | Sequence length |
+| `--learning-rate` | Peak learning rate |
+| `--warmup-steps` | LR warmup steps |
+| `--device` | Device: auto, cuda, mps, cpu |
+| `--experiment-name` | Experiment name for logging |
+| `--checkpoint-dir` | Checkpoint directory |
+| `--seed` | Random seed |
+| `--log-interval` | Logging interval (steps) |
+| `--save-interval` | Checkpoint interval (steps) |
+
+### Basic Training (Programmatic)
 
 ```python
 from config.model_config import get_preset_config
@@ -292,7 +419,19 @@ trainer.train()
 ### Command Line Training
 
 ```bash
-# WikiText-2 with GPT-2 tokenizer
+# YAML config mode (recommended)
+python training/train_wikitext2_gpt2.py \
+    --config configs/1b_deepseek_gsa.yaml \
+    --device auto
+
+# YAML config with overrides
+python training/train.py \
+    --config configs/1b_base.yaml \
+    --max-steps 10000 \
+    --batch-size 8 \
+    --gradient-accumulation 4
+
+# Preset mode (legacy)
 python training/train_wikitext2_gpt2.py \
     --preset 1b-deepseek-gsa \
     --device auto \
@@ -300,13 +439,6 @@ python training/train_wikitext2_gpt2.py \
     --batch-size 2 \
     --max-steps 1000 \
     --learning-rate 3e-4
-
-# Generic training
-python training/train.py \
-    --preset 1b-base \
-    --max-steps 10000 \
-    --batch-size 8 \
-    --gradient-accumulation 4
 ```
 
 ### Device Support
@@ -357,7 +489,10 @@ from config.model_config import (
     PRESET_CONFIGS,
 )
 
-# Get preset
+# Method 1: Load from YAML (recommended)
+config = ModelConfig.load("configs/1b_deepseek_gsa.yaml")
+
+# Method 2: Get preset
 config = get_preset_config("1b-deepseek-gsa")
 
 # Modify

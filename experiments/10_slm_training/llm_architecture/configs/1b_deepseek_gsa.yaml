@@ -1,12 +1,12 @@
 # =============================================================================
-# LLM 1B with Manifold Hyper-Connections (mHC)
+# LLM 1B with DeepSeek-style Gated Sparse Attention (GSA)
 # =============================================================================
-# Based on paper 2512.24880
-# Replaces standard residual connections with manifold-constrained multi-path
+# Corrected implementation of GSA with proper 1/sqrt(d) scaling
+# Memory-optimized defaults for MPS/limited VRAM
 # Parameters: ~1.1B
 # =============================================================================
 
-model_name: "LLM-1B-mHC"
+model_name: "LLM-1B-DeepSeek-GSA"
 model_version: "1.0.0"
 
 # Core architecture
@@ -25,20 +25,37 @@ hidden_dropout: 0.0
 dtype: "bfloat16"
 
 # -----------------------------------------------------------------------------
-# Attention Configuration
+# Attention Configuration - DEEPSEEK GSA (Recommended)
 # -----------------------------------------------------------------------------
 attention:
-  attention_type: "grouped_query"
+  attention_type: "deepseek_gsa"     # DeepSeek-style GSA (corrected implementation)
   num_attention_heads: 16
   num_key_value_heads: 4
   head_dim: 128
   attention_dropout: 0.0
   attention_bias: false
-  gsa_indexer_dim: 64
-  gsa_num_indexer_heads: 4
-  gsa_k_base: 2048
-  gsa_k_min: 256
-  gsa_k_max: 4096
+  
+  # GSA Indexer parameters
+  gsa_indexer_dim: 64                # d_I: Low-dim indexer projection
+  gsa_num_indexer_heads: 4           # H_I: Number of indexer heads
+  gsa_indexer_activation: "sigmoid"  # Indexer activation function
+  
+  # Adaptive sparsity - Memory-optimized defaults for MPS
+  # For CUDA with more VRAM, increase: k_base=512-1024, k_max=1024-2048
+  gsa_k_base: 128                    # Base selection budget (small for MPS)
+  gsa_k_min: 32                      # Minimum tokens to attend
+  gsa_k_max: 256                     # Maximum tokens to attend (small for MPS)
+  gsa_use_adaptive_k: true           # Enable adaptive k selection
+  gsa_adaptive_k_method: "variance"  # Method: variance, entropy, learned
+  gsa_adaptive_k_temperature: 1.0    # Temperature for adaptive scaling
+  
+  # Gating (G1 + G2 dual gating)
+  gsa_use_value_gate: true           # G2: Applied after V projection
+  gsa_use_output_gate: true          # G1: Applied after attention
+  gsa_gate_activation: "sigmoid"     # Gate activation function
+  gsa_gate_bias_init: 0.5            # Initial gate bias
+  
+  # DeepSeek MLA specific (unused)
   ds_compressed_dim: 512
   ds_rope_head_dim: 32
   ds_num_shared_experts: 1
@@ -48,10 +65,10 @@ attention:
 # Position Embedding Configuration
 # -----------------------------------------------------------------------------
 position:
-  position_type: "rope"
+  position_type: "yarn"              # YaRN for extended context capability
   rope_theta: 10000.0
   rope_scaling_factor: 1.0
-  yarn_scale: 1.0
+  yarn_scale: 8.0                    # 8x context extension
   yarn_original_max_position: 4096
   yarn_beta_fast: 32.0
   yarn_beta_slow: 1.0
@@ -71,13 +88,13 @@ ffn:
   moe_aux_loss_coef: 0.01
 
 # -----------------------------------------------------------------------------
-# Connection Configuration - MANIFOLD HYPER-CONNECTIONS
+# Connection Configuration
 # -----------------------------------------------------------------------------
 connection:
-  connection_type: "mhc"             # mHC enabled
-  mhc_expansion_rate: 4              # n: number of streams (paper uses 4)
-  mhc_alpha_init: 0.01               # α: gating factor init (paper uses 0.01)
-  mhc_sinkhorn_iters: 20             # Sinkhorn-Knopp iterations (paper uses 20)
+  connection_type: "residual"
+  mhc_expansion_rate: 4
+  mhc_alpha_init: 0.01
+  mhc_sinkhorn_iters: 20
 
 # -----------------------------------------------------------------------------
 # Output Head Configuration
@@ -94,9 +111,9 @@ head:
 training:
   max_steps: 10000
   max_epochs: null
-  batch_size: 8
-  gradient_accumulation_steps: 4
-  seq_length: 1024
+  batch_size: 2                      # Small batch for memory efficiency
+  gradient_accumulation_steps: 16    # Effective batch = 32
+  seq_length: 512                    # Moderate for MPS memory
   
   # Optimizer
   learning_rate: 3.0e-4
@@ -123,14 +140,14 @@ training:
   
   # Checkpointing
   save_interval: 1000
-  checkpoint_dir: "./checkpoints/1b_mhc"
+  checkpoint_dir: "./checkpoints/1b_deepseek_gsa"
   
   # Logging
   log_interval: 10
   eval_interval: 500
   
   # Experiment
-  experiment_name: "1b_mhc"
+  experiment_name: "1b_deepseek_gsa"
   seed: 42
 
 # =============================================================================
