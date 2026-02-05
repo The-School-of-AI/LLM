@@ -3,15 +3,14 @@ S3 Parquet Schema Validation Tool
 Validates random records from parquet files against defined schema
 """
 
-import boto3
-import pandas as pd
-import pyarrow.parquet as pq
+import io
+import json
 import random
 from datetime import datetime
-from typing import Dict, List, Any
-import io
-import hashlib
-import json
+from typing import Any, Dict, List
+
+import boto3
+import pandas as pd
 
 # AWS Configuration
 AWS_ACCESS_KEY = "******"
@@ -104,7 +103,7 @@ class ParquetSchemaValidator:
                     json.loads(value)
                     result["is_valid"] = True
                     result["issues"].append("Dict stored as JSON string")
-                except:
+                except json.JSONDecodeError:
                     result["issues"].append("Expected dict, got unparseable string")
             else:
                 result["issues"].append(f"Expected dict, got {type(value).__name__}")
@@ -178,7 +177,7 @@ class ParquetSchemaValidator:
                 df = self.read_parquet_from_s3(file_key)
                 
                 if len(df) == 0:
-                    print(f"  Warning: File is empty, skipping")
+                    print("  Warning: File is empty, skipping")
                     continue
                 
                 # Sample random records
