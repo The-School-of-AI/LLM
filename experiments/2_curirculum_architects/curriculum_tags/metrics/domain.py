@@ -22,6 +22,21 @@ class DomainMetric(MetricPlugin):
 
     name = "domain"
 
+    # NCERT Mapping
+    NCERT_DOMAIN_MAPPING = {
+        "physics": "math_science",
+        "chemistry": "math_science",
+        "biology": "math_science",
+        "mathematics": "math_science",
+        "history": "encyclopedic",
+        "political_science": "encyclopedic",
+        "geography": "encyclopedic",
+        "economics": "technical_docs",
+        "accounting": "technical_docs",
+        "english": "general_web_clean",
+        "hindi": "general_web_clean",
+    }
+
     # Regex patterns for heuristic classification of general text
     RE_DIALOGUE = re.compile(
         r"^(User|Assistant|System|Human|AI|A|B):|^(Q|A)\.|<\|user\|>|<\|assistant\|>",
@@ -40,6 +55,27 @@ class DomainMetric(MetricPlugin):
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Determine domain based on modality signals and text features."""
+
+        # 0. NCERT Override
+        if "metadata" in sample:
+            meta = sample["metadata"]
+            if isinstance(meta, str):
+                import json
+                try:
+                    meta = json.loads(meta)
+                except json.JSONDecodeError:
+                    meta = {}
+            
+            if isinstance(meta, dict) and meta.get("source_type") == "textbook":
+                dataset = sample.get("dataset", "").lower()
+                if dataset == "ncert" or "ncert" in str(sample.get("id", "")).lower():
+                    subject = meta.get("subject", "").lower().replace(" ", "_")
+                    if subject in self.NCERT_DOMAIN_MAPPING:
+                        return {
+                            "primary_domain": self.NCERT_DOMAIN_MAPPING[subject],
+                            "confidence": 1.0,
+                            "reason": f"ncert_metadata_{subject}",
+                        }
 
         # 1. Get Modality Signals (High Confidence)
         tags = sample.get("curriculum_tags", {})

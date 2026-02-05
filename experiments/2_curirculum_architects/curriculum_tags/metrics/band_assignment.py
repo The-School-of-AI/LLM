@@ -234,7 +234,69 @@ class BandAssignmentMetric(MetricPlugin):
         else:
             selected = sorted_candidates[-1]  # Default highest
 
+        # 5. NCERT Adjustment (Post-Processing)
+        grade = self._get_ncert_grade(sample)
+        if grade is not None:
+            # Check source type or dataset name to be safe? 
+            # The grade extraction already checks metadata structure, assuming valid grade implies ncert context/applicability
+            selected = self.adjust_band_for_ncert(selected, grade)
+
         return self._result(selected, f"Constraints met: {candidates}")
+
+    def _get_ncert_grade(self, sample: Dict[str, Any]) -> int:
+        """Extract grade from metadata if available."""
+        if "metadata" in sample:
+            meta = sample["metadata"]
+            if isinstance(meta, str):
+                import json
+                try:
+                    meta = json.loads(meta)
+                except json.JSONDecodeError:
+                    meta = {}
+            
+            if isinstance(meta, dict):
+                # Check for NCERT explicitly?
+                # The user requirement implies applying this logic if "dataset is ncert"
+                dataset = sample.get("dataset", "").lower()
+                source_type = meta.get("source_type", "")
+                
+                is_ncert = (
+                    dataset == "ncert" 
+                    or "ncert" in str(sample.get("id", "")).lower()
+                    or source_type == "textbook"
+                )
+                
+                if is_ncert and "grade" in meta:
+                    try:
+                        return int(meta["grade"])
+                    except (ValueError, TypeError):
+                        pass
+        return None
+
+    def adjust_band_for_ncert(self, band: str, grade: int) -> str:
+        """
+        Adjust band assignment based on NCERT grade level.
+        Lower grades -> easier bands, higher grades -> harder bands.
+        """
+        if grade is None:
+            return band
+        
+        # Grade 6-8: cap at B2
+        if grade <= 8:
+            if band in ["B3", "B4", "B5"]:
+                return "B2"
+        
+        # Grade 9-10: cap at B3
+        elif grade <= 10:
+            if band in ["B4", "B5"]:
+                return "B3"
+        
+        # Grade 11-12: allow up to B4 (rarely B5)
+        elif grade <= 12:
+            if band == "B5":
+                return "B4"
+        
+        return band
 
     def _result(self, band: str, reason: str) -> Dict[str, Any]:
         """Format the output result."""

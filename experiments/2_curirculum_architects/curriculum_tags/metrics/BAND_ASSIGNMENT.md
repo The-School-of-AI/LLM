@@ -66,3 +66,15 @@ The metric adds a `band_assignment` field to the `curriculum_tags`:
     "reason": "Constraints met: ['B3', 'B4']"
 }
 ```
+
+### 4. NCERT Adjustment (Post-Processing)
+For NCERT datasets, we apply a final capping logic based on the `grade` metadata to ensure grade-appropriate assignments.
+
+| Grade | Max Allowed Band |
+| :--- | :--- |
+| **6 - 8** | **B2** |
+| **9 - 10** | **B3** |
+| **11 - 12** | **B4** |
+
+*   *Effect*: A grade 6 textbook paragraph classified as B4 due to technical terms will be capped at B2.
+
