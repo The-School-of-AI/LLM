@@ -24,6 +24,9 @@ dependencies = [
     "pyyaml>=6.0.3",
     "torch>=2.10.0",
     "transformers>=5.0.0",
+    # System monitoring
+    "psutil>=6.1.0",        # CPU utilization and memory monitoring
+    "nvidia-ml-py3>=7.352.0",  # GPU utilization monitoring (pynvml)
 ]
 
 # =============================================================================

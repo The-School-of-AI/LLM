@@ -28,6 +28,328 @@ from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
 from models.llm import LLM
 from training.train import TrainingConfig, Trainer
 
+
+class SystemMonitor:
+    """Monitor GPU and CPU resource usage during training."""
+    
+    def __init__(self):
+        # GPU tracking
+        self.gpu_memory_allocated_samples = []
+        self.gpu_memory_reserved_samples = []
+        self.gpu_utilization_samples = []
+        self.has_gpu = torch.cuda.is_available()
+        
+        # CPU tracking
+        self.cpu_percent_samples = []
+        self.cpu_memory_percent_samples = []
+        self.cpu_memory_gb_samples = []
+        
+        # Try to import psutil for CPU monitoring
+        try:
+            import psutil
+            self.psutil_available = True
+            self.process = psutil.Process()
+            
+            # Detect container memory limit (cgroup v1 and v2)
+            container_memory_gb = None
+            try:
+                # Try cgroup v2 first (newer Docker/Kubernetes)
+                with open('/sys/fs/cgroup/memory.max', 'r') as f:
+                    limit = f.read().strip()
+                    if limit != 'max':
+                        container_memory_gb = int(limit) / (1024 ** 3)
+            except (FileNotFoundError, ValueError, PermissionError):
+                try:
+                    # Try cgroup v1 (older systems)
+                    with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
+                        limit = int(f.read().strip())
+                        # Ignore if set to max value (not actually limited)
+                        if limit < (1 << 63):
+                            container_memory_gb = limit / (1024 ** 3)
+                except (FileNotFoundError, ValueError, PermissionError):
+                    pass
+            
+            # Use container limit if available, otherwise system total
+            if container_memory_gb:
+                self.system_total_memory_gb = container_memory_gb
+                self.is_containerized = True
+            else:
+                self.system_total_memory_gb = psutil.virtual_memory().total / (1024 ** 3)
+                self.is_containerized = False
+                
+        except ImportError:
+            self.psutil_available = False
+            self.system_total_memory_gb = 0
+            self.is_containerized = False
+            print("\n" + "="*60)
+            print("⚠️  CPU Monitoring Unavailable")
+            print("="*60)
+            print("psutil is not installed. Only GPU tracking is available.")
+            print("To enable CPU monitoring, run:")
+            print("  pip install psutil")
+            print("="*60 + "\n")
+        
+        if self.has_gpu:
+            # Reset peak memory stats at start
+            torch.cuda.reset_peak_memory_stats()
+            
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                self.nvml_available = True
+                self.handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                
+                # Get GPU name
+                self.gpu_name = pynvml.nvmlDeviceGetName(self.handle)
+                if isinstance(self.gpu_name, bytes):
+                    self.gpu_name = self.gpu_name.decode('utf-8')
+                    
+                # Get total memory
+                mem_info = pynvml.nvmlDeviceGetMemoryInfo(self.handle)
+                self.total_gpu_memory_gb = mem_info.total / (1024 ** 3)
+                
+            except (ImportError, Exception):
+                self.nvml_available = False
+                self.gpu_name = torch.cuda.get_device_name(0)
+                self.total_gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+                print("\n" + "="*60)
+                print("⚠️  GPU Utilization Tracking Unavailable")
+                print("="*60)
+                print("pynvml is not installed. Only GPU memory tracking is available.")
+                print("To enable GPU utilization tracking, run:")
+                print("  pip install nvidia-ml-py3")
+                print("="*60 + "\n")
+        else:
+            self.nvml_available = False
+            self.gpu_name = "No GPU"
+            self.total_gpu_memory_gb = 0
+    
+    def sample(self):
+        """Collect current GPU and CPU metrics."""
+        # GPU metrics
+        if self.has_gpu:
+            memory_allocated = torch.cuda.memory_allocated() / (1024 ** 3)  # GB
+            memory_reserved = torch.cuda.memory_reserved() / (1024 ** 3)    # GB
+            
+            self.gpu_memory_allocated_samples.append(memory_allocated)
+            self.gpu_memory_reserved_samples.append(memory_reserved)
+            
+            # GPU utilization (requires pynvml)
+            if self.nvml_available:
+                try:
+                    import pynvml
+                    utilization = pynvml.nvmlDeviceGetUtilizationRates(self.handle)
+                    self.gpu_utilization_samples.append(utilization.gpu)
+                except Exception:
+                    pass
+        
+        # CPU metrics (system-wide to capture DataLoader workers)
+        if self.psutil_available:
+            try:
+                import psutil
+                # System-wide CPU utilization (captures all processes including workers)
+                cpu_percent = psutil.cpu_percent(interval=None)
+                if cpu_percent > 0:  # Skip initial 0.0% reading
+                    self.cpu_percent_samples.append(cpu_percent)
+                
+                # Process memory usage (main process only)
+                mem_info = self.process.memory_info()
+                mem_gb = mem_info.rss / (1024 ** 3)  # Resident set size in GB
+                self.cpu_memory_gb_samples.append(mem_gb)
+                
+                # System memory percent
+                sys_mem = psutil.virtual_memory()
+                self.cpu_memory_percent_samples.append(sys_mem.percent)
+            except Exception:
+                pass
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get statistics summary."""
+        stats = {}
+        
+        # GPU stats
+        if self.has_gpu:
+            stats['max_memory_allocated_gb'] = torch.cuda.max_memory_allocated() / (1024 ** 3)
+            stats['max_memory_reserved_gb'] = torch.cuda.max_memory_reserved() / (1024 ** 3)
+            stats['total_gpu_memory_gb'] = self.total_gpu_memory_gb
+            stats['gpu_name'] = self.gpu_name
+        
+        if self.gpu_memory_allocated_samples:
+            stats['gpu_memory_allocated_max'] = max(self.gpu_memory_allocated_samples)
+            stats['gpu_memory_allocated_min'] = min(self.gpu_memory_allocated_samples)
+            stats['gpu_memory_allocated_mean'] = sum(self.gpu_memory_allocated_samples) / len(self.gpu_memory_allocated_samples)
+        
+        if self.gpu_memory_reserved_samples:
+            stats['gpu_memory_reserved_max'] = max(self.gpu_memory_reserved_samples)
+            stats['gpu_memory_reserved_min'] = min(self.gpu_memory_reserved_samples)
+            stats['gpu_memory_reserved_mean'] = sum(self.gpu_memory_reserved_samples) / len(self.gpu_memory_reserved_samples)
+        
+        if self.gpu_utilization_samples:
+            stats['gpu_utilization_max'] = max(self.gpu_utilization_samples)
+            stats['gpu_utilization_min'] = min(self.gpu_utilization_samples)
+            stats['gpu_utilization_mean'] = sum(self.gpu_utilization_samples) / len(self.gpu_utilization_samples)
+        
+        # CPU stats
+        if self.cpu_percent_samples:
+            stats['cpu_percent_max'] = max(self.cpu_percent_samples)
+            stats['cpu_percent_min'] = min(self.cpu_percent_samples)
+            stats['cpu_percent_mean'] = sum(self.cpu_percent_samples) / len(self.cpu_percent_samples)
+        
+        if self.cpu_memory_gb_samples:
+            stats['cpu_memory_gb_max'] = max(self.cpu_memory_gb_samples)
+            stats['cpu_memory_gb_min'] = min(self.cpu_memory_gb_samples)
+            stats['cpu_memory_gb_mean'] = sum(self.cpu_memory_gb_samples) / len(self.cpu_memory_gb_samples)
+        
+        if self.cpu_memory_percent_samples:
+            stats['system_memory_percent_max'] = max(self.cpu_memory_percent_samples)
+            stats['system_memory_percent_min'] = min(self.cpu_memory_percent_samples)
+            stats['system_memory_percent_mean'] = sum(self.cpu_memory_percent_samples) / len(self.cpu_memory_percent_samples)
+        
+        if self.psutil_available:
+            stats['system_total_memory_gb'] = self.system_total_memory_gb
+        
+        return stats
+    
+    def cleanup(self):
+        """Cleanup NVML resources."""
+        if self.nvml_available:
+            try:
+                import pynvml
+                pynvml.nvmlShutdown()
+            except Exception:
+                pass
+    
+    def print_summary(self, seq_length: Optional[int] = None, model_config: Optional[ModelConfig] = None):
+        """Print system statistics summary with configuration details."""
+        stats = self.get_stats()
+        
+        print(f"\n{'='*60}")
+        print("Training Summary")
+        print(f"{'='*60}")
+        
+        # Configuration details
+        if seq_length is not None:
+            print(f"Sequence Length: {seq_length}")
+        
+        if model_config is not None:
+            print(f"\nModel Configuration:")
+            print(f"  Model Name: {model_config.model_name}")
+            print(f"  Vocab Size: {model_config.vocab_size:,}")
+            print(f"  Hidden Size: {model_config.hidden_size}")
+            print(f"  Num Layers: {model_config.num_hidden_layers}")
+            print(f"  Num Heads: {model_config.attention.num_attention_heads}")
+            print(f"  Max Position: {model_config.max_position_embeddings}")
+            
+            # Attention config
+            if hasattr(model_config, 'attention'):
+                att = model_config.attention
+                print(f"\n  Attention Type: {att.attention_type.value if hasattr(att.attention_type, 'value') else att.attention_type}")
+                if att.attention_type.value in ['gated_sparse', 'deepseek_gsa']:
+                    print(f"    GSA k_base: {att.gsa_k_base}")
+                    print(f"    GSA k_max: {att.gsa_k_max}")
+                    if hasattr(att, 'gsa_r_base'):
+                        print(f"    GSA r_base: {att.gsa_r_base}")
+                    print(f"    GSA use_triton: {att.gsa_use_triton_kernels}")
+            
+            # FFN config
+            if hasattr(model_config, 'ffn'):
+                ffn = model_config.ffn
+                ffn_type = ffn.ffn_type.value if hasattr(ffn.ffn_type, 'value') else ffn.ffn_type
+                print(f"\n  FFN Type: {ffn_type}")
+                print(f"    Intermediate Size: {ffn.intermediate_size}")
+                if ffn_type == 'moe':
+                    print(f"    MoE Num Experts: {ffn.moe_num_experts}")
+                    print(f"    MoE Top-K: {ffn.moe_num_experts_per_tok}")
+            
+            # Position encoding
+            if hasattr(model_config, 'position'):
+                pos = model_config.position
+                pos_type = pos.position_type.value if hasattr(pos.position_type, 'value') else pos.position_type
+                print(f"\n  Position Encoding: {pos_type}")
+                if pos_type == 'rope':
+                    print(f"    RoPE Base: {pos.rope_theta}")
+                elif pos_type == 'yarn':
+                    print(f"    YaRN Scale: {pos.yarn_scale}")
+                    print(f"    YaRN Original Max Pos: {pos.yarn_original_max_position}")
+        
+        # GPU Statistics
+        if stats and 'gpu_name' in stats:
+            print(f"\n{'─'*60}")
+            print("GPU Statistics:")
+            print(f"{'─'*60}")
+            
+            print(f"  Device: {stats['gpu_name']}")
+            print(f"  Total Memory: {stats['total_gpu_memory_gb']:.2f} GB")
+            
+            # Peak memory usage
+            if 'max_memory_allocated_gb' in stats:
+                print(f"\n  Peak Memory Usage:")
+                print(f"    Allocated: {stats['max_memory_allocated_gb']:.2f} GB")
+                print(f"    Reserved:  {stats['max_memory_reserved_gb']:.2f} GB")
+                if 'total_gpu_memory_gb' in stats and stats['total_gpu_memory_gb'] > 0:
+                    utilization = (stats['max_memory_reserved_gb'] / stats['total_gpu_memory_gb']) * 100
+                    print(f"    Utilization: {utilization:.1f}%")
+            
+            # Sampled memory statistics (allocated)
+            if 'gpu_memory_allocated_max' in stats:
+                print(f"\n  Memory Allocated Over Time (GB):")
+                print(f"    Max:  {stats['gpu_memory_allocated_max']:.2f}")
+                print(f"    Min:  {stats['gpu_memory_allocated_min']:.2f}")
+                print(f"    Mean: {stats['gpu_memory_allocated_mean']:.2f}")
+            
+            # Sampled memory statistics (reserved)
+            if 'gpu_memory_reserved_max' in stats:
+                print(f"\n  Memory Reserved Over Time (GB):")
+                print(f"    Max:  {stats['gpu_memory_reserved_max']:.2f}")
+                print(f"    Min:  {stats['gpu_memory_reserved_min']:.2f}")
+                print(f"    Mean: {stats['gpu_memory_reserved_mean']:.2f}")
+            
+            # GPU utilization
+            if 'gpu_utilization_max' in stats:
+                print(f"\n  GPU Utilization Over Time (%):")
+                print(f"    Max:  {stats['gpu_utilization_max']}")
+                print(f"    Min:  {stats['gpu_utilization_min']}")
+                print(f"    Mean: {stats['gpu_utilization_mean']:.1f}")
+            else:
+                print(f"\n  GPU Utilization: Not available (install nvidia-ml-py3)")
+        
+        # CPU Statistics
+        if stats and ('cpu_percent_max' in stats or 'cpu_memory_gb_max' in stats):
+            print(f"\n{'─'*60}")
+            print("CPU Statistics:")
+            print(f"{'─'*60}")
+            
+            if 'system_total_memory_gb' in stats:
+                memory_label = "Container Memory" if self.is_containerized else "System Total Memory"
+                print(f"  {memory_label}: {stats['system_total_memory_gb']:.2f} GB")
+            
+            # CPU utilization
+            if 'cpu_percent_max' in stats:
+                print(f"\n  System-Wide CPU Utilization (%):")
+                print(f"    Max:  {stats['cpu_percent_max']:.1f}")
+                print(f"    Min:  {stats['cpu_percent_min']:.1f}")
+                print(f"    Mean: {stats['cpu_percent_mean']:.1f}")
+            
+            # Process memory usage
+            if 'cpu_memory_gb_max' in stats:
+                print(f"\n  Process Memory Usage (GB):")
+                print(f"    Max:  {stats['cpu_memory_gb_max']:.2f}")
+                print(f"    Min:  {stats['cpu_memory_gb_min']:.2f}")
+                print(f"    Mean: {stats['cpu_memory_gb_mean']:.2f}")
+            
+            # System memory utilization
+            if 'system_memory_percent_max' in stats:
+                print(f"\n  System Memory Utilization (%):")
+                print(f"    Max:  {stats['system_memory_percent_max']:.1f}")
+                print(f"    Min:  {stats['system_memory_percent_min']:.1f}")
+                print(f"    Mean: {stats['system_memory_percent_mean']:.1f}")
+        elif not self.psutil_available:
+            print(f"\n{'─'*60}")
+            print("CPU Statistics: Not available (install psutil)")
+            print(f"{'─'*60}")
+        
+        print(f"\n{'='*60}\n")
+
 try:
     from datasets import load_dataset
     from transformers import AutoTokenizer
@@ -35,6 +357,27 @@ except ImportError as exc:
     raise ImportError(
         "Missing dependencies. Install with: pip install datasets transformers"
     ) from exc
+
+
+def get_optimal_num_workers() -> int:
+    """
+    Determine optimal number of DataLoader workers based on CPU cores.
+    
+    Returns:
+        Recommended number of workers (typically 75% of available cores)
+    """
+    import os
+    try:
+        # Try to get CPU count
+        cpu_count = os.cpu_count()
+        if cpu_count is None:
+            return 4  # Fallback default
+        
+        # Use 75% of cores, min 4, max 16
+        optimal = max(4, min(16, int(cpu_count * 0.75)))
+        return optimal
+    except Exception:
+        return 4  # Safe fallback
 
 
 def load_config_from_yaml(config_path: str) -> Tuple[ModelConfig, Dict[str, Any]]:
@@ -225,10 +568,26 @@ Note: CLI arguments always override config file values.
     parser.add_argument("--checkpoint-dir", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
 
-    # Logging / DataLoader
+    # Logging / DataLoader optimization
     parser.add_argument("--log-interval", type=int, default=None)
     parser.add_argument("--save-interval", type=int, default=None)
-    parser.add_argument("--num-workers", type=int, default=2)
+    parser.add_argument(
+        "--num-workers", 
+        type=int, 
+        default=None,
+        help="Number of DataLoader workers (default: auto-detect based on CPU cores)"
+    )
+    parser.add_argument(
+        "--prefetch-factor",
+        type=int,
+        default=2,
+        help="Number of batches to prefetch per worker (default: 2)"
+    )
+    parser.add_argument(
+        "--persistent-workers",
+        action="store_true",
+        help="Keep DataLoader workers alive between epochs (recommended for multi-epoch training)"
+    )
 
     args = parser.parse_args()
 
@@ -323,12 +682,30 @@ Note: CLI arguments always override config file values.
     # Determine if we should pin memory (only for CUDA)
     pin_memory = training_config.device == "cuda" or (training_config.device == "auto" and torch.cuda.is_available())
 
+    # Auto-detect optimal number of workers if not specified
+    num_workers = args.num_workers if args.num_workers is not None else get_optimal_num_workers()
+    
+    # Persistent workers only makes sense with num_workers > 0
+    use_persistent_workers = args.persistent_workers and num_workers > 0
+    
+    print(f"\n{'='*60}")
+    print("DataLoader Configuration")
+    print(f"{'='*60}")
+    print(f"  Batch size: {training_config.batch_size}")
+    print(f"  Num workers: {num_workers}")
+    print(f"  Prefetch factor: {args.prefetch_factor}")
+    print(f"  Persistent workers: {use_persistent_workers}")
+    print(f"  Pin memory: {pin_memory}")
+    print(f"{'='*60}\n")
+
     dataloader = DataLoader(
         dataset,
         batch_size=training_config.batch_size,
         shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=pin_memory
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        prefetch_factor=args.prefetch_factor if num_workers > 0 else None,
+        persistent_workers=use_persistent_workers
     )
 
     # Update vocab size from tokenizer
@@ -370,7 +747,27 @@ Note: CLI arguments always override config file values.
         training_config=training_config,
         model_config=model_config
     )
-    trainer.train()
+    
+    # Initialize system monitor (GPU + CPU)
+    system_monitor = SystemMonitor()
+    
+    # Monkey-patch the trainer's _print_progress to also sample system metrics
+    original_print_progress = trainer._print_progress
+    def _print_progress_with_monitoring(metrics):
+        system_monitor.sample()
+        original_print_progress(metrics)
+    trainer._print_progress = _print_progress_with_monitoring
+    
+    # Run training
+    try:
+        trainer.train()
+    finally:
+        # Print system statistics summary with configuration details
+        system_monitor.print_summary(
+            seq_length=training_config.seq_length,
+            model_config=model_config
+        )
+        system_monitor.cleanup()
 
 
 if __name__ == "__main__":
