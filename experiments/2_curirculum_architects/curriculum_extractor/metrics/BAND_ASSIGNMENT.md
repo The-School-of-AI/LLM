@@ -105,3 +105,15 @@ To distinguish between **Graduate (B4)** and **Specialist (B5)** content in High
 *   **B5 Promotion**: IF `Grade >= 11` AND Metadata is Hard/Advanced AND (`question_complexity >= 0.5` OR type is `Numerical`/`Conceptual`).
  
 This ensures B5 is reserved for the most complex, deep-reasoning problems.
+
+## Modality Detection Logic
+
+The `ModalityMetric` uses valid strictly refined regex patterns to detect specific content types while avoiding false positives in general text.
+
+| Modality | Pattern Summary | Strictness / Safety |
+| :--- | :--- | :--- |
+| **Code** | `class Name:`, `def name(`, `import x` (start of line), `from x import y`, `function()` | - `class` requires following `:`, `{`, or `(`<br>- `import` must be at start of line<br>- `function` requires `()` or `{` (JS style) |
+| **Math** | LaTeX (e.g., `\frac`, `\sum`, `\alpha`), Unicode (`∑`, `∞`, `∫`), Delimiters (`\[...\]`, `\(...\)`) | - Expanded to include Greek letters and Symbols<br>- Matches standard LaTeX and Unicode math notation |
+| **Research Paper** | `Abstract:` (header), `References:` (header), `arXiv:ID`, `doi:ID`, `doi.org`, `et al.` | - Headers (`Abstract`, `References`, `Bibliography`) MUST be followed by `:` or newline<br>- `Abstract art...` is ignored |
+| **Agentic Trace** | `Action:`, `Thought:`, `Observation:`, `Final Answer:`, `Tool:` | - Keywords MUST appear at **start of line** (e.g., `^Action:`) or as JSON keys (`"action":`)<br>- `take action:` in sentences is ignored |
+| **Reasoning** | `Reasoning:`, `Explanation:`, `Chain of Thought:`, `let's think step by step` | - Headers MUST appear at **start of line**<br>- `let's think step by step` is a global phrase trigger |
