@@ -13,19 +13,20 @@ log_warn() { echo "[WARN] $1"; }
 log_error() { echo "[ERROR] $1"; }
 
 # Default values
+PREFIX="P15-IdleCPUMonitor-410"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CPU_THRESHOLD="${CPU_THRESHOLD:-10}"
 EVALUATION_PERIODS="${EVALUATION_PERIODS:-3}"
 PERIOD_SECONDS="${PERIOD_SECONDS:-300}"
-SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-telegram-cpu-idle-alert-topic}"
-LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-telegram-cpu-idle-alert-forwarder}"
-LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-telegram-cpu-alert-lambda-execution-role}"
-EVENTBRIDGE_LAMBDA_NAME="${EVENTBRIDGE_LAMBDA_NAME:-ec2-launch-alarm-creator}"
-EVENTBRIDGE_RULE_NAME="${EVENTBRIDGE_RULE_NAME:-ec2-launch-cpu-alarm-rule}"
+SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-${PREFIX}-Telegram-alert-topic}"
+LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-${PREFIX}-Telegram-alert-forwarder}"
+LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-${PREFIX}-Telegram-alert-lambda-execution-role}"
+EVENTBRIDGE_LAMBDA_NAME="${EVENTBRIDGE_LAMBDA_NAME:-${PREFIX}-ec2-launch-alarm-creator}"
+EVENTBRIDGE_RULE_NAME="${EVENTBRIDGE_RULE_NAME:-${PREFIX}-ec2-launch-cpu-alarm-rule}"
 
 # Tags
 TAG_TEAM="Team15"
-TAG_TASK_ID="Issue339"
+TAG_TASK_ID="Issue410"
 TAG_WORKLOAD_TYPE="Monitoring"
 
 # Parse arguments
@@ -216,7 +217,7 @@ def format_alarm(alarm, account_id):
         dim_str = 'N/A'
 
     lines = [
-        "{} *CPU Idle Alert {}*".format(emoji, name),
+        "{} *CPU Idle: {}*".format(emoji, name),
         "",
         "*Account:* {}".format(account_id),
         "*Alarm:* {}".format(name),
@@ -283,7 +284,7 @@ LAMBDA_ARN="arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${LAMBDA_FUN
 
 #######################################
 # Step 3: Create SNS Topic
-#######################################
+#####################################
 log_info "Checking SNS topic..."
 
 SNS_TOPIC_ARN=$(aws sns create-topic \
@@ -337,6 +338,7 @@ TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
 TAG_TEAM = "${TAG_TEAM}"
 TAG_TASK_ID = "${TAG_TASK_ID}"
 TAG_WORKLOAD_TYPE = "${TAG_WORKLOAD_TYPE}"
+PREFIX = "${PREFIX}"
 
 def lambda_handler(event, context):
     instance_id = event['detail']['instance-id']
@@ -344,7 +346,7 @@ def lambda_handler(event, context):
     
     # Get instance name
     instance_name = get_instance_name(instance_id)
-    alarm_name = "{}-cpu-idle".format(instance_name)
+    alarm_name = "{}-{}-cpu-idle".format(PREFIX, instance_name)
     
     # Check if alarm already exists
     existing = cloudwatch.describe_alarms(AlarmNames=[alarm_name])
@@ -527,7 +529,7 @@ else
       continue
     fi
 
-    alarm_name="${instance_name}-cpu-idle"
+    alarm_name="${PREFIX}-${instance_name}-cpu-idle"
     log_info "Creating alarm for ${instance_id} (${instance_name})..."
 
     aws cloudwatch put-metric-alarm \
