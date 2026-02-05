@@ -252,13 +252,24 @@ def triton_sparse_attention(
     # Grid
     grid = (batch_size, n_heads, triton.cdiv(seq_q, BLOCK_Q))
 
-    # Ensure indices are int64 for Triton
-    indices = indices.to(torch.int64)
+    # === Ensure tensor types and contiguity for Triton JIT ===
+    # This prevents "value cannot be converted to type at::Ha" errors
+    # that occur when Triton's JIT compiler has trouble with certain tensor types
     
-    # Ensure mask is a numeric type (int8) for proper stride calculation
-    # Boolean tensors can cause issues with .stride() in some PyTorch versions
+    # Ensure contiguity for all tensors
+    q = q.contiguous()
+    k = k.contiguous()
+    v = v.contiguous()
+    
+    # Ensure indices are int64 for Triton
+    indices = indices.contiguous().to(torch.int64)
+    
+    # Convert boolean mask to float32 for Triton compatibility
+    # Boolean tensors cause JIT compilation issues in some PyTorch/Triton versions
     if mask.dtype == torch.bool:
-        mask = mask.to(torch.int8)
+        mask = mask.to(torch.float32).contiguous()
+    else:
+        mask = mask.contiguous()
 
     try:
         _sparse_attention_fwd_kernel[grid](
@@ -282,7 +293,9 @@ def triton_sparse_attention(
         # Fall back to PyTorch implementation on kernel errors
         import warnings
         warnings.warn(f"Triton kernel failed with: {e}. Falling back to PyTorch.")
-        out, lse = pytorch_sparse_attention(q, k, v, indices, mask.bool(), scale)
+        # Convert mask back to bool for PyTorch implementation
+        mask_bool = mask > 0.5 if mask.dtype != torch.bool else mask
+        out, lse = pytorch_sparse_attention(q, k, v, indices, mask_bool, scale)
 
     return out, lse
 
