@@ -53,9 +53,9 @@ class DomainMetric(MetricPlugin):
         "science": "math_science",
         "qa": "dialogue_chat",
         "code": "code_repos",
-        "instruction": "technical_docs", 
+        "instruction": "technical_docs",
         "encyclopedia": "encyclopedic",
-        "education": "technical_docs" 
+        "education": "technical_docs",
     }
 
     # 2. Dolma Source Mapping (Precedence)
@@ -65,9 +65,8 @@ class DomainMetric(MetricPlugin):
         "stack": "code_repos",
         "arxiv": "math_science",
         "wiki": "encyclopedic",
-        "c4": "general_web_clean"
+        "c4": "general_web_clean",
     }
-
 
     RE_ENCYCLOPEDIC = re.compile(
         r"\[\d+\]|\[edit\]|Coordinates:|External links|See also|References|Bibliography",
@@ -83,38 +82,51 @@ class DomainMetric(MetricPlugin):
         """Determine domain based on modality signals and text features."""
 
         # --- 0. HIGH PRECEDENCE: Dataset Tags ---
-        dataset_domain_tag = sample.get("domain", "").lower() if sample.get("domain") else None
-        dataset_source_tag = sample.get("source", "").lower() if sample.get("source") else None
-        
+        dataset_domain_tag = (
+            sample.get("domain", "").lower() if sample.get("domain") else None
+        )
+        dataset_source_tag = (
+            sample.get("source", "").lower() if sample.get("source") else None
+        )
+
         # A. Dolma Source Mapping (Highest Prio for Dolma-specifics)
         if dataset_source_tag and dataset_source_tag in self.DOLMA_SOURCE_MAPPING:
-             return {
+            return {
                 "primary_domain": self.DOLMA_SOURCE_MAPPING[dataset_source_tag],
-                "confidence": 1.0, 
-                "reason": f"dolma_source_{dataset_source_tag}"
+                "confidence": 1.0,
+                "reason": f"dolma_source_{dataset_source_tag}",
             }
 
         # B. Dataset Domain Mapping (Precedence for high-signal tags: math, code, qa)
-        HIGH_SIGNAL_DOMAINS = ["math", "code", "qa", "science", "instruction", "encyclopedia", "news"]
-        
+        HIGH_SIGNAL_DOMAINS = [
+            "math",
+            "code",
+            "qa",
+            "science",
+            "instruction",
+            "encyclopedia",
+            "news",
+        ]
+
         if dataset_domain_tag and dataset_domain_tag in self.DATASET_DOMAIN_MAPPING:
-             if dataset_domain_tag in HIGH_SIGNAL_DOMAINS:
+            if dataset_domain_tag in HIGH_SIGNAL_DOMAINS:
                 return {
                     "primary_domain": self.DATASET_DOMAIN_MAPPING[dataset_domain_tag],
                     "confidence": 1.0,
-                    "reason": f"dataset_tag_{dataset_domain_tag}"
+                    "reason": f"dataset_tag_{dataset_domain_tag}",
                 }
-             
+
         # 0. NCERT Override
         if "metadata" in sample:
             meta = sample["metadata"]
             if isinstance(meta, str):
                 import json
+
                 try:
                     meta = json.loads(meta)
                 except json.JSONDecodeError:
                     meta = {}
-            
+
             if isinstance(meta, dict) and meta.get("source_type") == "textbook":
                 dataset = sample.get("dataset", "").lower()
                 if dataset == "ncert" or "ncert" in str(sample.get("id", "")).lower():

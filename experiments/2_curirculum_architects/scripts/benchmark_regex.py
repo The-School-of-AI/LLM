@@ -1,25 +1,29 @@
 import re
-import time
 import textwrap
+import time
 
 # 1. Setup Data
 # A mix of code and text, repeated to make it large (~1MB)
-sample_text = """
+sample_text = (
+    """
 def hello_world():
     print("Hello")
     # Some comments
     # More comments
-""" * 1000 + "Some general text without code " * 10000
+"""
+    * 1000
+    + "Some general text without code " * 10000
+)
 
 # Refined Pattern
 CODE_PATTERN = re.compile(
     r"```|"
     r"def\s+\w+\(|"
-    r"class\s+\w+\s*[:{\(]|" 
-    r"function\s+\w+\s*[\({]|" 
-    r"^\s*import\s+\w+|" 
-    r"from\s+[\w.]+\s+import\s+\w+|" 
-    r"from\s+\.\s+import\s+\w+", 
+    r"class\s+\w+\s*[:{\(]|"
+    r"function\s+\w+\s*[\({]|"
+    r"^\s*import\s+\w+|"
+    r"from\s+[\w.]+\s+import\s+\w+|"
+    r"from\s+\.\s+import\s+\w+",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -51,4 +55,3 @@ print(f"Search (First Match): {avg_search*1000:.4f} ms")
 print(f"Findall (All Matches): {avg_findall*1000:.4f} ms")
 print(f"Finditer (Count Only): {avg_finditer*1000:.4f} ms")
 print(f"Finditer vs Search Diff: {(avg_finditer - avg_search)*1000:.4f} ms")
-

@@ -112,9 +112,9 @@ class BandAssignmentMetric(MetricPlugin):
         tags = sample.get("curriculum_tags", {})
         print(f"DEBUG: Curriculum Tags Keys: {list(tags.keys())}")
         if tags:
-             print(f"DEBUG: Difficulty Tag Sample: {tags.get('difficulty')}")
-             print(f"DEBUG: Modality Tag Sample: {tags.get('modality')}")
-             
+            print(f"DEBUG: Difficulty Tag Sample: {tags.get('difficulty')}")
+            print(f"DEBUG: Modality Tag Sample: {tags.get('modality')}")
+
         # 1. Extract Signals
         modality_tags = tags.get("modality", {})
         primary_modality = modality_tags.get("primary_modality", "general_text")
@@ -164,7 +164,7 @@ class BandAssignmentMetric(MetricPlugin):
         if has_agentic or has_agentic_trace or primary_modality == "agentic_traces":
             selected_band = "B5"
             selection_reason = "Agentic Override"
-        
+
         elif has_research or primary_modality == "research_papers":
             if fk_grade > 16.0 or diff_score > 0.8:
                 selected_band = "B5"
@@ -197,7 +197,7 @@ class BandAssignmentMetric(MetricPlugin):
             elif diff_score > 0.7:
                 selected_band = "B4"
                 selection_reason = "Graduate Science (Domain Override)"
-            elif diff_score > 0.45: # Relaxed from 0.60
+            elif diff_score > 0.45:  # Relaxed from 0.60
                 selected_band = "B3"
                 selection_reason = "Undergraduate Science (Domain Override)"
             else:
@@ -236,7 +236,9 @@ class BandAssignmentMetric(MetricPlugin):
                     continue
                 if not in_range(diversity, constraints.diversity_range):
                     continue
-                if not in_range(structural_density, constraints.structural_density_range):
+                if not in_range(
+                    structural_density, constraints.structural_density_range
+                ):
                     continue
 
                 # D. Tokenizer Level Check
@@ -261,15 +263,17 @@ class BandAssignmentMetric(MetricPlugin):
                 # Or safe default B0.
                 # If we have COT but no candidates (e.g. extremely low complexity COT?), force B3
                 if has_cot_trace:
-                     selected_band = "B3"
-                     selection_reason = "Fallback (COT detected)"
+                    selected_band = "B3"
+                    selection_reason = "Fallback (COT detected)"
                 else:
-                     selected_band = "B0"
-                     selection_reason = "Fallback (No constraints met)"
+                    selected_band = "B0"
+                    selection_reason = "Fallback (No constraints met)"
             else:
                 # Sort candidates B0..B5
                 band_order = ["B0", "B1", "B2", "B3", "B4", "B5"]
-                sorted_candidates = sorted(candidates, key=lambda b: band_order.index(b))
+                sorted_candidates = sorted(
+                    candidates, key=lambda b: band_order.index(b)
+                )
 
                 if self.logic_config.overlap_policy == "highest":
                     selected = sorted_candidates[-1]
@@ -277,10 +281,10 @@ class BandAssignmentMetric(MetricPlugin):
                     selected = sorted_candidates[0]
                 else:
                     selected = sorted_candidates[-1]  # Default highest
-                
+
                 selected_band = selected
                 selection_reason = f"Constraints met: {candidates}"
-        
+
         # 5. NCERT Adjustment (Post-Processing)
         # Apply strict grade capping even if overridden by Modality/Domain logic
         grade = self._get_ncert_grade(sample)
@@ -290,16 +294,16 @@ class BandAssignmentMetric(MetricPlugin):
             if grade <= 2:
                 selected_band = "B0"
                 selection_reason = "Forced B0 (Grade <= 2)"
-            
+
             # Force max B1 for Grade <= 5 (Primary)
             elif grade <= 5:
                 # If current selection is higher than B1, cap it
                 # If it's already B0, leave it
                 current_idx = ["B0", "B1", "B2", "B3", "B4", "B5"].index(selected_band)
-                if current_idx > 1: # Higher than B1
-                     selected_band = "B1"
-                     selection_reason = "Capped at B1 (Grade <= 5)"
-                     
+                if current_idx > 1:  # Higher than B1
+                    selected_band = "B1"
+                    selection_reason = "Capped at B1 (Grade <= 5)"
+
             # 5b. Advanced Content Promotion (Upper Stratification)
             # Stratify B3 -> B4/B5 based on internal metadata
             elif selected_band == "B3" and primary_domain == "math_science":
@@ -307,38 +311,46 @@ class BandAssignmentMetric(MetricPlugin):
                     meta_str = sample.get("metadata", "{}")
                     # Metadata comes as stringified JSON often in this dataset
                     import json
+
                     if isinstance(meta_str, str):
                         meta_obj = json.loads(meta_str)
                     else:
                         meta_obj = meta_str if isinstance(meta_str, dict) else {}
-                        
+
                     difficulty = meta_obj.get("difficulty", "")
                     student_level = meta_obj.get("student_level", "")
-                    
+
                     # Promote to B4
                     if difficulty == "Hard" or student_level == "Advanced":
                         # Default promotion to B4
                         selected_band = "B4"
                         selection_reason = "Promoted to B4 (Metadata: Hard/Advanced)"
-                        
+
                         # Aggressive promotion to B5 (Top Tier)
                         # If explicitly marked Advanced/Hard AND is Grade 11 or 12 (Higher Secondary)
                         # AND has high question complexity OR is a complex question type
                         q_complexity = float(meta_obj.get("question_complexity", 0.0))
                         q_type = meta_obj.get("question_type", "")
-                        
-                        is_complex = q_complexity >= 0.5 or q_type in ["Numerical", "Conceptual"]
-                        
-                        if grade >= 11 and (student_level == "Advanced" or difficulty == "Hard") and is_complex:
-                             selected_band = "B5"
-                             selection_reason = "Promoted to B5 (Metadata: Advanced + Grade 11+ + Complex)"
-                             
+
+                        is_complex = q_complexity >= 0.5 or q_type in [
+                            "Numerical",
+                            "Conceptual",
+                        ]
+
+                        if (
+                            grade >= 11
+                            and (student_level == "Advanced" or difficulty == "Hard")
+                            and is_complex
+                        ):
+                            selected_band = "B5"
+                            selection_reason = "Promoted to B5 (Metadata: Advanced + Grade 11+ + Complex)"
+
                 except Exception as e:
                     print(f"DEBUG: Metadata parsing failed for promotion: {e}")
 
             # 5c. Standard Capping (Upper Bound)
             else:
-                 selected_band = self.adjust_band_for_ncert(selected_band, grade)
+                selected_band = self.adjust_band_for_ncert(selected_band, grade)
 
         result = self._result(selected_band, selection_reason)
         # print(f"DEBUG: Band Result: {result}")
@@ -350,23 +362,24 @@ class BandAssignmentMetric(MetricPlugin):
             meta = sample["metadata"]
             if isinstance(meta, str):
                 import json
+
                 try:
                     meta = json.loads(meta)
                 except json.JSONDecodeError:
                     meta = {}
-            
+
             if isinstance(meta, dict):
                 # Check for NCERT explicitly?
                 # The user requirement implies applying this logic if "dataset is ncert"
                 dataset = sample.get("dataset", "").lower()
                 source_type = meta.get("source_type", "")
-                
+
                 is_ncert = (
-                    dataset == "ncert" 
+                    dataset == "ncert"
                     or "ncert" in str(sample.get("id", "")).lower()
                     or source_type == "textbook"
                 )
-                
+
                 if is_ncert and "grade" in meta:
                     try:
                         return int(meta["grade"])
@@ -381,22 +394,22 @@ class BandAssignmentMetric(MetricPlugin):
         """
         if grade is None:
             return band
-        
+
         # Grade 6-8: cap at B2
         if grade <= 8:
             if band in ["B3", "B4", "B5"]:
                 return "B2"
-        
+
         # Grade 9-10: cap at B3
         elif grade <= 10:
             if band in ["B4", "B5"]:
                 return "B3"
-        
+
         # Grade 11-12: allow up to B4 (rarely B5)
         elif grade <= 12:
             if band == "B5":
                 return "B4"
-        
+
         return band
 
     def _result(self, band: str, reason: str) -> Dict[str, Any]:

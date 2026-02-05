@@ -137,29 +137,37 @@ def test_modality_research_paper_detection(temp_config):
 def test_modality_false_positive_prevention(temp_config):
     """Test that refined regexes do not match general text."""
     metric = ModalityMetric(temp_config)
-    
+
     # Code negatives
     assert not metric.compute({"text": "My biology class is doing well."})["has_code"]
     assert not metric.compute({"text": "The function of the heart."})["has_code"]
     assert not metric.compute({"text": "We import goods."})["has_code"]
     assert not metric.compute({"text": "Where are you from?"})["has_code"]
-    
+
     # Math negatives
     assert not metric.compute({"text": "It costs $50.00."})["has_math"]
     assert not metric.compute({"text": "The sum of 1 and 2."})["has_math"]
     assert not metric.compute({"text": "Using the alpha channel."})["has_math"]
 
     # Research negatives
-    assert not metric.compute({"text": "Abstract art is fascinating."})["has_research_paper"]
+    assert not metric.compute({"text": "Abstract art is fascinating."})[
+        "has_research_paper"
+    ]
     assert not metric.compute({"text": "I have good references."})["has_research_paper"]
 
     # Agentic negatives
-    assert not metric.compute({"text": "My final thought: this is great."})["has_agentic"]
+    assert not metric.compute({"text": "My final thought: this is great."})[
+        "has_agentic"
+    ]
     assert not metric.compute({"text": "We need to take action:"})["has_agentic"]
 
     # Reasoning negatives
-    assert not metric.compute({"text": "The reasoning: it was necessary."})["has_reasoning"]
-    assert not metric.compute({"text": "This requires no explanation."})["has_reasoning"]
+    assert not metric.compute({"text": "The reasoning: it was necessary."})[
+        "has_reasoning"
+    ]
+    assert not metric.compute({"text": "This requires no explanation."})[
+        "has_reasoning"
+    ]
 
 
 def test_modality_chaining_with_previous_tags(temp_config):

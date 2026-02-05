@@ -18,23 +18,23 @@ class ModalityMetric(MetricPlugin):
     CODE_PATTERN = re.compile(
         r"```|"
         r"def\s+\w+\(|"
-        r"class\s+\w+\s*[:{]|"    # Class followed by : or { (Java/C++/Python simple)
-        r"class\s+\w+\([^\)]+\)\s*:|" # Python class with inheritance: class Foo(Bar):
-        r"^\s*function\s+\w+\s*[\({]|" # JS function at start of line
-        r"^\s*import\s+\w+|" # Import at start of line
-        r"from\s+[\w.]+\s+import\s+\w+|" # Python from ... import
-        r"from\s+\.\s+import\s+\w+", # Python from . import
+        r"class\s+\w+\s*[:{]|"  # Class followed by : or { (Java/C++/Python simple)
+        r"class\s+\w+\([^\)]+\)\s*:|"  # Python class with inheritance: class Foo(Bar):
+        r"^\s*function\s+\w+\s*[\({]|"  # JS function at start of line
+        r"^\s*import\s+\w+|"  # Import at start of line
+        r"from\s+[\w.]+\s+import\s+\w+|"  # Python from ... import
+        r"from\s+\.\s+import\s+\w+",  # Python from . import
         re.IGNORECASE | re.MULTILINE,
     )
     MATH_PATTERN = re.compile(
-        r"[∑∫√≈≠≤≥∞]|" # Removed arrow →
+        r"[∑∫√≈≠≤≥∞]|"  # Removed arrow →
         r"\\("
         r"frac|sum|int|sqrt|begin\{equation\}|"
         r"alpha|beta|gamma|delta|theta|pi|sigma|omega|phi|"
         r"partial|cdot|times|pm"
         r")|"
         r"\\\[|\\\(",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     # NCERT Mapping
@@ -52,7 +52,6 @@ class ModalityMetric(MetricPlugin):
         "hindi": "general_text",
     }
 
-
     # CoT Patterns
     REASONING_PATTERN = re.compile(
         r"let's think step by step|"
@@ -64,43 +63,43 @@ class ModalityMetric(MetricPlugin):
     # Agentic Patterns
     AGENTIC_PATTERN = re.compile(
         r"^\s*(Action|Observation|Thought|Final Answer|Tool):|"  # Start of line
-        r'"(tool|action|observation|thought)"\s*:',              # JSON key
+        r'"(tool|action|observation|thought)"\s*:',  # JSON key
         re.IGNORECASE | re.MULTILINE,
     )
 
     RE_RESEARCH_PAPER = re.compile(
-        r"^\s*(?:Abstract|References|Bibliography)(?:[:\n]|$)" # Header followed by colon, newline, or end of line
-        r"|\b(?:arXiv|doi)[:/]\s*\d"                           # arXiv/doi with colon or slash
-        r"|\bdoi\.org/10\."                                    # doi.org
-        r"|\bet al\."                                          # et al.
-        r"|\[[\d,\s]+\].*\[[\d,\s]+\]",                        # Multiple Citations
+        r"^\s*(?:Abstract|References|Bibliography)(?:[:\n]|$)"  # Header followed by colon, newline, or end of line
+        r"|\b(?:arXiv|doi)[:/]\s*\d"  # arXiv/doi with colon or slash
+        r"|\bdoi\.org/10\."  # doi.org
+        r"|\bet al\."  # et al.
+        r"|\[[\d,\s]+\].*\[[\d,\s]+\]",  # Multiple Citations
         re.IGNORECASE | re.MULTILINE,
     )
 
     def _check_dataset_tags(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Check for dataset explicit tags to override/augment detection."""
         overrides = {}
-        
+
         # 1. Check strict domain tags
         domain = sample.get("domain", "").lower() if sample.get("domain") else ""
         source = sample.get("source", "").lower() if sample.get("source") else ""
-        
+
         # Code domains
         if domain == "code" or source == "stack":
             overrides["has_code"] = True
             overrides["primary_modality"] = "code"
-            
+
         # Math domains
         elif domain == "math":
             if not overrides.get("primary_modality"):
-                 overrides["has_math"] = True
-                 overrides["primary_modality"] = "math"
-                 
+                overrides["has_math"] = True
+                overrides["primary_modality"] = "math"
+
         # Research papers
         if source == "arxiv":
-             overrides["has_research_paper"] = True
-             overrides["primary_modality"] = "research_papers"
-             
+            overrides["has_research_paper"] = True
+            overrides["primary_modality"] = "research_papers"
+
         return overrides
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
@@ -124,13 +123,14 @@ class ModalityMetric(MetricPlugin):
             meta = sample["metadata"]
             if isinstance(meta, str):
                 import json
+
                 try:
                     meta = json.loads(meta)
                 except json.JSONDecodeError:
                     meta = {}
-            
+
             # Check for NCERT specific logic
-            if isinstance(meta, dict) and meta.get("source_type") == "textbook": 
+            if isinstance(meta, dict) and meta.get("source_type") == "textbook":
                 dataset = sample.get("dataset", "").lower()
                 if dataset == "ncert" or "ncert" in str(sample.get("id", "")).lower():
                     subject = meta.get("subject", "").lower().replace(" ", "_")
@@ -145,7 +145,7 @@ class ModalityMetric(MetricPlugin):
                             "primary_modality": mapped_mod,
                             "has_cot": False,
                             "cot_density": 0.0,
-                            "agentic_density": 0.0
+                            "agentic_density": 0.0,
                         }
 
         # Detect each modality
@@ -181,10 +181,13 @@ class ModalityMetric(MetricPlugin):
         # Apply Dataset Overrides (High Confidence)
         overrides = self._check_dataset_tags(sample)
         if overrides:
-            if overrides.get("has_code"): has_code = True
-            if overrides.get("has_math"): has_math = True
-            if overrides.get("has_research_paper"): has_research_paper = True
-            
+            if overrides.get("has_code"):
+                has_code = True
+            if overrides.get("has_math"):
+                has_math = True
+            if overrides.get("has_research_paper"):
+                has_research_paper = True
+
             # Allow override of primary ONLY if it was "general_text" OR the override is highly specific
             # Actually, specific tags typically beat heuristics.
             if "primary_modality" in overrides:
