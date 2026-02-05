@@ -89,7 +89,7 @@ class RejectionPolicyMetric(MetricPlugin):
 
             if min_tokens_int > 0 and token_count < min_tokens_int:
                 rejected = True
-                rejection_reason = f"below_minimum_token_threshold:{token_count}"
+                rejection_reason = "below_minimum_token_threshold"
 
         result = {
             "policy_checked": True,
