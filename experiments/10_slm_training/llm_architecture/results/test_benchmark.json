@@ -1,0 +1,341 @@
+{
+  "1b_base": {
+    "timestamp": "2026-02-05T23:59:49.579687",
+    "config_path": "configs/1b_base.yaml",
+    "config_name": "LLM-1B-Base (micro)",
+    "device": "cpu",
+    "device_info": {
+      "device": "cpu",
+      "torch_version": "2.5.1+cpu",
+      "has_ipex": false,
+      "name": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+      "num_threads": 14,
+      "num_interop_threads": 14,
+      "total_memory_gb": 16.641941504
+    },
+    "dtype": "float32",
+    "batch_size": 1,
+    "profile": "micro",
+    "model_profile": {
+      "name": "LLM-1B-Base (micro)",
+      "total_params": 29559040,
+      "trainable_params": 29559040,
+      "params_billions": 0.02955904,
+      "embedding_params": 12877824,
+      "attention_params": 655360,
+      "ffn_params": 3145728,
+      "head_params": 12877824,
+      "norm_params": 2304,
+      "connection_params": 0,
+      "other_params": 0,
+      "forward_flops": 7602176,
+      "backward_flops": 15204352,
+      "total_training_flops": 22806528,
+      "activation_bytes_per_token": 8192,
+      "kv_cache_bytes_per_token": 1024,
+      "params_per_layer": 950848,
+      "flops_per_layer": 1900544
+    },
+    "architecture_metrics": {
+      "attention_type": "grouped_query",
+      "kv_cache_reduction_factor": 4.0,
+      "sparse_attention_k": 0,
+      "triton_kernels_enabled": false,
+      "position_type": "rope",
+      "max_context_length": 8192,
+      "effective_context_with_yarn": 0,
+      "connection_type": "residual",
+      "mhc_overhead_percent": 0.0,
+      "mtp_enabled": false,
+      "mtp_tokens": 1,
+      "embedding_percent": 43.56644870740051,
+      "attention_percent": 2.217122071623436,
+      "ffn_percent": 10.64218594379249,
+      "head_percent": 43.56644870740051,
+      "other_percent": 0.007794569783051141
+    },
+    "model_settings": {
+      "attention": "grouped_query",
+      "position": "rope",
+      "connection": "residual",
+      "ffn": "swiglu",
+      "mtp": false,
+      "hidden_size": 256,
+      "num_layers": 4,
+      "head_dim": 64,
+      "num_heads": 4,
+      "num_kv_heads": 1,
+      "gsa_k_base": null,
+      "triton_enabled": true
+    },
+    "inference": [
+      {
+        "seq_len": 128,
+        "batch_size": 1,
+        "throughput": {
+          "tokens_per_sec": 1640.4115380800768,
+          "samples_per_sec": 12.8157151412506,
+          "tflops_achieved": 0.012470697224915445,
+          "mfu": 0.0
+        },
+        "latency": {
+          "mean_ms": 78.02920000782858,
+          "std_ms": 12.285137484261973,
+          "min_ms": 64.2014000331983,
+          "max_ms": 87.68509997753426,
+          "p50_ms": 82.20110001275316,
+          "p95_ms": 87.68509997753426,
+          "p99_ms": 87.68509997753426
+        },
+        "memory": {
+          "peak_allocated_gb": 0.11823616,
+          "peak_reserved_gb": 0.422367232,
+          "model_size_gb": 0.0,
+          "activation_memory_gb": 0.0,
+          "kv_cache_gb": 0.0,
+          "gradient_memory_gb": 0.0,
+          "memory_efficiency": 0.0
+        },
+        "attention_efficiency": 0.0,
+        "ffn_efficiency": 0.0,
+        "embedding_efficiency": 0.0,
+        "arithmetic_intensity": 8.229957129866193,
+        "bandwidth_utilization": 0.0
+      },
+      {
+        "seq_len": 256,
+        "batch_size": 1,
+        "throughput": {
+          "tokens_per_sec": 3281.916639154228,
+          "samples_per_sec": 12.819986871696203,
+          "tflops_achieved": 0.024949707908178933,
+          "mfu": 0.0
+        },
+        "latency": {
+          "mean_ms": 78.00320000387728,
+          "std_ms": 16.51012046319689,
+          "min_ms": 63.82560002384707,
+          "max_ms": 96.12970001762733,
+          "p50_ms": 74.05429997015744,
+          "p95_ms": 96.12970001762733,
+          "p99_ms": 96.12970001762733
+        },
+        "memory": {
+          "peak_allocated_gb": 0.11823616,
+          "peak_reserved_gb": 0.459026432,
+          "model_size_gb": 0.0,
+          "activation_memory_gb": 0.0,
+          "kv_cache_gb": 0.0,
+          "gradient_memory_gb": 0.0,
+          "memory_efficiency": 0.0
+        },
+        "attention_efficiency": 0.0,
+        "ffn_efficiency": 0.0,
+        "embedding_efficiency": 0.0,
+        "arithmetic_intensity": 16.459914259732386,
+        "bandwidth_utilization": 0.0
+      },
+      {
+        "seq_len": 512,
+        "batch_size": 1,
+        "throughput": {
+          "tokens_per_sec": 4305.66281401415,
+          "samples_per_sec": 8.409497683621387,
+          "tflops_achieved": 0.032732406508790834,
+          "mfu": 0.0
+        },
+        "latency": {
+          "mean_ms": 118.91316671002035,
+          "std_ms": 11.628847117285849,
+          "min_ms": 109.5552000333555,
+          "max_ms": 131.9319000467658,
+          "p50_ms": 115.25240004993975,
+          "p95_ms": 131.9319000467658,
+          "p99_ms": 131.9319000467658
+        },
+        "memory": {
+          "peak_allocated_gb": 0.11823616,
+          "peak_reserved_gb": 0.517828608,
+          "model_size_gb": 0.0,
+          "activation_memory_gb": 0.0,
+          "kv_cache_gb": 0.0,
+          "gradient_memory_gb": 0.0,
+          "memory_efficiency": 0.0
+        },
+        "attention_efficiency": 0.0,
+        "ffn_efficiency": 0.0,
+        "embedding_efficiency": 0.0,
+        "arithmetic_intensity": 32.91982851946477,
+        "bandwidth_utilization": 0.0
+      }
+    ],
+    "training": [
+      {
+        "seq_len": 128,
+        "batch_size": 1,
+        "throughput": {
+          "tokens_per_sec": 924.0965392865144,
+          "samples_per_sec": 7.2195042131758935,
+          "tflops_achieved": 0.02107543359794099,
+          "mfu": 0.0
+        },
+        "latency": {
+          "mean_ms": 138.51366665524742,
+          "std_ms": 20.191627020420047,
+          "min_ms": 124.63899998692796,
+          "max_ms": 161.67820000555366,
+          "p50_ms": 129.2237999732606,
+          "p95_ms": 161.67820000555366,
+          "p99_ms": 161.67820000555366
+        },
+        "memory": {
+          "peak_allocated_gb": 0.11823616,
+          "peak_reserved_gb": 0.620765184,
+          "model_size_gb": 0.11823616,
+          "activation_memory_gb": 0.004718592,
+          "kv_cache_gb": 0.000262144,
+          "gradient_memory_gb": 0.11823616,
+          "memory_efficiency": 1.0399081972892217
+        },
+        "attention_efficiency": 0.0,
+        "ffn_efficiency": 0.0,
+        "embedding_efficiency": 0.0,
+        "arithmetic_intensity": 24.68987138959858,
+        "bandwidth_utilization": 0.0
+      },
+      {
+        "seq_len": 256,
+        "batch_size": 1,
+        "throughput": {
+          "tokens_per_sec": 1105.9801121840696,
+          "samples_per_sec": 4.320234813219022,
+          "tflops_achieved": 0.02522356639596913,
+          "mfu": 0.0
+        },
+        "latency": {
+          "mean_ms": 231.46890000983453,
+          "std_ms": 11.208991121590916,
+          "min_ms": 218.5505999950692,
+          "max_ms": 238.62060002284124,
+          "p50_ms": 237.2355000115931,
+          "p95_ms": 238.62060002284124,
+          "p99_ms": 238.62060002284124
+        },
+        "memory": {
+          "peak_allocated_gb": 0.11823616,
+          "peak_reserved_gb": 0.68519936,
+          "model_size_gb": 0.11823616,
+          "activation_memory_gb": 0.009437184,
+          "kv_cache_gb": 0.000524288,
+          "gradient_memory_gb": 0.11823616,
+          "memory_efficiency": 1.0798163945784436
+        },
+        "attention_efficiency": 0.0,
+        "ffn_efficiency": 0.0,
+        "embedding_efficiency": 0.0,
+        "arithmetic_intensity": 49.37974277919716,
+        "bandwidth_utilization": 0.0
+      },
+      {
+        "seq_len": 512,
+        "batch_size": 1,
+        "throughput": {
+          "tokens_per_sec": 1870.3289721004578,
+          "samples_per_sec": 3.6529862736337066,
+          "tflops_achieved": 0.042655710071420314,
+          "mfu": 0.0
+        },
+        "latency": {
+          "mean_ms": 273.7486333353445,
+          "std_ms": 18.812388395302843,
+          "min_ms": 259.4377999776043,
+          "max_ms": 295.05700001027435,
+          "p50_ms": 266.75110001815483,
+          "p95_ms": 295.05700001027435,
+          "p99_ms": 295.05700001027435
+        },
+        "memory": {
+          "peak_allocated_gb": 0.11823616,
+          "peak_reserved_gb": 1.046962176,
+          "model_size_gb": 0.11823616,
+          "activation_memory_gb": 0.018874368,
+          "kv_cache_gb": 0.001048576,
+          "gradient_memory_gb": 0.11823616,
+          "memory_efficiency": 1.1596327891568874
+        },
+        "attention_efficiency": 0.0,
+        "ffn_efficiency": 0.0,
+        "embedding_efficiency": 0.0,
+        "arithmetic_intensity": 98.75948555839432,
+        "bandwidth_utilization": 0.0
+      }
+    ],
+    "inference_scaling": {
+      "base_seq_len": 128,
+      "base_throughput": 1640.4115380800768,
+      "throughput_scaling_exponent": 0.696088773530842,
+      "memory_scaling_exponent": -7.871647546307509e-17,
+      "latency_scaling_exponent": 0.3039112264691567,
+      "seq_lengths": [
+        128,
+        256,
+        512
+      ],
+      "throughputs": [
+        1640.4115380800768,
+        3281.916639154228,
+        4305.66281401415
+      ],
+      "memories": [
+        0.11823616,
+        0.11823616,
+        0.11823616
+      ],
+      "latencies": [
+        78.02920000782858,
+        78.00320000387728,
+        118.91316671002035
+      ],
+      "is_linear_scaling": "False",
+      "scaling_efficiency": 0.0
+    },
+    "training_scaling": {
+      "base_seq_len": 128,
+      "base_throughput": 924.0965392865144,
+      "throughput_scaling_exponent": 0.5085882833605202,
+      "memory_scaling_exponent": -7.871647546307509e-17,
+      "latency_scaling_exponent": 0.4914117166394806,
+      "seq_lengths": [
+        128,
+        256,
+        512
+      ],
+      "throughputs": [
+        924.0965392865144,
+        1105.9801121840696,
+        1870.3289721004578
+      ],
+      "memories": [
+        0.11823616,
+        0.11823616,
+        0.11823616
+      ],
+      "latencies": [
+        138.51366665524742,
+        231.46890000983453,
+        273.7486333353445
+      ],
+      "is_linear_scaling": "False",
+      "scaling_efficiency": 0.0
+    },
+    "insights": {
+      "bottleneck": "UNKNOWN: MFU not available (CPU or unsupported device)",
+      "memory_recommendation": "GQA: 4x KV cache reduction vs MHA",
+      "throughput_recommendation": "Seq scaling: -102% throughput drop from 128 to 512 tokens",
+      "attention_insight": "",
+      "comparison_summary": "",
+      "warnings": []
+    },
+    "parameters_billions": 0.02955904
+  }
+}

@@ -137,6 +137,62 @@ class BenchmarkResult:
     attention_efficiency: float = 0.0
     ffn_efficiency: float = 0.0
     embedding_efficiency: float = 0.0
+    
+    # Advanced metrics
+    arithmetic_intensity: float = 0.0  # FLOPs per byte transferred
+    bandwidth_utilization: float = 0.0  # % of theoretical memory bandwidth
+
+
+@dataclass
+class ArchitectureMetrics:
+    """Architecture-specific metrics for SOTA analysis."""
+    # Attention-specific
+    attention_type: str = ""
+    kv_cache_reduction_factor: float = 1.0  # vs full MHA
+    sparse_attention_k: int = 0  # For GSA
+    triton_kernels_enabled: bool = False
+    
+    # Position embeddings
+    position_type: str = ""
+    max_context_length: int = 0
+    effective_context_with_yarn: int = 0
+    
+    # Connection type
+    connection_type: str = ""
+    mhc_overhead_percent: float = 0.0
+    
+    # Head configuration
+    mtp_enabled: bool = False
+    mtp_tokens: int = 1
+    
+    # Component parameter distribution
+    embedding_percent: float = 0.0
+    attention_percent: float = 0.0
+    ffn_percent: float = 0.0
+    head_percent: float = 0.0
+    other_percent: float = 0.0
+
+
+@dataclass
+class SequenceScalingMetrics:
+    """Metrics for analyzing sequence length scaling behavior."""
+    base_seq_len: int = 0
+    base_throughput: float = 0.0
+    
+    # Scaling coefficients
+    throughput_scaling_exponent: float = 0.0  # -1 = O(n), -2 = O(n²)
+    memory_scaling_exponent: float = 0.0
+    latency_scaling_exponent: float = 0.0
+    
+    # Per-sequence data points
+    seq_lengths: List[int] = field(default_factory=list)
+    throughputs: List[float] = field(default_factory=list)
+    memories: List[float] = field(default_factory=list)
+    latencies: List[float] = field(default_factory=list)
+    
+    # Analysis
+    is_linear_scaling: bool = False
+    scaling_efficiency: float = 0.0  # 1.0 = perfect linear scaling
 
 
 @dataclass
@@ -154,11 +210,20 @@ class ModelProfile:
     head_params: int = 0
     norm_params: int = 0
     connection_params: int = 0  # For mHC
+    other_params: int = 0
     
     # FLOPs estimation
     forward_flops: int = 0
     backward_flops: int = 0
     total_training_flops: int = 0
+    
+    # Memory estimation (per token)
+    activation_bytes_per_token: int = 0
+    kv_cache_bytes_per_token: int = 0
+    
+    # Per-layer breakdown
+    params_per_layer: int = 0
+    flops_per_layer: int = 0
 
 
 @dataclass
@@ -395,12 +460,120 @@ def profile_model(model: nn.Module, config: ModelConfig) -> ModelProfile:
     prof.head_params = param_groups["head"]
     prof.norm_params = param_groups["norm"]
     prof.connection_params = param_groups["connection"]
+    prof.other_params = param_groups["other"]
     
     prof.forward_flops = estimate_forward_flops(config)
     prof.backward_flops = prof.forward_flops * 2
     prof.total_training_flops = prof.forward_flops * 3
     
+    # Per-layer estimates
+    if config.num_hidden_layers > 0:
+        layer_params = prof.attention_params + prof.ffn_params + prof.norm_params + prof.connection_params
+        prof.params_per_layer = layer_params // config.num_hidden_layers
+        prof.flops_per_layer = prof.forward_flops // config.num_hidden_layers
+    
+    # Memory per token estimates
+    H = config.hidden_size
+    L = config.num_hidden_layers
+    kv_heads = config.attention.num_key_value_heads
+    head_dim = config.attention.head_dim
+    prof.activation_bytes_per_token = 2 * L * H * 4  # FP32 activations
+    prof.kv_cache_bytes_per_token = 2 * L * kv_heads * head_dim * 2  # FP16 KV
+    
     return prof
+
+
+def get_architecture_metrics(config: ModelConfig, model_profile: ModelProfile) -> ArchitectureMetrics:
+    """Extract architecture-specific metrics for SOTA analysis."""
+    metrics = ArchitectureMetrics()
+    
+    # Attention metrics
+    metrics.attention_type = config.attention.attention_type.value
+    metrics.kv_cache_reduction_factor = config.attention.num_attention_heads / config.attention.num_key_value_heads
+    if config.attention.attention_type in [AttentionType.GATED_SPARSE, AttentionType.DEEPSEEK_GSA]:
+        metrics.sparse_attention_k = config.attention.gsa_k_base
+        metrics.triton_kernels_enabled = config.attention.gsa_use_triton_kernels
+    
+    # Position embeddings
+    metrics.position_type = config.position.position_type.value
+    metrics.max_context_length = config.max_position_embeddings
+    if config.position.position_type == PositionEmbeddingType.YARN:
+        metrics.effective_context_with_yarn = int(
+            config.max_position_embeddings * config.position.yarn_scale
+        )
+    
+    # Connection type
+    metrics.connection_type = config.connection.connection_type.value
+    if config.connection.connection_type == ConnectionType.MHC and model_profile.total_params > 0:
+        metrics.mhc_overhead_percent = (model_profile.connection_params / model_profile.total_params) * 100
+    
+    # Head configuration
+    metrics.mtp_enabled = config.head.use_multi_token_prediction
+    metrics.mtp_tokens = config.head.num_predict_tokens
+    
+    # Parameter distribution
+    if model_profile.total_params > 0:
+        total = model_profile.total_params
+        metrics.embedding_percent = (model_profile.embedding_params / total) * 100
+        metrics.attention_percent = (model_profile.attention_params / total) * 100
+        metrics.ffn_percent = (model_profile.ffn_params / total) * 100
+        metrics.head_percent = (model_profile.head_params / total) * 100
+        metrics.other_percent = ((model_profile.norm_params + model_profile.connection_params + model_profile.other_params) / total) * 100
+    
+    return metrics
+
+
+def analyze_sequence_scaling(results: List[BenchmarkResult]) -> SequenceScalingMetrics:
+    """Analyze how metrics scale with sequence length."""
+    metrics = SequenceScalingMetrics()
+    
+    if len(results) < 2:
+        return metrics
+    
+    # Sort by sequence length
+    sorted_results = sorted(results, key=lambda r: r.seq_len)
+    
+    metrics.base_seq_len = sorted_results[0].seq_len
+    metrics.base_throughput = sorted_results[0].throughput.tokens_per_sec
+    
+    metrics.seq_lengths = [r.seq_len for r in sorted_results]
+    metrics.throughputs = [r.throughput.tokens_per_sec for r in sorted_results]
+    metrics.memories = [r.memory.peak_allocated_gb for r in sorted_results]
+    metrics.latencies = [r.latency.mean_ms for r in sorted_results]
+    
+    # Calculate scaling exponents using log-log regression
+    if HAS_NUMPY and len(sorted_results) >= 2:
+        log_seqs = np.log(metrics.seq_lengths)
+        
+        # Throughput scaling (negative = slower with longer seqs)
+        log_tps = np.log([max(t, 1) for t in metrics.throughputs])
+        if len(log_seqs) > 1:
+            coef = np.polyfit(log_seqs, log_tps, 1)
+            metrics.throughput_scaling_exponent = coef[0]
+        
+        # Memory scaling
+        log_mem = np.log([max(m, 0.001) for m in metrics.memories])
+        if len(log_seqs) > 1:
+            coef = np.polyfit(log_seqs, log_mem, 1)
+            metrics.memory_scaling_exponent = coef[0]
+        
+        # Latency scaling
+        log_lat = np.log([max(l, 0.001) for l in metrics.latencies])
+        if len(log_seqs) > 1:
+            coef = np.polyfit(log_seqs, log_lat, 1)
+            metrics.latency_scaling_exponent = coef[0]
+        
+        # Determine if scaling is linear (O(n)) or quadratic (O(n²))
+        # Use latency exponent: ~1 = linear, ~2 = quadratic
+        # For attention-bound models, latency scales with n² due to attention
+        metrics.is_linear_scaling = abs(metrics.latency_scaling_exponent - 1.0) < 0.3
+        
+        # Scaling efficiency: 1.0 = perfect linear, 0.5 = quadratic
+        # Based on latency exponent (1 = linear, 2 = quadratic)
+        if metrics.latency_scaling_exponent > 0:
+            metrics.scaling_efficiency = min(1.0, 1.0 / metrics.latency_scaling_exponent)
+    
+    return metrics
 
 
 def estimate_forward_flops(config: ModelConfig) -> int:
@@ -587,6 +760,12 @@ def run_inference_benchmark(
         theoretical = device_info["theoretical_tflops_fp16"]
         result.throughput.mfu = result.throughput.tflops_achieved / theoretical if theoretical > 0 else 0
     
+    # Calculate arithmetic intensity (FLOPs per byte of memory accessed)
+    if result.memory.peak_allocated_gb > 0:
+        bytes_accessed = result.memory.peak_allocated_gb * 1e9
+        flops_per_inference = estimate_forward_flops(config) * seq_len * batch_size
+        result.arithmetic_intensity = flops_per_inference / bytes_accessed
+    
     if latencies:
         result.latency.mean_ms = statistics.mean(latencies)
         result.latency.std_ms = statistics.stdev(latencies) if len(latencies) > 1 else 0
@@ -664,6 +843,11 @@ def run_training_benchmark(
     result.memory.activation_memory_gb = estimate_activation_memory(config, batch_size, seq_len, dtype)
     result.memory.kv_cache_gb = estimate_kv_cache_size(config, batch_size, seq_len, dtype)
     
+    # Memory efficiency: useful memory (model + essential activations) / total allocated
+    useful_memory = result.memory.model_size_gb + result.memory.activation_memory_gb
+    if result.memory.peak_allocated_gb > 0:
+        result.memory.memory_efficiency = useful_memory / result.memory.peak_allocated_gb
+    
     total_time_sec = sum(latencies) / 1000
     total_tokens = batch_size * seq_len * benchmark_iters
     
@@ -673,6 +857,12 @@ def run_training_benchmark(
     training_flops_per_seq = estimate_forward_flops(config) * seq_len * 3
     total_flops = training_flops_per_seq * batch_size * benchmark_iters
     result.throughput.tflops_achieved = total_flops / total_time_sec / 1e12
+    
+    # Calculate arithmetic intensity for training
+    if result.memory.peak_allocated_gb > 0:
+        bytes_accessed = result.memory.peak_allocated_gb * 1e9
+        flops_per_step = training_flops_per_seq * batch_size
+        result.arithmetic_intensity = flops_per_step / bytes_accessed
     
     result.latency.mean_ms = statistics.mean(latencies)
     result.latency.std_ms = statistics.stdev(latencies) if len(latencies) > 1 else 0
@@ -918,6 +1108,14 @@ def benchmark_throughput(
         
         # Insights
         insights = generate_insights(model_prof, config, inference_results, training_results, device_info)
+        
+        # Architecture metrics
+        arch_metrics = get_architecture_metrics(config, model_prof)
+        
+        # Sequence scaling analysis
+        inference_scaling = analyze_sequence_scaling(inference_results)
+        training_scaling = analyze_sequence_scaling(training_results) if training_results else SequenceScalingMetrics()
+        
         print(f"\n{'─'*80}")
         print("💡 INSIGHTS")
         print("─" * 80)
@@ -929,6 +1127,36 @@ def benchmark_throughput(
             print(f"Architecture: {insights.attention_insight}")
         for w in insights.warnings:
             print(f"  {w}")
+        
+        # Print sequence scaling analysis if available
+        if len(inference_results) > 1:
+            print(f"\n{'─'*80}")
+            print("📊 SEQUENCE SCALING ANALYSIS")
+            print("─" * 80)
+            scaling_type = "Linear (O(n))" if inference_scaling.is_linear_scaling else "Quadratic (O(n²))"
+            print(f"  Memory Scaling: {scaling_type} (exponent: {inference_scaling.memory_scaling_exponent:.2f})")
+            print(f"  Throughput Scaling Exponent: {inference_scaling.throughput_scaling_exponent:.2f}")
+            print(f"  Scaling Efficiency: {inference_scaling.scaling_efficiency:.2%}")
+        
+        # Print architecture metrics
+        print(f"\n{'─'*80}")
+        print("🏗️ ARCHITECTURE BREAKDOWN")
+        print("─" * 80)
+        print(f"  Attention: {arch_metrics.attention_type} (KV reduction: {arch_metrics.kv_cache_reduction_factor:.1f}x)")
+        print(f"  Position: {arch_metrics.position_type} (max context: {arch_metrics.max_context_length})")
+        print(f"  Connection: {arch_metrics.connection_type}", end="")
+        if arch_metrics.mhc_overhead_percent > 0:
+            print(f" (overhead: {arch_metrics.mhc_overhead_percent:.2f}%)")
+        else:
+            print()
+        print(f"  MTP: {'Enabled' if arch_metrics.mtp_enabled else 'Disabled'}", end="")
+        if arch_metrics.mtp_enabled:
+            print(f" ({arch_metrics.mtp_tokens} tokens)")
+        else:
+            print()
+        if arch_metrics.triton_kernels_enabled:
+            print(f"  Triton Kernels: Enabled (k={arch_metrics.sparse_attention_k})")
+        print(f"  Param Distribution: Embed {arch_metrics.embedding_percent:.1f}% | Attn {arch_metrics.attention_percent:.1f}% | FFN {arch_metrics.ffn_percent:.1f}% | Head {arch_metrics.head_percent:.1f}%")
         
         # Store results
         config_name = Path(config_path).stem
@@ -942,6 +1170,7 @@ def benchmark_throughput(
             "batch_size": batch_size,
             "profile": profile,
             "model_profile": asdict(model_prof),
+            "architecture_metrics": asdict(arch_metrics),
             "model_settings": {
                 "attention": config.attention.attention_type.value,
                 "position": config.position.position_type.value,
@@ -953,10 +1182,16 @@ def benchmark_throughput(
                 "head_dim": config.attention.head_dim,
                 "num_heads": config.attention.num_attention_heads,
                 "num_kv_heads": config.attention.num_key_value_heads,
+                "gsa_k_base": config.attention.gsa_k_base if config.attention.attention_type in [AttentionType.GATED_SPARSE, AttentionType.DEEPSEEK_GSA] else None,
+                "triton_enabled": config.attention.gsa_use_triton_kernels if hasattr(config.attention, 'gsa_use_triton_kernels') else False,
             },
             "inference": [asdict(r) for r in inference_results],
             "training": [asdict(r) for r in training_results],
+            "inference_scaling": asdict(inference_scaling),
+            "training_scaling": asdict(training_scaling),
             "insights": asdict(insights),
+            # Compatibility fields for visualize_benchmarks.py
+            "parameters_billions": model_prof.params_billions,
         }
         
         del model
