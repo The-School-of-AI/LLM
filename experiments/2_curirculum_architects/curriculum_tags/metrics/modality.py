@@ -156,3 +156,31 @@ class ModalityMetric(MetricPlugin):
             "cot_density": round(cot_density, 6),
             "agentic_density": round(agentic_density, 6),
         }
+        
+        # Apply Tag Overrides
+        return self._check_dataset_tags(sample, result)
+
+        
+    def _check_dataset_tags(self, sample, result):
+        """Refine modality based on explicit dataset tags."""
+        domain_tag = sample.get("domain", "").lower()
+        source_tag = sample.get("source", "").lower()
+        
+        # Code
+        if domain_tag == "code" or source_tag == "stack":
+             result["has_code"] = True
+             result["primary_modality"] = "code"
+             
+        # Math
+        if domain_tag == "math":
+             result["has_math"] = True
+             if result["primary_modality"] not in ["code"]:
+                 result["primary_modality"] = "math"
+
+        # Research
+        if source_tag == "arxiv":
+             result["has_research_paper"] = True
+             result["primary_modality"] = "research_papers"
+             
+        return result
+
