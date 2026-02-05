@@ -59,7 +59,7 @@ def get_config() -> MoEModelConfig:
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=49152,            # Standardized with 3B
+            vocab_size=50304,            # Standardized with 3B
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -75,7 +75,7 @@ def get_config() -> MoEModelConfig:
         # With N=32, ρ=0.5, k_max=16: M=32 null copies, E[K_real]=8
         router=RouterConfig(
             router_type=RouterType.NULL_EXPERT,
-            top_k=4,                     # SAME as 3B (×4 fine-grained = 16 effective)
+            top_k=2,                     # SAME as 3B (×4 fine-grained = 16 effective)
             data_sparsity=0.5,           # SAME as 3B (ρ = 0.5)
             null_copies=0,               # SAME as 3B (auto-derive: M=32)
             use_aux_loss=True,
@@ -96,9 +96,9 @@ def get_config() -> MoEModelConfig:
         # Attention Configuration (scaled with hidden)
         attention=AttentionConfig(
             attention_type="gsa",
-            num_attention_heads=16,       # Scaled (6144/128 = 48) 
-            num_kv_heads=8,               # 6:1 GQA
-            head_dim=128,                 # Standard
+            num_attention_heads=16,       
+            num_kv_heads=4,               
+            head_dim=160,                 
             rope_theta=10000.0,
             attention_dropout=0.0,
             gsa_indexer_dim=64,

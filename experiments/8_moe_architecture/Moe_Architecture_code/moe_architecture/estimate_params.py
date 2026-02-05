@@ -130,10 +130,11 @@ def estimate_parameters(config) -> Dict[str, float]:
     components['total'] = total_params
     
     # ===== Active Parameters (per forward pass) =====
-    # Active routed = base top_k experts (matches load_model_summary.py line 139)
-    # load_model_summary.py uses config.router.top_k, not effective_top_k
-    base_top_k = config.router.top_k
-    active_routed = base_top_k * params_per_expert
+    # Active routed = E[K_real] = effective_top_k × ρ
+    # This is the expected number of REAL experts per token (excluding null)
+    # With ρ=0.5: half of the selected slots go to null experts
+    e_k_real = eff_top_k * rho  # e.g., 16 × 0.5 = 8
+    active_routed = e_k_real * params_per_expert
     active_shared = num_shared * params_per_shared
     
     active_per_layer = (

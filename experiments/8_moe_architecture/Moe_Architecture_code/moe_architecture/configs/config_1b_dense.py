@@ -51,7 +51,7 @@ def get_config() -> MoEModelConfig:
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=49152,
+            vocab_size=50304,
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,

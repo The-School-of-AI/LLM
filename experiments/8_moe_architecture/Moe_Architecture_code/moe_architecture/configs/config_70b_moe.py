@@ -55,14 +55,14 @@ def get_config() -> MoEModelConfig:
         # MoE Configuration (EXPLODED experts for 70B)
         # Base 70 experts × 4 fine-grained factor = 280 effective routed experts
         # Total params: 280 experts × 3 × 6144 × 64 × 32 layers ≈ 70B
-        num_routed_experts=70,          # EXPLODED Total:280
+        num_routed_experts=70,          # EXPLODED Total:256
         num_shared_experts=1,            # REDUCED (was 2) - paper: decays at scale
         num_null_experts=1,              # Single null (M=N=280 copies in router)
         moe_layer_frequency=1,           # MoE on ALL layers
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=49152,            # Standardized
+            vocab_size=50304,            # Standardized
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -78,7 +78,7 @@ def get_config() -> MoEModelConfig:
         # With N=280, ρ=0.5, k_max=16: M=280 null copies, E[K_real]=16
         router=RouterConfig(
             router_type=RouterType.NULL_EXPERT,
-            top_k=4,                     # Same k_max base (×4 = 16 effective)
+            top_k=2,                     # Same k_max base (×4 = 16 effective)
             data_sparsity=0.5,           # ρ = 0.5 (paper stable region)
             null_copies=0,               # Auto-derive: M = 280 × (1-0.5)/0.5 = 280
             use_aux_loss=True,
@@ -102,7 +102,7 @@ def get_config() -> MoEModelConfig:
         attention=AttentionConfig(
             attention_type="gsa",
             num_attention_heads=16,      # Same as 8B
-            num_kv_heads=8,
+            num_kv_heads=4,
             head_dim=160,
             rope_theta=10000.0,
             attention_dropout=0.0,

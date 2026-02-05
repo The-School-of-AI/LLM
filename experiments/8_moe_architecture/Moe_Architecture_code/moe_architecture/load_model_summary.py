@@ -135,9 +135,17 @@ def calculate_active_params(model: MoETransformer) -> dict:
                 if hasattr(experts_container, 'routed_experts') and len(experts_container.routed_experts) > 0:
                     single_expert_params = count_parameters(experts_container.routed_experts[0])
                 
-                # Active routed experts = top_k
-                top_k = config.router.top_k if hasattr(config, 'router') else 2
-                active_routed = top_k * single_expert_params
+                # Active routed experts = E[K_real] = effective_top_k × ρ
+                # effective_top_k = base_top_k × fine_grained_factor
+                # With null routing (ρ < 1.0), on average only ρ fraction are real experts
+                base_top_k = config.router.top_k if hasattr(config, 'router') else 2
+                fg_factor = getattr(config.expert, 'fine_grained_factor', 1)
+                rho = getattr(config.router, 'data_sparsity', 1.0) if hasattr(config, 'router') else 1.0
+                
+                effective_top_k = base_top_k * fg_factor  # e.g., 4 × 4 = 16
+                e_k_real = effective_top_k * rho          # e.g., 16 × 0.5 = 8
+                
+                active_routed = int(e_k_real) * single_expert_params
                 
                 # Shared experts (always active)
                 shared_params = 0
@@ -155,7 +163,8 @@ def calculate_active_params(model: MoETransformer) -> dict:
                 active_params['active_routed_experts'] = active_routed
                 active_params['shared_experts'] = shared_params
                 active_params['single_expert_params'] = single_expert_params
-                active_params['top_k'] = top_k
+                active_params['top_k'] = base_top_k
+                active_params['e_k_real'] = e_k_real
                 
             else:
                 # Dense FFN - all params active
@@ -219,9 +228,10 @@ def print_model_summary(model: MoETransformer, config_name: str):
         print(f"      Router:            {active_info['router_per_layer']:>12,} ({format_params(active_info['router_per_layer'])})")
         if 'top_k' in active_info:
             top_k = active_info['top_k']
+            e_k_real = active_info.get('e_k_real', top_k)
             single_exp = active_info.get('single_expert_params', 0)
             shared = active_info.get('shared_experts', 0)
-            print(f"      Top-{top_k} Experts:     {active_info.get('active_routed_experts', 0):>12,} ({format_params(active_info.get('active_routed_experts', 0))}) [{top_k} × {format_params(single_exp)}]")
+            print(f"      E[K_real]={int(e_k_real)} Experts: {active_info.get('active_routed_experts', 0):>12,} ({format_params(active_info.get('active_routed_experts', 0))}) [{int(e_k_real)} × {format_params(single_exp)}]")
             print(f"      Shared Experts:    {shared:>12,} ({format_params(shared)})")
         print(f"      Norms:             {active_info['norms_per_layer']:>12,} ({format_params(active_info['norms_per_layer'])})")
         print(f"      ─────────────────────────────────────")
