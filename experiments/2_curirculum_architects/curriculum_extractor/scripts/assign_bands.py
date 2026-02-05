@@ -227,7 +227,7 @@ class BandAssigner:
 
         Args:
             input_path: S3 path to metadata directory
-            output_path: Optional S3 output path
+            output_path: Optional S3 output path (bucket or prefix)
             filesystem: s3fs filesystem instance
 
         Returns:
@@ -243,6 +243,20 @@ class BandAssigner:
         total_records = 0
         total_files = 0
         aggregate_bands: Dict[str, int] = {}
+
+        # Normalize paths
+        input_path = input_path.rstrip("/")
+        output_path = output_path.rstrip("/")
+
+        # Extract bucket + prefix
+        # s3://bucket/prefix -> bucket, prefix
+        def split_s3_path(path: str):
+            assert path.startswith("s3://")
+            bucket, _, key = path[5:].partition("/")
+            return bucket, key
+
+        in_bucket, in_prefix = split_s3_path(input_path)
+        out_bucket, out_prefix = split_s3_path(output_path)
 
         # List all parquet files
         files = filesystem.glob(f"{input_path}/**/*.parquet")
@@ -267,9 +281,11 @@ class BandAssigner:
             # Write back
             output_table = pa.Table.from_pylist(updated_records)
 
-            # Calculate output file path
-            rel_path = file_path.replace(input_path.rstrip("/"), "").lstrip("/")
-            out_file = f"{output_path.rstrip('/')}/{rel_path}"
+            # Compute relative key *within the input prefix*
+            # s3://bucket/input_prefix/xxx -> xxx
+            full_key = file_path[5 + len(in_bucket) + 1 :]  # strip s3://bucket/
+            rel_key = full_key[len(in_prefix) :].lstrip("/")
+            out_file = f"s3://{out_bucket}/{out_prefix}/{rel_key}"
 
             tmp_file = out_file + ".tmp"
             with filesystem.open(tmp_file, "wb") as f:
