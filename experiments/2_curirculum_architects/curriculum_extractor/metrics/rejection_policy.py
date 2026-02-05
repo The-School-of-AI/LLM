@@ -94,10 +94,10 @@ class RejectionPolicyMetric(MetricPlugin):
             min_tokens = cfg.get("language_and_context.context_policy.min_context_tokens", 0)
 
             # Use a cheap token approximation
-            token_count = len(text.split()) /4 # approx accounting for tokenizer
+            token_count = len(text.split()) # approx accounting for tokenizer
 
             try:
-                min_tokens_int = int(min_tokens)
+                min_tokens_int = int(min_tokens) / 2 # approx accounting for tokenizer
             except Exception:
                 min_tokens_int = 0
 
