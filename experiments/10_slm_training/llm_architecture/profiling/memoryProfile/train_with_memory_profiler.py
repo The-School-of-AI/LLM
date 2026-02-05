@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
 # Add llm_architecture directory to path
 # Path: memoryProfile -> profiling -> llm_architecture
@@ -274,7 +274,7 @@ class Trainer:
         # Mixed precision
         self.use_amp = training_config.use_amp and torch.cuda.is_available()
         self.amp_dtype = getattr(torch, training_config.amp_dtype)
-        self.scaler = GradScaler(enabled=self.use_amp and training_config.amp_dtype == "float16")
+        self.scaler = GradScaler('cuda', enabled=self.use_amp and training_config.amp_dtype == "float16")
         
         # Logging
         self.logger = MetricsLogger(
@@ -378,7 +378,7 @@ class Trainer:
             labels = batch['labels'].to(self.device)
             
             # Forward pass
-            with autocast(enabled=self.use_amp, dtype=self.amp_dtype):
+            with autocast('cuda', enabled=self.use_amp, dtype=self.amp_dtype):
                 outputs = self.model(input_ids=input_ids, labels=labels)
                 loss = outputs.loss / self.config.gradient_accumulation_steps
             
@@ -474,6 +474,7 @@ class Trainer:
                         self.profiler.print_summary()
                         self.profiler.export_chrome_trace()
                         self.profiler.export_stacks()
+                        self.profiler.export_memory_timeline()  # NEW: Export memory timeline
                         self.profiler = None  # Disable after profiling
                 
                 # Reset accumulation
