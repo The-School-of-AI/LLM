@@ -91,15 +91,14 @@ The **curriculum_extractor** package extracts metrics from source data while kee
 
 | Metric | Level | What It Measures | Can Reject |
 |--------|-------|------------------|------------|
-| **LengthFilter** | 0 | Token/char length bounds | Yes |
-| **LanguageFilter** | 0 | Language detection | Yes |
-| **ContentFilter** | 0 | Blocklist/patterns | Yes |
-| **PerplexityScorer** | 1 | Language model perplexity | No |
-| **QualityClassifier** | 1 | ML quality score | No |
-| **DomainClassifier** | 2 | Content domain | No |
-| **ReadabilityScorer** | 1 | Flesch-Kincaid grade level | No |
-| **DiversityScorer** | 1 | Lexical richness (MTLD) | No |
-| **EntropyScorer** | 1 | Information density | No |
+| **RejectionPolicyMetric** | 0 | Language & token thresholds | Yes |
+| **DifficultyMetric** | - | Composite difficulty score | No |
+| **ModalityMetric** | - | Content types (code/math/reasoning) | No |
+| **DomainMetric** | - | Content domain classification | No |
+| **ReadabilityMetric** | - | Flesch-Kincaid & sentence stats | No |
+| **StructuralDensityMetric** | - | Symbol & structure density | No |
+| **EntropyMetric** | - | Information density (compression) | No |
+| **BandAssignmentMetric** | - | Assigns final curriculum band | No |
 
 ### How Levels Work
 

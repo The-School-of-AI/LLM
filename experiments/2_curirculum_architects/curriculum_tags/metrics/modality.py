@@ -37,23 +37,23 @@ class ModalityMetric(MetricPlugin):
     CODE_PATTERN = re.compile(
         r"```|"
         r"def\s+\w+\(|"
-        r"class\s+\w+\s*[:{]|"    # Class followed by : or { (Java/C++/Python simple)
-        r"class\s+\w+\([^\)]+\)\s*:|" # Python class with inheritance: class Foo(Bar):
-        r"^\s*function\s+\w+\s*[\({]|" # JS function at start of line
-        r"^\s*import\s+\w+|" # Import at start of line
-        r"from\s+[\w.]+\s+import\s+\w+|" # Python from ... import (supports .module)
-        r"from\s+\.\s+import\s+\w+", # Python from . import
+        r"class\s+\w+\s*[:{]|"  # Class followed by : or { (Java/C++/Python simple)
+        r"class\s+\w+\([^\)]+\)\s*:|"  # Python class with inheritance: class Foo(Bar):
+        r"^\s*function\s+\w+\s*[\({]|"  # JS function at start of line
+        r"^\s*import\s+\w+|"  # Import at start of line
+        r"from\s+[\w.]+\s+import\s+\w+|"  # Python from ... import (supports .module)
+        r"from\s+\.\s+import\s+\w+",  # Python from . import
         re.IGNORECASE | re.MULTILINE,
     )
     MATH_PATTERN = re.compile(
-        r"[∑∫√≈≠≤≥∞]|" # Removed arrow →
+        r"[∑∫√≈≠≤≥∞]|"  # Removed arrow →
         r"\\("
         r"frac|sum|int|sqrt|begin\{equation\}|"
         r"alpha|beta|gamma|delta|theta|pi|sigma|omega|phi|"
         r"partial|cdot|times|pm"
         r")|"
         r"\\\[|\\\(",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     # Merged CoT Patterns from cot_scanner.py
@@ -67,16 +67,16 @@ class ModalityMetric(MetricPlugin):
     # Merged Agentic Patterns from cot_scanner.py
     AGENTIC_PATTERN = re.compile(
         r"^\s*(Action|Observation|Thought|Final Answer|Tool):|"  # Start of line
-        r'"(tool|action|observation|thought)"\s*:',              # JSON key
+        r'"(tool|action|observation|thought)"\s*:',  # JSON key
         re.IGNORECASE | re.MULTILINE,
     )
 
     RE_RESEARCH_PAPER = re.compile(
-        r"^\s*(?:Abstract|References|Bibliography)(?:[:\n]|$)" # Header followed by colon, newline, or end of line
-        r"|\b(?:arXiv|doi)[:/]\s*\d"                           # arXiv/doi with colon or slash
-        r"|\bdoi\.org/10\."                                    # doi.org
-        r"|\bet al\."                                          # et al.
-        r"|\[[\d,\s]+\].*\[[\d,\s]+\]",                        # Multiple Citations
+        r"^\s*(?:Abstract|References|Bibliography)(?:[:\n]|$)"  # Header followed by colon, newline, or end of line
+        r"|\b(?:arXiv|doi)[:/]\s*\d"  # arXiv/doi with colon or slash
+        r"|\bdoi\.org/10\."  # doi.org
+        r"|\bet al\."  # et al.
+        r"|\[[\d,\s]+\].*\[[\d,\s]+\]",  # Multiple Citations
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -173,31 +173,29 @@ class ModalityMetric(MetricPlugin):
             "cot_density": round(cot_density, 6),
             "agentic_density": round(agentic_density, 6),
         }
-        
+
         # Apply Tag Overrides
         return self._check_dataset_tags(sample, result)
 
-        
     def _check_dataset_tags(self, sample, result):
         """Refine modality based on explicit dataset tags."""
         domain_tag = sample.get("domain", "").lower()
         source_tag = sample.get("source", "").lower()
-        
+
         # Code
         if domain_tag == "code" or source_tag == "stack":
-             result["has_code"] = True
-             result["primary_modality"] = "code"
-             
+            result["has_code"] = True
+            result["primary_modality"] = "code"
+
         # Math
         if domain_tag == "math":
-             result["has_math"] = True
-             if result["primary_modality"] not in ["code"]:
-                 result["primary_modality"] = "math"
+            result["has_math"] = True
+            if result["primary_modality"] not in ["code"]:
+                result["primary_modality"] = "math"
 
         # Research
         if source_tag == "arxiv":
-             result["has_research_paper"] = True
-             result["primary_modality"] = "research_papers"
-             
-        return result
+            result["has_research_paper"] = True
+            result["primary_modality"] = "research_papers"
 
+        return result

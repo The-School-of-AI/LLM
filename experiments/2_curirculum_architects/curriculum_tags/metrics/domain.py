@@ -53,9 +53,9 @@ class DomainMetric(MetricPlugin):
         "science": "math_science",
         "qa": "dialogue_chat",
         "code": "code_repos",
-        "instruction": "technical_docs", # or planning
+        "instruction": "technical_docs",  # or planning
         "encyclopedia": "encyclopedic",
-        "education": "technical_docs" 
+        "education": "technical_docs",
     }
 
     # 2. Dolma Source Mapping (Precedence)
@@ -65,9 +65,8 @@ class DomainMetric(MetricPlugin):
         "stack": "code_repos",
         "arxiv": "math_science",
         "wiki": "encyclopedic",
-        "c4": "general_web_clean"
+        "c4": "general_web_clean",
     }
-
 
     RE_ENCYCLOPEDIC = re.compile(
         r"\[\d+\]|\[edit\]|Coordinates:|External links|See also|References|Bibliography",
@@ -82,33 +81,45 @@ class DomainMetric(MetricPlugin):
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Determine domain based on modality signals and text features."""
         print(f"DEBUG: DomainMetric.compute executing for id={sample.get('id')}")
-        
+
         # --- 0. HIGH PRECEDENCE: Dataset Tags ---
-        dataset_domain_tag = sample.get("domain", "").lower() if sample.get("domain") else None
-        dataset_source_tag = sample.get("source", "").lower() if sample.get("source") else None
-        
+        dataset_domain_tag = (
+            sample.get("domain", "").lower() if sample.get("domain") else None
+        )
+        dataset_source_tag = (
+            sample.get("source", "").lower() if sample.get("source") else None
+        )
+
         # A. Dolma Source Mapping (Highest Prio for Dolma-specifics)
         if dataset_source_tag and dataset_source_tag in self.DOLMA_SOURCE_MAPPING:
-             return {
+            return {
                 "primary_domain": self.DOLMA_SOURCE_MAPPING[dataset_source_tag],
-                "confidence": 1.0, # High confidence for explicit source
-                "reason": f"dolma_source_{dataset_source_tag}"
+                "confidence": 1.0,  # High confidence for explicit source
+                "reason": f"dolma_source_{dataset_source_tag}",
             }
 
         # B. Dataset Domain Mapping (Precedence for high-signal tags: math, code, qa)
-        HIGH_SIGNAL_DOMAINS = ["math", "code", "qa", "science", "instruction", "encyclopedia", "news"]
-        
+        HIGH_SIGNAL_DOMAINS = [
+            "math",
+            "code",
+            "qa",
+            "science",
+            "instruction",
+            "encyclopedia",
+            "news",
+        ]
+
         if dataset_domain_tag and dataset_domain_tag in self.DATASET_DOMAIN_MAPPING:
-             if dataset_domain_tag in HIGH_SIGNAL_DOMAINS:
+            if dataset_domain_tag in HIGH_SIGNAL_DOMAINS:
                 return {
                     "primary_domain": self.DATASET_DOMAIN_MAPPING[dataset_domain_tag],
                     "confidence": 1.0,
-                    "reason": f"dataset_tag_{dataset_domain_tag}"
+                    "reason": f"dataset_tag_{dataset_domain_tag}",
                 }
-             # For generic tags like "web" or "social", we fall through to heuristics 
-             # unless we want to use them as defaults?
-             # Let's use them as strong defaults if heuristics fail.
-             
+            # For generic tags like "web" or "social", we fall through to heuristics
+            # unless we want to use them as defaults?
+            # Let's use them as strong defaults if heuristics fail.
+
         # 0. NCERT Override
         if "metadata" in sample:
             meta = sample["metadata"]
