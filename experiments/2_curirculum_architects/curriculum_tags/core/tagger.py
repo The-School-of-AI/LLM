@@ -136,6 +136,11 @@ class CurriculumTagger:
                 tags = plugin.compute(sample)
                 print(f"id: {sample['id']}, tags: {tags}")
                 sample["curriculum_tags"][plugin.name] = tags
+
+                # SKIP: If rejection_policy rejects, stop processing
+                if plugin.name == "rejection_policy" and tags.get("rejected", False):
+                    break
+
             except Exception as e:
                 sample["curriculum_tags"][plugin.name] = {"error": str(e)}
 
