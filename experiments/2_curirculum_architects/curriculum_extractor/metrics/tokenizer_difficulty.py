@@ -13,6 +13,8 @@ class TokenizerDifficultyMetric(MetricPlugin):
 
     name = "tokenizer_difficulty"
 
+    #: Token ID based thresholds calibrated for the current tokenizer.
+    #: Levels T0-T5 correspond to increasing difficulty.
     TOKEN_ID_THRESHOLDS: Dict[str, Dict[str, Any]] = {
         "T0": {
             "avg_max": 6227,
@@ -55,6 +57,8 @@ class TokenizerDifficultyMetric(MetricPlugin):
     def __init__(self, config):
         super().__init__(config)
 
+        # Load tokenizer configuration from the shared config, similar to other metrics.
+        # These keys are expected to be provided by the caller.
         self.model_id = config.get(
             "tokenizer_proxy.model_id", "meta-llama/Llama-3.3-70B-Instruct"
         )
@@ -62,34 +66,49 @@ class TokenizerDifficultyMetric(MetricPlugin):
         self.tokenizer = self._load_tokenizer()
 
     def _load_tokenizer(self):
-        """Load tokenizer from local folder."""
+        """Load the tokenizer assuming it is available in a local 'tokenizer' folder.
+
+        Uses a local-only load to avoid accessing remote/gated repositories.
+        Returns None if loading fails so callers can handle the absence of a tokenizer.
+        """
         try:
             return AutoTokenizer.from_pretrained(
                 "tokenizer", use_fast=True, local_files_only=True
             )
         except Exception as e:
-            print(f"Warning: Failed to load tokenizer: {e}")
+            print(f"Warning: Failed to load tokenizer from 'tokenizer' folder: {e}")
             return None
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        """Compute tokenizer-based difficulty level."""
+        """Compute tokenizer-based difficulty level, score, and features.
+
+        Returns:
+            level: Assigned tokenizer difficulty level (T0-T5)
+            score: Continuous difficulty score (0-1) derived from the band index
+            features: Token ID statistics used for banding
+        """
         text = sample.get("text", "")
         if not text:
             return self._empty_result()
 
         if not self.tokenizer:
             return {
-                "error": "Tokenizer not found",
+                "error": "Tokenizer not found - tokenizer-based difficulty metric not computed",
             }
 
+        # Tokenize (no special tokens, same as notebook)
         token_ids = self.tokenizer.encode(text, add_special_tokens=False)
 
         if not token_ids:
             return self._empty_result()
 
+        # Token ID statistics (avg, max, percentiles)
         features = self._calculate_stats(token_ids)
+
+        # Curriculum-style banding using token ID thresholds
         level, meta = self._assign_level(features)
 
+        # Map band index to a simple 0-1 score (T0 -> 0.0, ..., T5 -> 1.0)
         levels_order = ["T0", "T1", "T2", "T3", "T4", "T5"]
         idx = levels_order.index(level) if level in levels_order else 0
         score = idx / (len(levels_order) - 1)
@@ -103,7 +122,7 @@ class TokenizerDifficultyMetric(MetricPlugin):
         }
 
     def _calculate_stats(self, tokens: List[int]) -> Dict[str, float]:
-        """Compute token ID statistics."""
+        """Compute token ID statistics consistent with the notebook."""
         token_array = np.array(tokens)
         return {
             "avg_token_id": float(np.mean(token_array)),
@@ -118,7 +137,10 @@ class TokenizerDifficultyMetric(MetricPlugin):
     def _assign_level(
         self, token_stats: Dict[str, float]
     ) -> Tuple[str, Dict[str, Any]]:
-        """Assign a T0-T5 level based on token ID thresholds."""
+        """Assign a T0-T5 level based on token ID thresholds.
+
+        Logic ported from the notebook's `classify_band`, but renamed to T-levels.
+        """
         avg_id = token_stats["avg_token_id"]
         max_id = token_stats["max_token_id"]
         p95_id = token_stats["p95_token_id"]
@@ -127,25 +149,47 @@ class TokenizerDifficultyMetric(MetricPlugin):
             th = self.TOKEN_ID_THRESHOLDS[level]
             if (
                 avg_id <= th["avg_max"]
-                and p95_id <= th["p95_max"]
                 and max_id <= th["max_max"]
+                and p95_id <= th["p95_max"]
             ):
                 return level, {
+                    "level": level,
                     "description": th["description"],
-                    "reason": f"avg={avg_id:.0f}, p95={p95_id:.0f}, max={max_id}",
+                    "avg_token_id": avg_id,
+                    "max_token_id": max_id,
+                    "p95_token_id": p95_id,
+                    "reason": (
+                        f"avg={avg_id:.1f} <= {th['avg_max']}, "
+                        f"max={max_id} <= {th['max_max']}, "
+                        f"p95={p95_id:.1f} <= {th['p95_max']}"
+                    ),
                 }
 
+        # Fallback should never be hit because T5 is unbounded, but keep for safety.
         return "T5", {
+            "level": "T5",
             "description": self.TOKEN_ID_THRESHOLDS["T5"]["description"],
-            "reason": "Exceeds all thresholds",
+            "avg_token_id": avg_id,
+            "max_token_id": max_id,
+            "p95_token_id": p95_id,
+            "reason": "Exceeded all thresholds",
         }
 
-    def _empty_result(self) -> Dict[str, Any]:
-        """Return empty result for missing/empty text."""
+    @staticmethod
+    def _empty_result() -> Dict[str, Any]:
+        """Return a consistent empty result structure."""
         return {
             "level": "T0",
             "score": 0.0,
-            "level_description": "No text",
-            "level_reason": "Empty input",
-            "features": {},
+            "features": {
+                "avg_token_id": 0.0,
+                "max_token_id": 0,
+                "min_token_id": 0,
+                "p50_token_id": 0.0,
+                "p95_token_id": 0.0,
+                "p99_token_id": 0.0,
+                "token_count": 0,
+                "level_description": None,
+                "level_reason": "Empty text or no tokens",
+            },
         }
