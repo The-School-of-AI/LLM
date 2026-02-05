@@ -254,6 +254,11 @@ def triton_sparse_attention(
 
     # Ensure indices are int64 for Triton
     indices = indices.to(torch.int64)
+    
+    # Ensure mask is a numeric type (int8) for proper stride calculation
+    # Boolean tensors can cause issues with .stride() in some PyTorch versions
+    if mask.dtype == torch.bool:
+        mask = mask.to(torch.int8)
 
     try:
         _sparse_attention_fwd_kernel[grid](
@@ -277,7 +282,7 @@ def triton_sparse_attention(
         # Fall back to PyTorch implementation on kernel errors
         import warnings
         warnings.warn(f"Triton kernel failed with: {e}. Falling back to PyTorch.")
-        out, lse = pytorch_sparse_attention(q, k, v, indices, mask, scale)
+        out, lse = pytorch_sparse_attention(q, k, v, indices, mask.bool(), scale)
 
     return out, lse
 
