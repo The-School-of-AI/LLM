@@ -3,7 +3,7 @@
 import re
 from typing import Any, Dict
 
-from ..core.plugin import MetricPlugin
+from curriculum_extractor.core.plugin import MetricPlugin
 
 
 class DomainMetric(MetricPlugin):
@@ -55,6 +55,9 @@ class DomainMetric(MetricPlugin):
 
     def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         """Determine domain based on modality signals and text features."""
+        print(f"DEBUG: DomainMetric.compute executing for id={sample.get('id')}")
+        
+        # 0. NCERT Override
 
         # 0. NCERT Override
         if "metadata" in sample:
@@ -70,6 +73,7 @@ class DomainMetric(MetricPlugin):
                 dataset = sample.get("dataset", "").lower()
                 if dataset == "ncert" or "ncert" in str(sample.get("id", "")).lower():
                     subject = meta.get("subject", "").lower().replace(" ", "_")
+                    print(f"DEBUG: Domain Checking Subject: {subject}")
                     if subject in self.NCERT_DOMAIN_MAPPING:
                         return {
                             "primary_domain": self.NCERT_DOMAIN_MAPPING[subject],

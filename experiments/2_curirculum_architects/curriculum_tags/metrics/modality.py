@@ -3,7 +3,7 @@
 import re
 from typing import Any, Dict
 
-from ..core.plugin import MetricPlugin
+from curriculum_extractor.core.plugin import MetricPlugin
 
 
 class ModalityMetric(MetricPlugin):

@@ -15,11 +15,13 @@ Certain signals force specific bands regardless of other metrics to ensure high-
 | **Research Papers** | **B4 / B5** | **B5** if Grade > 16 or Difficulty > 0.8, otherwise **B4**. |
 | **Code / Math** | **B2 - B5** | **B5** if Diff > 0.8 or Diversity > 0.4. **B4** if Diff > 0.6. **B3** if Diff > 0.4. Else **B2**. |
 
-### 2. Quality Floors (Safety Nets)
-We apply "floors" to prevent complex reasoning from being misclassified as simple due to plain language.
-
+### 2. Quality Floors & Domain Precedence
+We apply floors to prevent complex reasoning or specialized content from being misclassified due to score fluctuations.
+ 
 *   **Reasoning Floor**: If `has_reasoning` or `has_cot` is detected in the `modality` tags, the band is forced to be **at least B3**.
-    *   *Result*: Any sample with Chain-of-Thought (COT) traces is disqualified from B0, B1, and B2.
+*   **Domain Precedence (NCERT/Science)**: If `domain == math_science` (Physics, Chem, Bio, Math):
+    *   **Soft Floor**: **B3** (Undergraduate/Technical) is allowed even if `difficulty_score < 0.60`.
+    *   This prevents technical content with simpler sentence structures (typical of textbooks) from falling into B0/B1.
 
 ### 3. Constraint-Based Classification (The Core Logic)
 For general text, we use a **Multi-Constraint Matching** approach based on thresholds defined in `band_assignment.yaml`.
@@ -68,13 +70,28 @@ The metric adds a `band_assignment` field to the `curriculum_tags`:
 ```
 
 ### 4. NCERT Adjustment (Post-Processing)
-For NCERT datasets, we apply a final capping logic based on the `grade` metadata to ensure grade-appropriate assignments.
-
+For NCERT datasets, we apply a multi-stage logic layer to handle grade-specific requirements and split generally "Hard" content into Graduate (B4) and Specialist (B5) tiers.
+ 
+#### A. Grade-Based Logic (Pre-computation)
+*   **Early Education Override**:
+    *   Grade <= 2: **FORCE B0**
+    *   Grade <= 5: **FORCE max B1**
+ 
+#### B. Capping Logic (Post-computation)
+After the standard assignment, we cap bands if they exceed the grade's typical maximum:
+ 
 | Grade | Max Allowed Band |
 | :--- | :--- |
 | **6 - 8** | **B2** |
 | **9 - 10** | **B3** |
-| **11 - 12** | **B4** |
-
-*   *Effect*: A grade 6 textbook paragraph classified as B4 due to technical terms will be capped at B2.
+| **11 - 12** | **B5** (Modified from B4) |
+ 
+#### C. Metadata Stratification (B4/B5 Separation)
+To distinguish between **Graduate (B4)** and **Specialist (B5)** content in Higher Secondary (Grade 11-12) science:
+ 
+*   **Default**: Standard text logic applies.
+*   **B4 Promotion**: If `difficulty="Hard"` OR `student_level="Advanced"`.
+*   **B5 Promotion**: IF `Grade >= 11` AND Metadata is Hard/Advanced AND (`question_complexity >= 0.5` OR type is `Numerical`/`Conceptual`).
+ 
+This ensures B5 is reserved for the most complex, deep-reasoning problems.
 
