@@ -15,15 +15,15 @@
 
 # Configuration
 PROFILE_NAME="seed_1b_timeline"
-PRESET="1b-gsa"
+PRESET="1b-deepseek-gsa"
 # Profile 20 steps for statistical significance and pattern identification
-PROFILE_STEPS="10-29"  # 20 steps to capture multiple iterations and average performance
+PROFILE_STEPS="10-15"  # 20 steps to capture multiple iterations and average performance
 
 #Training hyperparameters (optimized for Tesla T4 14GB)
 MAX_STEPS=100
 BATCH_SIZE=1
 GRADIENT_ACCUMULATION=1
-SEQ_LENGTH=256
+SEQ_LENGTH=512
 LEARNING_RATE=3e-4
 EXPERIMENT_NAME="profiling_${PROFILE_NAME}"
 
