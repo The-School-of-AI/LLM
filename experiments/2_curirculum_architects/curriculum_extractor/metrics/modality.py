@@ -18,15 +18,16 @@ class ModalityMetric(MetricPlugin):
     CODE_PATTERN = re.compile(
         r"```|"
         r"def\s+\w+\(|"
-        r"class\s+\w+\s*[:{\(]|" # Class definition followed by :, {, or (
-        r"function\s+\w+\s*[\({]|" # JS function followed by ( or {
+        r"class\s+\w+\s*[:{]|"    # Class followed by : or { (Java/C++/Python simple)
+        r"class\s+\w+\([^\)]+\)\s*:|" # Python class with inheritance: class Foo(Bar):
+        r"^\s*function\s+\w+\s*[\({]|" # JS function at start of line
         r"^\s*import\s+\w+|" # Import at start of line
-        r"from\s+[\w.]+\s+import\s+\w+|" # Python from ... import (supports .module)
+        r"from\s+[\w.]+\s+import\s+\w+|" # Python from ... import
         r"from\s+\.\s+import\s+\w+", # Python from . import
         re.IGNORECASE | re.MULTILINE,
     )
     MATH_PATTERN = re.compile(
-        r"[∑∫√≈≠≤≥→∞]|"
+        r"[∑∫√≈≠≤≥∞]|" # Removed arrow →
         r"\\("
         r"frac|sum|int|sqrt|begin\{equation\}|"
         r"alpha|beta|gamma|delta|theta|pi|sigma|omega|phi|"
