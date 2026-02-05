@@ -41,7 +41,9 @@ class RejectionPolicyMetric(MetricPlugin):
             elif isinstance(p, str):
                 allowed.append(p)
 
-        secondary = cfg.get("language_and_context.language_policy.secondary_languages", [])
+        secondary = cfg.get(
+            "language_and_context.language_policy.secondary_languages", []
+        )
         for s in secondary:
             if isinstance(s, dict) and s.get("lang"):
                 allowed.append(s.get("lang"))
@@ -50,8 +52,7 @@ class RejectionPolicyMetric(MetricPlugin):
 
         # Normalize language value from record (dataset_interface expects 'language')
         lang = _detect_language(text, sample)
-       
-        
+
         # Determine rejection
         rejected = False
         rejection_reason = None
@@ -74,13 +75,15 @@ class RejectionPolicyMetric(MetricPlugin):
 
         # Minimum token threshold (approximate via whitespace split)
         if not rejected:
-            min_tokens = cfg.get("language_and_context.context_policy.min_context_tokens", 0)
+            min_tokens = cfg.get(
+                "language_and_context.context_policy.min_context_tokens", 0
+            )
 
             # Use a cheap token approximation
-            token_count = len(text.split()) 
+            token_count = len(text.split())
 
             try:
-                min_tokens_int = int(min_tokens) /2 # approx accounting for tokenizer
+                min_tokens_int = int(min_tokens) / 2  # approx accounting for tokenizer
             except Exception:
                 min_tokens_int = 0
 
@@ -111,19 +114,40 @@ def _detect_language(text: str, sample: dict = None) -> str:
             metadata_lang = metadata.get("lang")
 
     if metadata_lang:
-        if metadata_lang.lower().startswith('en'):
-            return 'en'
-        if metadata_lang.lower() in ['hi', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'or']:
-            return 'indic'
-        elif metadata_lang.lower() in ["hindi", "bengali", "tamil", "telugu", "marathi", "gujarati", "kannada", "malayalam", "punjabi", "odia"]:
-            return 'indic'
-        
+        if metadata_lang.lower().startswith("en"):
+            return "en"
+        if metadata_lang.lower() in [
+            "hi",
+            "bn",
+            "ta",
+            "te",
+            "mr",
+            "gu",
+            "kn",
+            "ml",
+            "pa",
+            "or",
+        ]:
+            return "indic"
+        elif metadata_lang.lower() in [
+            "hindi",
+            "bengali",
+            "tamil",
+            "telugu",
+            "marathi",
+            "gujarati",
+            "kannada",
+            "malayalam",
+            "punjabi",
+            "odia",
+        ]:
+            return "indic"
+
     # if still not found, check text
     for char in text[:500]:
         code = ord(char)
         for start, end in INDIC_SCRIPT_RANGES:
             if start <= code <= end:
-                return 'indic'
+                return "indic"
 
     return None
-	

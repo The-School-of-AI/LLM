@@ -88,13 +88,16 @@ class ModalityMetric(MetricPlugin):
             meta = sample["metadata"]
             if isinstance(meta, str):
                 import json
+
                 try:
                     meta = json.loads(meta)
                 except json.JSONDecodeError:
                     meta = {}
-            
+
             # Check for NCERT specific logic
-            if isinstance(meta, dict) and meta.get("source_type") == "textbook": # Heuristic for NCERT or similar
+            if (
+                isinstance(meta, dict) and meta.get("source_type") == "textbook"
+            ):  # Heuristic for NCERT or similar
                 # Or check dataset name if available in sample
                 dataset = sample.get("dataset", "").lower()
                 if dataset == "ncert" or "ncert" in str(sample.get("id", "")).lower():

@@ -61,11 +61,12 @@ class DomainMetric(MetricPlugin):
             meta = sample["metadata"]
             if isinstance(meta, str):
                 import json
+
                 try:
                     meta = json.loads(meta)
                 except json.JSONDecodeError:
                     meta = {}
-            
+
             if isinstance(meta, dict) and meta.get("source_type") == "textbook":
                 dataset = sample.get("dataset", "").lower()
                 if dataset == "ncert" or "ncert" in str(sample.get("id", "")).lower():
