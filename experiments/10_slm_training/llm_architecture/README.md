@@ -1,13 +1,14 @@
 # LLM Architecture
 
-A modular, production-ready 1B parameter Large Language Model with state-of-the-art attention mechanisms including DeepSeek-style Gated Sparse Attention.
+A modular, production-ready 1B parameter Large Language Model implementation featuring state-of-the-art Gated Sparse Attention (GSA) based on DeepSeek 3.2 (arXiv:2512.02556v1) and the GSA paper (arXiv:2601.15305v1).
 
 ## Features
 
-- **Multiple Attention Mechanisms**: GQA, Gated Sparse Attention (GSA), DeepSeek GSA, DeepSeek MLA
-- **Extended Context**: YaRN position embeddings for 4K → 32K+ context
-- **Cross-Platform**: CUDA, MPS (Apple Silicon), and CPU support
-- **Memory Efficient**: Adaptive sparse attention with configurable memory modes
+- **Gated Sparse Attention (GSA)**: O(L·k) complexity instead of O(L²) for long sequences
+- **Triton Kernel Optimization**: Memory-efficient GPU kernels for 128K+ context lengths
+- **Extended Context**: YaRN position embeddings supporting 4K → 256K context
+- **Scalable Architecture**: Components designed to scale from 1B to larger models
+- **Cross-Platform**: CUDA (with Triton), MPS (Apple Silicon), and CPU support
 - **Production Ready**: Mixed precision, gradient checkpointing, KV caching
 
 ## Quick Start
@@ -26,50 +27,138 @@ python training/train_wikitext2_gpt2.py \
     --batch-size 4 \
     --max-steps 1000
 
+# Install Triton for optimized long-context training (CUDA only)
+pip install triton
+
+# Train 1B DeepSeek GSA model on CUDA with Triton kernels
+python training/train_wikitext2_gpt2.py \
+    --preset 1b-deepseek-gsa \
+    --device cuda \
+    --seq-length 4096 \
+    --batch-size 2 \
+    --max-steps 1000
+
 # Train with preset (legacy mode)
 python training/train_wikitext2_gpt2.py \
     --preset 1b-deepseek-gsa \
     --device mps \
     --seq-length 256 \
     --batch-size 1 \
+    --gsa-k-base 128 \
+    --gsa-k-max 256
+
+# Disable Triton kernels (use PyTorch fallback)
+python training/train_wikitext2_gpt2.py \
+    --preset 1b-deepseek-gsa \
+    --device cuda \
     --max-steps 100
 ```
 
-## Architecture
+```bash
+# Install dependencies
+pip install torch>=2.0.0 transformers datasets
+
+# Install Triton for optimized long-context training (CUDA only)
+pip install triton
+
+# Train 1B DeepSeek GSA model on CUDA with Triton kernels
+python training/train_wikitext2_gpt2.py \
+    --preset 1b-deepseek-gsa \
+    --device cuda \
+    --seq-length 4096 \
+    --batch-size 2 \
+    --max-steps 1000
+
+# Train on Apple Silicon (MPS) with smaller k values
+python training/train_wikitext2_gpt2.py \
+    --preset 1b-deepseek-gsa \
+    --device mps \
+    --seq-length 512 \
+    --batch-size 1 \
+    --gsa-k-base 128 \
+    --gsa-k-max 256
+
+# Disable Triton kernels (use PyTorch fallback)
+python training/train_wikitext2_gpt2.py \
+    --preset 1b-deepseek-gsa \
+    --device cuda \
+    --no-triton
+```
+
+## Architecture Overview
 
 ```
-Input IDs
-    │
-    ▼
-┌─────────────────────┐
-│  Token Embedding    │
-└─────────────────────┘
-    │
-    ▼
-┌─────────────────────┐
-│  Transformer Block  │ × 16
-│  ┌───────────────┐  │
-│  │ RMSNorm       │  │
-│  │ Attention     │  │  ← GQA / GSA / DeepSeek GSA
-│  │ Connection    │  │  ← Residual / mHC
-│  │ RMSNorm       │  │
-│  │ SwiGLU FFN    │  │
-│  │ Connection    │  │
-│  └───────────────┘  │
-└─────────────────────┘
-    │
-    ▼
-┌─────────────────────┐
-│  Final RMSNorm      │
-└─────────────────────┘
-    │
-    ▼
-┌─────────────────────┐
-│  LM Head            │
-└─────────────────────┘
-    │
-    ▼
-Logits
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           LLM Architecture                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Input IDs ──▶ Token Embedding ──▶ [batch, seq, hidden_size]           │
+│                                                                         │
+│                              │                                          │
+│                              ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                    Transformer Block × N                         │   │
+│  │  ┌─────────────────────────────────────────────────────────┐    │   │
+│  │  │                      RMSNorm                             │    │   │
+│  │  └─────────────────────────────────────────────────────────┘    │   │
+│  │                           │                                      │   │
+│  │                           ▼                                      │   │
+│  │  ┌─────────────────────────────────────────────────────────┐    │   │
+│  │  │              Gated Sparse Attention (GSA)                │    │   │
+│  │  │  ┌─────────────────────────────────────────────────┐    │    │   │
+│  │  │  │ 1. Gated Lightning Indexer                       │    │    │   │
+│  │  │  │    Q_idx, K_idx ──▶ scores ──▶ sigmoid ──▶ gate │    │    │   │
+│  │  │  └─────────────────────────────────────────────────┘    │    │   │
+│  │  │                        │                                │    │   │
+│  │  │                        ▼                                │    │   │
+│  │  │  ┌─────────────────────────────────────────────────┐    │    │   │
+│  │  │  │ 2. Adaptive Top-K Selection                      │    │    │   │
+│  │  │  │    k = f(variance) ∈ [k_min, k_max]             │    │    │   │
+│  │  │  └─────────────────────────────────────────────────┘    │    │   │
+│  │  │                        │                                │    │   │
+│  │  │                        ▼                                │    │   │
+│  │  │  ┌─────────────────────────────────────────────────┐    │    │   │
+│  │  │  │ 3. Sparse Attention (Triton/PyTorch)            │    │    │   │
+│  │  │  │    O(L·k) instead of O(L²)                      │    │    │   │
+│  │  │  └─────────────────────────────────────────────────┘    │    │   │
+│  │  │                        │                                │    │   │
+│  │  │                        ▼                                │    │   │
+│  │  │  ┌─────────────────────────────────────────────────┐    │    │   │
+│  │  │  │ 4. Dual Gating: G1 (output) + G2 (value)        │    │    │   │
+│  │  │  └─────────────────────────────────────────────────┘    │    │   │
+│  │  └─────────────────────────────────────────────────────────┘    │   │
+│  │                           │                                      │   │
+│  │                    Residual Connection                           │   │
+│  │                           │                                      │   │
+│  │                           ▼                                      │   │
+│  │  ┌─────────────────────────────────────────────────────────┐    │   │
+│  │  │                      RMSNorm                             │    │   │
+│  │  └─────────────────────────────────────────────────────────┘    │   │
+│  │                           │                                      │   │
+│  │                           ▼                                      │   │
+│  │  ┌─────────────────────────────────────────────────────────┐    │   │
+│  │  │                    SwiGLU FFN                            │    │   │
+│  │  │    gate = SiLU(x @ W_gate)                               │    │   │
+│  │  │    out = gate * (x @ W_up) @ W_down                      │    │   │
+│  │  └─────────────────────────────────────────────────────────┘    │   │
+│  │                           │                                      │   │
+│  │                    Residual Connection                           │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                              │                                          │
+│                              ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                       Final RMSNorm                              │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                              │                                          │
+│                              ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                    LM Head (tied/untied)                         │   │
+│  │              [hidden_size] ──▶ [vocab_size]                      │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                              │                                          │
+│                              ▼                                          │
+│                           Logits                                        │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Model Configurations
@@ -183,11 +272,11 @@ config = get_preset_config("1b-deepseek-gsa")
 ```
 
 **Key Features:**
-- Gated Lightning Indexer with proper 1/sqrt(d) scaling
+- Gated Lightning Indexer with proper 1/√d scaling
 - Adaptive Top-K selection with inverse variance relationship
 - Dual gating: G1 (output gate) + G2 (value gate)
-- Memory-efficient mode for MPS/limited VRAM
-- Indexer key caching for efficient decoding
+- Triton kernel support for long sequences
+- Memory-efficient mode for limited VRAM
 
 **Configuration Parameters:**
 
@@ -197,10 +286,10 @@ gsa_indexer_dim = 64              # Indexer projection dimension
 gsa_num_indexer_heads = 4         # Number of indexer heads
 gsa_indexer_activation = "sigmoid" # Activation function
 
-# Sparsity (Memory-optimized defaults for MPS)
-gsa_k_base = 128                  # Base selection budget
-gsa_k_min = 32                    # Minimum tokens to attend
-gsa_k_max = 256                   # Maximum tokens to attend
+# Sparsity
+gsa_k_base = 512                  # Base selection budget
+gsa_k_min = 64                    # Minimum tokens to attend
+gsa_k_max = 1024                  # Maximum tokens to attend
 gsa_use_adaptive_k = True         # Enable adaptive k selection
 gsa_adaptive_k_method = "variance" # Method: variance, entropy, learned
 
@@ -209,12 +298,9 @@ gsa_use_value_gate = True         # G2: Applied after V projection
 gsa_use_output_gate = True        # G1: Applied after attention
 gsa_gate_activation = "sigmoid"
 gsa_gate_bias_init = 0.5
-```
 
-**For CUDA with more VRAM**, increase k values:
-```python
-config.attention.gsa_k_base = 512
-config.attention.gsa_k_max = 1024
+# Triton optimization
+gsa_use_triton_kernels = True     # Use Triton for long sequences
 ```
 
 ## Components
@@ -396,6 +482,11 @@ from training.train import Trainer, TrainingConfig
 # Load configuration
 model_config = get_preset_config("1b-deepseek-gsa")
 
+# Optionally adjust GSA parameters
+model_config.attention.gsa_k_base = 512
+model_config.attention.gsa_k_max = 1024
+model_config.attention.gsa_use_triton_kernels = True
+
 # Create model
 model = LLM(model_config)
 
@@ -404,10 +495,10 @@ training_config = TrainingConfig(
     max_steps=10000,
     batch_size=4,
     gradient_accumulation_steps=4,
-    seq_length=1024,
+    seq_length=2048,
     learning_rate=3e-4,
     warmup_steps=500,
-    device="auto",  # cuda, mps, or cpu
+    device="cuda",
     use_amp=True,
 )
 
@@ -448,6 +539,17 @@ python training/train_wikitext2_gpt2.py \
 | CUDA | bfloat16, float16 | Full support, GradScaler for float16 |
 | MPS | float16 | Apple Silicon, memory-efficient attention mode |
 | CPU | None | Fallback, no mixed precision |
+
+**LM Head Design (following DeepSeek V3):**
+- **Untied embeddings**: Input and output embeddings are always separate
+- This ensures consistent behavior as model scales
+- Better quality than tied weights per DeepSeek V3 (arXiv:2412.19437)
+
+**Scaling guidelines:**
+- Scale FFN `intermediate_size` proportionally with `hidden_size`
+- GSA components (indexer, gating) remain the same architecture
+- LM head architecture stays unchanged across model sizes
+- Adjust `initializer_range` for larger models (smaller values for stability)
 
 ## API Reference
 
@@ -496,8 +598,9 @@ config = ModelConfig.load("configs/1b_deepseek_gsa.yaml")
 config = get_preset_config("1b-deepseek-gsa")
 
 # Modify
-config.attention.gsa_k_base = 256
-config.max_position_embeddings = 8192
+config.attention.gsa_k_base = 512
+config.attention.gsa_use_triton_kernels = True
+config.max_position_embeddings = 131072  # 128K
 
 # Save/Load
 config.save("config.json")
@@ -518,9 +621,8 @@ config = ModelConfig.load("config.json")
 
 ## References
 
-- [Gated Sparse Attention](https://arxiv.org/abs/2601.15305v1) - GSA paper
-- [YaRN](https://arxiv.org/abs/2309.00071) - Context extension
+- [Gated Sparse Attention (GSA)](https://arxiv.org/abs/2601.15305v1) - Core attention mechanism
+- [DeepSeek 3.2](https://arxiv.org/abs/2512.02556v1) - Architecture and training insights
+- [YaRN](https://arxiv.org/abs/2309.00071) - Context length extension
 - [Manifold Hyper-Connections](https://arxiv.org/abs/2512.24880) - mHC paper
-- [DeepSeek V3](https://arxiv.org/abs/2412.19437) - MTP
-
-
+- [Triton](https://triton-lang.org/) - GPU kernel optimization
