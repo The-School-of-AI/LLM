@@ -66,7 +66,7 @@ def _process_single_file(
                 compression='gzip',
                 maximum_object_size=1073741824  -- 1GB per line/object
             )
-        ) TO '{output_path}' (FORMAT 'parquet', COMPRESSION 'ZSTD');
+        ) TO '{output_path}' (FORMAT 'parquet', COMPRESSION 'SNAPPY');
     """
 
     try:
