@@ -56,25 +56,27 @@ class NullRoutingAnalyzer:
         input_ids: Tensor,  # (batch_size, seq_len)
         routing_logits: list[
             Tensor
-        ],  # list of tensor of shape (batch_size * seq_len, num_real_experts + num_null_experts), one for each moe block
-        num_real_experts: int,
+        ],  # list of tensor of shape (batch_size, seq_len, num_real_experts + num_null_experts), one for each moe block
+        num_experts: int,
         topk: int,
     ) -> list[NullExpertStats]:
+        batch_size, seq_len = input_ids.shape
+        num_tokens = batch_size * seq_len
         input_group_ids = self._token_ids_to_token_groups(input_ids).view(
             -1
         )  # (batch_size * seq_len)
         null_expert_stats: list[NullExpertStats] = []
 
         for rl in routing_logits:
-            routing_probs = torch.sigmoid(rl)
+            routing_probs = torch.softmax(rl.view(num_tokens, -1), dim=-1)
             _, indices = torch.topk(
                 routing_probs, topk, dim=-1
-            )  # indices is of shape (batch_size * seq_len, num_real_experts + num_null_experts)
+            )  # indices is of shape (batch_size * seq_len, topk)
 
             tokens_routed_to_null = torch.any(
                 indices
-                >= num_real_experts,  # assuming last num_null_experts out of num_real_experts + num_null_experts are null experts
-                dim=1,
+                >= num_experts,  # assuming last num_null_experts out of num_real_experts + num_null_experts are null experts
+                dim=-1,
             )  # bool tensor of (batch_size * seq_len,). if value at index i is True, that means ith token was routed to null expert.
             tokens_to_null_rate = (
                 tokens_routed_to_null.sum().item() / tokens_routed_to_null.numel()
@@ -186,23 +188,27 @@ class RouterAnalyzer:
         self,
         routing_logits: list[
             Tensor
-        ],  # list of tensor of shape (batch_size * seq_len, num_real_experts + num_null_experts), one for each moe block
-        num_real_experts: int,
-        num_null_experts: int,
+        ],  # list of tensor of shape (batch_size, seq_len, num_real_experts + num_null_experts), one for each moe block
+        num_experts: int,
+        data_sparsity: float,
         topk: int,
     ) -> RouterStats:
         load_stats: list[RouterLoadDistributionStats] = []
         entropy_per_token: list[Tensor] = []
+        num_null_experts = int(num_experts * (1 - data_sparsity) / data_sparsity)
 
         for rl in routing_logits:
-            routing_probs = torch.sigmoid(rl)
+            rl = rl.view(
+                -1, rl.shape[-1]
+            )  # shape: (batch_size * seq_len, num_real_experts + num_null_experts)
+            routing_probs = torch.softmax(rl, dim=-1)
             _, indices = torch.topk(
                 routing_probs, topk, dim=-1
-            )  # indices is of shape (batch_size * seq_len, num_real_experts + num_null_experts)
+            )  # indices is of shape (batch_size * seq_len, topk)
 
             load_stats.append(
                 self._calculate_load_distribution(
-                    indices, num_real_experts, num_null_experts
+                    indices, num_experts, num_null_experts
                 )
             )
 
@@ -229,9 +235,9 @@ class RouterAnalyzer:
         return RouterLoadDistributionStats(tokens_per_expert)
 
     def _calculate_entropy_per_token(self, routing_logits: Tensor) -> Tensor:
-        log_probs = F.log_softmax(routing_logits)
-        probs = F.softmax(routing_logits)
-        return -torch.sum(probs * log_probs)
+        log_probs = F.log_softmax(routing_logits, dim=-1)
+        probs = F.softmax(routing_logits, dim=-1)
+        return -torch.sum(probs * log_probs, dim=-1)
 
 
 class RouterHealthMetrics(NamedTuple):
@@ -244,13 +250,13 @@ class RouterHealthAnalyzer:
         self,
         vocab_size: int,
         token_id_group_mapping: dict[int, int],
-        num_real_experts: int,
-        num_null_experts: int,
+        num_experts: int,
+        data_sparsity: float,
         topk: int,
         device: str = "cpu",
     ):
-        self.num_real_experts = num_real_experts
-        self.num_null_experts = num_null_experts
+        self.num_experts = num_experts
+        self.data_sparsity = data_sparsity
         self.topk = topk
 
         self.null_routing_analyzer = NullRoutingAnalyzer(
@@ -262,10 +268,16 @@ class RouterHealthAnalyzer:
         self, input_ids: Tensor, routing_logits: list[Tensor]
     ) -> RouterHealthMetrics:
         null_experts_stats = self.null_routing_analyzer.analyze(
-            input_ids, routing_logits, self.num_real_experts, self.topk
+            input_ids=input_ids,
+            routing_logits=routing_logits,
+            num_experts=self.num_experts,
+            topk=self.topk,
         )
         router_stats = self.router_analyzer.analyze(
-            routing_logits, self.num_real_experts, self.num_null_experts, self.topk
+            routing_logits=routing_logits,
+            num_experts=self.num_experts,
+            data_sparsity=self.data_sparsity,
+            topk=self.topk,
         )
 
         return RouterHealthMetrics(null_experts_stats, router_stats)

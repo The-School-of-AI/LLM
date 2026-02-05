@@ -106,132 +106,192 @@ class MLP(nn.Module):
         return self.down_proj(gate * up)
 
 
-class DeepSeekMoE(nn.Module):
+class MoERouter(nn.Module):
     def __init__(
         self,
         hidden_size=768,
-        intermediate_size=1536,
-        num_routed_experts=7,
-        num_shared_experts=1,
-        num_null_experts=2,
-        num_experts_per_tok=2,
+        num_experts: int = 7,
+        topk: int = 2,
+        data_sparsity: float = 0.5,
+    ):
+        super().__init__()
+        self.num_experts = num_experts
+        self.topk = topk
+        self.data_sparsity = data_sparsity
+
+        # Calculate number of null expert copies: M = N · (1-ρ)/ρ
+        # For ρ=0.5, N=8: M = 8 · 0.5/0.5 = 8 null copies
+        self.num_null_experts = int(num_experts * (1 - data_sparsity) / data_sparsity)
+        self.num_total_experts = num_experts + self.num_null_experts
+
+        # gate for real experts only
+        self.router = nn.Linear(hidden_size, num_experts, bias=False)
+        self.router.weight.data.normal_(mean=0.0, std=0.02)
+        self.router_bias = nn.Parameter(torch.zeros(num_experts))
+
+        # single expert logit (will be duplicated self.num_null_expert times)
+        self.null_expert_logit = nn.Parameter(torch.tensor(0.0))
+
+        self.last_router_logits: Tensor | None = None
+
+    def forward(self, x: Tensor):
+        batch_size, seq_len, hidden_dim = x.shape
+
+        # router logits for real experts
+        real_logits = (
+            self.router(x) + self.router_bias
+        )  # shape: (batch_size, seq_len, num_experts)
+
+        # duplicate null expert logic num_null_expert times
+        null_logits = self.null_expert_logit.view(1, 1, 1).expand(
+            batch_size, seq_len, self.num_null_experts
+        )  # shape: (batch_size, seq_len, num_null_experts)
+
+        # creating router logits by concantenating real and null expert router logits
+        router_logits = torch.cat(
+            [real_logits, null_logits], dim=-1
+        )  # shape: (batch_size, seq_len, num_total_experts)
+        self.last_router_logits = router_logits.detach()
+
+        # softmax routing
+        router_probs = F.softmax(router_logits, dim=-1)
+
+        # top-k calculation
+        topk_weights, topk_indices = torch.topk(router_probs, self.topk, dim=-1)
+
+        # null expert selections
+        is_null = topk_indices >= self.num_experts
+
+        # renormalize weights over only the real experts
+        # zero out the null weights, and renormalize
+        real_weights = topk_weights * (~is_null).float()
+        topk_weight = real_weights / real_weights.sum(dim=-1, keepdim=True).clamp(1e-6)
+
+        ## compute auxiliary loss
+
+        # P_i: average routing probability of expert i
+        P = router_probs.mean(dim=(0, 1))  # shape: (num_total_experts,)
+
+        # f_i: fraction of tokens routed to expert i
+        f = torch.bincount(
+            topk_indices.flatten(), minlength=self.num_total_experts
+        ).float() / (batch_size * seq_len)
+
+        L_bal = self.num_total_experts * torch.sum(f * P)
+
+        # Z-Loss
+        # log^2(sum(exp(logits))) -> (log_sum_exp(logits))^2
+        L_z = (torch.logsumexp(router_logits, dim=-1) ** 2).mean()
+
+        # final aux loss
+        aux_loss = 2e-2 * L_bal + 1e-3 * L_z
+
+        return topk_indices, topk_weight, is_null, aux_loss
+
+
+class MoEBlock(nn.Module):
+    def __init__(
+        self,
+        hidden_size: int = 768,
+        intermediate_size: int = 1536,
+        num_experts: int = 7,
+        topk=2,
+        data_sparsity: float = 0.5,
+        dropout: float = 0.0,
     ):
         super().__init__()
 
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
-        self.num_routed_experts = num_routed_experts
-        self.num_shared_experts = num_shared_experts
-        self.num_null_experts = num_null_experts
-        self.top_k = num_experts_per_tok
+        self.num_experts = num_experts
+        self.topk = topk
+        self.dropout = dropout
 
-        # shared experts - always active
-        self.shared_experts = nn.ModuleList(
-            [MLP(hidden_size, intermediate_size) for _ in range(num_shared_experts)]
+        self.router = MoERouter(hidden_size, num_experts, topk, data_sparsity)
+
+        # expert weights (real experts only)
+        self.w_gate = nn.Parameter(
+            torch.randn(num_experts, hidden_size, intermediate_size) * 0.02
+        )
+        self.w_up = nn.Parameter(
+            torch.randn(num_experts, hidden_size, intermediate_size) * 0.02
+        )
+        self.w_down = nn.Parameter(
+            torch.randn(num_experts, intermediate_size, hidden_size) * 0.02
         )
 
-        # routed experts (top-k selection)
-        self.routed_experts = nn.ModuleList(
-            [MLP(hidden_size, intermediate_size) for _ in range(num_routed_experts)]
+        # shared expert (1 shared expert, always active)
+        self.shared_gate = nn.Linear(hidden_size, intermediate_size, bias=False)
+        self.shared_up = nn.Linear(hidden_size, intermediate_size, bias=False)
+        self.shared_down = nn.Linear(intermediate_size, hidden_size, bias=False)
+        for module in [self.shared_gate, self.shared_up, self.shared_down]:
+            module.weight.data.normal_(mean=0.0, std=0.02)
+
+    def forward(self, x: Tensor):
+        batch_size, seq_len, hidden_size = x.shape
+        num_tokens = batch_size * seq_len
+        device, dtype = x.device, x.dtype
+
+        # shared expert
+        shared_hidden = F.silu(self.shared_gate(x)) * self.shared_up(x)
+        if self.training and self.dropout > 0:
+            shared_hidden = F.dropout(shared_hidden, p=self.dropout)
+        shared_out = self.shared_down(shared_hidden)
+
+        # routed experts with null expert handling
+        topk_indices, topk_weights, is_null, aux_loss = self.router(x)
+
+        # filter out null expert routes
+        # create a mask for real expert routes
+        real_mask = ~(is_null.view(num_tokens, self.topk))
+
+        # flatten and filter
+        token_indices = (
+            torch.arange(num_tokens, device=device)
+            .unsqueeze(1)
+            .expand(num_tokens, self.topk)
         )
 
-        # router network - routes to all non shared experts (real + null)
-        self.router = nn.Linear(
-            hidden_size, num_routed_experts + num_null_experts, bias=False
+        # keep only real experts routes
+        real_token_indices = token_indices[real_mask]
+        real_expert_indices = topk_indices.view(num_tokens, self.topk)[real_mask]
+        real_expert_weights = topk_weights.view(num_tokens, self.topk)[real_mask]
+
+        # sort by expert for vectorized computation
+        sorted_indices = real_expert_indices.argsort()
+        sorted_token_indices = real_token_indices[sorted_indices]
+        sorted_expert_weights = real_expert_weights[sorted_indices]
+        sorted_x = x.view(num_tokens, hidden_size)[sorted_token_indices]
+
+        expert_counts = torch.bincount(real_expert_indices, minlength=self.num_experts)
+        expert_offsets = expert_counts.cumsum(0)
+
+        # process each real expert's chunk
+        num_real_assignments = sorted_token_indices.size(0)
+        sorted_out = torch.empty(
+            num_real_assignments, hidden_size, device=device, dtype=dtype
         )
 
-        # routing bias for load balancing (learned, but manually updated)
-        self.routing_bias = nn.Parameter(
-            torch.zeros(num_routed_experts + num_null_experts)
+        start = 0
+        for e in range(self.num_experts):
+            end = expert_offsets[e].item()
+            if end > start:
+                chunk_x = sorted_x[start:end]
+                h = F.silu(chunk_x @ self.w_gate[e]) * (chunk_x @ self.w_up[e])
+                if self.training and self.dropout > 0:
+                    h = F.dropout(h, p=self.dropout)
+                sorted_out[start:end] = h @ self.w_down[e]
+            start = end
+
+        # scatter back (only real experts, null contributes nothing)
+        weighted_out = sorted_out * sorted_expert_weights.unsqueeze(-1)
+        routed_out = torch.zeros(num_tokens, hidden_size, device=device, dtype=dtype)
+        routed_out.scatter_add_(
+            0, sorted_token_indices.unsqueeze(-1).expand(-1, hidden_size), weighted_out
         )
 
-        # track expert load from last forward pass
-        self.last_expert_load: Tensor | None = None
-
-        # tracking routing decisions for monitoring
-        self.last_routing_logits: Tensor | None = None
-
-    def forward(self, x: Tensor) -> Tensor:
-        batch_size, seq_len, hidden_dim = x.shape
-
-        # flatten to (batch * seq_len, hidden_size) for easier processing
-        x_flat = x.view(-1, hidden_dim)
-
-        # shared experts
-        shared_output = torch.zeros_like(x_flat)
-        for expert in self.shared_experts:
-            shared_output += expert(x_flat)
-        shared_output = shared_output / self.num_shared_experts
-
-        # routing scores
-        routing_logits = self.router(x_flat) + self.routing_bias
-
-        # get top-k experts per token
-        routing_probs = torch.sigmoid(routing_logits)
-        scores, indices = torch.topk(routing_probs, self.top_k, dim=-1)
-
-        # normalize scores over selected real experts only, null experts don't contribute to output.
-        real_expert_mask = indices < self.num_routed_experts
-        scores = scores * real_expert_mask.float()
-        scores = scores / scores.sum(dim=-1, keepdim=True).clamp(min=1e-8)
-
-        # routed experts
-        combined_output = torch.zeros_like(x_flat)
-        for k in range(self.top_k):
-            expert_indices = indices[..., k]  # which expert for this k-th position
-            expert_scores = scores[..., k : k + 1]  # score for this k-th position
-
-            # process each expert
-            for i in range(self.num_routed_experts):
-                mask = expert_indices == i
-                if mask.any():
-                    expert_input = x_flat[mask]
-                    expert_output = self.routed_experts[i](expert_input)
-                    combined_output[mask] += expert_output * expert_scores[mask]
-
-            # null experts are the ones from index >= num_routed_experts. since
-            # they dont contribute to output, no code required.
-
-        # final output
-        final_output = shared_output + combined_output
-
-        # reshape back to (batch_size, seq_len, hidden_size)
-        final_output = final_output.view(batch_size, seq_len, hidden_dim)
-
-        # track expert load for bias updates (done in training loop)
-        self.last_expert_load = self._compute_expert_load(indices)
-
-        # track routing decisions for monitoring
-        self.last_routing_logits = routing_logits
-
-        return final_output
-
-    def update_bias_terms(self, expert_load: Tensor):
-        # update routing bias to balance expert load (loss-less balancing) across all experts (real + null)
-        # Uses adaptive learning rate based on load imbalance
-
-        target_load = 1.0 / (self.num_routed_experts + self.num_null_experts)
-        load_diff = expert_load - target_load
-
-        # adaptive update rate: bigger imbalance -> bigger correction
-        update_rate = 0.1 * torch.abs(load_diff)
-
-        # update bias (outside autograd to avoid affecting gradients)
-        with torch.no_grad():
-            self.routing_bias -= update_rate * torch.sign(load_diff)
-
-    def _compute_expert_load(self, indices: Tensor) -> Tensor:
-        # Computes what fraction of tokens were routed to each expert.
-        # indices shape: (num_tokens, top_k) - expert indices selected per token
-
-        num_tokens = indices.shape[0]
-        total_experts = self.num_routed_experts + self.num_null_experts
-        expert_load = torch.zeros(total_experts, device=indices.device)
-
-        for i in range(total_experts):
-            expert_load[i] = (indices == i).sum().float() / num_tokens
-
-        return expert_load
+        y = shared_out + routed_out.view(batch_size, seq_len, hidden_size)
+        return y, aux_loss
 
 
 class TransformerBlock(nn.Module):
@@ -241,10 +301,9 @@ class TransformerBlock(nn.Module):
         num_heads=9,
         compression_ratio=8,
         intermediate_size=1536,
-        num_routed_experts=7,
-        num_shared_experts=1,
-        num_null_experts=2,
-        num_experts_per_tok=2,
+        num_experts=7,
+        topk=2,
+        data_sparsity=0.5,
         rms_norm_eps=1e-5,
         max_position_embeddings=2048,
         rope_theta=100000.0,
@@ -266,14 +325,13 @@ class TransformerBlock(nn.Module):
         # pre-moe norm
         self.post_attention_layernorm = LlamaRMSNorm(hidden_size, eps=rms_norm_eps)
 
-        # DeepSeek MOE
-        self.moe = DeepSeekMoE(
+        # MoE with null experts
+        self.moe = MoEBlock(
             hidden_size=hidden_size,
             intermediate_size=intermediate_size,
-            num_routed_experts=num_routed_experts,
-            num_shared_experts=num_shared_experts,
-            num_null_experts=num_null_experts,
-            num_experts_per_tok=num_experts_per_tok,
+            num_experts=num_experts,
+            topk=topk,
+            data_sparsity=data_sparsity,
         )
 
     def forward(self, x: Tensor, attention_mask: Tensor | None = None) -> Tensor:
@@ -284,10 +342,10 @@ class TransformerBlock(nn.Module):
 
         residual = x
         x = self.post_attention_layernorm(x)
-        x = self.moe(x)
+        x, aux_loss = self.moe(x)
         x = residual + x
 
-        return x
+        return x, aux_loss
 
 
 class DeepSeekIsh(nn.Module):
@@ -299,10 +357,9 @@ class DeepSeekIsh(nn.Module):
         num_attention_heads=9,
         compression_ratio=8,
         intermediate_size=1536,
-        num_routed_experts=7,
-        num_shared_experts=1,
-        num_null_experts=2,
-        num_experts_per_tok=2,
+        num_experts=7,
+        topk=2,
+        data_sparsity=0.5,
         rms_norm_eps=1e-5,
         max_position_embeddings=2048,
         rope_theta=100000.0,
@@ -324,10 +381,9 @@ class DeepSeekIsh(nn.Module):
                     num_heads=num_attention_heads,
                     compression_ratio=compression_ratio,
                     intermediate_size=intermediate_size,
-                    num_routed_experts=num_routed_experts,
-                    num_shared_experts=num_shared_experts,
-                    num_null_experts=num_null_experts,
-                    num_experts_per_tok=num_experts_per_tok,
+                    num_experts=num_experts,
+                    topk=topk,
+                    data_sparsity=data_sparsity,
                     rms_norm_eps=rms_norm_eps,
                     max_position_embeddings=max_position_embeddings,
                     rope_theta=rope_theta,
@@ -348,14 +404,18 @@ class DeepSeekIsh(nn.Module):
 
     def forward(
         self, input_ids: Tensor, attention_mask: Tensor | None = None
-    ) -> Tensor:
+    ) -> tuple[Tensor, Tensor]:
         # input_ids shape: (batch_size, seq_len)
 
         x = self.embed_tokens(input_ids)  # (batch, seq_len, hidden_size)
 
+        # accumulate aux losses from all moe layers
+        total_aux_loss = torch.tensor(0.0, device=x.device, dtype=x.dtype)
+
         # pass through the transformer blocks
         for layer in self.layers:
-            x = layer(x, attention_mask)
+            x, aux_loss = layer(x, attention_mask)
+            total_aux_loss = total_aux_loss + aux_loss
 
         # final norm
         x = self.norm(x)
@@ -367,7 +427,7 @@ class DeepSeekIsh(nn.Module):
         else:
             logits = F.linear(x, self.embed_tokens.weight)
 
-        return logits
+        return logits, total_aux_loss
 
     def _init_weights(self, module):
         std = 1.0 / 24.0  # 0.041666666666666664
