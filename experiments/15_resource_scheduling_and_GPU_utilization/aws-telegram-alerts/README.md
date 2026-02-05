@@ -61,7 +61,7 @@ chmod +x setup.sh
 ./setup.sh \
   --telegram-token 123456789:ABCdef... \
   --telegram-chat-id -1001234567890 \
-  --region ap-south-1
+  --region us-east-1
 ```
 
 After running once, new EC2 instances automatically get alarms via EventBridge.
@@ -104,7 +104,7 @@ After running once, new EC2 instances automatically get alarms via EventBridge.
 Account: 123456789012
 Alarm: my-server-cpu-idle
 Status: ALARM
-Region: ap-south-1
+Region: us-east-1
 
 Metric: CPUUtilization
 Dimensions: InstanceId=i-0abc123
@@ -122,7 +122,7 @@ Time: 03-Feb-2026 09:30:45 PM IST
 Account: 123456789012
 Instance: my-server (i-0abc123)
 Alarm: my-server-cpu-idle
-Region: ap-south-1
+Region: us-east-1
 Threshold: CPU < 10%
 
 Time: 03-Feb-2026 09:30:45 PM IST

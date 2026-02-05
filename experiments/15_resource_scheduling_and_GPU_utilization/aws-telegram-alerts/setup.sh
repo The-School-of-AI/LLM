@@ -173,7 +173,17 @@ def lambda_handler(event, context):
             message = event['Records'][0]['Sns']['Message']
             try:
                 alarm = json.loads(message)
-                text = format_alarm(alarm, account_id)
+                # Extract instance name using EC2 API
+                instance_id = None
+                region = alarm.get('Region', os.environ.get('AWS_REGION', 'us-east-1'))
+                for dim in alarm.get('Trigger', {}).get('Dimensions', []):
+                  if dim.get('name') == 'InstanceId':
+                    instance_id = dim.get('value')
+                    break
+
+                instance_name = get_instance_name(instance_id)
+
+                text = format_alarm(alarm, account_id, instance_name)
             except json.JSONDecodeError:
                 text = "📢 *AWS Alert* ({})\n\n{}".format(account_id, message)
         else:
@@ -186,7 +196,25 @@ def lambda_handler(event, context):
         send_telegram(bot_token, chat_id, "❌ *Error* ({}): {}".format(account_id, str(e)))
         raise
 
-def format_alarm(alarm, account_id):
+def get_instance_name(instance_id):
+    if instance_id:
+      try:
+        import boto3
+        ec2 = boto3.client('ec2')
+        response = ec2.describe_instances(InstanceIds=[instance_id])
+        tags = response['Reservations'][0]['Instances'][0].get('Tags', [])
+        for tag in tags:
+          if tag['Key'] == 'Name':
+            return tag['Value']
+            break
+      except Exception:
+          instance_name = instance_id
+    else:
+      instance_name = None
+
+    return instance_name
+
+def format_alarm(alarm, account_id, instance_name=None):
     name = alarm.get('AlarmName', 'Unknown')
     state = alarm.get('NewStateValue', 'Unknown')
     reason = alarm.get('NewStateReason', 'N/A')
@@ -217,20 +245,21 @@ def format_alarm(alarm, account_id):
         dim_str = 'N/A'
 
     lines = [
-        "{} *CPU Idle: {}*".format(emoji, name),
-        "",
-        "*Account:* {}".format(account_id),
-        "*Alarm:* {}".format(name),
-        "*Status:* {}".format(state),
-        "*Region:* {}".format(region),
-        "",
-        "*Metric:* {}".format(metric),
-        "*Dimensions:* {}".format(dim_str),
-        "*Threshold:* {}".format(threshold),
-        "",
-        "*Reason:* {}".format(reason),
-        "",
-        "*Time:* {}".format(time_str)
+      "{} *CPU Idle: {}*".format(emoji, instance_name if instance_name else name),
+      "",
+      "*Account:* {}".format(account_id),
+      "*Alarm:* {}".format(name),
+      "*Status:* {}".format(state),
+      "*Region:* {}".format(region),
+      "*Instance Name:* {}".format(instance_name if instance_name else "N/A"),
+      "",
+      "*Metric:* {}".format(metric),
+      "*Dimensions:* {}".format(dim_str),
+      "*Threshold:* {}".format(threshold),
+      "",
+      "*Reason:* {}".format(reason),
+      "",
+      "*Time:* {}".format(time_str)
     ]
     return "\n".join(lines)
 
@@ -324,6 +353,7 @@ import urllib.parse
 from datetime import datetime, timedelta
 
 cloudwatch = boto3.client('cloudwatch')
+
 ec2 = boto3.client('ec2')
 
 # Configuration from environment
@@ -381,15 +411,22 @@ def lambda_handler(event, context):
     return {'statusCode': 200, 'body': 'Alarm created: {}'.format(alarm_name)}
 
 def get_instance_name(instance_id):
-    try:
+    if instance_id:
+      try:
         response = ec2.describe_instances(InstanceIds=[instance_id])
         tags = response['Reservations'][0]['Instances'][0].get('Tags', [])
         for tag in tags:
-            if tag['Key'] == 'Name':
-                return tag['Value']
-    except Exception:
-        pass
-    return instance_id
+          if tag['Key'] == 'Name':
+            return tag['Value']
+            break
+      except Exception:
+          instance_name = instance_id
+    else:
+      instance_name = None
+
+    return instance_name
+
+
 
 def notify_telegram(instance_id, instance_name, alarm_name, region):
     ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
