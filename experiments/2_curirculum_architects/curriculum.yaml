@@ -5,7 +5,7 @@
 # Any deviation requires escalation + re-freeze.
 # ============================================================
 
-version: "0.4"
+version: "0.5"
 owner_team: "Team 2: Curriculum Architects"
 status: "DRAFT"  # "FROZEN"
 frozen_on: "2026-02-02"
@@ -28,8 +28,6 @@ global_contract:
     violation_action: "REJECT_OR_HALT"
   rejection_reasons:
     - "language_not_en_or_indic"
-    - "indic_not_allowed_at_stage"
-    - "agentic_not_allowed_in_band_at_stage"
     - "below_minimum_token_threshold"
 
 # ============================================================
@@ -43,7 +41,7 @@ language_and_context:
       - lang: "en"
         max_share: 0.92
     secondary_languages:
-      - lang: "hi"
+      - lang: "indic"
         max_share: 0.08
         earliest_stage: "1B"
     excluded_languages: ["zh", "ja", "ko", "fr", "de", "es"]

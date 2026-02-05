@@ -1,21 +1,8 @@
-"""Rejection policy metric that enforces canonical curriculum rejection reasons.
-
-This metric enforces a small, safe subset of curriculum-level rejections at
-extraction time:
-
-- language_not_en_or_indic: rejects samples whose declared language is not
-  in the approved primary/secondary language lists
-- below_minimum_token_threshold: rejects samples with token counts below the
-  curriculum-configured minimum (approximate token count via whitespace)
-
-NOTE: Stage- and band-aware rules (e.g. indic_not_allowed_at_stage,
-agentic_not_allowed_in_band_at_stage) are intentionally NOT enforced here
-because band/stage assignment happens downstream in post-processing.
-"""
+"""Rejection policy metric for curriculum tags."""
 
 from typing import Any, Dict, List
 
-from ..core.plugin import ExtractionResult, MetricPlugin, ReadOnlyRecord
+from ..core.plugin import MetricPlugin
 
 
 class RejectionPolicyMetric(MetricPlugin):
@@ -25,7 +12,6 @@ class RejectionPolicyMetric(MetricPlugin):
     """
 
     name = "rejection_policy"
-    level = 0
     INDIC_SCRIPT_RANGES = [
         (0x0900, 0x097F),  # Devanagari (Hindi, Marathi, Sanskrit)
         (0x0980, 0x09FF),  # Bengali
@@ -38,11 +24,8 @@ class RejectionPolicyMetric(MetricPlugin):
         (0x0D00, 0x0D7F),  # Malayalam
     ]
 
-    def compute(self, record: ReadOnlyRecord) -> Dict[str, Any]:
-        # Provide a simple marker that the check ran
-        return {"policy_checked": True}
-
-    def extract(self, record: ReadOnlyRecord) -> ExtractionResult:
+    def compute(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute rejection status based on policy."""
         # Access curriculum config via self.config
         cfg = self.config
 
