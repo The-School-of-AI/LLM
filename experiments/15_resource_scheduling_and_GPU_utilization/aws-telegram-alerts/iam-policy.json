@@ -27,7 +27,9 @@
         "lambda:DeleteFunction",
         "lambda:GetFunction",
         "lambda:AddPermission",
-        "lambda:TagResource"
+        "lambda:TagResource",
+        "lambda:GetFunctionConfiguration",
+        "lambda:InvokeFunction"
       ],
       "Resource": [
         "arn:aws:lambda:*:*:function:telegram-*",
