@@ -12,8 +12,7 @@ SimpleQA_Verified
 HumanEval
 APPS (Automated Programming Progress Standard)
 AIME 2025
-"MSGS (Mixed Signals Generalization Set)
-(Diagnostics)"
+"MSGS (Mixed Signals Generalization Set)(Diagnostics)"
 BLiMP
 IndicGLUE
 IndicQA
@@ -24,6 +23,3 @@ Indic-Bias (FairITales)
 IndicMMLU-Pro
 HellaSwag
 Winogrande
-PIQA
-LAMBADA (language modeling)
-Tools and Agent-TBD

@@ -1,43 +1,44 @@
 stage: "1b"
-description: "Pre-training benchmarks for 1B model (Base Capability Profile)"
+description: "Pre-training benchmarks for 1B model (Frontier Phase)"
 benchmarks:
   # Standard Harness Benchmarks
   - name: "MMLU"
     enabled: true
     harness_task: "mmlu"
-    shots: 0
-    subjects: ["elementary_mathematics", "high_school_biology", "high_school_chemistry", "high_school_physics", "high_school_computer_science", "high_school_us_history", "high_school_geography", "high_school_psychology"]
+    shots: 5
     phases: ["pretraining"]
 
   - name: "TriviaQA"
     enabled: true
     harness_task: "triviaqa"
-    shots: 0
+    shots: 5
+    cot: true
     phases: ["pretraining"]
 
   - name: "GSM8K"
     enabled: true
     harness_task: "gsm8k"
-    shots: 5
+    shots: 16
+    cot: true
     phases: ["pretraining"]
 
   - name: "BBH (Big Bench Hard)"
     enabled: true
-    harness_task: "bbh_zeroshot"
-    shots: 0
-    tasks: ["boolean_expressions", "sports_understanding", "word_sorting", "date_understanding", "object_counting"]
+    harness_task: "bbh_cot_fewshot"
+    shots: 3
+    cot: true
     phases: ["pretraining"]
 
   - name: "ARC-Challenge"
     enabled: true
     harness_task: "arc_challenge"
-    shots: 0
+    shots: 25
     phases: ["pretraining"]
 
   - name: "MATH"
     enabled: true
     harness_task: "hendrycks_math"
-    shots: 0
+    shots: 8
     phases: ["pretraining"]
 
   - name: "IFEval"
@@ -49,33 +50,38 @@ benchmarks:
   - name: "HumanEval"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
-    shots: 5
+    shots: 0
+    phases: ["pretraining"]
+
+  - name: "MSGS"
+    enabled: false
+    harness_task: "msgs"
+    shots: 0
     phases: ["pretraining"]
 
   - name: "BLiMP"
     enabled: true
     harness_task: "blimp"
     shots: 0
-    tasks: ["regular_plural_subject_verb_agreement_1", "determiner_noun_agreement_with_adj_2", "distractor_agreement_relative_clause"]
     phases: ["pretraining"]
 
   - name: "TruthfulQA"
     enabled: true
     harness_task: "truthfulqa"
-    mode: "MC1"
+    mode: "MC2"
     shots: 0
     phases: ["pretraining"]
 
   - name: "HellaSwag"
     enabled: true
     harness_task: "hellaswag"
-    shots: 5
+    shots: 0
     phases: ["pretraining"]
 
   - name: "Winogrande"
     enabled: true
     harness_task: "winogrande"
-    shots: 5
+    shots: 0
     phases: ["pretraining"]
 
   - name: "PIQA"
@@ -94,23 +100,25 @@ benchmarks:
   - name: "SimpleQA_Verified"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
+    paradigm: "Hard Filtering"
     phases: ["pretraining"]
 
   - name: "AIME 2025"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
-    paradigm: "0-shot (Baseline)"
+    paradigm: "8-shot CoT"
     phases: ["pretraining"]
 
   - name: "IndicGLUE"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
-    tasks: ["iitp-movie-reviews", "bbc-news-articles", "article-genre-classification"]
+    tasks: ["indic-wnli", "indic-copa", "xquad-in"]
     phases: ["pretraining"]
 
   - name: "IndicQA"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
+    paradigm: "5-10 shot"
     phases: ["pretraining"]
 
   - name: "L-Eval"
@@ -121,10 +129,20 @@ benchmarks:
   - name: "RULER"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
-    tasks: ["niah_single_1"]
+    tasks: ["longchat_qa"]
     phases: ["pretraining"]
 
   - name: "Indic-Bias (FairITales)"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
+    phases: ["pretraining"]
+
+  - name: "HELM Safety"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/helm_safety.py"
+    phases: ["pretraining"]
+
+  - name: "SWE-bench Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
     phases: ["pretraining"]

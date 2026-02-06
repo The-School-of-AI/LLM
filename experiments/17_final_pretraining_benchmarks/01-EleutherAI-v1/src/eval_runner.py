@@ -60,42 +60,58 @@ def generate_summary_report(results, run_dir):
 
         for b in results["benchmarks"]:
             score = b.get("score", "N/A")
-            subtask_count = len(b.get("subtasks", []))
+            subtasks = b.get("subtasks", [])
+            subtask_count = len(subtasks)
+            
+            subtasks_col = str(subtask_count)
+            if subtask_count > 0:
+                # Small preview for the summary table
+                preview_list = [f"• {st['task']}" for st in sorted(subtasks, key=lambda x: x['task'])[:5]]
+                preview_text = "<br>".join(preview_list)
+                if subtask_count > 5:
+                    preview_text += f"<br>... and {subtask_count - 5} more"
+                subtasks_col = f"<details><summary>{subtask_count} tasks</summary>{preview_text}</details>"
+
             f.write(
-                f"| **{b['name']}** | {b.get('type', 'N/A')} | {b['status']} | **{score}** | {subtask_count} |\n"
+                f"| **{b['name']}** | {b.get('type', 'N/A')} | {b['status']} | **{score}** | {subtasks_col} |\n"
             )
 
+        # ---------------------------------------------------------
+        # Detailed Results (Expandable)
+        # ---------------------------------------------------------
         f.write("\n\n## Detailed Results (per subject/subset)\n\n")
-        f.write("| Task/Subject | Status | Score | Error |\n")
+        f.write("| Task/Subject | Status | Score | Details |\n")
         f.write("| :--- | :--- | :--- | :--- |\n")
 
         for b in results["benchmarks"]:
             if b["status"] == "failed":
                 f.write(
-                    f"| **{b['name']} (FAILED)** | error | - | {b.get('error')} |\n"
+                    f"| **{b['name']} (FAILED)** | error | - | {b.get('error', '')[:300]} |\n"
                 )
                 continue
 
-            # Header for high-level benchmark
             score = b.get("score", "N/A")
-            f.write(
-                f"| **{b['name']} (Aggregate)** | {b['status']} | **{score}** | - |\n"
-            )
+            subtasks = b.get("subtasks", [])
+            
+            if not subtasks:
+                f.write(
+                    f"| **{b['name']}** | {b['status']} | **{score}** | - |\n"
+                )
+            else:
+                # Construct HTML list for the details cell
+                subtask_items = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" 
+                                       for st in sorted(subtasks, key=lambda x: x['task'])])
+                details_md = (
+                    f"<details><summary><b>Expand {len(subtasks)} tasks</b></summary>"
+                    f"<ul>{subtask_items}</ul></details>"
+                )
+                f.write(
+                    f"| **{b['name']} (Aggregate)** | {b['status']} | **{score}** | {details_md} |\n"
+                )
 
-            # Granular sub-tasks
-            if b.get("subtasks"):
-                # Sort subtasks by name for better readability
-                sorted_subtasks = sorted(b["subtasks"], key=lambda x: x["task"])
-                for st in sorted_subtasks:
-                    s = st.get("score", "N/A")
-                    f.write(
-                        f"| &nbsp;&nbsp;&nbsp;&nbsp;↳ {st['task']} | {b['status']} | {s} | - |\n"
-                    )
-
-    # ---------------------------------------------------------
-    # Add CSV-Friendly Section for Comparative Analysis
-    # ---------------------------------------------------------
-    with open(report_path, "a") as f:
+        # ---------------------------------------------------------
+        # Add CSV-Friendly Section for Comparative Analysis
+        # ---------------------------------------------------------
         f.write("\n\n## Competitive Analysis Data (CSV Format)\n")
         f.write("Use this data to compare across multiple runs/models.\n\n")
         f.write("```csv\n")
@@ -113,8 +129,8 @@ def generate_summary_report(results, run_dir):
                     .split("pretrained=")[1]
                     .split(",")[0]
                 )
-            except Exception as e:
-                print(f"Error extracting model name from model args: {e}")
+            except Exception:
+                pass
 
         for b in results["benchmarks"]:
             bench_name = b["name"]
@@ -125,8 +141,9 @@ def generate_summary_report(results, run_dir):
                 f"{stage},{phase},{model_name},{timestamp},{bench_name},AGGREGATE,primary,{agg_score}\n"
             )
 
-            # Subtask Rows
-            if b.get("subtasks"):
+            # Subtask Rows - Only write if count is small to avoid junk in CSV too (or make it optional)
+            # User specifically complained about junk report.
+            if b.get("subtasks") and len(b["subtasks"]) <= 20: 
                 for st in b["subtasks"]:
                     task_name = st["task"]
                     score = st.get("score", "N/A")
@@ -135,6 +152,7 @@ def generate_summary_report(results, run_dir):
                     )
 
         f.write("```\n")
+
 
     return report_path
 

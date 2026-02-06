@@ -1,5 +1,5 @@
 stage: "3b"
-description: "Pre-training benchmarks for 3B model (Intermediate Knowledge/Reasoning)"
+description: "Pre-training benchmarks for 3B model (Frontier Phase)"
 benchmarks:
   # Standard Harness Benchmarks
   - name: "MMLU"
@@ -11,32 +11,34 @@ benchmarks:
   - name: "TriviaQA"
     enabled: true
     harness_task: "triviaqa"
-    shots: 3
+    shots: 5
+    cot: true
     phases: ["pretraining"]
 
   - name: "GSM8K"
     enabled: true
     harness_task: "gsm8k"
-    shots: 5
+    shots: 16
+    cot: true
     phases: ["pretraining"]
 
   - name: "BBH (Big Bench Hard)"
     enabled: true
-    harness_task: "bbh_fewshot"
-    shots: 2
-    tasks: ["causal_judgement", "disambiguation_qa", "movie_recommendation", "navigate", "ruin_names", "hyperbaton", "reasoning_about_colored_objects"]
+    harness_task: "bbh_cot_fewshot"
+    shots: 3
+    cot: true
     phases: ["pretraining"]
 
   - name: "ARC-Challenge"
     enabled: true
     harness_task: "arc_challenge"
-    shots: 5
+    shots: 25
     phases: ["pretraining"]
 
   - name: "MATH"
     enabled: true
     harness_task: "hendrycks_math"
-    shots: 0
+    shots: 8
     phases: ["pretraining"]
 
   - name: "IFEval"
@@ -51,17 +53,22 @@ benchmarks:
     shots: 0
     phases: ["pretraining"]
 
+  - name: "MSGS"
+    enabled: false
+    harness_task: "msgs"
+    shots: 0
+    phases: ["pretraining"]
+
   - name: "BLiMP"
     enabled: true
     harness_task: "blimp"
     shots: 0
-    tasks: ["regular_plural_subject_verb_agreement_1", "determiner_noun_agreement_with_adj_2", "distractor_agreement_relative_clause"]
     phases: ["pretraining"]
 
   - name: "TruthfulQA"
     enabled: true
     harness_task: "truthfulqa"
-    mode: "MC1"
+    mode: "MC2"
     shots: 0
     phases: ["pretraining"]
 
@@ -93,25 +100,25 @@ benchmarks:
   - name: "SimpleQA_Verified"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
-    paradigm: "Strict Zero-Shot"
+    paradigm: "Hard Filtering"
     phases: ["pretraining"]
 
   - name: "AIME 2025"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
-    paradigm: "3-shot"
+    paradigm: "8-shot CoT"
     phases: ["pretraining"]
 
   - name: "IndicGLUE"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
-    tasks: ["iitp-movie-reviews", "bbc-news-articles", "article-genre-classification"]
+    tasks: ["indic-wnli", "indic-copa", "xquad-in"]
     phases: ["pretraining"]
 
   - name: "IndicQA"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
-    paradigm: "1-shot"
+    paradigm: "5-10 shot"
     phases: ["pretraining"]
 
   - name: "L-Eval"
@@ -122,10 +129,20 @@ benchmarks:
   - name: "RULER"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
-    tasks: ["variable_tracking"]
+    tasks: ["longchat_qa"]
     phases: ["pretraining"]
 
   - name: "Indic-Bias (FairITales)"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
+    phases: ["pretraining"]
+
+  - name: "HELM Safety"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/helm_safety.py"
+    phases: ["pretraining"]
+
+  - name: "SWE-bench Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
     phases: ["pretraining"]

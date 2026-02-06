@@ -25,9 +25,8 @@ benchmarks:
   - name: "BBH (Big Bench Hard)"
     enabled: true
     harness_task: "bbh_cot_fewshot"
-    shots: 5
+    shots: 3
     cot: true
-    tasks: ["all_23_tasks"]
     phases: ["pretraining"]
 
   - name: "ARC-Challenge"
@@ -55,7 +54,7 @@ benchmarks:
     phases: ["pretraining"]
 
   - name: "MSGS"
-    enabled: true
+    enabled: false
     harness_task: "msgs"
     shots: 0
     phases: ["pretraining"]
@@ -64,7 +63,6 @@ benchmarks:
     enabled: true
     harness_task: "blimp"
     shots: 0
-    tasks: ["wh_island", "adjunct_island", "complex_np_island", "npi_present_1", "npi_present_2", "superlative_quantifiers_1"]
     phases: ["pretraining"]
 
   - name: "TruthfulQA"
