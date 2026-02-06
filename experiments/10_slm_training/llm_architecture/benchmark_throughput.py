@@ -568,10 +568,18 @@ def analyze_sequence_scaling(results: List[BenchmarkResult]) -> SequenceScalingM
         # For attention-bound models, latency scales with n² due to attention
         metrics.is_linear_scaling = abs(metrics.latency_scaling_exponent - 1.0) < 0.3
         
-        # Scaling efficiency: 1.0 = perfect linear, 0.5 = quadratic
-        # Based on latency exponent (1 = linear, 2 = quadratic)
-        if metrics.latency_scaling_exponent > 0:
-            metrics.scaling_efficiency = min(1.0, 1.0 / metrics.latency_scaling_exponent)
+        # Scaling efficiency: measures how well throughput scales with sequence length
+        # 1.0 = perfect (throughput increases linearly with seq_len)
+        # 0.5 = throughput stays constant (typical for memory-bound)
+        # <0.5 = throughput degrades (quadratic attention)
+        # Calculated as: actual_throughput_ratio / ideal_throughput_ratio
+        if len(metrics.throughputs) >= 2 and metrics.throughputs[0] > 0:
+            seq_ratio = metrics.seq_lengths[-1] / metrics.seq_lengths[0]
+            throughput_ratio = metrics.throughputs[-1] / metrics.throughputs[0]
+            # Ideal: throughput scales linearly with seq (constant time per token)
+            # So throughput_ratio should equal seq_ratio for perfect scaling
+            # But for most models, throughput_ratio < seq_ratio due to overhead
+            metrics.scaling_efficiency = throughput_ratio / seq_ratio if seq_ratio > 0 else 0.0
     
     return metrics
 
@@ -757,6 +765,17 @@ def run_inference_benchmark(
     result.memory.peak_allocated_gb = get_peak_memory_gb(device, model=model, dtype=dtype)
     result.memory.peak_reserved_gb = get_reserved_memory_gb(device)
     
+    # Add memory breakdown for inference
+    dtype_size = 2 if dtype in [torch.float16, torch.bfloat16] else 4
+    result.memory.model_size_gb = sum(p.numel() for p in model.parameters()) * dtype_size / 1e9
+    result.memory.kv_cache_gb = estimate_kv_cache_size(config, batch_size, seq_len, dtype)
+    result.memory.activation_memory_gb = estimate_activation_memory(config, batch_size, seq_len, dtype) * 0.3  # Inference uses ~30% of training activations
+    
+    # Memory efficiency for inference
+    useful_memory = result.memory.model_size_gb + result.memory.kv_cache_gb
+    if result.memory.peak_allocated_gb > 0:
+        result.memory.memory_efficiency = useful_memory / result.memory.peak_allocated_gb
+    
     total_time_sec = sum(latencies) / 1000
     total_tokens = batch_size * seq_len * benchmark_iters
     
@@ -869,6 +888,12 @@ def run_training_benchmark(
     training_flops_per_seq = estimate_forward_flops(config) * seq_len * 3
     total_flops = training_flops_per_seq * batch_size * benchmark_iters
     result.throughput.tflops_achieved = total_flops / total_time_sec / 1e12
+    
+    # Calculate Training MFU
+    device_info = get_device_info(device)
+    if "theoretical_tflops_fp16" in device_info:
+        theoretical = device_info["theoretical_tflops_fp16"]
+        result.throughput.mfu = result.throughput.tflops_achieved / theoretical if theoretical > 0 else 0
     
     # Calculate arithmetic intensity for training
     if result.memory.peak_allocated_gb > 0:
