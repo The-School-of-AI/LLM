@@ -24,9 +24,9 @@ PROFILE_STEPS="10-12"  # Not used by ncu - just kept for documentation
 
 # Training hyperparameters (optimized for Tesla T4 14GB)
 MAX_STEPS=12
-BATCH_SIZE=1
+BATCH_SIZE=6
 GRADIENT_ACCUMULATION=1
-SEQ_LENGTH= 256
+SEQ_LENGTH=2048
 LEARNING_RATE=3e-4
 EXPERIMENT_NAME="kernel_profiling_${PROFILE_NAME}"
 
@@ -95,7 +95,7 @@ source "${PROJECT_ROOT}/.venv/bin/activate"
 
 # Run ncu with full analysis sections
 # NOTE: sudo is required because RmProfilingAdminOnly=1 restricts GPU performance counters
-/opt/nvidia/nsight-compute/2025.4.1/ncu \
+ncu \
   -f \
   --set full \
   --target-processes all \

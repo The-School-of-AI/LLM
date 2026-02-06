@@ -740,7 +740,7 @@ Note: CLI arguments always override config file values.
     # )
 
     model = LLM(model_config)
-    model.gradient_checkpointing_enable()
+    #model.gradient_checkpointing_enable()
     trainer = Trainer(
         model=model,
         train_dataloader=dataloader,

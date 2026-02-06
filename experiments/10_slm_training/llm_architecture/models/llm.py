@@ -30,6 +30,13 @@ from components.embeddings.token_embedding import TokenEmbedding
 from components.embeddings.rotary_embedding import RotaryEmbedding
 from components.embeddings.yarn_embedding import YaRNRotaryEmbedding
 from components.normalization.rms_norm import RMSNorm
+# Use Triton-optimized version when available
+try:
+    from components.kernels.triton_normalization import TritonRMSNorm
+    USE_TRITON_NORM = True
+except ImportError:
+    USE_TRITON_NORM = False
+    TritonRMSNorm = RMSNorm  # Fallback
 from components.attention.grouped_query_attention import create_causal_mask
 from components.heads.multi_token_head import (
     LMHead,
@@ -98,7 +105,7 @@ class LLM(nn.Module):
         self.layers = TransformerBlockList(config)
         
         # Final normalization
-        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.norm = TritonRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         
         # Output head - always untied (following DeepSeek V3)
         # This ensures consistent behavior as model scales (only FFN grows)

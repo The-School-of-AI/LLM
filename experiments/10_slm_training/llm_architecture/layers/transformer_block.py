@@ -29,6 +29,13 @@ from components.ffn.swiglu_ffn import SwiGLUFFN
 
 # Import normalization
 from components.normalization.rms_norm import RMSNorm
+# Use Triton-optimized version when available
+try:
+    from components.kernels.triton_normalization import TritonRMSNorm
+    USE_TRITON_NORM = True
+except ImportError:
+    USE_TRITON_NORM = False
+    TritonRMSNorm = RMSNorm  # Fallback
 
 # Import connections
 from components.connections.mhc import (
@@ -70,13 +77,13 @@ class TransformerBlock(nn.Module):
         self.hidden_size = config.hidden_size
         
         # Pre-attention normalization
-        self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = TritonRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         
         # Attention - select based on config
         self.attention = self._create_attention(config, layer_idx)
         
         # Post-attention normalization
-        self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = TritonRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         
         # FFN
         self.ffn = self._create_ffn(config)

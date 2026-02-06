@@ -1,0 +1,42 @@
+{
+  "config": {
+    "max_steps": 100,
+    "max_epochs": null,
+    "batch_size": 6,
+    "gradient_accumulation_steps": 1,
+    "seq_length": 2048,
+    "learning_rate": 0.0003,
+    "min_learning_rate": 1e-05,
+    "weight_decay": 0.1,
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "eps": 1e-08,
+    "warmup_steps": 20,
+    "lr_decay_style": "cosine",
+    "gradient_clip": 1.0,
+    "dropout": 0.0,
+    "use_amp": true,
+    "amp_dtype": "bfloat16",
+    "device": "cuda",
+    "save_interval": 200,
+    "checkpoint_dir": "./checkpoints/wikitext2_gpt2",
+    "log_interval": 10,
+    "eval_interval": 500,
+    "experiment_name": "wikitext2_gpt2",
+    "seed": 42
+  },
+  "final_metrics": {
+    "step": 100,
+    "epoch": 0,
+    "loss": 6.387973785400391,
+    "learning_rate": 0.0,
+    "tokens_per_second": 0.0,
+    "samples_per_second": 0.0,
+    "grad_norm": 0.0,
+    "tokens_seen": 1228800,
+    "elapsed_time": 274.0219931602478,
+    "main_loss": null,
+    "aux_loss": null
+  },
+  "history_length": 100
+}
