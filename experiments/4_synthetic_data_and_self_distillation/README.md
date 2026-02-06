@@ -1,0 +1,558 @@
+# Synthetic Data Pipeline v2
+
+A complete synthetic data generation, validation, and injection pipeline for LLM training. Designed to fix predicted benchmark weaknesses through targeted, stage-aligned synthetic data — without leaking evaluation data.
+
+## Project Overview
+
+This pipeline implements **Team 4: Synthetic Data & Self-Distillation** requirements for controlled capability acceleration during LLM training.
+
+### Core Philosophy
+
+> "You are NOT exploring. You are prescribing in advance."
+>
+> Synthetic data is not exploratory and not reactive. It is pre-planned, targeted, and gated by tests defined before training begins.
+
+### What This Pipeline Does
+
+1. **Pre-generates** synthetic reasoning and code data BEFORE training
+2. **Diagnoses** model weaknesses using 50 lightweight tests
+3. **Injects** targeted data patches when weaknesses are detected
+4. **Validates** improvements using proxy model fine-tuning
+5. **Prevents** benchmark contamination through deduplication
+6. **Verifies** data quality through teacher-student agreement
+
+## Architecture
+
+```
+PHASE 1: PREPARATION (Before Training)
+======================================
+generate-bank    -> Pre-generate for all 45 skills
+import-synth     -> Import from external datasets (PleIAs/SYNTH)
+status           -> Check what's ready
+
+synth_data_bank/
+├── manifest.json
+├── RSN-ARITH.jsonl          (10 samples)
+├── RSN-LOG.jsonl            (5 samples)
+├── CODE-ALGO.jsonl          (5 samples)
+├── INDIC-QA.jsonl           (50 samples)
+└── ... (45 skill shards)
+
+PHASE 2: INJECTION (During Training)
+====================================
+diagnose              -> Run 50 tests, find weak skills
+inject                -> Pull from bank, filter by stage bands
+check-contamination   -> Verify no benchmark overlap
+verify                -> Teacher-student verification
+validate              -> Measure before/after delta with LoRA
+```
+
+## Quick Start
+
+```bash
+# 1. Install dependencies
+pip install pyyaml datasets transformers peft accelerate torch
+
+# 2. Install Ollama and pull models
+ollama pull qwen3:8b   # Teacher/generator model
+ollama pull qwen3:4b   # Student/diagnostic model
+ollama pull qwen2.5:1.5b  # Proxy validation model
+
+# 3. Pre-generate data bank (do this ONCE)
+cd synth-pipeline-v2
+python run_pipeline.py generate-bank --all --num 30
+
+# 4. Check what's ready
+python run_pipeline.py status -v
+
+# 5. Run diagnostics to find weaknesses
+python run_pipeline.py diagnose --model qwen3:4b -o report.json
+
+# 6. Prepare injection from weak skills
+python run_pipeline.py inject --weakness-report report.json --stage SFT -o injection.jsonl
+
+# 7. Check for benchmark contamination
+python run_pipeline.py check-contamination injection.jsonl --report contamination.json
+
+# 8. Validate improvement with proxy model
+python run_pipeline.py validate injection.jsonl
+```
+
+## Commands Reference
+
+| Command | Phase | Purpose |
+|---------|-------|---------|
+| `generate-bank` | 1 | Pre-generate data for all/some skills |
+| `import-synth` | 1 | Import samples from PleIAs/SYNTH dataset |
+| `status` | 1 | Show bank status and sample counts |
+| `rebuild-manifest` | 1 | Rebuild manifest from existing shards |
+| `diagnose` | 2 | Run 50 diagnostic tests, find weaknesses |
+| `inject` | 2 | Prepare injection with stage band filtering |
+| `check-contamination` | 2 | Check against GSM8K, MATH, MMLU |
+| `verify` | 2 | Teacher-student verification pipeline |
+| `validate` | 2 | LoRA fine-tune + measure delta |
+| `seeds` | - | Generate seed questions only |
+| `generate` | - | Generate for single skill |
+
+## Detailed Command Usage
+
+### generate-bank
+
+Pre-generate synthetic data for all or specific skills.
+
+```bash
+# Generate for all 45 skills
+python run_pipeline.py generate-bank --all --num 50
+
+# Generate for specific skills (canonical names)
+python run_pipeline.py generate-bank --skills RSN-ARITH RSN-LOG --num 30
+
+# Legacy aliases also work
+python run_pipeline.py generate-bank --skills RSN-ARITHMETIC RSN-LOGIC --num 30
+
+# Use built-in seeds (faster, no LLM generation for seeds)
+python run_pipeline.py generate-bank --all --builtin-seeds --num 20
+
+# Specify model
+python run_pipeline.py generate-bank --all --model qwen3:8b --num 50
+```
+
+### import-synth
+
+Import samples from the PleIAs/SYNTH dataset (79M samples with CoT).
+
+```bash
+# Import 1000 English samples
+python run_pipeline.py import-synth --num 1000 --language en
+
+# Filter by specific bands (B3-B5 for SFT)
+python run_pipeline.py import-synth --num 5000 --language en --bands B3 B4 B5
+
+# Filter by skills
+python run_pipeline.py import-synth --num 1000 --skills RSN-ARITH RSN-ALG
+```
+
+### diagnose
+
+Run 50 lightweight diagnostic tests to identify weak skills.
+
+```bash
+# Full diagnostics
+python run_pipeline.py diagnose --model qwen3:4b -o report.json
+
+# Filter by band or skill
+python run_pipeline.py diagnose --model qwen3:4b --band B3
+python run_pipeline.py diagnose --model qwen3:4b --skill RSN-ARITH
+
+# Quiet mode (no per-test output)
+python run_pipeline.py diagnose --model qwen3:4b -o report.json --quiet
+```
+
+### inject
+
+Prepare injection data from bank with automatic stage band filtering.
+
+```bash
+# From weakness report (recommended)
+python run_pipeline.py inject --weakness-report report.json --stage SFT -o injection.jsonl
+
+# For specific skills
+python run_pipeline.py inject --skills RSN-ARITH RSN-LOG --stage SFT
+
+# Different stages (PRE, SFT, DPO, RLHF)
+python run_pipeline.py inject --skills CODE-ALGO --stage DPO -o dpo_data.jsonl
+```
+
+**Stage Band Restrictions:**
+
+| Stage | Allowed Bands | Cap |
+|-------|---------------|-----|
+| PRE | B0-B5 | 5% |
+| SFT | B3-B5 only | 10% |
+| DPO | B3-B5 only | 10% |
+| RLHF | B4-B5 only | 5% |
+
+### check-contamination
+
+Check data against benchmark datasets to prevent evaluation leakage.
+
+```bash
+# Basic check
+python run_pipeline.py check-contamination injection.jsonl --report report.json
+
+# Filter out contaminated samples
+python run_pipeline.py check-contamination injection.jsonl --filter -o clean.jsonl
+
+# Check specific benchmarks
+python run_pipeline.py check-contamination injection.jsonl --benchmarks gsm8k mmlu
+```
+
+**Supported Benchmarks:**
+
+- GSM8K (1,319 grade school math questions)
+- MMLU (14,042 multitask questions)
+- MATH (competition math - requires HF access)
+
+### verify
+
+Run teacher-student verification to ensure data quality.
+
+```bash
+# Basic verification
+python run_pipeline.py verify injection.jsonl
+
+# Specify models
+python run_pipeline.py verify injection.jsonl --teacher qwen3:8b --student qwen3:4b
+
+# Custom output path
+python run_pipeline.py verify injection.jsonl -o verified_data.jsonl
+```
+
+**Verification Checks:**
+
+1. **Teacher check**: Large model solves and compares to expected
+2. **Student check**: Small model re-solves independently
+3. **Consistency check**: Reasoning matches final answer
+
+### validate
+
+Run full LoRA fine-tuning validation to measure improvement.
+
+```bash
+# Basic validation (uses Qwen2.5-1.5B proxy model)
+python run_pipeline.py validate injection.jsonl
+
+# Custom settings
+python run_pipeline.py validate injection.jsonl --epochs 5 --lora-r 32
+
+# Different proxy model
+python run_pipeline.py validate injection.jsonl --model Qwen/Qwen2.5-0.5B
+```
+
+## Sample Format (Dual-View)
+
+Every synthetic sample has TWO views for flexible training:
+
+```json
+{
+  "id": "RSN-ARITH-0001",
+  "question": "What is 23 + 47?",
+  "answer": "70",
+  "distilled_view": "Answer: 70\nJustification: 23+47=70",
+  "think_view": "Step 1: Break down 23+47\nStep 2: 20+40=60\nStep 3: 3+7=10\nStep 4: 60+10=70\nAnswer: 70",
+  "skill_bucket": "RSN-ARITH",
+  "band": "B3",
+  "language": "en",
+  "verified": true,
+  "verification_score": 0.67,
+  "hard_negative": {
+    "reasoning": "23+47=60 (forgot the ones)",
+    "wrong_answer": "60",
+    "error_type": "arithmetic_error"
+  },
+  "error_correction": {
+    "error_identified": "Forgot to add ones place",
+    "explanation": "Must add both tens and ones",
+    "correct_solution": "23+47 = (20+40) + (3+7) = 60+10 = 70"
+  }
+}
+```
+
+## COT Policy by Band
+
+Chain-of-Thought is gated by difficulty band:
+
+| Band | Name | COT Allowed | Max Tokens | Code |
+|------|------|-------------|------------|------|
+| B0 | Nursery | No | 0 | none |
+| B1 | Primary | No | 0 | trivial |
+| B2 | High School | No | 0 | intro |
+| B3 | Undergraduate | Rare | 1024 | non-trivial |
+| B4 | Graduate | Yes | 1024 | advanced |
+| B5 | PhD | Yes | 2048 | system-level |
+
+## 45 Skill Buckets (7 Categories)
+
+### Quick Reference (All Skills)
+
+```text
+FOUNDATION (6)     REASONING (11)      CODE (9)           LANGUAGE (6)
+─────────────      ──────────────      ────────           ────────────
+FND-LEX-EN         RSN-LOG             CODE-SYN           LANG-HI-COMP
+FND-LEX-HI         RSN-CAUS            CODE-COMP          LANG-HI-GEN
+FND-SEM            RSN-ARITH           CODE-GEN-T1        LANG-TRANS
+FND-DIS            RSN-ALG             CODE-GEN-T2        LANG-MIX
+FND-LCX            RSN-WPT             CODE-GEN-T3        LANG-HI-LOG
+FND-FACT           RSN-ADVMATH         CODE-DBG           LANG-GRAMMAR
+                   RSN-MATH-HI         CODE-OPT
+                   RSN-CS              CODE-TEST
+                   RSN-MH              CODE-ALGO
+                   RSN-CONTRADICTION
+                   RSN-ANAL
+
+ALIGNMENT (5)      PRODUCTION (3)      INDIC (5)
+─────────────      ──────────────      ─────────
+ALN-INST           PRD-ROB             INDIC-QA
+ALN-STRUCT         PRD-SUM             INDIC-TRANS
+ALN-HALL           PRD-IE              INDIC-NLI
+ALN-SAFE                               INDIC-SENT
+ALN-HELP                               INDIC-NER
+```
+
+### Foundation (6 skills)
+| ID | Name | Band | Benchmarks |
+|----|------|------|------------|
+| FND-LEX-EN | English Lexical & Syntactic | B0-B2 | HellaSwag, BLiMP, CoLA |
+| FND-LEX-HI | Hindi Lexical & Syntactic | B0-B2 | IndicGLUE |
+| FND-SEM | Semantic Understanding | B1-B3 | WinoGrande, COPA |
+| FND-DIS | Discourse & Coherence | B2-B3 | StoryCloze |
+| FND-LCX | Long-Context Retention | B3-B5 | LongBench, SCROLLS |
+| FND-FACT | Factual Knowledge | B1-B3 | TriviaQA, NaturalQuestions |
+
+### Reasoning (11 skills)
+| ID | Name | Band | Benchmarks |
+|----|------|------|------------|
+| RSN-LOG | Logical Deduction | B3-B5 | LogiQA, ReClor, FOLIO |
+| RSN-CAUS | Causal Reasoning | B3-B5 | COPA, e-CARE |
+| RSN-ARITH | Arithmetic & Numerical | B2-B4 | GSM8K, SVAMP |
+| RSN-ALG | Algebraic & Symbolic | B3-B5 | MATH-Algebra |
+| RSN-WPT | Word Problem Translation | B3-B5 | GSM8K, AQUA-RAT |
+| RSN-ADVMATH | Advanced Mathematical | B4-B5 | MATH, AMC, AIME |
+| RSN-MATH-HI | Mathematical (Hindi) | B3-B5 | GSM8K-Hi |
+| RSN-CS | Commonsense Reasoning | B2-B4 | HellaSwag, PIQA, ARC |
+| RSN-MH | Multi-Hop Reasoning | B4-B5 | HotpotQA, MuSiQue |
+| RSN-CONTRADICTION | Contradiction Detection | B2-B4 | ANLI, SNLI, MNLI |
+| RSN-ANAL | Analogical Reasoning | B3-B4 | BATS, SAT-Analogy |
+
+### Code (9 skills)
+| ID | Name | Band | Languages |
+|----|------|------|-----------|
+| CODE-SYN | Code Syntax & Structure | B2-B3 | All |
+| CODE-COMP | Code Comprehension | B3-B4 | All |
+| CODE-GEN-T1 | Code Generation Tier 1 | B3-B5 | Python, JS |
+| CODE-GEN-T2 | Code Generation Tier 2 | B3-B5 | Java, C++, TS, Go |
+| CODE-GEN-T3 | Code Generation Tier 3 | B3-B5 | Rust, SQL, Bash |
+| CODE-DBG | Debugging & Error Correction | B3-B5 | All |
+| CODE-OPT | Optimization & Refactoring | B4-B5 | All |
+| CODE-TEST | Test Generation | B3-B5 | All |
+| CODE-ALGO | Algorithmic Implementation | B4-B5 | All |
+
+### Language (6 skills)
+| ID | Name | Band | Languages |
+|----|------|------|-----------|
+| LANG-HI-COMP | Hindi Comprehension | B1-B4 | hi |
+| LANG-HI-GEN | Hindi Generation | B1-B4 | hi |
+| LANG-TRANS | English-Hindi Translation | B2-B4 | en, hi |
+| LANG-MIX | Code-Mixed (Hinglish) | B2-B4 | hi-en |
+| LANG-HI-LOG | Hindi Logical Reasoning | B3-B5 | hi |
+| LANG-GRAMMAR | Grammar & Syntax | B0-B2 | en, hi |
+
+### Alignment (5 skills)
+| ID | Name | Band | Benchmarks |
+|----|------|------|------------|
+| ALN-INST | Instruction Following | B2-B5 | IFEval, InstructBench |
+| ALN-STRUCT | Structured Output | B3-B5 | JSONBench |
+| ALN-HALL | Hallucination Resistance | B2-B5 | TruthfulQA, HaluEval |
+| ALN-SAFE | Safety & Harm Avoidance | B0-B5 | Red-team, SafetyBench |
+| ALN-HELP | Helpfulness | B1-B5 | MT-Bench, AlpacaEval |
+
+### Production (3 skills)
+| ID | Name | Band | Benchmarks |
+|----|------|------|------------|
+| PRD-ROB | Input Robustness | B1-B5 | CheckList, TextFlint |
+| PRD-SUM | Summarization | B2-B4 | CNN/DM, XSum |
+| PRD-IE | Information Extraction | B2-B4 | CoNLL, TACRED |
+
+### Indic (5 skills) - Indian Language Support
+| ID | Name | Languages | Benchmarks |
+|----|------|-----------|------------|
+| INDIC-QA | Indic Question Answering | hi, bn, ta, te, mr, gu, kn, ml, pa, or, as | IndicQA, TyDiQA |
+| INDIC-TRANS | Indic Translation | 11 Indic + en | FLORES-200, Samanantar |
+| INDIC-NLI | Indic NLI | hi, bn, ta, te, mr, gu, kn, ml, pa, or | IndicXNLI |
+| INDIC-SENT | Indic Sentiment | hi, bn, ta, te, mr, gu | IndicGLUE-Sentiment |
+| INDIC-NER | Indic NER | 11 Indic languages | WikiANN, Naamapadam |
+
+**Supported Indic Languages:**
+- Hindi (hi), Bengali (bn), Tamil (ta), Telugu (te), Marathi (mr)
+- Gujarati (gu), Kannada (kn), Malayalam (ml), Punjabi (pa)
+- Odia (or), Assamese (as)
+
+Based on: [IndicGLUE](https://huggingface.co/datasets/ai4bharat/IndicGLUE) and [IndicQA](https://huggingface.co/datasets/ai4bharat/IndicQA)
+
+## Legacy Skill Aliases
+
+For backward compatibility, old skill names are automatically resolved:
+
+| Legacy Name | Canonical Name |
+|-------------|----------------|
+| RSN-ARITHMETIC | RSN-ARITH |
+| RSN-ALGEBRA | RSN-ALG |
+| RSN-LOGIC | RSN-LOG |
+| RSN-CAUSAL | RSN-CAUS |
+| RSN-ANALOGICAL | RSN-ANAL |
+| CODE-COMPLETION | CODE-GEN-T1 |
+| CODE-DEBUG | CODE-DBG |
+| CODE-EXPLAIN | CODE-COMP |
+| LANG-HINDI | LANG-HI-COMP |
+| LANG-COHERENCE | FND-DIS |
+| KNOW-FACTUAL | FND-FACT |
+| KNOW-SCIENCE | RSN-CS |
+| KNOW-COMMONSENSE | RSN-CS |
+
+## 50 Diagnostic Tests
+
+Fast probes (~1 sec each) covering all skill buckets:
+
+| Domain | Tests | Examples |
+|--------|-------|----------|
+| Arithmetic | 8 | Addition, multi-step, word problems |
+| Algebra | 5 | Equations, substitution, patterns |
+| Logic | 8 | Transitivity, modus ponens, syllogisms |
+| Code | 10 | Completion, debugging, algorithms |
+| Language | 7 | Grammar, coherence, Hindi |
+| Knowledge | 7 | Facts, science, commonsense |
+| Advanced | 5 | Counterfactuals, analogies |
+
+## File Structure
+
+```
+synth-pipeline-v2/
+├── run_pipeline.py              # Main CLI (11 commands)
+├── common/
+│   ├── __init__.py
+│   ├── bands.py                 # Band definitions, COT policy, stage configs
+│   └── skills.py                # 45 skill buckets + 30 failure modes
+├── diagnostics/
+│   ├── __init__.py
+│   ├── diagnostic_tests.py      # 50 test definitions
+│   └── run_diagnostics.py       # Test runner with Ollama
+├── generation/
+│   ├── __init__.py
+│   ├── seed_generator.py        # Seed question generation
+│   └── dual_view_generator.py   # Dual-view + hard negatives
+├── validation/
+│   ├── __init__.py
+│   ├── proxy_validation.py      # LoRA fine-tune + delta measurement
+│   ├── contamination.py         # Benchmark deduplication
+│   └── verification.py          # Teacher-student verification
+├── integration/
+│   ├── __init__.py
+│   └── synth_adapter.py         # PleIAs/SYNTH dataset adapter
+└── synth_data_bank/             # Generated data storage
+    ├── manifest.json
+    └── *.jsonl                  # Skill shards
+```
+
+## Requirements
+
+### Minimal (generation only)
+
+```bash
+pip install pyyaml
+```
+
+### Full Pipeline
+
+```bash
+pip install pyyaml datasets transformers peft accelerate torch
+```
+
+### For GPU Training (8GB VRAM)
+
+```bash
+# Use the GPU venv with CUDA support
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install transformers peft datasets accelerate
+```
+
+**Note:** Training config is optimized for 8GB GPU:
+
+- `batch_size=1`
+- `max_seq_length=512`
+- `gradient_checkpointing=True`
+
+## Validation Results
+
+Example results from proxy validation:
+
+```
+Baseline:      74% pass rate
+Post-finetune: 84% pass rate
+Delta:         +10%
+
+Skill improvements:
+  RSN-CAUS:     +0.50
+  CODE-ALGO:    +0.50
+  RSN-ANAL:     +0.50
+  RSN-ALG:      +0.40
+  RSN-ARITH:    +0.25
+
+Band gains:
+  B4: +23%
+  B5: +50%
+```
+
+## Integration with External Datasets
+
+### PleIAs/SYNTH Dataset
+
+The pipeline can import from [PleIAs/SYNTH](https://huggingface.co/datasets/PleIAs/SYNTH), a 79M sample dataset with CoT reasoning:
+
+```bash
+# Import 10,000 samples
+python run_pipeline.py import-synth --num 10000 --language en
+
+# Samples are auto-mapped:
+#   query              -> question
+#   synthetic_reasoning -> think_view
+#   synthetic_answer   -> distilled_view
+#   (inferred)         -> skill_bucket, band
+```
+
+## Troubleshooting
+
+### Ollama "think" mode issues
+
+For Qwen3 models, ensure `think: false` is at the TOP LEVEL of the API payload, not inside `options`. This is handled automatically by the pipeline.
+
+### CUDA OOM on 8GB GPU
+
+The validation pipeline is configured for 8GB GPUs. If you still get OOM:
+
+- Reduce `max_seq_length` in `validation/proxy_validation.py`
+- Ensure `gradient_checkpointing=True`
+
+### Benchmark loading fails
+
+Some HuggingFace datasets require authentication:
+
+```bash
+huggingface-cli login
+```
+
+### Unicode errors on Windows
+
+Run with UTF-8 encoding:
+
+```bash
+set PYTHONIOENCODING=utf-8
+python run_pipeline.py ...
+```
+
+## License
+
+This pipeline is designed for internal LLM training use. Ensure compliance with:
+- Source dataset licenses (PleIAs/SYNTH: CDLA-Permissive-2.0)
+- Model licenses (Qwen, etc.)
+- Benchmark dataset terms
+- IndicGLUE/IndicQA: CC-BY-4.0
+
+## Contributing
+
+1. Add new skills in `common/skills.py`
+2. Add diagnostic tests in `diagnostics/diagnostic_tests.py`
+3. Add external dataset adapters in `integration/`
+
+---
+
+**Built for Team 4: Synthetic Data & Self-Distillation**

@@ -1,0 +1,30 @@
+# ============================================================
+# Synthetic Data Pipeline v2 — Dependencies
+# ============================================================
+#
+# MINIMAL (diagnostics + generation with Ollama):
+#   pip install pyyaml
+#   + Install Ollama from https://ollama.com
+#
+# FULL (with proxy validation):
+#   pip install -r requirements.txt
+#
+# ============================================================
+
+# ── Core (always needed) ────────────────────────────────────
+pyyaml>=6.0
+
+# ── Data handling ───────────────────────────────────────────
+pandas>=2.0
+pyarrow>=14.0
+
+# ── Proxy validation (optional — for LoRA fine-tuning) ─────
+torch>=2.1
+transformers>=4.40
+peft>=0.10
+datasets>=2.18
+accelerate>=0.28
+
+# ── Quality (optional) ──────────────────────────────────────
+# bitsandbytes>=0.43    # For 4-bit quantization
+# scipy>=1.11           # For statistics

@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-02-06T17:04:01.650249",
+  "proxy_model": "Qwen/Qwen2.5-1.5B",
+  "synthetic_data_path": "injection.jsonl",
+  "num_samples": 25,
+  "baseline_pass_rate": 0.78,
+  "post_finetune_pass_rate": 0.86,
+  "delta": 0.07999999999999996,
+  "skill_deltas": {
+    "LANG-GRAMMAR": 0.0,
+    "RSN-ANALOGICAL": 0.5,
+    "KNOW-FACTUAL": 0.0,
+    "RSN-CONTRADICTION": 0.0,
+    "RSN-CAUSAL": 0.5,
+    "RSN-ALGEBRA": 0.6,
+    "CODE-COMPLETION": 0.0,
+    "KNOW-COMMONSENSE": 0.0,
+    "LANG-COHERENCE": 0.0,
+    "CODE-ALGO": 0.5,
+    "RSN-LOGIC": -0.25,
+    "CODE-DEBUG": 0.5,
+    "LANG-HINDI": 0.0,
+    "KNOW-SCIENCE": 0.0,
+    "RSN-ARITHMETIC": 0.0
+  },
+  "band_deltas": {
+    "B0": 0.0,
+    "B4": 0.23076923076923084,
+    "B5": 0.5,
+    "B2": 0.0,
+    "B1": 0.0,
+    "B3": 0.0
+  },
+  "num_regressions": 3,
+  "num_improvements": 7,
+  "regressions": [
+    "ARITH-003",
+    "LOGIC-001",
+    "LOGIC-007"
+  ],
+  "improvements": [
+    "ARITH-008",
+    "ALG-001",
+    "ALG-004",
+    "ALG-005",
+    "CODE-010",
+    "ADV-001",
+    "ADV-005"
+  ]
+}

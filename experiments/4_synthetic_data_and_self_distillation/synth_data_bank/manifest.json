@@ -1,0 +1,178 @@
+{
+  "created": "2026-02-06T12:02:55.615073",
+  "model": "qwen3:8b",
+  "skills": {
+    "CODE-ALGO": {
+      "samples": 5,
+      "band": "B5",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "CODE-ALGO.jsonl",
+      "priority": "critical"
+    },
+    "CODE-COMPLETION": {
+      "samples": 5,
+      "band": "B4",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "CODE-COMPLETION.jsonl",
+      "priority": "critical"
+    },
+    "CODE-DEBUG": {
+      "samples": 5,
+      "band": "B4",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "CODE-DEBUG.jsonl",
+      "priority": "high"
+    },
+    "CODE-EXPLAIN": {
+      "samples": 5,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "CODE-EXPLAIN.jsonl",
+      "priority": "medium"
+    },
+    "KNOW-COMMONSENSE": {
+      "samples": 5,
+      "band": "B2",
+      "cot_allowed": false,
+      "with_hard_negatives": 0,
+      "shard_file": "KNOW-COMMONSENSE.jsonl",
+      "priority": "high"
+    },
+    "KNOW-FACTUAL": {
+      "samples": 5,
+      "band": "B2",
+      "cot_allowed": false,
+      "with_hard_negatives": 0,
+      "shard_file": "KNOW-FACTUAL.jsonl",
+      "priority": "medium"
+    },
+    "KNOW-SCIENCE": {
+      "samples": 5,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "KNOW-SCIENCE.jsonl",
+      "priority": "high"
+    },
+    "LANG-COHERENCE": {
+      "samples": 5,
+      "band": "B2",
+      "cot_allowed": false,
+      "with_hard_negatives": 0,
+      "shard_file": "LANG-COHERENCE.jsonl",
+      "priority": "high"
+    },
+    "LANG-GRAMMAR": {
+      "samples": 5,
+      "band": "B1",
+      "cot_allowed": false,
+      "with_hard_negatives": 0,
+      "shard_file": "LANG-GRAMMAR.jsonl",
+      "priority": "high"
+    },
+    "LANG-HINDI": {
+      "samples": 0,
+      "band": "B2",
+      "cot_allowed": false,
+      "with_hard_negatives": 0,
+      "shard_file": "LANG-HINDI.jsonl",
+      "priority": "medium"
+    },
+    "RSN-ALGEBRA": {
+      "samples": 5,
+      "band": "B4",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "RSN-ALGEBRA.jsonl",
+      "priority": "critical"
+    },
+    "RSN-ANALOGICAL": {
+      "samples": 5,
+      "band": "B4",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "RSN-ANALOGICAL.jsonl",
+      "priority": "medium"
+    },
+    "RSN-ARITHMETIC": {
+      "samples": 3,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 3,
+      "shard_file": "RSN-ARITHMETIC.jsonl",
+      "priority": "critical"
+    },
+    "RSN-CAUSAL": {
+      "samples": 5,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "RSN-CAUSAL.jsonl",
+      "priority": "high"
+    },
+    "RSN-CONTRADICTION": {
+      "samples": 5,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "RSN-CONTRADICTION.jsonl",
+      "priority": "critical"
+    },
+    "RSN-LOGIC": {
+      "samples": 5,
+      "band": "B4",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "RSN-LOGIC.jsonl",
+      "priority": "critical"
+    },
+    "KNOW-FACTUAL_synth": {
+      "samples": 49,
+      "band": "B5",
+      "cot_allowed": true,
+      "with_hard_negatives": 0,
+      "shard_file": "KNOW-FACTUAL_synth.jsonl",
+      "priority": "medium",
+      "source": "PleIAs/SYNTH"
+    },
+    "RSN-ALGEBRA_synth": {
+      "samples": 1,
+      "band": "B5",
+      "cot_allowed": true,
+      "with_hard_negatives": 0,
+      "shard_file": "RSN-ALGEBRA_synth.jsonl",
+      "priority": "medium",
+      "source": "PleIAs/SYNTH"
+    },
+    "INDIC-QA": {
+      "samples": 5,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 5,
+      "shard_file": "INDIC-QA.jsonl",
+      "priority": "critical"
+    },
+    "ALN-INST": {
+      "samples": 3,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 3,
+      "shard_file": "ALN-INST.jsonl",
+      "priority": "critical"
+    },
+    "INDIC-TRANS": {
+      "samples": 3,
+      "band": "B3",
+      "cot_allowed": true,
+      "with_hard_negatives": 3,
+      "shard_file": "INDIC-TRANS.jsonl",
+      "priority": "critical"
+    }
+  },
+  "updated": "2026-02-06T20:58:37.564626",
+  "synth_added": "2026-02-06T12:40:36.035354"
+}
