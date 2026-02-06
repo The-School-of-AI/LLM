@@ -13,7 +13,7 @@ log_warn() { echo "[WARN] $1"; }
 log_error() { echo "[ERROR] $1"; }
 
 # Default values
-PREFIX="P15-IdleCPUMonitor-410"
+PREFIX="T15-IdleCPUMonitor-410"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CPU_THRESHOLD="${CPU_THRESHOLD:-10}"
 EVALUATION_PERIODS="${EVALUATION_PERIODS:-3}"
