@@ -609,6 +609,94 @@ config = ModelConfig.load("config.json")
 
 ## Performance
 
+### Benchmarking
+
+To run the throughput benchmark for the full architecture:
+
+```bash
+python benchmark_throughput.py configs/1b_full.yaml --seq-lengths 512,1024,2048
+```
+
+### Latest Benchmark Report
+
+```text
+================================================================================
+🚀 SOTA LLM THROUGHPUT BENCHMARK
+================================================================================
+Device: cuda (NVIDIA A100-SXM4-80GB)
+PyTorch: 2.9.0+cu126
+CUDA: 12.6 | Memory: 85.2GB
+Dtype: bfloat16 | Batch: 4 | Sequences: [512, 1024, 2048]
+================================================================================
+
+================================================================================
+📋 CONFIG: 1b_full.yaml
+================================================================================
+Model: LLM-1B-Full
+  Hidden: 2048 | Layers: 24
+  Attention: deepseek_gsa | Heads: 16/4 | HeadDim: 128
+  FFN: swiglu (5504) | Position: yarn
+  Connection: mhc | MTP: True
+
+🔧 Loading model...
+Initialized LLM-1B-Full
+  Parameters: 1.74B
+  Attention: deepseek_gsa
+  Connection: mhc
+  Position: yarn
+  MTP: True
+
+📊 Parameters: 1,738,509,776 (1.739B)
+  Embedding: 103,022,592 | Attention: 398,390,088 | FFN: 816,513,672
+
+────────────────────────────────────────────────────────────────────────────────
+📈 INFERENCE (Forward Pass)
+────────────────────────────────────────────────────────────────────────────────
+Seq      Tok/s        Samp/s     Lat(ms)      P95(ms)    Mem(GB)    TFLOPS  
+────────────────────────────────────────────────────────────────────────────────
+512      7,031        13.73      291.30       293.69     4.15       20.81   
+1024     5,285        5.16       775.02       777.45     4.38       15.64   
+2048     3,193        1.56       2565.27      2566.87    4.83       9.45    
+
+────────────────────────────────────────────────────────────────────────────────
+🏋️ TRAINING (Forward + Backward)
+────────────────────────────────────────────────────────────────────────────────
+Seq      Tok/s        Samp/s     Lat(ms)      P95(ms)    Mem(GB)    TFLOPS  
+────────────────────────────────────────────────────────────────────────────────
+512      5,941        11.60      344.70       365.76     23.46      52.76   
+1024     4,677        4.57       875.74       893.76     43.02      41.54   
+2048     OOM
+
+────────────────────────────────────────────────────────────────────────────────
+💡 INSIGHTS
+────────────────────────────────────────────────────────────────────────────────
+Bottleneck: SUB_OPTIMAL: MFU of 18.4% - optimization opportunities exist
+Memory: GSA k_base=2048: sparse attention for long sequences
+Throughput: Seq scaling: 21% throughput drop from 512 to 1024 tokens
+Architecture: DeepSeek GSA: variance adaptive k
+
+────────────────────────────────────────────────────────────────────────────────
+📊 SEQUENCE SCALING ANALYSIS
+────────────────────────────────────────────────────────────────────────────────
+  Memory Scaling: Quadratic (O(n²)) (exponent: 0.11)
+  Throughput Scaling Exponent: -0.57
+  Scaling Efficiency: 63.72%
+
+────────────────────────────────────────────────────────────────────────────────
+🏗️ ARCHITECTURE BREAKDOWN
+────────────────────────────────────────────────────────────────────────────────
+  Attention: deepseek_gsa (KV reduction: 4.0x)
+  Position: yarn (max context: 32768)
+  Connection: mhc
+  MTP: Enabled (4 tokens)
+  Triton Kernels: Enabled (k=2048)
+  Param Distribution: Embed 5.9% | Attn 22.9% | FFN 47.0% | Head 24.2%
+
+================================================================================
+🏁 BENCHMARK COMPLETE
+================================================================================
+```
+
 ### Model Size (~0.57B parameters)
 
 | Component | Parameters |
