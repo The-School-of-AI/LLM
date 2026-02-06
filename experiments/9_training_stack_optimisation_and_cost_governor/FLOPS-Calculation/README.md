@@ -87,6 +87,97 @@ The calculator accepts **two shapes**. You can use either in `architecture`:
 }
 ```
 
+### Attention Types (Quick Reference)
+
+The calculator supports **5 attention types** with optional ratio/parameter notation:
+
+| Type | Format | Examples | Description |
+|------|--------|----------|-------------|
+| **mha** | `mha` | `"mha"`, `"normal"` | Standard Multi-Head Attention |
+| **gqa** | `gqa:Q:KV` | `"gqa"`, `"gqa:4:1"`, `"gqa:8:1"` | Grouped Query Attention |
+| **gsa** | `gsa:k` | `"gsa"`, `"gsa:512"`, `"gsa:2048"` | Gated Sparse Attention |
+| **dsa** | `dsa:rank` | `"dsa"`, `"dsa:256"`, `"dsa:512"` | DeepSeek MLA (KV compression) |
+| **hybrid** | `type1-type2:r1:r2` | `"gqa-gsa:4:1"` | Hybrid (4 type1 layers per 1 type2) |
+
+#### GQA Ratio Notation
+
+For GQA, the ratio format is `gqa:Q:KV` where **Q heads share KV heads**:
+
+| Notation | Meaning | KV Ratio | Example |
+|----------|---------|----------|---------|
+| `"gqa:4:1"` | 4 Q heads share 1 KV head | 0.25 | Llama-2 style |
+| `"gqa:8:1"` | 8 Q heads share 1 KV head | 0.125 | More memory efficient |
+| `"gqa:2:1"` | 2 Q heads share 1 KV head | 0.5 | Less aggressive |
+| `"gqa"` | Uses `num_kv_heads` from config | varies | Legacy compatibility |
+
+#### GSA Sparse Tokens
+
+For GSA, the format is `gsa:k` where **k = number of tokens to attend to**:
+
+| Notation | Meaning | Typical Use |
+|----------|---------|-------------|
+| `"gsa:512"` | Attend to 512 tokens | Short context (4K) |
+| `"gsa:2048"` | Attend to 2048 tokens | Medium context (32K) |
+| `"gsa:4096"` | Attend to 4096 tokens | Long context (128K) |
+| `"gsa"` | Uses `sparse_k_tokens` from config | Legacy compatibility |
+
+#### DSA/MLA Compression Rank
+
+For DSA (DeepSeek MLA), the format is `dsa:rank` where **rank = KV LoRA compression rank**:
+
+| Notation | Meaning | Typical Use |
+|----------|---------|-------------|
+| `"dsa:256"` | Compress KV to rank 256 | Moderate compression |
+| `"dsa:512"` | Compress KV to rank 512 | Light compression |
+| `"dsa"` | Uses `mla_kv_lora_rank` from config | Legacy compatibility |
+
+#### Hybrid Attention (Layer Mixing)
+
+For models using different attention types across layers (e.g., DeepSeek-V3 style):
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| `type1-type2:r1:r2` | `"gqa-gsa:4:1"` | 4 GQA layers for every 1 GSA layer |
+| `type1-type2:r1:r2:k` | `"gqa-gsa:4:1:512"` | Hybrid with custom sparse k=512 |
+
+**How it works:**
+- `"gqa-gsa:4:1"` = 80% GQA layers, 20% GSA layers
+- FLOPs are weighted: `0.8 × GQA_FLOPs + 0.2 × GSA_FLOPs`
+- Memory includes GSA-specific parameters (gates, indexer)
+
+**Effect on Training:**
+| Metric | `gqa:4:1` (Pure GQA) | `gqa-gsa:4:1` (Hybrid) |
+|--------|----------------------|------------------------|
+| FLOPs | Higher | **Lower** (sparse attention) |
+| Params | Baseline | Slightly higher (GSA overhead) |
+| Memory | Baseline | Slightly higher |
+
+#### Config Examples
+
+```json
+// Standard attention (32 heads, no KV sharing)
+"attention_type": "mha"
+
+// GQA with 32 Q heads sharing 4 KV heads (8:1 ratio)
+"attention_type": "gqa:8:1"
+
+// GSA with k=512 sparse tokens
+"attention_type": "gsa:512"
+
+// DeepSeek MLA with rank=256 compression
+"attention_type": "dsa:256"
+
+// Hybrid: 4 GQA layers per 1 GSA layer (DeepSeek-V3 style)
+"attention_type": "gqa-gsa:4:1"
+
+// Hybrid with custom sparse k
+"attention_type": "gqa-gsa:4:1:1024"
+
+// Legacy format (still works)
+"attention_type": "grouped_query",
+"num_kv_heads": 4
+```
+
 **Precedence rule:** If a value exists both at the top level and inside a nested block,
 the **top-level value wins**. Otherwise the nested value is used.
 
@@ -106,73 +197,322 @@ We keep simple text snapshots of recent runs:
 
 These are **reference outputs only** and should be regenerated after config changes.
 
-## Configuration Format
+## Configuration Reference (DeepSpeed-Compatible)
 
-### Hardware & Cost
+This calculator uses a config format that mirrors **DeepSpeed's JSON structure**. If you're familiar with DeepSpeed configs, you'll feel right at home.
+
+---
+
+### 🔧 Hardware Settings
+
 ```json
 "hardware": {
-  "num_gpus": 8,
-  "mfu": 0.30,                // Model FLOPs Utilization (e.g., 30%)
-  "price_per_gpu_hour": 2.50, // Cost per GPU/Hour in USD
-  "quantization": "all",      // Options: "all", "bf16", "fp8"
-  "tflops_per_gpu": { ... }   // Peak TFLOPS for each precision
+  "num_gpus": 8,                    // Number of GPUs in your cluster
+  "price_per_gpu_hour": 2.50,       // Cost per GPU-hour in USD
+  "mfu": 0.30,                      // Model FLOPs Utilization (0.0-1.0)
+  "quantization": "all",            // "all", "bf16", "fp8", or "nvfp4"
+  
+  "tflops_per_gpu": {               // Peak TFLOPS per GPU by precision
+    "bf16": 989.0,                  // H100 SXM = 989 TFLOPS BF16
+    "fp8": 1979.0,                  // H100 SXM = 1979 TFLOPS FP8
+    "nvfp4": 3500.0                 // H100 SXM = ~3500 TFLOPS FP4
+  }
 }
 ```
 
-#### Parallelism & Communication (optional)
-If you want to model **communication overhead explicitly**, you can provide:
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `num_gpus` | int | 8 | Total GPUs in cluster |
+| `price_per_gpu_hour` | float | 2.50 | Cost per GPU-hour (USD) |
+| `mfu` | float | 0.30 | Model FLOPs Utilization (30% typical) |
+| `quantization` | str | "all" | Precision filter: "all", "bf16", "fp8", "nvfp4" |
+
+---
+
+### ⚡ ZeRO Optimization (DeepSpeed-style)
+
+```json
+"hardware": {
+  "zero_stage": 2,                  // ZeRO Stage: 0, 2, 3, or "infinity"
+  
+  // ZeRO efficiency factors (how much overhead each stage adds)
+  "zero_efficiency": {
+    "zero0": 1.0,                   // No sharding overhead
+    "zero2": 0.95,                  // 5% overhead for gradient sharding
+    "zero3": 0.70,                  // 30% overhead for full sharding
+    "zero_infinity": 0.25           // 75% overhead for CPU/NVMe offload
+  }
+}
+```
+
+| ZeRO Stage | What's Sharded | Typical Efficiency | When to Use |
+|------------|----------------|-------------------|-------------|
+| **0** | Nothing | 100% | Small models, single GPU |
+| **2** | Optimizer + Gradients | 95% | **Recommended default** |
+| **3** | Optimizer + Gradients + Weights | 70% | Large models (>10B params) |
+| **infinity** | Everything + CPU/NVMe offload | 25% | Very large models (>70B) |
+
+---
+
+### 💾 CPU Offload (ZeRO-Infinity)
+
+```json
+"hardware": {
+  "zero_stage": 3,                  // Must be 3 for offload
+  "cpu_offload": true,              // Enable CPU offloading
+  
+  "cpu_offload_config": {
+    "offload_optimizer": true,      // Offload optimizer states to CPU
+    "offload_params": true,         // Offload parameters to CPU
+    "offload_gradients": true,      // Offload gradients to CPU
+    "gpu_buffer_gb": 4.0            // GPU memory reserved for buffers
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cpu_offload` | bool | false | Enable CPU offloading |
+| `offload_optimizer` | bool | true | Offload optimizer states (8 bytes/param) |
+| `offload_params` | bool | true | Offload model parameters |
+| `offload_gradients` | bool | true | Offload gradients |
+| `gpu_buffer_gb` | float | 4.0 | GPU memory reserved for compute buffers |
+
+> **Memory Formula:**
+> - GPU Memory = `gpu_buffer_gb` + activations + any non-offloaded state
+> - CPU Memory = total offloaded state ÷ num_gpus
+
+---
+
+### 🧠 Activation Checkpointing
+
+Activation checkpointing trades compute for memory by recomputing activations during backward pass.
+
+**Option 1: Architecture-level (legacy)**
+```json
+"architecture": {
+  "training": {
+    "activation_checkpointing": true,        // Enable checkpointing
+    "activation_checkpointing_factor": 0.5,  // % of layers to checkpoint
+    "activation_precision": "bf16",          // "bf16", "fp16", "fp32"
+    "activation_multiplier": 2.0,            // Memory per activation (bytes/element)
+    "include_activation_memory": true        // Include in memory estimate
+  }
+}
+```
+
+**Option 2: Root-level DeepSpeed format (recommended)**
+```json
+{
+  "activation_checkpointing": {
+    "partition_activations": true,    // Shard activations across GPUs
+    "cpu_checkpointing": false,       // Offload checkpoints to CPU
+    "checkpoint_factor": 0.5          // 1.0=none, 0.5=half, 0.1=aggressive
+  },
+  "train_micro_batch_size_per_gpu": 16,
+  "gradient_accumulation_steps": 8
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `partition_activations` | bool | false | Shard activation memory across data-parallel GPUs |
+| `cpu_checkpointing` | bool | false | Offload checkpoints to CPU (slower but saves GPU memory) |
+| `checkpoint_factor` | float | 1.0 | Fraction of activations to keep (lower = more savings) |
+| `train_micro_batch_size_per_gpu` | int | 1 | Micro batch size (affects activation memory) |
+| `gradient_accumulation_steps` | int | 1 | Steps before optimizer update |
+
+> **Memory Savings:** Checkpointing can reduce activation memory by 60-80% at the cost of ~33% more compute.
+> 
+> **partition_activations:** When enabled, divides activation memory by `num_gpus`. Use with data parallelism.
+
+---
+
+### 🎯 Precision Settings
+
+```json
+"architecture": {
+  "precision": {
+    "weight_precision": "bf16",              // "bf16", "fp16", "fp32", "fp8", "auto"
+    "gradient_precision": "fp32",            // "bf16", "fp16", "fp32"
+    "optimizer_precision": "fp32",           // Optimizer state precision
+    "optimizer_states_count": 2,             // Adam = 2 states (m, v)
+    "optimizer_state_multiplier": 1.0,       // Extra state overhead
+    
+    "master_weights": false,                 // Keep FP32 master weights
+    "master_weights_precision": "fp32"       // Master weights precision
+  }
+}
+```
+
+| Precision | Bytes/Param | When to Use |
+|-----------|-------------|-------------|
+| **bf16** | 2 | Default for training |
+| **fp16** | 2 | Alternative mixed precision |
+| **fp32** | 4 | Optimizer states, master weights |
+| **fp8** | 1 | H100+ inference/training |
+
+---
+
+### 🔀 Parallelism Configuration
+
 ```json
 "hardware": {
   "parallelism": {
-    "tensor_parallel_size": 1,
-    "pipeline_parallel_size": 1,
-    "expert_parallel_size": 1,
-    "data_parallel_size": null   // auto = num_gpus / (tp*pp*ep)
-  },
-  "communication": {
-    "dp_bandwidth_gbps": 200,
-    "dp_latency_ms": 0.5,
-    "dp_comm_multiplier": 1.0,
-    "ep_bandwidth_gbps": 200,
-    "ep_latency_ms": 0.5,
-    "ep_comm_multiplier": 1.0,
-    "offload_bandwidth_gbps": 256,
-    "offload_latency_ms": 1.0,
-    "offload_bytes_per_step": null
-  },
-  "performance": {
-    "use_explicit_comm_model": false,
-    "compute_mfu": 0.30
+    "tensor_parallel_size": 1,       // TP: Split layers across GPUs
+    "pipeline_parallel_size": 1,     // PP: Split model into stages
+    "expert_parallel_size": 1,       // EP: Distribute MoE experts
+    "data_parallel_size": null       // DP: Auto = num_gpus / (TP×PP×EP)
   }
 }
-```
-Defaults reflect a **typical IB 200G cluster** plus **PCIe Gen4 offload**. Adjust for your actual fabric.
-When `use_explicit_comm_model=true`, the calculator:
-- uses `compute_mfu` for **pure compute**
-- **adds explicit DP/EP/offload communication time** on top
-Otherwise, it uses the simpler multiplicative efficiency model:
-```
-effective_mfu = mfu × zero_efficiency × scaling_efficiency
 ```
 
-#### CPU Offload (ZeRO‑Infinity)
-When `hardware.cpu_offload=true`, you can choose **what gets offloaded** and how much **GPU buffer** to reserve:
+| Parallelism | Use When |
+|-------------|----------|
+| **Data Parallel (DP)** | Always (default) |
+| **Tensor Parallel (TP)** | Model too large for single GPU |
+| **Pipeline Parallel (PP)** | Very deep models (>100 layers) |
+| **Expert Parallel (EP)** | MoE with many experts |
+
+---
+
+### 📡 Communication Settings (Advanced)
+
 ```json
 "hardware": {
-  "cpu_offload": true,
-  "cpu_offload_config": {
-    "offload_params": true,
-    "offload_optimizer": true,
-    "offload_gradients": true,
-    "gpu_buffer_gb": 4.0
+  "communication": {
+    "dp_bandwidth_gbps": 200,        // Data parallel bandwidth (NVLink/IB)
+    "dp_latency_ms": 0.5,            // DP communication latency
+    "dp_comm_multiplier": 1.0,       // DP overhead multiplier
+    
+    "ep_bandwidth_gbps": 200,        // Expert parallel bandwidth
+    "ep_latency_ms": 0.5,            // EP communication latency
+    "ep_comm_multiplier": 1.0,       // EP overhead multiplier
+    
+    "offload_bandwidth_gbps": 256,   // CPU offload bandwidth (PCIe)
+    "offload_latency_ms": 1.0,       // Offload latency
+    "offload_bytes_per_step": null   // Bytes offloaded per step
+  },
+  
+  "performance": {
+    "use_explicit_comm_model": false, // Use detailed comm model
+    "compute_mfu": 0.30               // Pure compute MFU
   }
 }
 ```
-Notes:
-- Offload moves **parameters, optimizer states, and/or gradients** to CPU/NVMe.
-- GPU memory becomes **buffer + any non‑offloaded state**.
-- CPU memory is reported **per GPU** (total offloaded state ÷ number of GPUs).
-- Throughput penalty is modeled via `zero_efficiency.zero_infinity`.
+
+> **Note:** Set `use_explicit_comm_model: true` to model communication overhead explicitly instead of using the multiplicative efficiency model.
+
+---
+
+### 🏗️ Architecture Settings
+
+```json
+"stages": [{
+  "name": "1B Dense",
+  "total_tokens": 20000000000,        // 20B tokens
+  
+  "architecture": {
+    // Core dimensions
+    "vocab_size": 128000,
+    "hidden_size": 2048,
+    "intermediate_size": 4096,        // FFN hidden size (typically 4× hidden)
+    "num_layers": 16,
+    "sequence_length": 4096,
+    
+    // Attention
+    "num_heads": 16,
+    "num_kv_heads": 4,                // GQA: fewer KV heads
+    "attention_type": "gqa:4:1",      // See Attention Types section
+    
+    // Embeddings
+    "tie_embeddings": true,           // Share input/output embeddings
+    
+    // MoE (if applicable)
+    "num_routed_experts": 8,
+    "num_shared_experts": 1,
+    "top_k": 2,
+    "moe_layer_frequency": 1          // MoE every N layers
+  }
+}]
+```
+
+---
+
+### 🧪 Training Settings
+
+```json
+"architecture": {
+  "training": {
+    "micro_batch_size": 1,                   // Batch size per GPU
+    "gradient_accumulation_steps": 1,        // Steps before optimizer update
+    "activation_precision": "bf16",          // Activation tensor precision
+    "activation_multiplier": 2.0,            // Memory per activation
+    "activation_checkpointing": false,       // Enable checkpointing
+    "activation_checkpointing_factor": 1.0,  // Fraction to checkpoint
+    "include_activation_memory": false       // Include in memory calc
+  }
+}
+```
+
+---
+
+### 📋 Complete Example Config
+
+Here's a complete config showing all options:
+
+```json
+{
+  "hardware": {
+    "num_gpus": 8,
+    "price_per_gpu_hour": 2.50,
+    "mfu": 0.30,
+    "quantization": "all",
+    "zero_stage": 2,
+    "cpu_offload": false,
+    "tflops_per_gpu": {
+      "bf16": 989.0,
+      "fp8": 1979.0
+    }
+  },
+  "stages": [{
+    "name": "1B Base",
+    "total_tokens": 20000000000,
+    "architecture": {
+      "vocab_size": 128000,
+      "hidden_size": 2048,
+      "intermediate_size": 4096,
+      "num_layers": 16,
+      "num_heads": 16,
+      "attention_type": "gqa:4:1",
+      "sequence_length": 4096,
+      "tie_embeddings": true,
+      "precision": {
+        "weight_precision": "bf16",
+        "optimizer_precision": "fp32"
+      },
+      "training": {
+        "micro_batch_size": 1,
+        "activation_checkpointing": false
+      }
+    }
+  }]
+}
+```
+
+---
+
+### 🚀 Quick Reference: Common Setups
+
+| Use Case | `zero_stage` | `cpu_offload` | `activation_checkpointing` |
+|----------|--------------|---------------|---------------------------|
+| **1B model, 8 GPUs** | 2 | false | false |
+| **7B model, 8 GPUs** | 2 | false | true |
+| **13B model, 8 GPUs** | 3 | false | true |
+| **70B model, 8 GPUs** | 3 | true | true |
+| **70B model, 64 GPUs** | 2 | false | true |
+
+---
 
 ### Architecture
 Define your training stages. All parameters (Layers, Hidden Size, Experts, etc.) must be specified.
@@ -334,14 +674,11 @@ If you pass `attention`, `router`, `expert`, or `head` objects (like your YAMLs)
 - `expert.intermediate_size`
 - `head.use_multi_token_prediction`, `head.num_prediction_heads`
 
-#### Gated Sparse Attention (GSA) / DeepSeek GSA
-When `attention_type` is `gsa` or `deepseek_gsa`, the calculator uses sparse attention (O(Lk)) and supports:
-- `gsa_k_base`, `gsa_k_min`, `gsa_k_max`: Base and clamp bounds for adaptive k.
-- `gsa_k_tokens`: Explicit k (overrides base/min/max).
-- `gsa_use_adaptive_k`: Enable adaptive k (uses base/min/max).
-- `gsa_num_indexer_heads`, `gsa_indexer_dim`: Lightning indexer config.
-- `gsa_use_value_gate`, `gsa_use_output_gate`: Adds G2/G1 gate projection params.
-- `indexer_fp8_speedup`: FP8 speedup factor for indexer (default 2.0).
+#### Gated Sparse Attention (GSA)
+Use `attention_type: "gsa:k"` where `k` is the number of tokens to attend to:
+- `"gsa:32"` - Very sparse (cheap)
+- `"gsa:128"` - Moderate sparse (recommended)
+- `"gsa:512"` - Less sparse
 
 #### DeepSeek MLA
 Set `attention_type: deepseek_mla` and provide either:
