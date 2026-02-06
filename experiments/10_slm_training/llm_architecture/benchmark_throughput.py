@@ -723,9 +723,17 @@ def run_inference_benchmark(
     
     input_ids = torch.randint(0, config.vocab_size, (batch_size, seq_len), device=device)
     
+    # Enable AMP for float16/bfloat16 inference
+    amp_enabled = device in ["cuda", "xpu"] and dtype in [torch.float16, torch.bfloat16]
+    amp_dtype = dtype if amp_enabled else dtype
+    
     with torch.no_grad():
         for _ in range(warmup_iters):
-            _ = model(input_ids)
+            if amp_enabled:
+                with torch.amp.autocast(device_type=device, dtype=amp_dtype, enabled=amp_enabled):
+                    _ = model(input_ids)
+            else:
+                _ = model(input_ids)
     
     synchronize(device)
     reset_memory_stats(device)
@@ -735,7 +743,11 @@ def run_inference_benchmark(
         for _ in range(benchmark_iters):
             synchronize(device)
             start = time.perf_counter()
-            _ = model(input_ids)
+            if amp_enabled:
+                with torch.amp.autocast(device_type=device, dtype=amp_dtype, enabled=amp_enabled):
+                    _ = model(input_ids)
+            else:
+                _ = model(input_ids)
             synchronize(device)
             latencies.append((time.perf_counter() - start) * 1000)
             # Track peak memory during execution (important for CPU)
