@@ -380,17 +380,17 @@ def get_peak_memory_gb(device: str, model: nn.Module = None, dtype: torch.dtype 
     if device == "xpu" and _has_xpu_backend():
         return torch.xpu.max_memory_allocated() / 1e9
     if device == "cpu":
-        # For CPU, estimate from model parameters if provided (more accurate)
+        if HAS_PSUTIL:
+            current = psutil.Process().memory_info().rss / 1e9
+            _cpu_peak_memory_gb = max(_cpu_peak_memory_gb, current)
+            return _cpu_peak_memory_gb
+        # Fallback: estimate from model parameters if psutil is unavailable
         if model is not None:
             bytes_per_param = 4  # default float32
             if dtype in (torch.float16, torch.bfloat16):
                 bytes_per_param = 2
             param_memory = sum(p.numel() * bytes_per_param for p in model.parameters())
             return param_memory / 1e9
-        elif HAS_PSUTIL:
-            current = psutil.Process().memory_info().rss / 1e9
-            _cpu_peak_memory_gb = max(_cpu_peak_memory_gb, current - _cpu_memory_baseline_gb)
-            return _cpu_peak_memory_gb
     return 0.0
 
 
@@ -419,7 +419,7 @@ def reset_memory_stats(device: str):
         torch.mps.empty_cache()
     elif device == "cpu" and HAS_PSUTIL:
         _cpu_memory_baseline_gb = psutil.Process().memory_info().rss / 1e9
-        _cpu_peak_memory_gb = 0.0
+        _cpu_peak_memory_gb = _cpu_memory_baseline_gb
 
 
 # =============================================================================
@@ -799,8 +799,8 @@ def run_training_benchmark(
     input_ids = torch.randint(0, config.vocab_size, (batch_size, seq_len), device=device)
     labels = torch.randint(0, config.vocab_size, (batch_size, seq_len), device=device)
     
-    amp_enabled = device in ["cuda", "xpu"]
-    amp_dtype = dtype if dtype in [torch.float16, torch.bfloat16] else torch.bfloat16
+    amp_enabled = device in ["cuda", "xpu"] and dtype in [torch.float16, torch.bfloat16]
+    amp_dtype = dtype if amp_enabled else dtype
     
     for _ in range(warmup_iters):
         if amp_enabled:
@@ -1041,7 +1041,9 @@ def benchmark_throughput(
         print(f"  Connection: {config.connection.connection_type.value} | MTP: {config.head.use_multi_token_prediction}")
         
         print(f"\n🔧 Loading model...")
-        model = LLM(config).to(device).to(torch_dtype)
+        model = LLM(config)
+        model = model.to(device)
+        model = model.to(dtype=torch_dtype)
         
         if compile_model and hasattr(torch, 'compile'):
             print("  Compiling with torch.compile()...")
