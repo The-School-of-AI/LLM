@@ -1,0 +1,14 @@
+[tool.setuptools]
+packages = ["repro", "repro_cli"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repro-registry"
+version = "0.1.0"
+dependencies = [
+  "pydantic>=2.0",
+  "pyyaml"
+]
