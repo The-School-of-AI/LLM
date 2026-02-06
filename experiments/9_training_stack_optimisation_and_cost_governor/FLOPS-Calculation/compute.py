@@ -24,6 +24,153 @@ def bytes_for_precision(precision: str) -> float:
     return mapping.get(prec, 4)
 
 
+def parse_attention_type(attention_str: str, num_heads: int = 32) -> dict:
+    """
+    Parse attention type string into normalized config.
+
+    Supports 5 attention types with optional ratio/parameter notation:
+
+    | Type | Format | Example | Description |
+    |------|--------|---------|-------------|
+    | mha  | mha | "mha" | Standard Multi-Head Attention |
+    | gqa  | gqa[:Q:KV] | "gqa:8:1" | Grouped Query Attention (8 Q heads share 1 KV head) |
+    | gsa  | gsa[:k] | "gsa:512" | Gated Sparse Attention (attend to k tokens) |
+    | dsa  | dsa[:rank] | "dsa:256" | DeepSeek MLA (KV LoRA rank=256) |
+    | hybrid | type1-type2:ratio1:ratio2 | "gqa-gsa:4:1" | Hybrid (4 GQA layers per 1 GSA layer) |
+
+    Args:
+        attention_str: Attention type string (e.g., "gqa:4:1", "gsa:512", "gqa-gsa:4:1")
+        num_heads: Number of attention heads (for validation)
+
+    Returns:
+        dict with keys:
+            - type: Normalized type ("mha", "gqa", "gsa", "dsa", "hybrid")
+            - kv_ratio: KV heads / Q heads (1.0 for MHA, 0.125 for 8:1 GQA)
+            - sparse_k: Sparse attention k tokens (None if not GSA)
+            - mla_rank: MLA compression rank (0 if not DSA)
+            - hybrid_config: (for hybrid only) dict with type1, type2, ratio1, ratio2
+
+    Examples:
+        >>> parse_attention_type("mha")
+        {'type': 'mha', 'kv_ratio': 1.0, 'sparse_k': None, 'mla_rank': 0, 'hybrid_config': None}
+
+        >>> parse_attention_type("gqa:8:1")  # 8 Q heads share 1 KV head
+        {'type': 'gqa', 'kv_ratio': 0.125, 'sparse_k': None, 'mla_rank': 0, 'hybrid_config': None}
+
+        >>> parse_attention_type("gsa:512")  # Sparse attention with k=512
+        {'type': 'gsa', 'kv_ratio': 1.0, 'sparse_k': 512, 'mla_rank': 0, 'hybrid_config': None}
+
+        >>> parse_attention_type("gqa-gsa:4:1")  # 4 GQA layers per 1 GSA layer
+        {'type': 'hybrid', 'kv_ratio': 1.0, 'sparse_k': None, 'mla_rank': 0,
+         'hybrid_config': {'type1': 'gqa', 'type2': 'gsa', 'ratio1': 4, 'ratio2': 1}}
+    """
+    attention_str = str(attention_str).strip().lower()
+    
+    # Check for hybrid format: type1-type2:ratio1:ratio2
+    if "-" in attention_str:
+        parts = attention_str.split(":")
+        type_parts = parts[0].split("-")
+        if len(type_parts) == 2:
+            type1, type2 = type_parts
+            ratio1 = int(parts[1]) if len(parts) > 1 else 1
+            ratio2 = int(parts[2]) if len(parts) > 2 else 1
+            
+            # Parse the sparse_k for GSA if specified (e.g., gqa-gsa:4:1:512)
+            sparse_k = int(parts[3]) if len(parts) > 3 else 512  # Default sparse_k
+            
+            # Normalize type aliases
+            type_aliases = {
+                "gqa": "gqa", "grouped_query": "gqa",
+                "gsa": "gsa", "gated_sparse": "gsa",
+                "mha": "mha", "standard": "mha",
+                "dsa": "dsa", "mla": "dsa", "deepseek_mla": "dsa",
+            }
+            type1 = type_aliases.get(type1, type1)
+            type2 = type_aliases.get(type2, type2)
+            
+            return {
+                "type": "hybrid",
+                "kv_ratio": 1.0,  # Will be computed per-layer
+                "sparse_k": sparse_k if "gsa" in [type1, type2] else None,
+                "mla_rank": 0,
+                "hybrid_config": {
+                    "type1": type1,
+                    "type2": type2,
+                    "ratio1": ratio1,
+                    "ratio2": ratio2,
+                    "layer_weight_type1": ratio1 / (ratio1 + ratio2),  # e.g., 0.8 for 4:1
+                    "layer_weight_type2": ratio2 / (ratio1 + ratio2),  # e.g., 0.2 for 4:1
+                },
+            }
+    
+    parts = attention_str.split(":")
+    attn_type = parts[0]
+
+    # Normalize aliases to canonical types
+    type_aliases = {
+        # MHA aliases
+        "": "mha",
+        "normal": "mha",
+        "standard": "mha",
+        "mha": "mha",
+        "multi_head": "mha",
+        "multi_head_attention": "mha",
+        # GQA aliases
+        "gqa": "gqa",
+        "grouped_query": "gqa",
+        "grouped_query_attention": "gqa",
+        # GSA aliases
+        "gsa": "gsa",
+        "gated_sparse": "gsa",
+        "gated_sparse_attention": "gsa",
+        "deepseek_gsa": "gsa",
+        # DSA/MLA aliases
+        "dsa": "dsa",
+        "mla": "dsa",
+        "deepseek_mla": "dsa",
+        "deepseek_sparse": "dsa",
+        "deepseek": "dsa",
+    }
+    attn_type = type_aliases.get(attn_type, attn_type)
+
+    result = {
+        "type": attn_type,
+        "kv_ratio": 1.0,      # KV heads / Q heads (1.0 = MHA, 0.125 = 8:1 GQA)
+        "sparse_k": None,     # Sparse attention k tokens
+        "mla_rank": 0,        # MLA/DSA compression rank
+        "hybrid_config": None,  # For hybrid attention
+    }
+
+    if attn_type == "gqa" and len(parts) >= 3:
+        # Format: gqa:Q:KV where Q heads share KV heads
+        # Example: gqa:8:1 means 8 Q heads share 1 KV head → ratio = 1/8 = 0.125
+        try:
+            q_per_group = int(parts[1])
+            kv_per_group = int(parts[2])
+            if q_per_group > 0:
+                result["kv_ratio"] = kv_per_group / q_per_group
+        except (ValueError, ZeroDivisionError):
+            pass  # Keep default ratio
+
+    elif attn_type == "gsa" and len(parts) >= 2:
+        # Format: gsa:k means sparse attention with k tokens
+        # Example: gsa:512 means attend to 512 tokens
+        try:
+            result["sparse_k"] = int(parts[1])
+        except ValueError:
+            pass
+
+    elif attn_type == "dsa" and len(parts) >= 2:
+        # Format: dsa:rank means MLA with kv_lora_rank
+        # Example: dsa:256 means compress KV to rank 256
+        try:
+            result["mla_rank"] = int(parts[1])
+        except ValueError:
+            pass
+
+    return result
+
+
 @dataclasses.dataclass
 class TrainingStage:
     name: str
@@ -136,11 +283,13 @@ class TrainingStage:
         lm_head_multiplier = arch.get(
             "lm_head_multiplier", head_cfg.get("lm_head_multiplier")
         )
-        if lm_head_multiplier is None and head_cfg.get(
-            "use_multi_token_prediction", False
-        ):
-            lm_head_multiplier = head_cfg.get(
-                "num_prediction_heads", head_cfg.get("mtp_heads", 2)
+        # Check use_multi_token_prediction at arch root first, then head_cfg
+        use_mtp = arch.get("use_multi_token_prediction", 
+                          head_cfg.get("use_multi_token_prediction", False))
+        if lm_head_multiplier is None and use_mtp:
+            lm_head_multiplier = arch.get(
+                "num_prediction_heads",
+                head_cfg.get("num_prediction_heads", head_cfg.get("mtp_heads", 2))
             )
         if lm_head_multiplier is None:
             lm_head_multiplier = 1
@@ -163,12 +312,19 @@ class TrainingStage:
             kv_ratio = 1.0
             attn_params_per_layer = 4 * hidden * hidden
 
+        # Check for GSA (including hybrid with GSA component)
+        parsed_attn = parse_attention_type(attention_type, num_heads or 32)
+        gsa_in_hybrid = (
+            parsed_attn.get("type") == "hybrid" and 
+            parsed_attn.get("hybrid_config") and 
+            "gsa" in [parsed_attn["hybrid_config"].get("type1"), parsed_attn["hybrid_config"].get("type2")]
+        )
         gsa_enabled = attention_type in (
             "gsa",
             "gated_sparse",
             "gated_sparse_attention",
             "deepseek_gsa",
-        ) or bool(arch.get("use_gsa", False))
+        ) or bool(arch.get("use_gsa", False)) or gsa_in_hybrid
         use_sparse_attn = bool(arch.get("use_sparse_attention", False)) or gsa_enabled
         indexer_heads = arch.get(
             "gsa_num_indexer_heads",
@@ -381,6 +537,11 @@ class TrainingStage:
             1 - null_prob
         ) * active_linear_params + null_prob * params_null_path_linear
 
+        # Expert params = routed experts only (for EP sharding)
+        routed_expert_params = num_moe_layers * experts * ffn_params_per_expert if experts > 0 else 0
+        # Non-expert params = everything except routed experts
+        non_expert_params = total_params - routed_expert_params
+
         return {
             "total_params": total_params,
             "active_params": effective_active_params,
@@ -392,6 +553,8 @@ class TrainingStage:
             "dense_layers": dense_layers,
             "num_experts": experts,
             "derived_num_experts": derived_experts,
+            "routed_expert_params": routed_expert_params,
+            "non_expert_params": non_expert_params,
         }
 
     def calculate_memory_per_gpu(
@@ -402,6 +565,11 @@ class TrainingStage:
         quantization: str = "bf16",
         cpu_offload: bool = False,
         cpu_offload_config: Optional[dict] = None,
+        expert_parallel_size: int = 1,
+        checkpoint_factor: Optional[float] = None,
+        include_activation_memory: Optional[bool] = None,
+        micro_batch_size: Optional[int] = None,
+        partition_activations: bool = False,
     ) -> dict:
         """
         Estimate memory footprint per GPU for training this stage.
@@ -415,12 +583,18 @@ class TrainingStage:
 
         ZeRO Stages:
         - ZeRO-0: No sharding (baseline)
-        - ZeRO-2: Shard optimizer states + gradients
+        - ZeRO-2: Shard optimizer states + gradients (+ expert sharding with EP)
         - ZeRO-3: Shard everything (params + optimizer + gradients)
         - ZeRO-Infinity (cpu_offload=True): Move selected state to CPU/NVMe, keep a GPU buffer.
+
+        Expert Parallelism:
+        - Routed expert weights are sharded across EP group
+        - Non-expert params (attention, embeddings, shared experts) remain unsharded in ZeRO-2
         """
         params = params or self.calculate_params()
         total_params = params["total_params"]
+        routed_expert_params = params.get("routed_expert_params", 0)
+        non_expert_params = params.get("non_expert_params", total_params)
         arch = self.architecture
         precision_cfg = arch.get("precision") or {}
         training_cfg = arch.get("training") or {}
@@ -484,13 +658,16 @@ class TrainingStage:
             gradient_bytes_per_param = bytes_for_precision(gradient_precision)
         gradient_bytes = total_params * float(gradient_bytes_per_param)
 
-        # Activation memory (optional, depends on batch size)
-        include_activation_memory = bool(
-            training_cfg.get("include_activation_memory", False)
-        )
+        # Activation memory - ALWAYS calculated (required for accurate GPU memory estimates)
+        # Only skip if explicitly set to False in the passed parameter
+        include_act_mem = include_activation_memory if include_activation_memory is not None else True
         activation_bytes = 0.0
-        if include_activation_memory:
-            micro_batch = float(training_cfg.get("micro_batch_size", 1))
+        if include_act_mem:
+            # Use passed micro_batch_size, else fallback to training_cfg
+            micro_batch = micro_batch_size
+            if micro_batch is None:
+                micro_batch = training_cfg.get("micro_batch_size", 1)
+            micro_batch = float(micro_batch)
             seq_len = float(
                 training_cfg.get(
                     "seq_length",
@@ -504,11 +681,14 @@ class TrainingStage:
             if act_bytes is None:
                 act_prec = training_cfg.get("activation_precision", "bf16")
                 act_bytes = bytes_for_precision(act_prec)
-            checkpoint_factor = training_cfg.get("activation_checkpointing_factor")
-            if checkpoint_factor is None:
-                checkpoint_factor = 0.5 if training_cfg.get("activation_checkpointing") else 1.0
-            checkpoint_factor = float(checkpoint_factor)
-            if checkpoint_factor <= 0:
+            # Use passed checkpoint_factor, else fallback to training_cfg, else defaults
+            ckpt_factor = checkpoint_factor
+            if ckpt_factor is None:
+                ckpt_factor = training_cfg.get("activation_checkpointing_factor")
+            if ckpt_factor is None:
+                ckpt_factor = 0.5 if training_cfg.get("activation_checkpointing") else 1.0
+            ckpt_factor = float(ckpt_factor)
+            if ckpt_factor <= 0:
                 raise ValueError("activation_checkpointing_factor must be > 0.")
             activation_bytes = (
                 micro_batch
@@ -517,10 +697,25 @@ class TrainingStage:
                 * layers
                 * activation_multiplier
                 * act_bytes
-                * checkpoint_factor
+                * ckpt_factor
             )
+            # partition_activations: shard activation memory across data parallel GPUs
+            if partition_activations and num_gpus > 1:
+                activation_bytes = activation_bytes / num_gpus
 
         cpu_memory_gb = 0.0
+
+        # Per-param bytes for EP calculation
+        opt_bytes_per_param = float(optimizer_state_bytes_per_param) * optimizer_state_multiplier
+        grad_bytes_per_param = float(gradient_bytes_per_param)
+
+        # Calculate bytes separately for expert vs non-expert params
+        expert_model_bytes = routed_expert_params * float(weight_bytes_per_param)
+        non_expert_model_bytes = non_expert_params * float(weight_bytes_per_param)
+        expert_optimizer_bytes = routed_expert_params * opt_bytes_per_param
+        non_expert_optimizer_bytes = non_expert_params * opt_bytes_per_param
+        expert_gradient_bytes = routed_expert_params * grad_bytes_per_param
+        non_expert_gradient_bytes = non_expert_params * grad_bytes_per_param
 
         # Per-GPU bytes for each component under the chosen ZeRO stage
         if zero_stage == 0:
@@ -534,21 +729,33 @@ class TrainingStage:
             optimizer_gpu_bytes = optimizer_bytes / num_gpus
             gradient_gpu_bytes = gradient_bytes / num_gpus
         else:
-            # Default to ZeRO-2: shard optimizer + gradients, replicate model
-            model_gpu_bytes = model_bytes
-            master_gpu_bytes = master_bytes
-            optimizer_gpu_bytes = optimizer_bytes / num_gpus
-            gradient_gpu_bytes = gradient_bytes / num_gpus
+            # ZeRO-2: shard optimizer + gradients, replicate model
+            # With EP: expert weights are sharded across EP group
+            ep = max(1, expert_parallel_size)
+            
+            # Only apply EP if there are actually experts to shard
+            if routed_expert_params > 0 and ep > 1:
+                # Model weights: experts sharded by EP, non-experts replicated
+                model_gpu_bytes = (expert_model_bytes / ep) + non_expert_model_bytes
+                master_gpu_bytes = master_bytes  # Master weights not sharded in ZeRO-2
+                
+                # Optimizer: non-experts sharded by full num_gpus, experts sharded by DP within EP group
+                # DP size within EP group = num_gpus / ep
+                dp_size = num_gpus / ep
+                optimizer_gpu_bytes = (expert_optimizer_bytes / ep) / dp_size + (non_expert_optimizer_bytes / num_gpus)
+                gradient_gpu_bytes = (expert_gradient_bytes / ep) / dp_size + (non_expert_gradient_bytes / num_gpus)
+            else:
+                # No experts or EP=1: standard ZeRO-2 sharding
+                model_gpu_bytes = model_bytes
+                master_gpu_bytes = master_bytes
+                optimizer_gpu_bytes = optimizer_bytes / num_gpus
+                gradient_gpu_bytes = gradient_bytes / num_gpus
 
         if cpu_offload:
             cpu_offload_cfg = cpu_offload_config or {}
             offload_params = bool(cpu_offload_cfg.get("offload_params", True))
             offload_optimizer = bool(cpu_offload_cfg.get("offload_optimizer", True))
             offload_gradients = bool(cpu_offload_cfg.get("offload_gradients", True))
-            gpu_buffer_gb = float(cpu_offload_cfg.get("gpu_buffer_gb", 4.0))
-            if gpu_buffer_gb <= 0:
-                raise ValueError("cpu_offload_config.gpu_buffer_gb must be > 0.")
-            gpu_buffer_bytes = gpu_buffer_gb * (1024**3)
 
             offloaded_bytes_total = 0.0
             if offload_params:
@@ -568,8 +775,7 @@ class TrainingStage:
                 + optimizer_gpu_bytes
                 + gradient_gpu_bytes
             )
-            base_gpu_bytes = max(remaining_gpu_bytes, gpu_buffer_bytes)
-            memory_bytes = base_gpu_bytes + activation_bytes
+            memory_bytes = remaining_gpu_bytes + activation_bytes
             cpu_memory_bytes = offloaded_bytes_total / num_gpus
             cpu_memory_gb = cpu_memory_bytes / (1024**3)
         else:
@@ -632,52 +838,44 @@ class TrainingStage:
         
         router_type = str(router_cfg.get("router_type", "")).strip().lower()
 
-        gsa_enabled = attention_type in (
+        # Parse attention type notation (e.g., "gsa:128" -> base_type="gsa", notation_value=128)
+        # Also handle hybrid format (e.g., "gqa-gsa:4:1")
+        num_heads_for_parsing = arch.get("num_heads", attention_cfg.get("num_attention_heads", 32))
+        parsed_attn = parse_attention_type(attention_type, num_heads_for_parsing or 32)
+        base_attention_type = parsed_attn.get("type", "mha")
+        
+        # Check for GSA (including hybrid with GSA component)
+        gsa_in_hybrid = (
+            base_attention_type == "hybrid" and 
+            parsed_attn.get("hybrid_config") and 
+            "gsa" in [parsed_attn["hybrid_config"].get("type1"), parsed_attn["hybrid_config"].get("type2")]
+        )
+        gsa_enabled = base_attention_type in (
             "gsa",
             "gated_sparse",
             "gated_sparse_attention",
             "deepseek_gsa",
-        ) or bool(arch.get("use_gsa", False))
+        ) or bool(arch.get("use_gsa", False)) or gsa_in_hybrid
 
-        # Sparse attention configuration
+        # Sparse attention configuration - use k from gsa:k notation if present
         use_sparse_attn = bool(arch.get("use_sparse_attention", False)) or gsa_enabled
         sparse_k_tokens = arch.get("sparse_k_tokens", s)
 
         if gsa_enabled:
+            # Priority: gsa:k notation > gsa_k_tokens > sparse_k_tokens > sequence_length
+            if ":" in attention_type:
+                # Parse k from gsa:k notation
+                try:
+                    sparse_k_tokens = int(attention_type.split(":")[1])
+                except (ValueError, IndexError):
+                    pass
             gsa_k_tokens = arch.get("gsa_k_tokens", attention_cfg.get("gsa_k_tokens"))
-            gsa_k_base = arch.get("gsa_k_base", attention_cfg.get("gsa_k_base"))
-            gsa_k_min = arch.get("gsa_k_min", attention_cfg.get("gsa_k_min", gsa_k_base))
-            gsa_k_max = arch.get("gsa_k_max", attention_cfg.get("gsa_k_max", gsa_k_base))
             if gsa_k_tokens is not None:
                 sparse_k_tokens = gsa_k_tokens
-            elif gsa_k_base is not None:
-                k = gsa_k_base
-                if bool(
-                    arch.get(
-                        "gsa_use_adaptive_k",
-                        attention_cfg.get("gsa_use_adaptive_k", False),
-                    )
-                ):
-                    if gsa_k_min is not None:
-                        k = max(k, gsa_k_min)
-                    if gsa_k_max is not None:
-                        k = min(k, gsa_k_max)
-                sparse_k_tokens = k
 
-        if gsa_enabled:
-            indexer_heads = arch.get(
-                "gsa_num_indexer_heads",
-                attention_cfg.get("gsa_num_indexer_heads", arch.get("indexer_heads", 4)),
-            )
-            indexer_dim = arch.get(
-                "gsa_indexer_dim",
-                attention_cfg.get("gsa_indexer_dim", arch.get("indexer_dim", 64)),
-            )
-        else:
-            indexer_heads = arch.get("indexer_heads", attention_cfg.get("indexer_heads", 4))
-            indexer_dim = arch.get(
-                "indexer_dim", attention_cfg.get("indexer_dim", h // 8)
-            )
+        # Indexer defaults (used for FLOPs calculation)
+        indexer_heads = 4
+        indexer_dim = h // 8
 
         mla_kv_lora_rank = arch.get(
             "mla_kv_lora_rank",
@@ -926,6 +1124,102 @@ def load_config(config_path: str):
     except json.JSONDecodeError as exc:
         print(f"Error parsing JSON file: {exc}")
         sys.exit(1)
+
+
+def normalize_deepspeed_config(config: dict) -> dict:
+    """
+    Normalize DeepSpeed-style config to internal format.
+
+    Supports both formats:
+    - DeepSpeed-style: zero_optimization, activation_checkpointing, bf16 at root level
+    - Legacy: everything nested under hardware
+
+    DeepSpeed format example:
+        {
+            "hardware": { "num_gpus": 8, "tflops_per_gpu": {...} },
+            "zero_optimization": { "stage": 2, "offload_optimizer": {"device": "cpu"} },
+            "activation_checkpointing": { "partition_activations": true },
+            "bf16": { "enabled": true },
+            "train_micro_batch_size_per_gpu": 1,
+            "mfu": 0.3
+        }
+
+    Returns config with "hardware" containing all extracted settings.
+    """
+    hardware = config.get("hardware", {}).copy()
+
+    # 1. Parse zero_optimization (DeepSpeed-style)
+    zero_opt = config.get("zero_optimization", {})
+    if zero_opt:
+        # Stage
+        if "stage" in zero_opt:
+            hardware["zero_stage"] = zero_opt["stage"]
+
+        # Offload settings
+        offload_optimizer = zero_opt.get("offload_optimizer", {})
+        offload_param = zero_opt.get("offload_param", {})
+
+        if isinstance(offload_optimizer, dict):
+            opt_device = offload_optimizer.get("device", "none")
+        else:
+            opt_device = "none"
+
+        if isinstance(offload_param, dict):
+            param_device = offload_param.get("device", "none")
+        else:
+            param_device = "none"
+
+        # Enable cpu_offload if either is set to cpu/nvme
+        if opt_device in ("cpu", "nvme") or param_device in ("cpu", "nvme"):
+            hardware["cpu_offload"] = True
+            hardware["cpu_offload_config"] = {
+                "offload_optimizer": opt_device in ("cpu", "nvme"),
+                "offload_params": param_device in ("cpu", "nvme"),
+                "offload_gradients": zero_opt.get("offload_gradients", True),
+                "gpu_buffer_gb": zero_opt.get("pin_memory", 4.0),
+            }
+
+    # 2. Parse activation_checkpointing (DeepSpeed-style)
+    # Always parse and store settings - activation memory is always calculated now
+    act_ckpt = config.get("activation_checkpointing", {})
+    partition_activations = bool(act_ckpt.get("partition_activations", False))
+    cpu_checkpointing = bool(act_ckpt.get("cpu_checkpointing", False))
+    # checkpoint_factor: 1.0 = no checkpointing (full activations), 0.1 = aggressive checkpointing
+    checkpoint_factor = float(act_ckpt.get("checkpoint_factor", 1.0))  # Default: no checkpointing
+    
+    hardware["_partition_activations"] = partition_activations
+    hardware["_checkpoint_factor"] = checkpoint_factor
+    hardware["_cpu_checkpointing"] = cpu_checkpointing
+    # Always include activation memory in calculations
+    hardware["_include_activation_memory"] = True
+
+    # 3. Parse precision (bf16/fp16 at root - DeepSpeed-style)
+    bf16_cfg = config.get("bf16", {})
+    fp16_cfg = config.get("fp16", {})
+    if bf16_cfg.get("enabled", False):
+        hardware["_precision"] = "bf16"
+    elif fp16_cfg.get("enabled", False):
+        hardware["_precision"] = "fp16"
+
+    # 4. Parse training settings from root level (DeepSpeed-style)
+    if "train_micro_batch_size_per_gpu" in config:
+        hardware["_micro_batch_size"] = config["train_micro_batch_size_per_gpu"]
+    if "gradient_accumulation_steps" in config:
+        hardware["_gradient_accumulation_steps"] = config["gradient_accumulation_steps"]
+
+    # 5. Parse mfu from root level (our addition)
+    if "mfu" in config and "mfu" not in hardware:
+        hardware["mfu"] = config["mfu"]
+
+    # 6. Set defaults if not present
+    hardware.setdefault("mfu", 0.3)
+    hardware.setdefault("zero_stage", 2)
+    hardware.setdefault("cpu_offload", False)
+    hardware.setdefault("price_per_gpu_hour", 2.5)
+
+    # Update config with normalized hardware
+    config["hardware"] = hardware
+    return config
 
 
 def get_zero_efficiency(
@@ -1229,6 +1523,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = load_config(args.config)
+    config = normalize_deepspeed_config(config)  # Support DeepSpeed-style configs
 
     try:
         hardware = config["hardware"]
@@ -1240,6 +1535,7 @@ def main() -> None:
         tflops_mode = hardware.get("tflops_mode", "dense")
         zero_stage = hardware.get("zero_stage", 2)  # Default ZeRO-2
         cpu_offload = hardware.get("cpu_offload", False)  # ZeRO-Infinity
+        expert_parallel_size = int(hardware.get("expert_parallel_size", hardware.get("ep", 1)))
 
         # Efficiency configs (can be overridden in config.json)
         zero_efficiency_cfg = hardware.get("zero_efficiency", {})
@@ -1345,6 +1641,11 @@ def main() -> None:
                 precision,
                 cpu_offload,
                 hardware.get("cpu_offload_config"),
+                expert_parallel_size,
+                hardware.get("_checkpoint_factor"),
+                hardware.get("_include_activation_memory"),
+                hardware.get("_micro_batch_size"),
+                hardware.get("_partition_activations", False),
             )
             mem_per_gpu = mem_info["memory_per_gpu_gb"]
 

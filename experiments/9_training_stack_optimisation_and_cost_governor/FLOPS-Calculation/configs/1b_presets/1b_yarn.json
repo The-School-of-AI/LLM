@@ -2,44 +2,33 @@
   "hardware": {
     "num_gpus": 8,
     "price_per_gpu_hour": 2.5,
-    "mfu": 0.3,
-    "quantization": "all",
-    "zero_stage": 2,
-    "cpu_offload": false,
-    "cpu_offload_config": {
-      "offload_params": true,
-      "offload_optimizer": true,
-      "offload_gradients": true,
-      "gpu_buffer_gb": 4.0
-    },
     "tflops_per_gpu": {
       "bf16": 989.0,
       "fp8": 1979.0,
       "nvfp4": 3500.0
-    },
-    "_comment": "Update hardware to match your cluster",
-    "parallelism": {
-      "tensor_parallel_size": 1,
-      "pipeline_parallel_size": 1,
-      "expert_parallel_size": 1,
-      "data_parallel_size": null
-    },
-    "communication": {
-      "dp_bandwidth_gbps": 200,
-      "dp_latency_ms": 0.5,
-      "dp_comm_multiplier": 1.0,
-      "ep_bandwidth_gbps": 200,
-      "ep_latency_ms": 0.5,
-      "ep_comm_multiplier": 1.0,
-      "offload_bandwidth_gbps": null,
-      "offload_latency_ms": 0.0,
-      "offload_bytes_per_step": null
-    },
-    "performance": {
-      "use_explicit_comm_model": false,
-      "compute_mfu": 0.3
     }
   },
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": {
+      "device": "none"
+    },
+    "offload_param": {
+      "device": "none"
+    }
+  },
+  "activation_checkpointing": {
+    "partition_activations": true,
+    "cpu_checkpointing": false,
+    "checkpoint_factor": 0.1,
+    "_comment": "checkpoint_factor: 1.0=none, 0.5=half layers, 0.1=aggressive"
+  },
+  "bf16": {
+    "enabled": true
+  },
+  "train_micro_batch_size_per_gpu": 1,
+  "gradient_accumulation_steps": 1,
+  "mfu": 0.3,
   "stages": [
     {
       "name": "1B YaRN 32K",
@@ -49,41 +38,25 @@
         "hidden_size": 2048,
         "intermediate_size": 4096,
         "num_layers": 16,
+        "sequence_length": 32768,
         "num_heads": 16,
         "num_kv_heads": 4,
-        "sequence_length": 32768,
+        "attention_type": "gqa:4:1",
         "tie_embeddings": true,
-        "attention_type": "gqa",
-        "position_type": "yarn",
-        "yarn_original_max_position": 4096,
-        "yarn_scale": 8.0,
-        "yarn_beta_fast": 32.0,
-        "yarn_beta_slow": 1.0,
-        "yarn_mscale": 1.0,
+        "position_embedding_type": "rope",
+        "rope_scaling": {
+          "type": "yarn",
+          "original_max_position": 4096,
+          "factor": 8.0
+        },
         "precision": {
           "weight_precision": "auto",
+          "gradient_precision": "fp32",
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
-          "optimizer_state_multiplier": 1.0,
-          "gradient_precision": "fp32",
-          "master_weights": false,
-          "master_weights_precision": "fp32"
-        },
-        "position": {
-          "position_type": "yarn",
-          "yarn_flops_multiplier": 1.0
-        },
-        "training": {
-          "micro_batch_size": 1,
-          "gradient_accumulation_steps": 1,
-          "activation_precision": "bf16",
-          "activation_multiplier": 2.0,
-          "activation_checkpointing": false,
-          "activation_checkpointing_factor": 1.0,
-          "include_activation_memory": false
+          "master_weights": false
         }
-      },
-      "_comment": "Token count is a placeholder; update when final"
+      }
     }
   ]
 }

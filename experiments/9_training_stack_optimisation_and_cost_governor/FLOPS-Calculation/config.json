@@ -1,60 +1,32 @@
 {
   "_comment": "Starter config. For team presets use configs/1b_presets or configs/moe_team8.",
+
   "hardware": {
     "num_gpus": 8,
     "price_per_gpu_hour": 2.5,
-    "mfu": 0.3,
-    "quantization": "all",
-    "zero_stage": 2,
-    "cpu_offload": false,
-    "cpu_offload_config": {
-      "offload_params": true,
-      "offload_optimizer": true,
-      "offload_gradients": true,
-      "gpu_buffer_gb": 4.0
-    },
     "tflops_per_gpu": {
       "bf16": 989.0,
       "fp8": 1979.0,
       "nvfp4": 3500.0
-    },
-    "_comment_zero_efficiency": "Optional; override if you have better profiling data.",
-    "zero_efficiency": {
-      "zero0": 1.0,
-      "zero2": 0.95,
-      "zero3": 0.7,
-      "zero_infinity": 0.25
-    },
-    "_comment_scaling_efficiency": "Optional; override if you have better profiling data.",
-    "scaling_efficiency": {
-      "base_gpus": 8,
-      "efficiency_at_base": 1.0,
-      "efficiency_at_64": 0.9,
-      "efficiency_at_256": 0.8,
-      "efficiency_at_1024": 0.65
-    },
-    "parallelism": {
-      "tensor_parallel_size": 1,
-      "pipeline_parallel_size": 1,
-      "expert_parallel_size": 1,
-      "data_parallel_size": null
-    },
-    "communication": {
-      "dp_bandwidth_gbps": 200,
-      "dp_latency_ms": 0.5,
-      "dp_comm_multiplier": 1.0,
-      "ep_bandwidth_gbps": 200,
-      "ep_latency_ms": 0.5,
-      "ep_comm_multiplier": 1.0,
-      "offload_bandwidth_gbps": null,
-      "offload_latency_ms": 0.0,
-      "offload_bytes_per_step": null
-    },
-    "performance": {
-      "use_explicit_comm_model": false,
-      "compute_mfu": 0.3
     }
   },
+
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": { "device": "none" },
+    "offload_param": { "device": "none" }
+  },
+
+  "activation_checkpointing": {
+    "partition_activations": false
+  },
+
+  "bf16": { "enabled": true },
+
+  "train_micro_batch_size_per_gpu": 1,
+  "gradient_accumulation_steps": 1,
+  "mfu": 0.3,
+
   "stages": [
     {
       "name": "Example 1B Base",
@@ -65,42 +37,21 @@
         "intermediate_size": 4096,
         "num_layers": 16,
         "sequence_length": 4096,
+
+        "num_heads": 16,
+        "num_kv_heads": 4,
+        "attention_type": "gqa:4:1",
+
         "tie_embeddings": true,
-        "attention": {
-          "attention_type": "grouped_query",
-          "num_attention_heads": 16,
-          "num_key_value_heads": 4
+
+        "position_embedding_type": "rope",
+        "rope_scaling": {
+          "type": "yarn",
+          "original_max_position": 4096,
+          "factor": 8.0
         },
-        "position": {
-          "position_type": "yarn",
-          "yarn_original_max_position": 4096,
-          "yarn_scale": 8.0,
-          "yarn_beta_fast": 32.0,
-          "yarn_beta_slow": 1.0,
-          "yarn_mscale": 1.0,
-          "yarn_flops_multiplier": 1.0
-        },
-        "head": {
-          "use_multi_token_prediction": false
-        },
-        "precision": {
-          "weight_precision": "auto",
-          "optimizer_precision": "fp32",
-          "optimizer_states_count": 2,
-          "optimizer_state_multiplier": 1.0,
-          "gradient_precision": "fp32",
-          "master_weights": false,
-          "master_weights_precision": "fp32"
-        },
-        "training": {
-          "micro_batch_size": 1,
-          "gradient_accumulation_steps": 1,
-          "activation_precision": "bf16",
-          "activation_multiplier": 2.0,
-          "activation_checkpointing": false,
-          "activation_checkpointing_factor": 1.0,
-          "include_activation_memory": false
-        }
+
+        "use_multi_token_prediction": false
       }
     }
   ]

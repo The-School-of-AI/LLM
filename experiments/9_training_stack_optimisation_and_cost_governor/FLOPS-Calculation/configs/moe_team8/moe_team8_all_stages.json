@@ -1,45 +1,47 @@
 {
   "hardware": {
-    "num_gpus": 36,
+    "num_gpus": 12,
     "price_per_gpu_hour": 4,
-    "mfu": 0.3,
-    "quantization": "all",
-    "zero_stage": 2,
-    "cpu_offload": true,
-    "cpu_offload_config": {
-      "offload_params": true,
-      "offload_optimizer": true,
-      "offload_gradients": true,
-      "gpu_buffer_gb": 75
-    },
     "tflops_per_gpu": {
       "bf16": 989.0,
       "fp8": 1979.0,
       "nvfp4": 3500.0
     },
-    "_comment": "Update hardware to match your cluster",
-    "parallelism": {
-      "tensor_parallel_size": 1,
-      "pipeline_parallel_size": 1,
-      "expert_parallel_size": 1,
-      "data_parallel_size": null
+    "expert_parallel_size": 8,
+    "zero_efficiency": {
+      "_comment": "Throughput efficiency for each ZeRO mode (0.0-1.0)",
+      "zero0": 1.0,
+      "zero2": 0.95,
+      "zero3": 0.70,
+      "zero_infinity": 0.25
     },
-    "communication": {
-      "dp_bandwidth_gbps": 200,
-      "dp_latency_ms": 0.5,
-      "dp_comm_multiplier": 1.0,
-      "ep_bandwidth_gbps": 200,
-      "ep_latency_ms": 0.5,
-      "ep_comm_multiplier": 1.0,
-      "offload_bandwidth_gbps": null,
-      "offload_latency_ms": 0.0,
-      "offload_bytes_per_step": null
-    },
-    "performance": {
-      "use_explicit_comm_model": false,
-      "compute_mfu": 0.3
+    "scaling_efficiency": {
+      "_comment": "Multi-GPU scaling efficiency at different GPU counts",
+      "base_gpus": 8,
+      "efficiency_at_base": 1.0,
+      "efficiency_at_64": 0.90,
+      "efficiency_at_256": 0.80,
+      "efficiency_at_1024": 0.65
     }
   },
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": {
+      "device": "none"
+    },
+    "offload_param": {
+      "device": "none"
+    }
+  },
+  "activation_checkpointing": {
+    "partition_activations": true,
+    "cpu_checkpointing": false,
+    "checkpoint_factor": 1,
+    "_comment": "checkpoint_factor: 1.0=none, 0.5=half layers, 0.1=aggressive"
+  },
+  "train_micro_batch_size_per_gpu": 16,
+  "gradient_accumulation_steps": 8,
+  "mfu": 0.3,
   "growth": {
     "mode": "none"
   },
@@ -52,69 +54,21 @@
         "hidden_size": 2048,
         "intermediate_size": 4096,
         "num_layers": 20,
+        "sequence_length": 4096,
         "num_heads": 16,
         "num_kv_heads": 4,
-        "sequence_length": 4096,
-        "tie_embeddings": true,
-        "attention": {
-          "attention_type": "gqa",
-          "num_attention_heads": 16,
-          "num_key_value_heads": 4,
-          "gsa_num_indexer_heads": 4,
-          "gsa_indexer_dim": 64,
-          "gsa_k_base": 128,
-          "gsa_k_min": 32,
-          "gsa_k_max": 256,
-          "gsa_use_adaptive_k": true,
-          "gsa_use_value_gate": true,
-          "gsa_use_output_gate": true
-        },
-        "router": {
-          "router_type": "null_expert",
-          "top_k": 4,
-          "top_k_min": 1,
-          "top_k_max": 4,
-          "use_adaptive_top_k": true,
-          "bias_update_speed": 0.001,
-          "bias_clamp_min": -2.0,
-          "bias_clamp_max": 2.0,
-          "data_sparsity": 0.8,
-          "null_copies": 0,
-          "num_router_heads": 4,
-          "router_dim": 64
-        },
-        "expert": {
-          "intermediate_size": 512,
-          "use_dual_gating": true,
-          "gate_bias_init": 0.5
-        },
+        "attention_type": "gqa:4:1",
         "num_routed_experts": 0,
         "num_shared_experts": 0,
-        "num_null_experts": 0,
         "top_k": 0,
         "moe_layer_frequency": 0,
-        "_comment": "Dense stage; MoE fields set to zero",
+        "tie_embeddings": true,
         "precision": {
           "weight_precision": "auto",
+          "gradient_precision": "fp32",
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
-          "optimizer_state_multiplier": 1.0,
-          "gradient_precision": "fp32",
-          "master_weights": false,
-          "master_weights_precision": "fp32"
-        },
-        "position": {
-          "position_type": "yarn",
-          "yarn_flops_multiplier": 1.0
-        },
-        "training": {
-          "micro_batch_size": 1,
-          "gradient_accumulation_steps": 1,
-          "activation_precision": "bf16",
-          "activation_multiplier": 2.0,
-          "activation_checkpointing": false,
-          "activation_checkpointing_factor": 1.0,
-          "include_activation_memory": false
+          "master_weights": false
         }
       }
     },
@@ -128,64 +82,21 @@
         "moe_intermediate_size": 512,
         "num_layers": 20,
         "sequence_length": 4096,
-        "tie_embeddings": true,
-        "attention": {
-          "attention_type": "gqa",
-          "num_attention_heads": 16,
-          "num_key_value_heads": 4,
-          "gsa_num_indexer_heads": 4,
-          "gsa_indexer_dim": 64,
-          "gsa_k_base": 128,
-          "gsa_k_min": 32,
-          "gsa_k_max": 256,
-          "gsa_use_adaptive_k": true,
-          "gsa_use_value_gate": true,
-          "gsa_use_output_gate": true
-        },
-        "router": {
-          "router_type": "null_expert",
-          "top_k": 4,
-          "top_k_min": 1,
-          "top_k_max": 4,
-          "use_adaptive_top_k": true,
-          "bias_update_speed": 0.001,
-          "bias_clamp_min": -2.0,
-          "bias_clamp_max": 2.0,
-          "data_sparsity": 0.8,
-          "null_copies": 0,
-          "num_router_heads": 4,
-          "router_dim": 64
-        },
-        "expert": {
-          "intermediate_size": 512,
-          "use_dual_gating": true,
-          "gate_bias_init": 0.5
-        },
+        "num_heads": 16,
+        "num_kv_heads": 4,
+        "attention_type": "gqa:4:1",
         "num_routed_experts": 40,
         "num_shared_experts": 2,
         "num_null_experts": 20,
         "top_k": 4,
         "moe_layer_frequency": 1,
-        "null_expert_params_per_expert": 1,
+        "tie_embeddings": true,
         "precision": {
           "weight_precision": "auto",
+          "gradient_precision": "fp32",
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
-          "optimizer_state_multiplier": 1.0,
-          "gradient_precision": "fp32",
-          "master_weights": false,
-          "master_weights_precision": "fp32"
-        },
-        "position": {
-          "position_type": "yarn",
-          "yarn_flops_multiplier": 1.0
-        },
-        "training": {
-          "micro_batch_size": 1,
-          "gradient_accumulation_steps": 1,
-          "activation_precision": "bf16",
-          "activation_multiplier": 2.0,
-          "include_activation_memory": false
+          "master_weights": false
         }
       }
     },
@@ -199,64 +110,21 @@
         "moe_intermediate_size": 512,
         "num_layers": 40,
         "sequence_length": 4096,
-        "tie_embeddings": true,
-        "attention": {
-          "attention_type": "gqa",
-          "num_attention_heads": 16,
-          "num_key_value_heads": 4,
-          "gsa_num_indexer_heads": 4,
-          "gsa_indexer_dim": 64,
-          "gsa_k_base": 128,
-          "gsa_k_min": 32,
-          "gsa_k_max": 256,
-          "gsa_use_adaptive_k": true,
-          "gsa_use_value_gate": true,
-          "gsa_use_output_gate": true
-        },
-        "router": {
-          "router_type": "null_expert",
-          "top_k": 4,
-          "top_k_min": 1,
-          "top_k_max": 4,
-          "use_adaptive_top_k": true,
-          "bias_update_speed": 0.001,
-          "bias_clamp_min": -2.0,
-          "bias_clamp_max": 2.0,
-          "data_sparsity": 0.8,
-          "null_copies": 0,
-          "num_router_heads": 4,
-          "router_dim": 64
-        },
-        "expert": {
-          "intermediate_size": 512,
-          "use_dual_gating": true,
-          "gate_bias_init": 0.5
-        },
+        "num_heads": 16,
+        "num_kv_heads": 4,
+        "attention_type": "gqa:4:1",
         "num_routed_experts": 40,
         "num_shared_experts": 2,
         "num_null_experts": 20,
         "top_k": 4,
         "moe_layer_frequency": 1,
-        "null_expert_params_per_expert": 1,
+        "tie_embeddings": true,
         "precision": {
           "weight_precision": "auto",
+          "gradient_precision": "fp32",
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
-          "optimizer_state_multiplier": 1.0,
-          "gradient_precision": "fp32",
-          "master_weights": false,
-          "master_weights_precision": "fp32"
-        },
-        "position": {
-          "position_type": "yarn",
-          "yarn_flops_multiplier": 1.0
-        },
-        "training": {
-          "micro_batch_size": 1,
-          "gradient_accumulation_steps": 1,
-          "activation_precision": "bf16",
-          "activation_multiplier": 2.0,
-          "include_activation_memory": false
+          "master_weights": false
         }
       }
     },
@@ -270,64 +138,21 @@
         "moe_intermediate_size": 512,
         "num_layers": 40,
         "sequence_length": 4096,
-        "tie_embeddings": true,
-        "attention": {
-          "attention_type": "gqa",
-          "num_attention_heads": 16,
-          "num_key_value_heads": 4,
-          "gsa_num_indexer_heads": 4,
-          "gsa_indexer_dim": 64,
-          "gsa_k_base": 128,
-          "gsa_k_min": 32,
-          "gsa_k_max": 256,
-          "gsa_use_adaptive_k": true,
-          "gsa_use_value_gate": true,
-          "gsa_use_output_gate": true
-        },
-        "router": {
-          "router_type": "null_expert",
-          "top_k": 8,
-          "top_k_min": 1,
-          "top_k_max": 8,
-          "use_adaptive_top_k": true,
-          "bias_update_speed": 0.001,
-          "bias_clamp_min": -2.0,
-          "bias_clamp_max": 2.0,
-          "data_sparsity": 0.8,
-          "null_copies": 0,
-          "num_router_heads": 4,
-          "router_dim": 64
-        },
-        "expert": {
-          "intermediate_size": 512,
-          "use_dual_gating": true,
-          "gate_bias_init": 0.5
-        },
+        "num_heads": 16,
+        "num_kv_heads": 4,
+        "attention_type": "gqa:4:1",
         "num_routed_experts": 512,
         "num_shared_experts": 4,
         "num_null_experts": 256,
         "top_k": 8,
         "moe_layer_frequency": 1,
-        "null_expert_params_per_expert": 1,
+        "tie_embeddings": true,
         "precision": {
           "weight_precision": "auto",
+          "gradient_precision": "fp32",
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
-          "optimizer_state_multiplier": 1.0,
-          "gradient_precision": "fp32",
-          "master_weights": false,
-          "master_weights_precision": "fp32"
-        },
-        "position": {
-          "position_type": "yarn",
-          "yarn_flops_multiplier": 1.0
-        },
-        "training": {
-          "micro_batch_size": 1,
-          "gradient_accumulation_steps": 1,
-          "activation_precision": "bf16",
-          "activation_multiplier": 2.0,
-          "include_activation_memory": false
+          "master_weights": false
         }
       }
     }
