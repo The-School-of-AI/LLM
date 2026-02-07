@@ -485,12 +485,26 @@ class TrainingStage:
         if experts > 0 and top_k > experts:
             raise ValueError("top_k_experts cannot exceed num_experts.")
 
+        # =========================================================================
+        # Normalization Parameters (LayerNorm/RMSNorm)
+        # 2 norms per layer (pre-attention, pre-FFN) + 1 final output norm
+        # RMSNorm: only gamma (scale) = hidden params per norm
+        # LayerNorm: gamma + beta = 2 * hidden params per norm
+        # =========================================================================
+        norm_type = str(arch.get("normalization", arch.get("norm_type", "rmsnorm"))).strip().lower()
+        num_norms = layers * 2 + 1  # 2 per layer + 1 final
+        if norm_type in ("rmsnorm", "rms", "rms_norm"):
+            norm_params = num_norms * hidden  # Only gamma
+        else:
+            norm_params = num_norms * 2 * hidden  # gamma + beta
+
         total_params = (
             embedding_params
             + lm_head_params
             + layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
             + num_moe_layers * total_ffn_params_moe
+            + norm_params
         )
 
         active_non_embed_params = (
@@ -498,12 +512,14 @@ class TrainingStage:
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params
+            + norm_params
         )
         active_linear_params = (
             layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params_for_flops
+            + norm_params
         )
         active_params_base = embedding_params + active_non_embed_params
 
@@ -513,6 +529,7 @@ class TrainingStage:
             + dense_layers * ffn_params_dense
             + num_moe_layers * (router_params + shared_expert_params)
             + lm_head_params
+            + norm_params
         )
         params_null_path_non_embed = (
             layers * attn_params_per_layer
