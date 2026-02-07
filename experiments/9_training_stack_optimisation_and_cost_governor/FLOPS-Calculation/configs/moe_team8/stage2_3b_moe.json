@@ -1,0 +1,63 @@
+{
+  "hardware": {
+    "num_gpus": 36,
+    "price_per_gpu_hour": 4,
+    "tflops_per_gpu": {
+      "bf16": 989.0,
+      "fp8": 1979.0
+    },
+    "expert_parallel_size": 1
+  },
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": {
+      "device": "cpu"
+    },
+    "offload_param": {
+      "device": "cpu"
+    },
+    "pin_memory": 75
+  },
+  "activation_checkpointing": {
+    "partition_activations": true,
+    "cpu_checkpointing": false,
+    "checkpoint_factor": 0.1,
+    "_comment": "checkpoint_factor: 1.0=none, 0.5=half layers, 0.1=aggressive"
+  },
+  "bf16": {
+    "enabled": true
+  },
+  "train_micro_batch_size_per_gpu": 1,
+  "gradient_accumulation_steps": 1,
+  "mfu": 0.3,
+  "stages": [
+    {
+      "name": "Stage 2 (3B MoE)",
+      "total_tokens": 40000000000,
+      "architecture": {
+        "vocab_size": 32000,
+        "hidden_size": 2048,
+        "intermediate_size": 4096,
+        "moe_intermediate_size": 512,
+        "num_layers": 20,
+        "sequence_length": 4096,
+        "num_heads": 16,
+        "num_kv_heads": 4,
+        "attention_type": "gqa:4:1",
+        "num_routed_experts": 40,
+        "num_shared_experts": 2,
+        "num_null_experts": 20,
+        "top_k": 4,
+        "moe_layer_frequency": 1,
+        "tie_embeddings": true,
+        "precision": {
+          "weight_precision": "auto",
+          "gradient_precision": "fp32",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "master_weights": false
+        }
+      }
+    }
+  ]
+}
