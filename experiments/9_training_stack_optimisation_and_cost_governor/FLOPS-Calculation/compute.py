@@ -693,7 +693,7 @@ class TrainingStage:
             )
             hidden = float(arch.get("hidden_size", 2048))
             layers = float(arch.get("num_layers", arch.get("num_hidden_layers", 24)))
-            activation_multiplier = float(training_cfg.get("activation_multiplier", 2.0))
+            activation_multiplier = float(training_cfg.get("activation_multiplier", 10.0))
             act_bytes = training_cfg.get("activation_bytes_per_element")
             if act_bytes is None:
                 act_prec = training_cfg.get("activation_precision", "bf16")

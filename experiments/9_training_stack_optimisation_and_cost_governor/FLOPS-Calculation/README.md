@@ -295,7 +295,7 @@ Activation checkpointing trades compute for memory by recomputing activations du
     "activation_checkpointing": true,        // Enable checkpointing
     "activation_checkpointing_factor": 0.5,  // % of layers to checkpoint
     "activation_precision": "bf16",          // "bf16", "fp16", "fp32"
-    "activation_multiplier": 2.0,            // Memory per activation (bytes/element)
+    "activation_multiplier": 10.0,           // Hidden vectors per token per layer (see docs)
     "include_activation_memory": true        // Include in memory estimate
   }
 }
@@ -325,6 +325,65 @@ Activation checkpointing trades compute for memory by recomputing activations du
 > **Memory Savings:** Checkpointing can reduce activation memory by 60-80% at the cost of ~33% more compute.
 > 
 > **partition_activations:** When enabled, divides activation memory by `num_gpus`. Use with data parallelism.
+
+#### Understanding `activation_multiplier`
+
+The `activation_multiplier` controls how many "hidden vectors per token per layer" are stored for the backward pass. The formula used is:
+
+```
+activation_bytes = batch × seq × hidden × layers × activation_multiplier × bytes × ckpt_factor
+```
+
+**How we calculated the default value (10.0):**
+
+For a SwiGLU transformer layer with GQA, the activations stored for backward pass are:
+
+| Activation | Shape | Units (÷ hidden) |
+|------------|-------|------------------|
+| Layer input (residual) | `B × S × H` | 1 |
+| Post-LayerNorm (pre-attn) | `B × S × H` | 1 |
+| Q projection output | `B × S × H` | 1 |
+| K projection output | `B × S × kv_dim` | kv_ratio (e.g., 0.25) |
+| V projection output | `B × S × kv_dim` | kv_ratio (e.g., 0.25) |
+| Attention output | `B × S × H` | 1 |
+| Post-LayerNorm (pre-FFN) | `B × S × H` | 1 |
+| Gate projection (FFN) | `B × S × I` | intermediate/hidden (e.g., 4) |
+| Up projection (FFN) | `B × S × I` | intermediate/hidden (e.g., 4) |
+
+**Typical totals:**
+
+| Scenario | Multiplier | When to use |
+|----------|------------|-------------|
+| With FlashAttention | **10-15** | Modern training (recommended) |
+| Without FlashAttention | **30-50** | Adds `heads × seq / hidden` for attention scores |
+
+**Example calculation (GQA 4:1, intermediate=4×hidden, FlashAttention):**
+```
+1 + 1 + 1 + 0.25 + 0.25 + 1 + 1 + 4 + 4 = 13.5 → round to 10-15
+```
+
+**Without FlashAttention (must store O(seq²) attention scores):**
+```
+13.5 + (16 heads × 4096 seq / 2048 hidden) = 13.5 + 32 = 45.5 → use 30-50
+```
+
+**Configuration examples:**
+```json
+// With FlashAttention (default, recommended)
+"training": {
+  "activation_multiplier": 10.0
+}
+
+// Without FlashAttention (stores attention scores)
+"training": {
+  "activation_multiplier": 40.0
+}
+
+// Conservative estimate for safety
+"training": {
+  "activation_multiplier": 15.0
+}
+```
 
 ---
 
@@ -447,7 +506,7 @@ Activation checkpointing trades compute for memory by recomputing activations du
     "micro_batch_size": 1,                   // Batch size per GPU
     "gradient_accumulation_steps": 1,        // Steps before optimizer update
     "activation_precision": "bf16",          // Activation tensor precision
-    "activation_multiplier": 2.0,            // Memory per activation
+    "activation_multiplier": 10.0,           // Hidden vectors per token per layer
     "activation_checkpointing": false,       // Enable checkpointing
     "activation_checkpointing_factor": 1.0,  // Fraction to checkpoint
     "include_activation_memory": false       // Include in memory calc
@@ -546,7 +605,7 @@ You can optionally model **gradient accumulation and activation memory**:
     "micro_batch_size": 1,
     "gradient_accumulation_steps": 1,
     "activation_precision": "bf16",
-    "activation_multiplier": 2.0,
+    "activation_multiplier": 10.0,
     "activation_checkpointing": false,
     "activation_checkpointing_factor": 1.0,
     "activation_bytes_per_element": null,
