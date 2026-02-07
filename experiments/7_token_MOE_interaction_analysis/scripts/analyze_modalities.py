@@ -1,0 +1,100 @@
+import argparse
+
+import numpy as np
+from transformers import AutoTokenizer
+
+
+def main():
+    # Computes global token distribution using saved token counts and computes log-odds per modality to get:
+    # 1) distinctive tokens per modality
+    # 2) null-token candidates
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--npz", type=str, default="domain_token_distributions.npz")
+    parser.add_argument("--tokenizer", type=str, default="gpt2")
+    parser.add_argument("--topk", type=int, default=30)
+    parser.add_argument("--null_topk", type=int, default=50)
+    parser.add_argument("--min_tokens", type=int, default=5000)
+    args = parser.parse_args()
+
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
+    tokenizer.model_max_length = 10**9
+    MIN_TOKENS = args.min_tokens
+
+    # Higher value for more syntactic nulls and fewer semantic words. Eg more towards "and", "in", "was" and
+    # less towards "important", "developments" etc
+    MIN_GLOBAL_PROB = 1e-5  # 5e-6 #3e-6 #1e-6
+
+    data = np.load(args.npz)
+
+    # Filter small modalities
+    modalities = [k for k in data.files if not k.endswith("__total")]
+    print("Modalities:", modalities)
+    for m in modalities:
+        print(m, data[m + "__total"][0])
+
+    valid_modalities = [m for m in modalities if data[m + "__total"][0] > MIN_TOKENS]
+
+    print("Keeping modalities:", valid_modalities)
+    modalities = valid_modalities
+
+    # Stack distributions
+    Ps = np.stack([data[m] for m in modalities], axis=0)
+
+    # Global distribution
+    Pg = Ps.sum(axis=0)
+    Pg /= Pg.sum()
+
+    eps = 1e-12
+
+    # Log-odds per modality
+    log_odds = np.log((Ps + eps) / (Pg + eps))
+
+    # ---------------------------------------
+    # Distinctive tokens per modality
+    # ---------------------------------------
+
+    for i, m in enumerate(modalities):
+        scores = log_odds[i]
+        top = np.argsort(-scores)[: args.topk]
+        toks = tokenizer.convert_ids_to_tokens(top.tolist())
+
+        print("\n==============================")
+        print(m)
+        print(toks)
+
+    # ---------------------------------------
+    # Null token candidates
+    # Tokens with near-zero variance of log-odds
+    # ---------------------------------------
+
+    # var = log_odds.var(axis=0) # This is not accurate when there is very high imbalance between modalities
+
+    # modality weights from true totals
+    weights = np.array([data[m + "__total"][0] for m in modalities], dtype=np.float64)
+    weights /= weights.sum()
+
+    # Variance across modalities - use weighted variance
+    mean = np.average(log_odds, axis=0, weights=weights)
+    var = np.average((log_odds - mean) ** 2, axis=0, weights=weights)
+    print("Weights:", dict(zip(modalities, weights)))
+
+    # Only consider tokens with enough total probability
+    # null_ids = np.argsort(var)[: args.null_topk]
+    mask = Pg > MIN_GLOBAL_PROB
+    filtered_var = var.copy()
+    filtered_var[~mask] = np.inf
+    null_ids = np.argsort(filtered_var)[: args.null_topk]
+    null_tokens = tokenizer.convert_ids_to_tokens(null_ids.tolist())
+
+    print("\n==============================")
+    print("NULL TOKEN CANDIDATES (lowest variance across modalities):")
+    print(null_tokens)
+
+    # Also show most globally frequent
+    print("\nMost globally frequent tokens:")
+    top_global = np.argsort(-Pg)[: args.null_topk]
+    print(tokenizer.convert_ids_to_tokens(top_global.tolist()))
+
+
+if __name__ == "__main__":
+    main()

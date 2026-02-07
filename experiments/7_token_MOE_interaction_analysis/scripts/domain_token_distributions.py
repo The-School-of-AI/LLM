@@ -10,6 +10,8 @@ import pyarrow.parquet as pq
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
+# For each modality, calculate what tokens appear most often
+
 # -----------------------------
 # CONFIG
 # -----------------------------
@@ -239,7 +241,12 @@ def main():
         Pd /= Pd.sum()
         P[d] = Pd
 
-    np.savez(args.output, **P)
+    save_dict = {}
+    for d in DOMAINS:
+        save_dict[d] = P[d]
+        save_dict[d + "__total"] = np.array([totals[d]], dtype=np.int64)
+
+    np.savez(args.output, **save_dict)
     print("Saved:", args.output)
 
     # Sanity
