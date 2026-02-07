@@ -1,7 +1,8 @@
 import boto3
-from huggingface_hub import hf_hub_download, list_repo_files
-import os
+from huggingface_hub import list_repo_files, HfApi
 import argparse
+import requests
+from io import BytesIO
 
 def main():
     parser = argparse.ArgumentParser(description="Download dataset from Hugging Face and upload to S3")
@@ -38,18 +39,22 @@ def main():
         print(f"No files found for prefix {prefix}")
         return
 
+    api = HfApi()
     for filename in files:
-        print(f"Downloading and uploading {filename}...")
+        print(f"Streaming and uploading {filename}...")
         try:
-            # Download the file
-            local_path = hf_hub_download(repo_id=repo_id, filename=filename, repo_type=repo_type)
-            
-            # Upload to S3
-            s3_key = f"huggingface_sangraha/{args.lang}/{filename}"  # Adjust the key as needed
-            s3.upload_file(local_path, bucket, s3_key)
-            
-            # Clean up local file
-            os.remove(local_path)
+            # Get the file download URL
+            url = api.presigned_url(repo_id=repo_id, filename=filename, repo_type=repo_type)
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            file_obj = BytesIO()
+            for chunk in response.iter_content(chunk_size=1048576):
+                if chunk:
+                    file_obj.write(chunk)
+            file_obj.seek(0)
+            # Upload to S3 from memory
+            s3_key = f"huggingface_sangraha/{args.lang}/{filename}"
+            s3.upload_fileobj(file_obj, bucket, s3_key)
             print(f"Successfully uploaded {filename} to s3://{bucket}/{s3_key}")
         except Exception as e:
             print(f"Error processing {filename}: {e}")
