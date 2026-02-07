@@ -37,6 +37,9 @@ def main():
     print("Keeping modalities:", valid_modalities)
     modalities = valid_modalities
 
+    if len(modalities) == 0:
+        raise ValueError("No modalities passed min_tokens threshold")
+
     # Stack distributions
     Ps = np.stack([data[m] for m in modalities], axis=0)
 
@@ -48,6 +51,21 @@ def main():
 
     # Log-odds per modality
     log_odds = np.log((Ps + eps) / (Pg + eps))
+
+    # ---------------------------------------
+    # Expert affinity calculations
+    # ---------------------------------------
+
+    # log_odds shape: [num_modalities, vocab_size]
+
+    # Max affinity: strongest expert preference per token
+    max_affinity = log_odds.max(axis=0)
+
+    # Also useful: which expert it prefers
+    argmax_affinity = log_odds.argmax(axis=0)
+
+    # Optional: mean absolute affinity (secondary signal)
+    mean_abs_affinity = np.mean(np.abs(log_odds), axis=0)
 
     # ---------------------------------------
     # Distinctive tokens per modality
@@ -94,6 +112,47 @@ def main():
     print("\nMost globally frequent tokens:")
     top_global = np.argsort(-Pg)[: args.null_topk]
     print(tokenizer.convert_ids_to_tokens(top_global.tolist()))
+
+    # Top tokens by affinity
+    null_score = var  # weighted variance of log_odds
+    # token_stats = {
+    #     "null_score": null_score,
+    #     "max_affinity": max_affinity,
+    #     "mean_abs_affinity": mean_abs_affinity,
+    # }
+    top_affinity_ids = np.argsort(-max_affinity)[: args.topk]
+    top_affinity_tokens = tokenizer.convert_ids_to_tokens(top_affinity_ids.tolist())
+
+    print("\n==============================")
+    print("TOP TOKENS BY EXPERT AFFINITY")
+    for tid, tok in zip(top_affinity_ids, top_affinity_tokens):
+        print(
+            f"{tok:>15s} | max_aff={max_affinity[tid]:.3f} | "
+            f"null_score={null_score[tid]:.2e} | "
+            f"expert={modalities[argmax_affinity[tid]]}"
+        )
+
+    # Inspect low-affinity tokens (null candidates)
+    low_affinity_ids = np.argsort(np.abs(max_affinity))[: args.topk]
+    low_affinity_tokens = tokenizer.convert_ids_to_tokens(low_affinity_ids.tolist())
+
+    print("\n==============================")
+    print("LOW EXPERT AFFINITY TOKENS (NULL-LIKE)")
+    for tid, tok in zip(low_affinity_ids, low_affinity_tokens):
+        print(
+            f"{tok:>15s} | max_aff={max_affinity[tid]:.3e} | "
+            f"null_score={null_score[tid]:.2e}"
+        )
+
+    # Save affinity stats
+    np.savez(
+        "token_affinity_stats.npz",
+        max_affinity=max_affinity,
+        mean_abs_affinity=mean_abs_affinity,
+        null_score=null_score,
+        Pg=Pg,
+        argmax_affinity=argmax_affinity,
+    )
 
 
 if __name__ == "__main__":
