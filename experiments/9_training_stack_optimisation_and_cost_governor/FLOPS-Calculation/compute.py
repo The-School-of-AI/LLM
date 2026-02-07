@@ -754,7 +754,8 @@ class TrainingStage:
             if routed_expert_params > 0 and ep > 1:
                 # Model weights: experts sharded by EP, non-experts replicated
                 model_gpu_bytes = (expert_model_bytes / ep) + non_expert_model_bytes
-                master_gpu_bytes = master_bytes  # Master weights not sharded in ZeRO-2
+                # Master weights: sharded like optimizer states in ZeRO-2
+                master_gpu_bytes = master_bytes / num_gpus
                 
                 # Optimizer: non-experts sharded by full num_gpus, experts sharded by DP within EP group
                 # DP size within EP group = num_gpus / ep
@@ -764,7 +765,8 @@ class TrainingStage:
             else:
                 # No experts or EP=1: standard ZeRO-2 sharding
                 model_gpu_bytes = model_bytes
-                master_gpu_bytes = master_bytes
+                # Master weights are sharded in ZeRO-2 (part of optimizer state)
+                master_gpu_bytes = master_bytes / num_gpus
                 optimizer_gpu_bytes = optimizer_bytes / num_gpus
                 gradient_gpu_bytes = gradient_bytes / num_gpus
 
@@ -792,7 +794,11 @@ class TrainingStage:
                 + optimizer_gpu_bytes
                 + gradient_gpu_bytes
             )
-            memory_bytes = remaining_gpu_bytes + activation_bytes
+            # GPU buffer for parameter streaming (DeepSpeed keeps a buffer for overlapping)
+            # Default: ~4GB or configurable via gpu_buffer_gb
+            gpu_buffer_gb = float(cpu_offload_cfg.get("gpu_buffer_gb", 4.0))
+            gpu_buffer_bytes = gpu_buffer_gb * (1024**3)
+            memory_bytes = remaining_gpu_bytes + activation_bytes + gpu_buffer_bytes
             cpu_memory_bytes = offloaded_bytes_total / num_gpus
             cpu_memory_gb = cpu_memory_bytes / (1024**3)
         else:
