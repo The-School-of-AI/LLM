@@ -617,18 +617,61 @@
         const intermediate = stage.intermediate_size ?? hidden * 4;
         const layers = stage.num_layers ?? 24;
         const num_heads = stage.num_heads ?? null;
-        const num_kv_heads = stage.num_kv_heads ?? num_heads;
-        const experts = stage.num_experts ?? 0;
+        let num_kv_heads = stage.num_kv_heads ?? num_heads;
+        let experts = stage.num_experts ?? 0;
         const top_k = stage.top_k_experts ?? 1;
-        const num_moe_layers = stage.num_moe_layers ?? (experts > 0 ? layers : 0);
+        const solve_for = (stage.solve_for ?? "").toString().trim().toLowerCase();
+        let num_moe_layers = stage.num_moe_layers ?? (experts > 0 ? layers : 0);
         const tie_embeddings = stage.tie_embeddings ?? true;
         const include_lm_head_flops = stage.include_lm_head_flops ?? true;
         const null_prob = stage.null_expert_prob ?? 0.0;
-        const moe_capacity_factor = stage.moe_capacity_factor ?? 1.0;
+        const moe_capacity_factor = Number(stage.moe_capacity_factor ?? 1.0);
         const ffn_type = (stage.ffn_type ?? "swiglu").toLowerCase();
-        const ffn_multiplier =
-          stage.ffn_multiplier ??
-          (["gelu", "relu", "mlp"].includes(ffn_type) ? 2 : 3);
+        const target_total_params = stage.target_total_params ?? null;
+        const target_params_per_expert = stage.target_params_per_expert ?? null;
+        let ffn_multiplier = stage.ffn_multiplier;
+
+        if (experts < 0 || top_k < 0) {
+          throw new Error("num_experts and top_k_experts must be >= 0.");
+        }
+        if (null_prob < 0 || null_prob > 1) {
+          throw new Error("null_expert_prob must be in [0, 1].");
+        }
+        if (moe_capacity_factor <= 0) {
+          throw new Error("moe_capacity_factor must be > 0.");
+        }
+        const topKExplicit =
+          stage.top_k_experts !== null && stage.top_k_experts !== undefined;
+        if (experts === 0 && topKExplicit && top_k !== 0) {
+          throw new Error("top_k_experts must be 0 when num_experts is 0.");
+        }
+        if (
+          experts === 0 &&
+          solve_for !== "num_experts" &&
+          solve_for !== "num_experts_from_per_expert"
+        ) {
+          num_moe_layers = 0;
+        }
+        if (experts > 0 && top_k > experts) {
+          throw new Error("top_k_experts cannot exceed num_experts.");
+        }
+        if (num_moe_layers < 0 || num_moe_layers > layers) {
+          throw new Error("num_moe_layers must be between 0 and num_layers.");
+        }
+        if (num_heads !== null && num_kv_heads === null) {
+          num_kv_heads = num_heads;
+        }
+        if (num_heads !== null && num_kv_heads !== null) {
+          if (num_kv_heads <= 0) {
+            throw new Error("num_kv_heads must be > 0.");
+          }
+          if (num_kv_heads > num_heads) {
+            throw new Error("num_kv_heads cannot exceed num_heads.");
+          }
+          if (num_heads % num_kv_heads !== 0) {
+            throw new Error("num_kv_heads must divide num_heads for GQA/MQA.");
+          }
+        }
 
         const embedding_params = vocab * hidden;
         const lm_head_params = tie_embeddings ? 0 : vocab * hidden;
@@ -642,16 +685,97 @@
           attn_params_per_layer = hidden * hidden * (2 + 2 * kv_ratio);
         }
 
-        const ffn_params_per_expert = ffn_multiplier * hidden * intermediate;
-        const ffn_params_dense = ffn_params_per_expert;
-        const router_params = experts > 0 ? hidden * experts : 0;
+        if (ffn_multiplier === null || ffn_multiplier === undefined) {
+          if (["gelu", "relu", "mlp"].includes(ffn_type)) {
+            ffn_multiplier = 2;
+          } else if (["swiglu", "geglu", "glu"].includes(ffn_type)) {
+            ffn_multiplier = 3;
+          } else {
+            throw new Error(
+              `Unknown ffn_type '${ffn_type}'. Use 'swiglu', 'geglu', 'glu', 'gelu', 'relu', or set ffn_multiplier.`
+            );
+          }
+        }
 
-        const total_ffn_params_moe =
-          experts > 0 ? experts * ffn_params_per_expert + router_params : 0;
-        const active_ffn_params_moe =
-          experts > 0 ? top_k * ffn_params_per_expert + router_params : 0;
+        const ffn_params_per_expert = Number(ffn_multiplier) * hidden * intermediate;
+        const ffn_params_dense = ffn_params_per_expert;
+        let router_params = 0;
+        let total_ffn_params_moe = 0;
+        let active_ffn_params_moe = 0;
+
+        if (
+          experts > 0 ||
+          solve_for === "num_experts" ||
+          solve_for === "num_experts_from_per_expert"
+        ) {
+          router_params = hidden * experts;
+          total_ffn_params_moe = experts * ffn_params_per_expert + router_params;
+          active_ffn_params_moe = top_k * ffn_params_per_expert + router_params;
+        }
 
         const dense_layers = layers - num_moe_layers;
+        let derived_experts = null;
+
+        if (solve_for === "num_experts") {
+          if (target_total_params === null || target_total_params === undefined) {
+            throw new Error("target_total_params must be set when solve_for='num_experts'.");
+          }
+          if (num_moe_layers <= 0) {
+            throw new Error("num_moe_layers must be > 0 when solve_for='num_experts'.");
+          }
+          const base_params =
+            embedding_params +
+            lm_head_params +
+            layers * attn_params_per_layer +
+            dense_layers * ffn_params_dense;
+          const per_expert_per_layer = ffn_params_per_expert + hidden;
+          derived_experts =
+            (target_total_params - base_params) /
+            (num_moe_layers * per_expert_per_layer);
+          if (derived_experts < 1) {
+            throw new Error("target_total_params is too small for the given architecture.");
+          }
+          experts = Math.round(derived_experts);
+          if (experts < 1) {
+            throw new Error("Derived num_experts is < 1; check target_total_params.");
+          }
+          if (top_k > experts) {
+            throw new Error("top_k_experts cannot exceed derived num_experts.");
+          }
+          router_params = hidden * experts;
+          total_ffn_params_moe = experts * ffn_params_per_expert + router_params;
+          active_ffn_params_moe = top_k * ffn_params_per_expert + router_params;
+          num_moe_layers = num_moe_layers === 0 ? layers : num_moe_layers;
+        } else if (solve_for === "num_experts_from_per_expert") {
+          if (
+            target_total_params === null ||
+            target_total_params === undefined ||
+            target_params_per_expert === null ||
+            target_params_per_expert === undefined
+          ) {
+            throw new Error(
+              "target_total_params and target_params_per_expert must be set when solve_for='num_experts_from_per_expert'."
+            );
+          }
+          experts = Math.round(target_total_params / target_params_per_expert);
+          if (experts < 1) {
+            throw new Error(
+              "Derived num_experts is < 1; check target_total_params/target_params_per_expert."
+            );
+          }
+          if (top_k > experts) {
+            throw new Error("top_k_experts cannot exceed derived num_experts.");
+          }
+          router_params = hidden * experts;
+          total_ffn_params_moe = experts * ffn_params_per_expert + router_params;
+          active_ffn_params_moe = top_k * ffn_params_per_expert + router_params;
+          derived_experts = experts;
+        }
+
+        if (experts > 0 && top_k > experts) {
+          throw new Error("top_k_experts cannot exceed num_experts.");
+        }
+
         const total_params =
           embedding_params +
           lm_head_params +
@@ -698,14 +822,22 @@
         return {
           total_params,
           active_params,
-          effective_active_linear_params,
+          active_linear_params: effective_active_linear_params,
           ffn_params_per_expert,
-          top_k,
+          top_k_experts: top_k,
           num_moe_layers,
+          moe_capacity_factor,
+          num_experts: experts,
+          derived_num_experts: derived_experts,
         };
       }
 
       function flopsPerToken(stage, params) {
+        const n_linear = params.active_linear_params;
+        const num_moe_layers = params.num_moe_layers;
+        const ffn_params_per_expert = params.ffn_params_per_expert;
+        const top_k = params.top_k_experts;
+        const moe_capacity_factor = params.moe_capacity_factor;
         const layers = stage.num_layers ?? 24;
         const hidden = stage.hidden_size ?? 2048;
         const s = stage.sequence_length ?? 4096;
@@ -720,39 +852,66 @@
         const null_prob = stage.null_expert_prob ?? 0.0;
         const moe_routing_overhead_ratio = stage.moe_routing_overhead_ratio ?? 0.0;
         const moe_routing_flops_per_token = stage.moe_routing_flops_per_token ?? null;
-        const moe_capacity_factor = stage.moe_capacity_factor ?? 1.0;
+
+        if (s <= 0) {
+          throw new Error("sequence_length must be > 0.");
+        }
+        if (attention_kernel_multiplier <= 0) {
+          throw new Error("attention_kernel_multiplier must be > 0.");
+        }
+        if (quantization_flops_multiplier <= 0) {
+          throw new Error("quantization_flops_multiplier must be > 0.");
+        }
+        if (moe_routing_overhead_ratio < 0) {
+          throw new Error("moe_routing_overhead_ratio must be >= 0.");
+        }
+        if (null_prob < 0 || null_prob > 1) {
+          throw new Error("null_expert_prob must be in [0, 1].");
+        }
+        if (recompute_multiplier <= 0) {
+          throw new Error("recompute_multiplier must be > 0.");
+        }
 
         let attn_tokens = s;
-        if (attention_window) {
+        if (attention_window !== null && attention_window !== undefined) {
+          if (attention_window <= 0) {
+            throw new Error("attention_window must be > 0.");
+          }
           attn_tokens = Math.min(s, attention_window);
-        } else if (attention_sparsity) {
+        } else if (attention_sparsity !== null && attention_sparsity !== undefined) {
+          if (attention_sparsity <= 0 || attention_sparsity > 1) {
+            throw new Error("attention_sparsity must be in (0, 1].");
+          }
           attn_tokens = s * attention_sparsity;
         }
 
         const attention_term = 12 * layers * hidden * attn_tokens;
         let softmax_term = 0;
         if (include_softmax_flops) {
-          const heads = stage.num_heads ?? 0;
+          const heads = stage.num_heads;
+          if (heads === null || heads === undefined) {
+            throw new Error("num_heads must be set when include_softmax_flops is True.");
+          }
           softmax_term = 3 * layers * heads * attn_tokens;
         }
 
         let flops_per_token =
-          6 * params.effective_active_linear_params +
+          6 * n_linear +
           attention_kernel_multiplier * (attention_term + softmax_term);
 
-        if (params.num_moe_layers > 0) {
+        if (num_moe_layers > 0) {
           const moe_expert_flops_per_token =
-            6 * params.top_k * params.ffn_params_per_expert * moe_capacity_factor;
+            6 * top_k * ffn_params_per_expert * moe_capacity_factor;
           if (moe_routing_overhead_ratio > 0) {
             flops_per_token +=
-              params.num_moe_layers *
+              num_moe_layers *
               moe_routing_overhead_ratio *
               moe_expert_flops_per_token *
               (1 - null_prob);
           }
           if (moe_routing_flops_per_token !== null && moe_routing_flops_per_token !== "") {
             flops_per_token +=
-              params.num_moe_layers *
+              num_moe_layers *
               Number(moe_routing_flops_per_token) *
               (1 - null_prob);
           }
