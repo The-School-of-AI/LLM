@@ -910,9 +910,25 @@ class TrainingStage:
         if s <= 0:
             raise ValueError("sequence_length must be > 0.")
 
-        # Linear layer FLOPs
+        # =========================================================================
+        # Recompute Multiplier (for activation/gradient checkpointing)
+        # =========================================================================
+        # When checkpointing is enabled, activations are recomputed during backward
+        # pass, adding ~33% overhead (extra forward pass for recomputation).
+        # Base training FLOPs: Forward (2x) + Backward-grad (2x) + Backward-weight (2x) = 6x
+        # With recompute: 6x + 2x (extra forward) = 8x, ratio = 8/6 = 4/3 ≈ 1.33
+        # =========================================================================
+        gradient_ckpt = training_cfg.get("gradient_checkpointing", False)
+        activation_ckpt = training_cfg.get("activation_checkpointing", False)
+        # Also check for partition_activations in training config (DeepSpeed-style)
+        partition_activations = training_cfg.get("partition_activations", False)
+        
+        use_checkpointing = gradient_ckpt or activation_ckpt or partition_activations
+        recompute_multiplier = 4/3 if use_checkpointing else 1.0
+
+        # Linear layer FLOPs (includes recompute overhead)
         linear_multiplier = float(arch.get("linear_flops_multiplier", 1.0))
-        flops_per_seq_linear = 6 * s * n_linear * linear_multiplier
+        flops_per_seq_linear = 6 * s * n_linear * linear_multiplier * recompute_multiplier
 
         # Attention FLOPs calculation
         attention_multiplier = arch.get("attention_flops_multiplier")
@@ -1033,7 +1049,7 @@ class TrainingStage:
             attn_v_matmul_flops = 2 * (s**2) * num_heads * attn_dim
             dense_attn_per_layer = (
                 qk_matmul_flops + softmax_flops + attn_v_matmul_flops
-            ) * 3.0
+            ) * 3.0 * recompute_multiplier
             flops_per_seq_attn = layers * dense_attn_per_layer * attention_multiplier
 
         # =========================================================================
