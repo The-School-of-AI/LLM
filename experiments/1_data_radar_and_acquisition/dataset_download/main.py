@@ -11,18 +11,18 @@ def main():
 
     # Configuration
     repo_id = "ai4bharat/sangraha"
-    bucket = "t1-dataacquisition-datasets"  # Replace with your S3 bucket name
+    bucket = "t1-dataacquisition-datasets/"  # Replace with your S3 bucket name
     repo_type = "dataset"
 
     # Determine prefix
     if args.category == 'verified':
         prefix = 'verified/'
-        if not args.lang:
-            parser.error("--lang is required when category is language")
-        else:
-            prefix = prefix+ args.lang + '/'
     else:
         parser.error("Invalid category")
+    if not args.lang:
+            parser.error("--lang is required ")
+    else:
+        prefix = prefix+ args.lang + '/'
     
     print ("Starting the download and upload process...")
     print (f"Category: {args.category}, Language: {args.lang if args.lang else 'N/A'}, Prefix: {prefix}")
@@ -45,7 +45,7 @@ def main():
             local_path = hf_hub_download(repo_id=repo_id, filename=filename, repo_type=repo_type)
             
             # Upload to S3
-            s3_key = f"sangraha/{filename}"  # Adjust the key as needed
+            s3_key = f"huggingface_sangraha/{args.lang}/{filename}"  # Adjust the key as needed
             s3.upload_file(local_path, bucket, s3_key)
             
             # Clean up local file
