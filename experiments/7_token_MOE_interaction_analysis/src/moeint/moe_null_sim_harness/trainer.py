@@ -1,3 +1,5 @@
+import json
+
 import torch
 from datasets import load_dataset
 from moeint.moe_null_sim_harness.model import DeepSeekIsh, MoERouter
@@ -81,10 +83,16 @@ class Trainer:
             loss = loss + aux_loss
 
             moe_router_logits = self._collect_moe_router_logits()
-            stats = self.router_health_analyzer.analyze(input_ids, moe_router_logits)
-            print(
-                f"Step {step} | Loss: {loss.item():.4f} | L0 junk to null rate: {stats.null_experts_stats[0].junk_to_null_rate:.2f} | L0 null got junk rate: {stats.null_experts_stats[0].null_junk_rate:.2f}"
+
+            stats = self.router_health_analyzer.analyze_logits(
+                input_ids, moe_router_logits
             )
+
+            json_str = json.dumps([stat._asdict() for stat in stats], indent=2)
+            print(f"step: {step}")
+            print(json_str)
+            print("-" * 100)
+
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()

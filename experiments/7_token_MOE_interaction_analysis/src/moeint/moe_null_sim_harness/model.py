@@ -334,7 +334,9 @@ class TransformerBlock(nn.Module):
             data_sparsity=data_sparsity,
         )
 
-    def forward(self, x: Tensor, attention_mask: Tensor | None = None) -> Tensor:
+    def forward(
+        self, x: Tensor, attention_mask: Tensor | None = None
+    ) -> tuple[Tensor, Tensor]:
         residual = x
         x = self.input_layernorm(x)
         x = self.self_attn(x, attention_mask)
