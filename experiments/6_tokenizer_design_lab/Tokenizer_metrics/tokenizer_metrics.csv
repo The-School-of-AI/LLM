@@ -1,0 +1,148 @@
+Tokenizer,Vocab Size,Category,Bytes/Token,Fertility,Speed (Tokens/sec),Fallback (%),Vocab Gini,Total Tokens
+gemma_tokenizer,255998,Code - c,2.9325,3.3415,442832.04,0.0,0.9236,1794828
+mistral_tokenizer,131072,Code - c,3.2142,3.0487,373244.44,0.0,0.8911,1637537
+tokenizer_selected,128000,Code - c,3.5111,2.7909,373008.09,0.0,0.8812,1499060
+olmocode_tokenizer,151669,Code - c,3.5226,2.7818,305154.22,0.0,0.8901,1494184
+qwencode_tokenizer,151669,Code - c,3.5226,2.7818,305249.62,0.0,0.8901,1494184
+qwen_tokenizer,151669,Code - c,3.5226,2.7818,302337.64,0.0,0.8901,1494184
+gptoss_tokenizer,200019,Code - c,3.5796,2.7375,356957.86,0.0,0.8843,1470403
+gemma_tokenizer,255998,Code - cpp,3.4554,3.4625,283485.51,0.0,0.9075,1517326
+mistral_tokenizer,131072,Code - cpp,3.7721,3.1718,245057.58,0.0,0.8705,1389961
+tokenizer_selected,128000,Code - cpp,4.0283,2.9701,223902.14,0.0,0.8712,1301551
+olmocode_tokenizer,151669,Code - cpp,4.0574,2.9488,186498.5,0.0,0.8758,1292226
+qwencode_tokenizer,151669,Code - cpp,4.0574,2.9488,196319.2,0.0,0.8758,1292226
+qwen_tokenizer,151669,Code - cpp,4.0574,2.9488,196474.88,0.0,0.8758,1292226
+gptoss_tokenizer,200019,Code - cpp,4.0833,2.9301,245743.04,0.0,0.874,1284010
+gemma_tokenizer,255998,Code - java,3.8077,3.0905,147677.41,0.0,0.9078,1380405
+mistral_tokenizer,131072,Code - java,4.1457,2.8386,157686.12,0.0,0.8725,1267874
+tokenizer_selected,128000,Code - java,4.3625,2.6975,160412.49,0.0,0.874,1204872
+gptoss_tokenizer,200019,Code - java,4.4674,2.6342,143305.83,0.0,0.8785,1176573
+olmocode_tokenizer,151669,Code - java,4.5223,2.6022,110397.55,0.0,0.8739,1162304
+qwencode_tokenizer,151669,Code - java,4.5223,2.6022,119511.93,0.0,0.8739,1162304
+qwen_tokenizer,151669,Code - java,4.5223,2.6022,118245.62,0.0,0.8739,1162304
+gemma_tokenizer,255998,Code - python,3.4679,3.3951,204688.23,0.0004,0.9167,1514738
+mistral_tokenizer,131072,Code - python,3.9361,2.9912,198421.45,0.0,0.8696,1334535
+tokenizer_selected,128000,Code - python,4.1621,2.8288,203134.03,0.0,0.8662,1262078
+olmocode_tokenizer,151669,Code - python,4.2018,2.802,145339.84,0.0,0.8724,1250145
+qwencode_tokenizer,151669,Code - python,4.2018,2.802,150573.58,0.0,0.8724,1250145
+qwen_tokenizer,151669,Code - python,4.2018,2.802,154723.99,0.0,0.8724,1250145
+gptoss_tokenizer,200019,Code - python,4.2352,2.78,191256.9,0.0,0.87,1240299
+gemma_tokenizer,255998,Code - typescript,3.5733,3.1188,255831.38,0.0003,0.9176,1469886
+mistral_tokenizer,131072,Code - typescript,3.9424,2.8268,253091.42,0.0,0.8814,1332260
+tokenizer_selected,128000,Code - typescript,4.1488,2.6862,254783.34,0.0,0.8794,1265979
+olmocode_tokenizer,151669,Code - typescript,4.1706,2.6721,188207.71,0.0,0.8853,1259358
+qwencode_tokenizer,151669,Code - typescript,4.1706,2.6721,191109.58,0.0,0.8853,1259358
+qwen_tokenizer,151669,Code - typescript,4.1706,2.6721,186633.52,0.0,0.8853,1259358
+gptoss_tokenizer,200019,Code - typescript,4.2007,2.653,237808.85,0.0,0.8839,1250352
+olmocode_tokenizer,151669,Indic - hin_Deva,2.7407,4.9512,225857.6,0.0,0.9121,1916033
+qwencode_tokenizer,151669,Indic - hin_Deva,2.7407,4.9512,224263.12,0.0,0.9121,1916033
+qwen_tokenizer,151669,Indic - hin_Deva,2.7407,4.9512,223111.62,0.0,0.9121,1916033
+gemma_tokenizer,255998,Indic - hin_Deva,6.261,2.1673,291795.73,0.0,0.761,838718
+mistral_tokenizer,131072,Indic - hin_Deva,6.3671,2.1312,169347.71,0.0,0.7621,824747
+tokenizer_selected,128000,Indic - hin_Deva,7.6248,1.7797,154980.73,0.0,0.8012,688702
+gptoss_tokenizer,200019,Indic - hin_Deva,7.6298,1.7785,147278.3,0.0,0.8021,688252
+olmocode_tokenizer,151669,Indic - hin_Latn,2.7065,2.371,321463.44,0.0,0.9427,1938149
+qwencode_tokenizer,151669,Indic - hin_Latn,2.7065,2.371,328987.32,0.0,0.9427,1938149
+qwen_tokenizer,151669,Indic - hin_Latn,2.7065,2.371,327675.55,0.0,0.9427,1938149
+mistral_tokenizer,131072,Indic - hin_Latn,2.7204,2.3589,372685.57,0.0,0.9409,1928266
+gemma_tokenizer,255998,Indic - hin_Latn,2.9639,2.1651,476112.14,0.0,0.9386,1769836
+tokenizer_selected,128000,Indic - hin_Latn,3.0167,2.1272,362769.96,0.0,0.9304,1738840
+gptoss_tokenizer,200019,Indic - hin_Latn,3.1137,2.061,337165.57,0.0,0.9293,1684719
+olmocode_tokenizer,151669,Indic - tam_Taml,2.4682,9.6865,319102.43,0.0,0.9581,2125222
+qwencode_tokenizer,151669,Indic - tam_Taml,2.4682,9.6865,321620.69,0.0,0.9581,2125222
+qwen_tokenizer,151669,Indic - tam_Taml,2.4682,9.6865,325572.35,0.0,0.9581,2125222
+gemma_tokenizer,255998,Indic - tam_Taml,5.5923,4.2751,447987.32,0.0,0.835,937964
+mistral_tokenizer,131072,Indic - tam_Taml,6.4502,3.7065,222148.65,0.0,0.7886,813210
+tokenizer_selected,128000,Indic - tam_Taml,7.3231,3.2647,210281.52,0.0,0.8177,716282
+gptoss_tokenizer,200019,Indic - tam_Taml,7.3293,3.262,191394.03,0.0,0.8192,715677
+mistral_tokenizer,131072,NCERT - Accountancy,4.9787,1.2613,153091.76,0.0,0.9172,1316214
+gemma_tokenizer,255998,NCERT - Accountancy,5.0572,1.2417,149756.5,0.0,0.9241,1295776
+olmocode_tokenizer,151669,NCERT - Accountancy,5.114,1.2279,106192.26,0.0,0.9179,1281375
+qwencode_tokenizer,151669,NCERT - Accountancy,5.114,1.2279,107749.43,0.0,0.9179,1281375
+qwen_tokenizer,151669,NCERT - Accountancy,5.114,1.2279,106293.94,0.0,0.9179,1281375
+tokenizer_selected,128000,NCERT - Accountancy,5.1952,1.2088,152733.58,0.0,0.9164,1261371
+gptoss_tokenizer,200019,NCERT - Accountancy,5.2341,1.1998,152648.51,0.0,0.9174,1251976
+tokenizer_selected,128000,NCERT - Biology,5.0995,1.2841,162638.4,0.0,0.8485,589361
+olmocode_tokenizer,151669,NCERT - Biology,5.1002,1.2839,110945.5,0.0,0.8488,589284
+qwencode_tokenizer,151669,NCERT - Biology,5.1002,1.2839,113432.14,0.0,0.8488,589284
+qwen_tokenizer,151669,NCERT - Biology,5.1002,1.2839,113178.05,0.0,0.8488,589284
+mistral_tokenizer,131072,NCERT - Biology,5.1746,1.2654,157676.57,0.0,0.8511,580806
+gptoss_tokenizer,200019,NCERT - Biology,5.1836,1.2633,159382.66,0.0,0.8501,579799
+gemma_tokenizer,255998,NCERT - Biology,5.2581,1.2453,152786.48,0.0,0.8621,571582
+mistral_tokenizer,131072,NCERT - Business Studies,5.5826,1.1996,141251.51,0.0,0.881,709252
+gemma_tokenizer,255998,NCERT - Business Studies,5.612,1.1933,130260.12,0.0,0.8918,705528
+olmocode_tokenizer,151669,NCERT - Business Studies,5.7068,1.1735,92120.97,0.0,0.8829,693816
+qwencode_tokenizer,151669,NCERT - Business Studies,5.7068,1.1735,95368.07,0.0,0.8829,693816
+qwen_tokenizer,151669,NCERT - Business Studies,5.7068,1.1735,93891.49,0.0,0.8829,693816
+tokenizer_selected,128000,NCERT - Business Studies,5.7184,1.1711,141530.24,0.0,0.8822,692406
+gptoss_tokenizer,200019,NCERT - Business Studies,5.7549,1.1637,145397.33,0.0,0.8844,688012
+olmocode_tokenizer,151669,NCERT - Chemistry,4.7311,1.3319,124976.66,0.0,0.894,1120817
+qwencode_tokenizer,151669,NCERT - Chemistry,4.7311,1.3319,126970.15,0.0,0.894,1120817
+qwen_tokenizer,151669,NCERT - Chemistry,4.7311,1.3319,128085.38,0.0,0.894,1120817
+tokenizer_selected,128000,NCERT - Chemistry,4.7531,1.3257,178307.35,0.0,0.8951,1115632
+mistral_tokenizer,131072,NCERT - Chemistry,4.7754,1.3195,172485.87,0.0,0.8961,1110412
+gptoss_tokenizer,200019,NCERT - Chemistry,4.8005,1.3126,178342.63,0.0,0.8969,1104607
+gemma_tokenizer,255998,NCERT - Chemistry,4.8602,1.2965,175256.49,0.0,0.9035,1091047
+mistral_tokenizer,131072,NCERT - Economics,5.2314,1.2157,183432.22,0.0,0.8957,1021765
+gemma_tokenizer,255998,NCERT - Economics,5.2625,1.2085,174399.22,0.0,0.9042,1015724
+olmocode_tokenizer,151669,NCERT - Economics,5.3294,1.1934,127855.05,0.0,0.8969,1002964
+qwencode_tokenizer,151669,NCERT - Economics,5.3294,1.1934,128555.36,0.0,0.8969,1002964
+qwen_tokenizer,151669,NCERT - Economics,5.3294,1.1934,128961.36,0.0,0.8969,1002964
+tokenizer_selected,128000,NCERT - Economics,5.3647,1.1855,192823.1,0.0,0.8948,996371
+gptoss_tokenizer,200019,NCERT - Economics,5.398,1.1782,185477.61,0.0,0.8968,990230
+mistral_tokenizer,131072,NCERT - Geography,5.1517,1.2616,216184.58,0.0,0.874,959629
+olmocode_tokenizer,151669,NCERT - Geography,5.2235,1.2443,145635.63,0.0,0.8741,946433
+qwencode_tokenizer,151669,NCERT - Geography,5.2235,1.2443,148353.9,0.0,0.8741,946433
+qwen_tokenizer,151669,NCERT - Geography,5.2235,1.2443,148670.36,0.0,0.8741,946433
+gemma_tokenizer,255998,NCERT - Geography,5.2277,1.2433,197400.88,0.0,0.8869,945676
+tokenizer_selected,128000,NCERT - Geography,5.2806,1.2308,216975.93,0.0,0.8711,936202
+gptoss_tokenizer,200019,NCERT - Geography,5.339,1.2173,212825.77,0.0,0.8738,925951
+mistral_tokenizer,131072,NCERT - History,4.9935,1.3055,276173.99,0.0,0.8596,602355
+olmocode_tokenizer,151669,NCERT - History,5.0624,1.2878,184375.12,0.0,0.8609,594164
+qwencode_tokenizer,151669,NCERT - History,5.0624,1.2878,188341.29,0.0,0.8609,594164
+qwen_tokenizer,151669,NCERT - History,5.0624,1.2878,190033.13,0.0,0.8609,594164
+tokenizer_selected,128000,NCERT - History,5.1184,1.2737,279941.16,0.0,0.8558,587656
+gemma_tokenizer,255998,NCERT - History,5.1271,1.2715,240017.77,0.0,0.8692,586667
+gptoss_tokenizer,200019,NCERT - History,5.1878,1.2566,267863.1,0.0,0.8572,579802
+mistral_tokenizer,131072,NCERT - Physics,4.7606,1.2634,219900.65,0.0,0.9017,1289098
+olmocode_tokenizer,151669,NCERT - Physics,4.7711,1.2606,156724.5,0.0,0.9004,1286249
+qwencode_tokenizer,151669,NCERT - Physics,4.7711,1.2606,159768.19,0.0,0.9004,1286249
+qwen_tokenizer,151669,NCERT - Physics,4.7711,1.2606,159466.01,0.0,0.9004,1286249
+gemma_tokenizer,255998,NCERT - Physics,4.7833,1.2574,219671.01,0.0,0.91,1282970
+tokenizer_selected,128000,NCERT - Physics,4.7837,1.2573,225478.35,0.0,0.9004,1282873
+gptoss_tokenizer,200019,NCERT - Physics,4.8306,1.2451,219923.36,0.0,0.9024,1270410
+mistral_tokenizer,131072,NCERT - Political Science,5.3217,1.2259,176931.53,0.0,0.8803,759776
+gemma_tokenizer,255998,NCERT - Political Science,5.3779,1.2131,161947.04,0.0,0.892,751836
+olmocode_tokenizer,151669,NCERT - Political Science,5.4423,1.1988,117055.42,0.0,0.882,742934
+qwencode_tokenizer,151669,NCERT - Political Science,5.4423,1.1988,116622.34,0.0,0.882,742934
+qwen_tokenizer,151669,NCERT - Political Science,5.4423,1.1988,119584.67,0.0,0.882,742934
+tokenizer_selected,128000,NCERT - Political Science,5.4752,1.1916,181312.85,0.0,0.878,738473
+gptoss_tokenizer,200019,NCERT - Political Science,5.5323,1.1793,177004.78,0.0,0.8804,730859
+mistral_tokenizer,131072,NCERT - Psychology,5.5291,1.2067,151648.0,0.0,0.8568,375735
+gemma_tokenizer,255998,NCERT - Psychology,5.5409,1.2041,140611.42,0.0,0.8672,374936
+olmocode_tokenizer,151669,NCERT - Psychology,5.6192,1.1873,103314.2,0.0,0.8565,369708
+qwencode_tokenizer,151669,NCERT - Psychology,5.6192,1.1873,103345.54,0.0,0.8565,369708
+qwen_tokenizer,151669,NCERT - Psychology,5.6192,1.1873,105065.41,0.0,0.8565,369708
+tokenizer_selected,128000,NCERT - Psychology,5.6241,1.1863,156705.33,0.0,0.8556,369386
+gptoss_tokenizer,200019,NCERT - Psychology,5.6656,1.1776,150410.94,0.0,0.8575,366683
+mistral_tokenizer,131072,NCERT - Science,5.0163,1.2277,185351.63,0.0,0.888,1340946
+olmocode_tokenizer,151669,NCERT - Science,5.0359,1.2229,129233.47,0.0,0.8868,1335712
+qwencode_tokenizer,151669,NCERT - Science,5.0359,1.2229,130412.02,0.0,0.8868,1335712
+qwen_tokenizer,151669,NCERT - Science,5.0359,1.2229,129708.54,0.0,0.8868,1335712
+tokenizer_selected,128000,NCERT - Science,5.0469,1.2203,187056.44,0.0,0.8864,1332819
+gemma_tokenizer,255998,NCERT - Science,5.0759,1.2133,175936.51,0.0,0.901,1325183
+gptoss_tokenizer,200019,NCERT - Science,5.096,1.2085,184938.66,0.0,0.8895,1319957
+mistral_tokenizer,131072,NCERT - Social Studies,5.2315,1.2402,166675.5,0.0,0.8897,1884396
+gemma_tokenizer,255998,NCERT - Social Studies,5.3135,1.2211,156503.16,0.0,0.9038,1855343
+olmocode_tokenizer,151669,NCERT - Social Studies,5.3263,1.2181,112337.99,0.0,0.8916,1850868
+qwencode_tokenizer,151669,NCERT - Social Studies,5.3263,1.2181,112831.3,0.0,0.8916,1850868
+qwen_tokenizer,151669,NCERT - Social Studies,5.3263,1.2181,113589.65,0.0,0.8916,1850868
+tokenizer_selected,128000,NCERT - Social Studies,5.3533,1.212,169387.79,0.0,0.8887,1841550
+gptoss_tokenizer,200019,NCERT - Social Studies,5.4111,1.199,166458.67,0.0,0.8919,1821861
+mistral_tokenizer,131072,NCERT - Socialogy,5.3769,1.2361,161046.69,0.0,0.8764,767660
+gemma_tokenizer,255998,NCERT - Socialogy,5.4326,1.2234,143980.72,0.0,0.8878,759788
+olmocode_tokenizer,151669,NCERT - Socialogy,5.4756,1.2138,105381.77,0.0,0.8778,753811
+qwencode_tokenizer,151669,NCERT - Socialogy,5.4756,1.2138,107917.47,0.0,0.8778,753811
+qwen_tokenizer,151669,NCERT - Socialogy,5.4756,1.2138,108640.86,0.0,0.8778,753811
+tokenizer_selected,128000,NCERT - Socialogy,5.5116,1.2059,164226.01,0.0,0.8746,748887
+gptoss_tokenizer,200019,NCERT - Socialogy,5.5607,1.1952,154267.39,0.0,0.877,742287
