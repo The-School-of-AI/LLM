@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e2e8f0; }
+        
+        .header { 
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
+            padding: 1.5rem 2rem; 
+            border-bottom: 2px solid #334155; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .header h1 { font-size: 1.8rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem; }
+        .header-subtitle { font-size: 0.875rem; color: #94a3b8; font-weight: 500; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        
+        .controls { 
+            background: #111827; 
+            border: 1px solid #1e293b; 
+            border-radius: 0.75rem; 
+            padding: 1.5rem; 
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-label { font-size: 0.875rem; color: #94a3b8; font-weight: 600; }
+        .control-select { 
+            flex: 1;
+            min-width: 250px;
+            background: #1e293b; 
+            color: #e2e8f0; 
+            border: 1px solid #334155; 
+            border-radius: 0.5rem; 
+            padding: 0.5rem 1rem; 
+            font-size: 0.875rem; 
+        }
+        .control-button { 
+            background: #3b82f6; 
+            color: white; 
+            border: none; 
+            border-radius: 0.5rem; 
+            padding: 0.5rem 1.5rem; 
+            font-size: 0.875rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+        }
+        .control-button:hover { background: #2563eb; }
+        
+        .stats-banner {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 1px solid #475569;
+            border-radius: 0.75rem;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+        
+        .metric-selector { 
+            background: #111827; 
+            border: 1px solid #1e293b; 
+            border-radius: 0.75rem; 
+            padding: 1.5rem; 
+            margin-bottom: 1.5rem; 
+        }
+        .metric-selector h2 {
+            font-size: 1.1rem;
+            color: #f1f5f9;
+            margin-bottom: 1rem;
+        }
+        .metric-category { margin-bottom: 1.5rem; }
+        .category-title { 
+            font-size: 0.875rem; 
+            color: #60a5fa; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .category-badge {
+            background: rgba(96, 165, 250, 0.2);
+            padding: 0.125rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+        .metric-list { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
+            gap: 0.5rem; 
+        }
+        .metric-checkbox { 
+            display: flex; 
+            align-items: center; 
+            gap: 0.5rem; 
+            padding: 0.5rem; 
+            cursor: pointer; 
+            border-radius: 0.375rem;
+            transition: background 0.2s;
+        }
+        .metric-checkbox:hover { background: #1e293b; }
+        .metric-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .metric-checkbox label { font-size: 0.875rem; color: #cbd5e1; cursor: pointer; user-select: none; }
+        
+        .charts-container { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr)); 
+            gap: 1.5rem; 
+        }
+        .chart-card { 
+            background: #111827; 
+            border: 1px solid #1e293b; 
+            border-radius: 0.75rem; 
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+        .chart-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        .chart-title-group {
+            flex: 1;
+        }
+        .chart-title { 
+            font-size: 1rem; 
+            font-weight: 600; 
+            color: #f1f5f9; 
+            margin-bottom: 0.5rem;
+        }
+        .chart-stats {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+        .chart-stat {
+            display: flex;
+            flex-direction: column;
+        }
+        .chart-stat-label {
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.65rem;
+        }
+        .chart-stat-value {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        .chart-wrapper { position: relative; height: 300px; }
+        
+        .tooltip-custom {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        .tooltip-custom.active {
+            opacity: 1;
+        }
+        .tooltip-title {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 0.25rem;
+        }
+        .tooltip-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+        
+        .loading { text-align: center; padding: 3rem; color: #64748b; }
+        .spinner { 
+            border: 3px solid #1e293b; 
+            border-top: 3px solid #3b82f6; 
+            border-radius: 50%; 
+            width: 40px; 
+            height: 40px; 
+            animation: spin 1s linear infinite; 
+            margin: 0 auto 1rem; 
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+        .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
+        
+        @media (max-width: 768px) {
+            .charts-container { grid-template-columns: 1fr; }
+            .metric-list { grid-template-columns: 1fr; }
+            .stats-banner { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Dashboard</h1>
+        <div class="header-subtitle">Real-time monitoring and analysis for machine learning experiments</div>
+    </div>
+
+    <div class="container">
+        <div class="controls">
+            <span class="control-label">Training Run:</span>
+            <select id="runSelect" class="control-select"><option value="">Loading...</option></select>
+            <button onclick="refreshData()" class="control-button">🔄 Refresh</button>
+        </div>
+
+        <div id="statsBanner" style="display: none;"></div>
+        <div id="metricSelector" class="metric-selector" style="display: none;"></div>
+        <div id="chartsContainer" class="charts-container"></div>
+        
+        <div id="emptyState" class="empty-state">
+            <div class="empty-state-icon">📈</div>
+            <h3>Select a training run to begin monitoring</h3>
+            <p>Choose an experiment from the dropdown above to view detailed metrics and visualizations</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let currentRunId = null;
+        let availableMetrics = {};
+        let metricsData = {};
+        const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+        
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#1e293b';
+
+        async function init() { await loadRuns(); }
+
+        async function loadRuns() {
+            const response = await fetch(`${API_BASE}/api/runs`);
+            const data = await response.json();
+            const select = document.getElementById('runSelect');
+            select.innerHTML = data.runs.length ? '<option value="">Select a run...</option>' : '<option value="">No runs found</option>';
+            data.runs.forEach(run => {
+                const option = document.createElement('option');
+                option.value = run.run_id;
+                option.textContent = `${run.run_id} (${run.status})`;
+                select.appendChild(option);
+            });
+        }
+
+        document.getElementById('runSelect').addEventListener('change', async (e) => {
+            currentRunId = e.target.value;
+            if (!currentRunId) {
+                document.getElementById('metricSelector').style.display = 'none';
+                document.getElementById('statsBanner').style.display = 'none';
+                document.getElementById('chartsContainer').innerHTML = '';
+                document.getElementById('emptyState').style.display = 'block';
+                return;
+            }
+            document.getElementById('emptyState').style.display = 'none';
+            await discoverMetrics();
+        });
+
+        async function discoverMetrics() {
+            document.getElementById('metricSelector').innerHTML = '<div class="loading"><div class="spinner"></div><p>Discovering metrics...</p></div>';
+            document.getElementById('metricSelector').style.display = 'block';
+            
+            const response = await fetch(`${API_BASE}/api/runs/${currentRunId}/metrics`);
+            const data = await response.json();
+            availableMetrics = data.metrics;
+            
+            // Calculate stats
+            const totalMetrics = Object.values(availableMetrics).reduce((sum, arr) => sum + arr.length, 0);
+            const categories = Object.keys(availableMetrics).length;
+            
+            // Show stats banner
+            const statsBanner = document.getElementById('statsBanner');
+            statsBanner.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-label">Total Metrics</div>
+                    <div class="stat-value">${totalMetrics}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Categories</div>
+                    <div class="stat-value">${categories}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Selected Run</div>
+                    <div class="stat-value" style="font-size: 1rem;">${currentRunId.substring(0, 20)}...</div>
+                </div>
+            `;
+            statsBanner.style.display = 'grid';
+            
+            renderMetricSelector();
+        }
+
+        function renderMetricSelector() {
+            let html = '<h2>Select Metrics to Visualize</h2>';
+            for (const [category, metrics] of Object.entries(availableMetrics)) {
+                html += `<div class="metric-category"><div class="category-title">${category} <span class="category-badge">${metrics.length}</span></div><div class="metric-list">`;
+                metrics.forEach(metric => {
+                    const id = `metric-${metric.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    html += `<div class="metric-checkbox"><input type="checkbox" id="${id}" value="${metric}" onchange="generateCharts()"><label for="${id}">${metric}</label></div>`;
+                });
+                html += '</div></div>';
+            }
+            document.getElementById('metricSelector').innerHTML = html;
+        }
+
+        async function generateCharts() {
+            const checkboxes = document.querySelectorAll('.metric-checkbox input:checked');
+            const selectedMetrics = Array.from(checkboxes).map(cb => cb.value);
+            
+            const container = document.getElementById('chartsContainer');
+            
+            if (!selectedMetrics.length) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading data...</p></div>';
+            
+            const response = await fetch(`${API_BASE}/api/runs/${currentRunId}/data?metrics=${encodeURIComponent(selectedMetrics.join(','))}`);
+            const data = await response.json();
+            metricsData = data;
+            container.innerHTML = '';
+            
+            selectedMetrics.forEach((metric, index) => {
+                const metricData = data[metric] || [];
+                if (metricData.length) createChart(metric, metricData, index);
+            });
+        }
+
+        function calculateStats(data) {
+            const values = data.map(d => Array.isArray(d.value) ? d.value.reduce((a, b) => a + b, 0) / d.value.length : d.value);
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const mean = values.reduce((a, b) => a + b, 0) / values.length;
+            const latest = values[values.length - 1];
+            
+            return { min, max, mean, latest, count: data.length };
+        }
+
+        function createChart(metricName, data, colorIndex) {
+            const container = document.getElementById('chartsContainer');
+            const stats = calculateStats(data);
+            
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            card.innerHTML = `
+                <div class="chart-header">
+                    <div class="chart-title-group">
+                        <div class="chart-title">${metricName}</div>
+                        <div class="chart-stats">
+                            <div class="chart-stat">
+                                <div class="chart-stat-label">Current</div>
+                                <div class="chart-stat-value">${stats.latest.toFixed(4)}</div>
+                            </div>
+                            <div class="chart-stat">
+                                <div class="chart-stat-label">Min</div>
+                                <div class="chart-stat-value">${stats.min.toFixed(4)}</div>
+                            </div>
+                            <div class="chart-stat">
+                                <div class="chart-stat-label">Max</div>
+                                <div class="chart-stat-value">${stats.max.toFixed(4)}</div>
+                            </div>
+                            <div class="chart-stat">
+                                <div class="chart-stat-label">Mean</div>
+                                <div class="chart-stat-value">${stats.mean.toFixed(4)}</div>
+                            </div>
+                            <div class="chart-stat">
+                                <div class="chart-stat-label">Points</div>
+                                <div class="chart-stat-value">${stats.count}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.5rem;">
+                    💡 Scroll to zoom • Ctrl+Drag to pan • Double-click to reset
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="chart-${colorIndex}"></canvas>
+                </div>
+            `;
+            
+            container.appendChild(card);
+            
+            const ctx = document.getElementById(`chart-${colorIndex}`);
+            const color = COLORS[colorIndex % COLORS.length];
+            const isHistogram = Array.isArray(data[0]?.value);
+            
+            if (isHistogram) {
+                const latestValue = data[data.length - 1]?.value || [];
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: { 
+                        labels: latestValue.map((_, i) => `${i}`), 
+                        datasets: [{ 
+                            label: metricName, 
+                            data: latestValue, 
+                            backgroundColor: color 
+                        }] 
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                                titleColor: '#94a3b8',
+                                bodyColor: '#f1f5f9',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 12,
+                                displayColors: false
+                            }
+                        },
+                        scales: {
+                            x: { grid: { color: '#1e293b' } },
+                            y: { grid: { color: '#1e293b' } }
+                        }
+                    }
+                });
+            } else {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: { 
+                        labels: data.map(d => d.step), 
+                        datasets: [{ 
+                            label: metricName, 
+                            data: data.map(d => d.value), 
+                            borderColor: color, 
+                            backgroundColor: color + '33', 
+                            borderWidth: 2, 
+                            tension: 0.3, 
+                            pointRadius: 0,
+                            pointHoverRadius: 5,
+                            pointHoverBackgroundColor: color,
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2
+                        }] 
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                                titleColor: '#94a3b8',
+                                bodyColor: '#f1f5f9',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 12,
+                                displayColors: true,
+                                callbacks: {
+                                    label: function(context) {
+                                        return `Value: ${context.parsed.y.toFixed(6)}`;
+                                    },
+                                    afterLabel: function(context) {
+                                        const step = context.parsed.x;
+                                        return `Step: ${step}`;
+                                    }
+                                }
+                            },
+                            zoom: {
+                                pan: {
+                                    enabled: true,
+                                    mode: 'x',
+                                    modifierKey: 'ctrl'
+                                },
+                                zoom: {
+                                    wheel: {
+                                        enabled: true,
+                                        speed: 0.1
+                                    },
+                                    pinch: {
+                                        enabled: true
+                                    },
+                                    mode: 'x'
+                                },
+                                limits: {
+                                    x: { min: 'original', max: 'original' }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { 
+                                title: { display: true, text: 'Step' },
+                                grid: { color: '#1e293b' }
+                            },
+                            y: { 
+                                title: { display: true, text: 'Value' },
+                                grid: { color: '#1e293b' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function refreshData() { currentRunId ? discoverMetrics() : loadRuns(); }
+        init();
+    </script>
+</body>
+</html>
