@@ -73,8 +73,12 @@ log_info "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 #######################################
 log_info "Checking IAM role..."
 
+POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${PREFIX}"
+
+log_info "Checking if ${LAMBDA_ROLE_NAME} role exists..."
 if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" >/dev/null 2>&1; then
-  log_info "Creating IAM role..."
+  log_info "Inside IF - ${LAMBDA_ROLE_NAME} Role does not exist"
+  log_info "Creating IAM role...${LAMBDA_ROLE_NAME}"
   aws iam create-role \
     --role-name "${LAMBDA_ROLE_NAME}" \
     --assume-role-policy-document '{
@@ -88,64 +92,26 @@ if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" >/dev/null 2>&1; then
     --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
     > /dev/null
 
+  log_info "Attaching AWSLambdaBasicExecutionRole policy to role...${LAMBDA_ROLE_NAME}"
   aws iam attach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
     --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 
   # Add inline policy for CloudWatch alarms and EC2 describe
-  aws iam put-role-policy \
+  log_info "Attaching ${POLICY_ARN} policy to role...${LAMBDA_ROLE_NAME}"
+  aws iam attach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
-    --policy-name "AlarmCreationPolicy" \
-    --policy-document '{
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Action": [
-            "cloudwatch:PutMetricAlarm",
-            "cloudwatch:DescribeAlarms",
-            "cloudwatch:TagResource"
-          ],
-          "Resource": "*"
-        },
-        {
-          "Effect": "Allow",
-          "Action": [
-            "ec2:DescribeInstances"
-          ],
-          "Resource": "*"
-        }
-      ]
-    }'
+    --policy-arn ${POLICY_ARN}
 
   log_info "Waiting for role to propagate..."
   sleep 10
 else
+  log_info "Inside ELSE - ${LAMBDA_ROLE_NAME} Role exists"
   # Ensure inline policy exists for existing role
-  aws iam put-role-policy \
+  log_info "Attaching ${POLICY_ARN} policy to role...${LAMBDA_ROLE_NAME}"
+  aws iam attach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
-    --policy-name "AlarmCreationPolicy" \
-    --policy-document '{
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Action": [
-            "cloudwatch:PutMetricAlarm",
-            "cloudwatch:DescribeAlarms",
-            "cloudwatch:TagResource"
-          ],
-          "Resource": "*"
-        },
-        {
-          "Effect": "Allow",
-          "Action": [
-            "ec2:DescribeInstances"
-          ],
-          "Resource": "*"
-        }
-      ]
-    }' 2>/dev/null || true
+    --policy-arn ${POLICY_ARN} 2>/dev/null || true
 fi
 
 LAMBDA_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${LAMBDA_ROLE_NAME}"
@@ -206,7 +172,7 @@ def get_instance_name(instance_id):
         for tag in tags:
           if tag['Key'] == 'Name':
             return tag['Value']
-            break
+
       except Exception:
           instance_name = instance_id
     else:
@@ -279,8 +245,10 @@ PYTHON_EOF
 
 cd "${TEMP_DIR}" && zip -q lambda.zip lambda_function.py
 
+log_info "Checking Lambda function ${LAMBDA_FUNCTION_NAME} exists"
 if aws lambda get-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-  log_info "Updating Telegram forwarder Lambda..."
+  log_info "Inside IF Lambda function exists ${LAMBDA_FUNCTION_NAME}"
+  log_info "Updating Telegram forwarder Lambda...${LAMBDA_FUNCTION_NAME}"
   aws lambda update-function-code \
     --function-name "${LAMBDA_FUNCTION_NAME}" \
     --zip-file "fileb://lambda.zip" \
@@ -292,7 +260,7 @@ if aws lambda get-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "$
     --environment "Variables={TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}}" \
     --region "${AWS_REGION}" > /dev/null
 else
-  log_info "Creating Telegram forwarder Lambda..."
+  log_info "Inside ELSE, ${LAMBDA_FUNCTION_NAME} does not exist, Creating it..."
   aws lambda create-function \
     --function-name "${LAMBDA_FUNCTION_NAME}" \
     --runtime "python3.12" \
@@ -314,7 +282,7 @@ LAMBDA_ARN="arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${LAMBDA_FUN
 #######################################
 # Step 3: Create SNS Topic
 #####################################
-log_info "Checking SNS topic..."
+log_info "Checking SNS topic...${SNS_TOPIC_NAME}"
 
 SNS_TOPIC_ARN=$(aws sns create-topic \
   --name "${SNS_TOPIC_NAME}" \
@@ -323,7 +291,10 @@ SNS_TOPIC_ARN=$(aws sns create-topic \
   --query 'TopicArn' \
   --output text)
 
+log_info "Received SNS topic ARN: ${SNS_TOPIC_ARN} from create-topic for ${SNS_TOPIC_NAME}"
+
 # Add Lambda permission for SNS
+log_info "Adding Lambda permission for SNS to invoke...${LAMBDA_FUNCTION_NAME}"
 aws lambda add-permission \
   --function-name "${LAMBDA_FUNCTION_NAME}" \
   --statement-id "sns-invoke" \
@@ -333,6 +304,7 @@ aws lambda add-permission \
   --region "${AWS_REGION}" 2>/dev/null || true
 
 # Subscribe Lambda to SNS
+log_info "Subscribing Lambda to SNS topic...${SNS_TOPIC_NAME}"
 aws sns subscribe \
   --topic-arn "${SNS_TOPIC_ARN}" \
   --protocol "lambda" \
@@ -342,7 +314,7 @@ aws sns subscribe \
 #######################################
 # Step 4: Create EventBridge Lambda (auto-alarm on EC2 launch)
 #######################################
-log_info "Checking EventBridge Lambda..."
+log_info "Checking EventBridge Lambda...${EVENTBRIDGE_LAMBDA_NAME}"
 
 cat > "${TEMP_DIR}/eventbridge_lambda.py" << PYTHON_EOF
 import json
@@ -461,20 +433,22 @@ PYTHON_EOF
 
 cd "${TEMP_DIR}" && zip -q eventbridge_lambda.zip eventbridge_lambda.py
 
+log_info "Checking EventBridge Lambda function ${EVENTBRIDGE_LAMBDA_NAME} exists"
 if aws lambda get-function --function-name "${EVENTBRIDGE_LAMBDA_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-  log_info "Updating EventBridge Lambda..."
+  log_info "Inside IF, Updating EventBridge Lambda...${EVENTBRIDGE_LAMBDA_NAME}"
   aws lambda update-function-code \
     --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
     --zip-file "fileb://eventbridge_lambda.zip" \
     --region "${AWS_REGION}" > /dev/null
 
   sleep 5
+  log_info "Updating EventBridge Lambda configuration...${EVENTBRIDGE_LAMBDA_NAME}"
   aws lambda update-function-configuration \
     --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
     --environment "Variables={CPU_THRESHOLD=${CPU_THRESHOLD},EVALUATION_PERIODS=${EVALUATION_PERIODS},PERIOD_SECONDS=${PERIOD_SECONDS},SNS_TOPIC_ARN=${SNS_TOPIC_ARN},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}}" \
     --region "${AWS_REGION}" > /dev/null
 else
-  log_info "Creating EventBridge Lambda..."
+  log_info "Inside ELSE, Creating EventBridge Lambda...${EVENTBRIDGE_LAMBDA_NAME}"
   aws lambda create-function \
     --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
     --runtime "python3.12" \
@@ -495,7 +469,7 @@ EVENTBRIDGE_LAMBDA_ARN="arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:
 #######################################
 # Step 5: Create EventBridge Rule
 #######################################
-log_info "Checking EventBridge rule..."
+log_info "Checking EventBridge rule...${EVENTBRIDGE_RULE_NAME}"
 
 # Create rule for EC2 running state
 aws events put-rule \
@@ -512,12 +486,14 @@ aws events put-rule \
   --region "${AWS_REGION}" > /dev/null
 
 # Tag the rule
+log_info "Tagging EventBridge rule...${EVENTBRIDGE_RULE_NAME}"
 aws events tag-resource \
   --resource-arn "arn:aws:events:${AWS_REGION}:${AWS_ACCOUNT_ID}:rule/${EVENTBRIDGE_RULE_NAME}" \
   --tags Key=Team,Value=${TAG_TEAM} Key=TaskId,Value=${TAG_TASK_ID} Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE} \
   --region "${AWS_REGION}" 2>/dev/null || true
 
 # Add Lambda permission for EventBridge
+log_info "Adding Lambda permission for EventBridge to invoke...${EVENTBRIDGE_LAMBDA_NAME}"
 aws lambda add-permission \
   --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
   --statement-id "eventbridge-invoke" \
@@ -527,6 +503,7 @@ aws lambda add-permission \
   --region "${AWS_REGION}" 2>/dev/null || true
 
 # Add Lambda as target
+log_info "Adding Lambda as target to EventBridge rule...${EVENTBRIDGE_RULE_NAME}"
 aws events put-targets \
   --rule "${EVENTBRIDGE_RULE_NAME}" \
   --targets "Id=1,Arn=${EVENTBRIDGE_LAMBDA_ARN}" \
@@ -537,18 +514,20 @@ cd - > /dev/null && rm -rf "${TEMP_DIR}"
 #######################################
 # Step 6: Create alarms for existing instances
 #######################################
-log_info "Checking for existing instances..."
 
 EXISTING_ALARMS=$(aws cloudwatch describe-alarms \
   --query "MetricAlarms[?ends_with(AlarmName, '-cpu-idle')].Dimensions[?Name=='InstanceId'].Value | []" \
   --output text \
   --region "${AWS_REGION}" 2>/dev/null | tr '\t' '\n' | sort -u)
 
+log_info "Got alarms for existing instances...${EXISTING_ALARMS}"
+
 RUNNING_INSTANCES=$(aws ec2 describe-instances \
   --filters "Name=instance-state-name,Values=running" \
   --query 'Reservations[].Instances[].[InstanceId,Tags[?Key==`Name`].Value | [0]]' \
   --output text \
   --region "${AWS_REGION}")
+log_info "Got running instances...${RUNNING_INSTANCES}"
 
 NEW_COUNT=0
 SKIP_COUNT=0

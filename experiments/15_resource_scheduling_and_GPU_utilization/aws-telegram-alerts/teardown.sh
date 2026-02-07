@@ -21,59 +21,64 @@ ACCOUNTS_FILE="${SCRIPT_DIR}/accounts.txt"
 
 teardown_account() {
   AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+  POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${PREFIX}"
 
   echo "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 
   # Delete CloudWatch alarms
-  echo "  Deleting alarms..."
   ALARMS=$(aws cloudwatch describe-alarms \
     --query "MetricAlarms[?ends_with(AlarmName, '-cpu-idle')].AlarmName" \
     --output text \
     --region "${AWS_REGION}" 2>/dev/null || echo "")
+  echo "  Deleting alarms...${ALARMS}"
   if [ -n "${ALARMS}" ]; then
     aws cloudwatch delete-alarms --alarm-names ${ALARMS} --region "${AWS_REGION}"
   fi
 
   # Delete EventBridge rule targets first
-  echo "  Deleting EventBridge rule..."
+  echo "  Deleting targets for EventBridge rule...${EVENTBRIDGE_RULE_NAME}"
   aws events remove-targets \
     --rule "${EVENTBRIDGE_RULE_NAME}" \
     --ids "1" \
     --region "${AWS_REGION}" 2>/dev/null || true
 
   # Delete EventBridge rule
+  echo "  Deleting EventBridge rule...${EVENTBRIDGE_RULE_NAME}"
   aws events delete-rule \
     --name "${EVENTBRIDGE_RULE_NAME}" \
     --region "${AWS_REGION}" 2>/dev/null || true
 
   # Delete EventBridge Lambda
-  echo "  Deleting EventBridge Lambda..."
+  echo "  Deleting EventBridge Lambda...${EVENTBRIDGE_LAMBDA_NAME}"
   aws lambda delete-function \
     --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
     --region "${AWS_REGION}" 2>/dev/null || true
 
   # Delete SNS topic
-  echo "  Deleting SNS topic..."
+  echo "  Deleting SNS topic...${SNS_TOPIC_NAME}"
   aws sns delete-topic \
     --topic-arn "arn:aws:sns:${AWS_REGION}:${AWS_ACCOUNT_ID}:${SNS_TOPIC_NAME}" \
     --region "${AWS_REGION}" 2>/dev/null || true
 
   # Delete Telegram forwarder Lambda
-  echo "  Deleting Telegram forwarder Lambda..."
+  echo "  Deleting Telegram forwarder Lambda...${LAMBDA_FUNCTION_NAME}"
   aws lambda delete-function \
     --function-name "${LAMBDA_FUNCTION_NAME}" \
     --region "${AWS_REGION}" 2>/dev/null || true
 
-  # Delete IAM role
-  echo "  Deleting IAM role..."
-  aws iam delete-role-policy \
+  # Detach managed policies from IAM role
+  echo "  Detaching ${POLICY_ARN} from role...${LAMBDA_ROLE_NAME}"
+  aws iam detach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
-    --policy-name "AlarmCreationPolicy" 2>/dev/null || true
+    --policy-arn "${POLICY_ARN}" 2>/dev/null || true
 
+  echo "  Detaching AWSLambdaBasicExecutionRole from role...${LAMBDA_ROLE_NAME}"
   aws iam detach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
     --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 2>/dev/null || true
 
+  # Delete IAM role
+  echo "  Deleting IAM role...${LAMBDA_ROLE_NAME}"
   aws iam delete-role \
     --role-name "${LAMBDA_ROLE_NAME}" 2>/dev/null || true
 
