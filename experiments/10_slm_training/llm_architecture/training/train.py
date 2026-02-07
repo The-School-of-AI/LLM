@@ -22,9 +22,8 @@ import sys
 import time
 import json
 import math
+import signal
 import argparse
-import threading
-import select
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, asdict, fields
@@ -271,73 +270,99 @@ class LRScheduler:
             return self.max_lr
 
 
-class PauseController:
+class TrainingController:
     """
-    Controls play/pause of the training loop via keyboard input.
+    Controls pause/resume/stop of training with ZERO background thread overhead.
 
-    Press Enter during training to toggle pause/resume.
-    While paused, the training loop blocks until resumed.
+    All input checking happens inline at natural pause points (once per optimizer
+    step), so there is no background thread competing for the GIL.
+
+    Controls:
+      - Ctrl+C : Pause training (first time) / Stop & save (while paused or second Ctrl+C)
+      - While paused, reads stdin:  Enter = resume,  'stop' = save & exit
+
+    The SIGINT handler is managed by the Trainer, not this class.
     """
 
     def __init__(self):
         self._paused = False
-        self._pause_event = threading.Event()
-        self._pause_event.set()  # Start in "running" state
-        self._stop = False
-        self._listener_thread = None
-        self._pause_time = 0.0  # Total time spent paused
+        self._stop_requested = False
+        self._pause_time = 0.0
         self._pause_start = None
+        self._interactive = True
 
     def start(self):
-        """Start listening for pause/resume input."""
-        self._listener_thread = threading.Thread(target=self._listen, daemon=True)
-        self._listener_thread.start()
-        print("[Pause Controller] Press Enter to pause/resume training.\n")
+        """Print controls info. No background thread is started."""
+        # Check if stdin is interactive (not redirected)
+        try:
+            self._interactive = os.isatty(sys.stdin.fileno())
+        except (AttributeError, OSError):
+            self._interactive = False
 
-    def _listen(self):
-        """Background thread that listens for Enter key to toggle pause."""
-        while not self._stop:
-            try:
-                # Use select for non-blocking stdin check (works on Unix/macOS)
-                if select.select([sys.stdin], [], [], 0.5)[0]:
-                    sys.stdin.readline()
-                    self.toggle()
-            except (EOFError, OSError):
-                # stdin not available (e.g., running in background / non-interactive)
-                break
-
-    def toggle(self):
-        """Toggle between paused and running states."""
-        if self._paused:
-            self.resume()
-        else:
-            self.pause()
+        print("[Controls] Ctrl+C to pause | While paused: Enter=resume, 'stop'=save & exit\n")
 
     def pause(self):
-        """Pause training."""
+        """Pause training. Called from SIGINT handler."""
         if not self._paused:
             self._paused = True
-            self._pause_event.clear()
             self._pause_start = time.time()
             print(f"\n{'*'*60}")
-            print("  TRAINING PAUSED  -  Press Enter to resume")
-            print(f"{'*'*60}\n")
+            print("  TRAINING PAUSED")
+            print("  Press Enter to resume | Type 'stop' to save & exit")
+            print(f"{'*'*60}")
 
-    def resume(self):
-        """Resume training."""
+    def request_stop(self):
+        """Request graceful stop. Called from SIGINT handler or user input."""
+        self._stop_requested = True
+        if self._paused:
+            # Account for pause time before unblocking
+            if self._pause_start is not None:
+                self._pause_time += time.time() - self._pause_start
+                self._pause_start = None
+            self._paused = False
+        print(f"\n{'*'*60}")
+        print("  STOP REQUESTED  -  Saving checkpoint and exiting...")
+        print(f"{'*'*60}\n")
+
+    def check_and_handle_pause(self):
+        """Called once per optimizer step. Blocks while paused, reads user input.
+
+        Returns immediately with zero overhead when not paused.
+        """
+        if not self._paused:
+            return
+
+        # Paused: block and read stdin for resume/stop commands
+        while self._paused and not self._stop_requested:
+            try:
+                line = input("> ").strip().lower()
+            except EOFError:
+                # Non-interactive, just resume
+                self._resume()
+                return
+
+            if line == 'stop':
+                self.request_stop()
+                return
+            else:
+                # Any other input (including empty Enter) resumes
+                self._resume()
+                return
+
+    def _resume(self):
+        """Resume training from paused state."""
         if self._paused:
             if self._pause_start is not None:
                 self._pause_time += time.time() - self._pause_start
                 self._pause_start = None
             self._paused = False
-            self._pause_event.set()
             print(f"\n{'*'*60}")
             print("  TRAINING RESUMED")
             print(f"{'*'*60}\n")
 
-    def wait_if_paused(self):
-        """Block until training is resumed. Call this in the training loop."""
-        self._pause_event.wait()
+    @property
+    def stop_requested(self) -> bool:
+        return self._stop_requested
 
     @property
     def is_paused(self) -> bool:
@@ -351,11 +376,9 @@ class PauseController:
             extra = time.time() - self._pause_start
         return self._pause_time + extra
 
-    def stop(self):
-        """Stop the listener thread."""
-        self._stop = True
-        if self._paused:
-            self._pause_event.set()  # Unblock if paused
+    def shutdown(self):
+        """Cleanup (no-op since there's no background thread)."""
+        pass
 
 
 class RandomTextDataset(Dataset):
@@ -458,7 +481,7 @@ class Trainer:
         )
         
         # Pause controller
-        self.pause_controller = PauseController()
+        self.pause_controller = TrainingController()
 
         # State
         self.global_step = 0
@@ -511,17 +534,37 @@ class Trainer:
         # Start pause controller
         self.pause_controller.start()
 
+        # Register Ctrl+C handler:
+        #   1st Ctrl+C -> pause (if running)
+        #   2nd Ctrl+C -> stop & save (if paused)
+        #   3rd Ctrl+C -> force exit
+        original_sigint = signal.getsignal(signal.SIGINT)
+        def _sigint_handler(signum, frame):
+            ctrl = self.pause_controller
+            if ctrl.stop_requested:
+                # Already stopping, force exit
+                print("\nForce exit requested.")
+                signal.signal(signal.SIGINT, original_sigint)
+                raise KeyboardInterrupt
+            elif ctrl.is_paused:
+                # Paused -> stop & save
+                ctrl.request_stop()
+            else:
+                # Running -> pause
+                ctrl.pause()
+        signal.signal(signal.SIGINT, _sigint_handler)
+
         accumulation_loss = 0.0
         accumulation_main_loss = 0.0
         accumulation_aux_loss = 0.0
         accumulation_steps = 0
         step_start_time = time.time()
+        step_pause_snapshot = self.pause_controller.total_pause_time
+        stopped_early = False
 
         data_iter = iter(self.train_dataloader)
 
         while self.global_step < self.config.max_steps:
-            # Block here if training is paused
-            self.pause_controller.wait_if_paused()
             # Get batch
             try:
                 batch = next(data_iter)
@@ -585,8 +628,10 @@ class Trainer:
                 )
                 self.tokens_seen += tokens_in_step
                 
-                # Calculate metrics
-                step_time = time.time() - step_start_time
+                # Calculate metrics (subtract pause time within this step)
+                step_pause_delta = self.pause_controller.total_pause_time - step_pause_snapshot
+                step_time = time.time() - step_start_time - step_pause_delta
+                step_time = max(step_time, 1e-6)  # Avoid division by zero
                 tokens_per_second = tokens_in_step / step_time
                 samples_per_second = (
                     self.config.batch_size *
@@ -632,10 +677,19 @@ class Trainer:
                 accumulation_main_loss = 0.0
                 accumulation_aux_loss = 0.0
                 accumulation_steps = 0
+
+                # Pause/stop check (once per optimizer step, zero overhead when running)
+                self.pause_controller.check_and_handle_pause()
+                if self.pause_controller.stop_requested:
+                    stopped_early = True
+                    break
+
                 step_start_time = time.time()
+                step_pause_snapshot = self.pause_controller.total_pause_time
         
-        # Stop pause controller
-        self.pause_controller.stop()
+        # Restore original signal handler and stop pause controller
+        signal.signal(signal.SIGINT, original_sigint)
+        self.pause_controller.shutdown()
 
         # Final checkpoint
         total_pause_time = self.pause_controller.total_pause_time
@@ -655,10 +709,11 @@ class Trainer:
         )
 
         wall_time = time.time() - self.start_time
+        status = "Training Stopped (checkpoint saved)" if stopped_early else "Training Complete!"
         print(f"\n{'='*60}")
-        print("Training Complete!")
+        print(status)
         print(f"{'='*60}")
-        print(f"Final step: {self.global_step}")
+        print(f"Final step: {self.global_step}/{self.config.max_steps}")
         print(f"Best loss: {self.best_loss:.4f}")
         print(f"Tokens seen: {self.tokens_seen:,}")
         print(f"Active training time: {active_time:.1f}s")
