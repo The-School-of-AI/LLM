@@ -108,7 +108,7 @@ class FFNConfig:
     """Configuration for feed-forward networks."""
     
     ffn_type: FFNType = FFNType.SWIGLU
-    intermediate_size: int = 4096  # Usually 4x hidden_size for SwiGLU: 8/3 * hidden
+    intermediate_size: int = 8192  # Usually 4x hidden_size for SwiGLU: 8/3 * hidden
     ffn_dropout: float = 0.0
     ffn_bias: bool = False
     
@@ -344,7 +344,7 @@ def get_1b_base_config() -> ModelConfig:
         ),
         ffn=FFNConfig(
             ffn_type=FFNType.SWIGLU,
-            intermediate_size=4096,  # ~2.7x hidden for SwiGLU
+            intermediate_size=8192,  # ~2.7x hidden for SwiGLU
         ),
     )
 
@@ -523,7 +523,7 @@ def get_1b_full_config() -> ModelConfig:
         ),
         ffn=FFNConfig(
             ffn_type=FFNType.SWIGLU,
-            intermediate_size=4096,
+            intermediate_size=8192,
         ),
         connection=ConnectionConfig(
             connection_type=ConnectionType.MHC,
