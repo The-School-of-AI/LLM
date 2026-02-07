@@ -49,10 +49,35 @@ iam-policy.json   # IAM policy for setup user
    curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | grep -o '"id":-[0-9]*' | head -1
    ```
 
-## IAM Setup
+## IAM Setup (Prerequisite)
 
 Attach `iam-policy.json` to IAM users/roles that will run the setup scripts.
 
+The managed policy `T15-IdleCPUMonitor-410` must exist in the account before running setup.sh. Create it with:
+
+```
+aws iam create-policy \
+  --policy-name "T15-IdleCPUMonitor-410" \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "cloudwatch:PutMetricAlarm",
+          "cloudwatch:DescribeAlarms",
+          "cloudwatch:TagResource"
+        ],
+        "Resource": "*"
+      },
+      {
+        "Effect": "Allow",
+        "Action": "ec2:DescribeInstances",
+        "Resource": "*"
+      }
+    ]
+  }'
+```
 ## Single Account
 
 ```bash
