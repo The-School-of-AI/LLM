@@ -74,7 +74,7 @@
                 "ArnEquals": {
                     "iam:PolicyARN": [
                         "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-                        "arn:aws:iam::227568829374:policy/T15-CloudWatchAlarms-410"
+                        "arn:aws:iam::227568829374:policy/T15-IdleCPUMonitor-410"
                     ]
                 }
             }
