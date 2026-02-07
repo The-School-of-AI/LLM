@@ -1,6 +1,6 @@
 # LLM Architecture
 
-A modular, production-ready ~0.87B parameter Large Language Model implementation featuring state-of-the-art Gated Sparse Attention (GSA) based on DeepSeek V3 (arXiv:2512.02556v1) and the GSA paper (arXiv:2601.15305v1).
+A modular, production-ready ~1.27B parameter Large Language Model implementation featuring state-of-the-art Gated Sparse Attention (GSA) based on DeepSeek V3 (arXiv:2512.02556v1) and the GSA paper (arXiv:2601.15305v1).
 
 ## Model Specifications
 
@@ -8,7 +8,7 @@ A modular, production-ready ~0.87B parameter Large Language Model implementation
 
 | Parameter | Value |
 |-----------|-------|
-| **Total Parameters** | **~870M** (with GPT-2 tokenizer) / **~1.19B** (with 128K vocab) |
+| **Total Parameters** | **~1.27B** (with GPT-2 tokenizer) / **~1.39B** (with 128K vocab) |
 | Hidden Size | 2,048 |
 | Num Layers | 16 |
 | Attention Heads | 16 (4 KV heads, GQA 4:1 ratio) |
@@ -39,8 +39,8 @@ A modular, production-ready ~0.87B parameter Large Language Model implementation
 | FFN down_proj | 1,67,77,216 | 8192 x 2048 |
 | **FFN Subtotal** | **5,03,31,648** | |
 | RMSNorm (2x) | 4,096 | 2 x 2048 |
-| **Per-Layer Total** | **~41.6M** | |
-| **All 16 Layers** | **~1.2B** | |
+| **Per-Layer Total** | **~66.7M** | |
+| **All 16 Layers** | **~1.07B** | |
 
 ### Global Parameters
 
