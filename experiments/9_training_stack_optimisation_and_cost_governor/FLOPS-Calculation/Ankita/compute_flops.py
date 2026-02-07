@@ -38,8 +38,13 @@ class TrainingStage:
 
         if experts < 0 or top_k < 0:
             raise ValueError("num_experts and top_k_experts must be >= 0.")
+        if null_prob < 0 or null_prob > 1:
+            raise ValueError("null_expert_prob must be in [0, 1].")
         if moe_capacity_factor <= 0:
             raise ValueError("moe_capacity_factor must be > 0.")
+        top_k_explicit = "top_k_experts" in arch
+        if experts == 0 and top_k_explicit and top_k != 0:
+            raise ValueError("top_k_experts must be 0 when num_experts is 0.")
         if experts == 0 and solve_for not in (
             "num_experts",
             "num_experts_from_per_expert",
