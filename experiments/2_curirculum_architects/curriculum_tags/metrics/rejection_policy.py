@@ -117,29 +117,31 @@ def _detect_language(text: str, sample: dict = None) -> str:
         if metadata_lang.lower().startswith("en"):
             return "en"
         if metadata_lang.lower() in [
-            "hi",
+            "as",
             "bn",
-            "ta",
-            "te",
-            "mr",
             "gu",
+            "hi",
             "kn",
             "ml",
-            "pa",
+            "mr",
             "or",
+            "pa",
+            "ta",
+            "te",
         ]:
             return "indic"
         elif metadata_lang.lower() in [
-            "hindi",
+            "assamese",
             "bengali",
-            "tamil",
-            "telugu",
-            "marathi",
             "gujarati",
+            "hindi",
             "kannada",
             "malayalam",
-            "punjabi",
+            "marathi",
             "odia",
+            "punjabi",
+            "tamil",
+            "telugu",
         ]:
             return "indic"
 

@@ -3,7 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import boto3
 import pytest
 import yaml
 from curriculum_tags.core.plugin import MetricPlugin

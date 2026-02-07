@@ -41,7 +41,7 @@ language_and_context:
       - lang: "en"
         max_share: 0.92
     secondary_languages:
-      - lang: "indic"
+      - lang: ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"]
         max_share: 0.08
         earliest_stage: "1B"
     excluded_languages: ["zh", "ja", "ko", "fr", "de", "es"]
