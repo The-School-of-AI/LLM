@@ -331,7 +331,7 @@ def get_1b_base_config() -> ModelConfig:
         vocab_size=128000,
         hidden_size=2048,
         num_hidden_layers=16,
-        max_position_embeddings=4096,
+        max_position_embeddings=8192,
         attention=AttentionConfig(
             attention_type=AttentionType.GROUPED_QUERY,
             num_attention_heads=16,
@@ -339,12 +339,16 @@ def get_1b_base_config() -> ModelConfig:
         ),
         position=PositionConfig(
             position_type=PositionEmbeddingType.YARN,
-            yarn_original_max_position=4096,
+            yarn_original_max_position=8192,
             yarn_scale=8.0,
         ),
         ffn=FFNConfig(
             ffn_type=FFNType.SWIGLU,
             intermediate_size=8192,  # ~2.7x hidden for SwiGLU
+        ),
+        head=HeadConfig(
+            use_multi_token_prediction=True,
+            num_predict_tokens=2,
         ),
     )
 

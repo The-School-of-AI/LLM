@@ -23,6 +23,8 @@ import time
 import json
 import math
 import argparse
+import threading
+import select
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, asdict, fields
@@ -269,6 +271,93 @@ class LRScheduler:
             return self.max_lr
 
 
+class PauseController:
+    """
+    Controls play/pause of the training loop via keyboard input.
+
+    Press Enter during training to toggle pause/resume.
+    While paused, the training loop blocks until resumed.
+    """
+
+    def __init__(self):
+        self._paused = False
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # Start in "running" state
+        self._stop = False
+        self._listener_thread = None
+        self._pause_time = 0.0  # Total time spent paused
+        self._pause_start = None
+
+    def start(self):
+        """Start listening for pause/resume input."""
+        self._listener_thread = threading.Thread(target=self._listen, daemon=True)
+        self._listener_thread.start()
+        print("[Pause Controller] Press Enter to pause/resume training.\n")
+
+    def _listen(self):
+        """Background thread that listens for Enter key to toggle pause."""
+        while not self._stop:
+            try:
+                # Use select for non-blocking stdin check (works on Unix/macOS)
+                if select.select([sys.stdin], [], [], 0.5)[0]:
+                    sys.stdin.readline()
+                    self.toggle()
+            except (EOFError, OSError):
+                # stdin not available (e.g., running in background / non-interactive)
+                break
+
+    def toggle(self):
+        """Toggle between paused and running states."""
+        if self._paused:
+            self.resume()
+        else:
+            self.pause()
+
+    def pause(self):
+        """Pause training."""
+        if not self._paused:
+            self._paused = True
+            self._pause_event.clear()
+            self._pause_start = time.time()
+            print(f"\n{'*'*60}")
+            print("  TRAINING PAUSED  -  Press Enter to resume")
+            print(f"{'*'*60}\n")
+
+    def resume(self):
+        """Resume training."""
+        if self._paused:
+            if self._pause_start is not None:
+                self._pause_time += time.time() - self._pause_start
+                self._pause_start = None
+            self._paused = False
+            self._pause_event.set()
+            print(f"\n{'*'*60}")
+            print("  TRAINING RESUMED")
+            print(f"{'*'*60}\n")
+
+    def wait_if_paused(self):
+        """Block until training is resumed. Call this in the training loop."""
+        self._pause_event.wait()
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
+    @property
+    def total_pause_time(self) -> float:
+        """Total seconds spent paused."""
+        extra = 0.0
+        if self._paused and self._pause_start is not None:
+            extra = time.time() - self._pause_start
+        return self._pause_time + extra
+
+    def stop(self):
+        """Stop the listener thread."""
+        self._stop = True
+        if self._paused:
+            self._pause_event.set()  # Unblock if paused
+
+
 class RandomTextDataset(Dataset):
     """
     Random dataset for testing/development.
@@ -368,6 +457,9 @@ class Trainer:
             experiment_name=training_config.experiment_name
         )
         
+        # Pause controller
+        self.pause_controller = PauseController()
+
         # State
         self.global_step = 0
         self.epoch = 0
@@ -415,14 +507,21 @@ class Trainer:
         print(f"Max steps: {self.config.max_steps}")
         print(f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}")
         print(f"{'='*60}\n")
-        
+
+        # Start pause controller
+        self.pause_controller.start()
+
         accumulation_loss = 0.0
+        accumulation_main_loss = 0.0
+        accumulation_aux_loss = 0.0
         accumulation_steps = 0
         step_start_time = time.time()
-        
+
         data_iter = iter(self.train_dataloader)
-        
+
         while self.global_step < self.config.max_steps:
+            # Block here if training is paused
+            self.pause_controller.wait_if_paused()
             # Get batch
             try:
                 batch = next(data_iter)
@@ -448,6 +547,10 @@ class Trainer:
                 loss.backward()
 
             accumulation_loss += micro_loss.item()
+            if outputs.loss_dict is not None:
+                accumulation_main_loss += outputs.loss_dict.get('main_loss', micro_loss).item()
+                if 'aux_total' in outputs.loss_dict:
+                    accumulation_aux_loss += outputs.loss_dict['aux_total'].item()
             accumulation_steps += 1
 
             # Gradient accumulation step
@@ -490,7 +593,8 @@ class Trainer:
                     self.config.gradient_accumulation_steps
                 ) / step_time
                 
-                # Log metrics
+                # Log metrics (exclude pause time from elapsed)
+                active_elapsed = time.time() - self.start_time - self.pause_controller.total_pause_time
                 metrics = TrainingMetrics(
                     step=self.global_step,
                     epoch=self.epoch,
@@ -500,14 +604,14 @@ class Trainer:
                     samples_per_second=samples_per_second,
                     grad_norm=grad_norm,
                     tokens_seen=self.tokens_seen,
-                    elapsed_time=time.time() - self.start_time
+                    elapsed_time=active_elapsed
                 )
                 
-                # Add MTP loss components if available
+                # Add averaged MTP loss components if available
                 if outputs.loss_dict is not None:
-                    metrics.main_loss = outputs.loss_dict.get('main_loss', outputs.loss).item()
+                    metrics.main_loss = accumulation_main_loss / max(1, accumulation_steps)
                     if 'aux_total' in outputs.loss_dict:
-                        metrics.aux_loss = outputs.loss_dict['aux_total'].item()
+                        metrics.aux_loss = accumulation_aux_loss / max(1, accumulation_steps)
                 
                 self.logger.log(metrics)
                 
@@ -525,31 +629,42 @@ class Trainer:
                 
                 # Reset accumulation
                 accumulation_loss = 0.0
+                accumulation_main_loss = 0.0
+                accumulation_aux_loss = 0.0
                 accumulation_steps = 0
                 step_start_time = time.time()
         
+        # Stop pause controller
+        self.pause_controller.stop()
+
         # Final checkpoint
+        total_pause_time = self.pause_controller.total_pause_time
+        active_time = time.time() - self.start_time - total_pause_time
         final_metrics = TrainingMetrics(
             step=self.global_step,
             epoch=self.epoch,
             loss=self.best_loss,
             tokens_seen=self.tokens_seen,
-            elapsed_time=time.time() - self.start_time
+            elapsed_time=active_time
         )
-        
+
         self._save_checkpoint(final_metrics, is_final=True)
         self.logger.save_summary(
             config=asdict(self.config),
             final_metrics=final_metrics
         )
-        
+
+        wall_time = time.time() - self.start_time
         print(f"\n{'='*60}")
         print("Training Complete!")
         print(f"{'='*60}")
         print(f"Final step: {self.global_step}")
         print(f"Best loss: {self.best_loss:.4f}")
         print(f"Tokens seen: {self.tokens_seen:,}")
-        print(f"Total time: {time.time() - self.start_time:.1f}s")
+        print(f"Active training time: {active_time:.1f}s")
+        if total_pause_time > 0:
+            print(f"Total pause time: {total_pause_time:.1f}s")
+        print(f"Wall clock time: {wall_time:.1f}s")
         print(f"{'='*60}\n")
         
         return final_metrics
@@ -560,10 +675,25 @@ class Trainer:
             metrics.elapsed_time / max(1, metrics.step)
         )
         eta_str = f"{eta_seconds/3600:.1f}h" if eta_seconds > 3600 else f"{eta_seconds/60:.1f}m"
-        
+
+        # Build loss string: show model loss and MTP loss separately when available
+        if metrics.main_loss is not None and metrics.aux_loss is not None:
+            loss_str = (
+                f"Model Loss: {metrics.main_loss:.4f} | "
+                f"MTP Loss: {metrics.aux_loss:.4f} | "
+                f"Total Loss: {metrics.loss:.4f}"
+            )
+        elif metrics.main_loss is not None:
+            loss_str = (
+                f"Model Loss: {metrics.main_loss:.4f} | "
+                f"Total Loss: {metrics.loss:.4f}"
+            )
+        else:
+            loss_str = f"Loss: {metrics.loss:.4f}"
+
         print(
             f"Step {metrics.step:>6d}/{self.config.max_steps} | "
-            f"Loss: {metrics.loss:.4f} | "
+            f"{loss_str} | "
             f"LR: {metrics.learning_rate:.2e} | "
             f"Tok/s: {metrics.tokens_per_second:,.0f} | "
             f"Grad: {metrics.grad_norm:.2f} | "
