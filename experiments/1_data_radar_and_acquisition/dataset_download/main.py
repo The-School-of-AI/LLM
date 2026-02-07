@@ -39,12 +39,11 @@ def main():
         print(f"No files found for prefix {prefix}")
         return
 
-    api = HfApi()
     for filename in files:
         print(f"Streaming and uploading {filename}...")
         try:
-            # Get the file download URL
-            url = api.presigned_url(repo_id=repo_id, filename=filename, repo_type=repo_type)
+            # Construct the raw file URL for Hugging Face datasets
+            url = f"https://huggingface.co/datasets/{repo_id}/resolve/main/{filename}"
             response = requests.get(url, stream=True)
             response.raise_for_status()
             file_obj = BytesIO()
