@@ -158,3 +158,11 @@ The following graphs summarize the performance of the tokenizer across different
 
 ![Vocab Gini](Tokenizer_metrics/graphs/Summary_Vocab.png)
 *Vocabulary Inequality (Higher = Less Balanced)*
+
+### Comparative Analysis
+
+Based on the evaluation metrics across Code, Indic languages, and NCERT textbooks:
+
+*   **Academic & General Text (NCERT)**: **`our_tokenizer` demonstrates excellent performance**, often matching or outperforming `gemma_tokenizer` and `mistral_tokenizer` in compression efficiency (lower Bytes/Token). For subjects like Biology and Chemistry, it rivals the highly efficient `qwen_tokenizer`.
+*   **Code**: Our tokenizer remains **highly competitive**, showing better compression than the original `gptoss_tokenizer` and `qwen_tokenizer` in languages like Python and Java. While `gemma_tokenizer` holds a slight edge in raw compression, our tokenizer strikes a balanced trade-off.
+*   **Indic Languages**: The tokenizer retains functional support for languages like Hindi and Tamil. While `qwen_tokenizer` leads in this category due to its extensive multilingual vocabulary, `our_tokenizer` maintains stability consistent with the base GPToss model, ensuring these languages are processed correctly without fallback errors.

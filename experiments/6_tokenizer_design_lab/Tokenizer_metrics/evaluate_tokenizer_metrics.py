@@ -35,7 +35,7 @@ if os.path.exists(gptoss_path):
 DATA_DIRS = {
     "Code": "datasets/code",
     "Indic": "datasets/indic",
-    "NCERT": "ncert"
+    "NCERT": "datasets/ncert"
 }
 
 def load_tokenizer(config):
@@ -88,6 +88,7 @@ def get_dataset_files():
     # Code
     if os.path.exists(DATA_DIRS["Code"]):
         code_langs = glob.glob(os.path.join(DATA_DIRS["Code"], "*"))
+        found_any_code = False
         for lang_dir in code_langs:
             if not os.path.isdir(lang_dir):
                 continue
@@ -95,14 +96,19 @@ def get_dataset_files():
             files = glob.glob(os.path.join(lang_dir, "*.jsonl"))
             if files:
                 dataset_map[f"Code - {lang}"] = files
+                found_any_code = True
             else:
                 print(f"Warning: No .jsonl files found in '{lang_dir}'. Please ensure dataset files are in .jsonl format.")
+        
+        if not found_any_code:
+            print(f"Warning: No valid language subdirectories with .jsonl files found in '{DATA_DIRS['Code']}'.")
     else:
         print(f"Warning: Dataset directory '{DATA_DIRS['Code']}' not found.")
 
     # Indic
     if os.path.exists(DATA_DIRS["Indic"]):
         indic_langs = glob.glob(os.path.join(DATA_DIRS["Indic"], "*"))
+        found_any_indic = False
         for lang_dir in indic_langs:
             if not os.path.isdir(lang_dir):
                 continue
@@ -110,8 +116,12 @@ def get_dataset_files():
             files = glob.glob(os.path.join(lang_dir, "*.jsonl"))
             if files:
                 dataset_map[f"Indic - {lang}"] = files
+                found_any_indic = True
             else:
                 print(f"Warning: No .jsonl files found in '{lang_dir}'. Please ensure dataset files are in .jsonl format.")
+        
+        if not found_any_indic:
+            print(f"Warning: No valid language subdirectories with .jsonl files found in '{DATA_DIRS['Indic']}'.")
     else:
         print(f"Warning: Dataset directory '{DATA_DIRS['Indic']}' not found.")
 
