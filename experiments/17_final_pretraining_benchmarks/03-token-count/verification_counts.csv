@@ -1,0 +1,9 @@
+dataset,config,split,tokens,text_column
+squad,plain_text,train,1105850,id
+squad,plain_text,train,354056,title
+squad,plain_text,train,13958011,context
+squad,plain_text,train,1097466,question
+squad,plain_text,validation,130880,id
+squad,plain_text,validation,41506,title
+squad,plain_text,validation,1721499,context
+squad,plain_text,validation,133679,question
