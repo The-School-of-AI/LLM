@@ -8,12 +8,13 @@ set -eu
 #   ./teardown.sh --all        # All accounts in accounts.txt
 #######################################
 
+PREFIX="T15-IdleCPUMonitor-410"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-P15-IdleCPUMonitor-410-Telegram-alert-topic}"
-LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-P15-IdleCPUMonitor-410-Telegram-alert-forwarder}"
-LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-P15-IdleCPUMonitor-410-Telegram-alert-lambda-execution-role}"
-EVENTBRIDGE_LAMBDA_NAME="${EVENTBRIDGE_LAMBDA_NAME:-P15-IdleCPUMonitor-410-ec2-launch-alarm-creator}"
-EVENTBRIDGE_RULE_NAME="${EVENTBRIDGE_RULE_NAME:-P15-IdleCPUMonitor-410-ec2-launch-cpu-alarm-rule}"
+SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-${PREFIX}-Telegram-alert-topic}"
+LAMBDA_FUNCTION_NAME="${LAMBDA_FUNCTION_NAME:-${PREFIX}-Telegram-alert-forwarder}"
+LAMBDA_ROLE_NAME="${LAMBDA_ROLE_NAME:-${PREFIX}-Telegram-alert-lambda-execution-role}"
+EVENTBRIDGE_LAMBDA_NAME="${EVENTBRIDGE_LAMBDA_NAME:-${PREFIX}-ec2-launch-alarm-creator}"
+EVENTBRIDGE_RULE_NAME="${EVENTBRIDGE_RULE_NAME:-${PREFIX}-ec2-launch-cpu-alarm-rule}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ACCOUNTS_FILE="${SCRIPT_DIR}/accounts.txt"
