@@ -1,0 +1,128 @@
+stage: sft_70b
+description: OLMES SFT benchmarks for 70B model (Frontier Phase)
+benchmarks:
+- name: MMLU
+  enabled: true
+  olmes_task: mmlu::olmes
+  phases:
+  - sft
+- name: TriviaQA
+  enabled: true
+  olmes_task: triviaqa::olmes
+  phases:
+  - sft
+- name: GSM8K
+  enabled: true
+  olmes_task: gsm8k::olmes
+  phases:
+  - sft
+- name: BBH (Big Bench Hard)
+  enabled: true
+  olmes_task: bbh:cot-v1::olmes
+  phases:
+  - sft
+- name: ARC-Challenge
+  enabled: true
+  olmes_task: arc_challenge::olmes
+  phases:
+  - sft
+- name: MATH
+  enabled: true
+  olmes_task: minerva_math::olmes
+  phases:
+  - sft
+- name: IFEval
+  enabled: true
+  shots: 0
+  phases:
+  - sft
+  harness_task: ifeval
+- name: HumanEval
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/humaneval.py
+  phases:
+  - sft
+- name: MSGS
+  enabled: false
+  shots: 0
+  phases:
+  - sft
+  harness_task: msgs
+- name: BLiMP
+  enabled: true
+  shots: 0
+  phases:
+  - sft
+  harness_task: blimp
+- name: TruthfulQA
+  enabled: true
+  olmes_task: truthfulqa::olmo1
+  phases:
+  - sft
+- name: HellaSwag
+  enabled: true
+  olmes_task: hellaswag::olmes
+  phases:
+  - sft
+- name: Winogrande
+  enabled: true
+  olmes_task: winogrande::olmes
+  phases:
+  - sft
+- name: PIQA
+  enabled: true
+  olmes_task: piqa::olmes
+  phases:
+  - sft
+- name: LAMBADA
+  enabled: true
+  olmes_task: lambada
+  phases:
+  - sft
+- name: SimpleQA_Verified
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/simpleqa.py
+  phases:
+  - sft
+- name: AIME 2025
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/aime2025.py
+  phases:
+  - sft
+- name: IndicGLUE
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/indic_glue.py
+  phases:
+  - sft
+- name: IndicQA
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/indic_qa.py
+  phases:
+  - sft
+- name: L-Eval
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/leval.py
+  phases:
+  - sft
+- name: RULER
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/ruler.py
+  tasks:
+  - longchat_qa
+  phases:
+  - sft
+- name: Indic-Bias (FairITales)
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/indic_bias.py
+  phases:
+  - sft
+- name: HELM Safety
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/helm_safety.py
+  phases:
+  - sft
+- name: SWE-bench Verified
+  enabled: true
+  custom_script: 02-OLMES-v1/src/custom-scripts/swebench.py
+  phases:
+  - sft
