@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Dataset Download",
+			"type": "shell",
+			"command": "uv",
+			"args": [
+				"run",
+				"python",
+				"main.py"
+			],
+			"group": "build"
+		}
+	]
+}
