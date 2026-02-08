@@ -321,8 +321,10 @@ class LLM(nn.Module):
         hidden_states = self.norm(hidden_states)
         
         # LM head
+        # Always return aux_logits when MTP is enabled, so external loss
+        # computation (used by torch.compile) can access them.
         if self.config.head.use_multi_token_prediction:
-            logits, aux_logits = self.lm_head(hidden_states, return_aux=labels is not None)
+            logits, aux_logits = self.lm_head(hidden_states, return_aux=True)
         else:
             logits = self.lm_head(hidden_states)
             aux_logits = None

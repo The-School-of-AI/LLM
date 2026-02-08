@@ -38,13 +38,15 @@ except ImportError:
     _USE_TRITON_SINKHORN = False
 
 
-@torch.jit.script
 def _sinkhorn_knopp_pytorch(H: torch.Tensor, num_iters: int = 20, eps: float = 1e-8) -> torch.Tensor:
     """
-    PyTorch fallback Sinkhorn-Knopp (JIT-compiled).
+    PyTorch Sinkhorn-Knopp (torch.compile compatible).
 
     Projects matrices onto Birkhoff polytope (doubly stochastic).
     Used when Triton is unavailable or input is not on CUDA.
+
+    Note: Removed @torch.jit.script as it causes graph breaks with torch.compile.
+    torch.compile's inductor backend already optimizes this loop effectively.
 
     Args:
         H: Input matrix [..., n, n] (will be exponentiated)

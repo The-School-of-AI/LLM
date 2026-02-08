@@ -409,6 +409,45 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def align_model_context_to_seq_length(model_config: ModelConfig, seq_length: int) -> None:
+    """
+    Ensure model positional capacity matches requested training sequence length.
+
+    This prevents out-of-bounds indexing in RoPE/YaRN caches when training with
+    seq_length > model_config.max_position_embeddings.
+    """
+    if seq_length <= model_config.max_position_embeddings:
+        return
+
+    old_max = model_config.max_position_embeddings
+    model_config.max_position_embeddings = seq_length
+    print(
+        f"[Context] Increasing max_position_embeddings: {old_max} -> {seq_length} "
+        f"to match training seq_length."
+    )
+
+    # If YaRN is used, ensure configured scale can cover seq_length.
+    pos = getattr(model_config, "position", None)
+    if pos is None:
+        return
+
+    pos_type = getattr(pos, "position_type", None)
+    pos_type_value = pos_type.value if hasattr(pos_type, "value") else str(pos_type)
+    if pos_type_value != "yarn":
+        return
+
+    original_max = int(getattr(pos, "yarn_original_max_position", old_max) or old_max)
+    original_max = max(1, original_max)
+    required_scale = seq_length / float(original_max)
+    current_scale = float(getattr(pos, "yarn_scale", 1.0))
+    if required_scale > current_scale:
+        pos.yarn_scale = required_scale
+        print(
+            f"[Context] Increasing YaRN scale: {current_scale:.4g} -> {required_scale:.4g} "
+            f"(original_max={original_max}, target_seq={seq_length})."
+        )
+
+
 class TokenBlockDataset(Dataset):
     """Simple fixed-length token block dataset."""
 
@@ -563,6 +602,30 @@ Note: CLI arguments always override config file values.
         help="Disable Triton kernels (use PyTorch fallback for GSA)"
     )
 
+    # torch.compile
+    parser.add_argument(
+        "--use-torch-compile",
+        action="store_true",
+        help="Enable torch.compile() for graph optimization (requires PyTorch 2.0+)"
+    )
+    parser.add_argument(
+        "--torch-compile-mode",
+        type=str,
+        default=None,
+        choices=["default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"],
+        help="torch.compile mode: default (safe), max-autotune-no-cudagraphs (recommended), max-autotune (+ CUDAGraphs), reduce-overhead (CUDAGraphs only)"
+    )
+    parser.add_argument(
+        "--torch-compile-fullgraph",
+        action="store_true",
+        help="Enforce full-graph compilation (no graph breaks)"
+    )
+    parser.add_argument(
+        "--torch-compile-dynamic",
+        action="store_true",
+        help="Enable dynamic shapes in torch.compile"
+    )
+
     # Experiment
     parser.add_argument("--experiment-name", type=str, default=None)
     parser.add_argument("--checkpoint-dir", type=str, default=None)
@@ -614,6 +677,11 @@ Note: CLI arguments always override config file values.
             log_interval=training_dict.get('log_interval', 10),
             save_interval=training_dict.get('save_interval', 200),
             use_amp=training_dict.get('use_amp', True),
+            use_torch_compile=training_dict.get('use_torch_compile', False),
+            torch_compile_mode=training_dict.get('torch_compile_mode', 'max-autotune-no-cudagraphs'),
+            torch_compile_fullgraph=training_dict.get('torch_compile_fullgraph', False),
+            torch_compile_dynamic=training_dict.get('torch_compile_dynamic', False),
+            torch_compile_backend=training_dict.get('torch_compile_backend', 'inductor'),
         )
     else:
         # Preset mode (legacy)
@@ -659,6 +727,17 @@ Note: CLI arguments always override config file values.
         training_config.save_interval = args.save_interval
     if args.no_amp:
         training_config.use_amp = False
+    if args.use_torch_compile:
+        training_config.use_torch_compile = True
+    if args.torch_compile_mode is not None:
+        training_config.torch_compile_mode = args.torch_compile_mode
+    if args.torch_compile_fullgraph:
+        training_config.torch_compile_fullgraph = True
+    if args.torch_compile_dynamic:
+        training_config.torch_compile_dynamic = True
+
+    # Keep model positional capacity aligned with requested training length.
+    align_model_context_to_seq_length(model_config, training_config.seq_length)
 
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
     if tokenizer.pad_token is None:

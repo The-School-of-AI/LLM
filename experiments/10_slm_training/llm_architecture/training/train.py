@@ -84,6 +84,45 @@ def training_config_from_dict(data: Dict[str, Any]) -> 'TrainingConfig':
     return TrainingConfig(**filtered_data)
 
 
+def align_model_context_to_seq_length(model_config: ModelConfig, seq_length: int) -> None:
+    """
+    Ensure model positional capacity matches requested training sequence length.
+
+    This prevents out-of-bounds indexing in RoPE/YaRN caches when training with
+    seq_length > model_config.max_position_embeddings.
+    """
+    if seq_length <= model_config.max_position_embeddings:
+        return
+
+    old_max = model_config.max_position_embeddings
+    model_config.max_position_embeddings = seq_length
+    print(
+        f"[Context] Increasing max_position_embeddings: {old_max} -> {seq_length} "
+        f"to match training seq_length."
+    )
+
+    # If YaRN is used, ensure configured scale can cover seq_length.
+    pos = getattr(model_config, "position", None)
+    if pos is None:
+        return
+
+    pos_type = getattr(pos, "position_type", None)
+    pos_type_value = pos_type.value if hasattr(pos_type, "value") else str(pos_type)
+    if pos_type_value != "yarn":
+        return
+
+    original_max = int(getattr(pos, "yarn_original_max_position", old_max) or old_max)
+    original_max = max(1, original_max)
+    required_scale = seq_length / float(original_max)
+    current_scale = float(getattr(pos, "yarn_scale", 1.0))
+    if required_scale > current_scale:
+        pos.yarn_scale = required_scale
+        print(
+            f"[Context] Increasing YaRN scale: {current_scale:.4g} -> {required_scale:.4g} "
+            f"(original_max={original_max}, target_seq={seq_length})."
+        )
+
+
 def get_best_device(preferred: str = "auto") -> torch.device:
     """
     Get the best available device.
@@ -160,6 +199,13 @@ class TrainingConfig:
     # Logging
     log_interval: int = 10
     eval_interval: int = 500
+
+    # torch.compile (PyTorch 2.0+)
+    use_torch_compile: bool = False
+    torch_compile_mode: str = "max-autotune-no-cudagraphs"  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
+    torch_compile_fullgraph: bool = False  # enforce no graph breaks (stricter but faster)
+    torch_compile_dynamic: bool = False  # allow dynamic shapes (slower compile, flexible shapes)
+    torch_compile_backend: str = "inductor"  # inductor (default), cudagraphs, etc.
 
     # Experiment
     experiment_name: str = "1b_base"
@@ -446,6 +492,10 @@ class Trainer:
         self.model = self.model.to(self.device)
         model.gradient_checkpointing_enable()
 
+        # torch.compile - apply AFTER device placement & gradient checkpointing,
+        # BEFORE optimizer creation (named_parameters works through compile wrapper)
+        self._apply_torch_compile(training_config)
+
         # Optimizer
         self.optimizer = self._create_optimizer()
 
@@ -489,7 +539,178 @@ class Trainer:
         self.tokens_seen = 0
         self.best_loss = float('inf')
         self.start_time = None
+        self._compile_safe_retry_attempted = False
+        self._compile_eager_fallback_done = False
         
+    def _apply_torch_compile(self, training_config: TrainingConfig):
+        """Apply torch.compile to the model if enabled and available."""
+        if not training_config.use_torch_compile:
+            return
+
+        if not hasattr(torch, 'compile'):
+            print("Warning: torch.compile not available (requires PyTorch 2.0+), skipping")
+            return
+
+        # torch.compile on MPS has limited support
+        if self.device.type == "mps":
+            print("Warning: torch.compile has limited MPS support. "
+                  "If you hit errors, disable with --no-torch-compile or use CUDA.")
+
+        mode = training_config.torch_compile_mode
+        fullgraph = training_config.torch_compile_fullgraph
+        dynamic = training_config.torch_compile_dynamic if training_config.torch_compile_dynamic else None
+        backend = training_config.torch_compile_backend
+
+        # Inductor max-autotune can fail on very long contexts due Triton index
+        # integer range limits during autotuning. Prefer "default" mode there.
+        if (
+            backend == "inductor"
+            and self.device.type == "cuda"
+            and training_config.seq_length >= 32768
+            and mode in {"max-autotune", "max-autotune-no-cudagraphs"}
+        ):
+            print(f"Warning: seq_length={training_config.seq_length} with mode='{mode}' can crash "
+                  "Inductor/Triton autotuning on large BMM shapes.")
+            print("  Auto-switching to torch.compile mode='default' for stability.")
+            mode = "default"
+            training_config.torch_compile_mode = mode
+
+        # CUDAGraphs (used by reduce-overhead AND max-autotune) allocate static
+        # output buffers. MTP heads produce multiple large outputs (main_logits +
+        # aux_logits) from the same hidden state, causing CUDAGraphs to overwrite
+        # earlier buffers. Auto-downgrade to max-autotune-no-cudagraphs.
+        cudagraph_modes = {"reduce-overhead", "max-autotune"}
+        raw_model = getattr(self.model, '_orig_mod', self.model)
+        if mode in cudagraph_modes and getattr(raw_model, 'mtp_loss', None) is not None:
+            print(f"Warning: '{mode}' mode uses CUDAGraphs which is incompatible with "
+                  "Multi-Token Prediction (buffer reuse overwrites MTP head outputs).")
+            print("  Auto-switching to max-autotune-no-cudagraphs mode.")
+            mode = "max-autotune-no-cudagraphs"
+            training_config.torch_compile_mode = mode
+
+        # Enable TF32 for float32 matmul — better Tensor Core utilization on Ampere+
+        # Use only torch.set_float32_matmul_precision (the public API) to avoid
+        # mixing legacy and new internal APIs, which crashes Inductor's max-autotune.
+        if self.device.type == "cuda":
+            torch.set_float32_matmul_precision('high')
+
+        print(f"Applying torch.compile(mode='{mode}', backend='{backend}', "
+              f"fullgraph={fullgraph}, dynamic={dynamic})...")
+
+        try:
+            self.model = torch.compile(
+                self.model,
+                mode=mode,
+                backend=backend,
+                fullgraph=fullgraph,
+                dynamic=dynamic,
+            )
+            print("Model compiled successfully (first forward pass will be slower due to compilation)")
+        except Exception as e:
+            print(f"Warning: torch.compile failed: {e}")
+            print("Continuing without compilation.")
+
+    def _is_compile_runtime_error(self, error: Exception) -> bool:
+        """Heuristic check for torch.compile/Inductor/Triton runtime failures."""
+        if not self.config.use_torch_compile:
+            return False
+        message = f"{type(error).__name__}: {error}"
+        markers = (
+            "torch._inductor",
+            "torch._dynamo",
+            "InductorError",
+            "BackendCompilerFailed",
+            "triton.compiler.errors.CompilationError",
+            "out of range for type int32",
+            "torch.compile",
+        )
+        return any(marker in message for marker in markers)
+
+    def _retry_compile_with_safe_mode(self) -> bool:
+        """Try once to recover by recompiling with conservative settings."""
+        if not hasattr(torch, "compile"):
+            return False
+
+        raw_model = getattr(self.model, "_orig_mod", self.model)
+        backend = self.config.torch_compile_backend
+        safe_mode = "default"
+        print(f"Retrying torch.compile with safer settings: mode='{safe_mode}', backend='{backend}', "
+              "fullgraph=False, dynamic=None")
+        try:
+            self.model = torch.compile(
+                raw_model,
+                mode=safe_mode,
+                backend=backend,
+                fullgraph=False,
+                dynamic=None,
+            )
+            self.config.torch_compile_mode = safe_mode
+            self.config.torch_compile_fullgraph = False
+            self.config.torch_compile_dynamic = False
+            print("Safe torch.compile retry succeeded.")
+            return True
+        except Exception as retry_error:
+            print(f"Warning: safe torch.compile retry failed: {retry_error}")
+            return False
+
+    def _fallback_to_eager(self) -> bool:
+        """Disable compile and restore eager model execution."""
+        raw_model = getattr(self.model, "_orig_mod", None)
+        if raw_model is None:
+            return False
+        self.model = raw_model
+        self.config.use_torch_compile = False
+        print("Falling back to eager execution for stability.")
+        return True
+
+    def _handle_compile_runtime_failure(self, error: Exception) -> bool:
+        """
+        Handle runtime compile failures.
+
+        Returns True if recovery action was applied and caller should retry.
+        """
+        if not self._is_compile_runtime_error(error):
+            return False
+
+        if not self._compile_safe_retry_attempted:
+            self._compile_safe_retry_attempted = True
+            if self._retry_compile_with_safe_mode():
+                return True
+
+        if not self._compile_eager_fallback_done:
+            self._compile_eager_fallback_done = True
+            if self._fallback_to_eager():
+                return True
+
+        return False
+
+    def _compute_loss(self, outputs, labels):
+        """
+        Compute loss outside the compiled graph.
+
+        Used with torch.compile to avoid CUDAGraph buffer reuse errors.
+        The model forward returns logits only (labels not passed), and
+        loss is computed here in eager mode.
+
+        Returns:
+            (loss, loss_dict) tuple
+        """
+        raw_model = getattr(self.model, '_orig_mod', self.model)
+
+        if raw_model.mtp_loss is not None:
+            loss, loss_dict = raw_model.mtp_loss(outputs.logits, outputs.aux_logits, labels)
+        else:
+            shift_logits = outputs.logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss = F.cross_entropy(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1),
+                ignore_index=-100
+            )
+            loss_dict = {'loss': loss}
+
+        return loss, loss_dict
+
     def _create_optimizer(self) -> torch.optim.Optimizer:
         """Create AdamW optimizer with weight decay."""
         # Separate parameters with and without weight decay
@@ -529,6 +750,8 @@ class Trainer:
         print(f"Device: {self.device}")
         print(f"Max steps: {self.config.max_steps}")
         print(f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}")
+        if self.config.use_torch_compile:
+            print(f"torch.compile: mode={self.config.torch_compile_mode}, backend={self.config.torch_compile_backend}")
         print(f"{'='*60}\n")
 
         # Start pause controller
@@ -577,11 +800,37 @@ class Trainer:
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
             
-            # Forward pass with device-aware autocast
-            with autocast(device_type=self.device.type, enabled=self.use_amp, dtype=self.amp_dtype):
-                outputs = self.model(input_ids=input_ids, labels=labels)
-                micro_loss = outputs.loss
-                loss = micro_loss / self.config.gradient_accumulation_steps
+            def _run_forward():
+                # Mark step boundary for CUDAGraphs (only needed in CUDAGraph modes).
+                _cudagraph_modes = {"reduce-overhead", "max-autotune"}
+                _uses_cudagraphs = (self.config.use_torch_compile
+                                    and self.config.torch_compile_mode in _cudagraph_modes)
+                if _uses_cudagraphs and hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
+                    torch.compiler.cudagraph_mark_step_begin()
+
+                # Forward pass with device-aware autocast
+                with autocast(device_type=self.device.type, enabled=self.use_amp, dtype=self.amp_dtype):
+                    if _uses_cudagraphs:
+                        # CUDAGraph modes — compute loss outside compiled graph
+                        # to avoid buffer reuse errors.
+                        outputs = self.model(input_ids=input_ids)
+                        micro_loss_local, loss_dict_local = self._compute_loss(outputs, labels)
+                    else:
+                        # default / max-autotune-no-cudagraphs / non-compiled: standard forward
+                        outputs = self.model(input_ids=input_ids, labels=labels)
+                        micro_loss_local = outputs.loss
+                        loss_dict_local = outputs.loss_dict
+                    loss_local = micro_loss_local / self.config.gradient_accumulation_steps
+
+                return loss_local, micro_loss_local, loss_dict_local
+
+            try:
+                loss, micro_loss, loss_dict = _run_forward()
+            except Exception as e:
+                if self._handle_compile_runtime_failure(e):
+                    loss, micro_loss, loss_dict = _run_forward()
+                else:
+                    raise
 
             # Backward pass (GradScaler only for CUDA float16)
             if self.scaler.is_enabled():
@@ -590,10 +839,10 @@ class Trainer:
                 loss.backward()
 
             accumulation_loss += micro_loss.item()
-            if outputs.loss_dict is not None:
-                accumulation_main_loss += outputs.loss_dict.get('main_loss', micro_loss).item()
-                if 'aux_total' in outputs.loss_dict:
-                    accumulation_aux_loss += outputs.loss_dict['aux_total'].item()
+            if loss_dict is not None:
+                accumulation_main_loss += loss_dict.get('main_loss', micro_loss).item()
+                if 'aux_total' in loss_dict:
+                    accumulation_aux_loss += loss_dict['aux_total'].item()
             accumulation_steps += 1
 
             # Gradient accumulation step
@@ -653,9 +902,9 @@ class Trainer:
                 )
                 
                 # Add averaged MTP loss components if available
-                if outputs.loss_dict is not None:
+                if loss_dict is not None:
                     metrics.main_loss = accumulation_main_loss / max(1, accumulation_steps)
-                    if 'aux_total' in outputs.loss_dict:
+                    if 'aux_total' in loss_dict:
                         metrics.aux_loss = accumulation_aux_loss / max(1, accumulation_steps)
                 
                 self.logger.log(metrics)
@@ -765,10 +1014,14 @@ class Trainer:
         else:
             checkpoint_path = checkpoint_dir / f"{self.config.experiment_name}_step{metrics.step}.pt"
         
+        # Access underlying model if torch.compiled (state_dict works either way,
+        # but saving the unwrapped state_dict is cleaner for portability)
+        raw_model = getattr(self.model, '_orig_mod', self.model)
+
         checkpoint = {
             'step': self.global_step,
             'epoch': self.epoch,
-            'model_state_dict': self.model.state_dict(),
+            'model_state_dict': raw_model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'lr_scheduler_step': self.lr_scheduler.current_step,
             'metrics': asdict(metrics),
@@ -816,6 +1069,9 @@ def run_training(
                     setattr(model_config, key, value)
                 else:
                     setattr(model_config, key, value)
+
+    # Keep model positional capacity aligned with requested training length.
+    align_model_context_to_seq_length(model_config, training_config.seq_length)
     
     # Create model
     model = LLM(model_config)
@@ -922,6 +1178,30 @@ Note: CLI arguments always override config file values.
         help="Disable Triton kernels (use PyTorch fallback for GSA)"
     )
 
+    # torch.compile
+    parser.add_argument(
+        "--use-torch-compile",
+        action="store_true",
+        help="Enable torch.compile() for graph optimization (requires PyTorch 2.0+)"
+    )
+    parser.add_argument(
+        "--torch-compile-mode",
+        type=str,
+        default=None,
+        choices=["default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"],
+        help="torch.compile mode: default (safe), max-autotune-no-cudagraphs (recommended), max-autotune (+ CUDAGraphs), reduce-overhead (CUDAGraphs only)"
+    )
+    parser.add_argument(
+        "--torch-compile-fullgraph",
+        action="store_true",
+        help="Enforce full-graph compilation (no graph breaks). Fails if model has unsupported ops."
+    )
+    parser.add_argument(
+        "--torch-compile-dynamic",
+        action="store_true",
+        help="Enable dynamic shapes in torch.compile (slower compile, flexible input shapes)"
+    )
+
     # Experiment
     parser.add_argument("--experiment-name", type=str, default=None)
     parser.add_argument("--checkpoint-dir", type=str, default=None)
@@ -970,6 +1250,17 @@ Note: CLI arguments always override config file values.
         training_config.log_interval = args.log_interval
     if args.save_interval is not None:
         training_config.save_interval = args.save_interval
+    if args.use_torch_compile:
+        training_config.use_torch_compile = True
+    if args.torch_compile_mode is not None:
+        training_config.torch_compile_mode = args.torch_compile_mode
+    if args.torch_compile_fullgraph:
+        training_config.torch_compile_fullgraph = True
+    if args.torch_compile_dynamic:
+        training_config.torch_compile_dynamic = True
+
+    # Keep model positional capacity aligned with requested training length.
+    align_model_context_to_seq_length(model_config, training_config.seq_length)
 
     # Set seed
     torch.manual_seed(training_config.seed)

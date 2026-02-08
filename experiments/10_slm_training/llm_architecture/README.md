@@ -103,6 +103,12 @@ python training/train_wikitext2_gpt2.py \
     --preset 1b-deepseek-gsa \
     --device cuda \
     --no-triton
+
+# run training with torch compile
+python training/train_wikitext2_gpt2.py --preset 1b-deepseek-gsa --use-torch-compile --torch-compile-mode max-autotune --device cuda \
+    --seq-length 8192 \
+    --batch-size 2 \
+    --max-steps 100 
 ```
 
 ## Architecture Overview

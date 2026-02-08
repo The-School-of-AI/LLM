@@ -318,7 +318,9 @@ class AdaptiveTopKSelector(nn.Module):
 
         if self.use_adaptive:
             k_values = self._compute_adaptive_k(scores)
-            k_effective = min(int(k_values.max().item()), seq_kv)
+            # Use static k_max as upper bound instead of data-dependent k_values.max().item()
+            # This avoids GPU->CPU sync and torch.compile graph breaks
+            k_effective = min(self.k_max, seq_kv)
         else:
             k_values = torch.full(
                 (batch_size, seq_q),
@@ -397,118 +399,93 @@ class AdaptiveTopKSelector(nn.Module):
         return k_values.long()
 
 
-class ValueGate(nn.Module):
+class FusedGates(nn.Module):
     """
-    G2: Value Gate - Applied after V projection, before attention.
+    Fused G1 (output gate) + G2 (value gate) projection.
 
-    Suppresses uninformative value dimensions early.
-    """
+    Instead of two separate linear projections from hidden_states:
+        g2 = value_gate_proj(h)    # hidden -> num_kv_heads * head_dim
+        g1 = output_gate_proj(h)   # hidden -> num_heads * head_dim
 
-    def __init__(
-        self,
-        hidden_size: int,
-        num_kv_heads: int,
-        head_dim: int,
-        bias_init: float = 0.5,
-        activation: str = "sigmoid",
-    ):
-        super().__init__()
+    We fuse into a single projection and split:
+        g_both = fused_proj(h)     # hidden -> (num_kv_heads + num_heads) * head_dim
+        g2, g1 = split(g_both)
 
-        self.hidden_size = hidden_size
-        self.num_kv_heads = num_kv_heads
-        self.head_dim = head_dim
-        self.activation = activation
-
-        self.gate_proj = nn.Linear(hidden_size, num_kv_heads * head_dim, bias=True)
-        self._init_weights(bias_init)
-
-    def _init_weights(self, bias_init: float):
-        nn.init.xavier_uniform_(self.gate_proj.weight, gain=0.1)
-        nn.init.constant_(self.gate_proj.bias, bias_init)
-
-    def forward(
-        self,
-        v: torch.Tensor,  # [batch, seq, num_kv_heads, head_dim]
-        hidden_states: torch.Tensor,  # [batch, seq, hidden_size]
-    ) -> torch.Tensor:
-        """Apply value gating."""
-        batch_size, seq_len, num_kv_heads, head_dim = v.shape
-
-        gate_logits = self.gate_proj(hidden_states)
-        gate_logits = gate_logits.view(batch_size, seq_len, num_kv_heads, head_dim)
-
-        if self.activation == "sigmoid":
-            gate = torch.sigmoid(gate_logits)
-        elif self.activation == "tanh":
-            gate = (torch.tanh(gate_logits) + 1) / 2
-        elif self.activation == "silu":
-            gate = F.silu(gate_logits)
-        else:
-            raise ValueError(f"Unknown activation: {self.activation}")
-
-        return v * gate
-
-
-class OutputGate(nn.Module):
-    """
-    G1: Output Gate - Applied after SDPA (most effective position).
-
-    Eliminates attention sinks by providing alternative pathway.
+    This halves kernel launch overhead and improves memory access patterns.
     """
 
     def __init__(
         self,
         hidden_size: int,
         num_heads: int,
+        num_kv_heads: int,
         head_dim: int,
         bias_init: float = 0.5,
         activation: str = "sigmoid",
-        per_head: bool = True,
+        use_value_gate: bool = True,
+        use_output_gate: bool = True,
     ):
         super().__init__()
 
         self.hidden_size = hidden_size
         self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
         self.head_dim = head_dim
         self.activation = activation
-        self.per_head = per_head
+        self.use_value_gate = use_value_gate
+        self.use_output_gate = use_output_gate
 
-        if per_head:
-            self.gate_proj = nn.Linear(hidden_size, num_heads * head_dim, bias=True)
-        else:
-            self.gate_proj = nn.Linear(hidden_size, num_heads, bias=True)
+        # Compute fused output size
+        self.g2_dim = num_kv_heads * head_dim if use_value_gate else 0
+        self.g1_dim = num_heads * head_dim if use_output_gate else 0
+        total_dim = self.g2_dim + self.g1_dim
 
-        self._init_weights(bias_init)
+        if total_dim > 0:
+            self.gate_proj = nn.Linear(hidden_size, total_dim, bias=True)
+            self._init_weights(bias_init)
 
     def _init_weights(self, bias_init: float):
         nn.init.xavier_uniform_(self.gate_proj.weight, gain=0.1)
         nn.init.constant_(self.gate_proj.bias, bias_init)
 
-    def forward(
-        self,
-        attn_output: torch.Tensor,  # [batch, seq, num_heads, head_dim]
-        hidden_states: torch.Tensor,  # [batch, seq, hidden_size]
-    ) -> torch.Tensor:
-        """Apply output gating."""
-        batch_size, seq_len, num_heads, head_dim = attn_output.shape
-
-        gate_logits = self.gate_proj(hidden_states)
-
-        if self.per_head:
-            gate_logits = gate_logits.view(batch_size, seq_len, num_heads, head_dim)
-        else:
-            gate_logits = gate_logits.view(batch_size, seq_len, num_heads, 1)
-
+    def _apply_activation(self, logits: torch.Tensor) -> torch.Tensor:
         if self.activation == "sigmoid":
-            gate = torch.sigmoid(gate_logits)
+            return torch.sigmoid(logits)
         elif self.activation == "tanh":
-            gate = (torch.tanh(gate_logits) + 1) / 2
+            return (torch.tanh(logits) + 1) / 2
         elif self.activation == "silu":
-            gate = F.silu(gate_logits)
+            return F.silu(logits)
         else:
             raise ValueError(f"Unknown activation: {self.activation}")
 
-        return attn_output * gate
+    def forward(
+        self,
+        hidden_states: torch.Tensor,  # [batch, seq, hidden_size]
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """
+        Compute both gates in a single fused projection.
+
+        Returns:
+            g2: Value gate [batch, seq, num_kv_heads, head_dim] or None
+            g1: Output gate [batch, seq, num_heads, head_dim] or None
+        """
+        batch_size, seq_len, _ = hidden_states.shape
+
+        gate_all = self.gate_proj(hidden_states)  # [batch, seq, g2_dim + g1_dim]
+
+        g2 = None
+        g1 = None
+
+        if self.use_value_gate and self.use_output_gate:
+            g2_logits, g1_logits = gate_all.split([self.g2_dim, self.g1_dim], dim=-1)
+            g2 = self._apply_activation(g2_logits).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
+            g1 = self._apply_activation(g1_logits).view(batch_size, seq_len, self.num_heads, self.head_dim)
+        elif self.use_value_gate:
+            g2 = self._apply_activation(gate_all).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
+        elif self.use_output_gate:
+            g1 = self._apply_activation(gate_all).view(batch_size, seq_len, self.num_heads, self.head_dim)
+
+        return g2, g1
 
 
 class DeepSeekGSA(nn.Module):
@@ -559,28 +536,22 @@ class DeepSeekGSA(nn.Module):
             method=config.adaptive_k_method,
         )
 
-        # Gates
-        if config.use_value_gate:
-            self.value_gate = ValueGate(
+        # Fused gates (G1 + G2 in a single projection)
+        self.use_value_gate = config.use_value_gate
+        self.use_output_gate = config.use_output_gate
+        if config.use_value_gate or config.use_output_gate:
+            self.gates = FusedGates(
                 hidden_size=self.hidden_size,
+                num_heads=self.num_heads,
                 num_kv_heads=self.num_kv_heads,
                 head_dim=self.head_dim,
                 bias_init=config.gate_bias_init,
                 activation=config.gate_activation,
+                use_value_gate=config.use_value_gate,
+                use_output_gate=config.use_output_gate,
             )
         else:
-            self.value_gate = None
-
-        if config.use_output_gate:
-            self.output_gate = OutputGate(
-                hidden_size=self.hidden_size,
-                num_heads=self.num_heads,
-                head_dim=self.head_dim,
-                bias_init=config.gate_bias_init,
-                activation=config.gate_activation,
-            )
-        else:
-            self.output_gate = None
+            self.gates = None
 
         # Position Embedding: YaRN or standard RoPE
         self.use_yarn = config.use_yarn
@@ -759,9 +730,14 @@ class DeepSeekGSA(nn.Module):
         k = self.k_proj(hidden_states).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
         v = self.v_proj(hidden_states).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
 
-        # === Step 2: Value Gate (G2) ===
-        if self.value_gate is not None:
-            v = self.value_gate(v, hidden_states)
+        # === Step 2: Compute fused gates (single projection for G1+G2) ===
+        g2, g1 = (None, None)
+        if self.gates is not None:
+            g2, g1 = self.gates(hidden_states)
+
+        # === Step 2b: Apply Value Gate (G2) ===
+        if g2 is not None:
+            v = v * g2
 
         # === Step 3: Apply RoPE ===
         if self.rotary_emb is not None:
@@ -769,12 +745,14 @@ class DeepSeekGSA(nn.Module):
             q_rope = q.transpose(1, 2)
             k_rope = k.transpose(1, 2)
             rope_input = hidden_states
-            if position_ids is not None:
-                # Ensure rotary cache can serve absolute decode positions without
-                # allocating a full [B, pos, hidden] tensor.
-                max_position = int(position_ids.max().item()) + 1
-                if max_position > hidden_states.shape[1]:
-                    rope_input = hidden_states.new_empty(1, max_position, 1)
+            if use_cache and position_ids is not None:
+                # For decoding with KV cache, position_ids may exceed current seq_len.
+                # Ensure rotary cache covers absolute positions.
+                # Guarded behind use_cache so torch.compile never traces this path
+                # during training (use_cache=False), avoiding the .item() graph break.
+                max_pos = int(position_ids.max()) + 1
+                if max_pos > hidden_states.shape[1]:
+                    rope_input = hidden_states.new_empty(1, max_pos, 1)
 
             cos, sin = self.rotary_emb(rope_input, position_ids)
             q_rope, k_rope = apply_rotary_pos_emb(q_rope, k_rope, cos, sin)
@@ -848,8 +826,8 @@ class DeepSeekGSA(nn.Module):
         )
 
         # === Step 8: Output Gate (G1) ===
-        if self.output_gate is not None:
-            attn_output = self.output_gate(attn_output, hidden_states)
+        if g1 is not None:
+            attn_output = attn_output * g1
 
         # === Step 9: Output Projection ===
         attn_output = attn_output.reshape(batch_size, seq_len, self.num_heads * self.head_dim)
@@ -923,9 +901,10 @@ class DeepSeekGSA(nn.Module):
         output_attentions: bool = False,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        PyTorch implementation of sparse attention.
+        PyTorch implementation of sparse attention using F.scaled_dot_product_attention.
 
-        Memory-optimized: avoids expanding full seq_kv dimension.
+        After gathering top-k K,V tokens, uses SDPA which dispatches to Flash Attention
+        / memory-efficient attention kernels for fused softmax+matmul.
         """
         batch_size = q.shape[0]
         seq_q = q.shape[1]
@@ -934,18 +913,24 @@ class DeepSeekGSA(nn.Module):
         k_gathered = self._gather_along_seq_efficient(k, indices)  # [batch, seq_q, k_selected, n_heads, d_head]
         v_gathered = self._gather_along_seq_efficient(v, indices)
 
-        # Permute for attention: [batch, seq_q, n_heads, k_selected, d_head]
-        k_gathered = k_gathered.permute(0, 1, 3, 2, 4)
-        v_gathered = v_gathered.permute(0, 1, 3, 2, 4)
+        # Reshape for SDPA: need [batch * seq_q, n_heads, 1, d_head] for q
+        # and [batch * seq_q, n_heads, k_selected, d_head] for k, v
+        # This treats each query position as a separate "batch" element
+        n_heads = q.shape[2]
+        k_selected = indices.shape[2]
 
-        # Attention scores: [batch, seq_q, n_heads, k_selected]
-        scores = torch.einsum('bqhd,bqhkd->bqhk', q, k_gathered) * self.scale
+        # q: [batch, seq_q, n_heads, d_head] -> [batch*seq_q, n_heads, 1, d_head]
+        q_sdpa = q.reshape(batch_size * seq_q, n_heads, 1, self.head_dim)
 
-        # Apply selection mask: [batch, seq_q, k_selected] -> [batch, seq_q, 1, k_selected]
-        mask_expanded = mask.unsqueeze(2)
-        scores = scores.masked_fill(~mask_expanded, float('-inf'))
+        # k_gathered: [batch, seq_q, k_selected, n_heads, d_head] -> [batch*seq_q, n_heads, k_selected, d_head]
+        k_sdpa = k_gathered.permute(0, 1, 3, 2, 4).reshape(batch_size * seq_q, n_heads, k_selected, self.head_dim)
+        v_sdpa = v_gathered.permute(0, 1, 3, 2, 4).reshape(batch_size * seq_q, n_heads, k_selected, self.head_dim)
 
-        # Apply additive attention mask (e.g., padding) on selected keys.
+        # Build attention mask for SDPA: [batch*seq_q, 1, 1, k_selected]
+        # True = valid (opposite of the additive mask convention)
+        attn_mask = mask.reshape(batch_size * seq_q, 1, 1, k_selected)
+
+        # Merge additive padding mask if present
         sparse_mask = self._normalize_attention_mask(
             attention_mask,
             seq_q=seq_q,
@@ -954,17 +939,23 @@ class DeepSeekGSA(nn.Module):
         )
         if sparse_mask is not None:
             gathered_sparse_mask = torch.gather(sparse_mask, dim=-1, index=indices)
-            scores = scores + gathered_sparse_mask.unsqueeze(2)
+            # Convert additive mask to boolean (valid where mask > -inf threshold)
+            padding_valid = gathered_sparse_mask > (torch.finfo(gathered_sparse_mask.dtype).min / 2)
+            padding_valid = padding_valid.reshape(batch_size * seq_q, 1, 1, k_selected)
+            attn_mask = attn_mask & padding_valid
 
-        # Softmax
-        attn_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(q.dtype)
-        attn_weights = attn_weights.masked_fill(~mask_expanded, 0.0)
-        attn_weights = self.attn_dropout(attn_weights)
+        # Use SDPA — dispatches to Flash Attention / memory-efficient kernels
+        dropout_p = self.attention_dropout if self.training else 0.0
+        output = F.scaled_dot_product_attention(
+            q_sdpa, k_sdpa, v_sdpa,
+            attn_mask=attn_mask,
+            dropout_p=dropout_p,
+            scale=self.scale,
+        )
+        # output: [batch*seq_q, n_heads, 1, d_head] -> [batch, seq_q, n_heads, d_head]
+        output = output.squeeze(2).reshape(batch_size, seq_q, n_heads, self.head_dim)
 
-        # Weighted sum: [batch, seq_q, n_heads, d_head]
-        output = torch.einsum('bqhk,bqhkd->bqhd', attn_weights, v_gathered)
-
-        return output, attn_weights if output_attentions else None
+        return output, None
 
     def _gather_along_seq_efficient(
         self,
@@ -1052,16 +1043,13 @@ if __name__ == "__main__":
     print(f"Input shape: {x.shape}")
     print(f"Output shape: {output.shape}")
 
-    # Test gates
-    if gsa.value_gate:
-        v_test = torch.randn(batch_size, seq_len, config.num_key_value_heads, config.head_dim)
-        v_gated = gsa.value_gate(v_test, x)
-        print(f"Value gate output shape: {v_gated.shape}")
-
-    if gsa.output_gate:
-        o_test = torch.randn(batch_size, seq_len, config.num_attention_heads, config.head_dim)
-        o_gated = gsa.output_gate(o_test, x)
-        print(f"Output gate output shape: {o_gated.shape}")
+    # Test fused gates
+    if gsa.gates is not None:
+        g2, g1 = gsa.gates(x)
+        if g2 is not None:
+            print(f"Value gate (G2) shape: {g2.shape}")
+        if g1 is not None:
+            print(f"Output gate (G1) shape: {g1.shape}")
 
     # Check indexer scores
     indexer_scores = gsa.indexer(x)

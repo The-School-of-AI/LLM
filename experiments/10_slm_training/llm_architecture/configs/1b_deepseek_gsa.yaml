@@ -150,6 +150,16 @@ training:
   experiment_name: "1b_deepseek_gsa"
   seed: 42
 
+  # torch.compile (requires PyTorch 2.0+)
+  # Modes: "default" (safe), "max-autotune-no-cudagraphs" (recommended),
+  #         "max-autotune" (+ CUDAGraphs, incompatible with MTP),
+  #         "reduce-overhead" (CUDAGraphs only, incompatible with MTP)
+  use_torch_compile: false
+  torch_compile_mode: "max-autotune-no-cudagraphs"
+  torch_compile_fullgraph: false        # true = strict, no graph breaks allowed
+  torch_compile_dynamic: false          # true = support variable input shapes
+  torch_compile_backend: "inductor"     # inductor (default), cudagraphs
+
 # =============================================================================
 # End of Configuration
 # =============================================================================
