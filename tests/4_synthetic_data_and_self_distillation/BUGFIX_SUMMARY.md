@@ -7,7 +7,7 @@
 
 ## Overview
 
-A code review of the `generate-bank` data generation pipeline identified **8 bugs** across data quality, Indic language support, code generation, alias resolution, manifest consistency, and scaling readiness. All 8 have been fixed and the first 3 are covered by **102 automated tests**.
+A code review of the `generate-bank` data generation pipeline identified **8 bugs** across data quality, Indic language support, code generation, alias resolution, manifest consistency, and scaling readiness. All 8 have been fixed and **171 automated tests** verify the fixes across 6 test files.
 
 ### Test Results
 
@@ -16,9 +16,11 @@ tests/4_synthetic_data_and_self_distillation/bugfixes/
 ├── test_bug1.py   29 tests  ✅ all pass
 ├── test_bug2.py   45 tests  ✅ all pass
 ├── test_bug3.py   28 tests  ✅ all pass
-└── test_bug4.py   33 tests  ✅ all pass
+├── test_bug4.py   33 tests  ✅ all pass
+├── test_bug5.py   12 tests  ✅ all pass
+└── test_bug6.py   24 tests  ✅ all pass
                   ─────────
-                  135 total   ✅ all pass
+                  171 total   ✅ all pass
 ```
 
 Run all tests:
@@ -239,30 +241,140 @@ Built a reverse alias map `_CANONICAL_TO_LEGACY` and updated both `get_builtin_s
 ## Bug 5: CODE-COMPLETION Seeds Pre-Solved
 
 **Severity:** 🟡 Medium
-**Impact:** Some code completion seeds contained already-complete functions, producing zero training value
-**Resolution:** Resolved by Bug 4 fix — alias resolution now routes to correct seed sets
+**Impact:** Generated CODE-COMPLETION.jsonl contained 5 samples with COMPLETE functions — LLM responded "already implemented" → zero training value
+**Resolution:** Resolved by Bug 4 (alias resolution) and Bug 6 (manifest normalization)
+**Files changed:** None directly — resolved via Bug 4 + Bug 6 fixes
+**Test file:** `bugfixes/test_bug5.py` (12 tests)
+
+### Problem
+
+The generated `CODE-COMPLETION.jsonl` contained 5 samples where the "question" had **fully complete function implementations** (is_palindrome, binary_search, bubble_sort, are_anagrams, generate_permutations). The LLM responded "The function is already correctly implemented" — zero training value.
+
+### Root Cause Analysis
+
+The initial assumption was that `BUILTIN_SEEDS["CODE-COMPLETION"]` had pre-solved seeds. **This was wrong.** Thorough verification showed:
+
+1. **BUILTIN_SEEDS["CODE-COMPLETION"]** (8 seeds) — **properly incomplete** ✅
+   All 8 seeds end mid-line: bare `return`, `return s ==`, `if n > max_val:`, `while left < right:`, etc.
+
+2. **The JSONL data** — came from **LLM-generated seeds**, NOT builtin seeds. `SeedGenerator.generate("CODE-COMPLETION")` used the `SEED_PROMPTS["CODE-COMPLETION"]` prompt which asked for "Partial function definitions to complete" — but the LLM ignored that instruction and generated complete functions as the "question".
+
+### How Bugs 4+6 Resolve It
+
+| Workflow | Before | After |
+|---|---|---|
+| `generate-bank --all --builtin-seeds` | Used CODE-COMPLETION key → 8 incomplete seeds (fine) | Uses CODE-GEN-T1 direct → 5 "write from scratch" seeds ✅ |
+| `generate-bank --all` (LLM seeds) | Used CODE-COMPLETION prompt → LLM gave complete functions | Uses CODE-GEN-T1 prompt → "Generate simple code generation problems" ✅ |
+| `generate-bank --skills CODE-COMPLETION` | Used legacy key directly | Bug 6 normalizes to CODE-GEN-T1 → same as above ✅ |
+
+### Key Verification Results
+
+```
+CODE-GEN-T1 (canonical) builtin seeds:
+  ✅ "Write a Python function to check if a number is even."
+  ✅ "Write a Python function to find the maximum of two numbers."
+
+CODE-COMPLETION (legacy) builtin seeds — properly incomplete:
+  ✅ "Complete this function:\ndef factorial(n):...    return"     (bare return)
+  ✅ "Complete this function:\ndef find_max(numbers):...if n > max_val:"  (no body)
+```
+
+### Note
+
+- The 8 CODE-COMPLETION builtin seeds are **orphaned** (only reachable via legacy key) — by design, since CODE-GEN-T1 is a different task type.
+- The existing `CODE-COMPLETION.jsonl` in the bank still has broken data and needs **regeneration**.
+- The `SEED_PROMPTS["CODE-COMPLETION"]` entry is now dead code (unreachable from canonical paths) but harmless.
 
 ---
 
 ## Bug 6: Manifest Key Normalization
 
 **Severity:** 🟠 High
-**Impact:** Duplicate manifest entries for same skill under different keys (e.g., `RSN-ARITHMETIC` and `RSN-ARITH`)
-**Files changed:** `run_pipeline.py`
+**Impact:** Duplicate manifest entries for same skill under different keys; `rebuild-manifest` skipped 15/22 shards; `inject` failed cross-format lookups
+**Files changed:** `run_pipeline.py`, `integration/synth_adapter.py`
+**Test file:** `bugfixes/test_bug6.py` (24 tests)
 
 ### Problem
 
-The manifest stored whichever key was passed (legacy or canonical). Running with `--skills RSN-ARITHMETIC` stored that key; running with `--all` stored `RSN-ARITH`. This caused duplicates.
+The manifest stored whatever key was passed — legacy or canonical. Running with `--skills RSN-ARITHMETIC` stored `"RSN-ARITHMETIC"`, while `--all` stored `"RSN-ARITH"`. This caused:
+1. **Duplicate entries** for the same skill under different keys
+2. **`inject --skills RSN-ARITH`** failing when manifest had `"RSN-ARITHMETIC"`
+3. **`rebuild-manifest`** skipping 15 of 22 shard files (legacy filenames like `RSN-ARITHMETIC.jsonl`)
+
+### Root Cause
+
+Five code paths interact with the manifest, but only one was originally fixed:
+
+| Code Path | Original Status |
+|---|---|
+| `cmd_generate_bank()` | ✅ Fixed (normalized `skill_id = skill.id`) |
+| `cmd_status()` | ✅ Read-only, handled aliases in display |
+| `cmd_rebuild_manifest()` | 🔴 **Checked `skill_id not in SKILL_BUCKETS` — rejected legacy filenames** |
+| `cmd_inject()` | 🔴 **Direct `manifest["skills"]` lookup — no cross-format resolution** |
+| `synth_adapter._update_manifest()` | 🔴 **Wrote legacy keys like `"KNOW-FACTUAL_synth"`** |
+
+Verification showed `rebuild-manifest` would reject 15 of 22 shard files:
+```
+❌ SKIP CODE-COMPLETION — not in SKILL_BUCKETS
+❌ SKIP RSN-ARITHMETIC — not in SKILL_BUCKETS
+❌ SKIP RSN-ALGEBRA — not in SKILL_BUCKETS
+... (15 total skipped)
+```
+
+And `inject` would miss skills when formats didn't match:
+```
+inject --skills RSN-ARITH       -> MISS in manifest (manifest has RSN-ARITHMETIC)
+inject --skills CODE-GEN-T1     -> MISS in manifest (manifest has CODE-COMPLETION)
+```
 
 ### Fix
 
-Normalize `skill_id` to canonical form at the top of the loop:
-```python
-skill = get_skill_bucket(raw_skill_id)
-skill_id = skill.id  # canonical form
+**Four-part fix across 3 remaining code paths:**
+
+1. **`cmd_generate_bank()`** — already fixed (normalized `skill_id = skill.id`)
+
+2. **`cmd_rebuild_manifest()`** — uses `get_skill_bucket()` to resolve legacy shard filenames:
+   ```python
+   # OLD: skill_id = shard_path.stem; if skill_id not in SKILL_BUCKETS: SKIP
+   # NEW: try to resolve via alias system
+   try:
+       skill = get_skill_bucket(raw_name)  # handles aliases
+       skill_id = skill.id  # canonical form
+   except ValueError:
+       print(f"  [SKIP] {raw_name} - not a known skill or alias")
+       continue
+   ```
+
+3. **`cmd_inject()`** — tries 3 lookup strategies:
+   ```python
+   # Step 1: Direct lookup (raw key)
+   # Step 2: Resolve raw as alias → try canonical in manifest
+   # Step 3: Reverse lookup — check if any legacy alias of canonical is in manifest
+   ```
+
+4. **`synth_adapter._update_manifest()`** — resolves to canonical before writing:
+   ```python
+   # OLD: entry_key = f"{skill}_synth"  (skill from EXERCISE_TO_SKILL, e.g. "KNOW-FACTUAL")
+   # NEW: canonical_skill = get_skill_bucket(skill).id  → "FND-FACT_synth"
+   ```
+
+### Verification Results
+
+After fix, all cross-format lookups work:
+```
+inject --skills RSN-ARITH        -> FOUND (via reverse legacy lookup) ✅
+inject --skills RSN-ARITHMETIC   -> FOUND (direct) ✅
+inject --skills CODE-GEN-T1      -> FOUND (via reverse lookup to CODE-COMPLETION) ✅
+inject --skills CODE-COMPLETION  -> FOUND (via canonical resolution to CODE-GEN-T1) ✅
 ```
 
-Shard filenames and manifest keys now always use the canonical ID.
+And `rebuild-manifest` now accepts all legacy shard files:
+```
+✅ RSN-ARITHMETIC.jsonl → RSN-ARITH (via alias)
+✅ CODE-COMPLETION.jsonl → CODE-GEN-T1 (via alias)
+✅ KNOW-FACTUAL.jsonl → FND-FACT (via alias)
+... (all 22 non-synth shards resolve)
+```
 
 ---
 
@@ -315,7 +427,8 @@ Defaults:
 |------|------------|
 | `generation/dual_view_generator.py` | #1, #2, #3, #7, #8 |
 | `generation/seed_generator.py` | #3, #4, #7 |
-| `run_pipeline.py` | #3, #6 |
+| `run_pipeline.py` | #3, #6 (generate-bank, generate, rebuild-manifest, inject) |
+| `integration/synth_adapter.py` | #6 (_synth manifest key normalization) |
 | `diagnostics/run_diagnostics.py` | #7 |
 | `validation/verification.py` | #7 |
 
@@ -327,7 +440,9 @@ Defaults:
 | `bugfixes/test_bug2.py` | Hard negative CoT fallback | 45 | ✅ Pass |
 | `bugfixes/test_bug3.py` | Language propagation | 28 | ✅ Pass |
 | `bugfixes/test_bug4.py` | Alias resolution | 33 | ✅ Pass |
-| — | Bugs 5-8 | — | Logic fixes, no separate test files yet |
+| `bugfixes/test_bug5.py` | CODE-COMPLETION pre-solved | 12 | ✅ Pass |
+| `bugfixes/test_bug6.py` | Manifest key normalization | 24 | ✅ Pass |
+| — | Bugs 7-8 | — | Logic fixes, no separate test files yet |
 
 ---
 

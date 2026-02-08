@@ -14,6 +14,7 @@ Usage:
 """
 
 import json
+import os
 import re
 import urllib.request
 from dataclasses import dataclass, field
@@ -22,11 +23,13 @@ from pathlib import Path
 from typing import Optional, Literal
 
 
-# OLD: hardcoded base URL and no timeout config
-# NEW: configurable via env vars
-import os
+# OLD: hardcoded base URL "http://localhost:11434" and timeout=60
+# NEW: configurable via OLLAMA_HOST and OLLAMA_TIMEOUT env vars
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "120"))
+try:
+    OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "120"))
+except (ValueError, TypeError):
+    OLLAMA_TIMEOUT = 120  # safe fallback if env var is empty or non-numeric
 
 
 @dataclass

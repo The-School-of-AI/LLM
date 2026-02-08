@@ -351,12 +351,22 @@ class SynthAdapter:
             bands = [s.band for s in samples]
             primary_band = max(set(bands), key=bands.count)
 
-            entry_key = f"{skill}_synth"
+            # OLD: used raw skill name from EXERCISE_TO_SKILL (e.g. "KNOW-FACTUAL")
+            #      → manifest got legacy keys like "KNOW-FACTUAL_synth"
+            # NEW: resolve to canonical ID before writing to manifest
+            try:
+                canonical_skill = get_skill_bucket(skill).id
+            except ValueError:
+                canonical_skill = skill  # keep as-is if unresolvable
+
+            entry_key = f"{canonical_skill}_synth"
             manifest["skills"][entry_key] = {
                 "samples": len(samples),
                 "band": primary_band,
                 "cot_allowed": cot_allowed_for_band(primary_band),
                 "with_hard_negatives": 0,
+                # OLD: shard_file used raw skill name
+                # NEW: shard_file still uses original name (file on disk unchanged)
                 "shard_file": f"{skill}_synth.jsonl",
                 "priority": "medium",
                 "source": "PleIAs/SYNTH",

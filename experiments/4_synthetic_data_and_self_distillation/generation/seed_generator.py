@@ -34,7 +34,10 @@ from common.skills import SkillCategory
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 # OLD: hardcoded timeout=300 — too short for 70B models
 # NEW: configurable via OLLAMA_TIMEOUT env var (default 600s)
-OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
+try:
+    OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
+except (ValueError, TypeError):
+    OLLAMA_TIMEOUT = 600  # safe fallback if env var is empty or non-numeric
 
 
 def ollama_chat(

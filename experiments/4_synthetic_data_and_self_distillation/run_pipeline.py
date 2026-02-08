@@ -212,14 +212,21 @@ def cmd_rebuild_manifest(args):
     }
 
     for shard_path in shards:
-        skill_id = shard_path.stem  # e.g., "RSN-ARITHMETIC" from "RSN-ARITHMETIC.jsonl"
+        raw_name = shard_path.stem  # e.g., "RSN-ARITHMETIC" from "RSN-ARITHMETIC.jsonl"
 
-        # Check if this is a known skill
-        if skill_id not in SKILL_BUCKETS:
-            print(f"  [SKIP] {skill_id} - not a known skill")
+        # OLD: only checked raw_name against SKILL_BUCKETS (canonical keys)
+        #      — legacy-named files like RSN-ARITHMETIC.jsonl were SKIPPED
+        # NEW: try to resolve the filename as a skill ID (canonical or alias)
+        try:
+            skill = get_skill_bucket(raw_name)  # handles aliases via SKILL_ALIASES
+            skill_id = skill.id  # canonical form
+        except ValueError:
+            # Not a known skill or alias (e.g., "KNOW-FACTUAL_synth")
+            print(f"  [SKIP] {raw_name} - not a known skill or alias")
             continue
 
-        skill = get_skill_bucket(skill_id)
+        if raw_name != skill_id:
+            print(f"  [ALIAS] {raw_name} -> {skill_id}")
 
         # Count samples
         with open(shard_path, encoding="utf-8") as f:
@@ -416,9 +423,28 @@ def cmd_inject(args):
 
     all_samples = []
     skipped_by_band = 0
-    for skill_id in skills_to_inject:
+    for raw_skill in skills_to_inject:
+        # OLD: used raw skill_id directly against manifest — missed if manifest
+        #      has legacy keys and user passes canonical, or vice versa
+        # NEW: try both the raw key and its canonical/legacy variants
+        skill_id = raw_skill
         if skill_id not in manifest["skills"]:
-            print(f"  [SKIP] {skill_id} not in bank")
+            # Try resolving as alias → canonical
+            try:
+                canonical = get_skill_bucket(skill_id).id
+                if canonical in manifest["skills"]:
+                    skill_id = canonical
+            except ValueError:
+                pass
+        if skill_id not in manifest["skills"]:
+            # Try reverse: check if any legacy alias of this canonical is in manifest
+            from common.skills import SKILL_ALIASES
+            for legacy, canon in SKILL_ALIASES.items():
+                if canon == raw_skill and legacy in manifest["skills"]:
+                    skill_id = legacy
+                    break
+        if skill_id not in manifest["skills"]:
+            print(f"  [SKIP] {raw_skill} not in bank")
             continue
 
         shard_path = bank_dir / manifest["skills"][skill_id]["shard_file"]
