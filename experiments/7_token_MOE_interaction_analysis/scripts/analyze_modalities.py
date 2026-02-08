@@ -40,11 +40,18 @@ def main():
     if len(modalities) == 0:
         raise ValueError("No modalities passed min_tokens threshold")
 
+    # modality weights from true totals
+    weights = np.array([data[m + "__total"][0] for m in modalities], dtype=np.float64)
+    weights /= weights.sum()
+
     # Stack distributions
     Ps = np.stack([data[m] for m in modalities], axis=0)
 
     # Global distribution
-    Pg = Ps.sum(axis=0)
+    # Pg = Ps.sum(axis=0)
+    Pg = np.average(
+        Ps, axis=0, weights=weights
+    )  # Re-normalize Pg with modality weights
     Pg /= Pg.sum()
 
     eps = 1e-12
@@ -67,6 +74,14 @@ def main():
     # Optional: mean absolute affinity (secondary signal)
     mean_abs_affinity = np.mean(np.abs(log_odds), axis=0)
 
+    # Inspect low-affinity tokens (null candidates), ie tokens that do not strongly prefer any expert
+    # Only consider tokens with higher frequency. Low freq tokens are junk
+    mask = Pg > MIN_GLOBAL_PROB
+    masked_aff = np.abs(max_affinity).copy()
+    masked_aff[~mask] = np.inf
+    low_affinity_ids = np.argsort(masked_aff)[: args.topk]
+    low_affinity_tokens = tokenizer.convert_ids_to_tokens(low_affinity_ids.tolist())
+
     # ---------------------------------------
     # Distinctive tokens per modality
     # ---------------------------------------
@@ -87,10 +102,6 @@ def main():
 
     # var = log_odds.var(axis=0) # This is not accurate when there is very high imbalance between modalities
 
-    # modality weights from true totals
-    weights = np.array([data[m + "__total"][0] for m in modalities], dtype=np.float64)
-    weights /= weights.sum()
-
     # Variance across modalities - use weighted variance
     mean = np.average(log_odds, axis=0, weights=weights)
     var = np.average((log_odds - mean) ** 2, axis=0, weights=weights)
@@ -104,6 +115,19 @@ def main():
     null_ids = np.argsort(filtered_var)[: args.null_topk]
     null_tokens = tokenizer.convert_ids_to_tokens(null_ids.tolist())
 
+    # ---------------------------------------
+    # Distinctive tokens per modality
+    # ---------------------------------------
+
+    # Identify junk tokens
+    LOW_AFF_THRESH = 1e-3  # near-zero affinity
+    LOW_PROB_THRESH = 1e-8  # very rare tokens
+
+    junk_mask = (np.abs(max_affinity) < LOW_AFF_THRESH) & (Pg < LOW_PROB_THRESH)
+
+    junk_ids = np.where(junk_mask)[0][: args.topk]
+    junk_tokens = tokenizer.convert_ids_to_tokens(junk_ids.tolist())
+
     print("\n==============================")
     print("NULL TOKEN CANDIDATES (lowest variance across modalities):")
     print(null_tokens)
@@ -115,11 +139,6 @@ def main():
 
     # Top tokens by affinity
     null_score = var  # weighted variance of log_odds
-    # token_stats = {
-    #     "null_score": null_score,
-    #     "max_affinity": max_affinity,
-    #     "mean_abs_affinity": mean_abs_affinity,
-    # }
     top_affinity_ids = np.argsort(-max_affinity)[: args.topk]
     top_affinity_tokens = tokenizer.convert_ids_to_tokens(top_affinity_ids.tolist())
 
@@ -132,10 +151,6 @@ def main():
             f"expert={modalities[argmax_affinity[tid]]}"
         )
 
-    # Inspect low-affinity tokens (null candidates)
-    low_affinity_ids = np.argsort(np.abs(max_affinity))[: args.topk]
-    low_affinity_tokens = tokenizer.convert_ids_to_tokens(low_affinity_ids.tolist())
-
     print("\n==============================")
     print("LOW EXPERT AFFINITY TOKENS (NULL-LIKE)")
     for tid, tok in zip(low_affinity_ids, low_affinity_tokens):
@@ -143,6 +158,11 @@ def main():
             f"{tok:>15s} | max_aff={max_affinity[tid]:.3e} | "
             f"null_score={null_score[tid]:.2e}"
         )
+
+    print("\n==============================")
+    print("JUNK TOKEN CANDIDATES (rare + low affinity):")
+    for tid, tok in zip(junk_ids, junk_tokens):
+        print(f"{tok:>15s} | Pg={Pg[tid]:.2e} | " f"max_aff={max_affinity[tid]:.2e}")
 
     # Save affinity stats
     np.savez(
@@ -152,6 +172,7 @@ def main():
         null_score=null_score,
         Pg=Pg,
         argmax_affinity=argmax_affinity,
+        modalities=np.array(modalities),
     )
 
 
