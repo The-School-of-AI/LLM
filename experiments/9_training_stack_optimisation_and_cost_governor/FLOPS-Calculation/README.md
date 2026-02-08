@@ -745,16 +745,10 @@ Set `attention_type: deepseek_mla` and provide either:
 - `ds_compressed_dim` (alias)
 to model KV compression in attention FLOPs.
 
-#### YaRN (Position) Overhead
-If you are using YaRN from the start and want to model any extra overhead beyond
-sequence length, set:
-```json
-"position": {
-  "position_type": "yarn",
-  "yarn_flops_multiplier": 1.0
-}
-```
-`yarn_flops_multiplier` scales the **attention** FLOPs term when `position_type` is `yarn`.
+#### YaRN Position Encoding
+YaRN (Yet another RoPE extensioN) has **zero computational overhead** compared to standard RoPE.
+The cost of training at longer contexts is automatically captured via `sequence_length` in the O(S²) attention formula.
+No additional configuration is needed for YaRN FLOPs accounting.
 
 ### 3. Cost Calculation
 ```python
