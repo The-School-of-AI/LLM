@@ -485,12 +485,26 @@ class TrainingStage:
         if experts > 0 and top_k > experts:
             raise ValueError("top_k_experts cannot exceed num_experts.")
 
+        # =========================================================================
+        # Normalization Parameters (LayerNorm/RMSNorm)
+        # 2 norms per layer (pre-attention, pre-FFN) + 1 final output norm
+        # RMSNorm: only gamma (scale) = hidden params per norm
+        # LayerNorm: gamma + beta = 2 * hidden params per norm
+        # =========================================================================
+        norm_type = str(arch.get("normalization", arch.get("norm_type", "rmsnorm"))).strip().lower()
+        num_norms = layers * 2 + 1  # 2 per layer + 1 final
+        if norm_type in ("rmsnorm", "rms", "rms_norm"):
+            norm_params = num_norms * hidden  # Only gamma
+        else:
+            norm_params = num_norms * 2 * hidden  # gamma + beta
+
         total_params = (
             embedding_params
             + lm_head_params
             + layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
             + num_moe_layers * total_ffn_params_moe
+            + norm_params
         )
 
         active_non_embed_params = (
@@ -498,12 +512,14 @@ class TrainingStage:
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params
+            + norm_params
         )
         active_linear_params = (
             layers * attn_params_per_layer
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params_for_flops
+            + norm_params
         )
         active_params_base = embedding_params + active_non_embed_params
 
@@ -513,6 +529,7 @@ class TrainingStage:
             + dense_layers * ffn_params_dense
             + num_moe_layers * (router_params + shared_expert_params)
             + lm_head_params
+            + norm_params
         )
         params_null_path_non_embed = (
             layers * attn_params_per_layer
@@ -676,7 +693,7 @@ class TrainingStage:
             )
             hidden = float(arch.get("hidden_size", 2048))
             layers = float(arch.get("num_layers", arch.get("num_hidden_layers", 24)))
-            activation_multiplier = float(training_cfg.get("activation_multiplier", 2.0))
+            activation_multiplier = float(training_cfg.get("activation_multiplier", 10.0))
             act_bytes = training_cfg.get("activation_bytes_per_element")
             if act_bytes is None:
                 act_prec = training_cfg.get("activation_precision", "bf16")
@@ -737,7 +754,8 @@ class TrainingStage:
             if routed_expert_params > 0 and ep > 1:
                 # Model weights: experts sharded by EP, non-experts replicated
                 model_gpu_bytes = (expert_model_bytes / ep) + non_expert_model_bytes
-                master_gpu_bytes = master_bytes  # Master weights not sharded in ZeRO-2
+                # Master weights: sharded like optimizer states in ZeRO-2
+                master_gpu_bytes = master_bytes / num_gpus
                 
                 # Optimizer: non-experts sharded by full num_gpus, experts sharded by DP within EP group
                 # DP size within EP group = num_gpus / ep
@@ -747,7 +765,8 @@ class TrainingStage:
             else:
                 # No experts or EP=1: standard ZeRO-2 sharding
                 model_gpu_bytes = model_bytes
-                master_gpu_bytes = master_bytes
+                # Master weights are sharded in ZeRO-2 (part of optimizer state)
+                master_gpu_bytes = master_bytes / num_gpus
                 optimizer_gpu_bytes = optimizer_bytes / num_gpus
                 gradient_gpu_bytes = gradient_bytes / num_gpus
 
@@ -775,7 +794,11 @@ class TrainingStage:
                 + optimizer_gpu_bytes
                 + gradient_gpu_bytes
             )
-            memory_bytes = remaining_gpu_bytes + activation_bytes
+            # GPU buffer for parameter streaming (DeepSpeed keeps a buffer for overlapping)
+            # Default: ~4GB or configurable via gpu_buffer_gb
+            gpu_buffer_gb = float(cpu_offload_cfg.get("gpu_buffer_gb", 4.0))
+            gpu_buffer_bytes = gpu_buffer_gb * (1024**3)
+            memory_bytes = remaining_gpu_bytes + activation_bytes + gpu_buffer_bytes
             cpu_memory_bytes = offloaded_bytes_total / num_gpus
             cpu_memory_gb = cpu_memory_bytes / (1024**3)
         else:
@@ -887,9 +910,25 @@ class TrainingStage:
         if s <= 0:
             raise ValueError("sequence_length must be > 0.")
 
-        # Linear layer FLOPs
+        # =========================================================================
+        # Recompute Multiplier (for activation/gradient checkpointing)
+        # =========================================================================
+        # When checkpointing is enabled, activations are recomputed during backward
+        # pass, adding ~33% overhead (extra forward pass for recomputation).
+        # Base training FLOPs: Forward (2x) + Backward-grad (2x) + Backward-weight (2x) = 6x
+        # With recompute: 6x + 2x (extra forward) = 8x, ratio = 8/6 = 4/3 ≈ 1.33
+        # =========================================================================
+        gradient_ckpt = training_cfg.get("gradient_checkpointing", False)
+        activation_ckpt = training_cfg.get("activation_checkpointing", False)
+        # Also check for partition_activations in training config (DeepSpeed-style)
+        partition_activations = training_cfg.get("partition_activations", False)
+        
+        use_checkpointing = gradient_ckpt or activation_ckpt or partition_activations
+        recompute_multiplier = 4/3 if use_checkpointing else 1.0
+
+        # Linear layer FLOPs (includes recompute overhead)
         linear_multiplier = float(arch.get("linear_flops_multiplier", 1.0))
-        flops_per_seq_linear = 6 * s * n_linear * linear_multiplier
+        flops_per_seq_linear = 6 * s * n_linear * linear_multiplier * recompute_multiplier
 
         # Attention FLOPs calculation
         attention_multiplier = arch.get("attention_flops_multiplier")
@@ -1010,7 +1049,7 @@ class TrainingStage:
             attn_v_matmul_flops = 2 * (s**2) * num_heads * attn_dim
             dense_attn_per_layer = (
                 qk_matmul_flops + softmax_flops + attn_v_matmul_flops
-            ) * 3.0
+            ) * 3.0 * recompute_multiplier
             flops_per_seq_attn = layers * dense_attn_per_layer * attention_multiplier
 
         # =========================================================================
