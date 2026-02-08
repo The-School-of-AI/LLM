@@ -27,37 +27,68 @@ import torch.nn.functional as F
 import math
 from typing import Optional, Tuple
 
+# Use Triton-fused Sinkhorn when available
+try:
+    from components.kernels.triton_sinkhorn import (
+        triton_sinkhorn_knopp,
+        HAS_TRITON as HAS_TRITON_SINKHORN,
+    )
+    _USE_TRITON_SINKHORN = HAS_TRITON_SINKHORN
+except ImportError:
+    _USE_TRITON_SINKHORN = False
 
-def sinkhorn_knopp(H: torch.Tensor, num_iters: int = 20, eps: float = 1e-8) -> torch.Tensor:
+
+@torch.jit.script
+def _sinkhorn_knopp_pytorch(H: torch.Tensor, num_iters: int = 20, eps: float = 1e-8) -> torch.Tensor:
     """
-    Sinkhorn-Knopp algorithm for projecting to doubly stochastic matrices.
-    
-    A doubly stochastic matrix has:
-    - All elements ≥ 0
-    - All rows sum to 1
-    - All columns sum to 1
-    
-    This ensures stable signal propagation (no explosion/vanishing).
-    
+    PyTorch fallback Sinkhorn-Knopp (JIT-compiled).
+
+    Projects matrices onto Birkhoff polytope (doubly stochastic).
+    Used when Triton is unavailable or input is not on CUDA.
+
     Args:
         H: Input matrix [..., n, n] (will be exponentiated)
         num_iters: Number of iterations (paper uses 20)
         eps: Numerical stability constant
-        
+
     Returns:
         Doubly stochastic matrix [..., n, n]
     """
-    # Make positive via exp
     M = torch.exp(H)
-    
-    # Alternate row and column normalization
     for _ in range(num_iters):
-        # Row normalization: each row sums to 1
         M = M / (M.sum(dim=-1, keepdim=True) + eps)
-        # Column normalization: each column sums to 1
         M = M / (M.sum(dim=-2, keepdim=True) + eps)
-    
     return M
+
+
+def sinkhorn_knopp(H: torch.Tensor, num_iters: int = 20, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Sinkhorn-Knopp algorithm for projecting to doubly stochastic matrices.
+
+    Uses fused Triton kernel on CUDA (single launch for all iterations),
+    falls back to JIT-compiled PyTorch otherwise.
+
+    A doubly stochastic matrix has:
+    - All elements >= 0
+    - All rows sum to 1
+    - All columns sum to 1
+
+    This ensures stable signal propagation (no explosion/vanishing).
+
+    Args:
+        H: Input matrix [..., n, n] (will be exponentiated)
+        num_iters: Number of iterations (paper uses 20)
+        eps: Numerical stability constant
+
+    Returns:
+        Doubly stochastic matrix [..., n, n]
+    """
+    if _USE_TRITON_SINKHORN and H.is_cuda:
+        try:
+            return triton_sinkhorn_knopp(H, num_iters, eps)
+        except Exception:
+            pass
+    return _sinkhorn_knopp_pytorch(H, num_iters, eps)
 
 
 class mHCMapping(nn.Module):
@@ -86,9 +117,9 @@ class mHCMapping(nn.Module):
     ):
         super().__init__()
         self.hidden_size = hidden_size  # C
-        self.n = expansion_rate  # n (typically 4)
+        self.n = int(expansion_rate)  # n (typically 4)
         self.sinkhorn_iters = sinkhorn_iters
-        
+
         # Flattened dimension: n * C
         self.flat_dim = self.n * hidden_size
         
@@ -206,8 +237,8 @@ class ManifoldConstrainedHyperConnection(nn.Module):
     ):
         super().__init__()
         self.hidden_size = hidden_size
-        self.n = expansion_rate
-        
+        self.n = int(expansion_rate)
+
         # Mapping module computes H_pre, H_post, H_res
         self.mapping = mHCMapping(
             hidden_size=hidden_size,
@@ -372,62 +403,67 @@ class ResidualConnection(nn.Module):
 
 
 # =============================================================================
-# Backward-compatible wrappers (expected by transformer_block.py)
+# Per-sublayer mHC module (used by MHCTransformerBlock)
 # =============================================================================
 
-class ManifoldHyperConnection(nn.Module):
+class MHCSublayerConnection(nn.Module):
     """
-    Backward-compatible mHC adapter.
+    Single mHC connection for one sublayer (attention or FFN).
 
-    Exposes the legacy signature: forward(x, sublayer_output) -> [batch, seq, C].
-    Internally uses the multi-stream ManifoldConstrainedHyperConnection.
+    Implements the paper's Eq. 3 on persistent n-stream state:
+        layer_input = H_pre @ x_l          (aggregate n streams -> C)
+        x_{l+1} = H_res @ x_l + H_post^T @ F(layer_input)
+
+    The n-stream state [B, S, n, C] persists across layers —
+    this module never expands or collapses the stream.
     """
 
     def __init__(
         self,
         hidden_size: int,
-        expansion_rate: float = 4.0,
+        expansion_rate: int = 4,
         alpha_init: float = 0.01,
         sinkhorn_iters: int = 20,
-        num_connections: int = 2,  # kept for API compatibility
-        use_dynamic_weights: bool = True,  # kept for API compatibility
-        manifold_dim: int = 64,  # kept for API compatibility
-        dropout: float = 0.0,
-        **kwargs
     ):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.expansion_rate = int(expansion_rate)
         self.mhc = ManifoldConstrainedHyperConnection(
             hidden_size=hidden_size,
-            expansion_rate=self.expansion_rate,
+            expansion_rate=expansion_rate,
             alpha_init=alpha_init,
-            sinkhorn_iters=sinkhorn_iters
+            sinkhorn_iters=sinkhorn_iters,
         )
-        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
-    def forward(self, x: torch.Tensor, sublayer_output: torch.Tensor) -> torch.Tensor:
-        # Expand single stream to n streams, apply mHC, then collapse.
-        x_multi = x.unsqueeze(2).expand(-1, -1, self.expansion_rate, -1).contiguous()
-        y_multi = self.mhc(x_multi, sublayer_output)
-        y = y_multi.mean(dim=2)
-        return self.dropout(y)
+    def get_layer_input(self, x: torch.Tensor) -> Tuple[torch.Tensor, Tuple]:
+        """
+        Aggregate n-stream state into single-stream layer input.
 
+        Args:
+            x: Multi-stream state [batch, seq, n, C]
 
-class SimplifiedMHC(nn.Module):
-    """
-    Minimal simplified mHC for compatibility.
-    Uses a learnable residual scaling.
-    """
+        Returns:
+            layer_input: [batch, seq, C]
+            cache: Mapping tensors for apply_residual
+        """
+        return self.mhc.get_aggregated_input(x)
 
-    def __init__(self, hidden_size: int, num_connections: int = 2, dropout: float = 0.0):
-        super().__init__()
-        self.alpha = nn.Parameter(torch.zeros(1))
-        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+    def apply_residual(
+        self,
+        x: torch.Tensor,
+        sublayer_output: torch.Tensor,
+        cache: Tuple,
+    ) -> torch.Tensor:
+        """
+        Apply mHC residual to produce updated n-stream state.
 
-    def forward(self, x: torch.Tensor, sublayer_output: torch.Tensor) -> torch.Tensor:
-        alpha = torch.sigmoid(self.alpha)
-        return x + self.dropout(alpha * sublayer_output)
+        Args:
+            x: Multi-stream state [batch, seq, n, C]
+            sublayer_output: Output of F [batch, seq, C]
+            cache: Mapping tensors from get_layer_input
+
+        Returns:
+            Updated multi-stream state [batch, seq, n, C]
+        """
+        return self.mhc.apply_cached(x, sublayer_output, cache)
 
 
 # =============================================================================
@@ -498,41 +534,38 @@ def print_mhc_overhead(hidden_size: int = 2048, num_layers: int = 24, expansion_
 # =============================================================================
 
 if __name__ == "__main__":
-    print("Testing CORRECT mHC Implementation")
+    print("Testing mHC Implementation")
     print("=" * 60)
-    
+
     # Config
     batch_size = 2
     seq_len = 128
     hidden_size = 2048
     n = 4
-    
-    # Create mHC
+
+    # --- Test core ManifoldConstrainedHyperConnection ---
     mhc = ManifoldConstrainedHyperConnection(
         hidden_size=hidden_size,
         expansion_rate=n
     )
-    
-    # Count actual parameters
+
     actual_params = sum(p.numel() for p in mhc.parameters())
     expected = count_mhc_parameters_per_module(hidden_size, n)['total']
-    
+
     print(f"Actual parameters: {actual_params:,}")
     print(f"Expected from formula: {expected:,}")
     print(f"Match: {actual_params == expected}")
-    
-    # Test forward pass
+
     x = torch.randn(batch_size, seq_len, n, hidden_size)
     layer_output = torch.randn(batch_size, seq_len, hidden_size)
-    
-    # Using two-step API (how it's used in transformer)
+
     layer_input, cache = mhc.get_aggregated_input(x)
     print(f"\nInput shape: {x.shape}")
     print(f"Layer input shape: {layer_input.shape}")
-    
+
     x_new = mhc.apply_cached(x, layer_output, cache)
     print(f"Output shape: {x_new.shape}")
-    
+
     # Verify doubly stochastic property
     H_pre, H_post, H_res = mhc.mapping(x)
     print(f"\nH_res verification:")
@@ -542,6 +575,16 @@ if __name__ == "__main__":
     print(f"  Row sums (should be ~1): {row_sums.tolist()}")
     print(f"  Col sums (should be ~1): {col_sums.tolist()}")
     print(f"  All non-negative: {(H_res >= 0).all().item()}")
-    
+
+    # --- Test MHCSublayerConnection (used by transformer) ---
+    print("\n--- MHCSublayerConnection ---")
+    conn = MHCSublayerConnection(hidden_size=hidden_size, expansion_rate=n)
+    layer_in, cache = conn.get_layer_input(x)
+    print(f"  Aggregated input: {layer_in.shape}")
+    x_updated = conn.apply_residual(x, layer_output, cache)
+    print(f"  Updated n-stream: {x_updated.shape}")
+    assert x_updated.shape == x.shape, "n-stream shape must be preserved!"
+    print("  Shape preserved across sublayer: OK")
+
     # Full overhead analysis
     print_mhc_overhead(hidden_size=2048, num_layers=24, expansion_rate=4)

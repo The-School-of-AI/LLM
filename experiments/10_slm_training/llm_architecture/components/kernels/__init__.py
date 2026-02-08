@@ -32,6 +32,10 @@ if HAS_TRITON:
     from .triton_indexer import (
         triton_gated_indexer,
     )
+    from .triton_sinkhorn import (
+        triton_sinkhorn_knopp,
+        pytorch_sinkhorn_knopp,
+    )
 else:
     # Provide fallback functions that raise helpful errors
     def triton_sparse_attention(*args, **kwargs):
@@ -44,12 +48,20 @@ else:
             "Triton is not installed. Install with: pip install triton"
         )
 
-    # Import PyTorch fallback
+    def triton_sinkhorn_knopp(*args, **kwargs):
+        raise ImportError(
+            "Triton is not installed. Install with: pip install triton"
+        )
+
+    # Import PyTorch fallbacks
     from .triton_sparse_attn import pytorch_sparse_attention
+    from .triton_sinkhorn import pytorch_sinkhorn_knopp
 
 __all__ = [
     "HAS_TRITON",
     "triton_sparse_attention",
     "triton_gated_indexer",
     "pytorch_sparse_attention",
+    "triton_sinkhorn_knopp",
+    "pytorch_sinkhorn_knopp",
 ]
