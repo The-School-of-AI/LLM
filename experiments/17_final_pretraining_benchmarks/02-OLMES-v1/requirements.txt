@@ -1,5 +1,6 @@
 lm-eval
 torch
+torchvision
 transformers
 accelerate
 datasets==3.1.0
