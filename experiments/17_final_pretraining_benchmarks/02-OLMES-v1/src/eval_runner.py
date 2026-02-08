@@ -522,13 +522,22 @@ def run_olmes_benchmark(
 
     # Construct olmes command
     # Usage: olmes --model <model> --task <task> --output-dir <dir>
-    # Determine olmes script path
-    olmes_script = os.path.join(os.path.dirname(py_exec), "olmes")
-    if not os.path.exists(olmes_script):
-        # Fallback to module if script not found (though we know it exists now)
-        cmd = [py_exec, "-m", "oe_eval"]
+    # Determine olmes executable path robustly
+    import shutil
+    olmes_executable = shutil.which("olmes")
+    
+    # If not in PATH, check relative to py_exec
+    if not olmes_executable:
+        olmes_relative = os.path.join(os.path.dirname(py_exec), "olmes")
+        if os.path.exists(olmes_relative):
+            olmes_executable = olmes_relative
+
+    if olmes_executable:
+        cmd = [olmes_executable]
     else:
-        cmd = [olmes_script]
+        # Fallback to module if script not found
+        logger.warning("  [OLMES] 'olmes' executable not found in PATH or near python. Falling back to 'python -m oe_eval'.")
+        cmd = [py_exec, "-m", "oe_eval"]
 
     cmd += [
         "--model",
