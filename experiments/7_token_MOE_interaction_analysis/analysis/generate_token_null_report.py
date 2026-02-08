@@ -15,30 +15,32 @@ def generate_report(
     output_path,
     tokenizer,
     Pg,
-    max_aff,
-    null_score,
-    argmax_aff,
+    max_affinity,
+    null_routing_score,
+    argmax_affinity,
     modalities,
     min_prob,
     low_aff_thresh,
     junk_prob_thresh,
-    topk=50,
+    topk=20,
 ):
+    # ----------------------------
+    # Frequency-gated null ranking
+    # ----------------------------
+    valid_mask = Pg > min_prob
+    gated_score = null_routing_score.copy()
+    gated_score[~valid_mask] = -np.inf
+
+    null_rank = np.argsort(-gated_score)[:topk]
 
     # ----------------------------
-    # Null-attracting tokens
+    # Junk tokens (rare + no affinity)
     # ----------------------------
-    valid = Pg > min_prob
-    null_rank = np.argsort(-null_score * valid)[:topk]
-
-    # ----------------------------
-    # Junk tokens
-    # ----------------------------
-    junk_mask = (Pg < junk_prob_thresh) & (np.abs(max_aff) < low_aff_thresh)
+    junk_mask = (Pg < junk_prob_thresh) & (np.abs(max_affinity) < low_aff_thresh)
     junk_ids = np.where(junk_mask)[0][:topk]
 
     # ----------------------------
-    # Clusters (simple heuristics)
+    # Simple clustering heuristics
     # ----------------------------
     morph_suffixes = []
     glue_words = []
@@ -46,6 +48,7 @@ def generate_report(
 
     for tid in null_rank:
         tok = token_str(tokenizer, tid)
+
         if tok.endswith(("er", "ed", "ing", "s")):
             morph_suffixes.append(tid)
         elif tok.strip() in {",", ".", "(", ")", '"', "'"}:
@@ -57,29 +60,29 @@ def generate_report(
     # Write markdown
     # ----------------------------
     with open(output_path, "w") as f:
-        f.write("# Token Null Routing Map\n\n")
+        f.write("# Token Null Routing Report\n\n")
         f.write(f"_Auto-generated on {datetime.utcnow().isoformat()} UTC_\n\n")
 
         # ---- Section 1
-        f.write("## 1. Top Token IDs by Null-Routing Affinity\n\n")
-        f.write("| Rank | Token | Pg | Max Affinity | Null Score |\n")
-        f.write("|------|-------|----|--------------|------------|\n")
+        f.write("## 1. Top Tokens by Null Routing Score (Frequency-Gated)\n\n")
+        f.write("| Rank | Token | Pg | Max Affinity | Null Routing Score |\n")
+        f.write("|------|-------|----|--------------|--------------------|\n")
 
         for i, tid in enumerate(null_rank):
             tok = token_str(tokenizer, tid)
             f.write(
                 f"| {i+1} | `{tok}` | {Pg[tid]:.2e} | "
-                f"{max_aff[tid]:.2e} | {null_score[tid]:.2e} |\n"
+                f"{max_affinity[tid]:.2e} | {null_routing_score[tid]:.2e} |\n"
             )
 
         # ---- Section 2
-        f.write("\n## 2. Junk Token Signatures (Filtered)\n\n")
-        f.write("| Token | Pg | Notes |\n")
-        f.write("|-------|----|-------|\n")
+        f.write("\n## 2. Junk Token Candidates (Rare + No Affinity)\n\n")
+        f.write("| Token | Pg | Max Affinity |\n")
+        f.write("|-------|----|--------------|\n")
 
         for tid in junk_ids:
             tok = token_str(tokenizer, tid)
-            f.write(f"| `{tok}` | {Pg[tid]:.2e} | rare + no affinity |\n")
+            f.write(f"| `{tok}` | {Pg[tid]:.2e} | {max_affinity[tid]:.2e} |\n")
 
         # ---- Section 3
         f.write("\n## 3. Null-Attracting Token Clusters\n\n")
@@ -88,25 +91,23 @@ def generate_report(
             f.write(f"### {title}\n\n")
             for tid in tids[:15]:
                 tok = token_str(tokenizer, tid)
-                f.write(f"- `{tok}` (Pg={Pg[tid]:.1e})\n")
+                f.write(
+                    f"- `{tok}` (Pg={Pg[tid]:.1e}, "
+                    f"null_score={null_routing_score[tid]:.1e})\n"
+                )
             f.write("\n")
 
         write_cluster("Morphological fragments", morph_suffixes)
         write_cluster("Lexical glue tokens", glue_words)
         write_cluster("Structural separators", separators)
 
-        # ---- Section 4 (placeholder)
+        # ---- Section 4
         f.write(
-            "## 4. Local Token Patterns (Bigrams / Trigrams)\n\n"
-            "_Not yet computed. Planned extension._\n\n"
-        )
-
-        # ---- Notes
-        f.write(
-            "## 5. Notes\n\n"
-            "- Null-attracting tokens are frequent and domain-agnostic.\n"
-            "- Junk tokens are rare and excluded via frequency gating.\n"
-            "- Token behavior is dataset-dependent; rerun as data improves.\n"
+            "## 4. Notes\n\n"
+            "- Null routing score already includes frequency gating.\n"
+            "- Junk tokens are intentionally excluded from rankings.\n"
+            "- High scores indicate load on the null / shared pathway.\n"
+            "- Results stabilize as dataset size increases.\n"
         )
 
 
@@ -114,12 +115,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--affinity_npz", required=True)
     parser.add_argument("--tokenizer", default="gpt2")
-    parser.add_argument("--output", default="token_null_map.md")
+    parser.add_argument("--output", default="reports/token_null_map.md")
 
     parser.add_argument("--min_prob", type=float, default=1e-5)
     parser.add_argument("--junk_prob", type=float, default=1e-8)
-    parser.add_argument("--low_aff", type=float, default=1e-3)
-    parser.add_argument("--topk", type=int, default=30)
+    parser.add_argument("--low_aff", type=float, default=3e-3)
+    parser.add_argument("--topk", type=int, default=20)
 
     args = parser.parse_args()
 
@@ -131,9 +132,9 @@ def main():
         output_path=args.output,
         tokenizer=tokenizer,
         Pg=data["Pg"],
-        max_aff=data["max_affinity"],
-        null_score=data["null_score"],
-        argmax_aff=data["argmax_affinity"],
+        max_affinity=data["max_affinity"],
+        null_routing_score=data["null_routing_score"],
+        argmax_affinity=data["argmax_affinity"],
         modalities=data["modalities"],
         min_prob=args.min_prob,
         low_aff_thresh=args.low_aff,
