@@ -8,15 +8,15 @@
 
 2. **Create a feature branch**
    - Always prefix the feature branch with Project Number based on your project number.
-   - Branch from `main` using a descriptive name, e.g. `p19/feat/tokenizer-selection-improvements` or `p7/fix/eval-lite-metrics`.
+   - Branch from `staging` branch using a descriptive name, e.g. `p19/feat/tokenizer-selection-improvements` or `p7/fix/eval-lite-metrics`.
    - Keep each PR focused on a single logical change whenever possible. Avoid adding too many commits/files to a single PR.
    - Short lived feature branches are easier and quicker to review and merge. Hence short lived feature branches (>1-2 days) are recommended.
-   - Contributors are recommended to rebase there feature branches with main atleast twice everyday
+   - Contributors are recommended to rebase there feature branches with 'staging' branch atleast twice everyday
 
 3. **Implement and keep PRs small**
    - Prefer multiple small PRs over one very large one.
    - Avoid mixing refactors, new features, and formatting-only changes in the same PR.
-   - Rebase your feature branch with main before raising the PR
+   - Rebase your feature branch with 'staging' branch before raising the PR
 
 4. **Link the PR to an issue**
    - In the PR description, reference the issue using GitHub keywords so it auto-closes when merged, e.g.:
@@ -52,6 +52,11 @@
    - Add at least two reviewers.
    - Address review comments via follow-up commits; summarize major changes in a comment if the PR evolves significantly.
 
+9. **PR From Staging to Main**
+   - PR requests from Staging to Main could only be raised in case of a handover/hotfix
+   - PR review requests to staging will be shared between llm_repo_owners and respective team level groups (folder level permissions managed inside codeowners)
+   - PR approvals from Staging to Main will be approved on a schedule basis and are subject to successfull gating checks, ci pipelines, reproducibility, tracking and more
+
 ## Code and environment
 
 - When working with files and paths (for example, in notebooks or scripts), avoid hard‑coded absolute paths that are specific to one machine or OS.
@@ -67,3 +72,4 @@ file_path = Path("experiments/tokenizer/selection/ds_tokenizer.json")
 
 1. [Github Best Practices](https://dev.to/pwd9000/github-repository-best-practices-23ck)
 2. [pre-commit](https://pre-commit.com/)
+3. [Rebase to Staging](https://github.com/The-School-of-AI/LLM/tree/main/experiments/19_reproducibility_provenance_and_experiment_tracking/rebase_with_stage.md)
