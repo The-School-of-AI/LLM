@@ -7,7 +7,7 @@
 
 ## Overview
 
-A code review of the `generate-bank` data generation pipeline identified **8 bugs** across data quality, Indic language support, code generation, alias resolution, manifest consistency, and scaling readiness. All 8 have been fixed and **171 automated tests** verify the fixes across 6 test files.
+A code review of the `generate-bank` data generation pipeline identified **8 bugs** across data quality, Indic language support, code generation, alias resolution, manifest consistency, and scaling readiness. All 8 have been fixed and **216 automated tests** verify the fixes across 8 test files.
 
 ### Test Results
 
@@ -18,9 +18,11 @@ tests/4_synthetic_data_and_self_distillation/bugfixes/
 ├── test_bug3.py   28 tests  ✅ all pass
 ├── test_bug4.py   33 tests  ✅ all pass
 ├── test_bug5.py   12 tests  ✅ all pass
-└── test_bug6.py   24 tests  ✅ all pass
+├── test_bug6.py   24 tests  ✅ all pass
+├── test_bug7.py   24 tests  ✅ all pass
+└── test_bug8.py   21 tests  ✅ all pass
                   ─────────
-                  171 total   ✅ all pass
+                  216 total   ✅ all pass
 ```
 
 Run all tests:
@@ -383,41 +385,158 @@ And `rebuild-manifest` now accepts all legacy shard files:
 **Severity:** 🟠 High (for scaling)
 **Impact:** 70B models on consumer hardware would timeout on every API call
 **Files changed:** `generation/dual_view_generator.py`, `generation/seed_generator.py`, `diagnostics/run_diagnostics.py`, `validation/verification.py`
+**Test file:** `bugfixes/test_bug7.py` (24 tests)
 
 ### Problem
 
-All Ollama API calls had hardcoded timeouts:
-- Generation: `timeout=300` (5 min)
-- Diagnostics: `timeout=30` (30 sec)
-- Verification: `timeout=60` (1 min)
+All Ollama API calls had hardcoded timeouts that were too short for large models:
 
-A 70B model can take 10-15 minutes per generation on consumer hardware.
+| File | Old Timeout | Endpoint |
+|------|-------------|----------|
+| `generation/dual_view_generator.py` | `timeout=300` (5 min) | `/api/chat` |
+| `generation/seed_generator.py` | `timeout=300` (5 min) | `/api/chat` |
+| `diagnostics/run_diagnostics.py` | `timeout=30` (30 sec) | `/api/generate` |
+| `validation/verification.py` | `timeout=60` (1 min) | `/api/generate` |
+
+A 70B model on consumer hardware can take 10-15 minutes per generation. Every API call would timeout.
+
+### Root Cause
+
+Timeouts were hardcoded integer literals inside `urllib.request.urlopen()` calls. No mechanism existed to configure them for different model sizes.
 
 ### Fix
 
-All timeouts now read from `OLLAMA_TIMEOUT` environment variable:
+**Four-part fix:**
 
-```python
-OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
-```
+1. **All 4 files** now read `OLLAMA_TIMEOUT` from environment variable with appropriate defaults:
 
-Usage for large models:
+   | File | Default | Reasoning |
+   |------|---------|-----------|
+   | `dual_view_generator.py` | 600s (10 min) | Generation calls are the longest |
+   | `seed_generator.py` | 600s (10 min) | Seed generation can produce long responses |
+   | `run_diagnostics.py` | 120s (2 min) | Diagnostic prompts are short |
+   | `verification.py` | 120s (2 min) | Verification prompts are short |
+
+2. **Safe env var parsing** — all 4 use `try/except (ValueError, TypeError)` to handle empty or non-numeric `OLLAMA_TIMEOUT`:
+   ```python
+   try:
+       OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
+   except (ValueError, TypeError):
+       OLLAMA_TIMEOUT = 600  # safe fallback if env var is empty or non-numeric
+   ```
+
+3. **Health check unchanged** — `check_ollama()` in `run_diagnostics.py` keeps `timeout=5` (hardcoded, intentional — it's a quick connectivity test, not a model call).
+
+4. **Clean imports** — moved `import os` in `verification.py` from inline (line 27) to the standard import block at the top of the file.
+
+### Usage for Large Models
+
 ```bash
-export OLLAMA_TIMEOUT=1800  # 30 minutes
+# 30 minutes for 70B models
+export OLLAMA_TIMEOUT=1800
 python run_pipeline.py generate-bank --all --model llama3:70b
+
+# Custom Ollama host
+export OLLAMA_HOST=http://192.168.1.100:11434
+python run_pipeline.py diagnose --model llama3:70b
 ```
 
-Defaults:
-- Generation files: **600s** (10 min)
-- Diagnostics/verification: **120s** (2 min)
+### Edge Cases Verified
+
+| Scenario | `OLLAMA_TIMEOUT` env var | Result |
+|---|---|---|
+| Normal | `"1800"` | 1800 ✅ |
+| Unset | not set | Uses default (600 or 120) ✅ |
+| Empty string | `""` | Falls back to default ✅ (was crash before fix) |
+| Non-numeric | `"abc"` | Falls back to default ✅ (was crash before fix) |
+| Float string | `"1.5"` | Falls back to default ✅ (was crash before fix) |
+
+### Calls Audited
+
+| File | `urlopen` calls | All use `OLLAMA_TIMEOUT`? |
+|---|---|---|
+| `dual_view_generator.py` | 1 | ✅ |
+| `seed_generator.py` | 1 | ✅ |
+| `run_diagnostics.py` | 2 (generate + health check) | ✅ generate uses OLLAMA_TIMEOUT, health check keeps 5s |
+| `verification.py` | 1 | ✅ |
+| `proxy_validation.py` | 0 (calls diagnostics indirectly) | N/A ✅ |
 
 ---
 
 ## Bug 8: max_tokens=256 Truncated Code Output
 
 **Severity:** 🟡 Medium
-**Impact:** Code generation distilled views were truncated or empty
-**Resolution:** Bundled into Bug 1 fix — `DISTILLED_MAX_TOKENS` gives 512 tokens for code categories
+**Impact:** Code generation distilled views were truncated mid-function or returned empty for all 9 code skills
+**Files changed:** `generation/dual_view_generator.py` (bundled into Bug 1 fix)
+**Test file:** `bugfixes/test_bug8.py` (21 tests)
+
+### Problem
+
+`_generate_distilled()` used `max_tokens=256` for ALL skill categories. Code generation tasks (implementing functions, algorithms) need 512+ tokens for a complete code block + justification. At 256 tokens, code responses were truncated mid-function, producing broken or empty `distilled_view` fields for all 9 code skills.
+
+### Root Cause
+
+The `max_tokens` parameter was a hardcoded integer literal:
+```python
+# OLD
+response = ollama_chat(..., max_tokens=256, ...)
+```
+
+No mechanism existed to vary it by task type.
+
+### Fix
+
+Added `DISTILLED_MAX_TOKENS` dict (bundled into Bug 1 implementation):
+
+```python
+DISTILLED_MAX_TOKENS = {
+    "code_gen":    512,   # Function/algorithm implementations
+    "code_debug":  384,   # Bug identification + fix
+    "code_explain": 384,  # Code explanation
+    "translation": 384,   # Translated text
+    "indic":       384,   # Devanagari/other Indic scripts
+    "instruction": 384,   # Instruction-following output
+    "default":     256,   # Math/reasoning (short answers, unchanged)
+}
+```
+
+`_generate_distilled()` now reads the limit dynamically:
+```python
+category = _get_skill_prompt_category(skill_bucket)
+max_tokens = DISTILLED_MAX_TOKENS[category]
+```
+
+### Edge Case Found During Review
+
+`LANG-MIX` (Hinglish code-mixing) was routing to `"default"` (256 tokens) instead of `"indic"` (384 tokens). Fixed by adding `"LANG-MIX"` to the indic category in `_get_skill_prompt_category()`.
+
+### Token Allocation Audit (all 45 skills)
+
+| Category | Skills | Token Limit | Old Limit |
+|----------|--------|-------------|-----------|
+| `code_gen` | CODE-GEN-T1/T2/T3, CODE-ALGO, CODE-SYN, CODE-OPT, CODE-TEST | **512** | 256 |
+| `code_debug` | CODE-DBG | **384** | 256 |
+| `code_explain` | CODE-COMP | **384** | 256 |
+| `translation` | LANG-TRANS, INDIC-TRANS | **384** | 256 |
+| `indic` | INDIC-QA/NLI/SENT/NER, LANG-HI-*, FND-LEX-HI, RSN-MATH-HI, LANG-MIX | **384** | 256 |
+| `instruction` | ALN-INST/STRUCT/HALL/SAFE/HELP | **384** | 256 |
+| `default` | RSN-*, FND-* (non-HI), PRD-*, LANG-GRAMMAR | **256** | 256 |
+
+### Why 256 is Fine for Default Skills
+
+Math/reasoning distilled answers are short:
+- `"Answer: 42\nJustification: 3x + 7 = 22, so 3x = 15, x = 5."` (~20 tokens)
+- `"Answer: Paris\nJustification: Paris is the capital of France."` (~15 tokens)
+
+The 256 limit was never the bottleneck for these categories.
+
+### Other `max_tokens` Values (Not Changed)
+
+| Call | Value | Location | Rationale |
+|------|-------|----------|-----------|
+| CoT generation | 1024-2048 | Band spec in `bands.py` | Already large enough ✅ |
+| Hard negative | 512 | `_generate_hard_negative()` | Flawed reasoning + wrong answer, not full code ✅ |
+| Error correction | 768 | `_generate_error_correction()` | Error ID + explanation + fix ✅ |
 
 ---
 
@@ -442,7 +561,8 @@ Defaults:
 | `bugfixes/test_bug4.py` | Alias resolution | 33 | ✅ Pass |
 | `bugfixes/test_bug5.py` | CODE-COMPLETION pre-solved | 12 | ✅ Pass |
 | `bugfixes/test_bug6.py` | Manifest key normalization | 24 | ✅ Pass |
-| — | Bugs 7-8 | — | Logic fixes, no separate test files yet |
+| `bugfixes/test_bug7.py` | Configurable timeouts | 24 | ✅ Pass |
+| `bugfixes/test_bug8.py` | Token limits for code/indic | 21 | ✅ Pass |
 
 ---
 

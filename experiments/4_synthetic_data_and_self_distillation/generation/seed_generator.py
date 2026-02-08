@@ -26,6 +26,9 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from common import SKILL_BUCKETS, get_skill_bucket, Band
 from common.skills import SkillCategory
+from common.logging_config import get_logger
+
+logger = get_logger("generation.seed_generator")
 
 # ================================================================
 # OLLAMA CLIENT
@@ -957,7 +960,7 @@ class SeedGenerator:
         # NEW: resolve through alias lookup
         prompt_key = self._resolve_prompt_key(skill_id)
         if prompt_key is None:
-            print(f"[WARN] No prompt template for {skill_id}, using generic")
+            logger.warning("No prompt template for %s, using generic", skill_id)
             return self._generate_generic(skill_id, num)
 
         prompt = SEED_PROMPTS[prompt_key].format(num=num)
@@ -966,7 +969,7 @@ class SeedGenerator:
         if difficulty != "mixed" and difficulty in DIFFICULTY_MODIFIERS:
             prompt += DIFFICULTY_MODIFIERS[difficulty]
         
-        print(f"[SeedGen] Generating {num} questions for {skill_id}...")
+        logger.info("[SeedGen] Generating %d questions for %s (model=%s)", num, skill_id, self.model)
         
         response = ollama_chat(
             self.model,
@@ -978,7 +981,7 @@ class SeedGenerator:
         # Parse JSON from response
         questions = self._parse_questions(response, skill_id)
         
-        print(f"[SeedGen] Generated {len(questions)} questions")
+        logger.info("[SeedGen] Generated %d questions for %s", len(questions), skill_id)
         return questions
     
     def _parse_questions(self, response: str, skill_id: str) -> list[dict]:
@@ -1068,7 +1071,7 @@ Output as JSON array:
                 seeds = self.generate(skill_id, num_per_skill, difficulty)
                 all_seeds[skill_id] = seeds
             except Exception as e:
-                print(f"[ERROR] Failed for {skill_id}: {e}")
+                logger.error("Failed for %s: %s", skill_id, e)
                 all_seeds[skill_id] = []
         
         return all_seeds

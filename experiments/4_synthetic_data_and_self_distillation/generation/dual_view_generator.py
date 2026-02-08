@@ -29,6 +29,10 @@ from typing import Literal
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+from common.logging_config import get_logger
+
+logger = get_logger("generation.dual_view_generator")
+
 from common.bands import (
     Band,
     get_band_spec,
@@ -84,12 +88,16 @@ def ollama_chat(
         method="POST",
     )
     
-    # OLD: timeout=300 (hardcoded)
-    # NEW: uses OLLAMA_TIMEOUT env var for large model support
+    logger.debug("ollama_chat -> model=%s, max_tokens=%d, temp=%.2f, timeout=%ds",
+                 model, max_tokens, temperature, OLLAMA_TIMEOUT)
+    logger.debug("  prompt: %s", messages[-1]["content"][:120].replace("\n", " "))
+    
     with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
         result = json.loads(resp.read().decode("utf-8"))
     
-    return result.get("message", {}).get("content", "").strip()
+    content = result.get("message", {}).get("content", "").strip()
+    logger.debug("  response (%d chars): %s", len(content), content[:100].replace("\n", " "))
+    return content
 
 
 # ================================================================
@@ -230,8 +238,11 @@ def _get_skill_prompt_category(skill_bucket: str) -> str:
         return "translation"
 
     # Indic language skills (non-translation)
+    # OLD: LANG-MIX (Hinglish) was missing — fell through to "default" with 256 tokens
+    # NEW: include LANG-MIX in the indic category
     if sb.startswith("INDIC-") or sb in ("LANG-HI-COMP", "LANG-HI-GEN",
                                           "LANG-HI-LOG", "LANG-HINDI",
+                                          "LANG-MIX",
                                           "FND-LEX-HI", "RSN-MATH-HI"):
         return "indic"
 
@@ -406,42 +417,62 @@ class DualViewGenerator:
         cot_max_tokens = band_spec.cot_max_tokens or 0
 
         # Generate distilled view (always)
-        # OLD: self._generate_distilled(question) — no skill context, used math prompt for everything
-        # NEW: pass skill_bucket so the right prompt template is selected
+        logger.debug("Generating distilled view for skill=%s, band=%s, lang=%s", skill_bucket, band, language)
         distilled = self._generate_distilled(question, skill_bucket=skill_bucket)
         answer = self._extract_answer(distilled)
+        logger.debug("  Extracted answer (%d chars): %s", len(answer), repr(answer[:80]))
 
         # Generate COT view (if allowed for band)
         think_view = None
         if cot_allowed:
+            logger.debug("  Generating COT view (max_tokens=%d)", cot_max_tokens)
             think_view = self._generate_cot(question, cot_max_tokens)
+            logger.debug("  COT view: %d chars", len(think_view) if think_view else 0)
+        else:
+            logger.debug("  COT not allowed for band %s", band)
 
         # Fallback: if distilled failed but COT succeeded, extract answer from COT
-        # OLD: only checked (not distilled or "Answer:" not in distilled)
-        # NEW: also catches "Answer: Unknown." and empty answers — ensures hard negatives get a real answer
+        # Catches: empty, "Unknown", bare code fences (```python), and other garbage answers
         answer_is_bad = (
             not answer
             or answer.lower().strip().rstrip(".") in ("unknown", "no answer generated", "")
+            or answer.strip() in ("```python", "```", "``")
         )
         distilled_is_bad = not distilled or "Answer:" not in distilled or answer_is_bad
 
         if distilled_is_bad and think_view:
+            logger.debug("  Distilled answer is bad (answer=%s), attempting COT fallback", repr(answer[:40]) if answer else "empty")
             extracted = self._extract_answer_from_cot(think_view)
             if extracted:
-                # OLD: only patched distilled text
-                # NEW: also update `answer` so hard negative gets a real correct_answer
-                distilled = f"Answer: {extracted}\nJustification: See reasoning above."
+                logger.info("  COT fallback extracted answer: %s", repr(extracted[:80]))
+                if "```" in extracted:
+                    distilled = f"Answer:\n{extracted}\nJustification: See step-by-step reasoning in think view."
+                else:
+                    distilled = f"Answer: {extracted}\nJustification: See reasoning above."
                 answer = extracted
+            else:
+                logger.warning("  COT fallback failed — no usable answer extracted from think_view")
 
         # Generate hard negative
         hard_negative = None
-        # OLD: only checked cot_allowed
-        # NEW: also skip hard negative if we still don't have a real answer (prevents "Correct Answer: Unknown")
-        has_valid_answer = answer and answer.lower().strip().rstrip(".") not in ("unknown", "no answer generated", "")
+        # Skip hard negative if we don't have a real answer
+        # Catches: empty, "Unknown", bare code fences — prevents garbage "Correct Answer: ```python"
+        has_valid_answer = (
+            answer
+            and answer.lower().strip().rstrip(".") not in ("unknown", "no answer generated", "")
+            and answer.strip() not in ("```python", "```", "``")
+        )
         if generate_hard_negative and cot_allowed and has_valid_answer:
+            logger.debug("  Generating hard negative (correct_answer=%s)", repr(answer[:50]))
             hard_negative = self._generate_hard_negative(
                 question, answer, skill_bucket
             )
+            if hard_negative:
+                logger.debug("  Hard negative: wrong_answer=%s", repr(str(hard_negative.get("wrong_answer", ""))[:60]))
+            else:
+                logger.debug("  Hard negative generation returned None")
+        elif not has_valid_answer:
+            logger.debug("  Skipping hard negative — no valid answer (answer=%s)", repr(answer[:40]) if answer else "empty")
 
         # Generate error correction pair
         error_correction = None
@@ -453,7 +484,7 @@ class DualViewGenerator:
         # Validate before returning
         issues = self._validate_sample(distilled, think_view, band)
         if issues:
-            print(f"    [WARN] Sample issues: {issues}")
+            logger.warning("  Sample quality issues: %s", issues)
 
         return DualViewSample(
             id=sample_id or f"{skill_bucket}-{hash(question) % 100000:05d}",
@@ -502,12 +533,11 @@ class DualViewGenerator:
         OLD: Used single DISTILLED_PROMPT for all skills — caused "Unknown" for code/indic/translation
         NEW: Routes to category-specific prompt via _get_skill_prompt_category()
         """
-        # NEW: pick the right prompt template and token limit for this skill category
         category = _get_skill_prompt_category(skill_bucket)
         prompt_template = DISTILLED_PROMPT_MAP[category]
-        # OLD: max_tokens=256 (too short for code)
-        # NEW: category-appropriate token limit
         max_tokens = DISTILLED_MAX_TOKENS[category]
+
+        logger.debug("  _generate_distilled: category=%s, max_tokens=%d, skill=%s", category, max_tokens, skill_bucket)
 
         prompt = prompt_template.format(question=question)
 
@@ -530,11 +560,14 @@ class DualViewGenerator:
                 return f"Answer:\n{response}"
 
             if attempt < max_retries:
-                print(f"    [Retry {attempt+1}] distilled missing 'Answer:' (category={category})")
+                logger.info("    [Retry %d/%d] distilled missing 'Answer:' (category=%s)", attempt + 1, max_retries, category)
 
         # Last resort: wrap raw response
-        # OLD: always used "Unknown" as fallback
-        # NEW: wrap the actual response content
+        if not response:
+            return "Answer: No answer generated.\nJustification: LLM returned empty response."
+        # For code categories, preserve code blocks in the fallback
+        if category.startswith("code") and ("```" in response or "def " in response):
+            return f"Answer:\n{response}\nJustification: Code generated without standard format."
         first_sentence = response.split('.')[0] if response else "No answer generated"
         return f"Answer: {first_sentence}.\nJustification: {response}"
     
@@ -638,7 +671,7 @@ class DualViewGenerator:
             }
             
         except Exception as e:
-            print(f"Hard negative generation failed: {e}")
+            logger.error("Hard negative generation failed: %s", e)
             return None
     
     def _generate_error_correction(
@@ -685,13 +718,38 @@ class DualViewGenerator:
             }
             
         except Exception as e:
-            print(f"Error correction generation failed: {e}")
+            logger.error("Error correction generation failed: %s", e)
             return None
     
     def _extract_answer(self, distilled: str) -> str:
-        """Extract answer from distilled view."""
+        """Extract answer from distilled view.
+
+        For code answers (```python ... ```), extracts the FULL code block.
+        For text answers, extracts the single-line value after "Answer:".
+        """
+        if not distilled:
+            return ""
+
+        # Strategy 1: Extract full code block after "Answer:"
+        # Handles: "Answer:\n```python\ndef foo():\n    pass\n```"
+        code_match = re.search(
+            r"Answer:\s*\n?\s*(```(?:python)?\s*\n.+?```)",
+            distilled,
+            re.DOTALL,
+        )
+        if code_match:
+            return code_match.group(1).strip()
+
+        # Strategy 2: Single-line answer (math, factual, etc.)
         match = re.search(r"Answer:\s*(.+?)(?:\n|$)", distilled)
-        return match.group(1).strip() if match else distilled.split("\n")[0]
+        if match:
+            candidate = match.group(1).strip()
+            # Reject bare code fence markers — not a real answer
+            if candidate in ("```python", "```", "``"):
+                return ""
+            return candidate
+
+        return distilled.split("\n")[0]
 
     @staticmethod
     def _extract_answer_from_cot(think_view: str) -> str | None:
@@ -783,7 +841,7 @@ def generate_batch(
     
     for i, q in enumerate(questions):
         if verbose and (i + 1) % 10 == 0:
-            print(f"  [{i+1}/{len(questions)}] Generating...")
+            logger.info("[%d/%d] Generating...", i + 1, len(questions))
         
         try:
             sample = generator.generate(
@@ -799,7 +857,7 @@ def generate_batch(
             samples.append(sample)
         except Exception as e:
             if verbose:
-                print(f"  ERROR on {i}: {e}")
+                logger.error("ERROR on sample %d: %s", i, e)
     
     return samples
 

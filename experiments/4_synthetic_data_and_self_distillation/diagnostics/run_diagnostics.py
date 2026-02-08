@@ -32,6 +32,9 @@ from diagnostics.diagnostic_tests import (
     get_tests_for_band,
     get_test_summary,
 )
+from common.logging_config import get_logger
+
+logger = get_logger("diagnostics.run_diagnostics")
 
 
 # ================================================================
@@ -49,8 +52,8 @@ except (ValueError, TypeError):
 
 def ollama_generate(model: str, prompt: str, max_tokens: int = 150) -> str:
     """Generate text from Ollama."""
-    # Qwen3 models preamble before answering even with thinking off; enforce a floor
     max_tokens = max(max_tokens, 100)
+    logger.debug("ollama_generate -> model=%s, max_tokens=%d, timeout=%ds", model, max_tokens, OLLAMA_TIMEOUT)
     payload = {
         "model": model,
         "prompt": prompt,
@@ -114,17 +117,17 @@ def run_single_test(model: str, test: DiagnosticTest, verbose: bool = False) -> 
         
         if verbose:
             status = "✓" if result["passed"] else "✗"
-            print(f"  {status} {test.id}: {test.name} ({elapsed_ms:.0f}ms)")
+            logger.info("  %s %s: %s (%.0fms)", status, test.id, test.name, elapsed_ms)
             if not result["passed"]:
-                print(f"      Expected: {test.expected}")
-                print(f"      Got: {output[:60]}...")
+                logger.debug("      Expected: %s", test.expected)
+                logger.debug("      Got: %s...", output[:60])
         
         return result
         
     except Exception as e:
         elapsed_ms = (time.time() - start) * 1000
         if verbose:
-            print(f"  ✗ {test.id}: ERROR - {str(e)[:50]}")
+            logger.error("  ✗ %s: ERROR - %s", test.id, str(e)[:50])
         return {
             "test_id": test.id,
             "test_name": test.name,
@@ -150,10 +153,10 @@ def run_all_tests(
     results = []
     
     if verbose:
-        print(f"\n{'='*60}")
-        print(f"  DIAGNOSTIC TEST RUN: {model}")
-        print(f"{'='*60}")
-        print(f"  Tests to run: {len(tests)}")
+        logger.info("=" * 60)
+        logger.info("  DIAGNOSTIC TEST RUN: %s", model)
+        logger.info("=" * 60)
+        logger.info("  Tests to run: %d", len(tests))
     
     start_total = time.time()
     
@@ -212,21 +215,21 @@ def run_all_tests(
     }
     
     if verbose:
-        print(f"\n{'='*60}")
-        print(f"  RESULTS SUMMARY")
-        print(f"{'='*60}")
-        print(f"  Total: {len(results)} | Passed: {passed} | Failed: {failed}")
-        print(f"  Pass Rate: {pass_rate*100:.1f}%")
-        print(f"  Time: {elapsed_total:.1f}s ({elapsed_total/len(results)*1000:.0f}ms/test)")
+        logger.info("=" * 60)
+        logger.info("  RESULTS SUMMARY")
+        logger.info("=" * 60)
+        logger.info("  Total: %d | Passed: %d | Failed: %d", len(results), passed, failed)
+        logger.info("  Pass Rate: %.1f%%", pass_rate * 100)
+        logger.info("  Time: %.1fs (%.0fms/test)", elapsed_total, elapsed_total / len(results) * 1000)
         
-        print(f"\n  By Band:")
+        logger.info("  By Band:")
         for band in sorted(by_band.keys()):
             stats = by_band[band]
             total = stats["passed"] + stats["failed"]
             rate = stats["passed"] / total if total > 0 else 0
-            print(f"    {band}: {stats['passed']}/{total} ({rate*100:.0f}%)")
+            logger.info("    %s: %d/%d (%.0f%%)", band, stats['passed'], total, rate * 100)
         
-        print(f"\n  By Skill (top failures):")
+        logger.info("  By Skill (top failures):")
         skill_rates = [
             (skill, s["passed"] / (s["passed"] + s["failed"]))
             for skill, s in by_skill.items()
@@ -234,12 +237,12 @@ def run_all_tests(
         skill_rates.sort(key=lambda x: x[1])
         for skill, rate in skill_rates[:5]:
             if rate < 1.0:
-                print(f"    {skill}: {rate*100:.0f}%")
+                logger.info("    %s: %.0f%%", skill, rate * 100)
         
         if failure_modes:
-            print(f"\n  Failure Modes Detected:")
+            logger.info("  Failure Modes Detected:")
             for mode, count in sorted(failure_modes.items(), key=lambda x: -x[1])[:5]:
-                print(f"    {mode}: {count}")
+                logger.info("    %s: %d", mode, count)
     
     return summary
 

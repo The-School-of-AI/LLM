@@ -23,6 +23,7 @@ Commands:
 
 import argparse
 import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -35,6 +36,9 @@ from common import (
     Band, Stage, SKILL_BUCKETS, get_skill_bucket,
     cot_allowed_for_band, get_injection_cap, STAGE_CONFIGS,
 )
+from common.logging_config import setup_logging, get_logger
+
+logger = get_logger("run_pipeline")
 
 DEFAULT_BANK_DIR = Path("./synth_data_bank")
 
@@ -54,12 +58,16 @@ def cmd_generate_bank(args):
     else:
         skills = [s for s, spec in SKILL_BUCKETS.items() if spec.priority in ("critical", "high")]
     
-    print("\n" + "="*60)
-    print("  PHASE 1: PRE-GENERATING SYNTHETIC DATA BANK")
-    print("="*60)
-    print(f"  Bank directory: {bank_dir}")
-    print(f"  Skills: {len(skills)}")
-    print(f"  Samples per skill: {args.num}")
+    logger.info("=" * 60)
+    logger.info("  PHASE 1: PRE-GENERATING SYNTHETIC DATA BANK")
+    logger.info("=" * 60)
+    logger.info("  Bank directory: %s", bank_dir.resolve())
+    logger.info("  Model: %s", args.model)
+    logger.info("  Skills to generate: %d", len(skills))
+    logger.info("  Samples per skill: %d", args.num)
+    logger.info("  Builtin seeds: %s | Hard negatives: %s | Error correction: %s",
+                args.builtin_seeds, args.hard_negatives, args.error_correction)
+    logger.debug("  Skill list: %s", skills)
     
     seed_gen = SeedGenerator(model=args.model)
     dual_gen = DualViewGenerator(model=args.model)
@@ -70,35 +78,37 @@ def cmd_generate_bank(args):
         with open(manifest_path, encoding="utf-8") as f:
             manifest = json.load(f)
         manifest["updated"] = datetime.now().isoformat()
-        print(f"  Loaded existing manifest: {len(manifest.get('skills', {}))} skills")
+        logger.info("  Loaded existing manifest: %d skills", len(manifest.get('skills', {})))
     else:
         manifest = {"created": datetime.now().isoformat(), "model": args.model, "skills": {}}
+        logger.info("  Creating new manifest")
     
-    for raw_skill_id in skills:
+    for skill_idx, raw_skill_id in enumerate(skills):
         skill = get_skill_bucket(raw_skill_id)
-        # OLD: used raw skill_id (could be legacy alias like "RSN-ARITHMETIC")
-        # NEW: normalize to canonical ID so manifest + shard files are consistent
-        skill_id = skill.id  # canonical form (e.g. "RSN-ARITH")
+        skill_id = skill.id  # canonical form
         shard_path = bank_dir / f"{skill_id}.jsonl"
         
         if raw_skill_id != skill_id:
-            print(f"\n[{raw_skill_id} -> {skill_id}] Generating {args.num} samples...")
+            logger.info("[%d/%d] %s -> %s | Generating %d samples (band=%s, priority=%s)",
+                        skill_idx + 1, len(skills), raw_skill_id, skill_id, args.num,
+                        skill.primary_band.value, skill.priority)
         else:
-            print(f"\n[{skill_id}] Generating {args.num} samples...")
+            logger.info("[%d/%d] %s | Generating %d samples (band=%s, priority=%s)",
+                        skill_idx + 1, len(skills), skill_id, args.num,
+                        skill.primary_band.value, skill.priority)
         
         if args.builtin_seeds:
             seeds = get_builtin_seeds(skill_id, args.num)
+            logger.debug("  Using %d builtin seeds for %s", len(seeds), skill_id)
         else:
             seeds = seed_gen.generate(skill_id, args.num, args.difficulty)
+            logger.debug("  Generated %d LLM seeds for %s (difficulty=%s)", len(seeds), skill_id, args.difficulty)
         
         samples = []
         for i, seed in enumerate(seeds):
-            if (i + 1) % 10 == 0:
-                print(f"  [{i+1}/{len(seeds)}]", end="\r")
+            seed_language = seed.get("language", skill.languages[0] if skill.languages else "en")
+            logger.debug("  [%d/%d] Seed: %s (lang=%s)", i + 1, len(seeds), seed["question"][:60], seed_language)
             try:
-                # OLD: language was never passed from seed metadata — all Indic samples got "en"
-                # NEW: propagate language from seed (e.g. "hi", "bn", "ta") with fallback to skill default
-                seed_language = seed.get("language", skill.languages[0] if skill.languages else "en")
                 sample = dual_gen.generate(
                     question=seed["question"],
                     skill_bucket=skill_id,
@@ -106,19 +116,24 @@ def cmd_generate_bank(args):
                     generate_hard_negative=args.hard_negatives,
                     generate_error_correction=args.error_correction,
                     sample_id=seed.get("id"),
-                    # OLD: language parameter was missing entirely
-                    # NEW: pass the seed's language or the skill's primary language
                     language=seed_language,
                 )
                 samples.append(sample)
+                logger.debug("    -> answer=%s | dist=%d chars | think=%s chars | hn=%s | ec=%s",
+                             repr(sample.answer[:50]),
+                             len(sample.distilled_view),
+                             len(sample.think_view) if sample.think_view else 0,
+                             "yes" if sample.hard_negative else "no",
+                             "yes" if sample.error_correction else "no")
             except Exception as e:
-                print(f"\n  [ERROR] {i}: {e}")
+                logger.error("  [%d/%d] FAILED: %s", i + 1, len(seeds), e, exc_info=True)
         
-        print(f"  Generated {len(samples)} samples")
+        logger.info("  -> Generated %d/%d samples for %s", len(samples), len(seeds), skill_id)
         
         with open(shard_path, "w", encoding="utf-8") as f:
             for s in samples:
                 f.write(json.dumps(s.to_dict(), ensure_ascii=False) + "\n")
+        logger.debug("  Saved shard: %s", shard_path)
         
         manifest["skills"][skill_id] = {
             "samples": len(samples),
@@ -133,7 +148,9 @@ def cmd_generate_bank(args):
         json.dump(manifest, f, indent=2)
     
     total = sum(m["samples"] for m in manifest["skills"].values())
-    print(f"\n[Done] Created bank with {total} total samples")
+    logger.info("=" * 60)
+    logger.info("  DONE: Bank created with %d total samples across %d skills", total, len(manifest["skills"]))
+    logger.info("=" * 60)
     return manifest
 
 
@@ -144,21 +161,21 @@ def cmd_status(args):
     bank_dir = Path(args.bank_dir)
     manifest_path = bank_dir / "manifest.json"
 
-    print("\n" + "="*60)
-    print("  SYNTHETIC DATA BANK STATUS")
-    print("="*60)
+    logger.info("=" * 60)
+    logger.info("  SYNTHETIC DATA BANK STATUS")
+    logger.info("=" * 60)
 
     if not manifest_path.exists():
-        print(f"  Bank not found at: {bank_dir}")
-        print(f"  Create with: python run_pipeline.py generate-bank")
+        logger.warning("  Bank not found at: %s", bank_dir)
+        logger.info("  Create with: python run_pipeline.py generate-bank")
         return
 
     with open(manifest_path, encoding="utf-8") as f:
         manifest = json.load(f)
 
-    print(f"  Created: {manifest.get('created')}")
-    print(f"  Model: {manifest.get('model')}")
-    print(f"\n  Shards:")
+    logger.info("  Created: %s", manifest.get('created'))
+    logger.info("  Model: %s", manifest.get('model'))
+    logger.info("  Shards:")
 
     total = 0
     covered_canonical = set()
@@ -167,7 +184,6 @@ def cmd_status(args):
         total += info["samples"]
         cot = "Y" if info.get("cot_allowed") else "N"
 
-        # Check if this is an alias
         canonical = resolve_skill_alias(skill_id)
         alias_marker = ""
         if canonical != skill_id:
@@ -176,34 +192,32 @@ def cmd_status(args):
         elif skill_id in SKILL_BUCKETS:
             covered_canonical.add(skill_id)
 
-        print(f"    {skill_id:20s} {info['samples']:4d} samples  COT:{cot}  {info['priority']}{alias_marker}")
+        logger.info("    %s %4d samples  COT:%s  %s%s", skill_id.ljust(20), info['samples'], cot, info['priority'], alias_marker)
 
-    print(f"\n  Total: {total} samples")
+    logger.info("  Total: %d samples", total)
 
-    # Calculate missing based on canonical skills
     missing = set(SKILL_BUCKETS.keys()) - covered_canonical
     if missing:
-        print(f"\n  Missing: {len(missing)} skills (run with --verbose to list)")
+        logger.info("  Missing: %d skills (run with --verbose to list)", len(missing))
         if args.verbose:
             for m in sorted(missing):
-                print(f"    - {m}")
+                logger.info("    - %s", m)
 
 
 def cmd_rebuild_manifest(args):
     """Rebuild manifest from existing shards."""
     bank_dir = Path(args.bank_dir)
 
-    print("\n" + "="*60)
-    print("  REBUILDING MANIFEST FROM SHARDS")
-    print("="*60)
+    logger.info("=" * 60)
+    logger.info("  REBUILDING MANIFEST FROM SHARDS")
+    logger.info("=" * 60)
 
     if not bank_dir.exists():
-        print(f"  Bank not found at: {bank_dir}")
+        logger.error("  Bank not found at: %s", bank_dir)
         return
 
-    # Scan all JSONL files
     shards = list(bank_dir.glob("*.jsonl"))
-    print(f"  Found {len(shards)} shard files")
+    logger.info("  Found %d shard files", len(shards))
 
     manifest = {
         "created": datetime.now().isoformat(),
@@ -222,11 +236,11 @@ def cmd_rebuild_manifest(args):
             skill_id = skill.id  # canonical form
         except ValueError:
             # Not a known skill or alias (e.g., "KNOW-FACTUAL_synth")
-            print(f"  [SKIP] {raw_name} - not a known skill or alias")
+            logger.warning("  [SKIP] %s - not a known skill or alias", raw_name)
             continue
 
         if raw_name != skill_id:
-            print(f"  [ALIAS] {raw_name} -> {skill_id}")
+            logger.info("  [ALIAS] %s -> %s", raw_name, skill_id)
 
         # Count samples
         with open(shard_path, encoding="utf-8") as f:
@@ -242,15 +256,14 @@ def cmd_rebuild_manifest(args):
             "shard_file": shard_path.name,
             "priority": skill.priority,
         }
-        print(f"  [OK] {skill_id}: {len(samples)} samples")
+        logger.info("  [OK] %s: %d samples", skill_id, len(samples))
 
-    # Save manifest
     manifest_path = bank_dir / "manifest.json"
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
     total = sum(m["samples"] for m in manifest["skills"].values())
-    print(f"\n[Done] Rebuilt manifest: {len(manifest['skills'])} skills, {total} total samples")
+    logger.info("  DONE: Rebuilt manifest: %d skills, %d total samples", len(manifest['skills']), total)
     return manifest
 
 
@@ -265,7 +278,7 @@ def cmd_seeds(args):
         for skill_id in skills:
             seeds = get_builtin_seeds(skill_id, args.num)
             all_seeds.extend(seeds)
-            print(f"[Builtin] {skill_id}: {len(seeds)} seeds")
+            logger.info("[Builtin] %s: %d seeds", skill_id, len(seeds))
     else:
         generator = SeedGenerator(model=args.model)
         if args.all:
@@ -280,7 +293,7 @@ def cmd_seeds(args):
         for seed in all_seeds:
             f.write(json.dumps(seed, ensure_ascii=False) + "\n")
     
-    print(f"[Done] Saved {len(all_seeds)} seeds to: {output_path}")
+    logger.info("Saved %d seeds to: %s", len(all_seeds), output_path)
 
 
 def cmd_generate(args):
@@ -289,43 +302,42 @@ def cmd_generate(args):
     from generation.dual_view_generator import DualViewGenerator
     
     skill = get_skill_bucket(args.skill)
+    logger.info("Generating for skill: %s (band=%s, model=%s)", args.skill, skill.primary_band.value, args.model)
     
     if args.seeds:
         with open(args.seeds, encoding="utf-8") as f:
             seeds = [json.loads(l) for l in f if l.strip()][:args.num]
+        logger.info("Loaded %d seeds from file: %s", len(seeds), args.seeds)
     else:
         seeds = get_builtin_seeds(args.skill, args.num)
+        logger.info("Using %d builtin seeds", len(seeds))
     
     generator = DualViewGenerator(model=args.model)
     samples = []
     
     for i, seed in enumerate(seeds):
-        if (i+1) % 10 == 0:
-            print(f"  [{i+1}/{len(seeds)}]", end="\r")
+        seed_language = seed.get("language", skill.languages[0] if skill.languages else "en")
+        logger.debug("[%d/%d] Processing seed: %s (lang=%s)", i + 1, len(seeds), seed["question"][:60], seed_language)
         try:
-            # OLD: language parameter was missing — all Indic samples got "en"
-            # NEW: propagate language from seed with fallback to skill's primary language
-            seed_language = seed.get("language", skill.languages[0] if skill.languages else "en")
             sample = generator.generate(
                 question=seed["question"],
                 skill_bucket=args.skill,
                 band=skill.primary_band.value,
                 generate_hard_negative=args.hard_negatives,
                 generate_error_correction=args.error_correction,
-                # OLD: language was not passed
-                # NEW: pass seed language
                 language=seed_language,
             )
             samples.append(sample)
+            logger.debug("  -> OK: answer=%s", repr(sample.answer[:50]))
         except Exception as e:
-            print(f"  [ERROR] {i}: {e}")
+            logger.error("[%d/%d] FAILED: %s", i + 1, len(seeds), e, exc_info=True)
     
     output_path = args.output or f"synthetic_{args.skill}_{datetime.now():%Y%m%d_%H%M}.jsonl"
     with open(output_path, "w", encoding="utf-8") as f:
         for s in samples:
             f.write(json.dumps(s.to_dict(), ensure_ascii=False) + "\n")
     
-    print(f"\n[Done] Saved {len(samples)} samples to: {output_path}")
+    logger.info("Saved %d samples to: %s", len(samples), output_path)
 
 
 def cmd_diagnose(args):
@@ -334,7 +346,7 @@ def cmd_diagnose(args):
     from diagnostics.diagnostic_tests import DIAGNOSTIC_TESTS, get_tests_for_skill, get_tests_for_band
     
     if not check_ollama():
-        print("ERROR: Ollama not running")
+        logger.error("Ollama is not running! Start with: ollama serve")
         sys.exit(1)
     
     tests = DIAGNOSTIC_TESTS
@@ -343,9 +355,10 @@ def cmd_diagnose(args):
     if args.band:
         tests = [t for t in tests if t.band == args.band]
     
-    print("\n" + "="*60)
-    print("  PHASE 2: DIAGNOSTIC TESTING")
-    print("="*60)
+    logger.info("=" * 60)
+    logger.info("  PHASE 2: DIAGNOSTIC TESTING")
+    logger.info("=" * 60)
+    logger.info("  Model: %s | Tests: %d | Threshold: %.0f%%", args.model, len(tests), args.threshold * 100)
     
     results = run_all_tests(model=args.model, tests=tests, verbose=not args.quiet)
     
@@ -365,24 +378,23 @@ def cmd_diagnose(args):
         with open(manifest_path, encoding="utf-8") as f:
             bank_available = json.load(f).get("skills", {})
     
-    print("\n" + "="*60)
-    print("  WEAKNESS ANALYSIS")
-    print("="*60)
-    print(f"  Threshold: {args.threshold*100:.0f}%")
-    print(f"  Weak skills: {len(weak_skills)}")
+    logger.info("=" * 60)
+    logger.info("  WEAKNESS ANALYSIS")
+    logger.info("=" * 60)
+    logger.info("  Threshold: %.0f%% | Weak skills: %d", args.threshold * 100, len(weak_skills))
     
     if weak_skills:
-        print("\n  Recommended injections:")
+        logger.info("  Recommended injections:")
         for w in weak_skills:
             avail = bank_available.get(w["skill"], {}).get("samples", 0)
             status = f"[OK] {avail} ready" if avail else "[MISSING] NOT IN BANK"
-            print(f"    {w['skill']:20s} {w['pass_rate']*100:5.1f}% -> {status}")
+            logger.info("    %s %5.1f%% -> %s", w['skill'].ljust(20), w['pass_rate'] * 100, status)
     
     if args.output:
         results["weak_skills"] = weak_skills
         with open(args.output, "w") as f:
             json.dump(results, f, indent=2)
-        print(f"\nSaved to: {args.output}")
+        logger.info("Saved diagnostics to: %s", args.output)
     
     return {"results": results, "weak_skills": weak_skills}
 
@@ -393,7 +405,7 @@ def cmd_inject(args):
     manifest_path = bank_dir / "manifest.json"
     
     if not manifest_path.exists():
-        print(f"ERROR: Bank not found at {bank_dir}")
+        logger.error("Bank not found at %s", bank_dir)
         sys.exit(1)
     
     with open(manifest_path, encoding="utf-8") as f:
@@ -406,20 +418,19 @@ def cmd_inject(args):
             report = json.load(f)
         skills_to_inject = [w["skill"] for w in report.get("weak_skills", [])]
     else:
-        print("ERROR: Specify --skills or --weakness-report")
+        logger.error("Specify --skills or --weakness-report")
         sys.exit(1)
     
-    print("\n" + "="*60)
-    print("  INJECTION PREPARATION")
-    print("="*60)
-    print(f"  Skills: {skills_to_inject}")
-    print(f"  Stage: {args.stage}")
+    logger.info("=" * 60)
+    logger.info("  INJECTION PREPARATION")
+    logger.info("=" * 60)
+    logger.info("  Skills: %s", skills_to_inject)
+    logger.info("  Stage: %s", args.stage)
     
-    # Get allowed bands for the stage
     stage_enum = Stage[args.stage]
     allowed_bands = STAGE_CONFIGS[stage_enum].bands_allowed
     allowed_band_names = {b.name for b in allowed_bands}
-    print(f"  Allowed bands for {args.stage}: {sorted(allowed_band_names)}")
+    logger.info("  Allowed bands for %s: %s", args.stage, sorted(allowed_band_names))
 
     all_samples = []
     skipped_by_band = 0
@@ -444,7 +455,7 @@ def cmd_inject(args):
                     skill_id = legacy
                     break
         if skill_id not in manifest["skills"]:
-            print(f"  [SKIP] {raw_skill} not in bank")
+            logger.warning("  [SKIP] %s not in bank", raw_skill)
             continue
 
         shard_path = bank_dir / manifest["skills"][skill_id]["shard_file"]
@@ -457,15 +468,15 @@ def cmd_inject(args):
         if len(samples) < original_count:
             skipped = original_count - len(samples)
             skipped_by_band += skipped
-            print(f"  [FILTER] {skill_id}: {skipped} samples excluded (band not in {args.stage})")
+            logger.info("  [FILTER] %s: %d samples excluded (band not in %s)", skill_id, skipped, args.stage)
 
         max_samples = int(len(samples) * args.max_pct / 100)
         samples = samples[:max_samples]
         all_samples.extend(samples)
-        print(f"  [OK] {skill_id}: {len(samples)} samples")
+        logger.info("  [OK] %s: %d samples", skill_id, len(samples))
 
     if skipped_by_band > 0:
-        print(f"\n  [INFO] Total skipped by band restriction: {skipped_by_band}")
+        logger.info("  Total skipped by band restriction: %d", skipped_by_band)
     
     # Format for training
     formatted = []
@@ -498,16 +509,16 @@ def cmd_inject(args):
         b = item.get("band", "unknown")
         band_counts[b] = band_counts.get(b, 0) + 1
 
-    print(f"\n[Done] {len(formatted)} samples -> {output_path}")
-    print("\n  Band Distribution & Injection Caps:")
+    logger.info("DONE: %d samples -> %s", len(formatted), output_path)
+    logger.info("  Band Distribution & Injection Caps:")
     for band_name in sorted(band_counts.keys()):
         count = band_counts[band_name]
         try:
             band_enum = Band[band_name]
             cap_pct = get_injection_cap(stage_enum, band_enum) * 100
-            print(f"    {band_name}: {count} samples (cap: {cap_pct:.0f}% of training mix)")
+            logger.info("    %s: %d samples (cap: %.0f%% of training mix)", band_name, count, cap_pct)
         except (KeyError, ValueError):
-            print(f"    {band_name}: {count} samples")
+            logger.info("    %s: %d samples", band_name, count)
 
 
 def cmd_validate(args):
@@ -595,8 +606,21 @@ WORKFLOW:
     python run_pipeline.py diagnose --model qwen3:4b
     python run_pipeline.py inject --skills RSN-ARITHMETIC
     python run_pipeline.py validate injection.jsonl
+
+LOGGING:
+  --log-level DEBUG     Show all debug messages on console
+  --log-level INFO      Default: info + warnings + errors
+  --log-dir ./my_logs   Custom log directory (default: ./logs/)
+  Logs always written to: logs/<command>_<datetime>.log
         """,
     )
+    
+    # Global logging args
+    parser.add_argument("--log-level", default="INFO",
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                        help="Console log level (default: INFO). File always captures DEBUG.")
+    parser.add_argument("--log-dir", default=None,
+                        help="Directory for log files (default: ./logs/)")
     
     sub = parser.add_subparsers(dest="command")
     
@@ -699,6 +723,14 @@ WORKFLOW:
         parser.print_help()
         sys.exit(1)
     
+    # Initialize logging BEFORE running any command
+    log_path = setup_logging(
+        command=args.command,
+        console_level=args.log_level,
+        log_dir=args.log_dir,
+    )
+    logger.info("Log file: %s", log_path)
+    
     cmds = {
         "generate-bank": cmd_generate_bank,
         "status": cmd_status,
@@ -712,7 +744,12 @@ WORKFLOW:
         "verify": cmd_verify,
         "import-synth": cmd_import_synth,
     }
-    cmds[args.command](args)
+    
+    try:
+        cmds[args.command](args)
+    except Exception as e:
+        logger.critical("Pipeline failed with error: %s", e, exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
