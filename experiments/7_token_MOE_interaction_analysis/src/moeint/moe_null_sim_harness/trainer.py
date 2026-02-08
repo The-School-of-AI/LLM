@@ -112,6 +112,8 @@ class Trainer:
         self, tokenizer: TokenizersBackend | SentencePieceBackend
     ) -> dict[int, int]:
         mapping = {}
+
+        # dummy token grouping logic, just to test things out:
         for token_str, token_id in tokenizer.get_vocab().items():
             # 1. Convert the byte-level representation back to a normal string
             # GPT-2 uses a specific byte-map; decoding is the safest way to check
@@ -120,7 +122,7 @@ class Trainer:
             # 2. Check if it's "Pure Junk"
             # This catches standalone spaces, newlines, tabs, and strings of them
             if decoded_token.isspace():
-                mapping[token_id] = TokenGroups.whitespace
+                mapping[token_id] = TokenGroups.junk
             else:
                 mapping[token_id] = TokenGroups.content
 

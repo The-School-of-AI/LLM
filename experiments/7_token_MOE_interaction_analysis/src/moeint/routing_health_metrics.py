@@ -7,7 +7,7 @@ from torch import Tensor
 
 
 class TokenGroups(IntEnum):
-    whitespace = 0  # for now, considered as junk
+    junk = 0
     content = 1
 
 
@@ -23,6 +23,13 @@ class RouterStats(NamedTuple):
     entropy_std: float
     """
     Standard deviation of entropy, i.e., its spread.
+    """
+
+    entropy_per_group: list[float]
+    """
+    Average entropy for each token group for this router.
+
+    Value at index i is the average entropy of the ith group.
     """
 
     n_eff: float
@@ -161,6 +168,9 @@ class RouterHealthAnalyzer:
 
         router_logits_scale = routing_logits_tensor.std(dim=(-2, -1))
         entropy_per_token = self._calculate_entropy_per_token(routing_logits_tensor)
+        entropy_per_group = self._calculate_entropy_per_group(
+            entropy_per_token, input_group_ids
+        )
         entropy_mean = entropy_per_token.mean(dim=1)  # shape: (num_routers,)
         entropy_std = entropy_per_token.std(dim=1)  # shape: (num_routers,)
         n_eff = torch.exp(entropy_mean)  # shape: (num_routers,)
@@ -190,6 +200,7 @@ class RouterHealthAnalyzer:
         for (
             entropy_mean,
             entropy_std,
+            entropy_per_group,
             n_eff,
             polarization,
             tokens_to_real_rate,
@@ -204,6 +215,7 @@ class RouterHealthAnalyzer:
         ) in zip(
             entropy_mean,
             entropy_std,
+            entropy_per_group,
             n_eff,
             polarization,
             tokens_to_real_rate,
@@ -220,6 +232,7 @@ class RouterHealthAnalyzer:
                 RouterStats(
                     entropy_mean=entropy_mean.item(),
                     entropy_std=entropy_std.item(),
+                    entropy_per_group=entropy_per_group.cpu().tolist(),
                     n_eff=n_eff.item(),
                     polarization=polarization.item(),
                     tokens_to_real_rate=tokens_to_real_rate.item(),
@@ -281,6 +294,52 @@ class RouterHealthAnalyzer:
         null_counts = counts[:, self.num_real_experts :].sum(dim=1, keepdim=True)
 
         return torch.cat([real_counts, null_counts], dim=1)
+
+    def _calculate_entropy_per_group(
+        self, entropy_per_token: Tensor, input_group_ids: Tensor
+    ) -> Tensor:
+        """
+        Calculates entropy per token group, give the entropies for each token.
+
+        Args:
+            entropy_per_token (Tensor): A tensor of shape (num_routers, batch_size * seq_len), the entropy per token for each router, where all null experts are considered as a single expert.
+            input_group_ids (Tensor): Group ids of each token present in input batch. The value at (i, j) is the group number of router i and token j. Tensor shape: (num_routers, batch_size * seq_len)
+        Returns:
+            Tensor: A tensor of shape (num_routers, num_groups), representing the entropy per group per router. If a group was not present in the input batch, the entropy is NaN.
+        """
+
+        num_groups = len(TokenGroups)  # Total possible groups, not just in batch
+
+        # Convert group IDs to one-hot vectors
+        # Each token gets a vector like [0, 1, 0] indicating which group it belongs to
+        # Shape: (num_routers, num_tokens, num_groups)
+        # Example: token with group_id=1 becomes [0, 1, 0] for 3 groups
+        group_mask = F.one_hot(input_group_ids, num_classes=num_groups).float()
+
+        # Prepare entropy for broadcasting
+        # Add a dimension so we can multiply with group_mask
+        # Shape: (num_routers, num_tokens, 1) -> broadcasts to (num_routers, num_tokens, num_groups)
+        entropy_expanded = entropy_per_token.unsqueeze(-1)
+
+        # Route each token's entropy to its group position
+        # Multiply: entropy value gets placed in the group's position, zeros elsewhere
+        # Example: token with entropy=2.5 and group_id=1 produces [0, 2.5, 0]
+        # Then sum across all tokens to aggregate entropy per group
+        # Result shape: (num_routers, num_groups)
+        group_sum = (entropy_expanded * group_mask).sum(dim=1)
+
+        # Count how many tokens belong to each group
+        # Sum the one-hot vectors across tokens dimension
+        # Result shape: (num_routers, num_groups)
+        # Example: if 5 tokens have group_id=0, group_count[..., 0] = 5
+        group_count = group_mask.sum(dim=1)
+
+        # Calculate mean entropy per group, replace inf with NaN as per contract.
+        # Result shape: (num_routers, num_groups)
+        group_entropy = group_sum / group_count
+        group_entropy.masked_fill_(torch.isinf(group_entropy), float("nan"))
+
+        return group_entropy
 
     def _calculate_imbalance_ratio(self, tokens_per_expert: Tensor) -> Tensor:
         """
@@ -429,7 +488,7 @@ class RouterHealthAnalyzer:
         )  # bool mask, shape: (num_routers, batch_size * seq_len)
 
         is_junk = (
-            input_group_ids == TokenGroups.whitespace
+            input_group_ids == TokenGroups.junk
         )  # bool mask, shape: (num_routers, batch_size * seq_len)
         is_junk_and_sent_to_null = (
             tokens_routed_to_null & is_junk
@@ -460,7 +519,7 @@ class RouterHealthAnalyzer:
             is_null, dim=-1
         )  # bool mask, shape: (num_routers, batch_size * seq_len)
         is_junk = (
-            input_group_ids == TokenGroups.whitespace
+            input_group_ids == TokenGroups.junk
         )  # bool mask, shape: (num_routers, batch_size * seq_len)
         is_junk_and_sent_to_null = (
             tokens_routed_to_null & is_junk
