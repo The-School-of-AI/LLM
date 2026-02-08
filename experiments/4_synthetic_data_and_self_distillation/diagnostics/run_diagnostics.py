@@ -39,6 +39,9 @@ from diagnostics.diagnostic_tests import (
 # ================================================================
 
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# OLD: hardcoded timeout=30 — too short for large models even on simple prompts
+# NEW: configurable via OLLAMA_TIMEOUT env var (default 120s for diagnostics, shorter than generation)
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "120"))
 
 
 def ollama_generate(model: str, prompt: str, max_tokens: int = 150) -> str:
@@ -65,7 +68,9 @@ def ollama_generate(model: str, prompt: str, max_tokens: int = 150) -> str:
         method="POST",
     )
     
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    # OLD: timeout=30 (hardcoded)
+    # NEW: uses OLLAMA_TIMEOUT env var for large model support
+    with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
         result = json.loads(resp.read().decode("utf-8"))
     
     return result.get("response", "").strip()

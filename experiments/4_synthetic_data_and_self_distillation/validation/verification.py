@@ -22,7 +22,11 @@ from pathlib import Path
 from typing import Optional, Literal
 
 
-OLLAMA_BASE = "http://localhost:11434"
+# OLD: hardcoded base URL and no timeout config
+# NEW: configurable via env vars
+import os
+OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "120"))
 
 
 @dataclass
@@ -144,7 +148,9 @@ def ollama_generate(model: str, prompt: str, max_tokens: int = 200) -> str:
             headers={"Content-Type": "application/json"},
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        # OLD: timeout=60 (hardcoded)
+        # NEW: uses OLLAMA_TIMEOUT env var for large model support
+        with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
             result = json.loads(resp.read().decode("utf-8"))
         return result.get("response", "").strip()
     except Exception as e:

@@ -51,6 +51,9 @@ from common.skills import (
 # ================================================================
 
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# OLD: hardcoded timeout=300 — too short for 70B models on consumer hardware
+# NEW: configurable via OLLAMA_TIMEOUT env var (default 600s, use 1800+ for large models)
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
 
 
 def ollama_chat(
@@ -78,7 +81,9 @@ def ollama_chat(
         method="POST",
     )
     
-    with urllib.request.urlopen(req, timeout=300) as resp:
+    # OLD: timeout=300 (hardcoded)
+    # NEW: uses OLLAMA_TIMEOUT env var for large model support
+    with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
         result = json.loads(resp.read().decode("utf-8"))
     
     return result.get("message", {}).get("content", "").strip()
@@ -88,8 +93,11 @@ def ollama_chat(
 # GENERATION PROMPTS
 # ================================================================
 
-# Distilled view prompt (answer + short justification)
-DISTILLED_PROMPT = """Solve this question. You MUST respond in this EXACT format:
+# OLD: Single DISTILLED_PROMPT for all categories (caused "Unknown" for code/indic/translation)
+# NEW: Category-specific distilled prompts that match the task type
+
+# Default distilled prompt — math / reasoning / factual (answer + short justification)
+DISTILLED_PROMPT_DEFAULT = """Solve this question. You MUST respond in this EXACT format:
 
 Answer: [your answer here]
 Justification: [1-2 sentence explanation]
@@ -101,6 +109,136 @@ Justification: Adding 2 and 2 gives 4.
 
 Now solve:
 Question: {question}"""
+
+# Code distilled prompt — expects a code block as the answer
+DISTILLED_PROMPT_CODE = """Provide the solution to this coding task. You MUST respond in this EXACT format:
+
+Answer:
+```python
+[your code here]
+```
+Justification: [1-2 sentence explanation of approach]
+
+Now solve:
+{question}"""
+
+# Translation distilled prompt — expects translated text
+DISTILLED_PROMPT_TRANSLATION = """Complete this translation task. You MUST respond in this EXACT format:
+
+Answer: [translated text here]
+Justification: [1 sentence about the translation approach]
+
+Do NOT respond with "Unknown" or "I don't know". Provide the best translation.
+
+Now translate:
+{question}"""
+
+# Indic / multilingual distilled prompt — handles native script questions
+DISTILLED_PROMPT_INDIC = """Answer the following question. The question may be in Hindi, Bengali, Tamil, Telugu, or another Indian language. Reply in the SAME language as the question.
+
+You MUST respond in this EXACT format:
+Answer: [your answer here]
+Justification: [1-2 sentence explanation]
+
+Do NOT respond with "Unknown". Provide the best answer you can.
+
+Question: {question}"""
+
+# Instruction-following distilled prompt
+DISTILLED_PROMPT_INSTRUCTION = """Follow the instruction below precisely. You MUST respond in this EXACT format:
+
+Answer: [your complete response following the instruction]
+Justification: [1 sentence explaining how you followed the constraints]
+
+Do NOT respond with "Unknown". Complete the task fully.
+
+Instruction: {question}"""
+
+# Code debugging distilled prompt — expects bug identification + fix
+DISTILLED_PROMPT_DEBUG = """Identify the bug and provide the fix. You MUST respond in this EXACT format:
+
+Answer: [the fixed code or one-line fix description]
+Justification: [1-2 sentence explanation of the bug and fix]
+
+Now fix:
+{question}"""
+
+# Code explanation distilled prompt — expects plain-English explanation
+DISTILLED_PROMPT_EXPLAIN = """Explain what this code does. You MUST respond in this EXACT format:
+
+Answer: [plain-English description of what the code does and its output]
+Justification: [1 sentence supporting detail]
+
+Now explain:
+{question}"""
+
+# Map from skill category/prefix to the appropriate distilled prompt
+# OLD: single DISTILLED_PROMPT for everything
+# NEW: category routing
+DISTILLED_PROMPT_MAP = {
+    "code_gen": DISTILLED_PROMPT_CODE,
+    "code_debug": DISTILLED_PROMPT_DEBUG,
+    "code_explain": DISTILLED_PROMPT_EXPLAIN,
+    "translation": DISTILLED_PROMPT_TRANSLATION,
+    "indic": DISTILLED_PROMPT_INDIC,
+    "instruction": DISTILLED_PROMPT_INSTRUCTION,
+    "default": DISTILLED_PROMPT_DEFAULT,
+}
+
+# Max tokens per category for distilled view
+# OLD: hardcoded 256 for all (truncated code)
+# NEW: category-appropriate limits
+DISTILLED_MAX_TOKENS = {
+    "code_gen": 512,
+    "code_debug": 384,
+    "code_explain": 384,
+    "translation": 384,
+    "indic": 384,
+    "instruction": 384,
+    "default": 256,
+}
+
+
+def _get_skill_prompt_category(skill_bucket: str) -> str:
+    """Route a skill bucket to the appropriate prompt category.
+
+    OLD: no routing — all skills used the same math-style prompt
+    NEW: maps skill prefix/ID to the correct prompt template
+    """
+    # Normalize to uppercase for matching
+    sb = skill_bucket.upper()
+
+    # Code generation skills → code prompt
+    if sb in ("CODE-GEN-T1", "CODE-GEN-T2", "CODE-GEN-T3", "CODE-SYN",
+              "CODE-ALGO", "CODE-OPT", "CODE-TEST",
+              "CODE-COMPLETION"):  # legacy alias
+        return "code_gen"
+
+    # Code debugging
+    if sb in ("CODE-DBG", "CODE-DEBUG"):  # canonical + legacy
+        return "code_debug"
+
+    # Code explanation / comprehension
+    if sb in ("CODE-COMP", "CODE-EXPLAIN"):  # canonical + legacy
+        return "code_explain"
+
+    # Translation skills
+    if sb in ("LANG-TRANS", "INDIC-TRANS"):
+        return "translation"
+
+    # Indic language skills (non-translation)
+    if sb.startswith("INDIC-") or sb in ("LANG-HI-COMP", "LANG-HI-GEN",
+                                          "LANG-HI-LOG", "LANG-HINDI",
+                                          "FND-LEX-HI", "RSN-MATH-HI"):
+        return "indic"
+
+    # Alignment / instruction-following skills
+    if sb.startswith("ALN-"):
+        return "instruction"
+
+    # Everything else: math, reasoning, knowledge, foundation, production
+    return "default"
+
 
 # COT view prompt (full reasoning) - uses numbered steps instead of <think> tags
 COT_PROMPT = """Solve this step-by-step. You MUST use numbered steps.
@@ -265,7 +403,9 @@ class DualViewGenerator:
         cot_max_tokens = band_spec.cot_max_tokens or 0
 
         # Generate distilled view (always)
-        distilled = self._generate_distilled(question)
+        # OLD: self._generate_distilled(question) — no skill context, used math prompt for everything
+        # NEW: pass skill_bucket so the right prompt template is selected
+        distilled = self._generate_distilled(question, skill_bucket=skill_bucket)
         answer = self._extract_answer(distilled)
 
         # Generate COT view (if allowed for band)
@@ -274,20 +414,28 @@ class DualViewGenerator:
             think_view = self._generate_cot(question, cot_max_tokens)
 
         # Fallback: if distilled failed but COT succeeded, extract answer from COT
-        if (not distilled or "Answer:" not in distilled) and think_view:
-            answer_match = re.search(
-                r"(?:Final\s+)?Answer[:\s]+(.+?)(?:\n|$)",
-                think_view,
-                re.IGNORECASE
-            )
-            if answer_match:
-                extracted = answer_match.group(1).strip()
+        # OLD: only checked (not distilled or "Answer:" not in distilled)
+        # NEW: also catches "Answer: Unknown." and empty answers — ensures hard negatives get a real answer
+        answer_is_bad = (
+            not answer
+            or answer.lower().strip().rstrip(".") in ("unknown", "no answer generated", "")
+        )
+        distilled_is_bad = not distilled or "Answer:" not in distilled or answer_is_bad
+
+        if distilled_is_bad and think_view:
+            extracted = self._extract_answer_from_cot(think_view)
+            if extracted:
+                # OLD: only patched distilled text
+                # NEW: also update `answer` so hard negative gets a real correct_answer
                 distilled = f"Answer: {extracted}\nJustification: See reasoning above."
                 answer = extracted
 
         # Generate hard negative
         hard_negative = None
-        if generate_hard_negative and cot_allowed:
+        # OLD: only checked cot_allowed
+        # NEW: also skip hard negative if we still don't have a real answer (prevents "Correct Answer: Unknown")
+        has_valid_answer = answer and answer.lower().strip().rstrip(".") not in ("unknown", "no answer generated", "")
+        if generate_hard_negative and cot_allowed and has_valid_answer:
             hard_negative = self._generate_hard_negative(
                 question, answer, skill_bucket
             )
@@ -340,30 +488,51 @@ class DualViewGenerator:
 
         return issues
     
-    def _generate_distilled(self, question: str, max_retries: int = 2) -> str:
-        """Generate distilled view with retry on format failure."""
-        prompt = DISTILLED_PROMPT.format(question=question)
+    def _generate_distilled(
+        self,
+        question: str,
+        skill_bucket: str = "",
+        max_retries: int = 2,
+    ) -> str:
+        """Generate distilled view with retry on format failure.
+
+        OLD: Used single DISTILLED_PROMPT for all skills — caused "Unknown" for code/indic/translation
+        NEW: Routes to category-specific prompt via _get_skill_prompt_category()
+        """
+        # NEW: pick the right prompt template and token limit for this skill category
+        category = _get_skill_prompt_category(skill_bucket)
+        prompt_template = DISTILLED_PROMPT_MAP[category]
+        # OLD: max_tokens=256 (too short for code)
+        # NEW: category-appropriate token limit
+        max_tokens = DISTILLED_MAX_TOKENS[category]
+
+        prompt = prompt_template.format(question=question)
 
         for attempt in range(max_retries + 1):
             response = ollama_chat(
                 self.model,
                 [{"role": "user", "content": prompt}],
-                max_tokens=256,
+                max_tokens=max_tokens,
                 temperature=0.3 + (attempt * 0.1),  # Increase temp on retry
             )
 
             # Strip preambles
             response = self._strip_preamble(response)
 
-            # Validate: must contain "Answer:"
+            # Validate: must contain "Answer:" (or code block for code categories)
             if "Answer:" in response:
                 return response
+            # NEW: For code categories, accept response with code blocks even without "Answer:" prefix
+            if category.startswith("code") and ("```" in response or "def " in response):
+                return f"Answer:\n{response}"
 
             if attempt < max_retries:
-                print(f"    [Retry {attempt+1}] distilled missing 'Answer:'")
+                print(f"    [Retry {attempt+1}] distilled missing 'Answer:' (category={category})")
 
         # Last resort: wrap raw response
-        first_sentence = response.split('.')[0] if response else "Unknown"
+        # OLD: always used "Unknown" as fallback
+        # NEW: wrap the actual response content
+        first_sentence = response.split('.')[0] if response else "No answer generated"
         return f"Answer: {first_sentence}.\nJustification: {response}"
     
     def _strip_preamble(self, response: str) -> str:
@@ -521,6 +690,77 @@ class DualViewGenerator:
         match = re.search(r"Answer:\s*(.+?)(?:\n|$)", distilled)
         return match.group(1).strip() if match else distilled.split("\n")[0]
 
+    @staticmethod
+    def _extract_answer_from_cot(think_view: str) -> str | None:
+        """Extract a usable answer from CoT text when distilled view failed.
+
+        Tries multiple strategies in order of reliability:
+          1. "Final Answer: <value>"  — most explicit
+          2. "Answer: <value>" (but NOT preamble text like "Here's the implementation")
+          3. Last numeric value in the text (for math/arithmetic)
+          4. Code block if present (for code tasks)
+        Returns None if no reliable answer can be extracted.
+        """
+        if not think_view or not think_view.strip():
+            return None
+
+        # Strategy 1: "Final Answer:" — strongest signal
+        final_match = re.search(
+            r"Final\s+Answer[:\s]+(.+?)(?:\n|$)",
+            think_view,
+            re.IGNORECASE,
+        )
+        if final_match:
+            candidate = final_match.group(1).strip()
+            # Accept if it's not a filler phrase
+            if candidate and candidate.lower() not in ("see above", "see below", "n/a"):
+                return candidate
+
+        # Strategy 2: "Answer:" — but skip preamble phrases and fillers
+        answer_match = re.search(
+            r"(?<!\w)Answer[:\s]+(.+?)(?:\n|$)",
+            think_view,
+            re.IGNORECASE,
+        )
+        if answer_match:
+            candidate = answer_match.group(1).strip()
+            # OLD BUG: accepted preamble like "Here's the implementation..."
+            # NEW: reject common preamble patterns and filler phrases
+            preamble_patterns = (
+                "here's", "here is", "the following", "below is",
+                "this is", "let me", "we can", "to solve",
+            )
+            filler_phrases = ("see above", "see below", "n/a", "none", "see reasoning")
+            candidate_lower = candidate.lower()
+            is_preamble = any(candidate_lower.startswith(p) for p in preamble_patterns)
+            is_filler = candidate_lower in filler_phrases
+            if candidate and not is_preamble and not is_filler:
+                return candidate
+
+        # Strategy 3: For math — extract last standalone number
+        # Looks for a number at the end of text or after "=" or ":"
+        num_match = re.search(
+            r"(?:=|:|\bis\b)\s*(-?\d+(?:\.\d+)?(?:/\d+)?)\s*\.?\s*$",
+            think_view,
+            re.MULTILINE,
+        )
+        if num_match:
+            return num_match.group(1).strip()
+
+        # Strategy 4: For code — extract the last ```python ... ``` block
+        code_blocks = re.findall(
+            r"```(?:python)?\s*\n(.+?)```",
+            think_view,
+            re.DOTALL,
+        )
+        if code_blocks:
+            # Return the last (usually most complete) code block
+            return f"```python\n{code_blocks[-1].strip()}\n```"
+
+        # No reliable answer found — return None so hard_negative is skipped
+        # OLD BUG: used first_line of CoT as answer (grabbed "Step 1: ..." reasoning text)
+        return None
+
 
 # ================================================================
 # BATCH GENERATION
@@ -573,6 +813,9 @@ if __name__ == "__main__":
     parser.add_argument("--question", "-q", required=True, help="Question to process")
     parser.add_argument("--skill", "-s", default="RSN-ARITHMETIC", help="Skill bucket")
     parser.add_argument("--band", "-b", default="B3", help="Band (B0-B5)")
+    # OLD: no --language flag
+    # NEW: allow specifying language for Indic tasks
+    parser.add_argument("--language", "-l", default="en", help="Language code (en, hi, bn, ta, te...)")
     parser.add_argument("--no-negative", action="store_true", help="Skip hard negative")
     
     args = parser.parse_args()
@@ -583,6 +826,9 @@ if __name__ == "__main__":
         skill_bucket=args.skill,
         band=args.band,
         generate_hard_negative=not args.no_negative,
+        # OLD: language was not passed — always defaulted to "en"
+        # NEW: pass CLI language flag
+        language=args.language,
     )
     
     print("\n" + "="*60)

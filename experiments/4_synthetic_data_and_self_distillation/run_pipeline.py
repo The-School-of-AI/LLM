@@ -74,11 +74,17 @@ def cmd_generate_bank(args):
     else:
         manifest = {"created": datetime.now().isoformat(), "model": args.model, "skills": {}}
     
-    for skill_id in skills:
-        skill = get_skill_bucket(skill_id)
+    for raw_skill_id in skills:
+        skill = get_skill_bucket(raw_skill_id)
+        # OLD: used raw skill_id (could be legacy alias like "RSN-ARITHMETIC")
+        # NEW: normalize to canonical ID so manifest + shard files are consistent
+        skill_id = skill.id  # canonical form (e.g. "RSN-ARITH")
         shard_path = bank_dir / f"{skill_id}.jsonl"
         
-        print(f"\n[{skill_id}] Generating {args.num} samples...")
+        if raw_skill_id != skill_id:
+            print(f"\n[{raw_skill_id} -> {skill_id}] Generating {args.num} samples...")
+        else:
+            print(f"\n[{skill_id}] Generating {args.num} samples...")
         
         if args.builtin_seeds:
             seeds = get_builtin_seeds(skill_id, args.num)
@@ -90,6 +96,9 @@ def cmd_generate_bank(args):
             if (i + 1) % 10 == 0:
                 print(f"  [{i+1}/{len(seeds)}]", end="\r")
             try:
+                # OLD: language was never passed from seed metadata — all Indic samples got "en"
+                # NEW: propagate language from seed (e.g. "hi", "bn", "ta") with fallback to skill default
+                seed_language = seed.get("language", skill.languages[0] if skill.languages else "en")
                 sample = dual_gen.generate(
                     question=seed["question"],
                     skill_bucket=skill_id,
@@ -97,6 +106,9 @@ def cmd_generate_bank(args):
                     generate_hard_negative=args.hard_negatives,
                     generate_error_correction=args.error_correction,
                     sample_id=seed.get("id"),
+                    # OLD: language parameter was missing entirely
+                    # NEW: pass the seed's language or the skill's primary language
+                    language=seed_language,
                 )
                 samples.append(sample)
             except Exception as e:
@@ -284,12 +296,18 @@ def cmd_generate(args):
         if (i+1) % 10 == 0:
             print(f"  [{i+1}/{len(seeds)}]", end="\r")
         try:
+            # OLD: language parameter was missing — all Indic samples got "en"
+            # NEW: propagate language from seed with fallback to skill's primary language
+            seed_language = seed.get("language", skill.languages[0] if skill.languages else "en")
             sample = generator.generate(
                 question=seed["question"],
                 skill_bucket=args.skill,
                 band=skill.primary_band.value,
                 generate_hard_negative=args.hard_negatives,
                 generate_error_correction=args.error_correction,
+                # OLD: language was not passed
+                # NEW: pass seed language
+                language=seed_language,
             )
             samples.append(sample)
         except Exception as e:

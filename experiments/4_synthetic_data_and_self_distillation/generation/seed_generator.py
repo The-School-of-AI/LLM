@@ -32,6 +32,9 @@ from common.skills import SkillCategory
 # ================================================================
 
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# OLD: hardcoded timeout=300 — too short for 70B models
+# NEW: configurable via OLLAMA_TIMEOUT env var (default 600s)
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
 
 
 def ollama_chat(
@@ -61,7 +64,9 @@ def ollama_chat(
         method="POST",
     )
     
-    with urllib.request.urlopen(req, timeout=300) as resp:
+    # OLD: timeout=300 (hardcoded)
+    # NEW: uses OLLAMA_TIMEOUT env var for large model support
+    with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
         result = json.loads(resp.read().decode("utf-8"))
     
     return result.get("message", {}).get("content", "").strip()
@@ -918,6 +923,25 @@ class SeedGenerator:
     def __init__(self, model: str = "qwen3:8b"):
         self.model = model
     
+    def _resolve_prompt_key(self, skill_id: str) -> str | None:
+        """Resolve skill_id to a key in SEED_PROMPTS, trying aliases.
+
+        OLD: Only checked skill_id directly — missed canonical names
+        NEW: Tries direct, then legacy aliases, then canonical resolution
+        """
+        # Direct match
+        if skill_id in SEED_PROMPTS:
+            return skill_id
+        # Try legacy aliases for this canonical ID
+        for legacy_key in _CANONICAL_TO_LEGACY.get(skill_id, []):
+            if legacy_key in SEED_PROMPTS:
+                return legacy_key
+        # Try resolving as alias → canonical
+        canonical = SKILL_ALIASES.get(skill_id)
+        if canonical and canonical in SEED_PROMPTS:
+            return canonical
+        return None
+
     def generate(
         self,
         skill_id: str,
@@ -925,12 +949,15 @@ class SeedGenerator:
         difficulty: Literal["easy", "medium", "hard", "mixed"] = "mixed",
     ) -> list[dict]:
         """Generate seed questions for a skill."""
-        
-        if skill_id not in SEED_PROMPTS:
+
+        # OLD: if skill_id not in SEED_PROMPTS — missed canonical IDs like RSN-ARITH
+        # NEW: resolve through alias lookup
+        prompt_key = self._resolve_prompt_key(skill_id)
+        if prompt_key is None:
             print(f"[WARN] No prompt template for {skill_id}, using generic")
             return self._generate_generic(skill_id, num)
-        
-        prompt = SEED_PROMPTS[skill_id].format(num=num)
+
+        prompt = SEED_PROMPTS[prompt_key].format(num=num)
         
         # Add difficulty modifier
         if difficulty != "mixed" and difficulty in DIFFICULTY_MODIFIERS:
@@ -1141,12 +1168,15 @@ BUILTIN_SEEDS = {
         {"question": "భారతదేశ రాజధాని ఏది?", "language": "te"},
     ],
 
+    # OLD: INDIC-TRANS seeds had source_lang/target_lang but no "language" key
+    #      → seed.get("language") returned None → fell back to skill.languages[0] = "hi" for all
+    # NEW: added "language" key set to target_lang (the output language of the translation)
     "INDIC-TRANS": [
-        {"question": "Translate to Hindi: 'Knowledge is power.'", "source_lang": "en", "target_lang": "hi"},
-        {"question": "Translate to Hindi: 'The early bird catches the worm.'", "source_lang": "en", "target_lang": "hi"},
-        {"question": "Translate to English: 'जल ही जीवन है।'", "source_lang": "hi", "target_lang": "en"},
-        {"question": "Translate to Bengali: 'Time is money.'", "source_lang": "en", "target_lang": "bn"},
-        {"question": "Translate to Tamil: 'Health is wealth.'", "source_lang": "en", "target_lang": "ta"},
+        {"question": "Translate to Hindi: 'Knowledge is power.'", "source_lang": "en", "target_lang": "hi", "language": "hi"},
+        {"question": "Translate to Hindi: 'The early bird catches the worm.'", "source_lang": "en", "target_lang": "hi", "language": "hi"},
+        {"question": "Translate to English: 'जल ही जीवन है।'", "source_lang": "hi", "target_lang": "en", "language": "en"},
+        {"question": "Translate to Bengali: 'Time is money.'", "source_lang": "en", "target_lang": "bn", "language": "bn"},
+        {"question": "Translate to Tamil: 'Health is wealth.'", "source_lang": "en", "target_lang": "ta", "language": "ta"},
     ],
 
     "INDIC-SENT": [
@@ -1177,11 +1207,13 @@ BUILTIN_SEEDS = {
         {"question": "Summarize: 'Climate change is causing global temperatures to rise. This leads to melting ice caps, rising sea levels, and more extreme weather events. Scientists urge immediate action to reduce carbon emissions.'"},
     ],
 
+    # OLD: LANG-TRANS seeds had no "language" key → all got "en" (skill.languages[0])
+    # NEW: added "language" key set to target language of the translation
     "LANG-TRANS": [
-        {"question": "Translate to Hindi: 'The book is on the table.'"},
-        {"question": "Translate to English: 'मुझे हिंदी में बात करना पसंद है।'"},
-        {"question": "Translate to Hindi: 'Time waits for no one.'"},
-        {"question": "Translate to English: 'विद्या सबसे बड़ा धन है।'"},
+        {"question": "Translate to Hindi: 'The book is on the table.'", "language": "hi"},
+        {"question": "Translate to English: 'मुझे हिंदी में बात करना पसंद है।'", "language": "en"},
+        {"question": "Translate to Hindi: 'Time waits for no one.'", "language": "hi"},
+        {"question": "Translate to English: 'विद्या सबसे बड़ा धन है।'", "language": "en"},
     ],
 
     "CODE-GEN-T1": [
@@ -1194,23 +1226,57 @@ BUILTIN_SEEDS = {
 }
 
 
+# OLD: BUILTIN_SEEDS keys are legacy names (RSN-ARITHMETIC), but generate-bank
+#      iterates canonical names (RSN-ARITH) — most skills got garbage placeholders.
+# NEW: Build a reverse alias map so canonical IDs can find legacy BUILTIN_SEEDS keys.
+from common.skills import SKILL_ALIASES
+
+# Reverse map: canonical → list of legacy aliases  (e.g. "RSN-ARITH" → ["RSN-ARITHMETIC"])
+_CANONICAL_TO_LEGACY: dict[str, list[str]] = {}
+for _legacy, _canonical in SKILL_ALIASES.items():
+    _CANONICAL_TO_LEGACY.setdefault(_canonical, []).append(_legacy)
+
+
 def get_builtin_seeds(skill_id: str, num: int = 10) -> list[dict]:
-    """Get built-in seed questions (no LLM needed)."""
-    
+    """Get built-in seed questions (no LLM needed).
+
+    OLD: Only looked up skill_id directly in BUILTIN_SEEDS — missed canonical IDs
+    NEW: Tries skill_id first, then resolves canonical→legacy aliases to find seeds
+    """
+
+    seeds = None
+
+    # 1. Direct lookup (works for legacy keys like "RSN-ARITHMETIC")
     if skill_id in BUILTIN_SEEDS:
         seeds = BUILTIN_SEEDS[skill_id][:num]
-    else:
-        # Generate simple placeholders
+
+    # 2. NEW: Try legacy aliases for this canonical ID
+    #    e.g. skill_id="RSN-ARITH" → look up "RSN-ARITHMETIC" in BUILTIN_SEEDS
+    if seeds is None:
+        for legacy_key in _CANONICAL_TO_LEGACY.get(skill_id, []):
+            if legacy_key in BUILTIN_SEEDS:
+                seeds = BUILTIN_SEEDS[legacy_key][:num]
+                break
+
+    # 3. NEW: Try resolving skill_id as an alias → canonical → check BUILTIN_SEEDS
+    #    e.g. skill_id="RSN-ARITHMETIC" alias→ "RSN-ARITH" → check BUILTIN_SEEDS["RSN-ARITH"]
+    if seeds is None:
+        canonical = SKILL_ALIASES.get(skill_id)
+        if canonical and canonical in BUILTIN_SEEDS:
+            seeds = BUILTIN_SEEDS[canonical][:num]
+
+    # 4. Fallback: generate placeholders (unchanged)
+    if seeds is None:
         seeds = [
             {"question": f"Sample question {i+1} for {skill_id}"}
             for i in range(num)
         ]
-    
+
     # Add metadata
     for i, s in enumerate(seeds):
         s["id"] = f"{skill_id}-SEED-{i+1:04d}"
         s["skill_bucket"] = skill_id
-    
+
     return seeds
 
 
