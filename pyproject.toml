@@ -5,3 +5,8 @@ description = "TSAI 70B LLM Training"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "experiments/7_token_MOE_interaction_analysis",
+]
