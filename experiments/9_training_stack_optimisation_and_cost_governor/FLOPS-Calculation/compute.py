@@ -203,7 +203,6 @@ class TrainingStage:
         arch = self.architecture
         attention_cfg = arch.get("attention") or {}
         router_cfg = arch.get("router") or {}
-        position_cfg = arch.get("position") or {}
         expert_cfg = arch.get("expert") or {}
         head_cfg = arch.get("head") or {}
 
@@ -837,7 +836,6 @@ class TrainingStage:
 
         attention_cfg = arch.get("attention") or {}
         router_cfg = arch.get("router") or {}
-        position_cfg = arch.get("position") or {}
         training_cfg = arch.get("training") or {}
         head_cfg = arch.get("head") or {}
 
@@ -940,20 +938,8 @@ class TrainingStage:
         attention_multiplier = float(attention_multiplier)
         if attention_multiplier <= 0:
             raise ValueError("attention_flops_multiplier must be > 0.")
-
-        position_type = str(
-            arch.get("position_type", position_cfg.get("position_type", ""))
-        ).strip().lower()
-        yarn_multiplier = arch.get(
-            "yarn_flops_multiplier", position_cfg.get("yarn_flops_multiplier")
-        )
-        if yarn_multiplier is None:
-            yarn_multiplier = 1.0
-        yarn_multiplier = float(yarn_multiplier)
-        if yarn_multiplier <= 0:
-            raise ValueError("yarn_flops_multiplier must be > 0.")
-        if position_type in ("yarn", "yarn_rope", "yarn_embedding"):
-            attention_multiplier *= yarn_multiplier
+        # Note: YaRN position encoding has zero FLOPs overhead compared to standard RoPE.
+        # The cost of longer contexts is captured in the O(S²) attention formula via sequence_length.
 
         num_heads = arch.get(
             "num_heads", attention_cfg.get("num_attention_heads", 32)
