@@ -49,21 +49,22 @@ def ensure_olmes_vendor(logger):
         install_success = False
         if uv_path:
             try:
-                logger.info(f"  [OLMES] Using uv to install: {uv_path} pip install -e {olmes_dir}")
+                logger.info(f\"  [OLMES] Using uv to install: {uv_path} pip install --no-deps -e {olmes_dir}\")
                 subprocess.run(
-                    [uv_path, "pip", "install", "-e", olmes_dir],
+                    [uv_path, \"pip\", \"install\", \"--no-deps\", \"-e\", olmes_dir],
                     check=True,
                     capture_output=True,
                     text=True
                 )
                 install_success = True
             except subprocess.CalledProcessError:
-                logger.warning("  [OLMES] uv pip install failed, falling back to standard pip...")
+                logger.warning(\"  [OLMES] uv pip install failed, falling back to standard pip...\")
         
         if not install_success:
             try:
+                logger.info(f\"  [OLMES] Using pip to install: {py_exec} -m pip install --no-deps -e {olmes_dir}\")
                 subprocess.run(
-                    [py_exec, "-m", "pip", "install", "-e", olmes_dir],
+                    [py_exec, \"-m\", \"pip\", \"install\", \"--no-deps\", \"-e\", olmes_dir],
                     check=True,
                     capture_output=True,
                     text=True
