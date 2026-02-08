@@ -12,10 +12,8 @@ Usage:
 
 import json
 import os
-import random
 import re
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -24,8 +22,7 @@ from typing import Literal
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from common import SKILL_BUCKETS, get_skill_bucket, Band
-from common.skills import SkillCategory
+from common import SKILL_BUCKETS, get_skill_bucket  # noqa: E402
 
 # ================================================================
 # OLLAMA CLIENT
@@ -42,7 +39,7 @@ def ollama_chat(
 ) -> str:
     """Chat completion via Ollama."""
     import urllib.request
-    
+
     payload = {
         "model": model,
         "messages": messages,
@@ -52,18 +49,19 @@ def ollama_chat(
             "temperature": temperature,
         },
     }
-    
+
     url = f"{OLLAMA_BASE}/api/chat"
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        url, data=data,
+        url,
+        data=data,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    
+
     with urllib.request.urlopen(req, timeout=300) as resp:
         result = json.loads(resp.read().decode("utf-8"))
-    
+
     return result.get("message", {}).get("content", "").strip()
 
 
@@ -86,7 +84,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-ALGEBRA": """Generate {num} diverse algebra problems.
 Requirements:
 - Linear equations (solve for x)
@@ -102,7 +99,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-LOGIC": """Generate {num} diverse logical reasoning problems.
 Requirements:
 - Syllogisms (All A are B, X is A, therefore...)
@@ -118,7 +114,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-CAUSAL": """Generate {num} diverse causal reasoning problems.
 Requirements:
 - Cause and effect chains
@@ -133,7 +128,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-CONTRADICTION": """Generate {num} pairs of statements for contradiction detection.
 Requirements:
 - Some pairs should contradict each other
@@ -147,7 +141,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "Statement A: ... Statement B: ... Do these statements contradict each other?"}}, ...]""",
-
     "RSN-ANALOGICAL": """Generate {num} analogy problems.
 Requirements:
 - A:B :: C:? format
@@ -162,7 +155,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-COMPLETION": """Generate {num} Python code completion problems.
 Requirements:
 - Partial function definitions to complete
@@ -177,7 +169,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "Complete this function:\\n..."}}, ...]""",
-
     "CODE-DEBUG": """Generate {num} Python debugging problems.
 Requirements:
 - Code with a specific bug to identify and fix
@@ -191,7 +182,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "Fix this code: ..."}}, ...]""",
-
     "CODE-ALGO": """Generate {num} algorithm implementation problems.
 Requirements:
 - Classic algorithms: binary search, sorting, graph traversal
@@ -206,7 +196,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-EXPLAIN": """Generate {num} code explanation problems.
 Requirements:
 - Provide code snippets and ask what they do
@@ -220,7 +209,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "What does this code do?\\n..."}}, ...]""",
-
     "LANG-GRAMMAR": """Generate {num} English grammar problems.
 Requirements:
 - Subject-verb agreement
@@ -235,7 +223,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "LANG-COHERENCE": """Generate {num} text coherence problems.
 Requirements:
 - Sentence ordering
@@ -250,7 +237,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "LANG-HINDI": """Generate {num} Hindi language problems.
 Requirements:
 - Mix of reading comprehension
@@ -265,7 +251,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "KNOW-FACTUAL": """Generate {num} factual knowledge questions.
 Requirements:
 - Geography, history, science, culture
@@ -280,7 +265,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "KNOW-SCIENCE": """Generate {num} science questions.
 Requirements:
 - Physics, chemistry, biology, earth science
@@ -295,7 +279,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "KNOW-COMMONSENSE": """Generate {num} commonsense reasoning questions.
 Requirements:
 - Physical commonsense (what happens if...)
@@ -310,11 +293,9 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     # ================================================================
     # FOUNDATION SKILLS (FND-*)
     # ================================================================
-
     "FND-LEX-EN": """Generate {num} English vocabulary/lexical problems.
 Requirements:
 - Word definitions and usage
@@ -330,7 +311,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "FND-LEX-HI": """Generate {num} Hindi vocabulary/lexical problems in Devanagari.
 Requirements:
 - Hindi word meanings (शब्द अर्थ)
@@ -346,7 +326,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "FND-SEM": """Generate {num} semantic understanding problems.
 Requirements:
 - Sentence similarity judgment
@@ -362,7 +341,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "FND-DIS": """Generate {num} discourse coherence problems.
 Requirements:
 - Sentence ordering
@@ -378,7 +356,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "FND-LCX": """Generate {num} long-context understanding problems.
 Requirements:
 - Multi-paragraph comprehension
@@ -394,7 +371,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "FND-FACT": """Generate {num} factual recall questions.
 Requirements:
 - Geography, history, science, culture
@@ -409,11 +385,9 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     # ================================================================
     # REASONING SKILLS (new RSN-*)
     # ================================================================
-
     "RSN-WPT": """Generate {num} word problems at various difficulty tiers.
 Requirements:
 - T1 (easy): Single-step arithmetic
@@ -429,7 +403,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-ADVMATH": """Generate {num} advanced mathematics problems.
 Requirements:
 - Calculus (derivatives, integrals)
@@ -445,7 +418,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-MATH-HI": """Generate {num} mathematics problems in Hindi (Devanagari script).
 Requirements:
 - Arithmetic word problems in Hindi
@@ -460,7 +432,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-MH": """Generate {num} multi-hop reasoning problems.
 Requirements:
 - 2-4 reasoning steps required
@@ -474,7 +445,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "RSN-CS": """Generate {num} commonsense reasoning problems.
 Requirements:
 - Physical commonsense (cause-effect)
@@ -489,11 +459,9 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     # ================================================================
     # CODE SKILLS (new CODE-*)
     # ================================================================
-
     "CODE-SYN": """Generate {num} code syntax understanding problems.
 Requirements:
 - Identify syntax errors
@@ -508,7 +476,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-GEN-T1": """Generate {num} simple code generation problems (Tier 1).
 Requirements:
 - Single function, < 10 lines
@@ -523,7 +490,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-GEN-T2": """Generate {num} medium code generation problems (Tier 2).
 Requirements:
 - 10-30 lines
@@ -538,7 +504,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-GEN-T3": """Generate {num} complex code generation problems (Tier 3).
 Requirements:
 - 30+ lines
@@ -554,7 +519,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-OPT": """Generate {num} code optimization problems.
 Requirements:
 - Provide inefficient code
@@ -569,7 +533,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-TEST": """Generate {num} test generation problems.
 Requirements:
 - Given a function, write unit tests
@@ -584,7 +547,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-DBG": """Generate {num} debugging problems.
 Requirements:
 - Code with subtle bugs
@@ -599,7 +561,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "CODE-COMP": """Generate {num} code comprehension problems.
 Requirements:
 - Provide code snippets
@@ -614,11 +575,9 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     # ================================================================
     # LANGUAGE SKILLS (LANG-*)
     # ================================================================
-
     "LANG-HI-COMP": """Generate {num} Hindi comprehension problems in Devanagari.
 Requirements:
 - Reading passages with questions
@@ -633,7 +592,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "LANG-HI-GEN": """Generate {num} Hindi text generation prompts in Devanagari.
 Requirements:
 - Story writing prompts
@@ -648,7 +606,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "LANG-TRANS": """Generate {num} translation problems (English ↔ Hindi).
 Requirements:
 - English to Hindi translations
@@ -663,7 +620,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "LANG-MIX": """Generate {num} code-mixing (Hinglish) problems.
 Requirements:
 - Natural code-mixed text
@@ -678,7 +634,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "LANG-HI-LOG": """Generate {num} logical reasoning problems in Hindi.
 Requirements:
 - Syllogisms in Hindi
@@ -693,11 +648,9 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     # ================================================================
     # ALIGNMENT SKILLS (ALN-*)
     # ================================================================
-
     "ALN-INST": """Generate {num} instruction following problems.
 Requirements:
 - Multi-step instructions
@@ -712,7 +665,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "ALN-STRUCT": """Generate {num} structured output problems.
 Requirements:
 - JSON output requests
@@ -727,7 +679,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "ALN-HALL": """Generate {num} hallucination resistance problems.
 Requirements:
 - Questions about fictional entities
@@ -742,7 +693,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "ALN-SAFE": """Generate {num} safety boundary test problems.
 Requirements:
 - Ethical dilemmas
@@ -757,7 +707,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "ALN-HELP": """Generate {num} helpfulness test problems.
 Requirements:
 - Ambiguous requests needing clarification
@@ -772,11 +721,9 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     # ================================================================
     # PRODUCTION SKILLS (PRD-*)
     # ================================================================
-
     "PRD-ROB": """Generate {num} robustness test problems.
 Requirements:
 - Typos and misspellings
@@ -791,7 +738,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "PRD-SUM": """Generate {num} summarization problems.
 Requirements:
 - Various text lengths (short to long)
@@ -806,7 +752,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     "PRD-IE": """Generate {num} information extraction problems.
 Requirements:
 - Named entity extraction
@@ -821,11 +766,9 @@ Examples:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]""",
-
     # ================================================================
     # INDIC SKILLS (INDIC-*)
     # ================================================================
-
     "INDIC-QA": """Generate {num} question-answering problems in Indian languages.
 Requirements:
 - Questions in Hindi, Bengali, Tamil, Telugu, or other Indian languages
@@ -840,7 +783,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "...", "language": "hi|bn|ta|te"}}, ...]""",
-
     "INDIC-TRANS": """Generate {num} translation problems for Indian languages.
 Requirements:
 - English to Indian language translations
@@ -855,7 +797,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "...", "source_lang": "en", "target_lang": "hi|bn|ta"}}, ...]""",
-
     "INDIC-NLI": """Generate {num} natural language inference problems in Indian languages.
 Requirements:
 - Premise and hypothesis pairs
@@ -869,7 +810,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "...", "language": "hi|bn|ta"}}, ...]""",
-
     "INDIC-SENT": """Generate {num} sentiment analysis problems in Indian languages.
 Requirements:
 - Product reviews, social media posts
@@ -884,7 +824,6 @@ Examples:
 
 Output as JSON array:
 [{{"question": "...", "language": "hi|bn|ta|mix"}}, ...]""",
-
     "INDIC-NER": """Generate {num} named entity recognition problems in Indian languages.
 Requirements:
 - Person, location, organization names
@@ -912,12 +851,13 @@ DIFFICULTY_MODIFIERS = {
 # SEED GENERATOR
 # ================================================================
 
+
 class SeedGenerator:
     """Generates seed questions for skill buckets."""
-    
+
     def __init__(self, model: str = "qwen3:8b"):
         self.model = model
-    
+
     def generate(
         self,
         skill_id: str,
@@ -925,37 +865,37 @@ class SeedGenerator:
         difficulty: Literal["easy", "medium", "hard", "mixed"] = "mixed",
     ) -> list[dict]:
         """Generate seed questions for a skill."""
-        
+
         if skill_id not in SEED_PROMPTS:
             print(f"[WARN] No prompt template for {skill_id}, using generic")
             return self._generate_generic(skill_id, num)
-        
+
         prompt = SEED_PROMPTS[skill_id].format(num=num)
-        
+
         # Add difficulty modifier
         if difficulty != "mixed" and difficulty in DIFFICULTY_MODIFIERS:
             prompt += DIFFICULTY_MODIFIERS[difficulty]
-        
+
         print(f"[SeedGen] Generating {num} questions for {skill_id}...")
-        
+
         response = ollama_chat(
             self.model,
             [{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0.8,
         )
-        
+
         # Parse JSON from response
         questions = self._parse_questions(response, skill_id)
-        
+
         print(f"[SeedGen] Generated {len(questions)} questions")
         return questions
-    
+
     def _parse_questions(self, response: str, skill_id: str) -> list[dict]:
         """Parse questions from LLM response."""
-        
+
         # Try to find JSON array
-        json_match = re.search(r'\[.*\]', response, re.DOTALL)
+        json_match = re.search(r"\[.*\]", response, re.DOTALL)
         if json_match:
             try:
                 questions = json.loads(json_match.group())
@@ -967,38 +907,42 @@ class SeedGenerator:
                         q["skill_bucket"] = skill_id
                         result.append(q)
                     elif isinstance(q, str):
-                        result.append({
-                            "id": f"{skill_id}-SEED-{i+1:04d}",
-                            "question": q,
-                            "skill_bucket": skill_id,
-                        })
+                        result.append(
+                            {
+                                "id": f"{skill_id}-SEED-{i+1:04d}",
+                                "question": q,
+                                "skill_bucket": skill_id,
+                            }
+                        )
                 return result
             except json.JSONDecodeError:
                 pass
-        
+
         # Fallback: extract numbered questions
         questions = []
-        lines = response.split('\n')
+        lines = response.split("\n")
         for i, line in enumerate(lines):
             line = line.strip()
             # Match patterns like "1.", "1)", "- ", "* "
-            match = re.match(r'^[\d]+[.\)]\s*(.+)|^[-*]\s*(.+)', line)
+            match = re.match(r"^[\d]+[.\)]\s*(.+)|^[-*]\s*(.+)", line)
             if match:
                 q_text = match.group(1) or match.group(2)
                 if q_text and len(q_text) > 10:
-                    questions.append({
-                        "id": f"{skill_id}-SEED-{len(questions)+1:04d}",
-                        "question": q_text.strip('"').strip(),
-                        "skill_bucket": skill_id,
-                    })
-        
+                    questions.append(
+                        {
+                            "id": f"{skill_id}-SEED-{len(questions)+1:04d}",
+                            "question": q_text.strip('"').strip(),
+                            "skill_bucket": skill_id,
+                        }
+                    )
+
         return questions
-    
+
     def _generate_generic(self, skill_id: str, num: int) -> list[dict]:
         """Generate questions for unknown skill using generic prompt."""
-        
+
         skill = get_skill_bucket(skill_id)
-        
+
         prompt = f"""Generate {num} diverse questions/problems for testing this skill:
 
 Skill: {skill.name}
@@ -1012,16 +956,16 @@ Requirements:
 
 Output as JSON array:
 [{{"question": "..."}}, ...]"""
-        
+
         response = ollama_chat(
             self.model,
             [{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0.8,
         )
-        
+
         return self._parse_questions(response, skill_id)
-    
+
     def generate_all(
         self,
         num_per_skill: int = 20,
@@ -1029,10 +973,10 @@ Output as JSON array:
         difficulty: str = "mixed",
     ) -> dict[str, list[dict]]:
         """Generate seeds for multiple skills."""
-        
+
         skills = skills or list(SKILL_BUCKETS.keys())
         all_seeds = {}
-        
+
         for skill_id in skills:
             try:
                 seeds = self.generate(skill_id, num_per_skill, difficulty)
@@ -1040,7 +984,7 @@ Output as JSON array:
             except Exception as e:
                 print(f"[ERROR] Failed for {skill_id}: {e}")
                 all_seeds[skill_id] = []
-        
+
         return all_seeds
 
 
@@ -1050,58 +994,124 @@ Output as JSON array:
 
 BUILTIN_SEEDS = {
     "RSN-ARITHMETIC": [
-        {"question": "A store sells apples for $2 each. If you buy 7 apples, how much do you pay?"},
-        {"question": "Tom has 45 marbles. He gives 12 to Jane and 8 to Mike. How many marbles does Tom have left?"},
-        {"question": "A train travels 240 km in 4 hours. What is its average speed in km/h?"},
-        {"question": "If 3/4 of a cake is left and you eat 1/3 of what's left, how much cake remains?"},
-        {"question": "A shirt costs $40. It's on sale for 25% off. What is the sale price?"},
+        {
+            "question": "A store sells apples for $2 each. If you buy 7 apples, how much do you pay?"
+        },
+        {
+            "question": "Tom has 45 marbles. He gives 12 to Jane and 8 to Mike. How many marbles does Tom have left?"
+        },
+        {
+            "question": "A train travels 240 km in 4 hours. What is its average speed in km/h?"
+        },
+        {
+            "question": "If 3/4 of a cake is left and you eat 1/3 of what's left, how much cake remains?"
+        },
+        {
+            "question": "A shirt costs $40. It's on sale for 25% off. What is the sale price?"
+        },
         {"question": "Calculate: (15 + 25) × 2 - 30"},
         {"question": "If you have $100 and spend $37.50, how much change do you have?"},
-        {"question": "A recipe needs 2.5 cups of flour. How much flour is needed for 3 batches?"},
+        {
+            "question": "A recipe needs 2.5 cups of flour. How much flour is needed for 3 batches?"
+        },
         {"question": "What is 15% of 80?"},
         {"question": "Divide 156 by 12."},
-        {"question": "A car uses 8 liters of fuel per 100 km. How much fuel is needed for 350 km?"},
-        {"question": "If 5 workers can complete a job in 12 days, how many days would 10 workers take?"},
-        {"question": "The sum of three consecutive numbers is 96. What are the numbers?"},
+        {
+            "question": "A car uses 8 liters of fuel per 100 km. How much fuel is needed for 350 km?"
+        },
+        {
+            "question": "If 5 workers can complete a job in 12 days, how many days would 10 workers take?"
+        },
+        {
+            "question": "The sum of three consecutive numbers is 96. What are the numbers?"
+        },
         {"question": "A rectangle has length 15 cm and width 8 cm. What is its area?"},
         {"question": "Convert 2.75 hours to hours and minutes."},
     ],
-    
     "RSN-LOGIC": [
-        {"question": "All mammals are warm-blooded. Whales are mammals. Are whales warm-blooded?"},
-        {"question": "If it rains, the ground gets wet. The ground is wet. Did it definitely rain?"},
-        {"question": "John is older than Mary. Mary is older than Tom. Tom is older than Sue. Who is the oldest?"},
-        {"question": "All squares are rectangles. All rectangles have four sides. Do all squares have four sides?"},
-        {"question": "If A implies B, and B implies C, and A is true, what can we conclude about C?"},
-        {"question": "Some birds can fly. Penguins are birds. Can we conclude that penguins can fly?"},
-        {"question": "No reptiles are mammals. All snakes are reptiles. Are any snakes mammals?"},
-        {"question": "If today is Monday, then tomorrow is Tuesday. Today is Monday. What is tomorrow?"},
-        {"question": "All prime numbers greater than 2 are odd. 7 is a prime number greater than 2. Is 7 odd?"},
-        {"question": "Either the door is locked or the window is open. The door is not locked. What can we conclude?"},
-        {"question": "If and only if you study, you pass. You didn't pass. Did you study?"},
-        {"question": "Box A is heavier than Box B. Box C is lighter than Box B. Which box is heaviest?"},
+        {
+            "question": "All mammals are warm-blooded. Whales are mammals. Are whales warm-blooded?"
+        },
+        {
+            "question": "If it rains, the ground gets wet. The ground is wet. Did it definitely rain?"
+        },
+        {
+            "question": "John is older than Mary. Mary is older than Tom. Tom is older than Sue. Who is the oldest?"
+        },
+        {
+            "question": "All squares are rectangles. All rectangles have four sides. Do all squares have four sides?"
+        },
+        {
+            "question": "If A implies B, and B implies C, and A is true, what can we conclude about C?"
+        },
+        {
+            "question": "Some birds can fly. Penguins are birds. Can we conclude that penguins can fly?"
+        },
+        {
+            "question": "No reptiles are mammals. All snakes are reptiles. Are any snakes mammals?"
+        },
+        {
+            "question": "If today is Monday, then tomorrow is Tuesday. Today is Monday. What is tomorrow?"
+        },
+        {
+            "question": "All prime numbers greater than 2 are odd. 7 is a prime number greater than 2. Is 7 odd?"
+        },
+        {
+            "question": "Either the door is locked or the window is open. The door is not locked. What can we conclude?"
+        },
+        {
+            "question": "If and only if you study, you pass. You didn't pass. Did you study?"
+        },
+        {
+            "question": "Box A is heavier than Box B. Box C is lighter than Box B. Which box is heaviest?"
+        },
     ],
-    
     "CODE-COMPLETION": [
-        {"question": "Complete this function:\ndef factorial(n):\n    '''Return n factorial'''\n    if n <= 1:\n        return 1\n    return"},
-        {"question": "Complete this function:\ndef is_palindrome(s):\n    '''Check if string is a palindrome'''\n    s = s.lower()\n    return s =="},
-        {"question": "Complete this function:\ndef find_max(numbers):\n    '''Return maximum value in list'''\n    if not numbers:\n        return None\n    max_val = numbers[0]\n    for n in numbers:\n        if n > max_val:"},
-        {"question": "Complete this function:\ndef count_vowels(s):\n    '''Count vowels in a string'''\n    vowels = 'aeiouAEIOU'\n    count = 0\n    for char in s:\n        if char in vowels:"},
-        {"question": "Complete this function:\ndef reverse_list(lst):\n    '''Reverse a list in place'''\n    left = 0\n    right = len(lst) - 1\n    while left < right:"},
-        {"question": "Complete this function:\ndef binary_search(arr, target):\n    '''Return index of target or -1'''\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:"},
-        {"question": "Complete this function:\ndef fizzbuzz(n):\n    '''Return FizzBuzz result for n'''\n    if n % 15 == 0:\n        return 'FizzBuzz'\n    elif n % 3 == 0:"},
-        {"question": "Complete this function:\ndef flatten_list(nested):\n    '''Flatten a nested list'''\n    result = []\n    for item in nested:\n        if isinstance(item, list):"},
+        {
+            "question": "Complete this function:\ndef factorial(n):\n    '''Return n factorial'''\n    if n <= 1:\n        return 1\n    return"
+        },
+        {
+            "question": "Complete this function:\ndef is_palindrome(s):\n    '''Check if string is a palindrome'''\n    s = s.lower()\n    return s =="
+        },
+        {
+            "question": "Complete this function:\ndef find_max(numbers):\n    '''Return maximum value in list'''\n    if not numbers:\n        return None\n    max_val = numbers[0]\n    for n in numbers:\n        if n > max_val:"
+        },
+        {
+            "question": "Complete this function:\ndef count_vowels(s):\n    '''Count vowels in a string'''\n    vowels = 'aeiouAEIOU'\n    count = 0\n    for char in s:\n        if char in vowels:"
+        },
+        {
+            "question": "Complete this function:\ndef reverse_list(lst):\n    '''Reverse a list in place'''\n    left = 0\n    right = len(lst) - 1\n    while left < right:"
+        },
+        {
+            "question": "Complete this function:\ndef binary_search(arr, target):\n    '''Return index of target or -1'''\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:"
+        },
+        {
+            "question": "Complete this function:\ndef fizzbuzz(n):\n    '''Return FizzBuzz result for n'''\n    if n % 15 == 0:\n        return 'FizzBuzz'\n    elif n % 3 == 0:"
+        },
+        {
+            "question": "Complete this function:\ndef flatten_list(nested):\n    '''Flatten a nested list'''\n    result = []\n    for item in nested:\n        if isinstance(item, list):"
+        },
     ],
-    
     "CODE-DEBUG": [
-        {"question": "Fix this code that should print 1 to 10:\nfor i in range(1, 10):\n    print(i)"},
-        {"question": "Fix this function that should return True for even numbers:\ndef is_even(n):\n    return n % 2 == 1"},
-        {"question": "Fix this code that should reverse a string:\ndef reverse(s):\n    return s[1::-1]"},
-        {"question": "Fix this function that should find the average:\ndef average(numbers):\n    return sum(numbers) / len(numbers) + 1"},
-        {"question": "Fix this code that should check if a list is sorted:\ndef is_sorted(lst):\n    for i in range(len(lst)):\n        if lst[i] > lst[i+1]:\n            return False\n    return True"},
-        {"question": "Fix this recursive function:\ndef countdown(n):\n    print(n)\n    countdown(n-1)"},
+        {
+            "question": "Fix this code that should print 1 to 10:\nfor i in range(1, 10):\n    print(i)"
+        },
+        {
+            "question": "Fix this function that should return True for even numbers:\ndef is_even(n):\n    return n % 2 == 1"
+        },
+        {
+            "question": "Fix this code that should reverse a string:\ndef reverse(s):\n    return s[1::-1]"
+        },
+        {
+            "question": "Fix this function that should find the average:\ndef average(numbers):\n    return sum(numbers) / len(numbers) + 1"
+        },
+        {
+            "question": "Fix this code that should check if a list is sorted:\ndef is_sorted(lst):\n    for i in range(len(lst)):\n        if lst[i] > lst[i+1]:\n            return False\n    return True"
+        },
+        {
+            "question": "Fix this recursive function:\ndef countdown(n):\n    print(n)\n    countdown(n-1)"
+        },
     ],
-    
     "KNOW-SCIENCE": [
         {"question": "Why does ice float on water instead of sinking?"},
         {"question": "What causes the seasons on Earth?"},
@@ -1114,20 +1124,24 @@ BUILTIN_SEEDS = {
         {"question": "Why do leaves change color in autumn?"},
         {"question": "How does photosynthesis work?"},
     ],
-    
     "KNOW-COMMONSENSE": [
         {"question": "What would happen if you put a metal spoon in a microwave?"},
         {"question": "Why do people wear sunglasses on sunny days?"},
-        {"question": "What would happen to a plant if you kept it in complete darkness?"},
+        {
+            "question": "What would happen to a plant if you kept it in complete darkness?"
+        },
         {"question": "Why is it dangerous to text while driving?"},
-        {"question": "What would happen if you left milk out of the refrigerator for a week?"},
+        {
+            "question": "What would happen if you left milk out of the refrigerator for a week?"
+        },
         {"question": "Why do people typically shake hands when meeting?"},
-        {"question": "What would happen if you tried to breathe underwater without equipment?"},
+        {
+            "question": "What would happen if you tried to breathe underwater without equipment?"
+        },
         {"question": "Why do people use bookmarks?"},
         {"question": "What would happen if all the bees disappeared?"},
         {"question": "Why is it impolite to talk with your mouth full?"},
     ],
-
     # New skill seeds
     "INDIC-QA": [
         {"question": "भारत की राजधानी क्या है?", "language": "hi"},
@@ -1140,50 +1154,95 @@ BUILTIN_SEEDS = {
         {"question": "இந்தியாவின் தலைநகரம் என்ன?", "language": "ta"},
         {"question": "భారతదేశ రాజధాని ఏది?", "language": "te"},
     ],
-
     "INDIC-TRANS": [
-        {"question": "Translate to Hindi: 'Knowledge is power.'", "source_lang": "en", "target_lang": "hi"},
-        {"question": "Translate to Hindi: 'The early bird catches the worm.'", "source_lang": "en", "target_lang": "hi"},
-        {"question": "Translate to English: 'जल ही जीवन है।'", "source_lang": "hi", "target_lang": "en"},
-        {"question": "Translate to Bengali: 'Time is money.'", "source_lang": "en", "target_lang": "bn"},
-        {"question": "Translate to Tamil: 'Health is wealth.'", "source_lang": "en", "target_lang": "ta"},
+        {
+            "question": "Translate to Hindi: 'Knowledge is power.'",
+            "source_lang": "en",
+            "target_lang": "hi",
+        },
+        {
+            "question": "Translate to Hindi: 'The early bird catches the worm.'",
+            "source_lang": "en",
+            "target_lang": "hi",
+        },
+        {
+            "question": "Translate to English: 'जल ही जीवन है।'",
+            "source_lang": "hi",
+            "target_lang": "en",
+        },
+        {
+            "question": "Translate to Bengali: 'Time is money.'",
+            "source_lang": "en",
+            "target_lang": "bn",
+        },
+        {
+            "question": "Translate to Tamil: 'Health is wealth.'",
+            "source_lang": "en",
+            "target_lang": "ta",
+        },
     ],
-
     "INDIC-SENT": [
-        {"question": "इस वाक्य की भावना क्या है? 'यह फिल्म बहुत बोरिंग थी, समय की बर्बादी।'", "language": "hi"},
-        {"question": "इस वाक्य की भावना क्या है? 'बहुत अच्छा अनुभव था, जरूर जाएं!'", "language": "hi"},
-        {"question": "Is this positive or negative? 'Product is bakwas, waste of money.'", "language": "mix"},
-        {"question": "Is this positive or negative? 'Bahut accha hai yaar, must buy!'", "language": "mix"},
+        {
+            "question": "इस वाक्य की भावना क्या है? 'यह फिल्म बहुत बोरिंग थी, समय की बर्बादी।'",
+            "language": "hi",
+        },
+        {
+            "question": "इस वाक्य की भावना क्या है? 'बहुत अच्छा अनुभव था, जरूर जाएं!'",
+            "language": "hi",
+        },
+        {
+            "question": "Is this positive or negative? 'Product is bakwas, waste of money.'",
+            "language": "mix",
+        },
+        {
+            "question": "Is this positive or negative? 'Bahut accha hai yaar, must buy!'",
+            "language": "mix",
+        },
     ],
-
     "ALN-INST": [
-        {"question": "List exactly 5 fruits. Format each as a bullet point. Capitalize the first letter only."},
+        {
+            "question": "List exactly 5 fruits. Format each as a bullet point. Capitalize the first letter only."
+        },
         {"question": "Write a sentence about dogs. It must have exactly 10 words."},
-        {"question": "Count from 1 to 10, but skip all even numbers. Separate with commas."},
+        {
+            "question": "Count from 1 to 10, but skip all even numbers. Separate with commas."
+        },
         {"question": "Name 3 countries in Europe. Do not mention France or Germany."},
-        {"question": "Write 'Hello World' with each word on a new line, in reverse order."},
+        {
+            "question": "Write 'Hello World' with each word on a new line, in reverse order."
+        },
     ],
-
     "ALN-STRUCT": [
-        {"question": "Return a JSON object with keys 'name', 'age', 'city' for a fictional person."},
-        {"question": "Format this data as a markdown table: Apple-$1.50, Banana-$0.75, Orange-$1.00"},
-        {"question": "List 3 countries with their capitals in the format 'Country: Capital'"},
-        {"question": "Create a JSON array with 3 objects, each having 'id' and 'value' keys."},
+        {
+            "question": "Return a JSON object with keys 'name', 'age', 'city' for a fictional person."
+        },
+        {
+            "question": "Format this data as a markdown table: Apple-$1.50, Banana-$0.75, Orange-$1.00"
+        },
+        {
+            "question": "List 3 countries with their capitals in the format 'Country: Capital'"
+        },
+        {
+            "question": "Create a JSON array with 3 objects, each having 'id' and 'value' keys."
+        },
     ],
-
     "PRD-SUM": [
-        {"question": "Summarize in one sentence: 'Machine learning is a subset of artificial intelligence that enables computers to learn from data without being explicitly programmed. It uses algorithms to identify patterns in data and make predictions or decisions based on those patterns.'"},
-        {"question": "What are the main points? 'The meeting covered three topics: budget approval for Q3, new hiring plans for the engineering team, and the product launch timeline for November.'"},
-        {"question": "Summarize: 'Climate change is causing global temperatures to rise. This leads to melting ice caps, rising sea levels, and more extreme weather events. Scientists urge immediate action to reduce carbon emissions.'"},
+        {
+            "question": "Summarize in one sentence: 'Machine learning is a subset of artificial intelligence that enables computers to learn from data without being explicitly programmed. It uses algorithms to identify patterns in data and make predictions or decisions based on those patterns.'"
+        },
+        {
+            "question": "What are the main points? 'The meeting covered three topics: budget approval for Q3, new hiring plans for the engineering team, and the product launch timeline for November.'"
+        },
+        {
+            "question": "Summarize: 'Climate change is causing global temperatures to rise. This leads to melting ice caps, rising sea levels, and more extreme weather events. Scientists urge immediate action to reduce carbon emissions.'"
+        },
     ],
-
     "LANG-TRANS": [
         {"question": "Translate to Hindi: 'The book is on the table.'"},
         {"question": "Translate to English: 'मुझे हिंदी में बात करना पसंद है।'"},
         {"question": "Translate to Hindi: 'Time waits for no one.'"},
         {"question": "Translate to English: 'विद्या सबसे बड़ा धन है।'"},
     ],
-
     "CODE-GEN-T1": [
         {"question": "Write a Python function to check if a number is even."},
         {"question": "Write a Python function to find the maximum of two numbers."},
@@ -1196,21 +1255,20 @@ BUILTIN_SEEDS = {
 
 def get_builtin_seeds(skill_id: str, num: int = 10) -> list[dict]:
     """Get built-in seed questions (no LLM needed)."""
-    
+
     if skill_id in BUILTIN_SEEDS:
         seeds = BUILTIN_SEEDS[skill_id][:num]
     else:
         # Generate simple placeholders
         seeds = [
-            {"question": f"Sample question {i+1} for {skill_id}"}
-            for i in range(num)
+            {"question": f"Sample question {i+1} for {skill_id}"} for i in range(num)
         ]
-    
+
     # Add metadata
     for i, s in enumerate(seeds):
         s["id"] = f"{skill_id}-SEED-{i+1:04d}"
         s["skill_bucket"] = skill_id
-    
+
     return seeds
 
 
@@ -1218,9 +1276,10 @@ def get_builtin_seeds(skill_id: str, num: int = 10) -> list[dict]:
 # CLI
 # ================================================================
 
+
 def main():
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description="Generate seed questions for synthetic data"
     )
@@ -1228,15 +1287,20 @@ def main():
     parser.add_argument("--all", action="store_true", help="Generate for all skills")
     parser.add_argument("--num", "-n", type=int, default=20, help="Questions per skill")
     parser.add_argument("--model", "-m", default="qwen3:8b", help="Ollama model")
-    parser.add_argument("--difficulty", "-d", default="mixed",
-                        choices=["easy", "medium", "hard", "mixed"])
+    parser.add_argument(
+        "--difficulty",
+        "-d",
+        default="mixed",
+        choices=["easy", "medium", "hard", "mixed"],
+    )
     parser.add_argument("--output", "-o", help="Output file (JSONL)")
-    parser.add_argument("--builtin", action="store_true", 
-                        help="Use built-in seeds (no LLM)")
+    parser.add_argument(
+        "--builtin", action="store_true", help="Use built-in seeds (no LLM)"
+    )
     parser.add_argument("--list", action="store_true", help="List available skills")
-    
+
     args = parser.parse_args()
-    
+
     # List mode
     if args.list:
         print("\nAvailable skill buckets:")
@@ -1246,13 +1310,13 @@ def main():
             print(f"  {has_prompt}{has_builtin} {skill_id:20s} {skill.name}")
         print("\n  ✓ = has template, ○ = generic/none")
         return
-    
+
     if not args.skill and not args.all:
         parser.print_help()
         return
-    
+
     all_seeds = []
-    
+
     if args.builtin:
         # Use built-in seeds
         skills = list(SKILL_BUCKETS.keys()) if args.all else [args.skill]
@@ -1263,7 +1327,7 @@ def main():
     else:
         # Generate with LLM
         generator = SeedGenerator(model=args.model)
-        
+
         if args.all:
             result = generator.generate_all(args.num, difficulty=args.difficulty)
             for skill_id, seeds in result.items():
@@ -1271,20 +1335,24 @@ def main():
         else:
             seeds = generator.generate(args.skill, args.num, args.difficulty)
             all_seeds.extend(seeds)
-    
+
     # Output
     output_path = args.output or f"seeds_{datetime.now():%Y%m%d_%H%M}.jsonl"
     with open(output_path, "w", encoding="utf-8") as f:
         for seed in all_seeds:
             f.write(json.dumps(seed, ensure_ascii=False) + "\n")
-    
+
     print(f"\n[Done] Saved {len(all_seeds)} seeds to: {output_path}")
-    
+
     # Show sample
     if all_seeds:
         print("\nSample questions:")
         for seed in all_seeds[:3]:
-            q = seed["question"][:80] + "..." if len(seed["question"]) > 80 else seed["question"]
+            q = (
+                seed["question"][:80] + "..."
+                if len(seed["question"]) > 80
+                else seed["question"]
+            )
             print(f"  - {q}")
 
 

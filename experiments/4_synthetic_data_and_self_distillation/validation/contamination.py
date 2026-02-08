@@ -20,7 +20,6 @@ Usage:
 import hashlib
 import json
 import re
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -29,6 +28,7 @@ from typing import Optional
 @dataclass
 class ContaminationResult:
     """Result of contamination check for a single sample."""
+
     sample_id: str
     is_contaminated: bool
     match_type: Optional[str] = None  # "exact", "high_similarity", "partial"
@@ -40,6 +40,7 @@ class ContaminationResult:
 @dataclass
 class ContaminationReport:
     """Aggregated contamination report."""
+
     total_samples: int
     contaminated_samples: int
     contamination_rate: float
@@ -57,9 +58,9 @@ def normalize_text(text: str) -> str:
     # Lowercase
     text = text.lower()
     # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
     # Remove punctuation except for math symbols
-    text = re.sub(r'[^\w\s\+\-\*\/\=\(\)\[\]\{\}]', '', text)
+    text = re.sub(r"[^\w\s\+\-\*\/\=\(\)\[\]\{\}]", "", text)
     return text.strip()
 
 
@@ -75,7 +76,7 @@ def ngram_set(text: str, n: int = 3) -> set:
     words = normalized.split()
     if len(words) < n:
         return {normalized}
-    return {' '.join(words[i:i+n]) for i in range(len(words) - n + 1)}
+    return {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
 
 
 def jaccard_similarity(set1: set, set2: set) -> float:
@@ -100,8 +101,12 @@ class ContaminationChecker:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.benchmark_hashes: dict[str, set] = {}  # benchmark_name -> set of hashes
-        self.benchmark_ngrams: dict[str, dict] = {}  # benchmark_name -> {hash: ngram_set}
-        self.benchmark_questions: dict[str, dict] = {}  # benchmark_name -> {hash: question}
+        self.benchmark_ngrams: dict[str, dict] = (
+            {}
+        )  # benchmark_name -> {hash: ngram_set}
+        self.benchmark_questions: dict[str, dict] = (
+            {}
+        )  # benchmark_name -> {hash: question}
 
         self.loaded_benchmarks: list[str] = []
 
@@ -116,9 +121,11 @@ class ContaminationChecker:
             benchmarks = ["gsm8k", "math", "mmlu"]
 
         try:
-            from datasets import load_dataset
+            from datasets import load_dataset  # noqa: F401
         except ImportError:
-            print("[WARN] 'datasets' library not available. Install with: pip install datasets")
+            print(
+                "[WARN] 'datasets' library not available. Install with: pip install datasets"
+            )
             print("[WARN] Falling back to local cache only.")
             return self._load_from_cache(benchmarks)
 
@@ -140,8 +147,10 @@ class ContaminationChecker:
                 print(f"  [ERROR] Failed to load {benchmark}: {e}")
 
         self.loaded_benchmarks = list(self.benchmark_hashes.keys())
-        print(f"[Done] Loaded {len(self.loaded_benchmarks)} benchmarks, "
-              f"{sum(len(h) for h in self.benchmark_hashes.values())} total questions")
+        print(
+            f"[Done] Loaded {len(self.loaded_benchmarks)} benchmarks, "
+            f"{sum(len(h) for h in self.benchmark_hashes.values())} total questions"
+        )
 
     def _fetch_benchmark(self, benchmark: str) -> list[str]:
         """Fetch questions from a benchmark dataset."""
@@ -184,13 +193,18 @@ class ContaminationChecker:
             h = text_hash(q)
             self.benchmark_hashes[benchmark].add(h)
             self.benchmark_ngrams[benchmark][h] = ngram_set(q)
-            self.benchmark_questions[benchmark][h] = q[:200]  # Store truncated for reference
+            self.benchmark_questions[benchmark][h] = q[
+                :200
+            ]  # Store truncated for reference
 
     def _save_benchmark_cache(self, benchmark: str, cache_path: Path):
         """Save benchmark index to cache."""
         data = {
             "hashes": list(self.benchmark_hashes.get(benchmark, set())),
-            "ngrams": {h: list(ng) for h, ng in self.benchmark_ngrams.get(benchmark, {}).items()},
+            "ngrams": {
+                h: list(ng)
+                for h, ng in self.benchmark_ngrams.get(benchmark, {}).items()
+            },
             "questions": self.benchmark_questions.get(benchmark, {}),
         }
         with open(cache_path, "w", encoding="utf-8") as f:
@@ -202,7 +216,9 @@ class ContaminationChecker:
             data = json.load(f)
 
         self.benchmark_hashes[benchmark] = set(data.get("hashes", []))
-        self.benchmark_ngrams[benchmark] = {h: set(ng) for h, ng in data.get("ngrams", {}).items()}
+        self.benchmark_ngrams[benchmark] = {
+            h: set(ng) for h, ng in data.get("ngrams", {}).items()
+        }
         self.benchmark_questions[benchmark] = data.get("questions", {})
 
     def _load_from_cache(self, benchmarks: list[str]):
@@ -233,7 +249,9 @@ class ContaminationChecker:
                     is_contaminated=True,
                     match_type="exact",
                     matched_benchmark=benchmark,
-                    matched_question=self.benchmark_questions[benchmark].get(q_hash, ""),
+                    matched_question=self.benchmark_questions[benchmark].get(
+                        q_hash, ""
+                    ),
                     similarity_score=1.0,
                 )
 
@@ -245,15 +263,23 @@ class ContaminationChecker:
                     best_match = ContaminationResult(
                         sample_id=sample_id,
                         is_contaminated=sim >= self.PARTIAL_MATCH_THRESHOLD,
-                        match_type="high_similarity" if sim >= self.HIGH_SIMILARITY_THRESHOLD else "partial",
+                        match_type=(
+                            "high_similarity"
+                            if sim >= self.HIGH_SIMILARITY_THRESHOLD
+                            else "partial"
+                        ),
                         matched_benchmark=benchmark,
-                        matched_question=self.benchmark_questions[benchmark].get(b_hash, ""),
+                        matched_question=self.benchmark_questions[benchmark].get(
+                            b_hash, ""
+                        ),
                         similarity_score=sim,
                     )
 
         return best_match
 
-    def check_samples(self, samples: list[dict], question_field: str = "question") -> ContaminationReport:
+    def check_samples(
+        self, samples: list[dict], question_field: str = "question"
+    ) -> ContaminationReport:
         """Check multiple samples for contamination.
 
         Args:
@@ -302,7 +328,9 @@ class ContaminationChecker:
             ],
         )
 
-    def filter_contaminated(self, samples: list[dict], question_field: str = "question") -> tuple[list[dict], ContaminationReport]:
+    def filter_contaminated(
+        self, samples: list[dict], question_field: str = "question"
+    ) -> tuple[list[dict], ContaminationReport]:
         """Filter out contaminated samples.
 
         Returns:
@@ -312,7 +340,8 @@ class ContaminationChecker:
         contaminated_ids = {s["id"] for s in report.flagged_samples}
 
         clean_samples = [
-            s for s in samples
+            s
+            for s in samples
             if s.get("id", f"sample_{samples.index(s)}") not in contaminated_ids
         ]
 
@@ -335,7 +364,7 @@ def run_contamination_check(
     """
     # Load samples
     with open(data_path, encoding="utf-8") as f:
-        samples = [json.loads(l) for l in f if l.strip()]
+        samples = [json.loads(line) for line in f if line.strip()]
 
     print(f"\n[Contamination Check] {len(samples)} samples from {data_path}")
 
@@ -353,15 +382,17 @@ def run_contamination_check(
         report = checker.check_samples(samples)
 
     # Print report
-    print(f"\n[Results]")
+    print("\n[Results]")
     print(f"  Total samples: {report.total_samples}")
-    print(f"  Contaminated: {report.contaminated_samples} ({report.contamination_rate*100:.1f}%)")
+    print(
+        f"  Contaminated: {report.contaminated_samples} ({report.contamination_rate*100:.1f}%)"
+    )
     print(f"    Exact matches: {report.exact_matches}")
     print(f"    High similarity: {report.high_similarity_matches}")
     print(f"    Partial matches: {report.partial_matches}")
 
     if report.by_benchmark:
-        print(f"\n  By Benchmark:")
+        print("\n  By Benchmark:")
         for bench, count in report.by_benchmark.items():
             print(f"    {bench}: {count}")
 
@@ -370,6 +401,7 @@ def run_contamination_check(
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1:
         run_contamination_check(sys.argv[1])
     else:

@@ -13,47 +13,48 @@ Each test:
   • Specifies band level
 """
 
-from dataclasses import dataclass, field
-from typing import Callable, Literal
 import re
+from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass
 class DiagnosticTest:
     """A single diagnostic test."""
+
     id: str
     name: str
     purpose: str
     skill_buckets: list[str]  # Which skills this probes
-    band: str                  # B0-B5
-    
+    band: str  # B0-B5
+
     # Test specification
     prompt: str
     expected: str | list[str]  # Expected output (string or list of acceptable)
     failure_signals: list[str]  # What indicates failure
-    
+
     # Test type
     test_type: Literal[
-        "completion",      # Complete the text
-        "next_token",      # Predict next token likelihood
-        "consistency",     # Check consistency across prompts
-        "error_detection", # Detect error in input
+        "completion",  # Complete the text
+        "next_token",  # Predict next token likelihood
+        "consistency",  # Check consistency across prompts
+        "error_detection",  # Detect error in input
         "classification",  # Classify into categories
     ] = "completion"
-    
+
     # Evaluation
     eval_method: Literal[
-        "exact_match",     # Exact string match
-        "contains",        # Contains expected substring
-        "numeric",         # Numeric comparison
-        "regex",           # Regex match
-        "not_contains",    # Should NOT contain
-        "code_valid",      # Valid syntax
+        "exact_match",  # Exact string match
+        "contains",  # Contains expected substring
+        "numeric",  # Numeric comparison
+        "regex",  # Regex match
+        "not_contains",  # Should NOT contain
+        "code_valid",  # Valid syntax
     ] = "contains"
-    
+
     # Metadata
     timeout_ms: int = 1000  # Max time in milliseconds
-    max_tokens: int = 50    # Max tokens to generate
+    max_tokens: int = 50  # Max tokens to generate
 
 
 # ================================================================
@@ -61,11 +62,9 @@ class DiagnosticTest:
 # ================================================================
 
 DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
-    
     # ─────────────────────────────────────────────────────────────
     # ARITHMETIC REASONING (8 tests)
     # ─────────────────────────────────────────────────────────────
-    
     DiagnosticTest(
         id="ARITH-001",
         name="Simple Addition",
@@ -78,7 +77,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ARITH-002",
         name="Multi-step Arithmetic",
@@ -91,7 +89,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ARITH-003",
         name="Word Problem Decomposition",
@@ -104,7 +101,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="ARITH-004",
         name="Percentage Calculation",
@@ -117,7 +113,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ARITH-005",
         name="Negative Numbers",
@@ -130,7 +125,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ARITH-006",
         name="Division with Remainder",
@@ -143,7 +137,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ARITH-007",
         name="Order of Operations",
@@ -156,7 +149,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ARITH-008",
         name="Fraction Basics",
@@ -169,11 +161,9 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     # ─────────────────────────────────────────────────────────────
     # ALGEBRAIC REASONING (5 tests)
     # ─────────────────────────────────────────────────────────────
-    
     DiagnosticTest(
         id="ALG-001",
         name="Simple Equation",
@@ -186,7 +176,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ALG-002",
         name="Two-step Equation",
@@ -199,7 +188,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ALG-003",
         name="Variable Substitution",
@@ -212,7 +200,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ALG-004",
         name="Inequality Direction",
@@ -225,7 +212,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ALG-005",
         name="Pattern Continuation",
@@ -238,11 +224,9 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     # ─────────────────────────────────────────────────────────────
     # LOGICAL REASONING (8 tests)
     # ─────────────────────────────────────────────────────────────
-    
     DiagnosticTest(
         id="LOGIC-001",
         name="Transitive Relation",
@@ -255,7 +239,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="LOGIC-002",
         name="Modus Ponens",
@@ -268,7 +251,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="LOGIC-003",
         name="Negation Handling",
@@ -281,7 +263,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="LOGIC-004",
         name="Contradiction Detection",
@@ -294,7 +275,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="LOGIC-005",
         name="Syllogism Validity",
@@ -307,7 +287,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="LOGIC-006",
         name="Contrapositive",
@@ -320,7 +299,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="LOGIC-007",
         name="Quantifier Scope",
@@ -333,7 +311,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="LOGIC-008",
         name="Multi-hop Reasoning",
@@ -346,11 +323,9 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     # ─────────────────────────────────────────────────────────────
     # CODE COMPLETION (10 tests)
     # ─────────────────────────────────────────────────────────────
-    
     DiagnosticTest(
         id="CODE-001",
         name="Fibonacci Base Case",
@@ -364,7 +339,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         test_type="completion",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="CODE-002",
         name="List Append",
@@ -377,7 +351,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="CODE-003",
         name="For Loop Range",
@@ -390,7 +363,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="CODE-004",
         name="Variable Scope",
@@ -403,7 +375,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="CODE-005",
         name="Dictionary Access",
@@ -416,7 +387,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="CODE-006",
         name="String Slicing",
@@ -429,7 +399,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="CODE-007",
         name="Function Return",
@@ -442,7 +411,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="CODE-008",
         name="List Comprehension",
@@ -455,7 +423,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="CODE-009",
         name="Error Type",
@@ -468,7 +435,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="CODE-010",
         name="Off-by-One Detection",
@@ -481,11 +447,9 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     # ─────────────────────────────────────────────────────────────
     # LANGUAGE & COHERENCE (7 tests)
     # ─────────────────────────────────────────────────────────────
-    
     DiagnosticTest(
         id="LANG-001",
         name="Subject-Verb Agreement",
@@ -498,7 +462,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="LANG-002",
         name="Pronoun Reference",
@@ -511,7 +474,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="LANG-003",
         name="Sentence Continuation",
@@ -524,7 +486,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="LANG-004",
         name="Tense Consistency",
@@ -537,7 +498,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="LANG-005",
         name="Hindi Basic",
@@ -550,7 +510,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="LANG-006",
         name="Paragraph Topic",
@@ -563,7 +522,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=30,
     ),
-    
     DiagnosticTest(
         id="LANG-007",
         name="Conjunction Usage",
@@ -576,11 +534,9 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     # ─────────────────────────────────────────────────────────────
     # KNOWLEDGE & COMMONSENSE (7 tests)
     # ─────────────────────────────────────────────────────────────
-    
     DiagnosticTest(
         id="KNOW-001",
         name="Basic Fact",
@@ -593,7 +549,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="KNOW-002",
         name="Scientific Fact",
@@ -606,7 +561,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="KNOW-003",
         name="Commonsense Physics",
@@ -619,7 +573,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="KNOW-004",
         name="Temporal Order",
@@ -632,7 +585,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="KNOW-005",
         name="Object Function",
@@ -645,7 +597,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="KNOW-006",
         name="Causal Chain",
@@ -658,7 +609,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     DiagnosticTest(
         id="KNOW-007",
         name="Social Situation",
@@ -671,11 +621,9 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=15,
     ),
-    
     # ─────────────────────────────────────────────────────────────
     # ADVANCED REASONING (5 tests)
     # ─────────────────────────────────────────────────────────────
-    
     DiagnosticTest(
         id="ADV-001",
         name="Counterfactual",
@@ -688,7 +636,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="ADV-002",
         name="Analogy Completion",
@@ -701,7 +648,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ADV-003",
         name="Constraint Satisfaction",
@@ -714,7 +660,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=10,
     ),
-    
     DiagnosticTest(
         id="ADV-004",
         name="Algorithm Trace",
@@ -727,7 +672,6 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
         eval_method="contains",
         max_tokens=20,
     ),
-    
     DiagnosticTest(
         id="ADV-005",
         name="Recursive Thinking",
@@ -746,6 +690,7 @@ DIAGNOSTIC_TESTS: list[DiagnosticTest] = [
 # ================================================================
 # TEST RUNNER UTILITIES
 # ================================================================
+
 
 def get_tests_for_skill(skill_id: str) -> list[DiagnosticTest]:
     """Get all tests for a skill bucket."""
@@ -767,7 +712,7 @@ def get_test_by_id(test_id: str) -> DiagnosticTest | None:
 
 def evaluate_test(test: DiagnosticTest, model_output: str) -> dict:
     """Evaluate model output against a test.
-    
+
     Returns:
         {
             "passed": bool,
@@ -779,43 +724,43 @@ def evaluate_test(test: DiagnosticTest, model_output: str) -> dict:
     output = model_output.strip().lower()
     expected = test.expected if isinstance(test.expected, list) else [test.expected]
     expected_lower = [e.lower() for e in expected]
-    
+
     passed = False
     failure_detected = None
-    
+
     if test.eval_method == "exact_match":
         passed = output in expected_lower
-        
+
     elif test.eval_method == "contains":
         passed = any(e in output for e in expected_lower)
-        
+
     elif test.eval_method == "numeric":
         try:
-            output_num = float(re.search(r'-?\d+\.?\d*', output).group())
+            output_num = float(re.search(r"-?\d+\.?\d*", output).group())
             passed = any(abs(output_num - float(e)) < 0.01 for e in expected)
         except (AttributeError, ValueError):
             passed = False
-            
+
     elif test.eval_method == "regex":
         passed = any(re.search(e, output, re.IGNORECASE) for e in expected)
-        
+
     elif test.eval_method == "not_contains":
         passed = not any(e in output for e in expected_lower)
-        
+
     elif test.eval_method == "code_valid":
         try:
             compile(output, "<string>", "exec")
             passed = True
         except SyntaxError:
             passed = False
-    
+
     # Check for failure signals
     if not passed:
         for signal in test.failure_signals:
             if signal.lower() in output:
                 failure_detected = signal
                 break
-    
+
     return {
         "passed": passed,
         "expected": test.expected,
@@ -828,16 +773,17 @@ def evaluate_test(test: DiagnosticTest, model_output: str) -> dict:
 # SUMMARY
 # ================================================================
 
+
 def get_test_summary() -> dict:
     """Get summary statistics about tests."""
     by_skill = {}
     by_band = {}
-    
+
     for t in DIAGNOSTIC_TESTS:
         for skill in t.skill_buckets:
             by_skill[skill] = by_skill.get(skill, 0) + 1
         by_band[t.band] = by_band.get(t.band, 0) + 1
-    
+
     return {
         "total_tests": len(DIAGNOSTIC_TESTS),
         "by_skill": by_skill,

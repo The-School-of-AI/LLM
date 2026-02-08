@@ -10,17 +10,18 @@ This is the SINGLE SOURCE OF TRUTH for:
 All other modules import from here.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
-
 
 # ================================================================
 # BAND DEFINITIONS
 # ================================================================
 
+
 class Band(Enum):
     """Training difficulty bands."""
+
     B0 = "B0"  # Nursery
     B1 = "B1"  # Primary
     B2 = "B2"  # High School
@@ -32,19 +33,22 @@ class Band(Enum):
 @dataclass
 class BandSpec:
     """Specification for a training band."""
+
     band: Band
     name: str
     description: str
-    
+
     # COT Policy
     cot_allowed: bool
     cot_frequency: Literal["never", "rare", "allowed"]
     cot_max_tokens: int | None  # None = no COT allowed
-    
+
     # Content constraints
     reasoning_explicit: bool
-    code_complexity: Literal["none", "trivial", "introductory", "non-trivial", "advanced", "system-level"]
-    
+    code_complexity: Literal[
+        "none", "trivial", "introductory", "non-trivial", "advanced", "system-level"
+    ]
+
     # Language
     hindi_allowed: bool
     hindi_cap_pct: float  # max % of samples in Hindi
@@ -149,17 +153,20 @@ def get_cot_max_tokens(band: Band | str) -> int:
 # TRAINING STAGES
 # ================================================================
 
+
 class Stage(Enum):
     """Training stages where synthetic data can be injected."""
-    PRE = "PRE"    # Pretraining
-    SFT = "SFT"    # Supervised Fine-Tuning
-    DPO = "DPO"    # Direct Preference Optimization
+
+    PRE = "PRE"  # Pretraining
+    SFT = "SFT"  # Supervised Fine-Tuning
+    DPO = "DPO"  # Direct Preference Optimization
     RLHF = "RLHF"  # Reinforcement Learning from Human Feedback
 
 
 @dataclass
 class StageConfig:
     """Configuration for a training stage."""
+
     stage: Stage
     synthetic_cap_pct: float  # max % of synthetic data
     bands_allowed: list[Band]

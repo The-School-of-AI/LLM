@@ -32,7 +32,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Iterator
+from typing import Optional
 
 # Add parent to path
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
@@ -57,7 +57,15 @@ EXERCISE_TO_SKILL = {
 
 # Keywords for skill inference if exercise type is unclear
 SKILL_KEYWORDS = {
-    "RSN-ARITHMETIC": ["calculate", "sum", "multiply", "divide", "add", "subtract", "number"],
+    "RSN-ARITHMETIC": [
+        "calculate",
+        "sum",
+        "multiply",
+        "divide",
+        "add",
+        "subtract",
+        "number",
+    ],
     "RSN-ALGEBRA": ["equation", "solve for x", "variable", "polynomial", "factor"],
     "RSN-LOGIC": ["therefore", "conclude", "implies", "if-then", "logical"],
     "RSN-CAUSAL": ["because", "caused by", "leads to", "result of", "effect"],
@@ -69,6 +77,7 @@ SKILL_KEYWORDS = {
     "KNOW-FACTUAL": ["who", "when", "where", "what year", "capital of"],
 }
 
+
 # Band inference based on content complexity
 def infer_band(text: str, reasoning: str = "") -> str:
     """Infer difficulty band from content."""
@@ -76,13 +85,13 @@ def infer_band(text: str, reasoning: str = "") -> str:
     reasoning_len = len(reasoning) if reasoning else 0
 
     # Check for code (usually higher bands)
-    if re.search(r'def |class |function |import |```', text):
+    if re.search(r"def |class |function |import |```", text):
         if reasoning_len > 1000:
             return "B5"
         return "B4"
 
     # Check for math/equations
-    if re.search(r'[=+\-*/^].*\d|solve|equation', text.lower()):
+    if re.search(r"[=+\-*/^].*\d|solve|equation", text.lower()):
         if reasoning_len > 500:
             return "B4"
         return "B3"
@@ -127,6 +136,7 @@ def infer_skill(exercise: str, query: str, answer: str = "") -> str:
 @dataclass
 class SynthSample:
     """Converted SYNTH sample in our format."""
+
     id: str
     question: str
     answer: str
@@ -198,7 +208,7 @@ class SynthAdapter:
         distilled = answer
         if len(answer) > 500:
             # Truncate long answers but keep first paragraph
-            first_para = answer.split('\n\n')[0]
+            first_para = answer.split("\n\n")[0]
             if len(first_para) > 500:
                 distilled = first_para[:500] + "..."
             else:
@@ -279,12 +289,17 @@ class SynthAdapter:
             samples.append(sample)
 
             if len(samples) % 100 == 0:
-                print(f"  [{len(samples)}/{num_samples}] seen={seen}, skipped={skipped}", end="\r")
+                print(
+                    f"  [{len(samples)}/{num_samples}] seen={seen}, skipped={skipped}",
+                    end="\r",
+                )
 
             if len(samples) >= num_samples:
                 break
 
-        print(f"\n[Done] Loaded {len(samples)} samples (seen={seen}, skipped={skipped})")
+        print(
+            f"\n[Done] Loaded {len(samples)} samples (seen={seen}, skipped={skipped})"
+        )
         return samples
 
     def save_to_bank(
@@ -317,7 +332,9 @@ class SynthAdapter:
                 with open(shard_path, "w", encoding="utf-8") as f:
                     for s in skill_samples:
                         f.write(json.dumps(s.to_dict(), ensure_ascii=False) + "\n")
-                print(f"  [Saved] {skill}: {len(skill_samples)} samples -> {shard_path.name}")
+                print(
+                    f"  [Saved] {skill}: {len(skill_samples)} samples -> {shard_path.name}"
+                )
 
             # Update manifest
             self._update_manifest(output_path, by_skill)
@@ -338,13 +355,17 @@ class SynthAdapter:
             with open(manifest_path) as f:
                 manifest = json.load(f)
         else:
-            manifest = {"created": datetime.now().isoformat(), "model": "synth", "skills": {}}
+            manifest = {
+                "created": datetime.now().isoformat(),
+                "model": "synth",
+                "skills": {},
+            }
 
         manifest["updated"] = datetime.now().isoformat()
         manifest["synth_added"] = datetime.now().isoformat()
 
         # Add SYNTH skill entries
-        from common import cot_allowed_for_band, get_skill_bucket
+        from common import cot_allowed_for_band
 
         for skill, samples in by_skill.items():
             # Get primary band from samples
