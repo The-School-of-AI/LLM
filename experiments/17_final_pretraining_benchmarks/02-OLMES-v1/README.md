@@ -46,6 +46,33 @@ python3 02-OLMES-v1/src/eval_runner.py \
 > To run a quick test, add `--limit 5` to the command above. 
 > **Note**: Avoid using `--limit 1`, as OLMES interprets it as 1.0 (100% of the dataset). Use integers like `2` or higher for sampling.
 
+### ☁️ Google Colab Execution
+Run the pipeline in a Colab notebook with a GPU (T4, L4, or A100):
+
+1. **Setup Repo**:
+   ```bash
+   !git clone <your-repo-url>
+   %cd <repo-folder>/experiments/17_final_pretraining_benchmarks
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   !pip install -r 02-OLMES-v1/requirements.txt
+   ```
+
+3. **Run Pipeline**:
+   ```python
+   # In a code cell
+   !python3 02-OLMES-v1/src/eval_runner.py \
+       --config 02-OLMES-v1/configs/stage_1b.yaml \
+       --phase pretraining \
+       --model_args "pretrained=HuggingFaceTB/SmolLM2-135M" \
+       --device "cuda" \
+       --batch_size 8 \
+       --limit 5
+   ```
+   *Note: The script automatically handles the `python` command shim and OLMES vendor setup on Colab.*
+
 ## ⚡ Batch Size Recommendations
 
 The `--batch_size` parameter has a major impact on total evaluation time. **We recommend using a fixed value over `auto`** to avoid the slow per-task auto-detection phase.

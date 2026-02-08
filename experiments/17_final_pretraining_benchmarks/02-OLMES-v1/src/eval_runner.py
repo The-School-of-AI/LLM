@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 
 import yaml
@@ -544,10 +545,37 @@ def run_olmes_benchmark(
     # but we'll stick to the core ones for now.
 
     logger.info(f"  [OLMES] Running: {task} (BS={batch_size}, limit={limit})...")
+    
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        if result.stdout:
-            logger.info(result.stdout)
+        # PATH Shim: OLMES internal launcher expects a 'python' command.
+        # We create a temporary directory with a 'python' symlink pointing to the current interpreter.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            python_shim = os.path.join(tmp_dir, "python")
+            try:
+                # Create a shell script wrapper for the 'python' shim
+                # This is more robust than a symlink for virtual environments
+                with open(python_shim, "w") as f:
+                    f.write(f"#!/bin/sh\nexec '{py_exec}' \"$@\"\n")
+                os.chmod(python_shim, 0o755)
+            except Exception as e:
+                # Fallback for systems where this might fail
+                import shutil
+                shutil.copy2(py_exec, python_shim)
+
+            # Update environment PATH
+            env = os.environ.copy()
+            env["PATH"] = f"{tmp_dir}{os.pathsep}{env.get('PATH', '')}"
+
+            # Run OLMES with the PATH shim
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                check=True,
+                env=env
+            )
+            if result.stdout:
+                logger.info(result.stdout)
 
         # OLMES saves aggregate results in metrics.json in the output-dir
         actual_path = os.path.join(task_raw_dir, "metrics.json")
