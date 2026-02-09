@@ -1,0 +1,49 @@
+
+# ------------------------------------------------------------------------------
+# Vector Configuration for 70B Training Sidecar
+# Role: Reads local JSONL logs and ships them to ClickHouse (and Debug Console)
+# ------------------------------------------------------------------------------
+
+# SOURCES
+
+[sources.training_logs]
+type = "file"
+# Watch all JSONL files in the training logs directory
+# This handles new run_ids and rank files automatically
+include = ["/tmp/training_logs/**/*.jsonl"]
+ignore_older_secs = 600
+read_from = "beginning"
+
+# TRANSFORMS
+
+[transforms.parse_json]
+type = "remap"
+inputs = ["training_logs"]
+source = '''
+  # Parse the raw line string into a structured object
+  . = parse_json!(.message)
+  
+  # Enrich with host metadata (useful for distributed debugging)
+  .host = get_hostname!()
+'''
+
+# SINKS
+
+# 1. Debug Sink (Prints to stdout so you can verify it's working)
+[sinks.console_debug]
+type = "console"
+inputs = ["parse_json"]
+encoding.codec = "json"
+
+# 2. Production Sink (ClickHouse)
+# Uncomment this when ClickHouse is deployed
+# [sinks.clickhouse_prod]
+# type = "clickhouse"
+# inputs = ["parse_json"]
+# endpoint = "http://clickhouse-server:8123"
+# database = "training_observability"
+# table = "logs"
+# compression = "gzip"
+# batch.max_bytes = 10485760 # 10MB batches for high throughput
+# encoding.timestamp_format = "unix"
+
