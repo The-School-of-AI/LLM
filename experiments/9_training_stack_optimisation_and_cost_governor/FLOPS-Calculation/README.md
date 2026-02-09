@@ -750,6 +750,47 @@ YaRN (Yet another RoPE extensioN) has **zero computational overhead** compared t
 The cost of training at longer contexts is automatically captured via `sequence_length` in the O(S²) attention formula.
 No additional configuration is needed for YaRN FLOPs accounting.
 
+#### DeltaNet (Gated Linear Attention)
+DeltaNet is a linear attention mechanism with **O(S × d²)** complexity instead of O(S² × d) for standard attention.
+This makes it dramatically more efficient for long sequences (256k+ tokens).
+
+**Standalone usage:**
+```json
+{
+  "attention_type": "deltanet"
+}
+```
+Aliases: `deltanet`, `delta`, `linear`, `gated_linear`, `gated_deltanet`
+
+**Hybrid DeltaNet-GSA format:**
+```json
+{
+  "attention_type": "deltanet-gsa:3:1:512"
+}
+```
+- `3:1` = 75% DeltaNet layers, 25% GSA layers
+- `512` = GSA sparse k tokens
+
+**Complexity comparison:**
+| Attention Type | Complexity | 256k Context (d=128) |
+|---------------|------------|----------------------|
+| Dense | O(S² × d) | Very expensive |
+| GSA | O(S × k) + O(S²_indexer) | Fast |
+| **DeltaNet** | **O(S × d²)** | **Fastest at long seq** |
+
+Crossover: When S > d², DeltaNet wins. For head_dim=128, crossover at ~16k tokens.
+
+**DeltaNet config options:**
+```json
+{
+  "deltanet": {
+    "num_heads": 32,
+    "head_dim": 128,
+    "conv_size": 4
+  }
+}
+```
+
 ### 3. Cost Calculation
 ```python
 Cost = (Total_FLOPs / Effective_Cluster_PFLOPS) * Price_Per_GPU_Hour * Num_GPUs
