@@ -49,9 +49,9 @@ def ensure_olmes_vendor(logger):
         install_success = False
         if uv_path:
             try:
-                logger.info(f"  [OLMES] Using uv to install: {uv_path} pip install --no-deps -e {olmes_dir}")
+                logger.info(f"  [OLMES] Using uv to install: {uv_path} pip install -e {olmes_dir}")
                 subprocess.run(
-                    [uv_path, "pip", "install", "--no-deps", "-e", olmes_dir],
+                    [uv_path, "pip", "install", "-e", olmes_dir],
                     check=True,
                     capture_output=True,
                     text=True
@@ -62,9 +62,9 @@ def ensure_olmes_vendor(logger):
         
         if not install_success:
             try:
-                logger.info(f"  [OLMES] Using pip to install: {py_exec} -m pip install --no-deps -e {olmes_dir}")
+                logger.info(f"  [OLMES] Using pip to install: {py_exec} -m pip install -e {olmes_dir}")
                 subprocess.run(
-                    [py_exec, "-m", "pip", "install", "--no-deps", "-e", olmes_dir],
+                    [py_exec, "-m", "pip", "install", "-e", olmes_dir],
                     check=True,
                     capture_output=True,
                     text=True
