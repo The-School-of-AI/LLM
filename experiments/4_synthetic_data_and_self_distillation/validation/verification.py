@@ -20,8 +20,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Literal
-
+from typing import Optional
 
 # OLD: hardcoded base URL "http://localhost:11434" and timeout=60
 # NEW: configurable via OLLAMA_HOST and OLLAMA_TIMEOUT env vars
@@ -35,6 +34,7 @@ except (ValueError, TypeError):
 @dataclass
 class VerificationResult:
     """Result of verifying a single sample."""
+
     sample_id: str
     verified: bool
     verification_score: float  # 0.0 to 1.0
@@ -52,6 +52,7 @@ class VerificationResult:
 @dataclass
 class VerificationReport:
     """Aggregated verification report."""
+
     timestamp: str
     teacher_model: str
     student_model: str
@@ -72,10 +73,10 @@ def extract_answer(text: str) -> str:
 
     # Try to find explicit answer markers
     patterns = [
-        r'(?:the )?answer(?:\s+is)?[:\s]+([^\n.]+)',
-        r'(?:result|solution)[:\s]+([^\n.]+)',
-        r'=\s*(\d+(?:\.\d+)?)',
-        r'(\d+(?:\.\d+)?)\s*$',  # Last number in text
+        r"(?:the )?answer(?:\s+is)?[:\s]+([^\n.]+)",
+        r"(?:result|solution)[:\s]+([^\n.]+)",
+        r"=\s*(\d+(?:\.\d+)?)",
+        r"(\d+(?:\.\d+)?)\s*$",  # Last number in text
     ]
 
     text_lower = text.lower()
@@ -85,7 +86,7 @@ def extract_answer(text: str) -> str:
             return match.group(1).strip()
 
     # Fallback: return last line
-    lines = text.strip().split('\n')
+    lines = text.strip().split("\n")
     return lines[-1].strip() if lines else ""
 
 
@@ -98,9 +99,9 @@ def normalize_answer(answer: str) -> str:
     # Remove common prefixes
     for prefix in ["the answer is", "answer:", "result:", "="]:
         if answer.startswith(prefix):
-            answer = answer[len(prefix):].strip()
+            answer = answer[len(prefix) :].strip()
     # Try to extract just the number if numeric
-    match = re.search(r'(-?\d+(?:\.\d+)?)', answer)
+    match = re.search(r"(-?\d+(?:\.\d+)?)", answer)
     if match:
         return match.group(1)
     return answer
@@ -147,9 +148,7 @@ def ollama_generate(model: str, prompt: str, max_tokens: int = 200) -> str:
         url = f"{OLLAMA_BASE}/api/generate"
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
-            url, data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST"
+            url, data=data, headers={"Content-Type": "application/json"}, method="POST"
         )
         # OLD: timeout=60 (hardcoded)
         # NEW: uses OLLAMA_TIMEOUT env var for large model support
@@ -190,7 +189,9 @@ class VerificationPipeline:
         expected = normalize_answer(extract_answer(expected_answer))
         if not expected:
             # Try to extract from distilled_view
-            expected = normalize_answer(extract_answer(sample.get("distilled_view", "")))
+            expected = normalize_answer(
+                extract_answer(sample.get("distilled_view", ""))
+            )
 
         if not question:
             result.failure_reason = "no_question"
@@ -312,13 +313,15 @@ Answer:"""
 
             # Track failures
             if not result.verified:
-                failed.append({
-                    "id": result.sample_id,
-                    "score": result.verification_score,
-                    "reason": result.failure_reason,
-                    "skill": skill,
-                    "band": band,
-                })
+                failed.append(
+                    {
+                        "id": result.sample_id,
+                        "score": result.verification_score,
+                        "reason": result.failure_reason,
+                        "skill": skill,
+                        "band": band,
+                    }
+                )
 
         verified = [r for r in results if r.verified]
         scores = [r.verification_score for r in results]
@@ -331,13 +334,21 @@ Answer:"""
             verified_samples=len(verified),
             verification_rate=len(verified) / total if total else 0.0,
             avg_score=sum(scores) / len(scores) if scores else 0.0,
-            by_skill={k: v["verified"] / v["total"] if v["total"] else 0 for k, v in by_skill.items()},
-            by_band={k: v["verified"] / v["total"] if v["total"] else 0 for k, v in by_band.items()},
+            by_skill={
+                k: v["verified"] / v["total"] if v["total"] else 0
+                for k, v in by_skill.items()
+            },
+            by_band={
+                k: v["verified"] / v["total"] if v["total"] else 0
+                for k, v in by_band.items()
+            },
             failed_samples=failed[:20],  # Limit to 20 examples
         )
 
-        print(f"\n[Done] {report.verified_samples}/{report.total_samples} verified "
-              f"({report.verification_rate*100:.1f}%)")
+        print(
+            f"\n[Done] {report.verified_samples}/{report.total_samples} verified "
+            f"({report.verification_rate*100:.1f}%)"
+        )
 
         return report
 
@@ -360,7 +371,7 @@ def run_verification(
     """
     # Load samples
     with open(data_path, encoding="utf-8") as f:
-        samples = [json.loads(l) for l in f if l.strip()]
+        samples = [json.loads(line) for line in f if line.strip()]
 
     # Run verification
     pipeline = VerificationPipeline(
@@ -393,18 +404,22 @@ def run_verification(
     # Save report
     report_path = Path(output_path).parent / "verification_report.json"
     with open(report_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "timestamp": report.timestamp,
-            "teacher_model": report.teacher_model,
-            "student_model": report.student_model,
-            "total_samples": report.total_samples,
-            "verified_samples": report.verified_samples,
-            "verification_rate": report.verification_rate,
-            "avg_score": report.avg_score,
-            "by_skill": report.by_skill,
-            "by_band": report.by_band,
-            "failed_samples": report.failed_samples,
-        }, f, indent=2)
+        json.dump(
+            {
+                "timestamp": report.timestamp,
+                "teacher_model": report.teacher_model,
+                "student_model": report.student_model,
+                "total_samples": report.total_samples,
+                "verified_samples": report.verified_samples,
+                "verification_rate": report.verification_rate,
+                "avg_score": report.avg_score,
+                "by_skill": report.by_skill,
+                "by_band": report.by_band,
+                "failed_samples": report.failed_samples,
+            },
+            f,
+            indent=2,
+        )
     print(f"[Report] {report_path}")
 
     return report
@@ -412,6 +427,7 @@ def run_verification(
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1:
         run_verification(sys.argv[1])
     else:

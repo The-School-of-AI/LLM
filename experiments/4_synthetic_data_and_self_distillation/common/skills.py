@@ -19,13 +19,14 @@ from typing import Literal
 
 from .bands import Band, Stage
 
-
 # ================================================================
 # SKILL CATEGORIES
 # ================================================================
 
+
 class SkillCategory(Enum):
     """High-level skill categories."""
+
     FOUNDATION = "foundation"
     REASONING = "reasoning"
     CODE = "code"
@@ -39,9 +40,11 @@ class SkillCategory(Enum):
 # FAILURE MODES
 # ================================================================
 
+
 @dataclass
 class FailureMode:
     """A specific way a model can fail at a skill."""
+
     id: str
     description: str
     detection_signal: str  # How to detect this failure
@@ -93,7 +96,6 @@ FAILURE_MODES = {
         detection_signal="Answers based on single hop when multiple required",
         severity="high",
     ),
-
     # Code failures
     "var_hallucination": FailureMode(
         id="var_hallucination",
@@ -137,7 +139,6 @@ FAILURE_MODES = {
         detection_signal="Mutation testing finds gaps",
         severity="medium",
     ),
-
     # Language failures
     "fluency_break": FailureMode(
         id="fluency_break",
@@ -169,7 +170,6 @@ FAILURE_MODES = {
         detection_signal="Unnatural language mixing",
         severity="medium",
     ),
-
     # Knowledge failures
     "factual_error": FailureMode(
         id="factual_error",
@@ -189,7 +189,6 @@ FAILURE_MODES = {
         detection_signal="Answers contradict earlier context",
         severity="high",
     ),
-
     # Alignment failures
     "instruction_violation": FailureMode(
         id="instruction_violation",
@@ -221,7 +220,6 @@ FAILURE_MODES = {
         detection_signal="User would need to re-ask",
         severity="medium",
     ),
-
     # Production failures
     "summarization_loss": FailureMode(
         id="summarization_loss",
@@ -241,7 +239,6 @@ FAILURE_MODES = {
         detection_signal="Performance drops on typos/paraphrases",
         severity="medium",
     ),
-
     # Indic-specific failures
     "indic_script_error": FailureMode(
         id="indic_script_error",
@@ -262,9 +259,11 @@ FAILURE_MODES = {
 # SKILL BUCKETS
 # ================================================================
 
+
 @dataclass
 class SkillBucket:
     """A skill bucket that synthetic data targets."""
+
     id: str
     name: str
     category: SkillCategory
@@ -297,11 +296,9 @@ class SkillBucket:
 # ================================================================
 
 SKILL_BUCKETS: dict[str, SkillBucket] = {
-
     # ═══════════════════════════════════════════════════════════════
     # FOUNDATION SKILLS (6)
     # ═══════════════════════════════════════════════════════════════
-
     "FND-LEX-EN": SkillBucket(
         id="FND-LEX-EN",
         name="English Lexical & Syntactic",
@@ -316,7 +313,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=10_000_000,
         priority="critical",
     ),
-
     "FND-LEX-HI": SkillBucket(
         id="FND-LEX-HI",
         name="Hindi Lexical & Syntactic",
@@ -332,7 +328,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     "FND-SEM": SkillBucket(
         id="FND-SEM",
         name="Semantic Understanding",
@@ -347,7 +342,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "FND-DIS": SkillBucket(
         id="FND-DIS",
         name="Discourse & Coherence",
@@ -362,7 +356,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "FND-LCX": SkillBucket(
         id="FND-LCX",
         name="Long-Context Retention",
@@ -377,7 +370,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=10_000_000,
         priority="critical",
     ),
-
     "FND-FACT": SkillBucket(
         id="FND-FACT",
         name="Factual Knowledge Encoding",
@@ -392,11 +384,9 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="high",
     ),
-
     # ═══════════════════════════════════════════════════════════════
     # REASONING SKILLS (11)
     # ═══════════════════════════════════════════════════════════════
-
     "RSN-LOG": SkillBucket(
         id="RSN-LOG",
         name="Logical Deduction",
@@ -411,7 +401,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     "RSN-CAUS": SkillBucket(
         id="RSN-CAUS",
         name="Causal Reasoning",
@@ -426,7 +415,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "RSN-ARITH": SkillBucket(
         id="RSN-ARITH",
         name="Arithmetic & Numerical",
@@ -441,7 +429,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=10_000_000,
         priority="critical",
     ),
-
     "RSN-ALG": SkillBucket(
         id="RSN-ALG",
         name="Algebraic & Symbolic",
@@ -456,7 +443,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="high",
     ),
-
     "RSN-WPT": SkillBucket(
         id="RSN-WPT",
         name="Word Problem Translation",
@@ -471,7 +457,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=10_000_000,
         priority="critical",
     ),
-
     "RSN-ADVMATH": SkillBucket(
         id="RSN-ADVMATH",
         name="Advanced Mathematical",
@@ -486,7 +471,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "RSN-MATH-HI": SkillBucket(
         id="RSN-MATH-HI",
         name="Mathematical Reasoning (Hindi)",
@@ -502,7 +486,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="critical",
     ),
-
     "RSN-CS": SkillBucket(
         id="RSN-CS",
         name="Commonsense Reasoning",
@@ -517,7 +500,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="high",
     ),
-
     "RSN-MH": SkillBucket(
         id="RSN-MH",
         name="Multi-Hop Reasoning",
@@ -532,7 +514,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "RSN-CONTRADICTION": SkillBucket(
         id="RSN-CONTRADICTION",
         name="Contradiction Detection",
@@ -547,7 +528,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="critical",
     ),
-
     "RSN-ANAL": SkillBucket(
         id="RSN-ANAL",
         name="Analogical Reasoning",
@@ -562,11 +542,9 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=3_000_000,
         priority="medium",
     ),
-
     # ═══════════════════════════════════════════════════════════════
     # CODE SKILLS (9)
     # ═══════════════════════════════════════════════════════════════
-
     "CODE-SYN": SkillBucket(
         id="CODE-SYN",
         name="Code Syntax & Structure",
@@ -581,7 +559,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="critical",
     ),
-
     "CODE-COMP": SkillBucket(
         id="CODE-COMP",
         name="Code Comprehension",
@@ -596,7 +573,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     "CODE-GEN-T1": SkillBucket(
         id="CODE-GEN-T1",
         name="Code Generation (Python, JS)",
@@ -611,7 +587,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=10_000_000,
         priority="critical",
     ),
-
     "CODE-GEN-T2": SkillBucket(
         id="CODE-GEN-T2",
         name="Code Generation (Java, C++, TS, Go)",
@@ -626,7 +601,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="high",
     ),
-
     "CODE-GEN-T3": SkillBucket(
         id="CODE-GEN-T3",
         name="Code Generation (Rust, SQL, Bash)",
@@ -641,7 +615,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "CODE-DBG": SkillBucket(
         id="CODE-DBG",
         name="Code Debugging & Error Correction",
@@ -656,7 +629,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     "CODE-OPT": SkillBucket(
         id="CODE-OPT",
         name="Code Optimization & Refactoring",
@@ -671,7 +643,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "CODE-TEST": SkillBucket(
         id="CODE-TEST",
         name="Test Generation & Verification",
@@ -686,7 +657,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "CODE-ALGO": SkillBucket(
         id="CODE-ALGO",
         name="Algorithmic Implementation",
@@ -701,11 +671,9 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     # ═══════════════════════════════════════════════════════════════
     # LANGUAGE SKILLS (6)
     # ═══════════════════════════════════════════════════════════════
-
     "LANG-HI-COMP": SkillBucket(
         id="LANG-HI-COMP",
         name="Hindi Comprehension",
@@ -721,7 +689,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     "LANG-HI-GEN": SkillBucket(
         id="LANG-HI-GEN",
         name="Hindi Generation",
@@ -737,7 +704,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="high",
     ),
-
     "LANG-TRANS": SkillBucket(
         id="LANG-TRANS",
         name="English-Hindi Translation",
@@ -753,7 +719,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "LANG-MIX": SkillBucket(
         id="LANG-MIX",
         name="Code-Mixed Language (Hinglish)",
@@ -769,7 +734,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "LANG-HI-LOG": SkillBucket(
         id="LANG-HI-LOG",
         name="Hindi Logical Reasoning",
@@ -785,7 +749,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "LANG-GRAMMAR": SkillBucket(
         id="LANG-GRAMMAR",
         name="Grammar & Syntax",
@@ -801,11 +764,9 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     # ═══════════════════════════════════════════════════════════════
     # ALIGNMENT SKILLS (5)
     # ═══════════════════════════════════════════════════════════════
-
     "ALN-INST": SkillBucket(
         id="ALN-INST",
         name="Instruction Following",
@@ -820,7 +781,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=10_000_000,
         priority="critical",
     ),
-
     "ALN-STRUCT": SkillBucket(
         id="ALN-STRUCT",
         name="Structured Output Generation",
@@ -835,7 +795,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="critical",
     ),
-
     "ALN-HALL": SkillBucket(
         id="ALN-HALL",
         name="Hallucination Resistance",
@@ -850,7 +809,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     "ALN-SAFE": SkillBucket(
         id="ALN-SAFE",
         name="Safety & Harm Avoidance",
@@ -865,7 +823,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="critical",
     ),
-
     "ALN-HELP": SkillBucket(
         id="ALN-HELP",
         name="Helpfulness & Engagement",
@@ -880,11 +837,9 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     # ═══════════════════════════════════════════════════════════════
     # PRODUCTION SKILLS (3)
     # ═══════════════════════════════════════════════════════════════
-
     "PRD-ROB": SkillBucket(
         id="PRD-ROB",
         name="Input Robustness",
@@ -899,7 +854,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "PRD-SUM": SkillBucket(
         id="PRD-SUM",
         name="Summarization",
@@ -914,7 +868,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "PRD-IE": SkillBucket(
         id="PRD-IE",
         name="Information Extraction",
@@ -929,11 +882,9 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     # ═══════════════════════════════════════════════════════════════
     # INDIC SKILLS (5) - Based on IndicGLUE, IndicQA
     # ═══════════════════════════════════════════════════════════════
-
     "INDIC-QA": SkillBucket(
         id="INDIC-QA",
         name="Indic Question Answering",
@@ -949,7 +900,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=8_000_000,
         priority="critical",
     ),
-
     "INDIC-TRANS": SkillBucket(
         id="INDIC-TRANS",
         name="Indic Translation",
@@ -961,11 +911,23 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         max_band=Band.B4,
         primary_band=Band.B3,
         stages=[Stage.SFT],
-        languages=["hi", "bn", "ta", "te", "mr", "gu", "kn", "ml", "pa", "or", "as", "en"],
+        languages=[
+            "hi",
+            "bn",
+            "ta",
+            "te",
+            "mr",
+            "gu",
+            "kn",
+            "ml",
+            "pa",
+            "or",
+            "as",
+            "en",
+        ],
         target_tokens=10_000_000,
         priority="critical",
     ),
-
     "INDIC-NLI": SkillBucket(
         id="INDIC-NLI",
         name="Indic Natural Language Inference",
@@ -981,7 +943,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=5_000_000,
         priority="high",
     ),
-
     "INDIC-SENT": SkillBucket(
         id="INDIC-SENT",
         name="Indic Sentiment Analysis",
@@ -997,7 +958,6 @@ SKILL_BUCKETS: dict[str, SkillBucket] = {
         target_tokens=3_000_000,
         priority="high",
     ),
-
     "INDIC-NER": SkillBucket(
         id="INDIC-NER",
         name="Indic Named Entity Recognition",
@@ -1046,6 +1006,7 @@ SKILL_ALIASES: dict[str, str] = {
 # HELPER FUNCTIONS
 # ================================================================
 
+
 def get_skill_bucket(skill_id: str) -> SkillBucket:
     """Get a skill bucket by ID (supports aliases)."""
     # Check for alias first
@@ -1059,7 +1020,8 @@ def get_skill_bucket(skill_id: str) -> SkillBucket:
 def get_skills_for_band(band: Band) -> list[SkillBucket]:
     """Get all skills applicable to a band."""
     return [
-        s for s in SKILL_BUCKETS.values()
+        s
+        for s in SKILL_BUCKETS.values()
         if s.min_band.value <= band.value <= s.max_band.value
     ]
 

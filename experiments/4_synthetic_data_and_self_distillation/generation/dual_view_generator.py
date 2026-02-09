@@ -21,7 +21,7 @@ import random
 import re
 import sys
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -42,13 +42,12 @@ from common.bands import (
     THINK_END,
     DIST_START,
     DIST_END,
+    DIST_START,
+    THINK_END,
+    THINK_START,
+    get_band_spec,
 )
-from common.skills import (
-    get_skill_bucket,
-    SKILL_BUCKETS,
-    FAILURE_MODES,
-)
-
+from common.skills import FAILURE_MODES, get_skill_bucket  # noqa: E402
 
 # ================================================================
 # OLLAMA CLIENT
@@ -79,11 +78,12 @@ def ollama_chat(
             "temperature": temperature,
         },
     }
-    
+
     url = f"{OLLAMA_BASE}/api/chat"
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        url, data=data,
+        url,
+        data=data,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
@@ -312,31 +312,32 @@ Answer: [correct answer]"""
 # DUAL VIEW SAMPLE
 # ================================================================
 
+
 @dataclass
 class DualViewSample:
     """A synthetic sample with both distilled and COT views."""
-    
+
     # Core content
     id: str
     question: str
     answer: str
-    
+
     # Dual views
-    distilled_view: str      # <dist> content
-    think_view: str | None   # <think> content (None if COT not allowed)
-    
+    distilled_view: str  # <dist> content
+    think_view: str | None  # <think> content (None if COT not allowed)
+
     # Metadata
     skill_bucket: str
     band: str
     stage: str
     language: str
-    
+
     # Hard negative (optional)
     hard_negative: dict | None = None  # {reasoning, wrong_answer, error_type}
-    
+
     # Error correction pair (optional)
     error_correction: dict | None = None  # {error, explanation, correction}
-    
+
     # Quality signals
     verified: bool = False
     verification_score: float | None = None
@@ -358,28 +359,28 @@ class DualViewSample:
             "verified": self.verified,
             "verification_score": self.verification_score,
         }
-    
+
     def format_for_training(
         self,
         view: Literal["distilled", "think", "both"] = "both",
         include_special_tokens: bool = True,
     ) -> str:
         """Format sample for training."""
-        
+
         parts = []
-        
+
         if view in ("distilled", "both"):
             if include_special_tokens:
                 parts.append(f"{DIST_START}\n{self.distilled_view}\n{DIST_END}")
             else:
                 parts.append(self.distilled_view)
-        
+
         if view in ("think", "both") and self.think_view:
             if include_special_tokens:
                 parts.append(f"{THINK_START}\n{self.think_view}\n{THINK_END}")
             else:
                 parts.append(self.think_view)
-        
+
         return "\n\n".join(parts)
 
 
@@ -387,9 +388,10 @@ class DualViewSample:
 # GENERATOR
 # ================================================================
 
+
 class DualViewGenerator:
     """Generates dual-view samples with COT gating."""
-    
+
     def __init__(
         self,
         model: str = "qwen3:8b",
@@ -397,7 +399,7 @@ class DualViewGenerator:
     ):
         self.model = model
         self.hard_negative_model = hard_negative_model or model
-    
+
     def generate(
         self,
         question: str,
@@ -477,9 +479,7 @@ class DualViewGenerator:
         # Generate error correction pair
         error_correction = None
         if generate_error_correction and hard_negative:
-            error_correction = self._generate_error_correction(
-                question, hard_negative
-            )
+            error_correction = self._generate_error_correction(question, hard_negative)
 
         # Validate before returning
         issues = self._validate_sample(distilled, think_view, band)
@@ -501,10 +501,7 @@ class DualViewGenerator:
         )
 
     def _validate_sample(
-        self,
-        distilled: str,
-        think_view: str | None,
-        band: str
+        self, distilled: str, think_view: str | None, band: str
     ) -> list[str]:
         """Validate sample completeness."""
         issues = []
@@ -570,7 +567,7 @@ class DualViewGenerator:
             return f"Answer:\n{response}\nJustification: Code generated without standard format."
         first_sentence = response.split('.')[0] if response else "No answer generated"
         return f"Answer: {first_sentence}.\nJustification: {response}"
-    
+
     def _strip_preamble(self, response: str) -> str:
         """Remove common LLM preambles (Qwen3 chattiness)."""
         if not response:
@@ -613,7 +610,7 @@ class DualViewGenerator:
 
         # Fallback: return cleaned response
         return response
-    
+
     def _generate_hard_negative(
         self,
         question: str,
@@ -621,24 +618,24 @@ class DualViewGenerator:
         skill_bucket: str,
     ) -> dict | None:
         """Generate a plausible but incorrect answer."""
-        
+
         # Get failure modes for this skill
         skill = get_skill_bucket(skill_bucket)
         error_types = skill.failure_modes
-        
+
         if not error_types:
             return None
-        
+
         # Pick a random error type
         error_type = random.choice(error_types)
         error_mode = FAILURE_MODES[error_type]
-        
+
         prompt = HARD_NEGATIVE_PROMPT.format(
             question=question,
             correct_answer=correct_answer,
             error_type=f"{error_mode.description}: {error_mode.detection_signal}",
         )
-        
+
         try:
             response = ollama_chat(
                 self.hard_negative_model,
@@ -646,7 +643,7 @@ class DualViewGenerator:
                 max_tokens=512,
                 temperature=0.7,  # Higher temp for more varied mistakes
             )
-            
+
             # Extract wrong answer
             wrong_match = re.search(
                 r"Wrong Answer:\s*(.+?)(?:\n|Error Location:|$)",
@@ -654,7 +651,7 @@ class DualViewGenerator:
                 re.DOTALL,
             )
             wrong_answer = wrong_match.group(1).strip() if wrong_match else None
-            
+
             # Extract reasoning
             think_match = re.search(
                 r"<think>(.*?)</think>",
@@ -662,35 +659,35 @@ class DualViewGenerator:
                 re.DOTALL | re.IGNORECASE,
             )
             reasoning = think_match.group(1).strip() if think_match else response
-            
+
             return {
                 "reasoning": reasoning,
                 "wrong_answer": wrong_answer,
                 "error_type": error_type,
                 "error_description": error_mode.description,
             }
-            
+
         except Exception as e:
             logger.error("Hard negative generation failed: %s", e)
             return None
-    
+
     def _generate_error_correction(
         self,
         question: str,
         hard_negative: dict,
     ) -> dict | None:
         """Generate error correction for the hard negative."""
-        
+
         incorrect_solution = (
             f"Reasoning: {hard_negative['reasoning']}\n"
             f"Answer: {hard_negative['wrong_answer']}"
         )
-        
+
         prompt = ERROR_CORRECTION_PROMPT.format(
             question=question,
             incorrect_solution=incorrect_solution,
         )
-        
+
         try:
             response = ollama_chat(
                 self.model,
@@ -698,7 +695,7 @@ class DualViewGenerator:
                 max_tokens=768,
                 temperature=0.3,
             )
-            
+
             # Extract components
             error_match = re.search(
                 r"Error Identified:\s*(.+?)(?:\n|Why It's Wrong:|$)",
@@ -710,17 +707,19 @@ class DualViewGenerator:
                 response,
                 re.DOTALL,
             )
-            
+
             return {
-                "error_identified": error_match.group(1).strip() if error_match else None,
+                "error_identified": (
+                    error_match.group(1).strip() if error_match else None
+                ),
                 "explanation": why_match.group(1).strip() if why_match else None,
                 "correct_solution": response,
             }
-            
+
         except Exception as e:
             logger.error("Error correction generation failed: %s", e)
             return None
-    
+
     def _extract_answer(self, distilled: str) -> str:
         """Extract answer from distilled view.
 
@@ -827,6 +826,7 @@ class DualViewGenerator:
 # BATCH GENERATION
 # ================================================================
 
+
 def generate_batch(
     questions: list[dict],  # [{question, skill_bucket, band, stage, language}]
     model: str = "qwen3:8b",
@@ -835,10 +835,10 @@ def generate_batch(
     verbose: bool = True,
 ) -> list[DualViewSample]:
     """Generate a batch of dual-view samples."""
-    
+
     generator = DualViewGenerator(model=model)
     samples = []
-    
+
     for i, q in enumerate(questions):
         if verbose and (i + 1) % 10 == 0:
             logger.info("[%d/%d] Generating...", i + 1, len(questions))
@@ -868,7 +868,7 @@ def generate_batch(
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Generate dual-view samples")
     parser.add_argument("--model", default="qwen3:8b", help="Ollama model")
     parser.add_argument("--question", "-q", required=True, help="Question to process")
@@ -878,9 +878,9 @@ if __name__ == "__main__":
     # NEW: allow specifying language for Indic tasks
     parser.add_argument("--language", "-l", default="en", help="Language code (en, hi, bn, ta, te...)")
     parser.add_argument("--no-negative", action="store_true", help="Skip hard negative")
-    
+
     args = parser.parse_args()
-    
+
     generator = DualViewGenerator(model=args.model)
     sample = generator.generate(
         question=args.question,
@@ -891,16 +891,16 @@ if __name__ == "__main__":
         # NEW: pass CLI language flag
         language=args.language,
     )
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("DUAL VIEW SAMPLE")
-    print("="*60)
+    print("=" * 60)
     print(f"\nQuestion: {sample.question}")
     print(f"Band: {sample.band} | Skill: {sample.skill_bucket}")
     print(f"\n--- DISTILLED VIEW ---\n{sample.distilled_view}")
     if sample.think_view:
         print(f"\n--- THINK VIEW ---\n{sample.think_view[:500]}...")
     if sample.hard_negative:
-        print(f"\n--- HARD NEGATIVE ---")
+        print("\n--- HARD NEGATIVE ---")
         print(f"Error Type: {sample.hard_negative['error_type']}")
         print(f"Wrong Answer: {sample.hard_negative['wrong_answer']}")

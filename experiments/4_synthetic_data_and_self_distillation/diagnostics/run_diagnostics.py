@@ -24,18 +24,16 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from diagnostics.diagnostic_tests import (
+from diagnostics.diagnostic_tests import (  # noqa: E402
     DIAGNOSTIC_TESTS,
     DiagnosticTest,
     evaluate_test,
-    get_tests_for_skill,
-    get_tests_for_band,
     get_test_summary,
+    get_tests_for_band,
 )
 from common.logging_config import get_logger
 
 logger = get_logger("diagnostics.run_diagnostics")
-
 
 # ================================================================
 # OLLAMA CLIENT (minimal)
@@ -64,7 +62,7 @@ def ollama_generate(model: str, prompt: str, max_tokens: int = 150) -> str:
             "temperature": 0.1,
         },
     }
-    
+
     url = f"{OLLAMA_BASE}/api/generate"
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
@@ -78,7 +76,7 @@ def ollama_generate(model: str, prompt: str, max_tokens: int = 150) -> str:
     # NEW: uses OLLAMA_TIMEOUT env var for large model support
     with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
         result = json.loads(resp.read().decode("utf-8"))
-    
+
     return result.get("response", "").strip()
 
 
@@ -97,24 +95,27 @@ def check_ollama() -> bool:
 # TEST RUNNER
 # ================================================================
 
+
 def run_single_test(model: str, test: DiagnosticTest, verbose: bool = False) -> dict:
     """Run a single diagnostic test."""
     start = time.time()
-    
+
     try:
         output = ollama_generate(model, test.prompt, test.max_tokens)
         elapsed_ms = (time.time() - start) * 1000
-        
+
         result = evaluate_test(test, output)
-        result.update({
-            "test_id": test.id,
-            "test_name": test.name,
-            "band": test.band,
-            "skill_buckets": test.skill_buckets,
-            "elapsed_ms": round(elapsed_ms, 1),
-            "error": None,
-        })
-        
+        result.update(
+            {
+                "test_id": test.id,
+                "test_name": test.name,
+                "band": test.band,
+                "skill_buckets": test.skill_buckets,
+                "elapsed_ms": round(elapsed_ms, 1),
+                "error": None,
+            }
+        )
+
         if verbose:
             status = "✓" if result["passed"] else "✗"
             logger.info("  %s %s: %s (%.0fms)", status, test.id, test.name, elapsed_ms)
@@ -123,7 +124,7 @@ def run_single_test(model: str, test: DiagnosticTest, verbose: bool = False) -> 
                 logger.debug("      Got: %s...", output[:60])
         
         return result
-        
+
     except Exception as e:
         elapsed_ms = (time.time() - start) * 1000
         if verbose:
@@ -148,10 +149,10 @@ def run_all_tests(
     verbose: bool = True,
 ) -> dict:
     """Run all diagnostic tests."""
-    
+
     tests = tests or DIAGNOSTIC_TESTS
     results = []
-    
+
     if verbose:
         logger.info("=" * 60)
         logger.info("  DIAGNOSTIC TEST RUN: %s", model)
@@ -159,18 +160,18 @@ def run_all_tests(
         logger.info("  Tests to run: %d", len(tests))
     
     start_total = time.time()
-    
+
     for i, test in enumerate(tests):
         result = run_single_test(model, test, verbose)
         results.append(result)
-    
+
     elapsed_total = time.time() - start_total
-    
+
     # Compute statistics
     passed = sum(1 for r in results if r["passed"])
     failed = len(results) - passed
     pass_rate = passed / len(results) if results else 0
-    
+
     # By band
     by_band = {}
     for r in results:
@@ -181,7 +182,7 @@ def run_all_tests(
             by_band[band]["passed"] += 1
         else:
             by_band[band]["failed"] += 1
-    
+
     # By skill
     by_skill = {}
     for r in results:
@@ -192,7 +193,7 @@ def run_all_tests(
                 by_skill[skill]["passed"] += 1
             else:
                 by_skill[skill]["failed"] += 1
-    
+
     # Failure analysis
     failures = [r for r in results if not r["passed"]]
     failure_modes = {}
@@ -200,7 +201,7 @@ def run_all_tests(
         if f.get("failure_detected"):
             fm = f["failure_detected"]
             failure_modes[fm] = failure_modes.get(fm, 0) + 1
-    
+
     summary = {
         "model": model,
         "total_tests": len(results),
@@ -213,7 +214,7 @@ def run_all_tests(
         "failure_modes_detected": failure_modes,
         "results": results,
     }
-    
+
     if verbose:
         logger.info("=" * 60)
         logger.info("  RESULTS SUMMARY")
@@ -251,67 +252,62 @@ def run_all_tests(
 # CLI
 # ================================================================
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run diagnostic tests on a model"
+    parser = argparse.ArgumentParser(description="Run diagnostic tests on a model")
+    parser.add_argument("--model", "-m", default="qwen3:4b", help="Ollama model name")
+    parser.add_argument("--band", "-b", default=None, help="Filter by band (B0-B5)")
+    parser.add_argument("--skill", "-s", default=None, help="Filter by skill bucket")
+    parser.add_argument(
+        "--output", "-o", default=None, help="Save results to JSON file"
     )
-    parser.add_argument("--model", "-m", default="qwen3:4b",
-                        help="Ollama model name")
-    parser.add_argument("--band", "-b", default=None,
-                        help="Filter by band (B0-B5)")
-    parser.add_argument("--skill", "-s", default=None,
-                        help="Filter by skill bucket")
-    parser.add_argument("--output", "-o", default=None,
-                        help="Save results to JSON file")
-    parser.add_argument("--quiet", "-q", action="store_true",
-                        help="Minimal output")
-    parser.add_argument("--list", action="store_true",
-                        help="List all tests and exit")
-    
+    parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
+    parser.add_argument("--list", action="store_true", help="List all tests and exit")
+
     args = parser.parse_args()
-    
+
     # List mode
     if args.list:
         summary = get_test_summary()
         print(f"\nDiagnostic Tests: {summary['total_tests']}")
-        print(f"\nBy Band:")
+        print("\nBy Band:")
         for band, count in sorted(summary["by_band"].items()):
             print(f"  {band}: {count}")
-        print(f"\nBy Skill:")
+        print("\nBy Skill:")
         for skill, count in sorted(summary["by_skill"].items()):
             print(f"  {skill}: {count}")
         return
-    
+
     # Check Ollama
     if not check_ollama():
         print("ERROR: Ollama is not running!")
         print("Start it with: ollama serve")
         sys.exit(1)
-    
+
     # Filter tests
     tests = DIAGNOSTIC_TESTS
     if args.band:
         tests = get_tests_for_band(args.band)
     if args.skill:
         tests = [t for t in tests if args.skill in t.skill_buckets]
-    
+
     if not tests:
         print("No tests match the specified filters")
         sys.exit(1)
-    
+
     # Run tests
     results = run_all_tests(
         model=args.model,
         tests=tests,
         verbose=not args.quiet,
     )
-    
+
     # Save results
     if args.output:
         with open(args.output, "w") as f:
             json.dump(results, f, indent=2)
         print(f"\nResults saved to: {args.output}")
-    
+
     # Exit code based on pass rate
     if results["pass_rate"] < 0.5:
         sys.exit(1)

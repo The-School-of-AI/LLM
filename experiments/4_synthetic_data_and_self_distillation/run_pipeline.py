@@ -32,9 +32,14 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from common import (
-    Band, Stage, SKILL_BUCKETS, get_skill_bucket,
-    cot_allowed_for_band, get_injection_cap, STAGE_CONFIGS,
+from common import (  # noqa: E402
+    SKILL_BUCKETS,
+    STAGE_CONFIGS,
+    Band,
+    Stage,
+    cot_allowed_for_band,
+    get_injection_cap,
+    get_skill_bucket,
 )
 from common.logging_config import setup_logging, get_logger
 
@@ -45,12 +50,12 @@ DEFAULT_BANK_DIR = Path("./synth_data_bank")
 
 def cmd_generate_bank(args):
     """Pre-generate synthetic data bank."""
-    from generation.seed_generator import SeedGenerator, get_builtin_seeds
     from generation.dual_view_generator import DualViewGenerator
-    
+    from generation.seed_generator import SeedGenerator, get_builtin_seeds
+
     bank_dir = Path(args.bank_dir)
     bank_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if args.all:
         skills = list(SKILL_BUCKETS.keys())
     elif args.skills:
@@ -143,10 +148,10 @@ def cmd_generate_bank(args):
             "shard_file": str(shard_path.name),
             "priority": skill.priority,
         }
-    
+
     with open(bank_dir / "manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
-    
+
     total = sum(m["samples"] for m in manifest["skills"].values())
     logger.info("=" * 60)
     logger.info("  DONE: Bank created with %d total samples across %d skills", total, len(manifest["skills"]))
@@ -156,7 +161,7 @@ def cmd_generate_bank(args):
 
 def cmd_status(args):
     """Show data bank status."""
-    from common.skills import SKILL_ALIASES, resolve_skill_alias
+    from common.skills import resolve_skill_alias
 
     bank_dir = Path(args.bank_dir)
     manifest_path = bank_dir / "manifest.json"
@@ -244,7 +249,7 @@ def cmd_rebuild_manifest(args):
 
         # Count samples
         with open(shard_path, encoding="utf-8") as f:
-            samples = [json.loads(l) for l in f if l.strip()]
+            samples = [json.loads(line) for line in f if line.strip()]
 
         hard_neg_count = sum(1 for s in samples if s.get("hard_negative"))
 
@@ -270,9 +275,9 @@ def cmd_rebuild_manifest(args):
 def cmd_seeds(args):
     """Generate seed questions."""
     from generation.seed_generator import SeedGenerator, get_builtin_seeds
-    
+
     all_seeds = []
-    
+
     if args.builtin:
         skills = list(SKILL_BUCKETS.keys()) if args.all else [args.skill]
         for skill_id in skills:
@@ -287,7 +292,7 @@ def cmd_seeds(args):
                 all_seeds.extend(seeds)
         elif args.skill:
             all_seeds = generator.generate(args.skill, args.num, args.difficulty)
-    
+
     output_path = args.output or f"seeds_{datetime.now():%Y%m%d_%H%M}.jsonl"
     with open(output_path, "w", encoding="utf-8") as f:
         for seed in all_seeds:
@@ -298,9 +303,9 @@ def cmd_seeds(args):
 
 def cmd_generate(args):
     """Generate for single skill."""
-    from generation.seed_generator import get_builtin_seeds
     from generation.dual_view_generator import DualViewGenerator
-    
+    from generation.seed_generator import get_builtin_seeds
+
     skill = get_skill_bucket(args.skill)
     logger.info("Generating for skill: %s (band=%s, model=%s)", args.skill, skill.primary_band.value, args.model)
     
@@ -314,7 +319,7 @@ def cmd_generate(args):
     
     generator = DualViewGenerator(model=args.model)
     samples = []
-    
+
     for i, seed in enumerate(seeds):
         seed_language = seed.get("language", skill.languages[0] if skill.languages else "en")
         logger.debug("[%d/%d] Processing seed: %s (lang=%s)", i + 1, len(seeds), seed["question"][:60], seed_language)
@@ -342,13 +347,13 @@ def cmd_generate(args):
 
 def cmd_diagnose(args):
     """Run diagnostic tests."""
-    from diagnostics.run_diagnostics import run_all_tests, check_ollama
-    from diagnostics.diagnostic_tests import DIAGNOSTIC_TESTS, get_tests_for_skill, get_tests_for_band
-    
+    from diagnostics.diagnostic_tests import DIAGNOSTIC_TESTS, get_tests_for_skill
+    from diagnostics.run_diagnostics import check_ollama, run_all_tests
+
     if not check_ollama():
         logger.error("Ollama is not running! Start with: ollama serve")
         sys.exit(1)
-    
+
     tests = DIAGNOSTIC_TESTS
     if args.skill:
         tests = get_tests_for_skill(args.skill)
@@ -361,16 +366,16 @@ def cmd_diagnose(args):
     logger.info("  Model: %s | Tests: %d | Threshold: %.0f%%", args.model, len(tests), args.threshold * 100)
     
     results = run_all_tests(model=args.model, tests=tests, verbose=not args.quiet)
-    
+
     weak_skills = []
     for skill, stats in results.get("by_skill", {}).items():
         total = stats["passed"] + stats["failed"]
         rate = stats["passed"] / total if total > 0 else 0
         if rate < args.threshold:
             weak_skills.append({"skill": skill, "pass_rate": rate})
-    
+
     weak_skills.sort(key=lambda x: x["pass_rate"])
-    
+
     bank_dir = Path(args.bank_dir)
     manifest_path = bank_dir / "manifest.json"
     bank_available = {}
@@ -403,14 +408,14 @@ def cmd_inject(args):
     """Prepare injection from bank."""
     bank_dir = Path(args.bank_dir)
     manifest_path = bank_dir / "manifest.json"
-    
+
     if not manifest_path.exists():
         logger.error("Bank not found at %s", bank_dir)
         sys.exit(1)
-    
+
     with open(manifest_path, encoding="utf-8") as f:
         manifest = json.load(f)
-    
+
     if args.skills:
         skills_to_inject = args.skills
     elif args.weakness_report:
@@ -460,7 +465,7 @@ def cmd_inject(args):
 
         shard_path = bank_dir / manifest["skills"][skill_id]["shard_file"]
         with open(shard_path, encoding="utf-8") as f:
-            samples = [json.loads(l) for l in f if l.strip()]
+            samples = [json.loads(line) for line in f if line.strip()]
 
         # Filter by allowed bands for stage
         original_count = len(samples)
@@ -483,22 +488,28 @@ def cmd_inject(args):
     for s in all_samples:
         cot = cot_allowed_for_band(s.get("band", "B3"))
         use_cot = cot and args.stage in ("SFT", "DPO")
-        
+
         item = {
             "id": s.get("id"),
             "instruction": s.get("question"),
-            "output": s.get("think_view") if use_cot and s.get("think_view") else s.get("distilled_view"),
+            "output": (
+                s.get("think_view")
+                if use_cot and s.get("think_view")
+                else s.get("distilled_view")
+            ),
             "skill_bucket": s.get("skill_bucket"),
             "band": s.get("band"),
             "stage": args.stage,
         }
-        
+
         if args.stage == "DPO" and s.get("hard_negative"):
             item["rejected"] = s["hard_negative"].get("reasoning", "")
-        
+
         formatted.append(item)
-    
-    output_path = args.output or f"injection_{args.stage}_{datetime.now():%Y%m%d_%H%M}.jsonl"
+
+    output_path = (
+        args.output or f"injection_{args.stage}_{datetime.now():%Y%m%d_%H%M}.jsonl"
+    )
     with open(output_path, "w", encoding="utf-8") as f:
         for item in formatted:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
@@ -523,7 +534,7 @@ def cmd_inject(args):
 
 def cmd_validate(args):
     """Run proxy validation."""
-    from validation.proxy_validation import run_validation, ValidationConfig
+    from validation.proxy_validation import ValidationConfig, run_validation
 
     config = ValidationConfig(
         proxy_model=args.model,
@@ -551,17 +562,22 @@ def cmd_check_contamination(args):
     # Save report
     if args.report:
         import json
+
         with open(args.report, "w") as f:
-            json.dump({
-                "total_samples": report.total_samples,
-                "contaminated_samples": report.contaminated_samples,
-                "contamination_rate": report.contamination_rate,
-                "exact_matches": report.exact_matches,
-                "high_similarity_matches": report.high_similarity_matches,
-                "partial_matches": report.partial_matches,
-                "by_benchmark": report.by_benchmark,
-                "flagged_samples": report.flagged_samples,
-            }, f, indent=2)
+            json.dump(
+                {
+                    "total_samples": report.total_samples,
+                    "contaminated_samples": report.contaminated_samples,
+                    "contamination_rate": report.contamination_rate,
+                    "exact_matches": report.exact_matches,
+                    "high_similarity_matches": report.high_similarity_matches,
+                    "partial_matches": report.partial_matches,
+                    "by_benchmark": report.by_benchmark,
+                    "flagged_samples": report.flagged_samples,
+                },
+                f,
+                indent=2,
+            )
         print(f"[Report] {args.report}")
 
 
@@ -623,7 +639,7 @@ LOGGING:
                         help="Directory for log files (default: ./logs/)")
     
     sub = parser.add_subparsers(dest="command")
-    
+
     # generate-bank
     p = sub.add_parser("generate-bank", help="Pre-generate data bank (Phase 1)")
     p.add_argument("--all", action="store_true")
@@ -631,11 +647,15 @@ LOGGING:
     p.add_argument("--num", "-n", type=int, default=30)
     p.add_argument("--model", "-m", default="qwen3:8b")
     p.add_argument("--bank-dir", default="./synth_data_bank")
-    p.add_argument("--difficulty", default="mixed", choices=["easy","medium","hard","mixed"])
+    p.add_argument(
+        "--difficulty", default="mixed", choices=["easy", "medium", "hard", "mixed"]
+    )
     p.add_argument("--builtin-seeds", action="store_true")
     p.add_argument("--no-hard-negatives", dest="hard_negatives", action="store_false")
-    p.add_argument("--no-error-correction", dest="error_correction", action="store_false")
-    
+    p.add_argument(
+        "--no-error-correction", dest="error_correction", action="store_false"
+    )
+
     # status
     p = sub.add_parser("status", help="Show bank status")
     p.add_argument("--bank-dir", default="./synth_data_bank")
@@ -644,7 +664,9 @@ LOGGING:
     # rebuild-manifest
     p = sub.add_parser("rebuild-manifest", help="Rebuild manifest from existing shards")
     p.add_argument("--bank-dir", default="./synth_data_bank")
-    p.add_argument("--model", "-m", default=None, help="Model name to record in manifest")
+    p.add_argument(
+        "--model", "-m", default=None, help="Model name to record in manifest"
+    )
 
     # seeds
     p = sub.add_parser("seeds", help="Generate seeds only")
@@ -655,7 +677,7 @@ LOGGING:
     p.add_argument("--difficulty", default="mixed")
     p.add_argument("--output", "-o")
     p.add_argument("--builtin", action="store_true")
-    
+
     # generate
     p = sub.add_parser("generate", help="Generate for single skill")
     p.add_argument("--skill", "-s", required=True)
@@ -664,8 +686,10 @@ LOGGING:
     p.add_argument("--seeds")
     p.add_argument("--output", "-o")
     p.add_argument("--no-hard-negatives", dest="hard_negatives", action="store_false")
-    p.add_argument("--no-error-correction", dest="error_correction", action="store_false")
-    
+    p.add_argument(
+        "--no-error-correction", dest="error_correction", action="store_false"
+    )
+
     # diagnose
     p = sub.add_parser("diagnose", help="Run diagnostics (Phase 2)")
     p.add_argument("--model", "-m", default="qwen3:4b")
@@ -675,16 +699,16 @@ LOGGING:
     p.add_argument("--bank-dir", default="./synth_data_bank")
     p.add_argument("--output", "-o")
     p.add_argument("--quiet", "-q", action="store_true")
-    
+
     # inject
     p = sub.add_parser("inject", help="Prepare injection from bank")
     p.add_argument("--skills", nargs="*")
     p.add_argument("--weakness-report")
-    p.add_argument("--stage", default="SFT", choices=["PRE","SFT","DPO","RLHF"])
+    p.add_argument("--stage", default="SFT", choices=["PRE", "SFT", "DPO", "RLHF"])
     p.add_argument("--max-pct", type=float, default=100.0)
     p.add_argument("--bank-dir", default="./synth_data_bank")
     p.add_argument("--output", "-o")
-    
+
     # validate
     p = sub.add_parser("validate", help="Validate with proxy model")
     p.add_argument("synthetic_data")
@@ -695,30 +719,44 @@ LOGGING:
     p.add_argument("--baseline-model", default="qwen2.5:1.5b")
 
     # check-contamination
-    p = sub.add_parser("check-contamination", help="Check data for benchmark contamination")
+    p = sub.add_parser(
+        "check-contamination", help="Check data for benchmark contamination"
+    )
     p.add_argument("data", help="Path to JSONL data file")
-    p.add_argument("--benchmarks", nargs="*", help="Benchmarks to check (default: gsm8k, math, mmlu)")
-    p.add_argument("--filter", action="store_true", help="Filter out contaminated samples")
+    p.add_argument(
+        "--benchmarks",
+        nargs="*",
+        help="Benchmarks to check (default: gsm8k, math, mmlu)",
+    )
+    p.add_argument(
+        "--filter", action="store_true", help="Filter out contaminated samples"
+    )
     p.add_argument("--output", "-o", help="Output path for filtered data")
     p.add_argument("--report", "-r", help="Path to save contamination report JSON")
 
     # verify
     p = sub.add_parser("verify", help="Run verification pipeline on samples")
     p.add_argument("data", help="Path to JSONL data file")
-    p.add_argument("--teacher", "-t", default="qwen3:8b", help="Teacher model for verification")
-    p.add_argument("--student", "-s", default="qwen3:4b", help="Student model for re-solve")
+    p.add_argument(
+        "--teacher", "-t", default="qwen3:8b", help="Teacher model for verification"
+    )
+    p.add_argument(
+        "--student", "-s", default="qwen3:4b", help="Student model for re-solve"
+    )
     p.add_argument("--output", "-o", help="Output path for verified data")
 
     # import-synth
     p = sub.add_parser("import-synth", help="Import samples from PleIAs/SYNTH dataset")
-    p.add_argument("--num", "-n", type=int, default=1000, help="Number of samples to import")
+    p.add_argument(
+        "--num", "-n", type=int, default=1000, help="Number of samples to import"
+    )
     p.add_argument("--bank-dir", default="./synth_data_bank", help="Output directory")
     p.add_argument("--language", "-l", default="en", help="Language filter")
     p.add_argument("--skills", nargs="*", help="Filter by skill buckets")
     p.add_argument("--bands", nargs="*", help="Filter by bands")
 
     args = parser.parse_args()
-    
+
     if not args.command:
         parser.print_help()
         sys.exit(1)
