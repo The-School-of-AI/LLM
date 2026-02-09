@@ -1,0 +1,10 @@
+{
+  "total_samples": 2,
+  "contaminated_samples": 0,
+  "contamination_rate": 0.0,
+  "exact_matches": 0,
+  "high_similarity_matches": 0,
+  "partial_matches": 0,
+  "by_benchmark": {},
+  "flagged_samples": []
+}
