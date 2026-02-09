@@ -17,6 +17,42 @@ Usage:
     results = checker.check_samples(synthetic_samples)
 """
 
+"NEW CHANGES"
+"""
+WHAT THIS SCRIPT HAS:
+- Text normalization
+- Exact hash matching
+- N-gram Jaccard similarity
+- MinHash + LSH (NEW, for scalability)
+
+WHY MinHash + LSH WAS ADDED:
+- Avoid O(N×M) brute-force comparisons
+- Keep $0 cost
+- Improve scalability and recall safely
+"""
+
+'''contamination.py
+│
+├─ Text normalization                    (unchanged)
+├─ Hashing (exact match)                 (unchanged)
+├─ N-gram generation                     (unchanged)
+│
+├─ Disk cache (persistent)               (kept + extended)
+│    ├─ hashes
+│    ├─ ngrams
+│    ├─ questions
+│    └─ minhash signatures   ← NEW
+│
+├─ MinHash + LSH (in-memory index)        ← NEW
+│    └─ candidate retrieval only
+│
+├─ Exact Jaccard similarity               (unchanged)
+│    └─ applied ONLY to candidates
+│
+├─ Threshold decision                    (unchanged)
+'''
+
+
 import hashlib
 import json
 import re
