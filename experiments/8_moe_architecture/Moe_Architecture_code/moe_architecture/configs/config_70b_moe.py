@@ -49,20 +49,20 @@ def get_config() -> MoEModelConfig:
         stage=4,
         
         # Core dimensions (SAME as 8B! - structure preserved)
-        hidden_size=2560,                # SAME as 8B
-        num_layers=32,                   # SAME as 8B 
+        hidden_size=4096,               
+        num_layers=20,                  
         
         # MoE Configuration (EXPLODED experts for 70B)
         # Base 70 experts × 4 fine-grained factor = 280 effective routed experts
         # Total params: 280 experts × 3 × 6144 × 64 × 32 layers ≈ 70B
-        num_routed_experts=70,          # EXPLODED Total:256
-        num_shared_experts=1,            # REDUCED (was 2) - paper: decays at scale
-        num_null_experts=1,              # Single null (M=N=280 copies in router)
-        moe_layer_frequency=1,           # MoE on ALL layers
+        num_routed_experts=136,          
+        num_shared_experts=1,            
+        num_null_experts=1,              
+        moe_layer_frequency=1,           
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=50304,            # Standardized
+            vocab_size=128000,            # Standardized
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -78,9 +78,9 @@ def get_config() -> MoEModelConfig:
         # With N=280, ρ=0.5, k_max=16: M=280 null copies, E[K_real]=16
         router=RouterConfig(
             router_type=RouterType.NULL_EXPERT,
-            top_k=2,                     # Same k_max base (×4 = 16 effective)
-            data_sparsity=0.5,           # ρ = 0.5 (paper stable region)
-            null_copies=0,               # Auto-derive: M = 280 × (1-0.5)/0.5 = 280
+            top_k=2,                     
+            data_sparsity=0.5,           
+            null_copies=0,               
             use_aux_loss=True,
             aux_loss_weight=0.02,
             router_z_loss_weight=0.001,
@@ -90,7 +90,7 @@ def get_config() -> MoEModelConfig:
         # Active = 9 experts/token × 3 × 6144 × 64 × 28 ≈ 2.4B
         # Total = 280 experts × 3 × 6144 × 64 × 28 ≈ 70B  
         expert=ExpertConfig(
-            intermediate_size=4096,       
+            intermediate_size=2048,       
             fine_grained_factor=4,       # DeepSeek-MoE style
             use_dual_gating=False,
             gate_bias_init=0.0,
@@ -98,14 +98,35 @@ def get_config() -> MoEModelConfig:
             noise_std_for_expansion=1e-3, # More noise for expert divergence
         ),
         
-        # Attention Configuration (SAME as 8B)
+        # Attention Configuration (Hybrid - Qwen3 Next Style)
+        # Alternates between linear (Gated DeltaNet) and full attention layers
+        # Pattern: 3 linear : 1 full (every 4th layer is full attention)
         attention=AttentionConfig(
-            attention_type="gsa",
-            num_attention_heads=16,      # Same as 8B
-            num_kv_heads=4,
-            head_dim=160,
+            attention_type="gsa",      
+            num_attention_heads=32,       
+            num_kv_heads=2,               
+            head_dim=128,                 
             rope_theta=10000.0,
             attention_dropout=0.0,
+            
+            # Hybrid configuration
+            full_attention_interval=4,    
+            
+            # Linear attention parameters (Gated DeltaNet)
+            # Optimized for good param savings while maintaining quality
+            linear_num_key_heads=16,      # Key heads
+            linear_num_value_heads=32,    # Value heads
+            linear_key_head_dim=64,       # Key head dim
+            linear_value_head_dim=64,     # Value head dim (reduced for savings)
+            linear_conv_kernel_dim=4,     # Conv kernel size
+            
+            # MLA params (kept for reference, not used with hybrid)
+            kv_lora_rank=256,
+            q_lora_rank=768,
+            qk_rope_head_dim=64,
+            qk_nope_head_dim=128,
+            v_head_dim=128,
+            # GSA params (kept for reference)
             gsa_indexer_dim=64,
             gsa_indexer_heads=4,
             gsa_k_base=2048,

@@ -52,17 +52,17 @@ def get_config() -> MoEModelConfig:
         
         # Core dimensions (SAME as 1B)
         hidden_size=2048,
-        num_layers=16,
+        num_layers=18,
         
         # MoE Configuration (DeepSeek-faithful + Null Experts paper)
-        num_routed_experts=6,            # N_seg = 6 per segment
-        num_shared_experts=2,            # Ks = 2 shared (always active)
+        num_routed_experts=12,            # N_seg = 6 per segment
+        num_shared_experts=1,            # Ks = 2 shared (always active)
         num_null_experts=1,              # Single null expert (M copies in router)
         moe_layer_frequency=1,           # MoE on ALL layers (Every Layer MoE)
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=50304,
+            vocab_size=128000,
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -82,7 +82,7 @@ def get_config() -> MoEModelConfig:
             top_k=2,                     # Base k_max (×4 fine-grained = 8 effective)
             data_sparsity=0.5,           # ρ = 0.5 (paper stable region)
             null_copies=0,               # 0 = derive from formula M = N×(1-ρ)/ρ
-            use_aux_loss=False,
+            use_aux_loss=True,
             aux_loss_weight=0.02,        # Paper recommends ~2e-2
             router_z_loss_weight=0.001,  # Paper recommends z-loss ~1e-3
         ),
@@ -91,10 +91,10 @@ def get_config() -> MoEModelConfig:
         expert=ExpertConfig(
             # Swiglu hidden layer expansion rule
             # Intermediate size without experts and segments = (8/3 * 2048) ~ 5504 (divisible by 2)
-            # We are using 4096 as intermediate size, half of dense model intermediate size
+            # We are using 4096 as intermediate size
             # Fine grained segments = 4, which means intermediate size will be divided into 4 segments 
             # Each segment intermediate size = 4096/4 = 1024
-            intermediate_size=4096,       
+            intermediate_size=2048,       
             fine_grained_factor=4,       # DeepSeek-MoE style: 4× more experts, 4× smaller each
             use_dual_gating=False,        # Disabled for efficiency
             gate_bias_init=0.0,           # σ(0) = 0.5 at init
@@ -106,7 +106,7 @@ def get_config() -> MoEModelConfig:
         attention=AttentionConfig(
             attention_type="gsa",
             num_attention_heads=16,
-            num_kv_heads=4,               # 4:1 GQA
+            num_kv_heads=2,               
             head_dim=128,
             rope_theta=10000.0,
             attention_dropout=0.0,

@@ -53,7 +53,11 @@ from typing import Optional, Dict, Tuple, List, Any
 import math
 
 from model.config import MoEModelConfig, ModelType
-from model.attention import GQAttention, GatedSparseAttention, RMSNorm, create_causal_mask
+from model.attention import (
+    GQAttention, GatedSparseAttention, MLAttention, 
+    GatedDeltaNetAttention, RMSNorm, create_causal_mask
+)
+from model.gsa_mla_attention import GSALatentAttention
 from model.moe_block import MoEBlock, DenseFFN
 
 
@@ -89,10 +93,43 @@ class TransformerLayer(nn.Module):
             eps=config.rms_norm_eps
         )
         
-        # Attention (GQA or GSA)
-        if config.attention.attention_type == "gsa":
+        # Attention type selection based on config
+        attention_type = config.attention.attention_type
+        
+        # For hybrid attention, use layer_types to determine per-layer attention
+        if attention_type == "hybrid" and config.attention.layer_types:
+            layer_type = config.attention.layer_types[layer_idx]
+            if layer_type == "full":
+                # Full attention layer (GQA for hybrid)
+                self.self_attn = GQAttention(config, layer_idx)
+            else:
+                # Linear attention layer
+                self.self_attn = GatedDeltaNetAttention(config, layer_idx)
+        elif attention_type == "gsa_mla_hybrid" and config.attention.layer_types:
+            # GSA-MLA Hybrid: GSA-MLA for full layers, DeltaNet for linear layers
+            layer_type = config.attention.layer_types[layer_idx]
+            if layer_type == "full":
+                self.self_attn = GSALatentAttention(config, layer_idx)
+            else:
+                self.self_attn = GatedDeltaNetAttention(config, layer_idx)
+        elif attention_type == "gsa_hybrid" and config.attention.layer_types:
+            # GSA Hybrid: GSA for full layers, DeltaNet for linear layers
+            layer_type = config.attention.layer_types[layer_idx]
+            if layer_type == "full":
+                self.self_attn = GatedSparseAttention(config, layer_idx)
+            else:
+                self.self_attn = GatedDeltaNetAttention(config, layer_idx)
+        elif attention_type == "gsa_mla":
+            # Pure GSA-MLA (no hybrid)
+            self.self_attn = GSALatentAttention(config, layer_idx)
+        elif attention_type == "gsa":
             self.self_attn = GatedSparseAttention(config, layer_idx)
+        elif attention_type == "mla":
+            self.self_attn = MLAttention(config, layer_idx)
+        elif attention_type == "linear":
+            self.self_attn = GatedDeltaNetAttention(config, layer_idx)
         else:
+            # Default: GQA
             self.self_attn = GQAttention(config, layer_idx)
         
         # Post-attention normalization

@@ -796,6 +796,728 @@ class GatedSparseAttention(nn.Module):
         return attn_output, past_key_value
 
 
+class MLAttention(nn.Module):
+    """
+    Multi-head Latent Attention (MLA) from DeepSeek V2/V3.
+    
+    MLA compresses KV into a low-rank latent space for massive parameter reduction
+    while maintaining model quality. Key innovations:
+    
+    1. KV Compression: hidden → c_kv (small latent) → K, V (decompressed)
+    2. Decoupled RoPE: K_rope comes directly from hidden, K_nope from latent
+    3. Optional Q Compression: hidden → c_q → Q (if q_lora_rank > 0)
+    4. Inference Optimization: Only cache c_kv instead of full K, V
+    
+    Reference: DeepSeek-V2 Technical Report
+    
+    Architecture:
+        Down projections:
+            W_DKV: hidden → c_kv (KV compression)
+            W_DQ: hidden → c_q (Q compression, optional)
+        
+        Up projections:
+            W_UK: c_kv → K_nope (content-based K)
+            W_UV: c_kv → V
+            W_UQ: c_q → Q (nope + rope)
+            W_KR: hidden → K_rope (position-based K)
+    """
+    
+    def __init__(self, config: MoEModelConfig, layer_idx: int = 0):
+        super().__init__()
+        self.config = config
+        self.attention_config = config.attention
+        self.layer_idx = layer_idx
+        
+        self.hidden_size = config.hidden_size
+        self.num_heads = self.attention_config.num_attention_heads
+        
+        # MLA dimensions
+        self.kv_lora_rank = self.attention_config.kv_lora_rank  # c_kv
+        self.q_lora_rank = self.attention_config.q_lora_rank    # c_q (0 = no compression)
+        self.qk_rope_head_dim = self.attention_config.qk_rope_head_dim  # d_h^R
+        self.qk_nope_head_dim = self.attention_config.qk_nope_head_dim  # d_h^C
+        self.v_head_dim = self.attention_config.v_head_dim              # d_h^V
+        
+        # Total head dimensions
+        self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim
+        
+        # ============================================================
+        # Down Projections (Compression)
+        # ============================================================
+        
+        # KV down-projection: hidden → c_kv
+        self.kv_down_proj = nn.Linear(
+            self.hidden_size,
+            self.kv_lora_rank,
+            bias=False
+        )
+        
+        # Q down-projection (optional): hidden → c_q
+        self.use_q_compression = self.q_lora_rank > 0
+        if self.use_q_compression:
+            self.q_down_proj = nn.Linear(
+                self.hidden_size,
+                self.q_lora_rank,
+                bias=False
+            )
+        
+        # ============================================================
+        # Up Projections (Decompression)
+        # ============================================================
+        
+        # K non-RoPE up-projection: c_kv → K_nope
+        self.k_nope_up_proj = nn.Linear(
+            self.kv_lora_rank,
+            self.num_heads * self.qk_nope_head_dim,
+            bias=False
+        )
+        
+        # K RoPE projection (from hidden, not latent): hidden → K_rope
+        self.k_rope_proj = nn.Linear(
+            self.hidden_size,
+            self.num_heads * self.qk_rope_head_dim,
+            bias=False
+        )
+        
+        # V up-projection: c_kv → V
+        self.v_up_proj = nn.Linear(
+            self.kv_lora_rank,
+            self.num_heads * self.v_head_dim,
+            bias=False
+        )
+        
+        # Q up-projection: c_q → Q_nope + Q_rope (or hidden → Q if no compression)
+        if self.use_q_compression:
+            self.q_up_proj = nn.Linear(
+                self.q_lora_rank,
+                self.num_heads * self.qk_head_dim,
+                bias=False
+            )
+        else:
+            self.q_proj = nn.Linear(
+                self.hidden_size,
+                self.num_heads * self.qk_head_dim,
+                bias=False
+            )
+        
+        # Output projection
+        self.o_proj = nn.Linear(
+            self.num_heads * self.v_head_dim,
+            self.hidden_size,
+            bias=self.attention_config.attention_bias
+        )
+        
+        # ============================================================
+        # RoPE (for decoupled rope dimensions only)
+        # ============================================================
+        
+        self.rotary_emb = RotaryEmbedding(
+            self.qk_rope_head_dim,  # Only for rope dimensions
+            max_position_embeddings=config.max_position_embeddings,
+            base=self.attention_config.rope_theta,
+            rope_scaling=self.attention_config.rope_scaling,
+        )
+        
+        # Dropout
+        self.attention_dropout = nn.Dropout(self.attention_config.attention_dropout)
+        
+        # Initialize weights
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize MLA weights."""
+        nn.init.normal_(self.kv_down_proj.weight, std=0.02)
+        nn.init.normal_(self.k_nope_up_proj.weight, std=0.02)
+        nn.init.normal_(self.k_rope_proj.weight, std=0.02)
+        nn.init.normal_(self.v_up_proj.weight, std=0.02)
+        nn.init.normal_(self.o_proj.weight, std=0.02)
+        
+        if self.use_q_compression:
+            nn.init.normal_(self.q_down_proj.weight, std=0.02)
+            nn.init.normal_(self.q_up_proj.weight, std=0.02)
+        else:
+            nn.init.normal_(self.q_proj.weight, std=0.02)
+        
+        if self.attention_config.attention_bias:
+            nn.init.zeros_(self.o_proj.bias)
+    
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = None,
+        use_cache: bool = False
+    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]]:
+        """
+        Forward pass for MLA.
+        
+        Args:
+            hidden_states: [batch, seq_len, hidden_size]
+            attention_mask: [batch, 1, seq_len, seq_len] attention mask
+            position_ids: [batch, seq_len] position IDs
+            past_key_value: Cached (c_kv, k_rope) for incremental decoding
+            use_cache: Whether to return updated cache
+            
+        Returns:
+            output: [batch, seq_len, hidden_size]
+            past_key_value: Updated cache (c_kv, k_rope) if use_cache=True
+        """
+        batch_size, seq_len, _ = hidden_states.shape
+        
+        # ============================================================
+        # Q Path
+        # ============================================================
+        
+        if self.use_q_compression:
+            # Compress Q: hidden → c_q → Q
+            q_compressed = self.q_down_proj(hidden_states)
+            query_states = self.q_up_proj(q_compressed)
+        else:
+            # Direct Q: hidden → Q
+            query_states = self.q_proj(hidden_states)
+        
+        # Reshape Q to [batch, num_heads, seq_len, qk_head_dim]
+        query_states = query_states.view(
+            batch_size, seq_len, self.num_heads, self.qk_head_dim
+        ).transpose(1, 2)
+        
+        # Split Q into nope and rope components
+        q_nope = query_states[..., :self.qk_nope_head_dim]
+        q_rope = query_states[..., self.qk_nope_head_dim:]
+        
+        # ============================================================
+        # KV Path
+        # ============================================================
+        
+        # Compress KV: hidden → c_kv
+        kv_compressed = self.kv_down_proj(hidden_states)
+        
+        # Decompress K_nope: c_kv → K_nope
+        k_nope = self.k_nope_up_proj(kv_compressed).view(
+            batch_size, seq_len, self.num_heads, self.qk_nope_head_dim
+        ).transpose(1, 2)
+        
+        # Get K_rope directly from hidden (decoupled RoPE)
+        k_rope = self.k_rope_proj(hidden_states).view(
+            batch_size, seq_len, self.num_heads, self.qk_rope_head_dim
+        ).transpose(1, 2)
+        
+        # Decompress V: c_kv → V
+        value_states = self.v_up_proj(kv_compressed).view(
+            batch_size, seq_len, self.num_heads, self.v_head_dim
+        ).transpose(1, 2)
+        
+        # ============================================================
+        # RoPE (only on rope components)
+        # ============================================================
+        
+        cos, sin = self.rotary_emb(q_rope, seq_len=seq_len)
+        q_rope, k_rope = apply_rotary_pos_emb(q_rope, k_rope, cos, sin, position_ids)
+        
+        # ============================================================
+        # KV Cache (store compressed latent + k_rope)
+        # ============================================================
+        
+        if past_key_value is not None:
+            # Unpack cached values
+            past_kv_compressed, past_k_rope, past_value = past_key_value
+            
+            # Concatenate with current
+            kv_compressed = torch.cat([past_kv_compressed, kv_compressed], dim=1)
+            k_rope = torch.cat([past_k_rope, k_rope], dim=2)
+            value_states = torch.cat([past_value, value_states], dim=2)
+            
+            # Re-decompress k_nope for full sequence
+            k_nope = self.k_nope_up_proj(kv_compressed).view(
+                batch_size, kv_compressed.shape[1], self.num_heads, self.qk_nope_head_dim
+            ).transpose(1, 2)
+        
+        # Cache for next step
+        if use_cache:
+            past_key_value = (kv_compressed, k_rope, value_states)
+        else:
+            past_key_value = None
+        
+        # ============================================================
+        # Combine K components
+        # ============================================================
+        
+        # Concatenate k_nope and k_rope to get full K
+        key_states = torch.cat([k_nope, k_rope], dim=-1)
+        
+        # Combine q_nope and q_rope to get full Q
+        query_states = torch.cat([q_nope, q_rope], dim=-1)
+        
+        # ============================================================
+        # Attention
+        # ============================================================
+        
+        # Scale factor
+        scale = 1.0 / math.sqrt(self.qk_head_dim)
+        
+        # Compute attention scores
+        attn_weights = torch.matmul(query_states, key_states.transpose(-2, -1)) * scale
+        
+        # Apply attention mask (causal)
+        if attention_mask is not None:
+            attn_weights = attn_weights + attention_mask
+        
+        # Softmax
+        attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        
+        # Dropout
+        attn_weights = self.attention_dropout(attn_weights)
+        
+        # Compute attention output
+        attn_output = torch.matmul(attn_weights, value_states)
+        
+        # Reshape back
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.reshape(batch_size, seq_len, self.num_heads * self.v_head_dim)
+        
+        # Output projection
+        attn_output = self.o_proj(attn_output)
+        
+        return attn_output, past_key_value
+
+
+class GatedRMSNorm(nn.Module):
+    """
+    Gated RMS Normalization.
+    
+    Applies RMSNorm and then gates the output with SiLU activation.
+    Used in Qwen3 Next's linear attention for gating the output.
+    """
+    
+    def __init__(self, hidden_size: int, eps: float = 1e-6):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.variance_epsilon = eps
+    
+    def forward(self, hidden_states: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
+        input_dtype = hidden_states.dtype
+        hidden_states = hidden_states.to(torch.float32)
+        
+        variance = hidden_states.pow(2).mean(-1, keepdim=True)
+        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
+        hidden_states = self.weight * hidden_states.to(input_dtype)
+        
+        # Gate with SiLU
+        hidden_states = hidden_states * F.silu(gate.to(torch.float32))
+        
+        return hidden_states.to(input_dtype)
+
+
+class GatedDeltaNetAttention(nn.Module):
+    """
+    Gated Delta Rule Linear Attention from Qwen3 Next.
+    
+    Instead of storing full KV cache (O(seq_len)), uses a recurrent state
+    of fixed size (O(key_dim × value_dim)). This enables:
+    - O(1) memory for inference
+    - Massive parameter reduction
+    - Efficient long-context handling
+    
+    Key components:
+    1. QKVZ projection: Combined query, key, value, and gate projection
+    2. BA projection: Beta (update) and Alpha (decay) for recurrent dynamics
+    3. Causal Conv1d: Temporal smoothing
+    4. Delta rule: Recurrent update k_t × v_t - k_t × (k_t @ state)
+    
+    Training uses chunk-based processing for efficiency.
+    Inference uses step-by-step recurrent updates.
+    
+    Reference: Qwen3 Next Technical Report, Flash Linear Attention library
+    """
+    
+    def __init__(self, config: MoEModelConfig, layer_idx: int = 0):
+        super().__init__()
+        self.config = config
+        self.attention_config = config.attention
+        self.layer_idx = layer_idx
+        
+        self.hidden_size = config.hidden_size
+        
+        # Linear attention dimensions
+        self.num_key_heads = self.attention_config.linear_num_key_heads
+        self.num_value_heads = self.attention_config.linear_num_value_heads
+        self.key_head_dim = self.attention_config.linear_key_head_dim
+        self.value_head_dim = self.attention_config.linear_value_head_dim
+        self.conv_kernel_size = self.attention_config.linear_conv_kernel_dim
+        
+        self.key_dim = self.num_key_heads * self.key_head_dim
+        self.value_dim = self.num_value_heads * self.value_head_dim
+        
+        # ============================================================
+        # Projections
+        # ============================================================
+        
+        # QKVZ combined projection
+        # Q, K have key_dim each, V, Z (gate) have value_dim each
+        self.in_proj_qkvz = nn.Linear(
+            self.hidden_size,
+            self.key_dim * 2 + self.value_dim * 2,
+            bias=False
+        )
+        
+        # Beta and Alpha projection for gating
+        self.in_proj_ba = nn.Linear(
+            self.hidden_size,
+            self.num_value_heads * 2,
+            bias=False
+        )
+        
+        # Causal 1D convolution for temporal smoothing
+        conv_dim = self.key_dim * 2 + self.value_dim  # Q, K, V (not Z)
+        self.conv1d = nn.Conv1d(
+            in_channels=conv_dim,
+            out_channels=conv_dim,
+            kernel_size=self.conv_kernel_size,
+            groups=conv_dim,
+            padding=self.conv_kernel_size - 1,
+            bias=False
+        )
+        
+        # Output projection
+        self.out_proj = nn.Linear(
+            self.value_dim,
+            self.hidden_size,
+            bias=False
+        )
+        
+        # Learnable decay parameters
+        self.dt_bias = nn.Parameter(torch.ones(self.num_value_heads))
+        A = torch.empty(self.num_value_heads).uniform_(0, 16)
+        self.A_log = nn.Parameter(torch.log(A))
+        
+        # Gated RMSNorm for output
+        self.norm = GatedRMSNorm(self.value_head_dim, eps=1e-6)
+        
+        # Initialize weights
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize linear attention weights."""
+        nn.init.normal_(self.in_proj_qkvz.weight, std=0.02)
+        nn.init.normal_(self.in_proj_ba.weight, std=0.02)
+        nn.init.normal_(self.out_proj.weight, std=0.02)
+        nn.init.normal_(self.conv1d.weight, std=0.02)
+    
+    def _l2norm(self, x: torch.Tensor, dim: int = -1, eps: float = 1e-6) -> torch.Tensor:
+        """L2 normalize for feature normalization."""
+        return x * torch.rsqrt((x * x).sum(dim=dim, keepdim=True) + eps)
+    
+    def _chunk_gated_delta_rule(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        g: torch.Tensor,
+        beta: torch.Tensor,
+        chunk_size: int = 64
+    ) -> torch.Tensor:
+        """
+        Chunk-based gated delta rule for training.
+        
+        This is a simplified PyTorch implementation of the algorithm.
+        For production, use the FLA library's optimized CUDA kernels.
+        
+        Args:
+            query: [batch, heads, seq, key_dim]
+            key: [batch, heads, seq, key_dim]
+            value: [batch, heads, seq, value_dim]
+            g: [batch, heads, seq] - gate/decay
+            beta: [batch, heads, seq] - update rate
+            
+        Returns:
+            output: [batch, seq, heads, value_dim]
+        """
+        batch_size, num_heads, seq_len, k_dim = key.shape
+        v_dim = value.shape[-1]
+        
+        # L2 normalize Q and K for stability
+        query = self._l2norm(query, dim=-1)
+        key = self._l2norm(key, dim=-1)
+        
+        # Scale query
+        scale = 1.0 / math.sqrt(k_dim)
+        query = query * scale
+        
+        # Initialize recurrent state: [batch, heads, key_dim, value_dim]
+        state = torch.zeros(
+            batch_size, num_heads, k_dim, v_dim,
+            dtype=query.dtype, device=query.device
+        )
+        
+        outputs = []
+        
+        # Process in chunks for memory efficiency
+        for i in range(0, seq_len, chunk_size):
+            end_i = min(i + chunk_size, seq_len)
+            chunk_len = end_i - i
+            
+            q_chunk = query[:, :, i:end_i]  # [B, H, chunk, K]
+            k_chunk = key[:, :, i:end_i]    # [B, H, chunk, K]
+            v_chunk = value[:, :, i:end_i]  # [B, H, chunk, V]
+            g_chunk = g[:, :, i:end_i]      # [B, H, chunk]
+            beta_chunk = beta[:, :, i:end_i]  # [B, H, chunk]
+            
+            chunk_output = torch.zeros(
+                batch_size, num_heads, chunk_len, v_dim,
+                dtype=query.dtype, device=query.device
+            )
+            
+            # Process each position in chunk
+            for t in range(chunk_len):
+                q_t = q_chunk[:, :, t]  # [B, H, K]
+                k_t = k_chunk[:, :, t]  # [B, H, K]
+                v_t = v_chunk[:, :, t]  # [B, H, V]
+                g_t = g_chunk[:, :, t].unsqueeze(-1).unsqueeze(-1).exp()  # [B, H, 1, 1]
+                beta_t = beta_chunk[:, :, t].unsqueeze(-1)  # [B, H, 1]
+                
+                # Decay state
+                state = state * g_t
+                
+                # Compute delta: v_t - k_t @ state
+                kv_mem = torch.einsum('bhk,bhkv->bhv', k_t, state)
+                delta = (v_t - kv_mem) * beta_t
+                
+                # Update state: state + k_t ⊗ delta
+                state = state + torch.einsum('bhk,bhv->bhkv', k_t, delta)
+                
+                # Output: q_t @ state
+                chunk_output[:, :, t] = torch.einsum('bhk,bhkv->bhv', q_t, state)
+            
+            outputs.append(chunk_output)
+        
+        # Concatenate chunks
+        output = torch.cat(outputs, dim=2)  # [B, H, S, V]
+        output = output.transpose(1, 2).contiguous()  # [B, S, H, V]
+        
+        return output
+    
+    def _recurrent_gated_delta_rule(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        g: torch.Tensor,
+        beta: torch.Tensor,
+        recurrent_state: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Single-step recurrent gated delta rule for inference.
+        
+        Args:
+            query: [batch, heads, 1, key_dim]
+            key: [batch, heads, 1, key_dim]
+            value: [batch, heads, 1, value_dim]
+            g: [batch, heads, 1] - gate/decay
+            beta: [batch, heads, 1] - update rate
+            recurrent_state: [batch, heads, key_dim, value_dim]
+            
+        Returns:
+            output: [batch, 1, heads, value_dim]
+            new_state: [batch, heads, key_dim, value_dim]
+        """
+        batch_size, num_heads, _, k_dim = key.shape
+        v_dim = value.shape[-1]
+        
+        # L2 normalize
+        query = self._l2norm(query, dim=-1)
+        key = self._l2norm(key, dim=-1)
+        
+        # Scale
+        scale = 1.0 / math.sqrt(k_dim)
+        query = query * scale
+        
+        # Squeeze seq dim
+        q_t = query.squeeze(2)  # [B, H, K]
+        k_t = key.squeeze(2)
+        v_t = value.squeeze(2)
+        g_t = g.squeeze(2).unsqueeze(-1).unsqueeze(-1).exp()  # [B, H, 1, 1]
+        beta_t = beta.squeeze(2).unsqueeze(-1)  # [B, H, 1]
+        
+        # Initialize state if needed
+        if recurrent_state is None:
+            recurrent_state = torch.zeros(
+                batch_size, num_heads, k_dim, v_dim,
+                dtype=query.dtype, device=query.device
+            )
+        
+        # Decay
+        recurrent_state = recurrent_state * g_t
+        
+        # Delta update
+        kv_mem = torch.einsum('bhk,bhkv->bhv', k_t, recurrent_state)
+        delta = (v_t - kv_mem) * beta_t
+        recurrent_state = recurrent_state + torch.einsum('bhk,bhv->bhkv', k_t, delta)
+        
+        # Output
+        output = torch.einsum('bhk,bhkv->bhv', q_t, recurrent_state)
+        output = output.unsqueeze(1)  # [B, 1, H, V]
+        
+        return output, recurrent_state
+    
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        use_cache: bool = False
+    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+        """
+        Forward pass for Gated DeltaNet linear attention.
+        
+        Args:
+            hidden_states: [batch, seq_len, hidden_size]
+            attention_mask: [batch, seq_len] boolean mask (optional)
+            position_ids: Not used in linear attention
+            past_key_value: (conv_state, recurrent_state) for inference
+            use_cache: Whether to return updated state
+            
+        Returns:
+            output: [batch, seq_len, hidden_size]
+            past_key_value: (conv_state, recurrent_state) if use_cache
+        """
+        batch_size, seq_len, _ = hidden_states.shape
+        
+        # Apply mask to padding if provided
+        if attention_mask is not None and attention_mask.dim() == 2:
+            hidden_states = hidden_states * attention_mask.unsqueeze(-1).to(hidden_states.dtype)
+        
+        # Check if we're in incremental decoding mode
+        use_recurrent = past_key_value is not None and seq_len == 1
+        
+        # ============================================================
+        # Project to QKVZ and BA
+        # ============================================================
+        
+        qkvz = self.in_proj_qkvz(hidden_states)  # [B, S, key_dim*2 + value_dim*2]
+        ba = self.in_proj_ba(hidden_states)      # [B, S, num_value_heads*2]
+        
+        # Split QKVZ: reshape to [B, S, num_key_heads, head_dim*2 + value_dim/key_heads*2]
+        q = qkvz[..., :self.key_dim]
+        k = qkvz[..., self.key_dim:self.key_dim*2]
+        v = qkvz[..., self.key_dim*2:self.key_dim*2+self.value_dim]
+        z = qkvz[..., self.key_dim*2+self.value_dim:]  # Gate
+        
+        # Split BA
+        beta = ba[..., :self.num_value_heads]
+        alpha = ba[..., self.num_value_heads:]
+        
+        # ============================================================
+        # Causal Conv1d
+        # ============================================================
+        
+        # Combine Q, K, V for conv (not Z)
+        qkv = torch.cat([q, k, v], dim=-1)  # [B, S, key_dim*2 + value_dim]
+        qkv = qkv.transpose(1, 2)  # [B, C, S]
+        
+        if use_recurrent:
+            # Incremental mode: update conv state
+            conv_state = past_key_value[0] if past_key_value else None
+            if conv_state is None:
+                conv_state = torch.zeros(
+                    batch_size, qkv.shape[1], self.conv_kernel_size - 1,
+                    dtype=qkv.dtype, device=qkv.device
+                )
+            
+            # Concatenate with history and apply conv
+            qkv_with_history = torch.cat([conv_state, qkv], dim=-1)
+            conv_state = qkv_with_history[..., -(self.conv_kernel_size - 1):]
+            
+            # Manual conv for single step
+            qkv = F.conv1d(
+                qkv_with_history,
+                self.conv1d.weight.squeeze(1)[:, None, :],
+                groups=qkv.shape[1],
+                padding=0
+            )
+            qkv = F.silu(qkv[..., -seq_len:])
+        else:
+            # Training mode: full causal conv
+            qkv = self.conv1d(qkv)[..., :seq_len]
+            qkv = F.silu(qkv)
+            conv_state = qkv[..., -(self.conv_kernel_size - 1):]  # Save for cache
+        
+        qkv = qkv.transpose(1, 2)  # [B, S, C]
+        
+        # Split back
+        q = qkv[..., :self.key_dim]
+        k = qkv[..., self.key_dim:self.key_dim*2]
+        v = qkv[..., self.key_dim*2:]
+        
+        # ============================================================
+        # Reshape for multi-head attention
+        # ============================================================
+        
+        # Expand K heads to match V heads if needed
+        heads_ratio = self.num_value_heads // self.num_key_heads
+        
+        q = q.view(batch_size, seq_len, self.num_key_heads, self.key_head_dim)
+        k = k.view(batch_size, seq_len, self.num_key_heads, self.key_head_dim)
+        v = v.view(batch_size, seq_len, self.num_value_heads, self.value_head_dim)
+        z = z.view(batch_size, seq_len, self.num_value_heads, self.value_head_dim)
+        
+        # Expand Q and K to match V heads
+        if heads_ratio > 1:
+            q = q.repeat_interleave(heads_ratio, dim=2)
+            k = k.repeat_interleave(heads_ratio, dim=2)
+        
+        # Transpose to [B, H, S, D]
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+        
+        # ============================================================
+        # Compute decay gate g
+        # ============================================================
+        
+        beta = beta.sigmoid()  # [B, S, num_value_heads]
+        g = -self.A_log.float().exp() * F.softplus(alpha.float() + self.dt_bias)
+        g = g.transpose(1, 2)  # [B, H, S]
+        beta = beta.transpose(1, 2)  # [B, H, S]
+        
+        # ============================================================
+        # Apply Gated Delta Rule
+        # ============================================================
+        
+        if use_recurrent:
+            recurrent_state = past_key_value[1] if past_key_value else None
+            output, recurrent_state = self._recurrent_gated_delta_rule(
+                q, k, v, g, beta, recurrent_state
+            )
+        else:
+            output = self._chunk_gated_delta_rule(q, k, v, g, beta)
+            recurrent_state = None  # Not needed for training
+        
+        # ============================================================
+        # Gated RMSNorm and Output
+        # ============================================================
+        
+        # Reshape for norm: [B*S*H, V]
+        output_flat = output.reshape(-1, self.value_head_dim)
+        z_flat = z.reshape(-1, self.value_head_dim)
+        
+        output = self.norm(output_flat, z_flat)
+        output = output.view(batch_size, seq_len, self.num_value_heads, self.value_head_dim)
+        output = output.reshape(batch_size, seq_len, self.value_dim)
+        
+        # Output projection
+        output = self.out_proj(output)
+        
+        # Prepare cache
+        if use_cache:
+            past_key_value = (conv_state, recurrent_state)
+        else:
+            past_key_value = None
+        
+        return output, past_key_value
+
+
 class RMSNorm(nn.Module):
     """
     Root Mean Square Layer Normalization.

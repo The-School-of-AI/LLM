@@ -165,15 +165,18 @@ class ExpertConfig:
 @dataclass
 class AttentionConfig:
     """
-    Attention configuration (GQA or GSA).
+    Attention configuration (GQA, GSA, MLA, Linear, or Hybrid).
     
     Uses GQA for efficient KV cache during inference.
     GSA adds gated sparse attention components per arXiv:2601.15305v1.
+    MLA (Multi-head Latent Attention) compresses KV into low-rank latent space (DeepSeek V2/V3).
+    Linear (Gated DeltaNet) uses recurrent state for O(1) memory, massive param savings (Qwen3 Next).
+    Hybrid alternates between full and linear attention layers.
     """
-    attention_type: str = "gqa"        # "gqa" (dense) or "gsa" (gated sparse attention)
-    num_attention_heads: int = 16       # Query heads
-    num_kv_heads: int = 4               # Key-Value heads (GQA)
-    head_dim: int = 128                 # Dimension per head
+    attention_type: str = "gqa"        # "gqa", "gsa", "mla", "linear", or "hybrid"
+    num_attention_heads: int = 16       # Query heads (for full attention)
+    num_kv_heads: int = 4               # Key-Value heads (GQA/GSA only)
+    head_dim: int = 128                 # Dimension per head (for full attention)
     
     # RoPE Configuration
     rope_theta: float = 10000.0         # RoPE base frequency
@@ -191,6 +194,30 @@ class AttentionConfig:
     gsa_k_max: int = 4096               # Maximum selection budget
     gsa_variance_ema_decay: float = 0.99
     gsa_gate_bias_init: float = 0.0     # Initialize gate bias for σ(·) ≈ 0.5
+    
+    # MLA (Multi-head Latent Attention) Parameters - DeepSeek V2/V3 Style
+    # Compresses KV into low-rank latent space for massive parameter reduction
+    # Reference: DeepSeek-V2 Technical Report
+    kv_lora_rank: int = 512             # c_kv: KV compression dimension (latent KV dim)
+    q_lora_rank: int = 1536             # c_q: Q compression dimension (0 = no compression)
+    qk_rope_head_dim: int = 64          # d_h^R: RoPE head dim (decoupled from main head)
+    qk_nope_head_dim: int = 128         # d_h^C: non-RoPE head dim for content-based attention
+    v_head_dim: int = 128               # d_h^V: value head dimension
+    
+    # Linear Attention (Gated DeltaNet) Parameters - Qwen3 Next Style
+    # Uses recurrent state instead of KV cache: O(1) memory, massive param savings
+    # Reference: Qwen3 Next Technical Report
+    linear_num_key_heads: int = 16      # Number of key heads in linear attention
+    linear_num_value_heads: int = 32    # Number of value heads in linear attention
+    linear_key_head_dim: int = 128      # Dimension per key head
+    linear_value_head_dim: int = 128    # Dimension per value head
+    linear_conv_kernel_dim: int = 4     # Kernel size for causal conv1d
+    
+    # Hybrid Attention Configuration (like Qwen3 Next)
+    # Pattern: "full" for standard attention, "linear" for Gated DeltaNet
+    # Default: 3 linear : 1 full (every 4th layer is full attention)
+    full_attention_interval: int = 4    # Every Nth layer uses full attention
+    layer_types: Optional[List[str]] = None  # Explicit layer types, overrides interval
 
 
 @dataclass
@@ -308,11 +335,29 @@ class MoEModelConfig:
             f"num_attention_heads ({self.attention.num_attention_heads}) must be divisible by num_kv_heads ({self.attention.num_kv_heads})"
 
         # Check attention type
-        if self.attention.attention_type not in {"gqa", "gsa"}:
+        valid_attention_types = {
+            "gqa", "gsa", "mla", "linear", "hybrid", 
+            "gsa_mla", "gsa_mla_hybrid", "gsa_hybrid"
+        }
+        if self.attention.attention_type not in valid_attention_types:
             raise ValueError(
                 f"Unsupported attention_type: {self.attention.attention_type}. "
-                "Use 'gqa' or 'gsa'."
+                f"Use one of: {valid_attention_types}"
             )
+        
+        # For hybrid attention types, compute layer_types if not provided
+        if self.attention.attention_type in ("hybrid", "gsa_mla_hybrid", "gsa_hybrid"):
+            if self.attention.layer_types is None:
+                # Generate layer types: every Nth layer is full attention
+                interval = self.attention.full_attention_interval
+                self.attention.layer_types = [
+                    "full" if (i + 1) % interval == 0 else "linear"
+                    for i in range(self.num_layers)
+                ]
+            else:
+                # Validate provided layer_types
+                assert len(self.attention.layer_types) == self.num_layers, \
+                    f"layer_types length ({len(self.attention.layer_types)}) must match num_layers ({self.num_layers})"
         
         # Check expert configuration for MoE
         if self.model_type == ModelType.MOE:
@@ -324,11 +369,12 @@ class MoEModelConfig:
                 #     "NULL_EXPERT router expects a single null expert (num_null_experts=1)."
                 # )
         
-        # Check head dimension
-        computed_head_dim = self.hidden_size // self.attention.num_attention_heads
-        if self.attention.head_dim != computed_head_dim:
-            print(f"Warning: head_dim ({self.attention.head_dim}) overridden to {computed_head_dim}")
-            self.attention.head_dim = computed_head_dim
+        # Check head dimension (only for full attention types)
+        if self.attention.attention_type in {"gqa", "gsa", "hybrid"}:
+            computed_head_dim = self.hidden_size // self.attention.num_attention_heads
+            if self.attention.head_dim != computed_head_dim:
+                print(f"Warning: head_dim ({self.attention.head_dim}) overridden to {computed_head_dim}")
+                self.attention.head_dim = computed_head_dim
     
     def _compute_derived_values(self):
         """Compute derived configuration values."""

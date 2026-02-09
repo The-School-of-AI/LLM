@@ -51,7 +51,7 @@ def get_config() -> MoEModelConfig:
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=50304,
+            vocab_size=128000,
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -66,14 +66,14 @@ def get_config() -> MoEModelConfig:
         
         # FFN configuration (becomes expert template)
         expert=ExpertConfig(
-            intermediate_size=8192,      # ≈ 4 × hidden_size (Following 4x expansion)
+            intermediate_size=5504,      # ≈ 4 × hidden_size (Following 4x expansion)
             use_dual_gating=False,       # No gating in dense model
             expert_init_std=0.02,
         ),
         
         # Attention configuration (GQA)
         attention=AttentionConfig(
-            attention_type="gsa",
+            attention_type="gqa",
             num_attention_heads=16,      # Query heads
             num_kv_heads=4,              # 4:1 GQA ratio
             head_dim=128,                # 2048 / 16

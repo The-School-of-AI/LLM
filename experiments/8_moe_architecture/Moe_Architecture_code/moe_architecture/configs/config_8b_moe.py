@@ -47,19 +47,19 @@ def get_config() -> MoEModelConfig:
         stage=3,
         
         # Core dimensions (WIDTH SCALED from 3B for capacity)
-        hidden_size=2560,                # Scaled up (was 4096) - wider model
-        num_layers=32,                   # Deeper (was 20)
+        hidden_size=4096,                
+        num_layers=20,                   
         
         # MoE Configuration (SAME as 3B! - DeepSeek + Null Experts paper)
         # Base 8 experts × 4 fine-grained factor = 32 effective routed experts
-        num_routed_experts=6,            # SAME as 3B (N_seg = 8 per segment)
-        num_shared_experts=2,            # SAME as 3B (Ks = 2)
-        num_null_experts=1,              # SAME as 3B (M copies in router)
-        moe_layer_frequency=1,           # MoE on ALL layers
+        num_routed_experts=12,            
+        num_shared_experts=1,            
+        num_null_experts=1,              
+        moe_layer_frequency=1,           
         
         # Tokenizer (Team 6 specification)
         tokenizer=TokenizerConfig(
-            vocab_size=50304,            # Standardized with 3B
+            vocab_size=128000,            
             pad_token_id=0,
             bos_token_id=1,
             eos_token_id=2,
@@ -75,9 +75,9 @@ def get_config() -> MoEModelConfig:
         # With N=32, ρ=0.5, k_max=16: M=32 null copies, E[K_real]=8
         router=RouterConfig(
             router_type=RouterType.NULL_EXPERT,
-            top_k=2,                     # SAME as 3B (×4 fine-grained = 16 effective)
-            data_sparsity=0.5,           # SAME as 3B (ρ = 0.5)
-            null_copies=0,               # SAME as 3B (auto-derive: M=32)
+            top_k=2,                     
+            data_sparsity=0.5,           
+            null_copies=0,               
             use_aux_loss=True,
             aux_loss_weight=0.02,
             router_z_loss_weight=0.001,
@@ -85,8 +85,8 @@ def get_config() -> MoEModelConfig:
         
         # Expert Configuration (SAME as 3B - fine-grained)
         expert=ExpertConfig(
-            intermediate_size=4096,       
-            fine_grained_factor=4,       # SAME as 3B (DeepSeek-MoE style)
+            intermediate_size=2048,       
+            fine_grained_factor=4,       
             use_dual_gating=False,
             gate_bias_init=0.0,
             expert_init_std=0.02,
@@ -96,9 +96,9 @@ def get_config() -> MoEModelConfig:
         # Attention Configuration (scaled with hidden)
         attention=AttentionConfig(
             attention_type="gsa",
-            num_attention_heads=16,       
-            num_kv_heads=4,               
-            head_dim=160,                 
+            num_attention_heads=32,  
+            num_kv_heads=2,               
+            head_dim=128,                 
             rope_theta=10000.0,
             attention_dropout=0.0,
             gsa_indexer_dim=64,
