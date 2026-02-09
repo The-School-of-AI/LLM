@@ -10,6 +10,48 @@ from datetime import datetime
 import yaml
 
 
+def patch_vendor_requirements(logger, olmes_dir):
+    """
+    Patches the vendor's files to fix:
+    1. Broken/unrealistic requirements in pyproject.toml (Colab stabilization).
+    2. macOS filename issues in oe_eval/utils.py (replacing colons with underscores).
+    """
+    # --- 1. Patch pyproject.toml ---
+    pyproject_path = os.path.join(olmes_dir, "pyproject.toml")
+    if os.path.exists(pyproject_path):
+        logger.info("  [OLMES] Patching vendor pyproject.toml...")
+        try:
+            with open(pyproject_path, "r") as f:
+                content = f.read()
+            patched = content.replace("torch>=2.8.0", "torch>=2.4.0")
+            patched = patched.replace("transformers>=4.57.0", "transformers>=4.40.0")
+            if patched != content:
+                with open(pyproject_path, "w") as f:
+                    f.write(patched)
+                logger.info("  [OLMES] Successfully patched pyproject.toml")
+        except Exception as e:
+            logger.warning(f"  [OLMES] Failed to patch pyproject.toml: {str(e)}")
+
+    # --- 2. Patch oe_eval/utils.py (macOS Filename Fix) ---
+    utils_path = os.path.join(olmes_dir, "oe_eval", "utils.py")
+    if os.path.exists(utils_path):
+        logger.info("  [OLMES] Patching vendor utils.py for macOS compatibility...")
+        try:
+            with open(utils_path, "r") as f:
+                content = f.read()
+            
+            # Target the task_file_name function to sanitize the name
+            target = 'def task_file_name(output_dir: str, task_idx: int, task_name: str, file_name: str) -> str:\n    return os.path.join(output_dir, f"task-{task_idx:03d}-{task_name}-{file_name}")'
+            replacement = 'def task_file_name(output_dir: str, task_idx: int, task_name: str, file_name: str) -> str:\n    # Sanitize task_name for macOS/generic safety (no colons or slashes)\n    safe_name = task_name.replace(":", "_").replace("/", "_")\n    return os.path.join(output_dir, f"task-{task_idx:03d}-{safe_name}-{file_name}")'
+            
+            patched = content.replace(target, replacement)
+            if patched != content:
+                with open(utils_path, "w") as f:
+                    f.write(patched)
+                logger.info("  [OLMES] Successfully patched utils.py (Sanitized filenames enabled)")
+        except Exception as e:
+            logger.warning(f"  [OLMES] Failed to patch utils.py: {str(e)}")
+
 def ensure_olmes_vendor(logger):
     """
     Ensures that the OLMES vendor library is present and installed.
@@ -19,37 +61,31 @@ def ensure_olmes_vendor(logger):
     vendor_dir = os.path.join(root_dir, "vendor")
     olmes_dir = os.path.join(vendor_dir, "olmes")
 
-    if os.path.exists(olmes_dir):
-        return
-
-    logger.info("  [OLMES] Vendor directory missing. Attempting to clone...")
-    if not os.path.exists(vendor_dir):
-        os.makedirs(vendor_dir)
-
     try:
-        # Clone official OLMES repository
-        subprocess.run(
-            ["git", "clone", "https://github.com/allenai/olmes.git", olmes_dir],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        logger.info(f"  [OLMES] Successfully cloned to {olmes_dir}")
+        if not os.path.exists(olmes_dir):
+            logger.info("  [OLMES] Vendor directory missing. Attempting to clone...")
+            if not os.path.exists(vendor_dir):
+                os.makedirs(vendor_dir)
 
-        # Install in editable mode
-        # Determine python executable (prefer .venv)
-        venv_python = os.path.join(root_dir, ".venv", "bin", "python3")
-        py_exec = venv_python if os.path.exists(venv_python) else sys.executable
+            subprocess.run(
+                ["git", "clone", "https://github.com/allenai/olmes.git", olmes_dir],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            logger.info(f"  [OLMES] Successfully cloned to {olmes_dir}")
 
-        logger.info(f"  [OLMES] Installing vendor package...")
-        
-        # Try uv pip install first if uv is available
-        uv_path = subprocess.run(["which", "uv"], capture_output=True, text=True).stdout.strip()
-        
+        # Patch requirements immediately after cloning or if already present
+        patch_vendor_requirements(logger, olmes_dir)
+
+        # Install the package
+        import shutil
+        uv_path = shutil.which("uv")
         install_success = False
+
         if uv_path:
             try:
-                logger.info(f"  [OLMES] Using uv to install: {uv_path} pip install -e {olmes_dir}")
+                logger.info(f"  [OLMES] Using uv to install: {olmes_dir}")
                 subprocess.run(
                     [uv_path, "pip", "install", "-e", olmes_dir],
                     check=True,
@@ -59,24 +95,19 @@ def ensure_olmes_vendor(logger):
                 install_success = True
             except subprocess.CalledProcessError:
                 logger.warning("  [OLMES] uv pip install failed, falling back to standard pip...")
-        
+
         if not install_success:
-            try:
-                logger.info(f"  [OLMES] Using pip to install: {py_exec} -m pip install -e {olmes_dir}")
-                subprocess.run(
-                    [py_exec, "-m", "pip", "install", "-e", olmes_dir],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                install_success = True
-            except subprocess.CalledProcessError as e:
-                logger.error(f"  [Error] Failed to setup OLMES vendor with pip: {e.stderr}")
-                sys.exit(1)
-
-        if install_success:
-            logger.info("  [OLMES] Vendor package installed successfully.")
-
+            # Determine python executable (prefer .venv)
+            venv_python = os.path.join(root_dir, ".venv", "bin", "python3")
+            py_exec = venv_python if os.path.exists(venv_python) else sys.executable
+            
+            logger.info(f"  [OLMES] Using pip to install: {olmes_dir}")
+            subprocess.run(
+                [py_exec, "-m", "pip", "install", "-e", olmes_dir],
+                check=True,
+                capture_output=True,
+                text=True
+            )
     except subprocess.CalledProcessError as e:
         logger.error(f"  [Error] Failed to setup OLMES vendor: {e.stderr}")
         sys.exit(1)
@@ -272,18 +303,18 @@ def run_harness_benchmark(
     task_filename = task_list[0] if task_list else base_task
     task_output_path = os.path.join(harness_raw_dir, f"{task_filename}.json")
 
-    # Determine python executable (prefer .venv in root or current dir)
-    venv_python = os.path.join(os.getcwd(), ".venv", "bin", "python3")
-    # Also check parent dir (if running from a subdirectory like 01-EleutherAI-v1)
-    parent_venv = os.path.join(os.path.dirname(os.getcwd()), ".venv", "bin", "python3")
-
+    # Determine python executable (prefer local .venv in the experiment dir)
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local_venv = os.path.join(root_dir, ".venv", "bin", "python3")
+    cwd_venv = os.path.join(os.getcwd(), ".venv", "bin", "python3")
+    
     py_exec = sys.executable
-    if os.path.exists(venv_python):
-        py_exec = venv_python
-    elif os.path.exists(parent_venv):
-        py_exec = parent_venv
+    if os.path.exists(local_venv):
+        py_exec = local_venv
+    elif os.path.exists(cwd_venv):
+        py_exec = cwd_venv
 
-    # Construct lm-eval command
+    # Construct lm-eval command flags
     cmd = [
         py_exec,
         "-m",
@@ -309,7 +340,7 @@ def run_harness_benchmark(
 
     logger.info(f"  [Harness] Running: {task_str} (BS={batch_size}, limit={limit})...")
     try:
-        # Run process but capture error if needed. Output will go to logger through subprocess.run defaults if not redirected
+        # Run process
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         if result.stdout:
             logger.info(result.stdout)
@@ -463,19 +494,19 @@ def run_custom_benchmark(
         }
 
     try:
-        # Expect custom script to output JSON to stdout or a specific file
-        # Use same python as harness if possible
-        venv_python = os.path.join(os.getcwd(), ".venv", "bin", "python3")
-        parent_venv = os.path.join(
-            os.path.dirname(os.getcwd()), ".venv", "bin", "python3"
-        )
+        # Determine python executable (prefer local .venv in the experiment dir)
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        local_venv = os.path.join(root_dir, ".venv", "bin", "python3")
+        cwd_venv = os.path.join(os.getcwd(), ".venv", "bin", "python3")
+        
         py_exec = sys.executable
-        if os.path.exists(venv_python):
-            py_exec = venv_python
-        elif os.path.exists(parent_venv):
-            py_exec = parent_venv
+        if os.path.exists(local_venv):
+            py_exec = local_venv
+        elif os.path.exists(cwd_venv):
+            py_exec = cwd_venv
 
         cmd = [py_exec, resolved_script, "--model_args", model_args]
+
         if limit:
             cmd += ["--limit", str(limit)]
         if device:
@@ -504,15 +535,16 @@ def run_olmes_benchmark(
 
     task_output_path = os.path.join(task_raw_dir, "metrics.json")
 
-    # Determine python executable
-    venv_python = os.path.join(os.getcwd(), ".venv", "bin", "python3")
-    parent_venv = os.path.join(os.path.dirname(os.getcwd()), ".venv", "bin", "python3")
-
+    # Determine python executable (prefer local .venv in the experiment dir)
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local_venv = os.path.join(root_dir, ".venv", "bin", "python3")
+    cwd_venv = os.path.join(os.getcwd(), ".venv", "bin", "python3")
+    
     py_exec = sys.executable
-    if os.path.exists(venv_python):
-        py_exec = venv_python
-    elif os.path.exists(parent_venv):
-        py_exec = parent_venv
+    if os.path.exists(local_venv):
+        py_exec = local_venv
+    elif os.path.exists(cwd_venv):
+        py_exec = cwd_venv
 
     # Extract model path from model_args
     model_path = ""
@@ -521,8 +553,6 @@ def run_olmes_benchmark(
     else:
         model_path = model_args # Fallback
 
-    # Construct olmes command
-    # Usage: olmes --model <model> --task <task> --output-dir <dir>
     # Determine olmes executable path robustly
     import shutil
     olmes_executable = shutil.which("olmes")
@@ -551,8 +581,6 @@ def run_olmes_benchmark(
 
     if limit:
         cmd += ["--limit", str(limit)]
-    # Note: OLMES might have different flags for device/batch_size, 
-    # but we'll stick to the core ones for now.
 
     logger.info(f"  [OLMES] Running: {task} (BS={batch_size}, limit={limit})...")
     
