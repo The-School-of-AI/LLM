@@ -21,9 +21,9 @@ import os
 import re
 import shutil
 
-BASE_GPTOSS_PATH = "tokenizers/gptoss/tokenizer.json"
+BASE_GPTOSS_PATH = "Tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
 OUTPUT_DIR = "gptoss_pruning"
-TARGET_VOCAB_SIZE = 128_000
+TARGET_VOCAB_SIZE = 131046  # 131072 - 26 (for add_special_tokens.py)
 NUM_SPECIAL = 512
 MAX_TOKEN_LEN = 32
 

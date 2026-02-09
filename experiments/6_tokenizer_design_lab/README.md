@@ -1,8 +1,8 @@
-# Tokenizer Design Lab - GPToss Pruning to 128K
+# Tokenizer Design Lab - GPToss Pruning to 131K (131,072)
 
 ## Overview
 
-This directory contains the pruned GPToss tokenizer optimized for 128K vocabulary size while retaining Indic language support.
+This directory contains the pruned GPToss tokenizer optimized for 131,072 (2^17) vocabulary size while retaining Indic language support.
 
 ## Pruning Process
 
@@ -17,11 +17,11 @@ This directory contains the pruned GPToss tokenizer optimized for 128K vocabular
 - Removed tokens for languages not in our target set (kept English + Indic languages)
 - **Result**: 199,734 - 43,081 = **156,653 tokens**
 
-### Iteration 3: 128K Cutoff
-- Since our target tokenizer needs to be 128K, removed tokens with higher token IDs
-- **Removed**: 156,653 - 128,000 = **28,653 tokens**
+### Iteration 3: 131K Cutoff
+- Since our target tokenizer needs to be 131,072 (2^17), removed tokens with higher token IDs
+- **Removed**: 156,653 - 131,046 = **25,607 tokens**
 - **Important**: Indic tokens were carefully retained during this step
-- The removed tokens are documented in `gptoss_pruning/removed_128k_cutoff.csv`
+- The removed tokens are documented in `gptoss_pruning/removed_tokens.csv`
 
 ### Result
 - **For Indic languages, GPToss and our pruned tokenizer have the same performance**
@@ -30,11 +30,11 @@ This directory contains the pruned GPToss tokenizer optimized for 128K vocabular
 
 | Range | Type | Count |
 |-------|------|-------|
-| 0 - 127,487 | Regular tokens | 127,488 |
-| 127,488 - 127,587 | Original special tokens | 100 |
-| 127,588 - 127,613 | New special tokens (added from Qwen/DeepSeek) | 26 |
-| 127,614 - 128,025 | Reserved tokens | 412 |
-| **Total** | | **128,026** |
+| 0 - 511 | Low-level Special tokens | 512 |
+| 512 - 117,403 | Regular tokens (English/Code) | 116,892 |
+| 117,404 - 131,045 | Indic tokens | 13,642 |
+| 131,046 - 131,071 | New Special tokens (FIM, Vision, etc.) | 26 |
+| **Total** | | **131,072** |
 
 ## Special Tokens
 
@@ -47,40 +47,40 @@ This directory contains the pruned GPToss tokenizer optimized for 128K vocabular
 - `<|code_begin|>`, `<|code_end|>` - Code blocks
 - Language tags: `<|lang:python|>`, `<|lang:javascript|>`, etc.
 
-### New Special Tokens (IDs 127588-127613)
-Added from Qwen-Code and DeepSeek-Code tokenizers:
+### New Special Tokens (IDs 131046-131071)
+Added from Qwen-Code and DeepSeek-Code tokenizers via `add_special_tokens.py`:
 
 | ID | Token | Purpose |
 |----|-------|---------|
-| 127588 | `<\|fim_prefix\|>` | Fill-in-the-Middle prefix |
-| 127589 | `<\|fim_middle\|>` | Fill-in-the-Middle middle |
-| 127590 | `<\|fim_suffix\|>` | Fill-in-the-Middle suffix |
-| 127591 | `<\|fim_pad\|>` | Fill-in-the-Middle padding |
-| 127592 | `<\|vision_start\|>` | Vision/multimodal start |
-| 127593 | `<\|vision_end\|>` | Vision/multimodal end |
-| 127594 | `<\|vision_pad\|>` | Vision padding |
-| 127595 | `<\|image_pad\|>` | Image padding |
-| 127596 | `<\|video_pad\|>` | Video padding |
-| 127597 | `<\|object_ref_start\|>` | Object reference start |
-| 127598 | `<\|object_ref_end\|>` | Object reference end |
-| 127599 | `<\|box_start\|>` | Bounding box start |
-| 127600 | `<\|box_end\|>` | Bounding box end |
-| 127601 | `<\|quad_start\|>` | Quad coordinates start |
-| 127602 | `<\|quad_end\|>` | Quad coordinates end |
-| 127603 | `<\|im_start\|>` | Instruction/message start |
-| 127604 | `<\|im_end\|>` | Instruction/message end |
-| 127605 | `<\|file_sep\|>` | File separator |
-| 127606 | `<\|repo_name\|>` | Repository name marker |
-| 127607 | `<tool_call>` | Tool call start |
-| 127608 | `</tool_call>` | Tool call end |
-| 127609 | `<tool_response>` | Tool response start |
-| 127610 | `</tool_response>` | Tool response end |
-| 127611 | `<think>` | Reasoning/thinking start |
-| 127612 | `</think>` | Reasoning/thinking end |
-| 127613 | `<\|EOT\|>` | End of turn |
+| 131046 | `<\|fim_prefix\|>` | Fill-in-the-Middle prefix |
+| 131047 | `<\|fim_middle\|>` | Fill-in-the-Middle middle |
+| 131048 | `<\|fim_suffix\|>` | Fill-in-the-Middle suffix |
+| 131049 | `<\|fim_pad\|>` | Fill-in-the-Middle padding |
+| 131050 | `<\|vision_start\|>` | Vision/multimodal start |
+| 131051 | `<\|vision_end\|>` | Vision/multimodal end |
+| 131052 | `<\|vision_pad\|>` | Vision padding |
+| 131053 | `<\|image_pad\|>` | Image padding |
+| 131054 | `<\|video_pad\|>` | Video padding |
+| 131055 | `<\|object_ref_start\|>` | Object reference start |
+| 131056 | `<\|object_ref_end\|>` | Object reference end |
+| 131057 | `<\|box_start\|>` | Bounding box start |
+| 131058 | `<\|box_end\|>` | Bounding box end |
+| 131059 | `<\|quad_start\|>` | Quad coordinates start |
+| 131060 | `<\|quad_end\|>` | Quad coordinates end |
+| 131061 | `<\|im_start\|>` | Instruction/message start |
+| 131062 | `<\|im_end\|>` | Instruction/message end |
+| 131063 | `<\|file_sep\|>` | File separator |
+| 131064 | `<\|repo_name\|>` | Repository name marker |
+| 131065 | `<tool_call>` | Tool call start |
+| 131066 | `</tool_call>` | Tool call end |
+| 131067 | `<tool_response>` | Tool response start |
+| 131068 | `</tool_response>` | Tool response end |
+| 131069 | `<think>` | Reasoning/thinking start |
+| 131070 | `</think>` | Reasoning/thinking end |
+| 131071 | `<\|EOT\|>` | End of turn |
 
-### Reserved Tokens (IDs 127614-128025)
-- 412 reserved tokens for future use: `<|reserved_100|>` to `<|reserved_511|>`
+### Reserved Tokens
+- 256+ reserved tokens are included in the initial block (IDs 0-511) for future use (e.g., `<|reserved_511|>`).
 
 ## Indic Language Support
 
@@ -111,7 +111,7 @@ gptoss_pruning/
 ├── tokenizer.json          # Main tokenizer file
 ├── tokenizer_config.json   # Tokenizer configuration
 ├── special_tokens_map.json # Special token mappings
-└── removed_128k_cutoff.csv # Tokens removed in 128K cutoff (28,653 tokens)
+└── removed_tokens.csv      # Tokens removed in pruning
 
 add_special_tokens.py       # Script to add new special tokens
 build_clean_tokenizer.py    # Script used to build/prune the tokenizer
@@ -166,3 +166,37 @@ Based on the evaluation metrics across Code, Indic languages, and NCERT textbook
 *   **Academic & General Text (NCERT)**: **`our_tokenizer` demonstrates excellent performance**, often matching or outperforming `gemma_tokenizer` and `mistral_tokenizer` in compression efficiency (lower Bytes/Token). For subjects like Biology and Chemistry, it rivals the highly efficient `qwen_tokenizer`.
 *   **Code**: Our tokenizer remains **highly competitive**, showing better compression than the original `gptoss_tokenizer` and `qwen_tokenizer` in languages like Python and Java. While `gemma_tokenizer` holds a slight edge in raw compression, our tokenizer strikes a balanced trade-off.
 *   **Indic Languages**: The tokenizer retains functional support for languages like Hindi and Tamil. While `qwen_tokenizer` leads in this category due to its extensive multilingual vocabulary, `our_tokenizer` maintains stability consistent with the base GPToss model, ensuring these languages are processed correctly without fallback errors.
+
+## Reproduction & Modification
+
+To regenerate the tokenizer or modify the vocabulary size/settings, follow these steps:
+
+### 1. Pruning and Base Generation (`build_clean_tokenizer.py`)
+This script prunes the original GPToss tokenizer and generates the base vocabulary.
+
+**To modify the target size:**
+Edit `TARGET_VOCAB_SIZE` in `build_clean_tokenizer.py`.
+> [!NOTE]
+> Ensure you account for the tokens added in the next step.
+> For a final size of **131,072**, we set `TARGET_VOCAB_SIZE = 131046` (131072 - 26).
+
+```bash
+python build_clean_tokenizer.py
+```
+
+### 2. Adding Special Tokens (`add_special_tokens.py`)
+This script appends the 26 new special tokens (FIM, Vision, Tool use) to the end of the vocabulary.
+
+**To add/remove special tokens:**
+Edit the `NEW_TOKENS` list in `add_special_tokens.py`.
+
+```bash
+python add_special_tokens.py
+```
+
+### 3. Verification
+Check the total token count to ensure it matches your target (e.g., 2^17 = 131,072).
+
+```bash
+python -c "import json; d=json.load(open('gptoss_pruning/tokenizer.json', encoding='utf-8')); print(len(d['model']['vocab']))"
+```
