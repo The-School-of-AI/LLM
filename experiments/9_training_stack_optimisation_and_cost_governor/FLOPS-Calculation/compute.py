@@ -84,6 +84,8 @@ def parse_attention_type(attention_str: str, num_heads: int = 32) -> dict:
                 "gsa": "gsa", "gated_sparse": "gsa",
                 "mha": "mha", "standard": "mha",
                 "dsa": "dsa", "mla": "dsa", "deepseek_mla": "dsa",
+                "deltanet": "deltanet", "delta": "deltanet", 
+                "linear": "deltanet", "gated_linear": "deltanet",
             }
             type1 = type_aliases.get(type1, type1)
             type2 = type_aliases.get(type2, type2)
@@ -93,13 +95,14 @@ def parse_attention_type(attention_str: str, num_heads: int = 32) -> dict:
                 "kv_ratio": 1.0,  # Will be computed per-layer
                 "sparse_k": sparse_k if "gsa" in [type1, type2] else None,
                 "mla_rank": 0,
+                "is_linear": "deltanet" in [type1, type2],  # Has linear attention component
                 "hybrid_config": {
                     "type1": type1,
                     "type2": type2,
                     "ratio1": ratio1,
                     "ratio2": ratio2,
-                    "layer_weight_type1": ratio1 / (ratio1 + ratio2),  # e.g., 0.8 for 4:1
-                    "layer_weight_type2": ratio2 / (ratio1 + ratio2),  # e.g., 0.2 for 4:1
+                    "layer_weight_type1": ratio1 / (ratio1 + ratio2),  # e.g., 0.75 for 3:1
+                    "layer_weight_type2": ratio2 / (ratio1 + ratio2),  # e.g., 0.25 for 3:1
                 },
             }
     
@@ -130,6 +133,12 @@ def parse_attention_type(attention_str: str, num_heads: int = 32) -> dict:
         "deepseek_mla": "dsa",
         "deepseek_sparse": "dsa",
         "deepseek": "dsa",
+        # DeltaNet (linear attention) aliases
+        "deltanet": "deltanet",
+        "delta": "deltanet",
+        "linear": "deltanet",
+        "gated_linear": "deltanet",
+        "gated_deltanet": "deltanet",
     }
     attn_type = type_aliases.get(attn_type, attn_type)
 
@@ -138,6 +147,7 @@ def parse_attention_type(attention_str: str, num_heads: int = 32) -> dict:
         "kv_ratio": 1.0,      # KV heads / Q heads (1.0 = MHA, 0.125 = 8:1 GQA)
         "sparse_k": None,     # Sparse attention k tokens
         "mla_rank": 0,        # MLA/DSA compression rank
+        "is_linear": attn_type == "deltanet",  # Linear attention (O(Ld²) vs O(L²d))
         "hybrid_config": None,  # For hybrid attention
     }
 
@@ -361,6 +371,70 @@ class TrainingStage:
             )
         )
 
+        # =========================================================================
+        # DeltaNet Parameters (Gated Linear Attention)
+        # DeltaNet has: Q/K/V/G/O projections + beta gate + alpha gate + A_log + D + short convs
+        # O(Ld²) complexity vs O(L²d) for standard attention
+        # =========================================================================
+        deltanet_in_hybrid = (
+            parsed_attn.get("type") == "hybrid" and 
+            parsed_attn.get("hybrid_config") and 
+            "deltanet" in [parsed_attn["hybrid_config"].get("type1"), parsed_attn["hybrid_config"].get("type2")]
+        )
+        deltanet_enabled = attention_type in (
+            "deltanet", "delta", "linear", "gated_linear", "gated_deltanet"
+        ) or bool(arch.get("use_deltanet", False)) or deltanet_in_hybrid
+        
+        # DeltaNet config
+        deltanet_cfg = arch.get("deltanet", attention_cfg.get("deltanet", {}))
+        delta_num_heads = deltanet_cfg.get("num_heads", num_heads or 32)
+        delta_head_dim = deltanet_cfg.get("head_dim", hidden // delta_num_heads if delta_num_heads else 128)
+        delta_conv_size = deltanet_cfg.get("conv_size", 4)  # Short convolution kernel size
+        
+        # Calculate layer distribution for hybrid
+        deltanet_layer_weight = 0.0
+        gsa_layer_weight = 0.0
+        if parsed_attn.get("type") == "hybrid" and parsed_attn.get("hybrid_config"):
+            hc = parsed_attn["hybrid_config"]
+            if hc.get("type1") == "deltanet":
+                deltanet_layer_weight = hc.get("layer_weight_type1", 0.75)
+                gsa_layer_weight = hc.get("layer_weight_type2", 0.25)
+            elif hc.get("type2") == "deltanet":
+                deltanet_layer_weight = hc.get("layer_weight_type2", 0.25)
+                gsa_layer_weight = hc.get("layer_weight_type1", 0.75)
+        elif deltanet_enabled and not deltanet_in_hybrid:
+            deltanet_layer_weight = 1.0
+        
+        num_deltanet_layers = int(layers * deltanet_layer_weight)
+        num_gsa_layers_hybrid = int(layers * gsa_layer_weight) if deltanet_in_hybrid else 0
+        
+        # DeltaNet-specific parameters per layer
+        deltanet_extra_params_per_layer = 0
+        if deltanet_enabled:
+            # Beta gate: H -> num_heads (weight + bias)
+            beta_gate_params = hidden * delta_num_heads + delta_num_heads
+            # Alpha (gk) gate: H -> num_heads (weight + bias)
+            alpha_gate_params = hidden * delta_num_heads + delta_num_heads
+            # A_log: per-head decay parameter
+            a_log_params = delta_num_heads
+            # D: per-head residual parameter
+            d_params = delta_num_heads
+            # Short convolutions on Q/K/V (depthwise, kernel=conv_size)
+            short_conv_params = 3 * hidden * delta_conv_size
+            # Output norm weight (per head_dim)
+            o_norm_params = delta_head_dim
+            
+            deltanet_extra_params_per_layer = (
+                beta_gate_params + alpha_gate_params + a_log_params + 
+                d_params + short_conv_params + o_norm_params
+            )
+            
+            # DeltaNet uses 5 projections: Q, K, V, G (output gate), O
+            # Standard attention: Q, K, V, O (4 projections with KV ratio)
+            # DeltaNet adds G projection: +H*H params per layer
+            deltanet_g_proj_params = hidden * hidden
+            deltanet_extra_params_per_layer += deltanet_g_proj_params
+
         moe_intermediate = arch.get(
             "moe_intermediate_size", expert_cfg.get("intermediate_size", intermediate)
         )
@@ -501,6 +575,7 @@ class TrainingStage:
             embedding_params
             + lm_head_params
             + layers * attn_params_per_layer
+            + num_deltanet_layers * deltanet_extra_params_per_layer  # DeltaNet-specific params
             + dense_layers * ffn_params_dense
             + num_moe_layers * total_ffn_params_moe
             + norm_params
@@ -508,6 +583,7 @@ class TrainingStage:
 
         active_non_embed_params = (
             layers * attn_params_per_layer
+            + num_deltanet_layers * deltanet_extra_params_per_layer  # DeltaNet-specific params
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params
@@ -515,6 +591,7 @@ class TrainingStage:
         )
         active_linear_params = (
             layers * attn_params_per_layer
+            + num_deltanet_layers * deltanet_extra_params_per_layer  # DeltaNet-specific params
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params_for_flops
@@ -954,6 +1031,86 @@ class TrainingStage:
             if attn_dim <= 0:
                 attn_dim = head_dim
 
+        # =========================================================================
+        # DeltaNet FLOPs Calculation (Gated Linear Attention)
+        # DeltaNet: O(L × d²) complexity - linear in sequence length!
+        # vs Standard Attention: O(L² × d) - quadratic in sequence length
+        # =========================================================================
+        deltanet_in_hybrid = (
+            parsed_attn.get("type") == "hybrid" and 
+            parsed_attn.get("hybrid_config") and 
+            "deltanet" in [parsed_attn["hybrid_config"].get("type1"), parsed_attn["hybrid_config"].get("type2")]
+        )
+        deltanet_enabled = attention_type in (
+            "deltanet", "delta", "linear", "gated_linear", "gated_deltanet"
+        ) or bool(arch.get("use_deltanet", False)) or deltanet_in_hybrid
+        
+        # DeltaNet config
+        deltanet_cfg = arch.get("deltanet", attention_cfg.get("deltanet", {}))
+        delta_num_heads = deltanet_cfg.get("num_heads", num_heads)
+        delta_head_dim = deltanet_cfg.get("head_dim", h // delta_num_heads if delta_num_heads else 128)
+        delta_conv_size = deltanet_cfg.get("conv_size", 4)
+        
+        # Calculate layer distribution for hybrid
+        deltanet_layer_weight = 0.0
+        gsa_layer_weight_hybrid = 0.0
+        if parsed_attn.get("type") == "hybrid" and parsed_attn.get("hybrid_config"):
+            hc = parsed_attn["hybrid_config"]
+            if hc.get("type1") == "deltanet":
+                deltanet_layer_weight = hc.get("layer_weight_type1", 0.75)
+                gsa_layer_weight_hybrid = hc.get("layer_weight_type2", 0.25)
+            elif hc.get("type2") == "deltanet":
+                deltanet_layer_weight = hc.get("layer_weight_type2", 0.25)
+                gsa_layer_weight_hybrid = hc.get("layer_weight_type1", 0.75)
+        elif deltanet_enabled and not deltanet_in_hybrid:
+            deltanet_layer_weight = 1.0
+        
+        num_deltanet_layers = int(layers * deltanet_layer_weight)
+        num_other_attn_layers = layers - num_deltanet_layers
+        
+        # DeltaNet FLOPs per layer
+        flops_per_seq_deltanet = 0
+        if deltanet_enabled and num_deltanet_layers > 0:
+            d = delta_head_dim
+            
+            # 1. Input projections: Q, K, V, G (output gate)
+            #    Each: 2 × S × H × H (matmul)
+            proj_in_flops = 4 * 2 * s * h * h
+            
+            # 2. Short convolutions on Q, K, V (depthwise, kernel=conv_size)
+            #    Each: S × H × conv_size
+            short_conv_flops = 3 * s * h * delta_conv_size
+            
+            # 3. L2 normalization on Q and K
+            #    Each: 2 × S × H (compute norm + divide)
+            l2_norm_flops = 2 * 2 * s * h
+            
+            # 4. Delta rule state updates - THE KEY O(d²) TERM
+            #    For each token: query state (d²), update state (d²), outer product (d²)
+            #    Total: 6 × d² per token per head
+            delta_rule_flops = s * delta_num_heads * d * d * 6
+            
+            # 5. Output projection: 2 × S × H × H
+            proj_out_flops = 2 * s * h * h
+            
+            # 6. Output normalization and gating (small): ~2 × S × H
+            output_ops_flops = 2 * s * h
+            
+            # Total forward FLOPs per DeltaNet layer
+            deltanet_forward_per_layer = (
+                proj_in_flops + short_conv_flops + l2_norm_flops + 
+                delta_rule_flops + proj_out_flops + output_ops_flops
+            )
+            
+            # Training multiplier (fwd + bwd)
+            base_multiplier = 3.0  # Forward (1x) + Backward (2x)
+            if use_checkpointing:
+                base_multiplier *= recompute_multiplier
+            
+            flops_per_seq_deltanet = (
+                num_deltanet_layers * deltanet_forward_per_layer * base_multiplier * attention_multiplier
+            )
+
         if use_sparse_attn:
             # Sparse attention FLOPs (DSA/GSA)
 
@@ -1009,19 +1166,22 @@ class TrainingStage:
                 indexer_flops + sparse_attn_core + mla_projection_flops
             ) * base_multiplier
 
-            # Total for all layers
-            flops_per_seq_attn = layers * sparse_attn_per_layer * attention_multiplier
+            # Total for all non-DeltaNet layers (for hybrid configs like deltanet-gsa)
+            attn_layers_for_sparse = num_other_attn_layers if deltanet_enabled else layers
+            flops_per_seq_attn_sparse = attn_layers_for_sparse * sparse_attn_per_layer * attention_multiplier
 
             # Store breakdown for debugging (optional)
             self._attn_flops_breakdown = {
-                "indexer_flops": indexer_flops * layers * base_multiplier,
-                "sparse_core_flops": sparse_attn_core * layers * base_multiplier,
+                "indexer_flops": indexer_flops * attn_layers_for_sparse * base_multiplier,
+                "sparse_core_flops": sparse_attn_core * attn_layers_for_sparse * base_multiplier,
                 "mla_projection_flops": mla_projection_flops
-                * layers
+                * attn_layers_for_sparse
                 * base_multiplier,
-                "total_attn_flops": flops_per_seq_attn,
+                "deltanet_flops": flops_per_seq_deltanet,
+                "total_attn_flops": flops_per_seq_attn_sparse + flops_per_seq_deltanet,
                 "sparse_k_tokens": sparse_k_tokens,
-                "reduction_vs_dense": (12 * layers * h * (s**2)) / flops_per_seq_attn,
+                "num_deltanet_layers": num_deltanet_layers,
+                "num_other_attn_layers": num_other_attn_layers,
             }
         else:
             # Standard Dense Attention: O(L^2)
@@ -1036,7 +1196,15 @@ class TrainingStage:
             dense_attn_per_layer = (
                 qk_matmul_flops + softmax_flops + attn_v_matmul_flops
             ) * 3.0 * recompute_multiplier
-            flops_per_seq_attn = layers * dense_attn_per_layer * attention_multiplier
+            # For hybrid configs, only apply to non-DeltaNet layers
+            attn_layers_for_dense = num_other_attn_layers if deltanet_enabled else layers
+            flops_per_seq_attn_dense = attn_layers_for_dense * dense_attn_per_layer * attention_multiplier
+        
+        # Combine DeltaNet + other attention FLOPs
+        if use_sparse_attn:
+            flops_per_seq_attn = flops_per_seq_deltanet + flops_per_seq_attn_sparse
+        else:
+            flops_per_seq_attn = flops_per_seq_deltanet + flops_per_seq_attn_dense
 
         # =========================================================================
         # MoE Router FLOPs (if MoE layers exist)
