@@ -9,6 +9,44 @@ from datetime import datetime
 
 import yaml
 
+# Check if running in Google Colab
+IS_COLAB = os.path.exists('/content') and os.path.exists('/usr/local/lib/python3.12/dist-packages')
+
+def check_torchvision_nms(logger):
+    """
+    Proactively checks if torchvision and its NMS operation are valid.
+    Specifically targets the common 'operator torchvision::nms does not exist' error.
+    """
+    try:
+        import torch
+        import torchvision
+        # Attempt to access nms
+        _ = torchvision.ops.nms
+        return True
+    except (ImportError, AttributeError, RuntimeError) as e:
+        logger.warning(f"  [Auto-Heal] Detected torchvision/torch sync issue: {str(e)}")
+        return False
+
+def sync_colab_dependencies(logger):
+    """
+    Explicitly synchronizes torch and torchvision in Colab to prevent NMS errors.
+    """
+    if not IS_COLAB:
+        return
+
+    logger.info("  [Colab] Synchronizing torch and torchvision...")
+    try:
+        # Specifically target the latest stable versions that are compatible
+        # In Colab, we often need to force-reinstall torchvision after updating torch
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu121"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        logger.info("  [Colab] Synchronization complete.")
+    except Exception as e:
+        logger.error(f"  [Error] Failed to sync Colab dependencies: {str(e)}")
 
 def patch_vendor_requirements(logger, olmes_dir):
     """
@@ -62,6 +100,10 @@ def ensure_olmes_vendor(logger):
     olmes_dir = os.path.join(vendor_dir, "olmes")
 
     try:
+        # Colab specific pre-check
+        if IS_COLAB:
+            sync_colab_dependencies(logger)
+
         if not os.path.exists(olmes_dir):
             logger.info("  [OLMES] Vendor directory missing. Attempting to clone...")
             if not os.path.exists(vendor_dir):
@@ -108,6 +150,24 @@ def ensure_olmes_vendor(logger):
                 capture_output=True,
                 text=True
             )
+
+        # Proactive Auto-Heal Check
+        if not check_torchvision_nms(logger):
+            logger.info("  [Auto-Heal] Triggering torchvision recovery...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade", "torchvision"],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                if check_torchvision_nms(logger):
+                    logger.info("  [Auto-Heal] recovery successful.")
+                else:
+                    logger.warning("  [Auto-Heal] recovery failed. You might need to restart the Colab runtime.")
+            except Exception as e:
+                logger.warning(f"  [Auto-Heal] recovery script failed: {str(e)}")
+
     except subprocess.CalledProcessError as e:
         logger.error(f"  [Error] Failed to setup OLMES vendor: {e.stderr}")
         sys.exit(1)
