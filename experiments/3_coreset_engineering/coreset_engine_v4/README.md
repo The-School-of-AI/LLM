@@ -9,6 +9,7 @@
 The Coreset Selection Engine is a production-grade pipeline that compresses 2 trillion tokens to ~400 billion tokens for efficient 70B parameter LLM pre-training. The engine uses curriculum-aware stratified sampling, deduplication, and diversity optimization to create high-quality training datasets across multiple stages.
 
 **Key Features**:
+
 - ✅ **Deterministic & Reproducible**: Fully seeded, version-controlled pipeline
 - ✅ **Curriculum-Compliant**: Strict adherence to frozen curriculum specifications
 - ✅ **Scalable (2T-ready)**: Streaming/batched selection with checkpoint/resume and optional sharding
@@ -108,9 +109,78 @@ python tools/estimate_total_tokens.py --input-path data/datasets --input-format 
 
 Use the printed `total_tokens` value as `--total-input-tokens-estimate`.
 
-### Sharding (Multi-Worker) and Non-Overlap (Streaming)
+### Sharded Pipeline Runner (`shard.sh`)
+
+The easiest way to run the pipeline at scale is via `shard.sh`, which launches N parallel shards, waits for all to complete, and auto-merges the results into a single unified ablation report.
+
+**Minimal run (uses defaults):**
+
+```bash
+bash shard.sh --input-path data/books/bands/ --total-tokens 4523096944
+```
+
+**Full run with all options:**
+
+```bash
+bash shard.sh \
+  --num-shards 8 \
+  --stages "1B 3B 8B 70B" \
+  --input-path data/books/bands/ \
+  --input-format parquet \
+  --config config/pipeline.yaml \
+  --curriculum config/curriculum_v7.yaml \
+  --checkpoint-base output/checkpoints \
+  --total-tokens 4523096944
+```
+
+**Available flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--input-path` | *(required)* | Path to input data directory or file |
+| `--total-tokens` | *(required)* | Estimated total input tokens |
+| `--num-shards` | `4` | Number of parallel shards |
+| `--stages` | `"1B 3B 8B 70B"` | Space-separated stage list |
+| `--input-format` | `parquet` | `parquet` or `jsonl` |
+| `--config` | `config/pipeline.yaml` | Pipeline config path |
+| `--curriculum` | `config/curriculum_v7.yaml` | Curriculum config path |
+| `--checkpoint-base` | `output/checkpoints` | Base directory for per-shard checkpoints |
+
+**What happens when you run `shard.sh`:**
+
+1. Cleans previous outputs (`output/checkpoints`, `output/coresets`, `output/manifests`)
+2. Launches N shards in parallel — each runs `coreset_builder.py` with a unique `--shard-id`
+3. Each shard performs per-shard dedup and writes its own selected indices + `shard_results_NNN.json`
+4. The last shard to finish auto-triggers `merge_shard_reports()` which:
+   - Aggregates stage metrics (tokens, chunks, distributions) across all shards
+   - Runs **cross-shard dedup** on selected indices to remove any duplicate `chunk_id`s
+   - Generates a single unified `ablation_validation_report.md`
+5. Prints a summary showing how many shards succeeded/failed
+
+**Output:**
+
+```
+output/
+├── coresets/
+│   ├── 1B/
+│   │   ├── selected_indices_part_shard000_batch000000.parquet
+│   │   ├── selected_indices_part_shard001_batch000000.parquet
+│   │   ├── manifest_shard000.json
+│   │   └── manifest_shard001.json
+│   ├── 3B/ ...
+│   ├── 8B/ ...
+│   └── 70B/ ...
+├── manifests/
+│   ├── shard_results_000.json
+│   ├── shard_results_001.json
+│   └── ablation_validation_report.md   ← unified report
+└── checkpoints/
+    ├── shard000/ ...
+    └── shard001/ ...
+```
 
 Streaming runs support multi-worker sharding with:
+
 - `--num-shards N`: total number of workers
 - `--shard-id K`: this worker’s index, `0..N-1`
 
@@ -130,6 +200,7 @@ Streaming runs support multi-worker sharding with:
 Checkpoint filenames are keyed by stage and batch number. If multiple shards share the same `--checkpoint-dir`, they will overwrite each other’s checkpoints.
 
 Recommended pattern:
+
 - `--checkpoint-dir output/checkpoints_1B/shard000`
 - `--checkpoint-dir output/checkpoints_1B/shard001`
 - …
@@ -142,6 +213,7 @@ Streaming enforces cross-stage non-overlap via a disk-backed used-chunk membersh
 - After each batch, selected ids are added to the store.
 
 Operational rules:
+
 - Keep the same `--num-shards` and shard-id mapping across all stages.
 - Do not delete `output/coresets/.used_chunks/` between stages if you want strict non-overlap.
 - Do not run multiple processes with the same `--shard-id` writing to the same output path concurrently.
@@ -263,6 +335,7 @@ coreset_engine/
 ### Main Config (`config/pipeline.yaml`)
 
 Key sections:
+
 - **dedup**: Exact and near-duplicate detection settings
 - **diversity**: Token rarity boosting and coverage weighting
 - **selection**: Strategy (stratified, density-aware), protected slices
@@ -270,6 +343,7 @@ Key sections:
 - **stages**: Per-stage configurations (1B, 3B, 8B, 70B, SFT, ALIGNMENT)
 
 Example customization:
+
 ```yaml
 # Disable near-dedup for faster processing
 dedup:
@@ -284,6 +358,7 @@ diversity:
 ### Curriculum Config (`config/curriculum.yaml`)
 
 **FROZEN** curriculum defining:
+
 - Band definitions (B0-B5 with allowed domains)
 - Stage-wise band ratios (1B: 45% B0 / 30% B1 / ..., etc.)
 - Language constraints (92% English, 8% Hindi)
@@ -415,6 +490,7 @@ selected_chunks, stats = engine.select_for_stage(
 ### Coverage Validation
 
 After selection, check:
+
 ```python
 from src.core.types import BandDistribution
 
@@ -438,23 +514,27 @@ assert preserved.code_preservation_ratio >= 0.90, "Code not preserved!"
 
 ### Issue: "Curriculum not frozen"
 
-**Error**: 
+**Error**:
+
 ```
 Curriculum validation failed: Curriculum is not frozen
 ```
 
-**Solution**: 
+**Solution**:
+
 - Ensure curriculum status is "FROZEN" in `config/curriculum.yaml`
 - Contact curriculum team if status is "DRAFT"
 
 ### Issue: "Rolling window violation"
 
 **Error**:
+
 ```
 HARD_REJECT: Rolling window constraint violated
 ```
 
 **Solution**:
+
 - Reduce `diversity.rare_token_boost` or `tail_token_boost`
 - Add `smooth_selection_via_rolling_window()` post-processing
 - Increase `rolling_window.window_tokens` to allow more variance
@@ -462,11 +542,13 @@ HARD_REJECT: Rolling window constraint violated
 ### Issue: "Protected slices under-preserved"
 
 **Error**:
+
 ```
 B5 preservation ratio: 0.85 < 0.95 (minimum required)
 ```
 
 **Solution**:
+
 1. Increase `selection.protected_preservation_override["B5"]` to be reachable
 2. Run selection without other constraints (debug mode)
 3. Check if enough B5 chunks exist in source data
@@ -474,6 +556,7 @@ B5 preservation ratio: 0.85 < 0.95 (minimum required)
 ### Issue: Memory exhaustion on large datasets
 
 **Solution**:
+
 ```yaml
 # Reduce parallel loaders
 io:
@@ -544,6 +627,7 @@ If you see `--input-path is required unless --legacy is set`, you are running th
 ### Reproducibility Guarantee
 
 Every coreset output includes:
+
 ```json
 {
   "deterministic": true,
@@ -556,6 +640,7 @@ Every coreset output includes:
 ```
 
 To reproduce exactly:
+
 ```bash
 python coreset_builder.py \
   --config config/pipeline.yaml \
@@ -582,12 +667,14 @@ Same outputs will be produced (bit-for-bit identical indices, same seed).
 ## Support & Issues
 
 **Bug Reports**: Create issue with:
+
 - Config file (sanitized)
 - Curriculum file
 - Error logs
 - Hardware specs (CPU/GPU, RAM)
 
-**Feature Requests**: 
+**Feature Requests**:
+
 - Propose as issue with use case
 - Include performance requirements
 - Discuss in team meeting before implementation

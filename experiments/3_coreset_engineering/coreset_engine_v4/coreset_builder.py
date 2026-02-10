@@ -15,6 +15,7 @@ Version: 1.0.0
 
 import argparse
 import logging
+import json
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -49,6 +50,7 @@ class CoresetBuilder:
     
     def __init__(self, config_path: str, curriculum_path: str):
         """Initialize builder with configuration files"""
+        self._config_path_str = config_path  # store for merge_shard_reports
         self.config = PipelineConfig.load_from_file(config_path)
         
         self.curriculum = CurriculumLoader(curriculum_path)
@@ -271,15 +273,85 @@ class CoresetBuilder:
         )
     
     def generate_reports(self, results: dict):
-        """Generate ablation and diagnostic reports"""
+        """Generate ablation and diagnostic reports.
+        
+        In sharded mode (num_shards > 1), each shard saves its per-shard
+        results as JSON.  The final unified report is produced by a
+        separate merge step (--merge-shard-reports).
+        """
         logger.info("\nGenerating reports...")
         
-        report_path = AblationReporter.generate_report(
-            results,
-            self.config.io.output_manifest_path
-        )
+        # Collect global dedup stats if available (set by StreamingCoresetBuilder)
+        dedup_stats = None
+        if hasattr(self, '_global_dedup_total') and self._global_dedup_total > 0:
+            dedup_stats = {
+                'total': self._global_dedup_total,
+                'dropped': self._global_dedup_dropped,
+            }
         
-        logger.info(f"Report saved to: {report_path}")
+        num_shards = getattr(self, 'num_shards', 1)
+        shard_id = getattr(self, 'shard_id', 0)
+        
+        if num_shards > 1:
+            # --- Sharded mode: save per-shard JSON ---
+            manifest_dir = Path(self.config.io.output_manifest_path)
+            manifest_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Make results JSON-serializable (convert distribution objects)
+            serializable_results = {}
+            for stage_name, stage_data in results.items():
+                sr = {}
+                for k, v in stage_data.items():
+                    if k in ('band_distribution', 'domain_distribution', 'language_distribution'):
+                        sr[k] = v.to_dict() if hasattr(v, 'to_dict') else (v if isinstance(v, dict) else str(v))
+                    elif k == 'timings_s':
+                        sr[k] = {tk: float(tv) for tk, tv in v.items()} if v else {}
+                    else:
+                        try:
+                            json.dumps(v)  # test serializable
+                            sr[k] = v
+                        except (TypeError, ValueError):
+                            sr[k] = str(v)
+                serializable_results[stage_name] = sr
+            
+            shard_json = manifest_dir / f"shard_results_{shard_id:03d}.json"
+            payload = {
+                'shard_id': shard_id,
+                'num_shards': num_shards,
+                'stages_results': serializable_results,
+                'dedup_stats': dedup_stats,
+            }
+            with open(shard_json, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, indent=2)
+            logger.info(f"Saved shard results to {shard_json}")
+            
+            # Auto-merge: check if all N shard JSONs are now present.
+            # The last shard to finish will find all files and produce the
+            # unified report automatically — no external merge step needed.
+            existing = sorted(manifest_dir.glob("shard_results_*.json"))
+            if len(existing) >= num_shards:
+                logger.info(f"All {num_shards} shard results present — merging into unified report...")
+                
+                # Build a minimal args-like namespace for merge_shard_reports
+                class _MergeArgs:
+                    config = self.config_path if hasattr(self, 'config_path') else 'config/pipeline.yaml'
+                
+                # Use the config path stored during __init__
+                _MergeArgs.config = self._config_path_str
+                merge_shard_reports(_MergeArgs())
+            else:
+                logger.info(
+                    f"Shard {shard_id} done ({len(existing)}/{num_shards} shards finished). "
+                    f"Unified report will be generated when the last shard completes."
+                )
+        else:
+            # --- Single-process mode: generate report directly ---
+            report_path = AblationReporter.generate_report(
+                results,
+                self.config.io.output_manifest_path,
+                dedup_stats=dedup_stats,
+            )
+            logger.info(f"Report saved to: {report_path}")
 
 
 class StreamingCoresetBuilder(CoresetBuilder):
@@ -315,6 +387,13 @@ class StreamingCoresetBuilder(CoresetBuilder):
         self.batch_processor = BatchProcessor(batch_size=self.batch_size, checkpoint_dir=checkpoint_dir)
         self.error_recovery = ErrorRecoveryManager()
 
+        # Global hash-based dedup state (same logic as notebook cell #6).
+        # Persists across all batches and stages so duplicates across
+        # the entire dataset are caught, not just within a single batch.
+        self._global_seen_hashes: set = set()
+        self._global_dedup_total: int = 0
+        self._global_dedup_dropped: int = 0
+
         # Enforce cross-stage non-overlap for streaming runs via disk-backed membership.
         used_dir = Path(self.config.io.output_coreset_path) / ".used_chunks"
         used_db = used_dir / f"used_chunks_shard{self.shard_id:03d}.sqlite"
@@ -339,6 +418,11 @@ class StreamingCoresetBuilder(CoresetBuilder):
 
     def _iter_batches(self) -> Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]]:
         """Yield (batch_idx, batch_rows) where batch_rows is [(chunk_id, row_dict), ...]."""
+
+        # Reset per-stage dedup state.  Each stage re-scans the full dataset,
+        # so we only want to remove duplicates *within* a single pass — not
+        # across stages (that would cause stages 3B/8B/70B to see 0 rows).
+        self._global_seen_hashes.clear()
 
         if self.input_format == "jsonl":
             files = self.batch_processor.list_input_files(self.input_path, "jsonl")
@@ -369,9 +453,22 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             return
                         if len(batch) > remaining:
                             batch = batch[:remaining]
-                    emitted += len(batch)
-                    yield batch_idx, batch
-                    batch_idx += 1
+                    # ---- GLOBAL HASH-BASED DEDUP for JSONL rows ----
+                    deduped_batch = []
+                    for cid, row in batch:
+                        row_hash = row.get("hash")
+                        if row_hash is not None:
+                            self._global_dedup_total += 1
+                            if row_hash in self._global_seen_hashes:
+                                self._global_dedup_dropped += 1
+                                continue
+                            self._global_seen_hashes.add(row_hash)
+                        deduped_batch.append((cid, row))
+
+                    emitted += len(deduped_batch)
+                    if deduped_batch:
+                        yield batch_idx, deduped_batch
+                        batch_idx += 1
             return
 
         if self.input_format == "parquet":
@@ -396,6 +493,12 @@ class StreamingCoresetBuilder(CoresetBuilder):
             #     "token_ids",
             # ]
             # NEW columns (matching actual NCERT parquet schema):
+            # OLD: columns without hash
+            # columns = [
+            #     "uuid", "source", "token_count_estimate",
+            #     "byte_length", "domain", "language", "assigned_band",
+            # ]
+            # NEW: added "hash" for global dedup (same as notebook cell #6)
             columns = [
                 "uuid",              # was: chunk_id
                 "source",            # was: dataset_id
@@ -404,6 +507,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 "domain",
                 "language",
                 "assigned_band",     # was: band
+                "hash",              # for global dedup
             ]
 
             batch_idx = 0
@@ -422,6 +526,18 @@ class StreamingCoresetBuilder(CoresetBuilder):
                         cid = r.get("uuid") or r.get("chunk_id")
                         if cid is None:
                             continue
+
+                        # ---- GLOBAL HASH-BASED DEDUP (notebook cell #6 logic) ----
+                        # If the row has a "hash" column, use it for global dedup.
+                        # Identical hashes across ANY batch/stage are dropped.
+                        row_hash = r.get("hash")
+                        if row_hash is not None:
+                            self._global_dedup_total += 1
+                            if row_hash in self._global_seen_hashes:
+                                self._global_dedup_dropped += 1
+                                continue
+                            self._global_seen_hashes.add(row_hash)
+
                         out.append((str(cid), r))
                     emitted += len(out)
                     if out:
@@ -854,6 +970,189 @@ class StreamingCoresetBuilder(CoresetBuilder):
         }
 
 
+def merge_shard_reports(args) -> int:
+    """Merge per-shard result JSONs into a single unified ablation report.
+    
+    Each shard writes a ``shard_results_NNN.json`` file.  This function
+    reads them all, aggregates stage metrics (sums tokens/chunks across
+    shards, merges distributions), combines dedup stats, and generates
+    one unified ablation report via AblationReporter.
+    """
+    from src.core.config import PipelineConfig
+    
+    config = PipelineConfig.load_from_file(args.config)
+    manifest_dir = Path(config.io.output_manifest_path)
+    
+    shard_files = sorted(manifest_dir.glob("shard_results_*.json"))
+    if not shard_files:
+        logger.error(f"No shard_results_*.json files found in {manifest_dir}")
+        return 1
+    
+    logger.info(f"Found {len(shard_files)} shard result files in {manifest_dir}")
+    
+    # Load all shard payloads
+    shards = []
+    for sf in shard_files:
+        with open(sf, 'r', encoding='utf-8') as f:
+            shards.append(json.load(f))
+    
+    # Aggregate: sum per-stage metrics across shards
+    all_stage_names = set()
+    for s in shards:
+        all_stage_names.update(s['stages_results'].keys())
+    
+    merged_results = {}
+    for stage_name in sorted(all_stage_names):
+        merged = {
+            'total_input_tokens': 0,
+            'total_input_chunks': 0,
+            'selected_tokens': 0,
+            'selected_chunks': 0,
+        }
+        # Collect band/domain/language dicts from each shard and weighted-merge
+        band_weighted = {}   # band_name -> total_tokens
+        domain_weighted = {} # domain -> total_tokens
+        lang_weighted = {}   # lang -> total_tokens
+        
+        for s in shards:
+            sr = s['stages_results'].get(stage_name)
+            if not sr:
+                continue
+            merged['total_input_tokens'] += sr.get('total_input_tokens', 0)
+            merged['total_input_chunks'] += sr.get('total_input_chunks', 0)
+            merged['selected_tokens'] += sr.get('selected_tokens', 0)
+            merged['selected_chunks'] += sr.get('selected_chunks', 0)
+            
+            shard_selected = sr.get('selected_tokens', 0)
+            
+            # Aggregate band distribution (weighted by selected tokens)
+            bd = sr.get('band_distribution', {})
+            if isinstance(bd, dict):
+                for band, ratio in bd.items():
+                    band_weighted[band] = band_weighted.get(band, 0) + ratio * shard_selected
+            
+            # Aggregate domain distribution
+            dd = sr.get('domain_distribution', {})
+            if isinstance(dd, dict):
+                for domain, ratio in dd.items():
+                    domain_weighted[domain] = domain_weighted.get(domain, 0) + ratio * shard_selected
+            
+            # Aggregate language distribution
+            ld = sr.get('language_distribution', {})
+            if isinstance(ld, dict):
+                for lang, ratio in ld.items():
+                    lang_weighted[lang] = lang_weighted.get(lang, 0) + ratio * shard_selected
+        
+        # Convert weighted sums back to ratios
+        total_selected = merged['selected_tokens'] or 1
+        if band_weighted:
+            merged['band_distribution'] = {b: t / total_selected for b, t in band_weighted.items()}
+        if domain_weighted:
+            merged['domain_distribution'] = {d: t / total_selected for d, t in domain_weighted.items()}
+        if lang_weighted:
+            merged['language_distribution'] = {l: t / total_selected for l, t in lang_weighted.items()}
+        
+        merged_results[stage_name] = merged
+    
+    # Aggregate dedup stats across shards
+    merged_dedup = {'total': 0, 'dropped': 0}
+    for s in shards:
+        ds = s.get('dedup_stats')
+        if ds:
+            merged_dedup['total'] += ds.get('total', 0)
+            merged_dedup['dropped'] += ds.get('dropped', 0)
+    
+    if merged_dedup['total'] == 0:
+        merged_dedup = None
+    
+    # ---- Cross-shard dedup on selected indices ----
+    import pyarrow.parquet as pq
+    import pyarrow as pa
+    
+    coreset_base = Path(config.io.output_manifest_path).parent / 'coresets'
+    cross_shard_dedup_stats = {'total_chunks': 0, 'duplicates_removed': 0, 'tokens_removed': 0}
+    
+    for stage_name in sorted(all_stage_names):
+        stage_dir = coreset_base / stage_name
+        if not stage_dir.exists():
+            continue
+        
+        idx_files = sorted(stage_dir.glob('selected_indices_*.parquet'))
+        if not idx_files:
+            continue
+        
+        seen_chunk_ids: set = set()
+        stage_total = 0
+        stage_dupes = 0
+        stage_tokens_removed = 0
+        
+        for idx_file in idx_files:
+            table = pq.read_table(idx_file)
+            n_before = len(table)
+            stage_total += n_before
+            
+            if 'chunk_id' not in table.column_names:
+                continue
+            
+            # Build keep mask
+            chunk_ids = table.column('chunk_id').to_pylist()
+            token_counts = table.column('token_count').to_pylist() if 'token_count' in table.column_names else [0] * len(chunk_ids)
+            mask = []
+            for cid, tc in zip(chunk_ids, token_counts):
+                if cid in seen_chunk_ids:
+                    mask.append(False)
+                    stage_dupes += 1
+                    stage_tokens_removed += tc
+                else:
+                    seen_chunk_ids.add(cid)
+                    mask.append(True)
+            
+            # Rewrite file if any duplicates were found
+            if not all(mask):
+                filtered = table.filter(pa.array(mask, type=pa.bool_()))
+                pq.write_table(filtered, idx_file)
+        
+        cross_shard_dedup_stats['total_chunks'] += stage_total
+        cross_shard_dedup_stats['duplicates_removed'] += stage_dupes
+        cross_shard_dedup_stats['tokens_removed'] += stage_tokens_removed
+        
+        # Adjust merged_results for this stage
+        if stage_dupes > 0 and stage_name in merged_results:
+            merged_results[stage_name]['selected_chunks'] -= stage_dupes
+            merged_results[stage_name]['selected_tokens'] -= stage_tokens_removed
+            logger.info(
+                f"  Cross-shard dedup ({stage_name}): removed {stage_dupes} duplicate chunks "
+                f"({stage_tokens_removed:,} tokens)"
+            )
+    
+    if cross_shard_dedup_stats['duplicates_removed'] == 0:
+        logger.info("  Cross-shard dedup: no duplicate chunks found across shards")
+    
+    # Log aggregated summary
+    logger.info("\n--- Merged Shard Summary ---")
+    for stage_name, m in sorted(merged_results.items()):
+        logger.info(
+            f"  {stage_name}: input_tokens={m['total_input_tokens']:,}  "
+            f"selected_tokens={m['selected_tokens']:,}  "
+            f"selected_chunks={m['selected_chunks']:,}"
+        )
+    if merged_dedup:
+        logger.info(
+            f"  Dedup: total={merged_dedup['total']:,}  "
+            f"dropped={merged_dedup['dropped']:,}  "
+            f"rate={merged_dedup['dropped']/merged_dedup['total']*100:.2f}%"
+        )
+    
+    # Generate unified report
+    report_path = AblationReporter.generate_report(
+        merged_results,
+        config.io.output_manifest_path,
+        dedup_stats=merged_dedup,
+    )
+    logger.info(f"Unified report saved to: {report_path}")
+    return 0
+
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
@@ -944,6 +1243,11 @@ def main():
         default="baseline",
         help="Ablation variant (baseline, no_dedup, no_diversity, density_only)"
     )
+    parser.add_argument(
+        "--merge-shard-reports",
+        action="store_true",
+        help="Merge per-shard result JSONs into a single ablation report, then exit."
+    )
     
     args = parser.parse_args()
     
@@ -952,6 +1256,10 @@ def main():
     logger.info("=" * 70)
     
     try:
+        # --- Merge mode: combine shard JSONs into one report, then exit ---
+        if args.merge_shard_reports:
+            return merge_shard_reports(args)
+        
         # Validate file paths
         if not Path(args.config).exists():
             raise FileNotFoundError(f"Config not found: {args.config}")
@@ -1003,6 +1311,15 @@ def main():
                     logger.info(f"    timings: {timing_str}")
         
         # Generate reports for both legacy and streaming runs
+        # ---- GLOBAL DEDUP SUMMARY ----
+        if not args.legacy and hasattr(builder, '_global_dedup_total') and builder._global_dedup_total > 0:
+            dedup_rate = builder._global_dedup_dropped / builder._global_dedup_total * 100
+            logger.info("\n--- Global Hash Dedup Stats ---")
+            logger.info(f"  Total rows with hash  : {builder._global_dedup_total:,}")
+            logger.info(f"  Unique rows kept      : {builder._global_dedup_total - builder._global_dedup_dropped:,}")
+            logger.info(f"  Duplicate rows dropped: {builder._global_dedup_dropped:,}")
+            logger.info(f"  Dedup rate            : {dedup_rate:.2f}%")
+
         builder.generate_reports(results)
         
         logger.info("\n" + "=" * 70)
