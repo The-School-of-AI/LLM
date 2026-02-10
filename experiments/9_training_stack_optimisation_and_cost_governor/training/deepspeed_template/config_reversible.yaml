@@ -25,7 +25,7 @@ deepspeed:
 model:
   model_type: "reversible"  # Use "reversible", "qwen2_moe", or "standard"
   tokenizer_name: "Qwen/Qwen2.5-0.5B"
-  embedding_type: "standard"  # "kronecker" or "standard" (for reversible models)
+  embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
 
 # Checkpoint Configuration
 checkpoint:

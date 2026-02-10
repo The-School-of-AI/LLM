@@ -1012,7 +1012,7 @@ class MoEFFN(nn.Module):
 
         sort_idx = real_expert_indices.argsort()
         sorted_token_indices = real_token_indices[sort_idx]
-        sorted_weights = real_weights[sort_idx]
+        sorted_weights = real_weights[sort_idx].to(dtype)
         sorted_x = flat_x[sorted_token_indices]
 
         expert_counts = torch.bincount(real_expert_indices, minlength=E)
@@ -1402,7 +1402,7 @@ class Model3B(nn.Module):
         self.layer_types = layer_types
 
         # Reversible Midpoint Integration
-        from reversible_ops_midpoint import ReversibleMidpointStack
+        from .reversible_ops_midpoint import ReversibleMidpointStack
         self.stack = ReversibleMidpointStack(
             self.layers,
             step_size=0.25,
