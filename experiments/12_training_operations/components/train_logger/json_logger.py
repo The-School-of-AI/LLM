@@ -1,10 +1,9 @@
-
 import json
 import time
 import threading
 import queue
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import numpy as np
 import os
 
@@ -13,11 +12,12 @@ class JSONLogger:
     A high-performance, non-blocking structured logger for training runs.
     Writes JSONL files to local NVMe storage for sidecar ingestion.
     """
-    def __init__(self, base_dir: str, run_id: str, rank: int = 0, buffer_size: int = 100, default_context: dict = None):
+    def __init__(self, base_dir: str, run_id: str, rank: int = 0, buffer_size: int = 100, default_context: dict = None, queue_maxsize: int = 0):
         self.base_dir = Path(base_dir)
         self.run_id = run_id
         self.rank = rank
         self.default_context = default_context or {}
+        self.host = os.environ.get("HOSTNAME") or os.uname().nodename
         
         # Ensure base directory exists
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -28,7 +28,7 @@ class JSONLogger:
         self.buffer_size = buffer_size
         
         # Async writing setup
-        self.queue = queue.Queue()
+        self.queue = queue.Queue(maxsize=queue_maxsize) if queue_maxsize and queue_maxsize > 0 else queue.Queue()
         self.running = True
         
         # Buffer for batch writing
@@ -49,13 +49,20 @@ class JSONLogger:
         if context:
             merged_context.update(context)
 
+        ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         payload = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": ts,
+            "run_id": self.run_id,
+            "rank": self.rank,
+            "host": self.host,
             "step": step,
             "metrics": metrics,
             "context": merged_context
         }
-        self.queue.put(payload)
+        try:
+            self.queue.put(payload, block=False)
+        except queue.Full:
+            pass
 
     def _writer_loop(self):
         """
