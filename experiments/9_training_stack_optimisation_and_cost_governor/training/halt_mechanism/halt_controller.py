@@ -9,6 +9,10 @@ import json
 
 REGION = "us-east-1"
 BUCKET = "YOUR_BUCKET_NAME"
+# Must match the template's s3.prefix (config.yaml) so we wait for the same sentinel the trainer writes.
+S3_PREFIX = "nishant/LLM"
+SENTINEL_KEY = f"{S3_PREFIX.rstrip('/')}/latest/_SUCCESS" if S3_PREFIX else "latest/_SUCCESS"
+
 METRICS_FILE = "/tmp/training_metrics.json"
 
 HEARTBEAT_TIMEOUT = 120
@@ -126,7 +130,7 @@ def wait_for_checkpoint():
         try:
             s3.head_object(
                 Bucket=BUCKET,
-                Key="latest/_SUCCESS"
+                Key=SENTINEL_KEY
             )
             print("Checkpoint confirmed.")
             return

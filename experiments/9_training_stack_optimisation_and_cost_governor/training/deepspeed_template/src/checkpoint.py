@@ -597,12 +597,15 @@ class S3CheckpointManager:
         if self.is_global_main and self.config.verbose:
             print("✅ All checkpoints uploaded across all nodes!")
 
-    def put_halt_sentinel(self, key: str = "latest/_SUCCESS") -> None:
+    def put_halt_sentinel(self, key: Optional[str] = None) -> None:
         """
         Write a sentinel object to S3 so the halt controller can detect checkpoint completion.
 
         Call this after wait_for_uploads() when exiting due to FORCE_CHECKPOINT.
+        When key is None, uses config.s3_prefix so the sentinel is under the same prefix as checkpoints.
         """
+        if key is None:
+            key = f"{self.config.s3_prefix.rstrip('/')}/latest/_SUCCESS"
         if self.is_local_main and hasattr(self, "s3_client"):
             try:
                 self.s3_client.put_object(
