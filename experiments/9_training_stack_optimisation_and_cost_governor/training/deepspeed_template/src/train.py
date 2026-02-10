@@ -7,9 +7,20 @@ for training language models with DeepSpeed optimization.
 
 import torch
 from tqdm import tqdm
+import time
+import torch.distributed as dist
+import psutil
 
 from .utils import is_main_process, print_rank_0
+from deepspeed.profiling.flops_profiler import FlopsProfiler
 
+try:
+    import pynvml
+
+    _NVML_AVAILABLE = True
+    pynvml.nvmlInit()
+except Exception:
+    _NVML_AVAILABLE = False
 
 def train_epoch(
     model_engine,
@@ -17,6 +28,7 @@ def train_epoch(
     epoch,
     max_steps=None,
     log_interval=10,
+    enable_system_metrics=False,
     checkpoint_interval=None,
     output_dir=None,
     checkpoint_manager=None,
@@ -50,11 +62,18 @@ def train_epoch(
         train_loader, desc=f"Epoch {epoch}", disable=not is_main_process()
     )
 
+    profile_step = 10
+    print_profile= True
+    prof = FlopsProfiler(model_engine)
     for i, batch in enumerate(progress_bar):
         # Skip steps if resuming
         if i < start_step:
             continue
-
+        if i == profile_step:
+            print ("Profile started")
+            prof.start_profile()
+        # Measure step wall-clock time
+        step_start_time = time.time()
         # Move batch to device
         input_ids = batch["input_ids"].to(model_engine.device)
         attention_mask = batch["attention_mask"].to(model_engine.device)
@@ -70,21 +89,123 @@ def train_epoch(
         # Update weights
         model_engine.step()
 
+        # Compute tokens per second for this step
+        step_time = time.time() - step_start_time
+        with torch.no_grad():
+            # Count tokens in this batch using attention mask (1s for real tokens)
+            tokens = attention_mask.sum().float()
+            # Aggregate across all ranks if distributed is initialized
+            if dist.is_available() and dist.is_initialized():
+                dist.all_reduce(tokens, op=dist.ReduceOp.SUM)
+            tokens = tokens.item()
+        tokens_per_sec = tokens / step_time if step_time > 0 else 0.0
+
+        # Optional system metrics (CPU/GPU util & memory)
+        gpu_util = gpu_mem_used = gpu_mem_total = None
+        cpu_util = cpu_mem_used = cpu_mem_total = None
+        if enable_system_metrics:
+            # CPU metrics
+            vm = psutil.virtual_memory()
+            cpu_util = psutil.cpu_percent(interval=None)
+            cpu_mem_used = vm.used / (1024**3)
+            cpu_mem_total = vm.total / (1024**3)
+
+            # GPU metrics (only on main process to avoid spam)
+            if _NVML_AVAILABLE and is_main_process() and torch.cuda.is_available():
+                try:
+                    # Collect metrics for all visible GPUs
+                    n_devices = pynvml.nvmlDeviceGetCount()
+                    gpu_rows = []
+                    for idx in range(n_devices):
+                        handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
+                        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                        util_info = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                        used_gb = mem_info.used / (1024**3)
+                        total_gb = mem_info.total / (1024**3)
+                        util = util_info.gpu
+                        gpu_rows.append((idx, util, used_gb, total_gb))
+
+                    # For scalar summary fields, use the device this rank is bound to
+                    device_index = (
+                        model_engine.local_rank
+                        if hasattr(model_engine, "local_rank")
+                        else torch.cuda.current_device()
+                    )
+                    _, gpu_util, gpu_mem_used, gpu_mem_total = next(
+                        (r for r in gpu_rows if r[0] == int(device_index)),
+                        (device_index, None, None, None),
+                    )
+
+                    # Build a neat table string for all GPUs
+                    header = "GPU  Util(%)  Mem(GB Used/Total)"
+                    lines = [header, "-" * len(header)]
+                    for idx, util, used_gb, total_gb in gpu_rows:
+                        lines.append(
+                            f"{idx:<3}  {util:>6.0f}%  {used_gb:>5.1f}G/{total_gb:>5.1f}G"
+                        )
+                    gpu_table = "\n".join(lines)
+                except Exception:
+                    gpu_table = None
+                    # Fail silently if NVML query fails
+                    pass
+
+        if i == profile_step:
+            print("Profile stoped\n")
+            prof.stop_profile()
+            flops = prof.get_total_flops()
+            macs = prof.get_total_macs()
+            params = prof.get_total_params()
+            if print_profile:
+                prof.print_model_profile(profile_step=profile_step)
+            prof.end_profile()
         # Track metrics
         total_loss += loss.item()
         steps += 1
         global_step += 1
 
         # Update progress bar
-        progress_bar.set_postfix(
-            {"loss": f"{loss.item():.4f}", "global_step": global_step}
-        )
+        postfix = {
+            "loss": f"{loss.item():.4f}",
+            "global_step": global_step,
+            "toks/s": f"{tokens_per_sec:.1f}",
+        }
+        if enable_system_metrics and gpu_mem_used is not None:
+            postfix["gpu_util"] = f"{gpu_util:.0f}%"
+            postfix["gpu_mem"] = f"{gpu_mem_used:.1f}G"
+        if enable_system_metrics and cpu_util is not None:
+            postfix["cpu_util"] = f"{cpu_util:.0f}%"
+            postfix["cpu_mem"] = f"{cpu_mem_used:.1f}G"
+        progress_bar.set_postfix(postfix)
 
         # Log periodically
         if i % log_interval == 0:
-            print_rank_0(
-                f"Epoch {epoch}, Step {i}, Global Step {global_step}, Loss: {loss.item():.4f}"
+            msg = (
+                f"Epoch {epoch}, Step {i}, Global Step {global_step}, "
+                f"Loss: {loss.item():.4f}, Tokens/s: {tokens_per_sec:.1f}, Tokens: {int(tokens)}"
             )
+            if enable_system_metrics:
+                if gpu_util is not None:
+                    msg += (
+                        f", GPU Util: {gpu_util:.0f}%, "
+                        f"GPU Mem: {gpu_mem_used:.1f}G/{gpu_mem_total:.1f}G"
+                    )
+                if cpu_util is not None:
+                    msg += (
+                        f", CPU Util: {cpu_util:.0f}%, "
+                        f"CPU Mem: {cpu_mem_used:.1f}G/{cpu_mem_total:.1f}G"
+                    )
+            print_rank_0(msg)
+
+            # Print full GPU table (all devices) when enabled and available
+            if enable_system_metrics and is_main_process():
+                try:
+                    # gpu_table is defined above when NVML succeeds; guard with getattr-style check
+                    if _NVML_AVAILABLE and "gpu_table" in locals() and gpu_table:
+                        print_rank_0("\nGPU Utilization / Memory (all devices):")
+                        print_rank_0(gpu_table)
+                except Exception:
+                    # Don't let logging issues break training
+                    pass
 
         # Save checkpoint periodically
         if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:

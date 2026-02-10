@@ -27,7 +27,15 @@ Configuration:
 
 import argparse
 import os
+import warnings
 from typing import Any, Dict
+
+# Suppress deprecated pynvml FutureWarning emitted inside torch.cuda
+warnings.filterwarnings(
+    "ignore",
+    message=".*pynvml package is deprecated.*",
+    category=FutureWarning,
+)
 
 import deepspeed
 import torch
@@ -57,6 +65,9 @@ class Config:
         self.max_eval_steps = config_dict["training"]["max_eval_steps"]
         self.log_interval = config_dict["training"]["log_interval"]
         self.seed = config_dict["training"]["seed"]
+        self.enable_system_metrics = config_dict["training"].get(
+            "enable_system_metrics", False
+        )
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
@@ -283,6 +294,7 @@ def main():
             epoch,
             max_steps=args.max_train_steps,
             log_interval=args.log_interval,
+            enable_system_metrics=args.enable_system_metrics,
             checkpoint_interval=args.checkpoint_interval,
             output_dir=args.output_dir,
             checkpoint_manager=checkpoint_manager,
