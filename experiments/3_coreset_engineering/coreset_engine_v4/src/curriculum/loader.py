@@ -336,14 +336,42 @@ class CurriculumLoader:
             lang_context_dict = self.raw_curriculum.get("language_and_context", {})
             lang_policy_dict = lang_context_dict.get("language_policy", {})
             
-            primary = {
-                lang["lang"]: lang.get("max_share", 1.0)
-                for lang in lang_policy_dict.get("primary_languages", [])
-            }
-            secondary = {
-                lang["lang"]: lang.get("max_share", 0.1)
-                for lang in lang_policy_dict.get("secondary_languages", [])
-            }
+            # OLD: Original dict comprehension — fails when lang is a list (curriculum_v6.yaml)
+            # primary = {
+            #     lang["lang"]: lang.get("max_share", 1.0)
+            #     for lang in lang_policy_dict.get("primary_languages", [])
+            # }
+            # secondary = {
+            #     lang["lang"]: lang.get("max_share", 0.1)
+            #     for lang in lang_policy_dict.get("secondary_languages", [])
+            # }
+
+            # NEW: Handle both string ("hi") and list (["as","bn",...]) values for lang
+            primary = {}
+            for lang_entry in lang_policy_dict.get("primary_languages", []):
+                lang_val = lang_entry.get("lang") or lang_entry.get("code")
+                share = lang_entry.get("max_share", 1.0)
+                if isinstance(lang_val, list):
+                    # v6 format: lang: ["en", "..."] — expand each into its own entry
+                    for lv in lang_val:
+                        primary[str(lv)] = share
+                else:
+                    # Original format: lang: "en"
+                    primary[str(lang_val)] = share
+
+            # Parse secondary languages — handle both string and list for lang
+            secondary = {}
+            for lang_entry in lang_policy_dict.get("secondary_languages", []):
+                lang_val = lang_entry.get("lang") or lang_entry.get("code")
+                share = lang_entry.get("max_share", 0.1)
+                if isinstance(lang_val, list):
+                    # v6 format: lang: ["as", "bn", "gu", ...] — expand list into
+                    # individual entries, each sharing the same max_share.
+                    for lv in lang_val:
+                        secondary[str(lv)] = share
+                else:
+                    # Original format: lang: "hi"
+                    secondary[str(lang_val)] = share
             excluded = set(lang_policy_dict.get("excluded_languages", []))
             
             self.language_policy = LanguagePolicy(

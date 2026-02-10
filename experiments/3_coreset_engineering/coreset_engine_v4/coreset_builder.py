@@ -382,17 +382,28 @@ class StreamingCoresetBuilder(CoresetBuilder):
             else:
                 paths = [self.input_path]
 
+            # OLD columns (original schema - did not match NCERT parquet):
+            # columns = [
+            #     "chunk_id",
+            #     "dataset_id",
+            #     "token_count",
+            #     "byte_length",
+            #     "domain",
+            #     "language",
+            #     "band",
+            #     "source_doc_id",
+            #     "source_url",
+            #     "token_ids",
+            # ]
+            # NEW columns (matching actual NCERT parquet schema):
             columns = [
-                "chunk_id",
-                "dataset_id",
-                "token_count",
+                "uuid",              # was: chunk_id
+                "source",            # was: dataset_id
+                "token_count_estimate",  # was: token_count
                 "byte_length",
                 "domain",
                 "language",
-                "band",
-                "source_doc_id",
-                "source_url",
-                "token_ids",
+                "assigned_band",     # was: band
             ]
 
             batch_idx = 0
@@ -406,7 +417,9 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 ):
                     out: List[Tuple[str, Dict[str, Any]]] = []
                     for r in rows:
-                        cid = r.get("chunk_id")
+                        # OLD: cid = r.get("chunk_id")
+                        # NEW: NCERT parquet uses "uuid" as the chunk identifier
+                        cid = r.get("uuid") or r.get("chunk_id")
                         if cid is None:
                             continue
                         out.append((str(cid), r))
@@ -538,18 +551,36 @@ class StreamingCoresetBuilder(CoresetBuilder):
             )
             if isinstance(secondary_specs, list) and secondary_specs:
                 for spec in secondary_specs:
-                    lang = spec.get('lang')
+                    # OLD: lang was assumed to be a string
+                    # lang = spec.get('lang')
+                    # earliest = spec.get('earliest_stage')
+                    # if not lang:
+                    #     continue
+                    # if not earliest:
+                    #     allowed_languages_for_stage.add(lang)
+                    #     continue
+                    # try:
+                    #     if stage_order.index(str(earliest)) <= current_stage_idx:
+                    #         allowed_languages_for_stage.add(lang)
+                    # except ValueError:
+                    #     allowed_languages_for_stage.add(lang)
+
+                    # NEW: Handle lang as either a string ("hi") or list (["as","bn",...])
+                    lang_val = spec.get('lang')
                     earliest = spec.get('earliest_stage')
-                    if not lang:
+                    if not lang_val:
                         continue
-                    if not earliest:
-                        allowed_languages_for_stage.add(lang)
-                        continue
-                    try:
-                        if stage_order.index(str(earliest)) <= current_stage_idx:
+                    # Normalize to a list of language codes
+                    langs = lang_val if isinstance(lang_val, list) else [lang_val]
+                    for lang in langs:
+                        if not earliest:
                             allowed_languages_for_stage.add(lang)
-                    except ValueError:
-                        allowed_languages_for_stage.add(lang)
+                            continue
+                        try:
+                            if stage_order.index(str(earliest)) <= current_stage_idx:
+                                allowed_languages_for_stage.add(lang)
+                        except ValueError:
+                            allowed_languages_for_stage.add(lang)
             else:
                 allowed_languages_for_stage.update(self.curriculum.language_policy.secondary_languages.keys())
 
@@ -585,25 +616,40 @@ class StreamingCoresetBuilder(CoresetBuilder):
                     if str(chunk_id) not in allowed_ids:
                         continue
                     try:
-                        token_count = int(row.get("token_count", 0) or 0)
+                        # OLD row parsing (original schema):
+                        # token_count = int(row.get("token_count", 0) or 0)
+                        # meta = ChunkMetadata(
+                        #     chunk_id=str(chunk_id),
+                        #     dataset_id=row.get("dataset_id", "ds"),
+                        #     token_count=token_count,
+                        #     byte_length=int(row.get("byte_length", 0) or 0),
+                        #     domain=row.get("domain", "clean_web"),
+                        #     language=row.get("language", "en"),
+                        #     band=DifficultyBand(row.get("band", "B0")),
+                        #     source_doc_id=row.get("source_doc_id", ""),
+                        #     source_url=row.get("source_url", None),
+                        # )
+                        # token_ids = row.get("token_ids")
+                        # if token_ids is not None:
+                        #     try:
+                        #         setattr(meta, "token_ids", list(token_ids))
+                        #     except Exception:
+                        #         pass
+
+                        # NEW row parsing (NCERT parquet schema):
+                        token_count = int(row.get("token_count_estimate", 0) or row.get("token_count", 0) or 0)
                         batch_tokens += token_count
                         meta = ChunkMetadata(
                             chunk_id=str(chunk_id),
-                            dataset_id=row.get("dataset_id", "ds"),
+                            dataset_id=row.get("source", "") or row.get("dataset_id", "ds"),
                             token_count=token_count,
                             byte_length=int(row.get("byte_length", 0) or 0),
                             domain=row.get("domain", "clean_web"),
                             language=row.get("language", "en"),
-                            band=DifficultyBand(row.get("band", "B0")),
+                            band=DifficultyBand(row.get("assigned_band", "B0") or row.get("band", "B0")),
                             source_doc_id=row.get("source_doc_id", ""),
                             source_url=row.get("source_url", None),
                         )
-                        token_ids = row.get("token_ids")
-                        if token_ids is not None:
-                            try:
-                                setattr(meta, "token_ids", list(token_ids))
-                            except Exception:
-                                pass
 
                         # Availability accounting: only count chunks that are eligible for selection
                         # given stage band ratios, allowed_domains, and language gating.

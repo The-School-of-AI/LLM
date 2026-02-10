@@ -177,7 +177,7 @@ class BatchProcessor:
             raise RuntimeError("pyarrow is required for parquet streaming; install pyarrow") from e
 
         dataset = ds.dataset(path, format="parquet")
-        scanner = dataset.scan(columns=columns, batch_size=int(batch_size_rows))
+        scanner = dataset.scanner(columns=columns, batch_size=int(batch_size_rows))
         emitted = 0
 
         for record_batch in scanner.to_batches():

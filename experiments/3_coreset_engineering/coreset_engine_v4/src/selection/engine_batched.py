@@ -229,19 +229,38 @@ class BatchedSelectionEngine(SelectionEngine):
             )
             if isinstance(secondary_specs, list) and secondary_specs:
                 for spec in secondary_specs:
-                    lang = spec.get('lang')
+                    # OLD: lang was assumed to be a string
+                    # lang = spec.get('lang')
+                    # earliest = spec.get('earliest_stage')
+                    # if not lang:
+                    #     continue
+                    # if not earliest:
+                    #     allowed_languages.add(lang)
+                    #     continue
+                    # try:
+                    #     if stage_order.index(str(earliest)) <= current_stage_idx:
+                    #         allowed_languages.add(lang)
+                    # except ValueError:
+                    #     # Unknown earliest_stage: be permissive
+                    #     allowed_languages.add(lang)
+
+                    # NEW: Handle lang as either a string ("hi") or list (["as","bn",...])
+                    lang_val = spec.get('lang')
                     earliest = spec.get('earliest_stage')
-                    if not lang:
+                    if not lang_val:
                         continue
-                    if not earliest:
-                        allowed_languages.add(lang)
-                        continue
-                    try:
-                        if stage_order.index(str(earliest)) <= current_stage_idx:
+                    # Normalize to a list of language codes
+                    langs = lang_val if isinstance(lang_val, list) else [lang_val]
+                    for lang in langs:
+                        if not earliest:
                             allowed_languages.add(lang)
-                    except ValueError:
-                        # Unknown earliest_stage: be permissive
-                        allowed_languages.add(lang)
+                            continue
+                        try:
+                            if stage_order.index(str(earliest)) <= current_stage_idx:
+                                allowed_languages.add(lang)
+                        except ValueError:
+                            # Unknown earliest_stage: be permissive
+                            allowed_languages.add(lang)
             else:
                 allowed_languages.update(self.curriculum.language_policy.secondary_languages.keys())
 
