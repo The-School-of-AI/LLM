@@ -1,15 +1,17 @@
 services:
   clickhouse:
-    image: clickhouse/clickhouse-server:25.8.16.34
+    image: clickhouse/clickhouse-server:latest
     container_name: p12-clickhouse
     restart: unless-stopped
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "0.0.0.0:8123:8123"
+      - "0.0.0.0:9000:9000"
     ulimits:
       nofile:
         soft: 262144
         hard: 262144
+    environment:
+      CLICKHOUSE_DB: training_observability
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
