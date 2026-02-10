@@ -43,7 +43,7 @@ import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
-from src.model import get_qwen2_moe_model
+from src.model import get_qwen2_moe_model, get_reversible_model
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
@@ -78,6 +78,8 @@ class Config:
             "tokenizer_name", "Qwen/Qwen2.5-0.5B"
         )
         self.model_name = config_dict["model"].get("model_name", "distilgpt2")
+        self.model_type = config_dict["model"].get("model_type", "qwen2_moe")  # "qwen2_moe", "reversible", or "standard"
+        self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # For reversible models
 
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
@@ -203,8 +205,16 @@ def main():
     # Step 2: Load Model
     # ========================================
     print_rank_0("\n[2/5] Loading model...")
-    model = get_qwen2_moe_model(print_info=True)
-    # model = get_model(args.model_name, print_info=True)
+    if args.model_type == "reversible":
+        print_rank_0("  Using Reversible Model (memory-efficient)")
+        model = get_reversible_model(print_info=True, embedding_type=args.embedding_type)
+    elif args.model_type == "qwen2_moe":
+        print_rank_0("  Using Qwen2 MoE Model")
+        model = get_qwen2_moe_model(print_info=True)
+    else:
+        print_rank_0(f"  Using Standard Model: {args.model_name}")
+        from src.model import get_model
+        model = get_model(args.model_name, print_info=True)
 
     # ========================================
     # Step 3: Initialize DeepSpeed

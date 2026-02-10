@@ -1,0 +1,53 @@
+{
+    "train_batch_size": 64,
+    "train_micro_batch_size_per_gpu": 2,
+    "gradient_accumulation_steps": 8,
+    
+    "optimizer": {
+        "type": "AdamW",
+        "params": {
+            "lr": 3e-4,
+            "betas": [0.9, 0.95],
+            "eps": 1e-8,
+            "weight_decay": 0.1
+        }
+    },
+    
+    "scheduler": {
+        "type": "WarmupDecayLR",
+        "params": {
+            "warmup_min_lr": 0,
+            "warmup_max_lr": 3e-4,
+            "warmup_num_steps": 100,
+            "total_num_steps": 1000
+        }
+    },
+    
+    "zero_optimization": {
+        "stage": 2,
+        "offload_optimizer": {
+            "device": "cpu",
+            "pin_memory": true
+        },
+        "contiguous_gradients": true,
+        "overlap_comm": true,
+        "reduce_scatter": true,
+        "reduce_bucket_size": 5e7,
+        "allgather_partitions": true,
+        "allgather_bucket_size": 5e7
+    },
+    
+    "bf16": {
+        "enabled": true
+    },
+    
+    "gradient_clipping": 1.0,
+    "steps_per_print": 10,
+    "wall_clock_breakdown": false,
+    "dump_state": false,
+    
+    "_comment_activation_checkpointing": "DISABLED for reversible models - they handle memory efficiency through their architecture",
+    "_comment_batch_size": "Increased from 32 to 64 - reversible models use ~10x less memory for activations",
+    "_comment_micro_batch": "Increased from 1 to 2 - take advantage of memory savings",
+    "_comment_dropout": "Model has dropout=0.0 set in config (required for reversibility)"
+}

@@ -80,8 +80,43 @@ def train_epoch(
         labels = batch["labels"].to(model_engine.device)
 
         # Forward pass
-        outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs.loss
+        # Check if this is a reversible model (has custom forward signature)
+        is_reversible = hasattr(model_engine.module, 'stack') and hasattr(model_engine.module.stack, 'bootstrap_layer')
+        
+        if is_reversible:
+            # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)
+            logits_ntp, logits_mtp, aux_loss = model_engine(
+                input_ids, 
+                next_token_ids=None,  # Will be computed from shifted labels if needed
+                attention_mask=attention_mask,
+                return_loss=True
+            )
+            
+            # Compute cross-entropy loss for next token prediction
+            # Shift logits and labels for causal LM
+            shift_logits = logits_ntp[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            
+            # Flatten the tokens
+            loss_fct = torch.nn.CrossEntropyLoss()
+            ntp_loss = loss_fct(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1)
+            )
+            
+            # Add auxiliary loss (from MoE routing, etc.)
+            if aux_loss is not None and aux_loss.numel() > 0:
+                loss = ntp_loss + aux_loss
+            else:
+                loss = ntp_loss
+            
+            # MTP loss (if enabled and logits_mtp is not None)
+            # For now, we focus on NTP loss
+            
+        else:
+            # Standard transformer model
+            outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
+            loss = outputs.loss
 
         # Backward pass
         model_engine.backward(loss)
@@ -273,10 +308,39 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
             labels = batch["labels"].to(model_engine.device)
 
             # Forward pass
-            outputs = model_engine(
-                input_ids, attention_mask=attention_mask, labels=labels
-            )
-            loss = outputs.loss
+            # Check if this is a reversible model
+            is_reversible = hasattr(model_engine.module, 'stack') and hasattr(model_engine.module.stack, 'bootstrap_layer')
+            
+            if is_reversible:
+                # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)
+                logits_ntp, logits_mtp, aux_loss = model_engine(
+                    input_ids,
+                    next_token_ids=None,
+                    attention_mask=attention_mask,
+                    return_loss=True
+                )
+                
+                # Compute cross-entropy loss for next token prediction
+                shift_logits = logits_ntp[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+                
+                loss_fct = torch.nn.CrossEntropyLoss()
+                ntp_loss = loss_fct(
+                    shift_logits.view(-1, shift_logits.size(-1)),
+                    shift_labels.view(-1)
+                )
+                
+                # Add auxiliary loss
+                if aux_loss is not None and aux_loss.numel() > 0:
+                    loss = ntp_loss + aux_loss
+                else:
+                    loss = ntp_loss
+            else:
+                # Standard transformer model
+                outputs = model_engine(
+                    input_ids, attention_mask=attention_mask, labels=labels
+                )
+                loss = outputs.loss
 
             # Track metrics
             total_loss += loss.item()
@@ -338,18 +402,58 @@ def generate_text(
     # Generate (only on rank 0 to avoid redundant generation)
     if is_main_process():
         with torch.no_grad():
-            output_ids = model_engine.module.generate(
-                input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                num_return_sequences=1,
-                do_sample=True,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                no_repeat_ngram_size=2,
-                pad_token_id=tokenizer.eos_token_id,
-            )
+            # Check if this is a reversible model
+            is_reversible = hasattr(model_engine.module, 'stack') and hasattr(model_engine.module.stack, 'bootstrap_layer')
+            
+            if is_reversible:
+                # Reversible models need custom generation logic
+                # For now, we'll use a simple greedy generation approach
+                print_rank_0("  Note: Using simplified generation for reversible model")
+                
+                generated_ids = input_ids.clone()
+                for _ in range(max_new_tokens):
+                    # Forward pass
+                    logits_ntp, _, _ = model_engine.module(
+                        generated_ids,
+                        next_token_ids=None,
+                        attention_mask=None,
+                        return_loss=True
+                    )
+                    
+                    # Get next token (greedy or sampling)
+                    next_token_logits = logits_ntp[:, -1, :] / temperature
+                    
+                    if top_k > 0:
+                        # Top-k sampling
+                        top_k_logits, top_k_indices = torch.topk(next_token_logits, top_k)
+                        next_token_logits = torch.full_like(next_token_logits, float('-inf'))
+                        next_token_logits.scatter_(1, top_k_indices, top_k_logits)
+                    
+                    probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
+                    next_token = torch.multinomial(probs, num_samples=1)
+                    
+                    # Append to generated sequence
+                    generated_ids = torch.cat([generated_ids, next_token], dim=-1)
+                    
+                    # Stop if EOS token is generated
+                    if next_token.item() == tokenizer.eos_token_id:
+                        break
+                
+                output_ids = generated_ids
+            else:
+                # Standard transformer model
+                output_ids = model_engine.module.generate(
+                    input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=max_new_tokens,
+                    num_return_sequences=1,
+                    do_sample=True,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    no_repeat_ngram_size=2,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
 
         # Decode
         input_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)

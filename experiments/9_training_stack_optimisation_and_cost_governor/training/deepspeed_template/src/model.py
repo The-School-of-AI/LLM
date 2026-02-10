@@ -9,6 +9,7 @@ import torch
 from transformers import AutoModelForCausalLM, Qwen2MoeConfig, Qwen2MoeForCausalLM
 
 from .utils import print_rank_0
+from .models import Model3B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
 
 
 def get_qwen2_moe_model(device=None, print_info=True):
@@ -92,6 +93,99 @@ def get_qwen2_moe_model(device=None, print_info=True):
         if print_info:
             print_rank_0(f"  Model moved to device: {device}")
 
+    return model
+
+
+def get_reversible_model(device=None, print_info=True, embedding_type="kronecker"):
+    """
+    Create a Reversible 3B model from scratch with custom configuration.
+    
+    This creates a memory-efficient reversible model with:
+    - Reversible midpoint integration for memory savings
+    - Hybrid Gated DeltaNet + Gated Sparse Attention
+    - MoE with null experts
+    - Multi-Token Prediction (MTP)
+    - Multi-Head Composition (mHC)
+    
+    Args:
+        device: Device to load model on (default: None, let model decide)
+        print_info: Whether to print model information
+        embedding_type: Type of embedding ("kronecker" or "standard")
+    
+    Returns:
+        The initialized reversible model
+    """
+    if print_info:
+        print_rank_0("  Creating Reversible 3B Model from scratch...")
+    
+    # Create model configuration
+    config = ModelConfig()
+    
+    # For Kronecker embeddings, we need to create vocabulary and codec
+    if embedding_type == "kronecker":
+        # Create a simple vocabulary for demonstration
+        # In production, you would load this from your tokenizer
+        vocab_size = config.vocab_size
+        bpe_vocab = [f"token_{i}" for i in range(vocab_size)]
+        
+        # Create Kronecker codec
+        pf_config = KroneckerConfig(
+            CHAR_DIM=256,
+            POS_DIM=32,
+            D=8192,
+            length_normalize=True,
+            truncate_long_words=True
+        )
+        pf_codec = KroneckerEmbeddings(pf_config)
+        
+        if print_info:
+            print_rank_0("  Using Kronecker Product Embeddings (byte-level)")
+    else:
+        bpe_vocab = None
+        pf_codec = None
+        if print_info:
+            print_rank_0("  Using Standard Embeddings")
+    
+    # Create model
+    model = Model3B(
+        config=config,
+        embedding_type=embedding_type,
+        bpe_vocab=bpe_vocab,
+        pf_codec=pf_codec
+    )
+    
+    # IMPORTANT: Disable gradient checkpointing for reversible models
+    # Reversible models handle memory efficiency through their architecture
+    # and don't need/shouldn't use gradient checkpointing
+    if hasattr(model, 'gradient_checkpointing_disable'):
+        model.gradient_checkpointing_disable()
+    
+    if print_info:
+        num_params = sum(p.numel() for p in model.parameters())
+        num_trainable_params = sum(
+            p.numel() for p in model.parameters() if p.requires_grad
+        )
+        print_rank_0("  Model created: Reversible 3B")
+        print_rank_0("  Configuration:")
+        print_rank_0(f"    - Hidden size: {config.hidden_size}")
+        print_rank_0(f"    - Layers: {config.num_layers}")
+        print_rank_0(f"    - DeltaNet layers: {config.num_deltanet_layers} ({config.num_deltanet_layers/config.num_layers*100:.0f}%)")
+        print_rank_0(f"    - GSA layers: {config.num_gsa_layers} ({config.num_gsa_layers/config.num_layers*100:.0f}%)")
+        print_rank_0(f"    - MoE experts: {config.num_real_experts} real + {config.num_null_experts} null")
+        print_rank_0(f"    - Top-k: {config.top_k} (active experts)")
+        print_rank_0(f"    - MTP predictions: {config.mtp_num_predictions}" if config.enable_mtp else "    - MTP: Disabled")
+        print_rank_0(f"    - Context: {config.max_seq_len:,} tokens")
+        print_rank_0(f"    - Reversible: Yes (Midpoint Integration, step_size=0.25, a=0.5)")
+        print_rank_0(f"  Total parameters: {num_params:,} (~{num_params/1e9:.2f}B)")
+        print_rank_0(f"  Trainable parameters: {num_trainable_params:,}")
+        print_rank_0("  ⚠️  Gradient checkpointing: Disabled (using reversible architecture)")
+    
+    # Move to device if specified
+    if device is not None:
+        model = model.to(device)
+        if print_info:
+            print_rank_0(f"  Model moved to device: {device}")
+    
     return model
 
 
