@@ -1,6 +1,8 @@
 # LLM Architecture
 
-A modular, production-ready ~1.27B parameter Large Language Model implementation featuring state-of-the-art Gated Sparse Attention (GSA) based on DeepSeek V3 (arXiv:2512.02556v1) and the GSA paper (arXiv:2601.15305v1).
+A modular, production-ready LLM codebase supporting:
+- DeepSeek-GSA architecture variants
+- Test_Code-compatible 1B Reference architecture (`1b-reference`) with hybrid DeltaNet + GSA, reversible midpoint integration, mHC-v2, and optional Kronecker embeddings.
 
 ## Model Specifications
 
@@ -17,6 +19,25 @@ A modular, production-ready ~1.27B parameter Large Language Model implementation
 | Vocab Size | 50,257 (GPT-2) / 128,000 (preset default) |
 | Max Position Embeddings | 128,000 (YaRN extended) |
 | Precision | bfloat16 |
+
+### 1B-Reference (Test_Code/model_1b.py Compatible)
+
+| Parameter | Value |
+|-----------|-------|
+| Backbone Layers | 8 |
+| MTP Layers | 1 |
+| Total Computational Layers | 9 |
+| Hidden Size | 4096 |
+| Delta/GSA Split | 75% / 25% (6 / 2 layers) |
+| DeltaNet Heads | 32 V / 16 QK, head_dim=128 |
+| GSA Heads | 16, head_dim=256, d_idx=32 |
+| Gate Dim | 384 |
+| FFN (Shared / Dense) | 2048 |
+| FFN (Routed, future MoE) | 1024 |
+| mHC Variant | `mhc_v2` (`alpha=0.1`) |
+| Integration | Reversible Midpoint (`step=0.25`, `a=0.5`) |
+| Embedding Types | `standard`, `kronecker` |
+| Preset | `1b-reference` |
 
 ### Parameter Breakdown (Per Layer)
 
@@ -54,6 +75,10 @@ A modular, production-ready ~1.27B parameter Large Language Model implementation
 ## Features
 
 - **Gated Sparse Attention (GSA)**: O(L*k) complexity instead of O(L^2) for long sequences
+- **Gated DeltaNet + Reference GSA Hybrid**: 75/25 layer split for long-context efficiency + sparse quality
+- **Reversible Midpoint Stack**: Memory-efficient integration for reference architecture
+- **mHC-v2 Connections**: Norm-inside hyper-connections matching Test_Code behavior
+- **Kronecker Embeddings (Optional)**: Byte-level PF embeddings with projection to model dimension
 - **Triton Kernel Optimization**: Fused RMSNorm and sparse attention kernels for reduced kernel launches
 - **Extended Context**: YaRN position embeddings supporting 4K to 256K context
 - **Adaptive Sparsity**: Variance-based top-k selection (inverse relationship: high confidence = fewer tokens)
@@ -109,6 +134,42 @@ python training/train_wikitext2_gpt2.py --preset 1b-deepseek-gsa --use-torch-com
     --seq-length 8192 \
     --batch-size 2 \
     --max-steps 100 
+
+# Reference architecture smoke test (standard embedding)
+python training/test_wikitext2_reference_gpt2.py \
+    --config configs/1b_reference.yaml \
+    --tokenizer gpt2 \
+    --embedding-type standard \
+    --seq-length 1024 \
+    --batch-size 1 \
+    --max-steps 20 \
+    --strict-arch
+
+# Reference architecture with Kronecker embedding
+python training/test_wikitext2_reference_gpt2.py \
+    --config configs/1b_reference.yaml \
+    --tokenizer gpt2 \
+    --embedding-type kronecker \
+    --seq-length 1024 \
+    --batch-size 1 \
+    --max-steps 20 \
+    --strict-arch
+
+# Reference architecture + torch.compile (recommended compile mode)
+python training/test_wikitext2_reference_gpt2.py \
+    --config configs/1b_reference.yaml \
+    --tokenizer gpt2 \
+    --embedding-type standard \
+    --seq-length 4096 \
+    --batch-size 1 \
+    --max-steps 100 \
+    --strict-arch \
+    --use-torch-compile \
+    --torch-compile-mode max-autotune-no-cudagraphs
+
+# Long-sequence memory tip (CUDA allocator)
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256 \
+python training/test_wikitext2_reference_gpt2.py --config configs/1b_reference.yaml --tokenizer gpt2 --embedding-type standard --seq-length 4096 --batch-size 1 --max-steps 100 --strict-arch
 ```
 
 ## Architecture Overview
@@ -256,6 +317,7 @@ CLI arguments always override config file values.
 | `1b-yarn` | GQA | YaRN | Extended context (32K) |
 | `1b-mtp` | GQA | YaRN | Multi-token prediction |
 | `1b-full` | GSA | YaRN | All features enabled |
+| `1b-reference` | DeltaNet + Reference GSA | YaRN | Test_Code-compatible reference architecture |
 
 ### DeepSeek GSA Configuration Parameters
 
@@ -332,24 +394,32 @@ llm_architecture/
 │   ├── 1b_deepseek.yaml            # DeepSeek MLA
 │   ├── 1b_mhc.yaml                 # Manifold hyper-connections
 │   ├── 1b_mtp.yaml                 # Multi-token prediction
+│   ├── 1b_reference.yaml           # Test_Code-compatible reference architecture
 │   ├── 1b_yarn.yaml                # Extended context (32K)
 │   └── 1b_full.yaml                # All features enabled
 ├── components/
 │   ├── attention/
 │   │   ├── deepseek_gsa.py          # DeepSeek GSA (recommended)
 │   │   ├── gated_sparse_attention.py # Original GSA
+│   │   ├── gated_deltanet.py        # DeltaNet O(N) linear attention
 │   │   ├── grouped_query_attention.py # GQA + causal mask utilities
-│   │   └── deepseek_sparse_attention.py # DeepSeek MLA
+│   │   ├── deepseek_sparse_attention.py # DeepSeek MLA
+│   │   └── reference_gsa.py         # Reference GSA used by 1b-reference
 │   ├── embeddings/
 │   │   ├── token_embedding.py       # Token embedding layer
 │   │   ├── rotary_embedding.py      # RoPE with dynamic cache extension
-│   │   └── yarn_embedding.py        # YaRN extended context RoPE
+│   │   ├── yarn_embedding.py        # YaRN extended context RoPE
+│   │   └── kronecker_embedding.py   # Kronecker embedding support
 │   ├── ffn/
-│   │   └── swiglu_ffn.py            # SwiGLU feed-forward network
+│   │   ├── swiglu_ffn.py            # SwiGLU feed-forward network
+│   │   └── moe_ffn.py               # Shared+routed MoE FFN for reference stack
 │   ├── normalization/
 │   │   └── rms_norm.py              # RMSNorm (PyTorch)
 │   ├── connections/
-│   │   └── mhc.py                   # Residual & Manifold Hyper-Connections
+│   │   ├── mhc.py                   # Residual & Manifold Hyper-Connections
+│   │   └── mhc_v2.py                # mHC-v2 used by reference model
+│   ├── integration/
+│   │   └── reversible_midpoint.py   # Reversible midpoint stack
 │   ├── heads/
 │   │   └── multi_token_head.py      # LM Head + Multi-Token Prediction
 │   └── kernels/
@@ -357,12 +427,15 @@ llm_architecture/
 │       ├── triton_sparse_attn.py     # Sparse attention kernel (Triton + PyTorch)
 │       └── triton_indexer.py         # Indexer computation kernel
 ├── layers/
-│   └── transformer_block.py         # TransformerBlock + TransformerBlockList
+│   ├── transformer_block.py         # TransformerBlock + TransformerBlockList
+│   └── lightning_decoder.py         # Reference decoder + full-transformer MTP block
 ├── models/
-│   └── llm.py                       # Complete LLM model
+│   ├── llm.py                       # Model factory + default LLM model
+│   └── reference_llm.py             # Test_Code-compatible reference model
 ├── training/
 │   ├── train.py                     # Trainer class (AMP, gradient accumulation)
-│   └── train_wikitext2_gpt2.py      # WikiText-2 training script
+│   ├── train_wikitext2_gpt2.py      # Generic WikiText-2 training script
+│   └── test_wikitext2_reference_gpt2.py # Reference architecture training/test script
 ├── profiling/                       # NSight Systems / NCU profiling scripts
 ├── configs/                         # YAML model configurations
 ├── benchmark_throughput.py          # Throughput benchmarking
@@ -390,7 +463,15 @@ llm_architecture/
 | `--gsa-k-base` | Override GSA k_base | None |
 | `--gsa-k-max` | Override GSA k_max | None |
 | `--persistent-workers` | Keep DataLoader workers alive | False |
+| `--use-torch-compile` | Enable torch.compile | False |
+| `--torch-compile-mode` | Compile mode | `max-autotune-no-cudagraphs` |
 | `--seed` | Random seed | 42 |
+
+Reference script (`training/test_wikitext2_reference_gpt2.py`) adds:
+- `--strict-arch`
+- `--embedding-type {standard,kronecker}`
+- `--disable-reversible-checkpoint` (not recommended at long sequence lengths)
+- `--torch-compile-fullgraph`, `--torch-compile-dynamic`, `--torch-compile-backend`
 
 ### Training Configuration
 
@@ -423,14 +504,14 @@ AMP:            bfloat16 (CUDA), float16 (MPS)
 
 ```python
 from config.model_config import get_preset_config
-from models.llm import LLM
+from models.llm import create_model_from_config
 from training.train import Trainer, TrainingConfig
 
 config = get_preset_config("1b-deepseek-gsa")
 config.attention.gsa_k_base = 512
 config.attention.gsa_k_max = 1024
 
-model = LLM(config)
+model = create_model_from_config(config)
 
 training_config = TrainingConfig(
     max_steps=10000,
@@ -446,6 +527,49 @@ training_config = TrainingConfig(
 trainer = Trainer(model, dataloader, training_config, model_config)
 trainer.train()
 ```
+
+### Reference Architecture Commands
+
+```bash
+# Baseline reference run (standard embedding)
+python training/test_wikitext2_reference_gpt2.py \
+  --config configs/1b_reference.yaml \
+  --tokenizer gpt2 \
+  --embedding-type standard \
+  --seq-length 4096 \
+  --batch-size 1 \
+  --num-workers 0 \
+  --max-steps 100 \
+  --strict-arch
+
+# Reference + Kronecker embedding
+python training/test_wikitext2_reference_gpt2.py \
+  --config configs/1b_reference.yaml \
+  --tokenizer gpt2 \
+  --embedding-type kronecker \
+  --seq-length 2048 \
+  --batch-size 1 \
+  --num-workers 0 \
+  --max-steps 100 \
+  --strict-arch
+
+# Reference + compile (safe mode for MTP)
+python training/test_wikitext2_reference_gpt2.py \
+  --config configs/1b_reference.yaml \
+  --tokenizer gpt2 \
+  --embedding-type standard \
+  --seq-length 4096 \
+  --batch-size 1 \
+  --num-workers 0 \
+  --max-steps 100 \
+  --strict-arch \
+  --use-torch-compile \
+  --torch-compile-mode max-autotune-no-cudagraphs
+```
+
+Notes:
+- Avoid `--disable-reversible-checkpoint` for long contexts (2048+), or memory usage can spike and cause OOM.
+- For MTP runs, `max-autotune-no-cudagraphs` is preferred over `max-autotune`.
 
 ## API Reference
 

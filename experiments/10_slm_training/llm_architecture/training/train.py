@@ -22,6 +22,7 @@ import sys
 import time
 import json
 import math
+import inspect
 import signal
 import argparse
 from pathlib import Path
@@ -40,7 +41,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
-from models.llm import LLM, create_model
+from models.llm import create_model_from_config
 
 
 def load_config_from_yaml(config_path: str) -> Tuple[ModelConfig, Dict[str, Any]]:
@@ -475,7 +476,7 @@ class Trainer:
     
     def __init__(
         self,
-        model: LLM,
+        model: nn.Module,
         train_dataloader: DataLoader,
         training_config: TrainingConfig,
         model_config: ModelConfig,
@@ -490,7 +491,13 @@ class Trainer:
         # Device - supports CUDA, MPS (Apple Silicon), and CPU
         self.device = get_best_device(training_config.device)
         self.model = self.model.to(self.device)
-        model.gradient_checkpointing_enable()
+        if hasattr(self.model, "gradient_checkpointing_enable"):
+            try:
+                self.model.gradient_checkpointing_enable()
+            except Exception as e:
+                print(f"Warning: gradient checkpointing enable failed: {e}")
+        else:
+            print("Info: Model does not expose gradient_checkpointing_enable(); continuing.")
 
         # torch.compile - apply AFTER device placement & gradient checkpointing,
         # BEFORE optimizer creation (named_parameters works through compile wrapper)
@@ -581,7 +588,11 @@ class Trainer:
         # earlier buffers. Auto-downgrade to max-autotune-no-cudagraphs.
         cudagraph_modes = {"reduce-overhead", "max-autotune"}
         raw_model = getattr(self.model, '_orig_mod', self.model)
-        if mode in cudagraph_modes and getattr(raw_model, 'mtp_loss', None) is not None:
+        has_mtp_outputs = (
+            getattr(raw_model, "mtp_loss", None) is not None
+            or getattr(raw_model, "mtp_block", None) is not None
+        )
+        if mode in cudagraph_modes and has_mtp_outputs:
             print(f"Warning: '{mode}' mode uses CUDAGraphs which is incompatible with "
                   "Multi-Token Prediction (buffer reuse overwrites MTP head outputs).")
             print("  Auto-switching to max-autotune-no-cudagraphs mode.")
@@ -696,20 +707,104 @@ class Trainer:
             (loss, loss_dict) tuple
         """
         raw_model = getattr(self.model, '_orig_mod', self.model)
+        mtp_loss_fn = getattr(raw_model, "mtp_loss", None)
+        logits, aux_logits, aux_residual = self._extract_output_tensors(outputs)
 
-        if raw_model.mtp_loss is not None:
-            loss, loss_dict = raw_model.mtp_loss(outputs.logits, outputs.aux_logits, labels)
-        else:
-            shift_logits = outputs.logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            loss = F.cross_entropy(
-                shift_logits.view(-1, shift_logits.size(-1)),
-                shift_labels.view(-1),
-                ignore_index=-100
-            )
-            loss_dict = {'loss': loss}
+        if logits is None:
+            raise ValueError("Model outputs do not contain logits/logits_ntp for loss computation.")
+
+        if mtp_loss_fn is not None and aux_logits is not None:
+            loss, loss_dict = mtp_loss_fn(logits, aux_logits, labels)
+            return loss, loss_dict
+
+        # Main NTP loss
+        shift_logits = logits[..., :-1, :].contiguous()
+        shift_labels = labels[..., 1:].contiguous()
+        main_loss = F.cross_entropy(
+            shift_logits.view(-1, shift_logits.size(-1)),
+            shift_labels.view(-1),
+            ignore_index=-100
+        )
+        loss = main_loss
+        loss_dict = {"main_loss": main_loss}
+
+        # Reference MTP output (logits_mtp) path
+        if aux_logits is not None and labels.size(1) > 2:
+            mtp_shift_logits = aux_logits[..., :-1, :].contiguous()
+            mtp_shift_labels = labels[..., 2:].contiguous()
+            mtp_min_len = min(mtp_shift_logits.size(1), mtp_shift_labels.size(1))
+            if mtp_min_len > 0:
+                mtp_loss = F.cross_entropy(
+                    mtp_shift_logits[:, :mtp_min_len].reshape(-1, mtp_shift_logits.size(-1)),
+                    mtp_shift_labels[:, :mtp_min_len].reshape(-1),
+                    ignore_index=-100
+                )
+                mtp_weight = getattr(getattr(raw_model, "config", None), "head", None)
+                mtp_weight = getattr(mtp_weight, "mtp_loss_weight", 1.0)
+                loss = loss + mtp_weight * mtp_loss
+                loss_dict["mtp_loss"] = mtp_loss
+
+        if aux_residual is not None:
+            loss = loss + aux_residual
+            loss_dict["aux_loss"] = aux_residual
+
+        loss_dict["total_loss"] = loss
 
         return loss, loss_dict
+
+    @staticmethod
+    def _extract_output_tensors(outputs):
+        """Extract logits/aux tensors from both LLMOutput and ReferenceLLMOutput/tuple."""
+        logits = None
+        aux_logits = None
+        aux_residual = None
+
+        if isinstance(outputs, tuple):
+            if len(outputs) > 0:
+                logits = outputs[0]
+            if len(outputs) > 1:
+                aux_logits = outputs[1]
+            return logits, aux_logits, aux_residual
+
+        if hasattr(outputs, "logits"):
+            logits = outputs.logits
+        elif hasattr(outputs, "logits_ntp"):
+            logits = outputs.logits_ntp
+
+        if hasattr(outputs, "aux_logits"):
+            aux_logits = outputs.aux_logits
+        elif hasattr(outputs, "logits_mtp"):
+            aux_logits = outputs.logits_mtp
+
+        if hasattr(outputs, "aux_loss"):
+            aux_residual = outputs.aux_loss
+
+        return logits, aux_logits, aux_residual
+
+    def _build_forward_inputs(
+        self,
+        input_ids: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        include_labels: bool = True,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Build forward kwargs compatible with both LLM and ReferenceLLM.
+        """
+        forward_inputs: Dict[str, torch.Tensor] = {"input_ids": input_ids}
+
+        raw_model = getattr(self.model, "_orig_mod", self.model)
+        try:
+            forward_params = inspect.signature(raw_model.forward).parameters
+        except (TypeError, ValueError):
+            forward_params = {}
+
+        if "next_token_ids" in forward_params and input_ids.size(1) > 1:
+            forward_inputs["next_token_ids"] = input_ids[:, 1:].contiguous()
+
+        if include_labels and labels is not None:
+            forward_inputs["labels"] = labels
+
+        return forward_inputs
 
     def _create_optimizer(self) -> torch.optim.Optimizer:
         """Create AdamW optimizer with weight decay."""
@@ -746,7 +841,11 @@ class Trainer:
         print(f"Starting Training: {self.config.experiment_name}")
         print(f"{'='*60}")
         print(f"Model: {self.model_config.model_name}")
-        print(f"Parameters: {self.model.num_parameters / 1e9:.2f}B")
+        raw_model = getattr(self.model, "_orig_mod", self.model)
+        num_params = getattr(raw_model, "num_parameters", None)
+        if num_params is None:
+            num_params = sum(p.numel() for p in raw_model.parameters())
+        print(f"Parameters: {num_params / 1e9:.2f}B")
         print(f"Device: {self.device}")
         print(f"Max steps: {self.config.max_steps}")
         print(f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}")
@@ -813,11 +912,20 @@ class Trainer:
                     if _uses_cudagraphs:
                         # CUDAGraph modes — compute loss outside compiled graph
                         # to avoid buffer reuse errors.
-                        outputs = self.model(input_ids=input_ids)
+                        forward_inputs = self._build_forward_inputs(
+                            input_ids=input_ids,
+                            include_labels=False,
+                        )
+                        outputs = self.model(**forward_inputs)
                         micro_loss_local, loss_dict_local = self._compute_loss(outputs, labels)
                     else:
                         # default / max-autotune-no-cudagraphs / non-compiled: standard forward
-                        outputs = self.model(input_ids=input_ids, labels=labels)
+                        forward_inputs = self._build_forward_inputs(
+                            input_ids=input_ids,
+                            labels=labels,
+                            include_labels=True,
+                        )
+                        outputs = self.model(**forward_inputs)
                         micro_loss_local = outputs.loss
                         loss_dict_local = outputs.loss_dict
                     loss_local = micro_loss_local / self.config.gradient_accumulation_steps
@@ -841,8 +949,13 @@ class Trainer:
             accumulation_loss += micro_loss.item()
             if loss_dict is not None:
                 accumulation_main_loss += loss_dict.get('main_loss', micro_loss).item()
+                aux_key = None
                 if 'aux_total' in loss_dict:
-                    accumulation_aux_loss += loss_dict['aux_total'].item()
+                    aux_key = 'aux_total'
+                elif 'aux_loss' in loss_dict:
+                    aux_key = 'aux_loss'
+                if aux_key is not None:
+                    accumulation_aux_loss += loss_dict[aux_key].item()
             accumulation_steps += 1
 
             # Gradient accumulation step
@@ -904,7 +1017,7 @@ class Trainer:
                 # Add averaged MTP loss components if available
                 if loss_dict is not None:
                     metrics.main_loss = accumulation_main_loss / max(1, accumulation_steps)
-                    if 'aux_total' in loss_dict:
+                    if 'aux_total' in loss_dict or 'aux_loss' in loss_dict:
                         metrics.aux_loss = accumulation_aux_loss / max(1, accumulation_steps)
                 
                 self.logger.log(metrics)
@@ -1039,7 +1152,7 @@ def run_training(
     model_preset: str = "1b-base",
     training_config: Optional[TrainingConfig] = None,
     model_config_overrides: Optional[Dict] = None
-) -> Tuple[LLM, TrainingMetrics]:
+) -> Tuple[nn.Module, TrainingMetrics]:
     """
     Run training with specified configuration.
     
@@ -1074,7 +1187,7 @@ def run_training(
     align_model_context_to_seq_length(model_config, training_config.seq_length)
     
     # Create model
-    model = LLM(model_config)
+    model = create_model_from_config(model_config)
     
     # Create dataset
     dataset = RandomTextDataset(
@@ -1268,7 +1381,7 @@ Note: CLI arguments always override config file values.
         torch.cuda.manual_seed_all(training_config.seed)
     
     # Create model
-    model = LLM(model_config)
+    model = create_model_from_config(model_config)
     
     # Create dataset
     dataset = RandomTextDataset(

@@ -82,7 +82,7 @@ from config.model_config import (
     ConnectionType,
     FFNType
 )
-from models.llm import LLM
+from models.llm import create_model_from_config
 
 
 # =============================================================================
@@ -1078,7 +1078,7 @@ def benchmark_throughput(
         print(f"  Connection: {config.connection.connection_type.value} | MTP: {config.head.use_multi_token_prediction}")
         
         print(f"\n🔧 Loading model...")
-        model = LLM(config)
+        model = create_model_from_config(config)
         model = model.to(device)
         model = model.to(dtype=torch_dtype)
         

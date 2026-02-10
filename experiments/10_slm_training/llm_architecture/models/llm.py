@@ -50,6 +50,9 @@ from layers.transformer_block import TransformerBlockList
 # Config
 from config.model_config import (
     ModelConfig,
+    AttentionType,
+    ConnectionType,
+    EmbeddingType,
     PositionEmbeddingType,
     get_preset_config
 )
@@ -483,22 +486,129 @@ class LLM(nn.Module):
         }
 
 
-def create_model(preset: str = "1b-base", **override_kwargs) -> LLM:
+def _embedding_type_to_str(
+    config: ModelConfig,
+    embedding_type: Optional[Union[str, EmbeddingType]] = None,
+) -> str:
+    """Resolve embedding type string from explicit arg or config."""
+    if embedding_type is not None:
+        if isinstance(embedding_type, EmbeddingType):
+            return embedding_type.value
+        return str(embedding_type).lower()
+
+    embedding_cfg = getattr(config, "embedding", None)
+    if embedding_cfg is None:
+        return EmbeddingType.STANDARD.value
+
+    cfg_type = getattr(embedding_cfg, "embedding_type", EmbeddingType.STANDARD)
+    if isinstance(cfg_type, EmbeddingType):
+        return cfg_type.value
+    return str(cfg_type).lower()
+
+
+def build_kronecker_artifacts_from_tokenizer(
+    tokenizer: Any,
+    config: ModelConfig,
+) -> Tuple[List[str], Any]:
+    """
+    Build Kronecker embedding artifacts from a tokenizer.
+
+    Returns:
+        (bpe_vocab, pf_codec)
+    """
+    from components.embeddings.kronecker_embedding import (
+        KroneckerConfig,
+        KroneckerEmbeddings,
+    )
+
+    vocab_size = config.vocab_size
+    pf_dim = config.embedding.kronecker_pf_dim
+
+    bpe_vocab = [
+        tokenizer.decode([token_id], clean_up_tokenization_spaces=False)
+        for token_id in range(vocab_size)
+    ]
+    pf_cfg = KroneckerConfig(D=pf_dim)
+    pf_codec = KroneckerEmbeddings(pf_cfg)
+    return bpe_vocab, pf_codec
+
+
+def _requires_reference_model(config: ModelConfig) -> bool:
+    """Route configs requiring Test_Code reference architecture to ReferenceLLM."""
+    use_reversible = bool(getattr(getattr(config, "integration", None), "use_reversible", False))
+    attn_type = getattr(getattr(config, "attention", None), "attention_type", None)
+    conn_type = getattr(getattr(config, "connection", None), "connection_type", None)
+
+    return (
+        use_reversible
+        or attn_type in {AttentionType.GATED_DELTANET, AttentionType.REFERENCE_GSA}
+        or conn_type == ConnectionType.MHC_V2
+    )
+
+
+def create_model_from_config(
+    config: ModelConfig,
+    embedding_type: Optional[Union[str, EmbeddingType]] = None,
+    bpe_vocab: Optional[List[str]] = None,
+    pf_codec: Optional[Any] = None,
+    tokenizer: Optional[Any] = None,
+) -> nn.Module:
+    """
+    Create model from ModelConfig with architecture-aware routing.
+
+    Routes to ReferenceLLM for reversible/Test_Code-compatible configs.
+    """
+    resolved_embedding_type = _embedding_type_to_str(config, embedding_type)
+    use_reference = _requires_reference_model(config)
+
+    if use_reference:
+        from models.reference_llm import ReferenceLLM
+
+        if resolved_embedding_type == EmbeddingType.KRONECKER.value:
+            if bpe_vocab is None or pf_codec is None:
+                if tokenizer is None:
+                    raise ValueError(
+                        "Kronecker embedding requires tokenizer or explicit bpe_vocab/pf_codec."
+                    )
+                bpe_vocab, pf_codec = build_kronecker_artifacts_from_tokenizer(tokenizer, config)
+
+        return ReferenceLLM(
+            config,
+            embedding_type=resolved_embedding_type,
+            bpe_vocab=bpe_vocab,
+            pf_codec=pf_codec,
+        )
+
+    if resolved_embedding_type != EmbeddingType.STANDARD.value:
+        raise ValueError(
+            f"Embedding type '{resolved_embedding_type}' is only supported by ReferenceLLM."
+        )
+
+    return LLM(config)
+
+
+def create_model(preset: str = "1b-base", **override_kwargs) -> nn.Module:
     """
     Factory function to create model from preset.
-    
+
     Args:
-        preset: Preset name ("1b-base", "1b-gsa", "1b-deepseek", etc.)
+        preset: Preset name ("1b-base", "1b-gsa", "1b-deepseek", "1b-reference", etc.)
         **override_kwargs: Override specific config values
-        
+
     Returns:
-        Initialized LLM model
+        Initialized model (LLM or ReferenceLLM)
     """
     config = get_preset_config(preset)
-    
+
     # Apply overrides
     for key, value in override_kwargs.items():
         if hasattr(config, key):
             setattr(config, key, value)
-    
-    return LLM(config)
+
+    return create_model_from_config(
+        config,
+        embedding_type=override_kwargs.get("embedding_type"),
+        bpe_vocab=override_kwargs.get("bpe_vocab"),
+        pf_codec=override_kwargs.get("pf_codec"),
+        tokenizer=override_kwargs.get("tokenizer"),
+    )

@@ -25,7 +25,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
-from models.llm import LLM
+from models.llm import create_model_from_config
 from training.train import TrainingConfig, Trainer
 
 
@@ -818,8 +818,7 @@ Note: CLI arguments always override config file values.
     #     use_amp=not args.no_amp
     # )
 
-    model = LLM(model_config)
-    #model.gradient_checkpointing_enable()
+    model = create_model_from_config(model_config, tokenizer=tokenizer)
     trainer = Trainer(
         model=model,
         train_dataloader=dataloader,

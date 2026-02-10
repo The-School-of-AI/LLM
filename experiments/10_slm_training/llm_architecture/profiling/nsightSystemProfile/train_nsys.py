@@ -39,7 +39,7 @@ import torch.cuda.profiler as profiler
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
-from models.llm import LLM, create_model
+from models.llm import create_model_from_config
 
 try:
     from datasets import load_dataset
@@ -282,7 +282,7 @@ class Trainer:
     
     def __init__(
         self,
-        model: LLM,
+        model: nn.Module,
         train_dataloader: DataLoader,
         training_config: TrainingConfig,
         model_config: ModelConfig,
@@ -602,7 +602,7 @@ def run_training(
     stride: Optional[int] = None,
     max_tokens: Optional[int] = None,
     num_workers: int = 2
-) -> Tuple[LLM, TrainingMetrics]:
+) -> Tuple[nn.Module, TrainingMetrics]:
     """
     Run training with specified configuration.
     
@@ -647,7 +647,7 @@ def run_training(
                 setattr(model_config, key, value)
     
     # Create model
-    model = LLM(model_config)
+    model = create_model_from_config(model_config, tokenizer=tokenizer)
     
     # Create dataset
     stride_val = training_config.seq_length if stride is None else stride

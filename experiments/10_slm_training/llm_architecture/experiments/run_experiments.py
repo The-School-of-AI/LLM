@@ -34,14 +34,16 @@ from config.model_config import (
     ModelConfig,
     AttentionConfig,
     PositionConfig,
+    FFNConfig,
     ConnectionConfig,
     HeadConfig,
     AttentionType,
+    FFNType,
     PositionEmbeddingType,
     ConnectionType,
     get_preset_config
 )
-from models.llm import LLM
+from models.llm import create_model_from_config
 from training.train import (
     TrainingConfig,
     TrainingMetrics,
@@ -273,7 +275,7 @@ class ExperimentRunner:
         print(f"{'='*70}\n")
         
         # Create model
-        model = LLM(experiment.model_config)
+        model = create_model_from_config(experiment.model_config)
         
         # Create dataset
         dataset = RandomTextDataset(
@@ -334,7 +336,7 @@ class ExperimentRunner:
             avg_tokens_per_second=avg_tps,
             total_time_seconds=total_time,
             tokens_seen=final_metrics.tokens_seen,
-            parameters=model.num_parameters,
+            parameters=getattr(model, "num_parameters", sum(p.numel() for p in model.parameters())),
             config_summary=config_summary
         )
         

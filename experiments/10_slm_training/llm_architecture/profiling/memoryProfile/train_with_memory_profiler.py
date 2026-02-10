@@ -33,7 +33,7 @@ from torch.amp import autocast, GradScaler
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
-from models.llm import LLM, create_model
+from models.llm import create_model_from_config
 from memory_profiler import MemoryProfiler, ProfilerConfig
 
 
@@ -242,7 +242,7 @@ class Trainer:
     
     def __init__(
         self,
-        model: LLM,
+        model: nn.Module,
         train_dataloader: DataLoader,
         training_config: TrainingConfig,
         model_config: ModelConfig,
@@ -555,7 +555,7 @@ def run_training(
     model_preset: str = "1b-base",
     training_config: Optional[TrainingConfig] = None,
     model_config_overrides: Optional[Dict] = None
-) -> Tuple[LLM, TrainingMetrics]:
+) -> Tuple[nn.Module, TrainingMetrics]:
     """
     Run training with specified configuration.
     
@@ -583,7 +583,7 @@ def run_training(
                 setattr(model_config, key, value)
     
     # Create model
-    model = LLM(model_config)
+    model = create_model_from_config(model_config)
     
     # Create dataset
     dataset = RandomTextDataset(
