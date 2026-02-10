@@ -12,12 +12,14 @@ class JSONLogger:
     A high-performance, non-blocking structured logger for training runs.
     Writes JSONL files to local NVMe storage for sidecar ingestion.
     """
-    def __init__(self, base_dir: str, run_id: str, rank: int = 0, buffer_size: int = 100, default_context: dict = None, queue_maxsize: int = 0):
+    def __init__(self, base_dir: str, run_id: str, rank: int = 0, buffer_size: int = 100, default_context: dict = None, queue_maxsize: int = 0, fsync_on_flush: bool = False):
         self.base_dir = Path(base_dir)
         self.run_id = run_id
         self.rank = rank
         self.default_context = default_context or {}
         self.host = os.environ.get("HOSTNAME") or os.uname().nodename
+        self.fsync_on_flush = fsync_on_flush
+        self.dropped = 0
         
         # Ensure base directory exists
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +64,7 @@ class JSONLogger:
         try:
             self.queue.put(payload, block=False)
         except queue.Full:
-            pass
+            self.dropped += 1
 
     def _writer_loop(self):
         """
@@ -93,6 +95,9 @@ class JSONLogger:
                 for entry in self.buffer:
                     # Use a custom encoder to handle numpy types
                     f.write(json.dumps(entry, default=self._json_serializer) + "\n")
+                if self.fsync_on_flush:
+                    f.flush()
+                    os.fsync(f.fileno())
             self.buffer = []
         except Exception as e:
             print(f"FAILED TO WRITE LOGS: {e}")
@@ -101,6 +106,15 @@ class JSONLogger:
         """
         Handle non-JSON types like Numpy arrays.
         """
+        try:
+            if hasattr(obj, "detach") and hasattr(obj, "cpu"):
+                t = obj.detach().cpu()
+                if hasattr(t, "numel") and callable(t.numel) and t.numel() == 1 and hasattr(t, "item"):
+                    return float(t.item())
+                if hasattr(t, "tolist"):
+                    return t.tolist()
+        except Exception:
+            pass
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         if isinstance(obj, np.float32) or isinstance(obj, np.float64):
@@ -118,4 +132,6 @@ class JSONLogger:
         # Flush any remaining items
         if self.buffer:
             self._flush()
+        if self.dropped:
+            print(f"! JSONLogger dropped {self.dropped} log entries due to full queue")
         print(f"✓ JSONLogger closed. Logs saved to {self.log_file}")

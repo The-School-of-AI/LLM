@@ -7,8 +7,7 @@ CREATE TABLE IF NOT EXISTS training_observability.logs
   `context` String,
   `host` LowCardinality(String),
   `run_id` LowCardinality(String) DEFAULT '',
-  `rank` UInt32 DEFAULT 0,
-  `_ingest_time` DateTime64(3) DEFAULT now64(3)
+  `rank` UInt32 DEFAULT 0
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(event_time)
