@@ -25,7 +25,121 @@ source = '''
   
   # Enrich with host metadata (useful for distributed debugging)
   .host = get_hostname!()
+
+  # Encode nested objects as JSON strings for ClickHouse table columns
+  if exists(.metrics) { .metrics = encode_json(.metrics) }
+  if exists(.context) { .context = encode_json(.context) }
+
+  # Derive run_id and rank from source filename when possible
+  path = ""
+  if exists(.file) { path = to_string!(.file) }
+  if path == "" && exists(.path) { path = to_string!(.path) }
+
+  if path != "" {
+    m = parse_regex(path, r'(?P<run_id>[^/]+)_rank_(?P<rank>\\d+)\\.jsonl$')
+    if m != null {
+      .run_id = m.run_id
+      .rank = to_int(m.rank) ?? 0
+    }
+  }
 '''
+
+[transforms.to_metric_points]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  rows = []
+
+  run_id = to_string(.run_id) ?? ""
+  host = to_string(.host) ?? ""
+  rank = to_int(.rank) ?? 0
+  step = to_int(.step) ?? 0
+
+  event_time = null
+  if exists(.timestamp) { event_time = parse_timestamp(.timestamp, "%+") ?? null }
+
+  mobj = parse_json(.metrics) ?? null
+  if is_object(mobj) {
+    for_each(mobj) -> |k, v| {
+      if is_integer(v) || is_float(v) {
+        rows = push(rows, {
+          "event_time": event_time,
+          "run_id": run_id,
+          "host": host,
+          "rank": rank,
+          "device": 65535,
+          "step": step,
+          "metric": to_string(k),
+          "value": to_float(v),
+          "unit": "",
+          "tags_json": ""
+        })
+      }
+    }
+  }
+
+  . = {"rows": rows}
+'''
+
+[transforms.metric_points_split]
+type = "split"
+inputs = ["to_metric_points"]
+field = "rows"
+
+[transforms.to_metric_arrays]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  rows = []
+
+  run_id = to_string(.run_id) ?? ""
+  host = to_string(.host) ?? ""
+  rank = to_int(.rank) ?? 0
+  step = to_int(.step) ?? 0
+
+  event_time = null
+  if exists(.timestamp) { event_time = parse_timestamp(.timestamp, "%+") ?? null }
+
+  cobj = parse_json(.context) ?? null
+  if is_object(cobj) {
+    for_each(cobj) -> |k, v| {
+      if is_array(v) {
+        vals = []
+        all_numeric = true
+        for_each(v) -> |_, item| {
+          if is_integer(item) || is_float(item) {
+            vals = push(vals, to_float(item))
+          } else {
+            all_numeric = false
+          }
+        }
+
+        if all_numeric {
+          rows = push(rows, {
+            "event_time": event_time,
+            "run_id": run_id,
+            "host": host,
+            "rank": rank,
+            "device": 65535,
+            "step": step,
+            "metric": to_string(k),
+            "keys": [],
+            "values": vals,
+            "unit": "",
+            "tags_json": ""
+          })
+        }
+      }
+    }
+  }
+
+  . = {"rows": rows}
+'''
+
+[transforms.metric_arrays_split]
+type = "split"
+inputs = ["to_metric_arrays"]
+field = "rows"
 
 # SINKS
 
@@ -36,14 +150,29 @@ inputs = ["parse_json"]
 encoding.codec = "json"
 
 # 2. Production Sink (ClickHouse)
-# Uncomment this when ClickHouse is deployed
-# [sinks.clickhouse_prod]
-# type = "clickhouse"
-# inputs = ["parse_json"]
-# endpoint = "http://clickhouse-server:8123"
-# database = "training_observability"
-# table = "logs"
-# compression = "gzip"
-# batch.max_bytes = 10485760 # 10MB batches for high throughput
-# encoding.timestamp_format = "unix"
+[sinks.clickhouse_prod]
+type = "clickhouse"
+inputs = ["parse_json"]
+endpoint = "http://127.0.0.1:8123"
+database = "training_observability"
+table = "logs"
+compression = "gzip"
+batch.max_bytes = 10485760 # 10MB batches for high throughput
 
+[sinks.clickhouse_metric_points]
+type = "clickhouse"
+inputs = ["metric_points_split"]
+endpoint = "http://127.0.0.1:8123"
+database = "training_observability"
+table = "metric_points"
+compression = "gzip"
+batch.max_bytes = 10485760
+
+[sinks.clickhouse_metric_arrays]
+type = "clickhouse"
+inputs = ["metric_arrays_split"]
+endpoint = "http://127.0.0.1:8123"
+database = "training_observability"
+table = "metric_arrays"
+compression = "gzip"
+batch.max_bytes = 10485760
