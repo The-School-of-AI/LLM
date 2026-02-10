@@ -288,7 +288,33 @@ class TrainingStage:
         if num_moe_layers < 0 or num_moe_layers > layers:
             raise ValueError("num_moe_layers must be between 0 and num_layers.")
 
-        embedding_params = vocab * hidden
+
+        # Embedding parameter calculation
+        # Support both standard and Kronecker Product Embeddings
+        embedding_type = arch.get("embedding_type", "standard")
+        
+        if embedding_type == "kronecker":
+            # Kronecker Product Embeddings
+            # Fixed encoding (no trainable params) + trainable projection
+            kronecker_cfg = arch.get("kronecker_config", {})
+            D = kronecker_cfg.get("D", 8192)  # Default: 256 bytes × 32 positions
+            
+            # Trainable parameters:
+            # 1. pf_to_model: Linear(D, hidden, bias=False)
+            pf_to_model_params = D * hidden
+            
+            # 2. embed_norm: RMSNorm(hidden) 
+            embed_norm_params = hidden
+            
+            embedding_params = pf_to_model_params + embed_norm_params
+            
+            # Kronecker embeddings cannot be tied (different dimensions)
+            # Force untied to ensure lm_head is counted
+            tie_embeddings = False
+        else:
+            # Standard embeddings: vocab × hidden lookup table
+            embedding_params = vocab * hidden
+
         lm_head_multiplier = arch.get(
             "lm_head_multiplier", head_cfg.get("lm_head_multiplier")
         )
@@ -346,7 +372,10 @@ class TrainingStage:
         )
         if use_sparse_attn and indexer_heads and indexer_dim:
             indexer_params = (
-                hidden * indexer_heads * indexer_dim * 2 + hidden * indexer_heads
+                hidden * indexer_heads * indexer_dim  # W_Iq: H -> ih*id
+                + hidden * indexer_dim                # W_Ik: H -> id
+                + hidden * indexer_heads              # W_Iw: H -> ih
+                + indexer_heads                       # gate_bias
             )
             attn_params_per_layer += indexer_params
 
@@ -360,9 +389,27 @@ class TrainingStage:
                 attention_cfg.get("gsa_use_output_gate", True),
             )
             if use_value_gate:
-                attn_params_per_layer += hidden * hidden * kv_ratio
+                attn_params_per_layer += hidden * hidden  # W_gv: full H*H (not kv_ratio)
             if use_output_gate:
                 attn_params_per_layer += hidden * hidden
+
+        # Calculate GSA-specific attention params (for hybrid layer separation)
+        # GSA uses: Q, K, V, O projections + dual gating (value gate + output gate) + indexer
+        gsa_attn_params_per_layer = 4 * hidden * hidden  # Q, K, V, O
+        if gsa_enabled:
+            if use_value_gate:
+                gsa_attn_params_per_layer += hidden * hidden  # W_gv: full H*H
+            if use_output_gate:
+                gsa_attn_params_per_layer += hidden * hidden  # W_go
+            # GSA indexer params
+            if indexer_heads and indexer_dim:
+                gsa_indexer_params = (
+                    hidden * indexer_heads * indexer_dim  # W_Iq
+                    + hidden * indexer_dim                # W_Ik
+                    + hidden * indexer_heads              # W_Iw
+                    + indexer_heads                       # gate_bias
+                )
+                gsa_attn_params_per_layer += gsa_indexer_params
 
         attn_params_per_layer += float(
             arch.get(
@@ -405,8 +452,15 @@ class TrainingStage:
         elif deltanet_enabled and not deltanet_in_hybrid:
             deltanet_layer_weight = 1.0
         
-        num_deltanet_layers = int(layers * deltanet_layer_weight)
-        num_gsa_layers_hybrid = int(layers * gsa_layer_weight) if deltanet_in_hybrid else 0
+        # Read explicit layer counts from config first, then fall back to weight calculation
+        num_deltanet_layers = deltanet_cfg.get(
+            "num_deltanet_layers", 
+            arch.get("num_deltanet_layers", int(layers * deltanet_layer_weight))
+        )
+        num_gsa_layers_hybrid = deltanet_cfg.get(
+            "num_gsa_layers",
+            arch.get("num_gsa_layers", int(layers * gsa_layer_weight) if deltanet_in_hybrid else 0)
+        )
         
         # DeltaNet-specific parameters per layer
         deltanet_extra_params_per_layer = 0
@@ -419,6 +473,8 @@ class TrainingStage:
             a_log_params = delta_num_heads
             # D: per-head residual parameter
             d_params = delta_num_heads
+            # dt_bias: per-head bias for delta gate
+            dt_bias_params = delta_num_heads
             # Short convolutions on Q/K/V (depthwise, kernel=conv_size)
             short_conv_params = 3 * hidden * delta_conv_size
             # Output norm weight (per head_dim)
@@ -426,7 +482,7 @@ class TrainingStage:
             
             deltanet_extra_params_per_layer = (
                 beta_gate_params + alpha_gate_params + a_log_params + 
-                d_params + short_conv_params + o_norm_params
+                d_params + dt_bias_params + short_conv_params + o_norm_params
             )
             
             # DeltaNet uses 5 projections: Q, K, V, G (output gate), O
@@ -441,15 +497,31 @@ class TrainingStage:
         ffn_params_dense = 3 * hidden * intermediate
         ffn_params_per_expert = 3 * hidden * moe_intermediate
 
+        # Shared expert uses its own intermediate size (may differ from routed experts)
+        shared_expert_intermediate = arch.get(
+            "shared_expert_intermediate_size",
+            expert_cfg.get("shared_expert_intermediate_size", moe_intermediate)
+        )
+        ffn_params_per_shared_expert = 3 * hidden * shared_expert_intermediate
+
         total_ffn_params_moe = 0
         active_ffn_params_moe = 0
         router_params = 0
-        shared_expert_params = num_shared_experts * ffn_params_per_expert
+        shared_expert_params = num_shared_experts * ffn_params_per_shared_expert
         null_expert_params_per_expert = arch.get(
             "null_expert_params_per_expert",
             router_cfg.get("null_expert_params_per_expert", 0),
         )
         null_expert_params = num_null_experts * null_expert_params_per_expert
+        
+        # Data sparsity affects active expert count (e.g. 0.5 = half tokens go to null experts)
+        data_sparsity = arch.get(
+            "data_sparsity", 
+            router_cfg.get("data_sparsity", 1.0)  # Default 1.0 = no null routing
+        )
+        # Effective active experts: top_k * data_sparsity
+        e_k_real = top_k * data_sparsity
+        
         router_type = str(router_cfg.get("router_type", "")).strip().lower()
         if (
             experts > 0
@@ -483,7 +555,7 @@ class TrainingStage:
                 + null_expert_params
             )
             active_ffn_params_moe = (
-                top_k * ffn_params_per_expert + shared_expert_params + router_params
+                e_k_real * ffn_params_per_expert + shared_expert_params + router_params
             )
 
         dense_layers = layers - num_moe_layers
@@ -528,7 +600,7 @@ class TrainingStage:
                 + null_expert_params
             )
             active_ffn_params_moe = (
-                top_k * ffn_params_per_expert + shared_expert_params + router_params
+                e_k_real * ffn_params_per_expert + shared_expert_params + router_params
             )
             num_moe_layers = layers if num_moe_layers == 0 else num_moe_layers
         elif solve_for == "num_experts_from_per_expert":
@@ -551,7 +623,7 @@ class TrainingStage:
                 + null_expert_params
             )
             active_ffn_params_moe = (
-                top_k * ffn_params_per_expert + shared_expert_params + router_params
+                e_k_real * ffn_params_per_expert + shared_expert_params + router_params
             )
             derived_experts = experts
 
@@ -571,31 +643,103 @@ class TrainingStage:
         else:
             norm_params = num_norms * 2 * hidden  # gamma + beta
 
+        # =========================================================================
+        # mHC (Multi-Head Composition) Parameters
+        # Used in reversible/stream-based architectures (e.g., LightningLM)
+        # Each layer has 2 mHC sublayers (attn + mlp blocks)
+        # =========================================================================
+        mhc_cfg = arch.get("mhc", {})
+        n_streams = mhc_cfg.get("n_streams", arch.get("n_streams", 0))
+        mhc_params_per_layer = 0
+        if n_streams > 0:
+            d_in = n_streams * hidden
+            # MHCCoeffs per sublayer
+            mhc_phi_pre = d_in * n_streams
+            mhc_phi_post = d_in * n_streams
+            mhc_phi_res = d_in * (n_streams * n_streams)
+            mhc_biases = n_streams + n_streams + (n_streams * n_streams)
+            mhc_alphas = 3  # alpha_pre, alpha_post, alpha_res
+            mhc_rms = d_in  # RMSNorm per sublayer
+            mhc_per_sublayer = mhc_phi_pre + mhc_phi_post + mhc_phi_res + mhc_biases + mhc_alphas + mhc_rms
+            mhc_params_per_layer = 2 * mhc_per_sublayer  # 2 sublayers: attn + mlp
+
+        total_mhc_params = layers * mhc_params_per_layer
+
+        # =========================================================================
+        # MTP Block Parameters (Multi-Token Prediction)
+        # MTP block contains: fusion projection + DeltaNet layer + FFN/MoE + mHC + norms
+        # This is a full transformer layer plus fusion projection
+        # =========================================================================
+        mtp_cfg = arch.get("mtp", head_cfg)
+        mtp_enabled = mtp_cfg.get("enabled", use_mtp)
+        mtp_num_predictions = mtp_cfg.get("num_predictions", head_cfg.get("mtp_heads", 2)) if mtp_enabled else 0
+        # Calculate attention params per layer type for hybrid models
+        # DeltaNet layers: base attention (4*H*H) + G projection + extra params (gates, convs)
+        # GSA layers: base attention (4*H*H) + dual gating (W_gv, W_go) + indexer
+        base_attn_params = 4 * hidden * hidden
+        deltanet_attn_per_layer = base_attn_params + deltanet_extra_params_per_layer
+        gsa_attn_per_layer = gsa_attn_params_per_layer if gsa_enabled else base_attn_params
+
+        mtp_block_params = 0
+        mtp_block_active_params = 0
+        if mtp_enabled and mtp_num_predictions > 0:
+            # Fusion projection: (d * 2) * d (combines current and previous hidden states)
+            mtp_fusion_params = (hidden * 2) * hidden
+            # DeltaNet layer (same as regular DeltaNet layer)
+            mtp_deltanet_params = deltanet_attn_per_layer
+            # FFN layer (MoE or dense)
+            mtp_ffn_total = total_ffn_params_moe if num_moe_layers > 0 else ffn_params_dense
+            mtp_ffn_active = active_ffn_params_moe if num_moe_layers > 0 else ffn_params_dense
+            # mHC (same as regular layer)
+            mtp_mhc_params = mhc_params_per_layer
+            # Norms (2 per layer)
+            mtp_norms = 2 * hidden
+            
+            mtp_block_params = mtp_fusion_params + mtp_deltanet_params + mtp_ffn_total + mtp_mhc_params + mtp_norms
+            mtp_block_active_params = mtp_fusion_params + mtp_deltanet_params + mtp_ffn_active + mtp_mhc_params + mtp_norms
+        
+        # Number of GSA layers in hybrid mode
+        num_gsa_layers_in_model = num_gsa_layers_hybrid if deltanet_in_hybrid else (
+            layers if gsa_enabled and not deltanet_enabled else 0
+        )
+        # Number of pure standard attention layers (neither DeltaNet nor GSA)
+        num_std_attn_layers = layers - num_deltanet_layers - num_gsa_layers_in_model
+        
+        # Total attention params across all layers
+        total_attn_params = (
+            num_deltanet_layers * deltanet_attn_per_layer +
+            num_gsa_layers_in_model * gsa_attn_per_layer +
+            num_std_attn_layers * base_attn_params
+        )
+
         total_params = (
             embedding_params
             + lm_head_params
-            + layers * attn_params_per_layer
-            + num_deltanet_layers * deltanet_extra_params_per_layer  # DeltaNet-specific params
+            + total_attn_params  # Layer-type-specific attention params
             + dense_layers * ffn_params_dense
             + num_moe_layers * total_ffn_params_moe
             + norm_params
+            + total_mhc_params  # mHC params
+            + mtp_block_params  # MTP block (full layer + fusion)
         )
 
         active_non_embed_params = (
-            layers * attn_params_per_layer
-            + num_deltanet_layers * deltanet_extra_params_per_layer  # DeltaNet-specific params
+            total_attn_params  # Layer-type-specific attention params
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params
             + norm_params
+            + total_mhc_params  # mHC params
+            + mtp_block_active_params  # MTP block active params
         )
         active_linear_params = (
-            layers * attn_params_per_layer
-            + num_deltanet_layers * deltanet_extra_params_per_layer  # DeltaNet-specific params
+            total_attn_params  # Layer-type-specific attention params
             + dense_layers * ffn_params_dense
             + num_moe_layers * active_ffn_params_moe
             + lm_head_params_for_flops
             + norm_params
+            + total_mhc_params  # mHC params
+            + mtp_block_active_params  # MTP block active params
         )
         active_params_base = embedding_params + active_non_embed_params
 
@@ -637,9 +781,12 @@ class TrainingStage:
 
         return {
             "total_params": total_params,
-            "active_params": effective_active_params,
-            "active_non_embed_params": effective_active_non_embed_params,
-            "active_linear_params": effective_active_linear_params,
+            "active_params": active_params_base,
+            "active_non_embed_params": active_non_embed_params,
+            "active_linear_params": active_linear_params,
+            "effective_active_params": effective_active_params,
+            "effective_active_non_embed_params": effective_active_non_embed_params,
+            "effective_active_linear_params": effective_active_linear_params,
             "embedding_params": embedding_params,
             "lm_head_params": lm_head_params,
             "num_moe_layers": num_moe_layers,
@@ -1273,9 +1420,31 @@ class TrainingStage:
         flops_per_seq_norm = num_norms * norm_flops_per_instance * norm_training_mult
 
         # =========================================================================
+        # Embedding FLOPs (Kronecker Product Embeddings only)
+        # =========================================================================
+        # Standard embeddings: Lookup operation (negligible FLOPs)
+        # Kronecker embeddings: Matrix multiplication per token
+        #   - Forward: s × (D × hidden) = s × D × h
+        #   - Backward (gradients): s × (D × hidden) = s × D × h  
+        #   - Backward (weight): s × (D × hidden) = s × D × h
+        #   - Total: 6 × s × D × h (with recompute overhead)
+        # =========================================================================
+        flops_per_seq_embedding = 0
+        embedding_type = arch.get("embedding_type", "standard")
+        
+        if embedding_type == "kronecker":
+            kronecker_cfg = arch.get("kronecker_config", {})
+            D = kronecker_cfg.get("D", 8192)
+            
+            # Matmul FLOPs: forward (2x) + backward-grad (2x) + backward-weight (2x) = 6x
+            # Each matmul: s tokens × D × h
+            flops_per_seq_embedding = 6 * s * D * h * recompute_multiplier
+        
+        # =========================================================================
         # Total FLOPs
         # =========================================================================
         flops_per_seq_total = (
+            flops_per_seq_embedding +
             flops_per_seq_linear + 
             flops_per_seq_attn + 
             flops_per_seq_router + 
@@ -1293,6 +1462,140 @@ class TrainingStage:
             raise ValueError("total_tokens must be > 0.")
 
         return self.flops_per_token(params) * self.total_tokens
+
+    def calculate_upcycling_flops(self, params: Optional[dict] = None) -> dict:
+        """
+        Calculate one-time FLOPs for Dense→MoE upcycling.
+        
+        This is a one-time cost when converting a dense model checkpoint to MoE,
+        not a per-training cost.
+        
+        Upcycling methods:
+        - slicing: Zero FLOPs (just memory copy, take first N columns)
+        - random_projection: O(H × src × tgt) matmul per weight matrix
+        - svd: O(min² × max) per weight matrix (truncated SVD)
+        
+        Returns:
+            dict with upcycling_flops, method, and breakdown
+        """
+        params = params or self.calculate_params()
+        arch = self.architecture
+        
+        # Get upcycling config
+        upcycling_cfg = arch.get("upcycling", {})
+        method = upcycling_cfg.get("method", "none")
+        
+        if method == "none" or not upcycling_cfg:
+            return {
+                "method": "none",
+                "upcycling_flops": 0,
+                "upcycling_time_seconds": 0,
+                "breakdown": {}
+            }
+        
+        # Source and target dimensions
+        hidden = arch.get("hidden_size", 4096)
+        source_intermediate = upcycling_cfg.get(
+            "source_intermediate_size", 
+            arch.get("intermediate_size", arch.get("ffn_intermediate_size", hidden * 4))
+        )
+        target_intermediate = upcycling_cfg.get(
+            "target_intermediate_size",
+            arch.get("moe_intermediate_size", arch.get("expert_intermediate_size", 1024))
+        )
+        num_experts = upcycling_cfg.get(
+            "num_experts_to_create",
+            arch.get("num_routed_experts", arch.get("num_real_experts", 1))
+        )
+        layers = arch.get("num_layers", 32)
+        
+        # SwiGLU has 3 weight matrices per FFN: gate_proj, up_proj, down_proj
+        # For upcycling, we need to shrink each matrix
+        num_matrices_per_layer = 3
+        
+        if method == "slicing":
+            # Just memory copy, zero compute FLOPs
+            upcycling_flops = 0
+            breakdown = {
+                "method": "slicing",
+                "description": "Zero compute (memory copy only)",
+                "flops_per_matrix": 0
+            }
+            
+        elif method == "random_projection":
+            # FLOPs = 2 × m × n × k for matrix multiply
+            # For each weight matrix: W_expert = W_dense @ R
+            # gate_proj/up_proj: (H, source) @ (source, target) → 2 × H × source × target
+            # down_proj: (source, H) @ (source, target) → project rows
+            flops_per_up_proj = 2 * hidden * source_intermediate * target_intermediate
+            flops_per_down_proj = 2 * source_intermediate * hidden * target_intermediate
+            
+            # Total per expert: 2 up-style + 1 down-style (SwiGLU)
+            flops_per_expert = 2 * flops_per_up_proj + flops_per_down_proj
+            
+            # Total across all layers and experts
+            upcycling_flops = flops_per_expert * num_experts * layers
+            
+            breakdown = {
+                "method": "random_projection",
+                "description": f"Project {source_intermediate}→{target_intermediate} via random matrix",
+                "flops_per_up_proj": flops_per_up_proj,
+                "flops_per_down_proj": flops_per_down_proj,
+                "flops_per_expert": flops_per_expert,
+                "num_experts": num_experts,
+                "num_layers": layers
+            }
+            
+        elif method == "svd":
+            # Truncated SVD: O(min(m,n)² × max(m,n))
+            # For up_proj (H × source): min=H, max=source
+            m_up, n_up = hidden, source_intermediate
+            min_up, max_up = min(m_up, n_up), max(m_up, n_up)
+            svd_flops_up = min_up ** 2 * max_up
+            
+            # For down_proj (source × H): min=H, max=source
+            m_down, n_down = source_intermediate, hidden
+            min_down, max_down = min(m_down, n_down), max(m_down, n_down)
+            svd_flops_down = min_down ** 2 * max_down
+            
+            # Reconstruction: U[:, :k] @ diag(S[:k]) @ Vt[:k, :]
+            # This is much cheaper than SVD itself, so we approximate total as 1.5× SVD
+            reconstruction_multiplier = 1.5
+            
+            # Total per expert: 2 up-style + 1 down-style (SwiGLU)
+            flops_per_expert = (2 * svd_flops_up + svd_flops_down) * reconstruction_multiplier
+            
+            # Total across all layers and experts
+            upcycling_flops = flops_per_expert * num_experts * layers
+            
+            breakdown = {
+                "method": "svd",
+                "description": f"Truncated SVD {source_intermediate}→{target_intermediate}",
+                "svd_flops_up_proj": svd_flops_up,
+                "svd_flops_down_proj": svd_flops_down,
+                "flops_per_expert": flops_per_expert,
+                "num_experts": num_experts,
+                "num_layers": layers
+            }
+        else:
+            # Unknown method
+            upcycling_flops = 0
+            breakdown = {"method": method, "description": "Unknown method"}
+        
+        # Estimate time assuming H100 at 989 TFLOPs (BF16)
+        # Use 50% efficiency for these small operations
+        h100_tflops = 989 * 0.5
+        upcycling_time_seconds = upcycling_flops / (h100_tflops * 1e12) if upcycling_flops > 0 else 0
+        
+        return {
+            "method": method,
+            "upcycling_flops": upcycling_flops,
+            "upcycling_time_seconds": upcycling_time_seconds,
+            "source_intermediate": source_intermediate,
+            "target_intermediate": target_intermediate,
+            "num_experts": num_experts,
+            "breakdown": breakdown
+        }
 
 
 def load_config(config_path: str):
@@ -1341,8 +1644,8 @@ def normalize_deepspeed_config(config: dict) -> dict:
     """
     hardware = config.get("hardware", {}).copy()
 
-    # 1. Parse zero_optimization (DeepSpeed-style)
-    zero_opt = config.get("zero_optimization", {})
+    # 1. Parse zero_optimization (DeepSpeed-style, or nested in hardware)
+    zero_opt = config.get("zero_optimization", hardware.get("zero_optimization", {}))
     if zero_opt:
         # Stage
         if "stage" in zero_opt:
@@ -1372,9 +1675,9 @@ def normalize_deepspeed_config(config: dict) -> dict:
                 "gpu_buffer_gb": zero_opt.get("pin_memory", 4.0),
             }
 
-    # 2. Parse activation_checkpointing (DeepSpeed-style)
+    # 2. Parse activation_checkpointing (DeepSpeed-style, or nested in hardware)
     # Always parse and store settings - activation memory is always calculated now
-    act_ckpt = config.get("activation_checkpointing", {})
+    act_ckpt = config.get("activation_checkpointing", hardware.get("activation_checkpointing", {}))
     partition_activations = bool(act_ckpt.get("partition_activations", False))
     cpu_checkpointing = bool(act_ckpt.get("cpu_checkpointing", False))
     # checkpoint_factor: 1.0 = no checkpointing (full activations), 0.1 = aggressive checkpointing
@@ -1394,11 +1697,15 @@ def normalize_deepspeed_config(config: dict) -> dict:
     elif fp16_cfg.get("enabled", False):
         hardware["_precision"] = "fp16"
 
-    # 4. Parse training settings from root level (DeepSpeed-style)
+    # 4. Parse training settings (root level or nested in hardware)
     if "train_micro_batch_size_per_gpu" in config:
         hardware["_micro_batch_size"] = config["train_micro_batch_size_per_gpu"]
+    elif "train_micro_batch_size_per_gpu" in hardware:
+        hardware["_micro_batch_size"] = hardware["train_micro_batch_size_per_gpu"]
     if "gradient_accumulation_steps" in config:
         hardware["_gradient_accumulation_steps"] = config["gradient_accumulation_steps"]
+    elif "gradient_accumulation_steps" in hardware:
+        hardware["_gradient_accumulation_steps"] = hardware["gradient_accumulation_steps"]
 
     # 5. Parse mfu from root level (our addition)
     if "mfu" in config and "mfu" not in hardware:
@@ -1713,6 +2020,11 @@ def main() -> None:
         default="config.json",
         help="Path to JSON config file",
     )
+    parser.add_argument(
+        "--upcycling-only",
+        action="store_true",
+        help="Only show upcycling cost comparison (no training tables)",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -1761,6 +2073,132 @@ def main() -> None:
     growth_cfg = config.get("growth", {"mode": "none"})
     apply_growth_allocation(stages, growth_cfg)
 
+    # =========================================================================
+    # Upcycling-Only Mode: Show just upcycling cost comparison
+    # =========================================================================
+    if args.upcycling_only:
+        print("=" * 90)
+        print("MoE UPCYCLING COST COMPARISON (One-Time Dense→MoE Conversion)")
+        print("=" * 90)
+        print()
+        
+        # Check if any stage has upcycling configured
+        upcycling_stages = []
+        for stage in stages:
+            upcycling_info = stage.calculate_upcycling_flops()
+            if upcycling_info["method"] != "none":
+                upcycling_stages.append((stage, upcycling_info))
+        
+        if not upcycling_stages:
+            print("⚠️  No upcycling configuration found in any stage.")
+            print("   Add 'upcycling' block to architecture with 'method': 'slicing|random_projection|svd'")
+            print()
+            return
+        
+        # Header
+        print(f"{'Stage Name':<35} | {'Method':<18} | {'FLOPs':<18} | {'Time (H100)':<12} | {'Cost':<10}")
+        print("-" * 100)
+        
+        total_upcycling_flops = 0
+        total_upcycling_time = 0
+        
+        for stage, upcycling_info in upcycling_stages:
+            method = upcycling_info["method"]
+            flops = upcycling_info["upcycling_flops"]
+            time_s = upcycling_info["upcycling_time_seconds"]
+            src = upcycling_info.get("source_intermediate", "?")
+            tgt = upcycling_info.get("target_intermediate", "?")
+            n_experts = upcycling_info.get("num_experts", "?")
+            
+            total_upcycling_flops += flops
+            total_upcycling_time += time_s
+            
+            # Format FLOPs nicely
+            if flops >= 1e12:
+                flops_str = f"{flops/1e12:.2f} TFLOPs"
+            elif flops >= 1e9:
+                flops_str = f"{flops/1e9:.2f} GFLOPs"
+            elif flops >= 1e6:
+                flops_str = f"{flops/1e6:.2f} MFLOPs"
+            else:
+                flops_str = "0 (copy)" if flops == 0 else f"{flops:.0f} FLOPs"
+            
+            # Format time
+            if time_s >= 60:
+                time_str = f"{time_s/60:.1f} min"
+            elif time_s >= 1:
+                time_str = f"{time_s:.1f} s"
+            else:
+                time_str = f"{time_s*1000:.1f} ms" if time_s > 0 else "~0"
+            
+            stage_name = stage.name[:34] if len(stage.name) > 34 else stage.name
+            
+            # Calculate cost (time × price_per_gpu_hour)
+            cost = time_s * price_per_gpu_hour / 3600  # Convert seconds to hours
+            cost_str = f"${cost:.4f}" if cost > 0 else "$0"
+            
+            print(f"{stage_name:<35} | {method:<18} | {flops_str:<18} | {time_str:<12} | {cost_str:<10}")
+            print(f"  └─ FFN: {src}→{tgt} × {n_experts} experts, {stage.architecture.get('num_layers', '?')} layers")
+        
+        print("-" * 100)
+        
+        # Total
+        if total_upcycling_flops >= 1e12:
+            total_flops_str = f"{total_upcycling_flops/1e12:.2f} TFLOPs"
+        elif total_upcycling_flops >= 1e9:
+            total_flops_str = f"{total_upcycling_flops/1e9:.2f} GFLOPs"
+        else:
+            total_flops_str = f"{total_upcycling_flops/1e6:.2f} MFLOPs" if total_upcycling_flops > 0 else "0"
+        
+        if total_upcycling_time >= 60:
+            total_time_str = f"{total_upcycling_time/60:.1f} min"
+        elif total_upcycling_time >= 1:
+            total_time_str = f"{total_upcycling_time:.1f} s"
+        else:
+            total_time_str = f"{total_upcycling_time*1000:.1f} ms" if total_upcycling_time > 0 else "~0"
+        
+        total_cost = total_upcycling_time * price_per_gpu_hour / 3600
+        total_cost_str = f"${total_cost:.4f}" if total_cost > 0 else "$0"
+        
+        print(f"{'TOTAL':<35} | {'─':<18} | {total_flops_str:<18} | {total_time_str:<12} | {total_cost_str:<10}")
+        print("=" * 100)
+        print()
+        
+        # Summary comparison
+        print("COST COMPARISON SUMMARY:")
+        print("─" * 50)
+        slicing_time = sum(u["upcycling_time_seconds"] for _, u in upcycling_stages if u["method"] == "slicing")
+        rp_time = sum(u["upcycling_time_seconds"] for _, u in upcycling_stages if u["method"] == "random_projection")
+        svd_time = sum(u["upcycling_time_seconds"] for _, u in upcycling_stages if u["method"] == "svd")
+        
+        methods_found = []
+        if any(u["method"] == "slicing" for _, u in upcycling_stages):
+            methods_found.append(("Slicing", 0, "~0 (memory copy only)"))
+        if any(u["method"] == "random_projection" for _, u in upcycling_stages):
+            rp_flops = sum(u["upcycling_flops"] for _, u in upcycling_stages if u["method"] == "random_projection")
+            methods_found.append(("Random Projection", rp_flops, f"{rp_time*1000:.1f} ms" if rp_time < 1 else f"{rp_time:.1f} s"))
+        if any(u["method"] == "svd" for _, u in upcycling_stages):
+            svd_flops = sum(u["upcycling_flops"] for _, u in upcycling_stages if u["method"] == "svd")
+            methods_found.append(("SVD", svd_flops, f"{svd_time*1000:.1f} ms" if svd_time < 1 else f"{svd_time:.1f} s"))
+        
+        for method_name, flops, time_str in methods_found:
+            if flops >= 1e12:
+                flops_str = f"{flops/1e12:.2f} TFLOPs"
+            elif flops >= 1e9:
+                flops_str = f"{flops/1e9:.2f} GFLOPs"
+            else:
+                flops_str = "0 FLOPs" if flops == 0 else f"{flops/1e6:.2f} MFLOPs"
+            print(f"  • {method_name:<20}: {flops_str:<18} | {time_str}")
+        
+        print()
+        print("NOTE: All methods produce the SAME MoE architecture.")
+        print("      Choose based on quality vs compute tradeoff:")
+        print("      - Slicing: Fastest, may lose information")
+        print("      - Random Projection: Fast, preserves structure stochastically")  
+        print("      - SVD: Slowest, best information preservation")
+        print()
+        return
+
     # Effective MFU after all overheads (or compute MFU if explicit comm model)
     effective_mfu = compute_mfu if use_explicit_comm_model else mfu * zero_eff * scaling_eff
     offload_str = " + CPU Offload" if cpu_offload else ""
@@ -1796,13 +2234,13 @@ def main() -> None:
         print(f"{'-'*120}")
         if cpu_offload:
             print(
-                f"{'Stage':<20} | {'Tokens (B)':<10} | {'Total Params':<12} | {'Active Params':<12} | {'Mem/GPU (GB)':<12} | {'Mem/CPU (GB)':<12} | {'ZFLOPs':<7} | {'Days':<6} | {'Cost ($)':<12}"
+                f"{'Stage':<36} | {'Tokens (B)':<10} | {'Total Params':<12} | {'Active Params':<12} | {'Mem/GPU (GB)':<12} | {'Mem/CPU (GB)':<12} | {'ZFLOPs':<7} | {'Days':<6} | {'Cost ($)':<12}"
             )
         else:
             print(
-                f"{'Stage':<20} | {'Tokens (B)':<10} | {'Total Params':<12} | {'Active Params':<12} | {'Mem/GPU (GB)':<12} | {'ZFLOPs':<7} | {'Days':<6} | {'Cost ($)':<12}"
+                f"{'Stage':<36} | {'Tokens (B)':<10} | {'Total Params':<12} | {'Active Params':<12} | {'Mem/GPU (GB)':<12} | {'ZFLOPs':<7} | {'Days':<6} | {'Cost ($)':<12}"
             )
-        print(f"{'-'*120}")
+        print(f"{'-'*136}")
 
         total_flops = 0.0
         total_seconds = 0.0
@@ -1850,28 +2288,102 @@ def main() -> None:
             if cpu_offload:
                 cpu_mem_gb = mem_info.get("cpu_memory_per_gpu_gb", 0)
                 mem_str_cpu = f"{cpu_mem_gb:<6.1f}"
+                stage_name = stage.name[:35] if len(stage.name) > 35 else stage.name
                 print(
-                    f"{stage.name:<20} | {stage.total_tokens/1e9:<10.1f} | {params['total_params']/1e9:<5.1f} B       | {params['active_params']/1e9:<5.1f} B       | {mem_str_gpu:<12} | {mem_str_cpu:<12} | {stage_flops/1e21:<7.2f} | {stage_days:<6.2f} | ${stage_cost:,.0f}"
+                    f"{stage_name:<36} | {stage.total_tokens/1e9:<10.1f} | {params['total_params']/1e9:<5.2f} B       | {params['active_params']/1e9:<5.2f} B       | {mem_str_gpu:<12} | {mem_str_cpu:<12} | {stage_flops/1e21:<7.2f} | {stage_days:<6.2f} | ${stage_cost:,.0f}"
                 )
             else:
+                stage_name = stage.name[:35] if len(stage.name) > 35 else stage.name
                 print(
-                    f"{stage.name:<20} | {stage.total_tokens/1e9:<10.1f} | {params['total_params']/1e9:<5.1f} B       | {params['active_params']/1e9:<5.1f} B       | {mem_str_gpu:<12} | {stage_flops/1e21:<7.2f} | {stage_days:<6.2f} | ${stage_cost:,.0f}"
+                    f"{stage_name:<36} | {stage.total_tokens/1e9:<10.1f} | {params['total_params']/1e9:<5.2f} B       | {params['active_params']/1e9:<5.2f} B       | {mem_str_gpu:<12} | {stage_flops/1e21:<7.2f} | {stage_days:<6.2f} | ${stage_cost:,.0f}"
                 )
 
         total_days = total_seconds / (24 * 3600)
         total_hours = total_seconds / 3600
         total_cost = total_hours * num_gpus * price_per_gpu_hour
 
-        print(f"{'-'*120}")
+        print(f"{'-'*136}")
         if cpu_offload:
             print(
-                f"{'TOTAL':<20} | {'-':<10} | {'-':<12} | {'-':<12} | {'-':<12} | {'-':<12} | {total_flops/1e21:<7.2f} | {total_days:<6.2f} | ${total_cost:,.0f}"
+                f"{'TOTAL':<36} | {'-':<10} | {'-':<12} | {'-':<12} | {'-':<12} | {'-':<12} | {total_flops/1e21:<7.2f} | {total_days:<6.2f} | ${total_cost:,.0f}"
             )
         else:
             print(
-                f"{'TOTAL':<20} | {'-':<10} | {'-':<12} | {'-':<12} | {'-':<12} | {total_flops/1e21:<7.2f} | {total_days:<6.2f} | ${total_cost:,.0f}"
+                f"{'TOTAL':<36} | {'-':<10} | {'-':<12} | {'-':<12} | {'-':<12} | {total_flops/1e21:<7.2f} | {total_days:<6.2f} | ${total_cost:,.0f}"
             )
-        print(f"{'='*120}\n")
+        print(f"{'='*136}")
+        
+        # =====================================================================
+        # Upcycling Cost (One-Time)
+        # =====================================================================
+        # Check if any stage has upcycling configured
+        upcycling_stages = []
+        for stage in stages:
+            upcycling_info = stage.calculate_upcycling_flops()
+            if upcycling_info["method"] != "none":
+                upcycling_stages.append((stage, upcycling_info))
+        
+        if upcycling_stages:
+            print(f"\n{'─'*80}")
+            print(f"UPCYCLING COST (One-Time Dense→MoE Conversion)")
+            print(f"{'─'*80}")
+            
+            total_upcycling_flops = 0
+            total_upcycling_time = 0
+            
+            for stage, upcycling_info in upcycling_stages:
+                method = upcycling_info["method"]
+                flops = upcycling_info["upcycling_flops"]
+                time_s = upcycling_info["upcycling_time_seconds"]
+                src = upcycling_info.get("source_intermediate", "?")
+                tgt = upcycling_info.get("target_intermediate", "?")
+                n_experts = upcycling_info.get("num_experts", "?")
+                
+                total_upcycling_flops += flops
+                total_upcycling_time += time_s
+                
+                # Format FLOPs nicely
+                if flops >= 1e12:
+                    flops_str = f"{flops/1e12:.2f} TFLOPs"
+                elif flops >= 1e9:
+                    flops_str = f"{flops/1e9:.2f} GFLOPs"
+                elif flops >= 1e6:
+                    flops_str = f"{flops/1e6:.2f} MFLOPs"
+                else:
+                    flops_str = f"{flops:.0f} FLOPs" if flops > 0 else "0 (memory copy)"
+                
+                # Format time
+                if time_s >= 60:
+                    time_str = f"{time_s/60:.1f} min"
+                elif time_s >= 1:
+                    time_str = f"{time_s:.1f} s"
+                else:
+                    time_str = f"{time_s*1000:.1f} ms" if time_s > 0 else "~0"
+                
+                stage_name = stage.name[:30] if len(stage.name) > 30 else stage.name
+                print(f"  {stage_name:<32} | Method: {method:<18} | {flops_str:<18} | Est. Time: {time_str}")
+                print(f"  {'':<32} | FFN: {src}→{tgt} × {n_experts} experts")
+            
+            print(f"{'─'*80}")
+            
+            # Total
+            if total_upcycling_flops >= 1e12:
+                total_flops_str = f"{total_upcycling_flops/1e12:.2f} TFLOPs"
+            elif total_upcycling_flops >= 1e9:
+                total_flops_str = f"{total_upcycling_flops/1e9:.2f} GFLOPs"
+            else:
+                total_flops_str = f"{total_upcycling_flops/1e6:.2f} MFLOPs" if total_upcycling_flops > 0 else "0"
+            
+            if total_upcycling_time >= 60:
+                total_time_str = f"{total_upcycling_time/60:.1f} min"
+            elif total_upcycling_time >= 1:
+                total_time_str = f"{total_upcycling_time:.1f} s"
+            else:
+                total_time_str = f"{total_upcycling_time*1000:.1f} ms" if total_upcycling_time > 0 else "~0"
+            
+            print(f"  {'TOTAL UPCYCLING':<32} | {total_flops_str:<18} | Est. Time: {total_time_str} (H100 @ 50% util)")
+            print(f"{'─'*80}")
+        print()
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@
         "intermediate_size": 4096,
         "moe_intermediate_size": 1024,
         "num_layers": 20,
-        "sequence_length": 262144,
+        "sequence_length": 4096,
         "num_heads": 32,
         "num_kv_heads": 8,
         "attention_type": "deltanet-gsa:3:1:512",

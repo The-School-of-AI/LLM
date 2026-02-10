@@ -1,0 +1,46 @@
+{
+  "hardware": {
+    "num_gpus": 1,
+    "price_per_gpu_hour": 4,
+    "tflops_per_gpu": {"bf16": 989.0},
+    "mfu": 0.3
+  },
+  "stages": [
+    {
+      "name": "1B→3B Slicing",
+      "total_tokens": 1,
+      "architecture": {
+        "hidden_size": 2048,
+        "intermediate_size": 4096,
+        "moe_intermediate_size": 1024,
+        "num_layers": 16,
+        "num_routed_experts": 20,
+        "upcycling": {"method": "slicing"}
+      }
+    },
+    {
+      "name": "1B→3B Random Projection",
+      "total_tokens": 1,
+      "architecture": {
+        "hidden_size": 2048,
+        "intermediate_size": 4096,
+        "moe_intermediate_size": 1024,
+        "num_layers": 16,
+        "num_routed_experts": 20,
+        "upcycling": {"method": "random_projection"}
+      }
+    },
+    {
+      "name": "1B→3B SVD",
+      "total_tokens": 1,
+      "architecture": {
+        "hidden_size": 2048,
+        "intermediate_size": 4096,
+        "moe_intermediate_size": 1024,
+        "num_layers": 16,
+        "num_routed_experts": 20,
+        "upcycling": {"method": "svd"}
+      }
+    }
+  ]
+}
