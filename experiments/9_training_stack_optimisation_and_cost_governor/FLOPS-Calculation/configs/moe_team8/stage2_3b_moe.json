@@ -43,7 +43,7 @@
   "stages": [
     {
       "name": "Stage 2: 3B MoE (DeltaNet+GSA)",
-      "total_tokens": 50000000000,
+      "total_tokens": 40000000000,
       "architecture": {
         "vocab_size": 131072,
         "hidden_size": 4096,

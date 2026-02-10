@@ -44,7 +44,7 @@
   "stages": [
     {
       "name": "Stage 4: 70B MoE (DeltaNet+GSA)",
-      "total_tokens": 200000000000,
+      "total_tokens": 240000000000,
       "architecture": {
         "vocab_size": 131072,
         "hidden_size": 4096,
