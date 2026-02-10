@@ -1,10 +1,14 @@
 """
-Main entry point for DeepSpeed training.
+Main entry point for DeepSpeed training with 3B Model.
 
-This script initializes the model, loads data, and runs training with DeepSpeed.
-Supports both ZeRO Stage 2 and Stage 3 configurations, S3 checkpointing, and resume.
+This script trains a 3.9B parameter model with:
+- TSAI 131K Tokenizer (2^17 vocab, byte-level Kronecker embeddings)
+- Hybrid Gated DeltaNet + Gated Sparse Attention architecture
+- Reversible midpoint integration for memory efficiency
+- MoE with null experts (20 real + 20 null)
+- 256k context length target with YARN RoPE scaling
 
-All configuration is loaded from config.yaml by default.
+Supports ZeRO Stage 2/3, S3 checkpointing, and resume from checkpoint.
 
 Usage:
     # Run with default config.yaml
@@ -18,8 +22,8 @@ Usage:
 
 Configuration:
     Edit config.yaml to customize:
-    - Dataset, batch size, epochs
-    - Model and tokenizer selection
+    - Dataset, batch size, epochs, max sequence length
+    - Embedding type (kronecker or standard)
     - Checkpoint intervals and S3 settings
     - DeepSpeed configuration file path
     - Resume from checkpoint settings
@@ -43,7 +47,7 @@ import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
-from src.model import get_qwen2_moe_model, get_reversible_model
+from src.models.model_3b import Model3B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
@@ -74,12 +78,7 @@ class Config:
         self.local_rank = config_dict["deepspeed"]["local_rank"]
 
         # Model configuration
-        self.tokenizer_name = config_dict["model"].get(
-            "tokenizer_name", "Qwen/Qwen2.5-0.5B"
-        )
-        self.model_name = config_dict["model"].get("model_name", "distilgpt2")
-        self.model_type = config_dict["model"].get("model_type", "qwen2_moe")  # "qwen2_moe", "reversible", or "standard"
-        self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # For reversible models
+        self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
 
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
@@ -160,7 +159,7 @@ def main():
     set_seed(args.seed)
 
     print_rank_0("=" * 80)
-    print_rank_0("DeepSpeed Training Template")
+    print_rank_0("3B Model Training - DeepSpeed + Reversible Architecture")
     print_rank_0("=" * 80)
     print_rank_0(f"Configuration File: {cmd_args.config}")
     print_rank_0(f"DeepSpeed Version: {deepspeed.__version__}")
@@ -169,6 +168,9 @@ def main():
     if torch.cuda.is_available():
         print_rank_0(f"CUDA Devices: {torch.cuda.device_count()}")
     print_rank_0("\nConfiguration:")
+    print_rank_0(f"  Model: 3B (3.9B params, ~1.74B active)")
+    print_rank_0(f"  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
+    print_rank_0(f"  Embedding Type: {args.embedding_type}")
     print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  Batch Size: {args.batch_size}")
@@ -186,10 +188,11 @@ def main():
     print_rank_0("=" * 80)
 
     # ========================================
-    # Step 1: Load Data
+    # Step 1: Load Tokenizer & Data
     # ========================================
-    print_rank_0("\n[1/5] Loading data...")
-    tokenizer = get_tokenizer(args.tokenizer_name)
+    print_rank_0("\n[1/5] Loading tokenizer and data...")
+    print_rank_0("  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)")
+    tokenizer = get_tokenizer()  # Loads from src/tokenizer/
     train_loader, eval_loader, test_loader, _ = get_dataloaders(
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
@@ -202,19 +205,60 @@ def main():
     print_rank_0(f"  Test batches: {len(test_loader)}")
 
     # ========================================
-    # Step 2: Load Model
+    # Step 2: Load Model (3B Model Only)
     # ========================================
     print_rank_0("\n[2/5] Loading model...")
-    if args.model_type == "reversible":
-        print_rank_0("  Using Reversible Model (memory-efficient)")
-        model = get_reversible_model(print_info=True, embedding_type=args.embedding_type, tokenizer=tokenizer)
-    elif args.model_type == "qwen2_moe":
-        print_rank_0("  Using Qwen2 MoE Model")
-        model = get_qwen2_moe_model(print_info=True)
+    print_rank_0("  Creating 3B Model with memory-efficient reversible architecture...")
+    
+    # Create model configuration
+    config = ModelConfig()
+    
+    # Update vocab size to match tokenizer
+    # Use len(tokenizer) to include special tokens (pad, eos, etc.)
+    vocab_size = len(tokenizer)
+    config.vocab_size = vocab_size
+    print_rank_0(f"  Updated model vocab_size to match tokenizer: {vocab_size:,}")
+    print_rank_0(f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})")
+    
+    # Prepare vocabulary for Kronecker embeddings if needed
+    bpe_vocab = None
+    pf_codec = None
+    
+    if args.embedding_type == "kronecker":
+        print_rank_0("  Setting up Kronecker Product Embeddings (byte-level)...")
+        
+        # Extract vocabulary words from tokenizer
+        bpe_vocab = []
+        for i in range(vocab_size):
+            try:
+                token = tokenizer.decode([i])
+                bpe_vocab.append(token if token else f"<unk_{i}>")
+            except:
+                bpe_vocab.append(f"<unk_{i}>")
+        
+        # Create Kronecker codec
+        pf_config = KroneckerConfig(
+            CHAR_DIM=256,
+            POS_DIM=32,
+            D=8192,
+            length_normalize=True,
+            truncate_long_words=True
+        )
+        pf_codec = KroneckerEmbeddings(pf_config)
+        
+        print_rank_0(f"  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192")
     else:
-        print_rank_0(f"  Using Standard Model: {args.model_name}")
-        from src.model import get_model
-        model = get_model(args.model_name, print_info=True)
+        print_rank_0("  Using Standard Embeddings")
+    
+    # Create the 3B model
+    model = Model3B(
+        config=config,
+        embedding_type=args.embedding_type,
+        bpe_vocab=bpe_vocab,
+        pf_codec=pf_codec
+    )
+    
+    print_rank_0(f"  ✓ Model created successfully")
 
     # ========================================
     # Step 3: Initialize DeepSpeed

@@ -2,21 +2,20 @@
 3B Model Architecture with Hybrid Gated DeltaNet + Gated Sparse Attention (GSA)
 
 Configuration:
-- ~3B total parameters, ~2B active parameters (with MoE)
+- 3.9B total parameters, 1.74B active parameters
 - 131,072 vocabulary (2^17)
 - 4096 hidden size, 8 layers (6 DeltaNet + 2 GSA)
-- 20 real experts + 20 null experts = 40 slots, top-k=2
+- 20 real experts + 20 null experts = 40 slots, top-k=2 dynamic
 - Multi-Token Prediction (MTP) with 2 predictions
 - Multi-Head Composition (mHC) with 4 streams
 - Reversible Midpoint Integration for memory efficiency
-- Target: 32k context length
+- Target: 256k context length
 
 Architecture based on:
 - Gated DeltaNet: arXiv:2412.06464 (Dec 2024)
 - Gated Sparse Attention: arXiv:2601.15305v1 (Jan 2026)
 - Multi-Token Prediction: DeepSeek-V3 style
 - Null Experts: Data sparsity ρ=0.5
-- Reversible Architecture: arXiv:2512.02056v2 (Dec 2024)
 """
 
 import torch
@@ -243,15 +242,15 @@ PFConfig = KroneckerConfig
 # ============================================================================
 
 class ModelConfig:
-    """3B Model Configuration (Scaled down from 70B for efficient training)"""
+    """3B Model Configuration"""
     # Architecture
     vocab_size = 131072  # 2^17
-    hidden_size = 4096   # 3B target
-    num_layers = 8       # Scaled for 3B params
+    hidden_size = 4096
+    num_layers = 8
 
     # Attention Mix (75% DeltaNet / 25% GSA)
-    num_deltanet_layers = 6   # 75% of 8 layers
-    num_gsa_layers = 2        # 25% of 8 layers
+    num_deltanet_layers = 6
+    num_gsa_layers = 2
 
     # DeltaNet Configuration
     delta_v_heads = 32  # hidden_size / delta_head_dim = 4096 / 128
@@ -262,21 +261,21 @@ class ModelConfig:
     # GSA Configuration
     gsa_num_heads = 16  # hidden_size / attn_head_dim = 4096 / 256
     gsa_head_dim = 256
-    gsa_k_base = 512  # Adaptive sparsity budget
+    gsa_k_base = 512  # Adaptive sparsity budget for 256k context
     gsa_k_min = 32
-    gsa_k_max = 1024
+    gsa_k_max = 1024  # Increased for 256k context
     gsa_indexer_heads = 4
 
-    # MoE Configuration (from config3b)
+    # MoE Configuration
     num_real_experts = 20
     num_null_experts = 20  # ρ=0.5 data sparsity
     total_expert_slots = 40
-    top_k = 2  # From config3b: num_routed_experts_active=2
-    expert_intermediate_size = 1024  # From config3b
-    shared_expert_intermediate_size = 1280  # From config3b
+    top_k = 2  # Dynamic 0-2, avg 2 active
+    expert_intermediate_size = 1024
+    shared_expert_intermediate_size = 2048
     data_sparsity = 0.5
 
-    # MTP Configuration (from config3b)
+    # MTP Configuration
     enable_mtp = True
     mtp_num_predictions = 2
 
@@ -285,10 +284,10 @@ class ModelConfig:
     sinkhorn_iters = 20
 
     # Context and RoPE (YARN Scaling)
-    max_seq_len = 32768  # 32k context (scaled from 256k for 3B)
+    max_seq_len = 262144  # 256k context
     rope_base = 10000
     rope_original_max_position = 8192  # Original training context
-    rope_scaling_factor = 4.0  # 32k / 8k = 4x extension
+    rope_scaling_factor = 32.0  # 256k / 8k = 32x extension
 
     # Training
     dropout = 0.0  # Required for reversible integration
@@ -952,11 +951,13 @@ class MoEGate(nn.Module):
 
 class MoEFFN(nn.Module):
     """MoE FFN with null experts (batched tensor implementation)."""
-    def __init__(self, d_model: int, d_hidden: int, num_experts: int = 270, top_k: int = 10,
+    def __init__(self, d_model: int, d_hidden: int, d_shared_hidden: Optional[int] = None,
+                 num_experts: int = 270, top_k: int = 10,
                  dropout: float = 0.0, data_sparsity: float = 0.5):
         super().__init__()
         self.d_model = d_model
         self.d_hidden = d_hidden
+        self.d_shared_hidden = d_shared_hidden if d_shared_hidden is not None else d_hidden
         self.num_experts = num_experts
         self.top_k = top_k
         self.dropout = dropout
@@ -969,9 +970,9 @@ class MoEFFN(nn.Module):
         self.W_down = nn.Parameter(torch.randn(num_experts, d_hidden, d_model) * 0.02)
 
         # Shared Expert
-        self.shared_gate = nn.Linear(d_model, d_hidden, bias=False)
-        self.shared_up = nn.Linear(d_model, d_hidden, bias=False)
-        self.shared_down = nn.Linear(d_hidden, d_model, bias=False)
+        self.shared_gate = nn.Linear(d_model, self.d_shared_hidden, bias=False)
+        self.shared_up = nn.Linear(d_model, self.d_shared_hidden, bias=False)
+        self.shared_down = nn.Linear(self.d_shared_hidden, d_model, bias=False)
         self._init_shared_weights()
 
         self.last_indices = None
@@ -1031,7 +1032,7 @@ class MoEFFN(nn.Module):
                 sorted_out[start:end] = h @ self.W_down[e]
             start = end
 
-        weighted_out = sorted_out * sorted_weights.unsqueeze(-1).to(dtype)
+        weighted_out = sorted_out * sorted_weights.unsqueeze(-1)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
         routed_out.scatter_add_(0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out)
 
@@ -1042,11 +1043,12 @@ class MoEFFN(nn.Module):
 class LightningMLP(nn.Module):
     """MLP wrapper using MoEFFN."""
     def __init__(self, hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
-                 data_sparsity=0.5):
+                 shared_intermediate_size=None, data_sparsity=0.5):
         super().__init__()
         self.moe = MoEFFN(
             d_model=hidden_size,
             d_hidden=intermediate_size,
+            d_shared_hidden=shared_intermediate_size,
             num_experts=num_experts,
             top_k=top_k,
             dropout=0.0,
@@ -1195,6 +1197,7 @@ class LightningDecoderLayer(nn.Module):
         mlp = LightningMLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.expert_intermediate_size,
+            shared_intermediate_size=config.shared_expert_intermediate_size,
             num_experts=config.num_real_experts,
             num_shared_experts=1,
             top_k=config.top_k,
@@ -1281,6 +1284,7 @@ class MTPTransformerBlock(nn.Module):
         self.mlp = LightningMLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.expert_intermediate_size,
+            shared_intermediate_size=config.shared_expert_intermediate_size,
             num_experts=config.num_real_experts,
             num_shared_experts=1,
             top_k=config.top_k,
@@ -1343,13 +1347,13 @@ class MTPTransformerBlock(nn.Module):
 
 class Model3B(nn.Module):
     """
-    3B Model with Hybrid Gated DeltaNet + Gated Sparse Attention.
+    3.9B Model with Hybrid Gated DeltaNet + Gated Sparse Attention.
 
     Configuration:
-    - ~3B total params, ~2B active params
-    - 75% DeltaNet (6 layers) + 25% GSA (2 layers)
-    - 20 real + 20 null experts, top-k=2
-    - 32k context length target
+    - 3.9B total params, 1.74B active params
+    - 75% DeltaNet (8 layers) + 25% GSA (2 layers)
+    - 20 real + 20 null experts, top-k=2 dynamic
+    - 256k context length target
     """
     def __init__(self, config: ModelConfig, embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
         super().__init__()
@@ -1398,7 +1402,7 @@ class Model3B(nn.Module):
         self.layer_types = layer_types
 
         # Reversible Midpoint Integration
-        from .reversible_ops_midpoint import ReversibleMidpointStack
+        from reversible_ops_midpoint import ReversibleMidpointStack
         self.stack = ReversibleMidpointStack(
             self.layers,
             step_size=0.25,
@@ -1440,7 +1444,7 @@ class Model3B(nn.Module):
             embedding_params = self.vocab_size * config.hidden_size / 1e6
             embedding_buffer = 0
 
-        print(f"\n🤖 MODEL-3B INITIALIZED:")
+        print(f"\n🤖 MODEL-70B INITIALIZED:")
         print(f"   Vocabulary: {self.vocab_size:,}")
         print(f"   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
@@ -1454,10 +1458,10 @@ class Model3B(nn.Module):
         print(f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse")
         print(f"\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
         print(f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots")
-        print(f"   Top-k: {config.top_k} (active experts per token, ρ={config.data_sparsity})")
+        print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
         print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
-        print(f"   Target Active: ~{total_params/1e9 * 0.67:.1f}B parameters (with MoE sparsity)")
+        print(f"   Target Active: ~3.1B parameters")
 
     def _init_weights(self, module):
         if self.use_kronecker and self.kronecker_embeddings is not None:
@@ -1562,10 +1566,25 @@ def create_model_3b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
 
 
 if __name__ == "__main__":
-    # Calculate actual metrics using config3b
-    from .config import config3b, LightningCalculator
+    # Calculate actual metrics from weights2.py
+    from weight_calculator import LightningConfig, LightningCalculator
 
-    calc = LightningCalculator(config3b)
+    config_calc = LightningConfig(
+        vocab_size=131072,
+        hidden_size=4096,
+        target_params=3e9,
+        attention_type="gsa",
+        deltanet_layer_ratio=0.75,
+        num_routed_experts_active=2,
+        expert_intermediate_size=1024,
+        shared_expert_intermediate_size=2048,
+        enable_mtp=True,
+        mtp_num_predictions=2,
+        num_experts_override=20,
+        num_layers_override=8,
+    )
+
+    calc = LightningCalculator(config_calc)
     num_experts = calc.solve_for_experts()
     report_df, _ = calc.generate_report(num_experts)
 
@@ -1579,19 +1598,19 @@ if __name__ == "__main__":
     config = ModelConfig()
 
     print("=" * 80)
-    print("3B MODEL ARCHITECTURE")
+    print("70B MODEL ARCHITECTURE")
     print("=" * 80)
     print("\nConfiguration:")
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
     print(f"\nAttention Mix:")
-    print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for long context")
+    print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context")
     print(f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality")
     print(f"\nExperts:")
-    print(f"  Real: {config.num_real_experts}")
-    print(f"  Null: {config.num_null_experts} (ρ={config.data_sparsity})")
+    print(f"  Real: {num_experts}")
+    print(f"  Null: {num_experts} (ρ={config.data_sparsity})")
     print(f"  Total slots: {config.total_expert_slots}")
-    print(f"  Top-k: {config.top_k} (active per token)")
+    print(f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})")
     print(f"\nContext: {config.max_seq_len:,} tokens")
     print("=" * 80)
