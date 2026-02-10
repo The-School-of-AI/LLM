@@ -5,9 +5,14 @@ This module contains training, evaluation, and inference functions
 for training language models with DeepSpeed optimization.
 """
 
+import math
+import os
+import time
+
 import torch
 from tqdm import tqdm
 
+from .halt_metrics import write_metrics
 from .utils import is_main_process, print_rank_0
 
 
@@ -22,6 +27,9 @@ def train_epoch(
     checkpoint_manager=None,
     start_step=0,
     global_step=0,
+    metrics_file=None,
+    metrics_interval=30,
+    force_checkpoint_file="/tmp/FORCE_CHECKPOINT",
 ):
     """
     Train the model for one epoch.
@@ -37,13 +45,27 @@ def train_epoch(
         checkpoint_manager: S3CheckpointManager instance (optional, for S3 support)
         start_step: Step to start from (for resuming)
         global_step: Global step counter across all epochs
+        metrics_file: Path to write halt metrics JSON (None = disabled)
+        metrics_interval: Seconds between metrics writes when metrics_file is set
+        force_checkpoint_file: Path to poll for halt signal when metrics_file is set
 
     Returns:
-        Tuple of (average_loss, final_global_step)
+        Tuple of (average_loss, final_global_step, exit_reason).
+        exit_reason is None, "halt", or "nan".
     """
     model_engine.train()
     total_loss = 0
     steps = 0
+    exit_reason = None
+
+    if metrics_file is not None:
+        world_size = (
+            torch.distributed.get_world_size()
+            if torch.distributed.is_initialized()
+            else 1
+        )
+        last_metrics_time = time.time()
+        tokens_accum = 0
 
     # Only show progress bar on main process
     progress_bar = tqdm(
@@ -54,6 +76,11 @@ def train_epoch(
         # Skip steps if resuming
         if i < start_step:
             continue
+
+        # Halt: check for FORCE_CHECKPOINT when halt integration is enabled
+        if metrics_file is not None and os.path.exists(force_checkpoint_file):
+            exit_reason = "halt"
+            break
 
         # Move batch to device
         input_ids = batch["input_ids"].to(model_engine.device)
@@ -85,6 +112,23 @@ def train_epoch(
             print_rank_0(
                 f"Epoch {epoch}, Step {i}, Global Step {global_step}, Loss: {loss.item():.4f}"
             )
+
+        # Halt metrics: tokens, NaN detection, periodic write (rank 0 only)
+        if metrics_file is not None:
+            tokens_accum += batch["input_ids"].numel() * world_size
+            if not math.isfinite(loss.item()):
+                if is_main_process():
+                    write_metrics(loss.item(), path=metrics_file, nan=True)
+                exit_reason = "nan"
+                break
+            now = time.time()
+            if is_main_process() and (now - last_metrics_time) >= metrics_interval:
+                tps = tokens_accum / (now - last_metrics_time)
+                write_metrics(
+                    loss.item(), path=metrics_file, tokens_per_sec=tps
+                )
+                tokens_accum = 0
+                last_metrics_time = now
 
         # Save checkpoint periodically
         if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:
@@ -120,7 +164,7 @@ def train_epoch(
     avg_loss = total_loss / steps if steps > 0 else 0
     print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
 
-    return avg_loss, global_step
+    return avg_loss, global_step, exit_reason
 
 
 def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):

@@ -597,6 +597,28 @@ class S3CheckpointManager:
         if self.is_global_main and self.config.verbose:
             print("✅ All checkpoints uploaded across all nodes!")
 
+    def put_halt_sentinel(self, key: str = "latest/_SUCCESS") -> None:
+        """
+        Write a sentinel object to S3 so the halt controller can detect checkpoint completion.
+
+        Call this after wait_for_uploads() when exiting due to FORCE_CHECKPOINT.
+        """
+        if self.is_local_main and hasattr(self, "s3_client"):
+            try:
+                self.s3_client.put_object(
+                    Bucket=self.config.bucket_name,
+                    Key=key,
+                    Body=b"ok",
+                )
+                if self.config.verbose:
+                    print(
+                        f"[Rank {self.global_rank}] ✓ Halt sentinel written: s3://{self.config.bucket_name}/{key}"
+                    )
+            except Exception as e:
+                print(
+                    f"[Rank {self.global_rank}] ❌ Failed to put halt sentinel: {e}"
+                )
+
     def cleanup_old_checkpoints(self, keep_last_n: Optional[int] = None):
         """
         Clean up old local checkpoints, keeping only the most recent N.

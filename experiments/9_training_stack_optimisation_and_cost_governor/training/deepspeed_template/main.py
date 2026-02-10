@@ -27,6 +27,7 @@ Configuration:
 
 import argparse
 import os
+import sys
 from typing import Any, Dict
 
 import deepspeed
@@ -90,6 +91,14 @@ class Config:
         # Generation configuration
         self.test_generation = config_dict["generation"]["test_generation"]
         self.generation_prompt = config_dict["generation"]["generation_prompt"]
+
+        # Halt controller integration (optional)
+        halt = config_dict.get("halt") or {}
+        self.halt_metrics_file = halt.get("metrics_file")
+        self.halt_metrics_interval = halt.get("metrics_interval", 30)
+        self.halt_force_checkpoint_file = halt.get(
+            "force_checkpoint_file", "/tmp/FORCE_CHECKPOINT"
+        )
 
 
 def load_config(config_path: str = "config.yaml") -> Config:
@@ -277,18 +286,72 @@ def main():
         epoch_start_step = start_step if epoch == start_epoch else 0
 
         # Train
-        avg_loss, global_step = train_epoch(
-            model_engine,
-            train_loader,
-            epoch,
-            max_steps=args.max_train_steps,
-            log_interval=args.log_interval,
-            checkpoint_interval=args.checkpoint_interval,
-            output_dir=args.output_dir,
-            checkpoint_manager=checkpoint_manager,
-            start_step=epoch_start_step,
-            global_step=global_step,
-        )
+        train_kwargs = {
+            "model_engine": model_engine,
+            "train_loader": train_loader,
+            "epoch": epoch,
+            "max_steps": args.max_train_steps,
+            "log_interval": args.log_interval,
+            "checkpoint_interval": args.checkpoint_interval,
+            "output_dir": args.output_dir,
+            "checkpoint_manager": checkpoint_manager,
+            "start_step": epoch_start_step,
+            "global_step": global_step,
+        }
+        if args.halt_metrics_file is not None:
+            train_kwargs["metrics_file"] = args.halt_metrics_file
+            train_kwargs["metrics_interval"] = args.halt_metrics_interval
+            train_kwargs["force_checkpoint_file"] = args.halt_force_checkpoint_file
+        avg_loss, global_step, exit_reason = train_epoch(**train_kwargs)
+
+        # Halt: graceful checkpoint and exit
+        if exit_reason == "halt":
+            print_rank_0("\nFORCE_CHECKPOINT detected. Saving halt checkpoint...")
+            client_state = {
+                "epoch": epoch,
+                "step": epoch_start_step,
+                "global_step": global_step,
+                "halt_requested": True,
+            }
+            if checkpoint_manager:
+                checkpoint_manager.save_checkpoint(
+                    model_engine,
+                    step=global_step,
+                    tag="halt",
+                    client_state=client_state,
+                )
+                print_rank_0("Waiting for S3 uploads to complete...")
+                checkpoint_manager.wait_for_uploads()
+                checkpoint_manager.put_halt_sentinel()
+            else:
+                from src.train import save_checkpoint
+
+                save_checkpoint(model_engine, args.output_dir, tag="halt")
+            print_rank_0("Halt checkpoint saved. Exiting.")
+            sys.exit(0)
+
+        # NaN: optional checkpoint and exit
+        if exit_reason == "nan":
+            print_rank_0("\nNaN detected. Exiting.")
+            if checkpoint_manager or args.save_checkpoint:
+                print_rank_0("Saving checkpoint for debugging...")
+                client_state = {
+                    "epoch": epoch,
+                    "global_step": global_step,
+                    "nan_detected": True,
+                }
+                if checkpoint_manager:
+                    checkpoint_manager.save_checkpoint(
+                        model_engine,
+                        step=global_step,
+                        tag="nan",
+                        client_state=client_state,
+                    )
+                else:
+                    from src.train import save_checkpoint
+
+                    save_checkpoint(model_engine, args.output_dir, tag="nan")
+            sys.exit(1)
 
         # Evaluate on validation set
         print_rank_0("\nEvaluating on validation set...")

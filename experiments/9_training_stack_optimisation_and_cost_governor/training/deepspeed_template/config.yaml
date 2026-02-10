@@ -49,3 +49,10 @@ s3:
 generation:
   test_generation: false
   generation_prompt: "The history of artificial intelligence begins with"
+
+# Halt controller integration (optional)
+# Uncomment to enable metrics file and FORCE_CHECKPOINT polling for the halt controller.
+# halt:
+#   metrics_file: "/tmp/training_metrics.json"
+#   metrics_interval: 30
+#   force_checkpoint_file: "/tmp/FORCE_CHECKPOINT"
