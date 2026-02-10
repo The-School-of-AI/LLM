@@ -5,8 +5,8 @@
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  batch_size: 16  # Can be larger due to reversible memory savings
-  max_length: 256  # Longer sequences possible with reversible architecture
+  batch_size: 2  # Reduced to fit in 4x L4 (15GB) GPUs
+  max_length: 64  # Reduced to conserve memory
 
 # Training Configuration
 training:
@@ -25,7 +25,7 @@ deepspeed:
 model:
   model_type: "reversible"  # Use "reversible", "qwen2_moe", or "standard"
   tokenizer_name: "Qwen/Qwen2.5-0.5B"
-  embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
+  embedding_type: "standard"  # "kronecker" or "standard" (for reversible models)
 
 # Checkpoint Configuration
 checkpoint:
@@ -55,5 +55,6 @@ generation:
 # - Reversible models use ~10x less memory for activations
 # - Activation checkpointing is DISABLED (handled by reversible architecture)
 # - Dropout is set to 0.0 in model config (required for reversibility)
-# - Batch size can be increased significantly compared to standard models
-# - Longer sequences are possible due to constant memory footprint w.r.t. depth
+# - Current settings optimized for 4x L4 (15GB) GPUs
+# - Memory breakdown: ~10GB model params + ~4-5GB activations/optimizer states
+# - For larger batches/sequences, use g5.12xlarge (4x A10G, 24GB each)

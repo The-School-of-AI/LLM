@@ -1,7 +1,7 @@
 {
-    "train_batch_size": 64,
-    "train_micro_batch_size_per_gpu": 2,
-    "gradient_accumulation_steps": 8,
+    "train_batch_size": 16,
+    "train_micro_batch_size_per_gpu": 1,
+    "gradient_accumulation_steps": 4,
     
     "optimizer": {
         "type": "AdamW",
@@ -47,7 +47,8 @@
     "dump_state": false,
     
     "_comment_activation_checkpointing": "DISABLED for reversible models - they handle memory efficiency through their architecture",
-    "_comment_batch_size": "Increased from 32 to 64 - reversible models use ~10x less memory for activations",
-    "_comment_micro_batch": "Increased from 1 to 2 - take advantage of memory savings",
-    "_comment_dropout": "Model has dropout=0.0 set in config (required for reversibility)"
+    "_comment_batch_size": "Reduced for 4x L4 (15GB) GPUs - effective batch size 16 via gradient accumulation",
+    "_comment_micro_batch": "Set to 1 to minimize per-GPU memory usage",
+    "_comment_dropout": "Model has dropout=0.0 set in config (required for reversibility)",
+    "_comment_memory": "For 4x A10G (24GB), can increase to micro_batch=2-4 and max_length=256"
 }

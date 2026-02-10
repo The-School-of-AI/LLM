@@ -96,7 +96,7 @@ def get_qwen2_moe_model(device=None, print_info=True):
     return model
 
 
-def get_reversible_model(device=None, print_info=True, embedding_type="kronecker"):
+def get_reversible_model(device=None, print_info=True, embedding_type="kronecker", tokenizer=None):
     """
     Create a Reversible 3B model from scratch with custom configuration.
     
@@ -111,6 +111,7 @@ def get_reversible_model(device=None, print_info=True, embedding_type="kronecker
         device: Device to load model on (default: None, let model decide)
         print_info: Whether to print model information
         embedding_type: Type of embedding ("kronecker" or "standard")
+        tokenizer: Optional tokenizer to extract vocabulary from (required for Kronecker embeddings)
     
     Returns:
         The initialized reversible model
@@ -121,12 +122,38 @@ def get_reversible_model(device=None, print_info=True, embedding_type="kronecker
     # Create model configuration
     config = ModelConfig()
     
+    # Update vocab size to match tokenizer (required for proper token ID handling)
+    # IMPORTANT: Use len(tokenizer) not tokenizer.vocab_size to include special tokens!
+    if tokenizer is not None:
+        # len(tokenizer) includes special tokens (pad, eos, etc.) which may have IDs >= vocab_size
+        config.vocab_size = len(tokenizer)
+        if print_info:
+            print_rank_0(f"  Updated model vocab_size to match tokenizer: {config.vocab_size:,}")
+            print_rank_0(f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})")
+    else:
+        if print_info:
+            print_rank_0(f"  ⚠️  WARNING: No tokenizer provided, using default vocab_size: {config.vocab_size:,}")
+            print_rank_0(f"  This may cause index errors if tokenizer vocab size doesn't match!")
+    
     # For Kronecker embeddings, we need to create vocabulary and codec
     if embedding_type == "kronecker":
-        # Create a simple vocabulary for demonstration
-        # In production, you would load this from your tokenizer
+        if tokenizer is None:
+            raise ValueError(
+                "Tokenizer is required for Kronecker embeddings. "
+                "Please pass tokenizer=tokenizer when creating the model, "
+                "or use embedding_type='standard' instead."
+            )
+        
+        # Extract vocabulary words from tokenizer
         vocab_size = config.vocab_size
-        bpe_vocab = [f"token_{i}" for i in range(vocab_size)]
+        # Convert token IDs to their string representations
+        bpe_vocab = []
+        for i in range(vocab_size):
+            try:
+                token = tokenizer.decode([i])
+                bpe_vocab.append(token if token else f"<unk_{i}>")
+            except:
+                bpe_vocab.append(f"<unk_{i}>")
         
         # Create Kronecker codec
         pf_config = KroneckerConfig(
@@ -139,7 +166,8 @@ def get_reversible_model(device=None, print_info=True, embedding_type="kronecker
         pf_codec = KroneckerEmbeddings(pf_config)
         
         if print_info:
-            print_rank_0("  Using Kronecker Product Embeddings (byte-level)")
+            print_rank_0(f"  Using Kronecker Product Embeddings (byte-level)")
+            print_rank_0(f"  Loaded vocabulary from tokenizer: {vocab_size:,} tokens")
     else:
         bpe_vocab = None
         pf_codec = None

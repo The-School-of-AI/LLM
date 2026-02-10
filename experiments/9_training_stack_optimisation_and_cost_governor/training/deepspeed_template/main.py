@@ -207,7 +207,7 @@ def main():
     print_rank_0("\n[2/5] Loading model...")
     if args.model_type == "reversible":
         print_rank_0("  Using Reversible Model (memory-efficient)")
-        model = get_reversible_model(print_info=True, embedding_type=args.embedding_type)
+        model = get_reversible_model(print_info=True, embedding_type=args.embedding_type, tokenizer=tokenizer)
     elif args.model_type == "qwen2_moe":
         print_rank_0("  Using Qwen2 MoE Model")
         model = get_qwen2_moe_model(print_info=True)
