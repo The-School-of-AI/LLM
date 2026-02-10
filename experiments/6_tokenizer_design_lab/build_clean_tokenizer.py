@@ -1,4 +1,4 @@
-"""Build clean 128k tokenizer from base gptoss.
+"""Build clean 131K tokenizer from base gptoss.
 
 Steps:
 1. Load base gptoss tokenizer
@@ -7,9 +7,14 @@ Steps:
    - >32 chars
    - Contains blocked language scripts (non-English, non-Indic)
 4. For each removed token, also remove the merge that produces it
-5. Move Indic tokens to end
-6. Add 512 special tokens at start
-7. Reduce to 128k by removing lowest-priority general tokens
+5. Reduce to 131,072 (2^17) by removing lowest-priority general tokens
+6. Assign IDs: General tokens first (ID 0+), then Indic tokens
+7. Add special tokens at end: base (80) + additional (26) + reserved (250)
+
+Final layout:
+  IDs 0 to G-1:        General tokens from gptoss
+  IDs G to N-1:        Indic tokens from gptoss
+  IDs N to 131071:     Special tokens (base + additional + reserved = 356)
 
 Key: Removal cascades properly - if token X is removed, the merge producing X
 is removed, so any token depending on X via merges cannot be built.
@@ -18,13 +23,17 @@ is removed, so any token depending on X via merges cannot be built.
 import csv
 import json
 import os
-import re
-import shutil
+
+from special_tokens import (
+    BASE_SPECIAL_TOKENS,
+    ADDITIONAL_SPECIAL_TOKENS,
+    NUM_ADDITIONAL_SPECIAL,
+)
 
 BASE_GPTOSS_PATH = "Tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
-OUTPUT_DIR = "gptoss_pruning"
-TARGET_VOCAB_SIZE = 131046  # 131072 - 26 (for add_special_tokens.py)
-NUM_SPECIAL = 512
+OUTPUT_DIR = "tsai_131k_tokenizer"
+TARGET_VOCAB_SIZE = 131072  # 2^17
+NUM_RESERVED = 250
 MAX_TOKEN_LEN = 32
 
 # ---------------------------------------------------------------------------
@@ -133,55 +142,56 @@ def is_indic(token: str) -> bool:
     return False
 
 
-def build_special_tokens():
-    """Create 512 special tokens."""
+def build_special_tokens(start_id: int):
+    """Create all special tokens (base + additional + reserved) starting at given ID."""
     tokens = []
+    current_id = start_id
 
-    doc = ["<|begin_of_text|>", "<|end_of_text|>", "<|pad|>", "<|unk|>",
-           "<|sep|>", "<|cls|>", "<|mask|>", "<|newline|>",
-           "<|paragraph|>", "<|document|>"]
-    chat = ["<|system|>", "<|user|>", "<|assistant|>", "<|tool|>",
-            "<|function|>", "<|context|>", "<|instruction|>", "<|response|>",
-            "<|turn|>", "<|end_turn|>"]
-    code = ["<|code_begin|>", "<|code_end|>", "<|output_begin|>", "<|output_end|>",
-            "<|error|>", "<|stdin|>", "<|stdout|>", "<|stderr|>",
-            "<|file_begin|>", "<|file_end|>"]
-    lang = ["<|lang:python|>", "<|lang:javascript|>", "<|lang:typescript|>", "<|lang:java|>",
-            "<|lang:cpp|>", "<|lang:c|>", "<|lang:rust|>", "<|lang:go|>",
-            "<|lang:ruby|>", "<|lang:php|>", "<|lang:swift|>", "<|lang:kotlin|>",
-            "<|lang:scala|>", "<|lang:r|>", "<|lang:julia|>", "<|lang:sql|>",
-            "<|lang:html|>", "<|lang:css|>", "<|lang:bash|>", "<|lang:shell|>"]
-    tool = ["<|json_begin|>", "<|json_end|>", "<|tool_call|>", "<|tool_result|>",
-            "<|function_call|>", "<|function_result|>", "<|api_request|>", "<|api_response|>",
-            "<|schema|>", "<|arguments|>"]
-    source = ["<|source:wikipedia|>", "<|source:github|>", "<|source:arxiv|>", "<|source:web|>",
-              "<|source:book|>", "<|source:code|>", "<|source:docs|>", "<|source:news|>",
-              "<|source:social|>", "<|source:other|>"]
-    think = ["<|think_begin|>", "<|think_end|>", "<|step|>", "<|plan|>",
-             "<|reflect|>", "<|verify|>", "<|conclude|>", "<|reason|>",
-             "<|analyze|>", "<|synthesize|>"]
-    fmt = ["<|markdown|>", "<|latex|>", "<|table|>", "<|list|>",
-           "<|heading|>", "<|quote|>", "<|link|>", "<|image|>",
-           "<|math|>", "<|diagram|>", "<|chart|>", "<|formula|>",
-           "<|footnote|>", "<|citation|>", "<|reference|>", "<|caption|>",
-           "<|bullet|>", "<|numbered|>", "<|checkbox|>", "<|definition|>"]
+    # Base special tokens
+    for content in BASE_SPECIAL_TOKENS:
+        tokens.append({
+            "id": current_id,
+            "content": content,
+            "single_word": False,
+            "lstrip": False,
+            "rstrip": False,
+            "normalized": False,
+            "special": True,
+        })
+        current_id += 1
 
-    all_defined = doc + chat + code + lang + tool + source + think + fmt
-    while len(all_defined) < 256:
-        all_defined.append(f"<|special_{len(all_defined)}|>")
+    # Additional special tokens (FIM, Vision, etc.)
+    for content in ADDITIONAL_SPECIAL_TOKENS:
+        tokens.append({
+            "id": current_id,
+            "content": content,
+            "single_word": False,
+            "lstrip": False,
+            "rstrip": False,
+            "normalized": False,
+            "special": True,
+        })
+        current_id += 1
 
-    for i, content in enumerate(all_defined[:256]):
-        tokens.append({"id": i, "content": content, "single_word": False,
-                       "lstrip": False, "rstrip": False, "normalized": False, "special": True})
-    for i in range(256, 512):
-        tokens.append({"id": i, "content": f"<|reserved_{i}|>", "single_word": False,
-                       "lstrip": False, "rstrip": False, "normalized": False, "special": True})
+    # Reserved tokens
+    for i in range(NUM_RESERVED):
+        tokens.append({
+            "id": current_id,
+            "content": f"<|reserved_{i}|>",
+            "single_word": False,
+            "lstrip": False,
+            "rstrip": False,
+            "normalized": False,
+            "special": True,
+        })
+        current_id += 1
+
     return tokens
 
 
 def main():
     print("=" * 70)
-    print("Building Clean 128K Tokenizer")
+    print("Building Clean 131K (2^17) Tokenizer")
     print("=" * 70)
 
     # Load base gptoss
@@ -275,14 +285,19 @@ def main():
     print(f"    Indic tokens: {len(indic_tokens):,}")
     print(f"    General tokens: {len(general_tokens):,}")
 
-    # Calculate budget for 128k
-    vocab_budget = TARGET_VOCAB_SIZE - NUM_SPECIAL
+    # Calculate budget for 131K (special tokens at end)
+    num_base_special = len(BASE_SPECIAL_TOKENS)
+    num_special_total = num_base_special + NUM_ADDITIONAL_SPECIAL + NUM_RESERVED
+    vocab_budget = TARGET_VOCAB_SIZE - num_special_total
     num_indic = len(indic_tokens)
     num_general_max = vocab_budget - num_indic
 
     print(f"\n[7] Token budget:")
-    print(f"    Target: {TARGET_VOCAB_SIZE:,}")
-    print(f"    Special: {NUM_SPECIAL}")
+    print(f"    Target: {TARGET_VOCAB_SIZE:,} (2^17)")
+    print(f"    Base special: {num_base_special}")
+    print(f"    Additional special: {NUM_ADDITIONAL_SPECIAL}")
+    print(f"    Reserved: {NUM_RESERVED}")
+    print(f"    Total special (at end): {num_special_total}")
     print(f"    Vocab budget: {vocab_budget:,}")
     print(f"    Indic (all): {num_indic:,}")
     print(f"    General max: {num_general_max:,}")
@@ -291,25 +306,24 @@ def main():
         kept_general = general_tokens[:num_general_max]
         removed_general = general_tokens[num_general_max:]
         print(f"    General kept: {len(kept_general):,}")
-        print(f"    General removed (for 128k): {len(removed_general):,}")
+        print(f"    General removed (for 131K): {len(removed_general):,}")
 
         # Add to removed_tokens for logging
         for token, old_id in removed_general:
-            removed_tokens[token] = "128k_cutoff"
+            removed_tokens[token] = "131k_cutoff"
     else:
         kept_general = general_tokens
         removed_general = []
         print(f"    General kept: {len(kept_general):,}")
 
-    # Build final vocab with new IDs
+    # Build final vocab with new IDs (gptoss tokens first, special at end)
     print("\n[8] Assigning new IDs...")
-    special_tokens = build_special_tokens()
-    final_vocab = {t["content"]: t["id"] for t in special_tokens}
+    final_vocab = {}
     token_mapping = []
 
-    next_id = NUM_SPECIAL
+    next_id = 0
 
-    # General tokens first
+    # General tokens first (starting at ID 0, like original gptoss)
     for token, old_id in kept_general:
         final_vocab[token] = next_id
         token_mapping.append((token, old_id, next_id, "general"))
@@ -317,7 +331,7 @@ def main():
 
     general_end_id = next_id - 1
 
-    # Indic tokens at the end
+    # Indic tokens
     for token, old_id in indic_tokens:
         final_vocab[token] = next_id
         token_mapping.append((token, old_id, next_id, "indic"))
@@ -325,10 +339,19 @@ def main():
 
     indic_end_id = next_id - 1
 
+    # Special tokens at the end (base + additional + reserved)
+    special_start_id = next_id
+    special_tokens = build_special_tokens(special_start_id)
+    for t in special_tokens:
+        final_vocab[t["content"]] = t["id"]
+        token_mapping.append((t["content"], -1, t["id"], "special"))
+
+    special_end_id = special_start_id + len(special_tokens) - 1
+
     print(f"    Final vocab size: {len(final_vocab):,}")
-    print(f"    Special: IDs 0-{NUM_SPECIAL - 1}")
-    print(f"    General: IDs {NUM_SPECIAL}-{general_end_id}")
+    print(f"    General: IDs 0-{general_end_id}")
     print(f"    Indic: IDs {general_end_id + 1}-{indic_end_id}")
+    print(f"    Special (base+additional+reserved): IDs {special_start_id}-{special_end_id}")
 
     # Filter merges again for final vocab
     print("\n[9] Final merge filtering...")
@@ -359,9 +382,36 @@ def main():
     with open(os.path.join(OUTPUT_DIR, "tokenizer.json"), "w", encoding="utf-8") as f:
         json.dump(new_tokenizer, f, ensure_ascii=False)
 
+    # Copy and update tokenizer_config.json
     config_src = os.path.join(os.path.dirname(BASE_GPTOSS_PATH), "tokenizer_config.json")
+    config_dst = os.path.join(OUTPUT_DIR, "tokenizer_config.json")
     if os.path.exists(config_src):
-        shutil.copy2(config_src, os.path.join(OUTPUT_DIR, "tokenizer_config.json"))
+        with open(config_src, encoding="utf-8") as f:
+            config = json.load(f)
+
+        # Update added_tokens_decoder with all special tokens
+        config["added_tokens_decoder"] = {}
+        for t in special_tokens:
+            config["added_tokens_decoder"][str(t["id"])] = {
+                "content": t["content"],
+                "lstrip": t["lstrip"],
+                "normalized": t["normalized"],
+                "rstrip": t["rstrip"],
+                "single_word": t["single_word"],
+                "special": t["special"],
+            }
+
+        with open(config_dst, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+    # Create special_tokens_map.json
+    special_tokens_map = {
+        "bos_token": "<|begin_of_text|>",
+        "eos_token": "<|end_of_text|>",
+        "pad_token": "<|end_of_text|>",
+    }
+    with open(os.path.join(OUTPUT_DIR, "special_tokens_map.json"), "w", encoding="utf-8") as f:
+        json.dump(special_tokens_map, f, indent=2, ensure_ascii=False)
 
     # Write reports
     with open(os.path.join(OUTPUT_DIR, "build_report.csv"), "w", newline="", encoding="utf-8") as f:
@@ -377,6 +427,8 @@ def main():
             writer.writerow([token, reason])
 
     print(f"    {OUTPUT_DIR}/tokenizer.json")
+    print(f"    {OUTPUT_DIR}/tokenizer_config.json")
+    print(f"    {OUTPUT_DIR}/special_tokens_map.json")
     print(f"    {OUTPUT_DIR}/build_report.csv")
     print(f"    {OUTPUT_DIR}/removed_tokens.csv")
 
