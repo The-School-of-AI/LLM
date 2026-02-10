@@ -1,55 +1,91 @@
 {
   "hardware": {
-    "num_gpus": 36,
-    "price_per_gpu_hour": 4,
+    "description": "AWS p5en.48xlarge: 8x NVIDIA H200 SXM (141GB HBM3e each)",
+    "num_gpus": 8,
+    "price_per_gpu_hour": 5.20,
     "tflops_per_gpu": {
-      "bf16": 989.0,
-      "fp8": 1979.0
+      "bf16": 1979.0,
+      "fp8": 3958.0
     },
-    "expert_parallel_size": 1
-  },
-  "zero_optimization": {
-    "stage": 2,
-    "offload_optimizer": {
-      "device": "cpu"
+    "gpu_memory_gb": 141,
+    "zero_efficiency": {
+      "zero0": 1.0,
+      "zero2": 0.95,
+      "zero3": 0.70,
+      "zero_infinity": 0.25
     },
-    "offload_param": {
-      "device": "cpu"
+    "scaling_efficiency": {
+      "base_gpus": 8,
+      "efficiency_at_base": 1.0,
+      "efficiency_at_64": 0.90,
+      "efficiency_at_256": 0.80,
+      "efficiency_at_1024": 0.65
     },
-    "pin_memory": 75
+    "expert_parallel_size": 8,
+    "cpu_offload": false,
+    "cpu_offload_config": {
+      "system_memory_limit_gb": 1000,
+      "zero_infinity": 0.25
+    },
+    "activation_checkpointing": {
+      "partition_activations": true,
+      "cpu_checkpointing": false,
+      "checkpoint_factor": 1
+    },
+    "zero_optimization": {
+      "stage": 2,
+      "offload_optimizer": {"device": "none"},
+      "offload_param": {"device": "none"}
+    },
+    "train_micro_batch_size_per_gpu": 8,
+    "gradient_accumulation_steps": 16,
+    "mfu": 0.3
   },
-  "activation_checkpointing": {
-    "partition_activations": true,
-    "cpu_checkpointing": false,
-    "checkpoint_factor": 0.1,
-    "_comment": "checkpoint_factor: 1.0=none, 0.5=half layers, 0.1=aggressive"
-  },
-  "bf16": {
-    "enabled": true
-  },
-  "train_micro_batch_size_per_gpu": 1,
-  "gradient_accumulation_steps": 1,
-  "mfu": 0.3,
   "stages": [
     {
-      "name": "Stage 4 (70B MoE)",
-      "total_tokens": 240000000000,
+      "name": "Stage 4: 70B MoE (DeltaNet+GSA)",
+      "total_tokens": 200000000000,
       "architecture": {
-        "vocab_size": 32000,
-        "hidden_size": 2048,
-        "intermediate_size": 4096,
-        "moe_intermediate_size": 512,
-        "num_layers": 40,
-        "sequence_length": 4096,
-        "num_heads": 16,
-        "num_kv_heads": 4,
-        "attention_type": "gqa:4:1",
-        "num_routed_experts": 512,
-        "num_shared_experts": 4,
+        "vocab_size": 131072,
+        "hidden_size": 4096,
+        "intermediate_size": 1024,
+        "moe_intermediate_size": 1024,
+        "num_layers": 20,
+        "sequence_length": 8192,
+        "num_heads": 32,
+        "num_kv_heads": 16,
+        "attention_type": "deltanet-gsa:3:1:512",
+        "deltanet": {
+          "num_deltanet_layers": 15,
+          "num_gsa_layers": 5,
+          "delta_v_heads": 32,
+          "delta_qk_heads": 16,
+          "delta_head_dim": 128,
+          "delta_gate_dim": 384,
+          "gsa_num_heads": 16,
+          "gsa_head_dim": 256,
+          "gsa_indexer_heads": 4,
+          "gsa_indexer_dim": 32,
+          "gsa_k_base": 512
+        },
+        "num_routed_experts": 256,
         "num_null_experts": 256,
+        "num_shared_experts": 1,
+        "shared_expert_intermediate_size": 2048,
         "top_k": 8,
+        "data_sparsity": 0.5,
+        "n_streams": 4,
         "moe_layer_frequency": 1,
-        "tie_embeddings": true,
+        "use_multi_token_prediction": true,
+        "mtp_num_predictions": 2,
+        "lm_head_multiplier": 1,
+        "embedding_type": "kronecker",
+        "kronecker_config": {
+          "char_dim": 256,
+          "pos_dim": 32,
+          "D": 8192
+        },
+        "tie_embeddings": false,
         "precision": {
           "weight_precision": "auto",
           "gradient_precision": "fp32",
