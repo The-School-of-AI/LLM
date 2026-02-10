@@ -5,6 +5,9 @@ These kernels provide efficient GPU implementations for:
 1. Sparse attention computation (avoiding O(L^2) memory)
 2. Gated indexer computation
 3. Fused gated attention operations
+4. Fused Sinkhorn-Knopp (all iterations in 1 kernel launch)
+5. Fused RMSNorm + SiLU + Gate (3 ops -> 1 kernel launch)
+6. RMSNorm with optional residual fusion
 
 Usage:
     from components.kernels import triton_sparse_attention, HAS_TRITON
@@ -36,6 +39,11 @@ if HAS_TRITON:
         triton_sinkhorn_knopp,
         pytorch_sinkhorn_knopp,
     )
+    from .triton_fused_norm_gate import (
+        triton_fused_norm_silu_gate,
+        pytorch_fused_norm_silu_gate,
+        FusedRMSNormSiLUGate,
+    )
 else:
     # Provide fallback functions that raise helpful errors
     def triton_sparse_attention(*args, **kwargs):
@@ -53,9 +61,18 @@ else:
             "Triton is not installed. Install with: pip install triton"
         )
 
+    def triton_fused_norm_silu_gate(*args, **kwargs):
+        raise ImportError(
+            "Triton is not installed. Install with: pip install triton"
+        )
+
     # Import PyTorch fallbacks
     from .triton_sparse_attn import pytorch_sparse_attention
     from .triton_sinkhorn import pytorch_sinkhorn_knopp
+    from .triton_fused_norm_gate import (
+        pytorch_fused_norm_silu_gate,
+        FusedRMSNormSiLUGate,
+    )
 
 __all__ = [
     "HAS_TRITON",
@@ -64,4 +81,7 @@ __all__ = [
     "pytorch_sparse_attention",
     "triton_sinkhorn_knopp",
     "pytorch_sinkhorn_knopp",
+    "triton_fused_norm_silu_gate",
+    "pytorch_fused_norm_silu_gate",
+    "FusedRMSNormSiLUGate",
 ]

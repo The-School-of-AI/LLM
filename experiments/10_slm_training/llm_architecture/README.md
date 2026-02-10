@@ -167,6 +167,29 @@ python training/test_wikitext2_reference_gpt2.py \
     --use-torch-compile \
     --torch-compile-mode max-autotune-no-cudagraphs
 
+# Force Flash/Efficient SDPA backend for compile stability
+python training/test_wikitext2_reference_gpt2.py \
+    --config configs/1b_reference.yaml \
+    --tokenizer gpt2 \
+    --embedding-type standard \
+    --seq-length 4096 \
+    --batch-size 1 \
+    --max-steps 100 \
+    --strict-arch \
+    --use-torch-compile \
+    --gsa-backend flash
+
+# Force Triton sparse kernel path (eager mode)
+python training/test_wikitext2_reference_gpt2.py \
+    --config configs/1b_reference.yaml \
+    --tokenizer gpt2 \
+    --embedding-type standard \
+    --seq-length 4096 \
+    --batch-size 1 \
+    --max-steps 100 \
+    --strict-arch \
+    --gsa-backend triton
+
 # Long-sequence memory tip (CUDA allocator)
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256 \
 python training/test_wikitext2_reference_gpt2.py --config configs/1b_reference.yaml --tokenizer gpt2 --embedding-type standard --seq-length 4096 --batch-size 1 --max-steps 100 --strict-arch
@@ -271,14 +294,17 @@ Cross-Entropy Loss (shifted by 1 position for next-token prediction)
 
 ```
 Sparse Attention Dispatch Priority:
-  1. Triton Kernel     (CUDA + triton installed + enabled)
-  2. PyTorch Chunked   (optimized gather + batched SDPA)
-  3. Legacy PyTorch    (naive implementation, fallback)
+  1. Triton Kernel     (CUDA + triton installed + enabled + eager mode)
+  2. Flash/Efficient SDPA (compile-friendly path, uses SDPA backend dispatch)
+  3. PyTorch Chunked   (optimized sparse gather fallback)
+  4. Dense SDPA        (last-resort correctness fallback)
 
-Long Sequence Optimization (seq_q * seq_kv > 16M elements):
-  -> Chunked Indexer: processes queries in chunks of 256
-  -> Avoids materializing full [seq_q, seq_kv] score matrix
-  -> Fused qw_proj reduces per-chunk matmuls from 2 to 1
+Reference GSA backend controls:
+  -> gsa_sparse_backend: auto|triton|pytorch|flash|dense
+  -> gsa_use_triton_kernels: enable/disable Triton
+  -> gsa_triton_min_seq_len: threshold for Triton in auto mode
+  -> gsa_prefer_flash: prefer Flash/Efficient SDPA kernels on CUDA
+  -> gsa_sdpa_chunk_size: query chunk size for sparse SDPA gather (lower saves memory)
 ```
 
 ## Model Configurations
@@ -342,6 +368,10 @@ gsa_gate_bias_init = 0.5          # sigmoid(0.5) ~ 0.62
 
 # Triton Optimization
 gsa_use_triton_kernels = True     # use Triton kernels when available
+gsa_sparse_backend = "auto"       # auto, triton, pytorch, flash, dense
+gsa_triton_min_seq_len = 512      # threshold for auto->triton
+gsa_prefer_flash = True           # prefer Flash/Efficient SDPA on CUDA
+gsa_sdpa_chunk_size = 16          # lower for long-context memory safety
 ```
 
 ### YAML Config Structure
@@ -472,6 +502,7 @@ Reference script (`training/test_wikitext2_reference_gpt2.py`) adds:
 - `--embedding-type {standard,kronecker}`
 - `--disable-reversible-checkpoint` (not recommended at long sequence lengths)
 - `--torch-compile-fullgraph`, `--torch-compile-dynamic`, `--torch-compile-backend`
+- `--no-triton`, `--gsa-backend`, `--gsa-triton-min-seq-len`, `--no-flash-sdpa`, `--gsa-sdpa-chunk-size`
 
 ### Training Configuration
 

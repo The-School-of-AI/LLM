@@ -53,7 +53,7 @@ attention:
   gsa_num_indexer_heads: 4
   gsa_k_base: 512
   gsa_k_min: 32
-  gsa_k_max: 1024
+  gsa_k_max: 256
 
   # Layer split: 75% Delta / 25% GSA
   mixer_delta_ratio: 0.75
@@ -69,6 +69,10 @@ attention:
   gsa_gate_bias_init: 0.5
   gsa_indexer_activation: "sigmoid"
   gsa_use_triton_kernels: true
+  gsa_sparse_backend: "auto"
+  gsa_triton_min_seq_len: 512
+  gsa_prefer_flash: true
+  gsa_sdpa_chunk_size: 16
   ds_compressed_dim: 512
   ds_rope_head_dim: 32
   ds_num_shared_experts: 1
@@ -108,7 +112,7 @@ connection:
   connection_type: "mhc_v2"
   mhc_expansion_rate: 4
   mhc_alpha_init: 0.1
-  mhc_sinkhorn_iters: 20
+  mhc_sinkhorn_iters: 10
 
 # -----------------------------------------------------------------------------
 # Output Head
@@ -154,4 +158,3 @@ training:
   amp_dtype: "bfloat16"
   device: "auto"
   log_interval: 10
-

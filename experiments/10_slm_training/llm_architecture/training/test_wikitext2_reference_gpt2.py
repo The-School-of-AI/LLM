@@ -286,8 +286,30 @@ def train_reference(
     torch_compile_dynamic: bool = False,
     torch_compile_backend: str = "inductor",
 ) -> None:
-    model = model.to(device)
-    model.train()
+    eager_model = model.to(device)
+    eager_model.train()
+    run_model = eager_model
+    compile_active = False
+
+    def _is_torch_compile_error(exc: BaseException) -> bool:
+        module = type(exc).__module__ or ""
+        name = type(exc).__name__.lower()
+        msg = str(exc).lower()
+        if module.startswith("torch._dynamo") or module.startswith("torch._inductor"):
+            return True
+        if "dynamo" in name or "backendcompilerfailed" in name:
+            return True
+        if "cannot access local variable 'tracer_output'" in msg:
+            return True
+        keywords = (
+            "torch._dynamo",
+            "torch.compile",
+            "inductor",
+            "aotautograd",
+            "backendcompilerfailed",
+            "fake tensor",
+        )
+        return any(k in msg for k in keywords)
 
     if use_torch_compile:
         if not hasattr(torch, "compile"):
@@ -299,31 +321,42 @@ def train_reference(
 
             # CUDAGraph modes are unstable with MTP multi-output heads.
             cudagraph_modes = {"reduce-overhead", "max-autotune"}
-            if mode in cudagraph_modes and getattr(model, "mtp_block", None) is not None:
+            if mode in cudagraph_modes and getattr(eager_model, "mtp_block", None) is not None:
                 print(
                     f"[torch.compile] mode='{mode}' uses CUDAGraphs and is unstable with MTP. "
                     "Switching to 'max-autotune-no-cudagraphs'."
                 )
                 mode = "max-autotune-no-cudagraphs"
 
+            if (
+                getattr(eager_model, "stack", None) is not None
+                and getattr(eager_model.stack, "use_checkpoint", False)
+            ):
+                print(
+                    "[torch.compile] Reversible checkpoint stack detected. "
+                    "Initial compile may be slow; use --torch-compile-mode default for faster startup."
+                )
+
             print(
                 f"[torch.compile] Applying compile(mode='{mode}', backend='{backend}', "
                 f"fullgraph={torch_compile_fullgraph}, dynamic={dynamic})"
             )
             try:
-                model = torch.compile(
-                    model,
+                run_model = torch.compile(
+                    eager_model,
                     mode=mode,
                     backend=backend,
                     fullgraph=torch_compile_fullgraph,
                     dynamic=dynamic,
                 )
                 print("[torch.compile] Model compiled successfully.")
+                compile_active = True
             except Exception as exc:
                 print(f"[torch.compile] Compile failed ({exc}); continuing in eager mode.")
+                run_model = eager_model
 
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        eager_model.parameters(),
         lr=learning_rate,
         betas=(beta1, beta2),
         eps=eps,
@@ -331,6 +364,13 @@ def train_reference(
     )
 
     amp_dtype = get_amp_dtype(amp_dtype_str)
+
+    # Keep checkpoint recompute in mixed precision to avoid fp32 memory spikes.
+    if getattr(eager_model, "stack", None) is not None:
+        eager_model.stack.checkpoint_autocast_enabled = bool(
+            use_amp and device.type in {"cuda", "mps"}
+        )
+        eager_model.stack.checkpoint_autocast_dtype = amp_dtype
 
     scaler_enabled = use_amp and device.type == "cuda" and amp_dtype == torch.float16
     scaler = GradScaler("cuda", enabled=scaler_enabled)
@@ -380,11 +420,33 @@ def train_reference(
                 enabled=autocast_enabled,
                 dtype=amp_dtype,
             ):
-                outputs = model(
-                    input_ids=input_ids,
-                    next_token_ids=next_token_ids,
-                    labels=labels,
-                )
+                try:
+                    outputs = run_model(
+                        input_ids=input_ids,
+                        next_token_ids=next_token_ids,
+                        labels=labels,
+                    )
+                except Exception as exc:
+                    if compile_active and _is_torch_compile_error(exc):
+                        short_msg = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+                        print(
+                            f"[torch.compile] Runtime compile failure ({type(exc).__name__}: {short_msg}). "
+                            "Falling back to eager mode."
+                        )
+                        try:
+                            if hasattr(torch, "_dynamo"):
+                                torch._dynamo.reset()
+                        except Exception:
+                            pass
+                        run_model = eager_model
+                        compile_active = False
+                        outputs = run_model(
+                            input_ids=input_ids,
+                            next_token_ids=next_token_ids,
+                            labels=labels,
+                        )
+                    else:
+                        raise
                 if not isinstance(outputs, ReferenceLLMOutput):
                     raise TypeError(
                         f"Expected ReferenceLLMOutput, got {type(outputs)}. "
@@ -412,7 +474,7 @@ def train_reference(
 
         if scaler.is_enabled():
             scaler.unscale_(optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip).item()
+        grad_norm = torch.nn.utils.clip_grad_norm_(eager_model.parameters(), gradient_clip).item()
 
         lr = lr_for_step(global_step + 1)
         for group in optimizer.param_groups:
@@ -537,6 +599,35 @@ def main() -> None:
         default=None,
         help="torch.compile backend (default: inductor).",
     )
+    parser.add_argument(
+        "--no-triton",
+        action="store_true",
+        help="Disable Triton sparse kernels in ReferenceGSA.",
+    )
+    parser.add_argument(
+        "--gsa-backend",
+        type=str,
+        default=None,
+        choices=["auto", "triton", "pytorch", "flash", "dense"],
+        help="ReferenceGSA sparse attention backend policy.",
+    )
+    parser.add_argument(
+        "--gsa-triton-min-seq-len",
+        type=int,
+        default=None,
+        help="Minimum sequence length to use Triton in auto mode.",
+    )
+    parser.add_argument(
+        "--no-flash-sdpa",
+        action="store_true",
+        help="Disable Flash/Efficient SDPA preference for ReferenceGSA.",
+    )
+    parser.add_argument(
+        "--gsa-sdpa-chunk-size",
+        type=int,
+        default=None,
+        help="Chunk size for ReferenceGSA SDPA sparse gather path (lower = less memory).",
+    )
 
     args = parser.parse_args()
     set_seed(args.seed)
@@ -628,6 +719,17 @@ def main() -> None:
     if args.torch_compile_backend is not None:
         train_cfg["torch_compile_backend"] = args.torch_compile_backend
 
+    if args.no_triton:
+        model_config.attention.gsa_use_triton_kernels = False
+    if args.gsa_backend is not None:
+        model_config.attention.gsa_sparse_backend = args.gsa_backend
+    if args.gsa_triton_min_seq_len is not None:
+        model_config.attention.gsa_triton_min_seq_len = args.gsa_triton_min_seq_len
+    if args.no_flash_sdpa:
+        model_config.attention.gsa_prefer_flash = False
+    if args.gsa_sdpa_chunk_size is not None:
+        model_config.attention.gsa_sdpa_chunk_size = max(1, int(args.gsa_sdpa_chunk_size))
+
     align_model_context_to_seq_length(model_config, train_cfg["seq_length"])
     print_architecture_report(model_config, strict=args.strict_arch)
 
@@ -644,6 +746,14 @@ def main() -> None:
 
     print(f"Tokenizer: {args.tokenizer} | vocab_size={model_config.vocab_size}")
     print(f"Embedding mode: {embedding_type}")
+    print(
+        "Reference GSA backend: "
+        f"{model_config.attention.gsa_sparse_backend} | "
+        f"triton={model_config.attention.gsa_use_triton_kernels} | "
+        f"triton_min_seq_len={model_config.attention.gsa_triton_min_seq_len} | "
+        f"prefer_flash={model_config.attention.gsa_prefer_flash} | "
+        f"sdpa_chunk_size={model_config.attention.gsa_sdpa_chunk_size}"
+    )
 
     token_ids = build_token_ids(
         split=args.dataset_split,

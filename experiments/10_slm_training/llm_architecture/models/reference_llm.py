@@ -133,16 +133,21 @@ class ReferenceLLM(nn.Module):
         self.layer_types = layer_types
 
         # ================================================================
-        # Reversible Midpoint Integration
+        # Integration: Reversible Midpoint or Sequential
         # ================================================================
         int_config = config.integration
-        self.stack = ReversibleMidpointStack(
-            self.layers,
-            step_size=int_config.step_size,
-            a=int_config.a,
-            noise_eps=int_config.noise_eps,
-            bootstrap=int_config.bootstrap,
-        )
+        self.use_reversible = int_config.use_reversible
+
+        if self.use_reversible:
+            self.stack = ReversibleMidpointStack(
+                self.layers,
+                step_size=int_config.step_size,
+                a=int_config.a,
+                noise_eps=int_config.noise_eps,
+                bootstrap=int_config.bootstrap,
+            )
+        else:
+            self.stack = None
 
         # ================================================================
         # Final normalization
@@ -183,7 +188,10 @@ class ReferenceLLM(nn.Module):
         print(f"  Streams: {self.n_streams}")
         print(f"  MTP: {'Enabled (Full Transformer)' if self.mtp_block else 'Disabled'}")
         print(f"  Embedding: {'Kronecker' if self.use_kronecker else 'Standard'}")
-        print(f"  Reversible: step={int_config.step_size}, a={int_config.a}")
+        if self.use_reversible:
+            print(f"  Integration: Reversible Midpoint (step={int_config.step_size}, a={int_config.a})")
+        else:
+            print(f"  Integration: Sequential (direct forward, no reversible overhead)")
         print(f"  Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
 
     def _init_weights(self, module):
@@ -245,8 +253,16 @@ class ReferenceLLM(nn.Module):
         x_stream = torch.zeros(B, T, self.n_streams, D, device=x.device, dtype=x.dtype)
         x_stream[:, :, 0, :] = x
 
-        # 3. Pass through reversible stack
-        x_stream, total_aux_loss = self.stack(x_stream)
+        # 3. Pass through layer stack (reversible or sequential)
+        if self.use_reversible and self.stack is not None:
+            x_stream, total_aux_loss = self.stack(x_stream)
+        else:
+            # Sequential forward: iterate layers directly (1x forward per layer)
+            total_aux_loss = x_stream.new_zeros((), dtype=torch.float32)
+            for layer in self.layers:
+                x_stream, aux = layer(x_stream, attention_mask=attention_mask)
+                if aux is not None:
+                    total_aux_loss = total_aux_loss + aux
 
         # 4. Collapse streams by mean
         h_main = x_stream.mean(dim=2)
@@ -391,5 +407,5 @@ class ReferenceLLM(nn.Module):
             'n_streams': self.n_streams,
             'embedding_type': self.embedding_type_str,
             'mtp_enabled': self.mtp_block is not None,
-            'reversible': True,
+            'reversible': self.use_reversible,
         }

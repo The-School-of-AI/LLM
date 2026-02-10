@@ -24,6 +24,18 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 from typing import List, Tuple
+from contextlib import nullcontext
+
+try:
+    import torch._dynamo as _dynamo
+    _dynamo_disable = _dynamo.disable
+except Exception:
+    def _dynamo_disable(fn=None, recursive=True):
+        if fn is None:
+            def decorator(f):
+                return f
+            return decorator
+        return fn
 
 
 class ReversibleMidpointStack(nn.Module):
@@ -53,6 +65,8 @@ class ReversibleMidpointStack(nn.Module):
         noise_eps: float = 0.0,
         bootstrap: str = "euler",
         use_checkpoint: bool = True,
+        checkpoint_autocast_enabled: bool = False,
+        checkpoint_autocast_dtype: torch.dtype = torch.bfloat16,
     ):
         super().__init__()
         self.layers = layers
@@ -61,10 +75,24 @@ class ReversibleMidpointStack(nn.Module):
         self.noise_eps = noise_eps
         self.bootstrap = bootstrap
         self.use_checkpoint = use_checkpoint
+        self.checkpoint_autocast_enabled = checkpoint_autocast_enabled
+        self.checkpoint_autocast_dtype = checkpoint_autocast_dtype
+
+    def _autocast_context(self, x: torch.Tensor):
+        if not self.checkpoint_autocast_enabled:
+            return nullcontext()
+        if x.device.type not in {"cuda", "mps"}:
+            return nullcontext()
+        return torch.autocast(
+            device_type=x.device.type,
+            enabled=True,
+            dtype=self.checkpoint_autocast_dtype,
+        )
 
     def _euler_step(self, x, layer):
         """Single Euler step: x_{n+1} = x_n + h * f(x_n)"""
-        delta, aux = layer.force(x)
+        with self._autocast_context(x):
+            delta, aux = layer.force(x)
         x_new = x + self.step_size * delta
         return x_new, aux
 
@@ -77,12 +105,13 @@ class ReversibleMidpointStack(nn.Module):
         With blending coefficient a:
             x_{n+1} = x_n + h * ((1-a)*f(x_n) + a*f(x_mid))
         """
-        # Evaluate at current point
-        delta_n, aux_n = layer.force(x)
+        with self._autocast_context(x):
+            # Evaluate at current point
+            delta_n, aux_n = layer.force(x)
 
-        # Midpoint evaluation
-        x_mid = x + (self.step_size / 2.0) * delta_n
-        delta_mid, aux_mid = layer.force(x_mid)
+            # Midpoint evaluation
+            x_mid = x + (self.step_size / 2.0) * delta_n
+            delta_mid, aux_mid = layer.force(x_mid)
 
         # Blended update
         blended_delta = (1.0 - self.a) * delta_n + self.a * delta_mid
@@ -95,7 +124,8 @@ class ReversibleMidpointStack(nn.Module):
     def _checkpointed_euler_step(self, x, layer):
         """Euler step with gradient checkpointing."""
         def step_fn(x_in):
-            delta, aux = layer.force(x_in)
+            with self._autocast_context(x_in):
+                delta, aux = layer.force(x_in)
             x_out = x_in + self.step_size * delta
             return x_out, aux
 
@@ -111,9 +141,10 @@ class ReversibleMidpointStack(nn.Module):
     def _checkpointed_midpoint_step(self, x, layer):
         """Midpoint step with gradient checkpointing."""
         def step_fn(x_in):
-            delta_n, aux_n = layer.force(x_in)
-            x_mid = x_in + (self.step_size / 2.0) * delta_n
-            delta_mid, aux_mid = layer.force(x_mid)
+            with self._autocast_context(x_in):
+                delta_n, aux_n = layer.force(x_in)
+                x_mid = x_in + (self.step_size / 2.0) * delta_n
+                delta_mid, aux_mid = layer.force(x_mid)
             blended_delta = (1.0 - self.a) * delta_n + self.a * delta_mid
             x_out = x_in + self.step_size * blended_delta
             aux = aux_n + aux_mid
@@ -125,6 +156,7 @@ class ReversibleMidpointStack(nn.Module):
             x_new, aux = step_fn(x)
         return x_new, aux
 
+    @_dynamo_disable
     def forward(self, x_stream: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass through all layers using midpoint integration.

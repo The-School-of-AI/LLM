@@ -100,6 +100,10 @@ class AttentionConfig:
     gsa_gate_bias_init: float = 0.5              # Initial gate bias
     gsa_indexer_activation: str = "sigmoid"      # Indexer activation ("sigmoid" or "relu")
     gsa_use_triton_kernels: bool = True          # Use Triton kernels for long sequences (if available)
+    gsa_sparse_backend: str = "auto"             # "auto", "triton", "pytorch", "flash", "dense"
+    gsa_triton_min_seq_len: int = 512            # Use Triton only above this seq length in auto mode
+    gsa_prefer_flash: bool = True                # Prefer Flash/Efficient SDPA backend on CUDA
+    gsa_sdpa_chunk_size: int = 16                # Query chunk size for SDPA sparse gather path
 
     # DeepSeek Sparse Attention specific
     ds_compressed_dim: int = 512      # Compressed KV dimension
@@ -148,21 +152,29 @@ class FFNConfig:
 class ConnectionConfig:
     """
     Configuration for layer connections.
-    
+
     For mHC (Manifold-Constrained Hyper-Connections from paper 2512.24880):
     - mhc_expansion_rate (n): Number of parallel streams (default 4)
     - mhc_alpha_init: Initial value for gating factors (default 0.01)
     - mhc_sinkhorn_iters: Iterations for doubly stochastic projection (default 20)
-    
+
     Parameter overhead per mHC module: ~nC(2n + n²) + constants
     For n=4, C=2048: ~205K params/module, ~410K/layer, ~9.8M total (24 layers)
     This is <1% overhead for a 1B model!
+
+    Memory impact of mhc_expansion_rate (per activation tensor, B=1, T=4096, D=4096, bf16):
+    - n=1 (residual):  B×T×D×2      =  32 MB  (no mHC, standard residual)
+    - n=2 (2 streams): B×T×n×D×2    =  64 MB  (2x memory, good memory-speed tradeoff)
+    - n=4 (4 streams): B×T×n×D×2    = 128 MB  (4x memory, paper default)
+
+    Use n=2 for memory-constrained settings (e.g. long context on limited VRAM).
+    Use n=4 for full expressiveness (paper default, recommended if VRAM allows).
     """
-    
+
     connection_type: ConnectionType = ConnectionType.MHC
-    
+
     # mHC parameters (from DeepSeek paper 2512.24880v2)
-    mhc_expansion_rate: int = 4        # n: number of streams (paper uses 4)
+    mhc_expansion_rate: int = 4        # n: number of streams (paper uses 4, use 2 for memory savings)
     mhc_alpha_init: float = 0.01       # α: gating factor init (paper uses 0.01)
     mhc_sinkhorn_iters: int = 20       # Sinkhorn-Knopp iterations (paper uses 20)
 
@@ -694,6 +706,11 @@ def get_1b_reference_config() -> ModelConfig:
             gsa_k_base=512,
             gsa_k_min=32,
             gsa_k_max=1024,
+            gsa_use_triton_kernels=True,
+            gsa_sparse_backend="auto",
+            gsa_triton_min_seq_len=512,
+            gsa_prefer_flash=True,
+            gsa_sdpa_chunk_size=16,
             # Mixer: 75% DeltaNet / 25% GSA
             mixer_delta_ratio=0.75,
             mixer_gsa_ratio=0.25,

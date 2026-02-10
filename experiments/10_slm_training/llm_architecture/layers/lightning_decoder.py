@@ -75,7 +75,12 @@ class LightningDecoderLayer(nn.Module):
                 k_max=attn_config.gsa_k_max,
                 indexer_heads=attn_config.gsa_num_indexer_heads,
                 rope_original_max=pos_config.yarn_original_max_position,
-                rope_scaling_factor=pos_config.rope_scaling_factor
+                rope_scaling_factor=pos_config.rope_scaling_factor,
+                use_triton_kernels=getattr(attn_config, "gsa_use_triton_kernels", True),
+                sparse_backend=getattr(attn_config, "gsa_sparse_backend", "auto"),
+                triton_min_seq_len=getattr(attn_config, "gsa_triton_min_seq_len", 512),
+                prefer_flash=getattr(attn_config, "gsa_prefer_flash", True),
+                sdpa_chunk_size=getattr(attn_config, "gsa_sdpa_chunk_size", 16),
             )
         else:
             raise ValueError(f"Unknown layer type: {layer_type}")

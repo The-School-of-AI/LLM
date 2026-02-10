@@ -11,17 +11,37 @@ Key differences from mhc.py (V1):
 - Norm is INSIDE MHCSublayerV2 (after H_pre aggregation, before sublayer)
 - Uses weighted sum for H_pre aggregation (not matmul)
 - Uses einsum for H_res mixing
-- Sinkhorn via @torch.jit.script
+- Sinkhorn via Triton kernel (CUDA) or JIT fallback (CPU)
 - Handles tuple returns from MoEFFN (output, aux_loss)
+
+Performance optimizations:
+- Triton Sinkhorn kernel: 40 kernel launches -> 1
+- TritonRMSNorm: fused variance + rsqrt + mul
 """
 
 import torch
 import torch.nn as nn
 from typing import Optional, Tuple
 
+# ============================================================================
+# Triton imports with graceful fallback
+# ============================================================================
+
+try:
+    from components.kernels.triton_normalization import TritonRMSNorm
+    _HAS_TRITON_NORM = True
+except ImportError:
+    _HAS_TRITON_NORM = False
+
+try:
+    from components.kernels.triton_sinkhorn import triton_sinkhorn_knopp
+    _HAS_TRITON_SINKHORN = True
+except ImportError:
+    _HAS_TRITON_SINKHORN = False
+
 
 # ============================================================================
-# Sinkhorn-Knopp (JIT-compiled)
+# Sinkhorn-Knopp (JIT-compiled fallback for CPU / non-CUDA)
 # ============================================================================
 
 @torch.jit.script
@@ -34,22 +54,35 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6) -> 
     return M
 
 
+def _sinkhorn_dispatch(logits: torch.Tensor, iters: int, eps: float = 1e-6) -> torch.Tensor:
+    """Dispatch Sinkhorn to Triton (CUDA) or JIT (CPU) backend."""
+    if _HAS_TRITON_SINKHORN and logits.is_cuda:
+        try:
+            return triton_sinkhorn_knopp(logits, num_iters=iters, eps=eps)
+        except Exception:
+            pass
+    return sinkhorn_knopp(logits, iters=iters, eps=eps)
+
+
 # ============================================================================
-# RMSNorm (local, matching Test_Code)
+# RMSNorm (auto-selects Triton on CUDA, PyTorch on CPU)
 # ============================================================================
 
-class RMSNorm(nn.Module):
-    """RMS Layer Normalization."""
+if _HAS_TRITON_NORM:
+    RMSNorm = TritonRMSNorm
+else:
+    class RMSNorm(nn.Module):
+        """RMS Layer Normalization."""
 
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
+        def __init__(self, dim: int, eps: float = 1e-6):
+            super().__init__()
+            self.eps = eps
+            self.weight = nn.Parameter(torch.ones(dim))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        norm = x.pow(2).mean(dim=-1, keepdim=True)
-        x = x * torch.rsqrt(norm + self.eps)
-        return self.weight * x
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            norm = x.pow(2).mean(dim=-1, keepdim=True)
+            x = x * torch.rsqrt(norm + self.eps)
+            return self.weight * x
 
 
 # ============================================================================
@@ -119,7 +152,7 @@ class MHCCoeffsV2(nn.Module):
 
         H_pre = torch.sigmoid(pre_logits)          # (B, T, n)
         H_post = 2.0 * torch.sigmoid(post_logits)  # (B, T, n) scaled to [0, 2]
-        H_res = sinkhorn_knopp(res_logits, iters=self.iters)  # (B, T, n, n)
+        H_res = _sinkhorn_dispatch(res_logits, iters=self.iters)  # (B, T, n, n)
 
         return H_pre, H_post, H_res
 
@@ -193,8 +226,6 @@ class MHCSublayerV2(nn.Module):
             y = out
 
         # Distribute output to streams
-        # H_post: (B, T, n) -> (B, T, 1, n) is wrong shape
-        # We need y.unsqueeze(2) * H_post.unsqueeze(-1)
         # y: (B, T, D) -> (B, T, 1, D)
         # H_post: (B, T, n) -> (B, T, n, 1)
         y_stream = y.unsqueeze(2) * H_post.unsqueeze(-1)  # (B, T, n, D)

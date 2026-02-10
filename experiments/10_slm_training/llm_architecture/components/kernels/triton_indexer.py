@@ -21,6 +21,11 @@ except ImportError:
 
 if HAS_TRITON:
     @triton.jit
+    def _sigmoid(x):
+        """Manual sigmoid: 1/(1+exp(-x)), universally supported in Triton."""
+        return 1.0 / (1.0 + tl.exp(-x))
+
+    @triton.jit
     def _gated_indexer_fwd_kernel(
         # Pointers to matrices
         Q_ptr, K_ptr, W_ptr, B_ptr, OUT_ptr,
@@ -69,29 +74,29 @@ if HAS_TRITON:
             # Q shape: [batch, seq_q, n_heads, d_idx]
             q_ptrs = Q_ptr + pid_b * stride_qb + q_offs[:, None] * stride_qq + h * stride_qh + d_offs[None, :] * stride_qd
             q_mask = (q_offs[:, None] < seq_q) & (d_offs[None, :] < d_idx)
-            q = tl.load(q_ptrs, mask=q_mask, other=0.0)
+            q = tl.load(q_ptrs, mask=q_mask, other=0.0).to(tl.float32)
 
             # Load key block (shared across heads)
             # K shape: [batch, seq_kv, d_idx]
             k_ptrs = K_ptr + pid_b * stride_kb + k_offs[:, None] * stride_kk + d_offs[None, :] * stride_kd
             k_mask = (k_offs[:, None] < seq_kv) & (d_offs[None, :] < d_idx)
-            k = tl.load(k_ptrs, mask=k_mask, other=0.0)
+            k = tl.load(k_ptrs, mask=k_mask, other=0.0).to(tl.float32)
 
             # Load importance weights
             # W shape: [batch, seq_q, n_heads]
             w_ptrs = W_ptr + pid_b * stride_wb + q_offs * stride_wq + h * stride_wh
             w_mask = q_offs < seq_q
-            w = tl.load(w_ptrs, mask=w_mask, other=0.0)
-            w_sigmoid = tl.sigmoid(w)
+            w = tl.load(w_ptrs, mask=w_mask, other=0.0).to(tl.float32)
+            w_sigmoid = _sigmoid(w)
 
             # Load bias for this head
-            b = tl.load(B_ptr + h)
+            b = tl.load(B_ptr + h).to(tl.float32)
 
             # Compute dot product: [BLOCK_Q, BLOCK_K]
             dot = tl.dot(q, tl.trans(k)) * scale
 
             # Apply sigmoid activation with bias
-            gated = tl.sigmoid(dot + b)
+            gated = _sigmoid(dot + b)
 
             # Accumulate weighted scores
             acc += w_sigmoid[:, None] * gated
@@ -105,6 +110,10 @@ if HAS_TRITON:
         out_ptrs = OUT_ptr + pid_b * stride_ob + q_offs[:, None] * stride_oq + k_offs[None, :] * stride_ok
         out_mask = (q_offs[:, None] < seq_q) & (k_offs[None, :] < seq_kv)
         tl.store(out_ptrs, acc, mask=out_mask)
+
+
+# Track whether we've warned about kernel failure
+_warned_indexer_failure = False
 
 
 def triton_gated_indexer(
@@ -129,18 +138,25 @@ def triton_gated_indexer(
     Returns:
         scores: [batch, seq_q, seq_kv]
     """
+    global _warned_indexer_failure
+
     if not HAS_TRITON:
         raise ImportError("Triton is required for triton_gated_indexer")
 
     batch_size, seq_q, n_heads, d_idx = q.shape
     _, seq_kv, _ = k.shape
 
-    # Allocate output
-    out = torch.empty(batch_size, seq_q, seq_kv, device=q.device, dtype=q.dtype)
+    # Ensure contiguous for correct strides
+    q = q.contiguous()
+    k = k.contiguous()
+    w = w.contiguous()
 
-    # Block sizes
-    BLOCK_Q = min(64, seq_q)
-    BLOCK_K = min(64, seq_kv)
+    # Allocate output
+    out = torch.empty(batch_size, seq_q, seq_kv, device=q.device, dtype=torch.float32)
+
+    # Block sizes — must be powers of 2 for tl.dot
+    BLOCK_Q = min(64, triton.next_power_of_2(seq_q))
+    BLOCK_K = min(64, triton.next_power_of_2(seq_kv))
     BLOCK_D = triton.next_power_of_2(d_idx)
 
     # Grid
@@ -160,9 +176,11 @@ def triton_gated_indexer(
             BLOCK_Q=BLOCK_Q, BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
         )
     except Exception as e:
-        # Fall back to PyTorch implementation
-        import warnings
-        warnings.warn(f"Triton indexer kernel failed with: {e}. Falling back to PyTorch.")
+        # Fall back to PyTorch implementation (warn once only)
+        if not _warned_indexer_failure:
+            import warnings
+            warnings.warn(f"Triton indexer kernel failed: {e}. Falling back to PyTorch.")
+            _warned_indexer_failure = True
         out = pytorch_gated_indexer(q, k, w, b, scale, causal)
 
     return out
