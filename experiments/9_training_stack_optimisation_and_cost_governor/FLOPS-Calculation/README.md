@@ -745,18 +745,150 @@ Set `attention_type: deepseek_mla` and provide either:
 - `ds_compressed_dim` (alias)
 to model KV compression in attention FLOPs.
 
-#### YaRN (Position) Overhead
-If you are using YaRN from the start and want to model any extra overhead beyond
-sequence length, set:
+#### YaRN Position Encoding
+YaRN (Yet another RoPE extensioN) has **zero computational overhead** compared to standard RoPE.
+The cost of training at longer contexts is automatically captured via `sequence_length` in the O(S²) attention formula.
+No additional configuration is needed for YaRN FLOPs accounting.
+
+#### DeltaNet (Gated Linear Attention)
+DeltaNet is a linear attention mechanism with **O(S × d²)** complexity instead of O(S² × d) for standard attention.
+This makes it dramatically more efficient for long sequences (256k+ tokens).
+
+**Standalone usage:**
 ```json
-"position": {
-  "position_type": "yarn",
-  "yarn_flops_multiplier": 1.0
+{
+  "attention_type": "deltanet"
 }
 ```
-`yarn_flops_multiplier` scales the **attention** FLOPs term when `position_type` is `yarn`.
+Aliases: `deltanet`, `delta`, `linear`, `gated_linear`, `gated_deltanet`
+
+**Hybrid DeltaNet-GSA format:**
+```json
+{
+  "attention_type": "deltanet-gsa:3:1:512"
+}
+```
+- `3:1` = 75% DeltaNet layers, 25% GSA layers
+- `512` = GSA sparse k tokens
+
+**Complexity comparison:**
+| Attention Type | Complexity | 256k Context (d=128) |
+|---------------|------------|----------------------|
+| Dense | O(S² × d) | Very expensive |
+| GSA | O(S × k) + O(S²_indexer) | Fast |
+| **DeltaNet** | **O(S × d²)** | **Fastest at long seq** |
+
+Crossover: When S > d², DeltaNet wins. For head_dim=128, crossover at ~16k tokens.
+
+**DeltaNet config options:**
+```json
+{
+  "deltanet": {
+    "num_heads": 32,
+    "head_dim": 128,
+    "conv_size": 4
+  }
+}
+```
+
+#### Kronecker Product Embeddings (KPE)
+
+Instead of a standard `vocab × hidden` lookup table, KPE represents each token as a fixed Kronecker product of character-level and position-level factors, followed by a trainable projection.
+
+**Standard embeddings:** `vocab × hidden` params (e.g., 131072 × 4096 = **537M params**)
+**Kronecker embeddings:** `D × hidden + hidden` params (e.g., 8192 × 4096 + 4096 = **33.6M params** — **16× smaller**)
+
+**Configuration:**
+```json
+{
+  "embedding_type": "kronecker",
+  "kronecker_config": {
+    "char_dim": 256,       // Character embedding dimension
+    "pos_dim": 32,         // Position embedding dimension
+    "D": 8192              // Product feature dimension (char_dim × pos_dim)
+  },
+  "tie_embeddings": false  // KPE cannot be tied (forced to false)
+}
+```
+
+**Parameters:**
+| Component | Formula | Example (D=8192, H=4096) |
+|-----------|---------|--------------------------|
+| `pf_to_model` | D × H | 33,554,432 |
+| `embed_norm` (RMSNorm) | H | 4,096 |
+| **Total** | **D × H + H** | **33.6M** |
+
+**FLOPs:** Unlike standard lookup (negligible FLOPs), KPE adds a matrix multiply per token:
+```
+FLOPs = 6 × seq_len × D × hidden  (fwd + bwd-grad + bwd-weight)
+```
+
+> **Note:** KPE forces `tie_embeddings: false` since the embedding and LM head have different dimensions.
+
+#### Multi-Head Composition (mHC)
+
+mHC enables **reversible** multi-stream architectures. The hidden state is split into `n_streams` parallel streams, and each sublayer (attention/FFN) uses learnable mixing coefficients to combine streams before and after processing.
+
+**Key benefit:** With reversibility, activations can be **reconstructed from outputs** during backward pass, reducing activation memory from O(layers) to O(1). This is separate from gradient checkpointing.
+
+**Configuration:**
+```json
+{
+  "n_streams": 4    // Number of parallel streams (typically 4)
+}
+```
+
+**Parameters per sublayer** (2 sublayers per layer: attention + FFN):
+| Component | Formula | Example (H=4096, S=4) |
+|-----------|---------|------------------------|
+| φ_pre (pre-mixing) | S×H × S | 65,536 |
+| φ_post (post-mixing) | S×H × S | 65,536 |
+| φ_res (residual mixing) | S×H × S² | 262,144 |
+| Biases | S + S + S² | 24 |
+| Alphas | 3 | 3 |
+| RMSNorm | S × H | 16,384 |
+| **Per sublayer** | | **409,627** |
+| **Per layer** (×2) | | **819,254** |
+
+Where `S = n_streams` and `d_in = S × hidden`.
+
+**Total mHC params** = `layers × 2 × mhc_per_sublayer` (included in both total and active params).
+
+
+
+
+#### MoE Upcycling Cost Calculation
+
+When converting a Dense model to MoE, you need to shrink FFN weights to create experts. The calculator supports three upcycling methods:
+
+| Method | FLOPs | Description |
+|--------|-------|-------------|
+| `slicing` | 0 | Memory copy only (take first N columns) |
+| `random_projection` | O(H × src × tgt) | Project via random matrix |
+| `svd` | O(min² × max) | Truncated SVD decomposition |
+
+**Usage:**
+```bash
+# Upcycling comparison only (clean output)
+python3 compute.py --config configs/moe_team8/test_upcycling_methods.json --upcycling-only
+```
+
+**Configuration:**
+```json
+{
+  "upcycling": {
+    "method": "svd",
+    "source_intermediate_size": 4096,
+    "target_intermediate_size": 1024,
+    "num_experts_to_create": 20
+  }
+}
+```
+
+**Trade-offs:** Slicing is fastest but may lose info. Random projection is balanced. SVD is slowest but preserves max variance.
 
 ### 3. Cost Calculation
+
 ```python
 Cost = (Total_FLOPs / Effective_Cluster_PFLOPS) * Price_Per_GPU_Hour * Num_GPUs
 ```
