@@ -8,6 +8,45 @@ from datetime import datetime
 
 import yaml
 
+# Check if running in Google Colab
+IS_COLAB = os.path.exists('/content') and os.path.exists('/usr/local/lib/python3.12/dist-packages')
+
+def check_torchvision_nms(logger):
+    """
+    Proactively checks if torchvision and its NMS operation are valid.
+    Specifically targets the common 'operator torchvision::nms does not exist' error.
+    """
+    try:
+        import torch
+        import torchvision
+        # Attempt to access nms
+        _ = torchvision.ops.nms
+        return True
+    except (ImportError, AttributeError, RuntimeError) as e:
+        logger.warning(f"  [Auto-Heal] Detected torchvision/torch sync issue: {str(e)}")
+        return False
+
+def sync_colab_dependencies(logger):
+    """
+    Explicitly synchronizes torch and torchvision in Colab to prevent NMS errors.
+    """
+    if not IS_COLAB:
+        return
+
+    logger.info("  [Colab] Synchronizing torch and torchvision...")
+    try:
+        # Specifically target the latest stable versions that are compatible
+        # In Colab, we often need to force-reinstall torchvision after updating torch
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu121"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        logger.info("  [Colab] Synchronization complete.")
+    except Exception as e:
+        logger.error(f"  [Error] Failed to sync Colab dependencies: {str(e)}")
+
 
 def setup_logging(run_dir, timestamp):
     log_dir = os.path.join(run_dir, "logs")
@@ -208,15 +247,15 @@ def run_harness_benchmark(
     task_output_path = os.path.join(harness_raw_dir, f"{task_filename}.json")
 
     # Determine python executable (prefer .venv in root or current dir)
-    venv_python = os.path.join(os.getcwd(), ".venv", "bin", "python3")
-    # Also check parent dir (if running from a subdirectory like 01-EleutherAI-v1)
-    parent_venv = os.path.join(os.path.dirname(os.getcwd()), ".venv", "bin", "python3")
-
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local_venv = os.path.join(root_dir, ".venv", "bin", "python3")
+    cwd_venv = os.path.join(os.getcwd(), ".venv", "bin", "python3")
+    
     py_exec = sys.executable
-    if os.path.exists(venv_python):
-        py_exec = venv_python
-    elif os.path.exists(parent_venv):
-        py_exec = parent_venv
+    if os.path.exists(local_venv):
+        py_exec = local_venv
+    elif os.path.exists(cwd_venv):
+        py_exec = cwd_venv
 
     # Construct lm-eval command
     cmd = [
@@ -387,15 +426,15 @@ def run_custom_benchmark(
     try:
         # Expect custom script to output JSON to stdout or a specific file
         # Use same python as harness if possible
-        venv_python = os.path.join(os.getcwd(), ".venv", "bin", "python3")
-        parent_venv = os.path.join(
-            os.path.dirname(os.getcwd()), ".venv", "bin", "python3"
-        )
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        local_venv = os.path.join(root_dir, ".venv", "bin", "python3")
+        cwd_venv = os.path.join(os.getcwd(), ".venv", "bin", "python3")
+        
         py_exec = sys.executable
-        if os.path.exists(venv_python):
-            py_exec = venv_python
-        elif os.path.exists(parent_venv):
-            py_exec = parent_venv
+        if os.path.exists(local_venv):
+            py_exec = local_venv
+        elif os.path.exists(cwd_venv):
+            py_exec = cwd_venv
 
         cmd = [py_exec, resolved_script, "--model_args", model_args]
         if limit:
@@ -505,6 +544,27 @@ def main():
 
     # Explicitly naming the JSON file as 'incremental_results.json' to emphasize its behavior
     output_json_path = os.path.join(run_dir, "incremental_results.json")
+
+    # Colab specific pre-check
+    if IS_COLAB:
+        sync_colab_dependencies(logger)
+    
+    # Proactive Auto-Heal Check
+    if not check_torchvision_nms(logger):
+        logger.info("  [Auto-Heal] Triggering torchvision recovery...")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "torchvision"],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            if check_torchvision_nms(logger):
+                logger.info("  [Auto-Heal] recovery successful.")
+            else:
+                logger.warning("  [Auto-Heal] recovery failed. You might need to restart the Colab runtime.")
+        except Exception as e:
+            logger.warning(f"  [Auto-Heal] recovery script failed: {str(e)}")
 
     for b in active_benchmarks:
         if b.get("harness_task"):
