@@ -32,6 +32,21 @@ The pipeline employs a **Source-Centric Distributed Deduplication** strategy. Un
 
 ---
 
+## 📁 Project Structure
+
+```text
+curriculum_pyspark_glue/
+├── glue_job.py           # Main Entry Point: Orchestrates the Glue Job, handles GlueContext & Job Init.
+├── config/
+│   └── config.yaml       # Configuration: Centralized S3 paths, schema maps, and DPU/Worker tuning.
+├── src/
+│   ├── processor.py      # Core Logic: Spark implementation of schema transforms & Window-based dedup.
+│   └── utils.py          # Utilities: Boto3-based S3 discovery, logging setup, and CheckpointManager.
+└── README.md             # Documentation: Professional guide for logic, deployment, and monitoring.
+```
+
+---
+
 ## 🛠️ AWS Glue Configuration Guide
 
 To satisfy professional standards, configure your Glue job with these parameters:
