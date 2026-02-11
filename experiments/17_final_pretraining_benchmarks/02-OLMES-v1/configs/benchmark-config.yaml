@@ -1,0 +1,252 @@
+# olmes_benchmarks.yaml
+# Purpose: declaratively define what to run at each training stage.
+# Use: your runner script reads this YAML and invokes `olmes` with the listed suites/tasks.
+
+version: 1
+
+defaults:
+  output_root: "./olmes_runs"
+  model_type_by_size:
+    small: "hf"      # 1B–8B
+    large: "vllm"    # 70B+
+  stages:
+    # Shared settings you can override per-stage
+    common:
+      max_new_tokens: 256
+      temperature: 0.0
+      top_p: 1.0
+      seed: 42
+
+baselines:
+  # Compare against these with identical task lists/decoding
+  models:
+    - "allenai/OLMo-2-0425-1B"
+    - "allenai/OLMo-2-1124-7B"
+    # Add more (e.g., OLMo-2-13B, OLMo-3, etc.) as needed
+
+# Capability bucket mapping (for CI gating / dashboards)
+buckets:
+  english: ["core_9mcqa::olmes", "mmlu::olmes", "olmo3:base:stem_qa_mc", "olmo3:base:nonstem_qa_mc", "olmo3:base:gen",
+            "olmo3:base_easy:qa_rc", "olmo3:base_easy:qa_bpb"]
+  indic:   ["indic_glue", "indic_qa", "indic_bias"]
+  cot:     ["olmo3:base:math", "olmo3:base_easy:math_bpb", "bbh::olmes"]
+  coding:  ["olmo3:base:code", "olmo3:base:code_fim", "olmo3:base_easy:code_bpb"]
+  agentic: ["olmo3:adapt:all"]
+
+stages:
+  # ----------------------------
+  # PRETRAIN: 1B
+  # ----------------------------
+  pretrain_1b:
+    description: "Fast, frequent signal while model is small; prioritize stability + trend."
+    cadence: ["per_checkpoint", "per_pr"]
+    backend: "hf"
+    decoding:
+      max_new_tokens: 256
+      temperature: 0.0
+      top_p: 1.0
+      seed: 42
+    benchmarks:
+      # Cheap, standard comparable suite
+      - name: "base_easy"
+        tasks:
+          - "olmo3:base_easy:qa_rc"
+          - "olmo3:base_easy:qa_bpb"
+          - "olmo3:base_easy:math_bpb"
+          - "olmo3:base_easy:code_bpb"
+      - name: "indic_nlu"
+        tasks:
+          - "indic_glue"
+    gating:
+      enabled: true
+      compare_mode: "best_baseline"   # or "fixed_baseline"
+      thresholds_abs_drop:
+        english: 0.01
+        cot: 0.01
+        coding: 0.01
+        default: 0.01
+
+  # ----------------------------
+  # PRETRAIN: 3B
+  # ----------------------------
+  pretrain_3b:
+    description: "Same as 1B + add a bit more breadth; still CI-friendly."
+    cadence: ["per_checkpoint", "nightly"]
+    backend: "hf"
+    decoding:
+      max_new_tokens: 256
+      temperature: 0.0
+      top_p: 1.0
+      seed: 42
+    benchmarks:
+      - name: "base_easy"
+        tasks:
+          - "olmo3:base_easy:qa_rc"
+          - "olmo3:base_easy:qa_bpb"
+          - "olmo3:base_easy:math_bpb"
+          - "olmo3:base_easy:code_bpb"
+      - name: "indic_standard"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
+      - name: "core_qa_knowledge"
+        tasks:
+          - "core_9mcqa::olmes"
+    gating:
+      enabled: true
+      compare_mode: "best_baseline"
+      thresholds_abs_drop:
+        english: 0.01
+        cot: 0.01
+        coding: 0.01
+        default: 0.01
+
+  # ----------------------------
+  # PRETRAIN: 8B
+  # ----------------------------
+  pretrain_8b:
+    description: "Run full base suite nightly / per milestone. Adds breadth across QA/gen/math/code."
+    cadence: ["nightly", "milestone"]
+    backend: "hf"     # switch to vllm if you want faster inference
+    decoding:
+      max_new_tokens: 512
+      temperature: 0.0
+      top_p: 1.0
+      seed: 42
+    benchmarks:
+      - name: "olmo3_base"
+        tasks:
+          - "olmo3:base:stem_qa_mc"
+          - "olmo3:base:nonstem_qa_mc"
+          - "olmo3:base:gen"
+          - "olmo3:base:math"
+          - "olmo3:base:code"
+          - "olmo3:base:code_fim"
+      - name: "mmlu"
+        tasks:
+          - "mmlu::olmes"
+      - name: "indic_standard"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
+    gating:
+      enabled: true
+      compare_mode: "best_baseline"
+      thresholds_abs_drop:
+        english: 0.01
+        cot: 0.01
+        coding: 0.01
+        default: 0.01
+
+  # ----------------------------
+  # PRETRAIN: 70B
+  # ----------------------------
+  pretrain_70b:
+    description: "GPU + vLLM. Add reasoning/CoT suite (BBH) before agentic SFT."
+    cadence: ["milestone"]
+    backend: "vllm"
+    decoding:
+      # Reasoning tasks benefit from longer generations
+      max_new_tokens: 1024
+      temperature: 0.0
+      top_p: 1.0
+      seed: 42
+    benchmarks:
+      - name: "olmo3_base"
+        tasks:
+          - "olmo3:base:stem_qa_mc"
+          - "olmo3:base:nonstem_qa_mc"
+          - "olmo3:base:gen"
+          - "olmo3:base:math"
+          - "olmo3:base:code"
+          - "olmo3:base:code_fim"
+
+      # Reasoning/CoT gate for agentic readiness
+      - name: "reasoning_cot_bbh"
+        tasks:
+          - "bbh::olmes"   # replace with exact task IDs from `oe-eval --list-tasks bbh` if different
+
+      # Optional: execution-based coding (run via olmes-docker in a separate job)
+      - name: "coding_exec"
+        executor: "olmes-docker"
+        env_types:
+          - "bcb"      # BigCodeBench
+          - "ds1000"   # DS-1000
+          - "multipl"  # MultiPL-E
+        enabled: false
+
+      # Optional: Early Indic signal promoted to a full Indic sweep at large scale
+      - name: "indic_full"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
+        enabled: true
+
+    gating:
+      enabled: true
+      compare_mode: "best_baseline"
+      thresholds_abs_drop:
+        english: 0.01
+        cot: 0.005      # tighter at 70B for reasoning readiness
+        coding: 0.01
+        default: 0.01
+
+  # ----------------------------
+  # SFT / INSTRUCT
+  # ----------------------------
+  sft:
+    description: "Post-SFT: instruction + agentic-aligned evals; keep base suite to avoid regressions."
+    cadence: ["milestone", "release"]
+    backend: "vllm"
+    decoding:
+      max_new_tokens: 1024
+      temperature: 0.0
+      top_p: 1.0
+      seed: 42
+    benchmarks:
+      # Keep base suite as regression guardrail
+      - name: "olmo3_base_regression_guard"
+        tasks:
+          - "olmo3:base:stem_qa_mc"
+          - "olmo3:base:nonstem_qa_mc"
+          - "olmo3:base:math"
+          - "olmo3:base:code"
+          - "olmo3:base:code_fim"
+
+      # Instruction / agentic-focused suite (may require special setup depending on tasks)
+      - name: "olmo3_adapt"
+        tasks:
+          - "olmo3:adapt"
+
+      # Optional: Indic instruct / multilingual sweep
+      - name: "indic_instruct"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
+          - "indic_bias"
+        enabled: true
+
+    gating:
+      enabled: true
+      compare_mode: "best_baseline"
+      thresholds_abs_drop:
+        english: 0.01
+        cot: 0.01
+        coding: 0.01
+        agentic: 0.01
+        default: 0.01
+  # ----------------------------
+  # CI / BREADTH (Sample Run)
+  # ----------------------------
+  ci_breadth:
+    description: "Fast CI run with high breadth: representative tasks from every capability bucket."
+    backend: "hf"
+    benchmarks:
+      - name: "breadth_sample"
+        limit: 2
+        tasks:
+          - "olmo3:base_easy:qa_rc"    # English / RC
+          - "indic_glue"               # Multilingual
+          - "bbh::olmes"               # Reasoning
+          - "olmo3:base_easy:code_bpb" # Coding
+          - "olmo3:adapt"          # Agentic
