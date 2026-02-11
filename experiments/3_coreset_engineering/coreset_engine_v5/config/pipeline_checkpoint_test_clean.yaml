@@ -1,0 +1,87 @@
+# Same as pipeline_checkpoint_test.yaml but with separate output dirs for clean (no-crash) comparison.
+
+# NOTE: Keep settings identical except output paths.
+
+dedup:
+  enable_exact_dedup: true
+  enable_near_dedup: false
+  near_dedup_threshold: 0.85
+  hash_algorithm: xxhash64
+  chunk_size_for_hashing: 4096
+  parallel_workers: 4
+
+diversity:
+  enable_diversity_weighting: false
+  diversity_metric: entropy
+  rare_token_boost: 1.0
+  tail_token_boost: 1.0
+  domain_diversity_weight: 0.0
+  language_diversity_weight: 0.0
+
+selection:
+  strategy: stratified_density_aware
+  include_protected_slices: true
+  protected_preservation_override:
+    B4: 0.95
+    B5: 0.95
+    code: 0.90
+    agentic: 0.90
+    indic: 0.85
+  bucket_internal_sampling: stratified
+  non_overlap_enforcement: true
+
+curriculum:
+  curriculum_yaml_path: config/curriculum.yaml
+  freeze_curriculum: true
+  enforce_rolling_window: true
+  rolling_window_tolerance: 0.03
+  deterministic_seed: 42
+  seed_scope:
+    - sampling
+    - shuffling
+    - stage_transition
+
+io:
+  input_dataset_path: data/datasets
+  input_metadata_path: data/metadata
+  output_coreset_path: output/coresets_checkpoint_test_clean
+  output_manifest_path: output/manifests_checkpoint_test_clean
+  output_index_format: parquet
+  use_object_store: false
+  object_store_type: null
+  object_store_bucket: null
+  num_parallel_loaders: 2
+  cache_metadata: false
+  cache_dir: cache/coreset_cache
+
+validation:
+  enable_curriculum_validation: true
+  enable_coverage_validation: true
+  enable_determinism_check: true
+  enable_overlap_check: true
+  strict_mode: true
+  validation_tolerance: 0.01
+
+reproducibility:
+  enable_reproducibility_checks: true
+  save_config_hash: true
+  save_seed: true
+  save_algorithm_version: true
+  emit_reproducibility_manifest: true
+  version: "1.0.0"
+
+ablation:
+  enable_ablation_mode: false
+  ablation_variant: checkpoint_test
+  track_metrics: []
+  save_intermediate_results: false
+
+stages:
+  "1B":
+    stage_name: "1B"
+    target_tokens: 20000000000
+    enable_sft_adaptation: false
+    enable_alignment_adaptation: false
+
+pipeline_version: "1.0.0"
+config_name: "checkpoint-test-clean"

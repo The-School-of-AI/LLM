@@ -1,0 +1,9 @@
+output
+data
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+*.sqlite
+*.log
