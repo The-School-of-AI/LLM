@@ -902,6 +902,8 @@ class TrainingStage:
         # Only skip if explicitly set to False in the passed parameter
         include_act_mem = include_activation_memory if include_activation_memory is not None else True
         activation_bytes = 0.0
+        # Check for reversible training (midpoint/leapfrog method)
+        use_reversible = arch.get("reversible", training_cfg.get("reversible", False))
         if include_act_mem:
             # Use passed micro_batch_size, else fallback to training_cfg
             micro_batch = micro_batch_size
@@ -916,29 +918,36 @@ class TrainingStage:
             )
             hidden = float(arch.get("hidden_size", 2048))
             layers = float(arch.get("num_layers", arch.get("num_hidden_layers", 24)))
-            activation_multiplier = float(training_cfg.get("activation_multiplier", 10.0))
-            act_bytes = training_cfg.get("activation_bytes_per_element")
-            if act_bytes is None:
+            act_bytes_per_elem = training_cfg.get("activation_bytes_per_element")
+            if act_bytes_per_elem is None:
                 act_prec = training_cfg.get("activation_precision", "bf16")
-                act_bytes = bytes_for_precision(act_prec)
-            # Use passed checkpoint_factor, else fallback to training_cfg, else defaults
-            ckpt_factor = checkpoint_factor
-            if ckpt_factor is None:
-                ckpt_factor = training_cfg.get("activation_checkpointing_factor")
-            if ckpt_factor is None:
-                ckpt_factor = 0.5 if training_cfg.get("activation_checkpointing") else 1.0
-            ckpt_factor = float(ckpt_factor)
-            if ckpt_factor <= 0:
-                raise ValueError("activation_checkpointing_factor must be > 0.")
-            activation_bytes = (
-                micro_batch
-                * seq_len
-                * hidden
-                * layers
-                * activation_multiplier
-                * act_bytes
-                * ckpt_factor
-            )
+                act_bytes_per_elem = bytes_for_precision(act_prec)
+
+            if use_reversible:
+                # Reversible training (midpoint/leapfrog): only store 2 hidden states
+                # (p_prev, p_cur) regardless of model depth. Memory is O(1) in layers.
+                activation_bytes = 2.0 * micro_batch * seq_len * hidden * act_bytes_per_elem
+            else:
+                # Standard training: store activations for all layers
+                activation_multiplier = float(training_cfg.get("activation_multiplier", 10.0))
+                # Use passed checkpoint_factor, else fallback to training_cfg, else defaults
+                ckpt_factor = checkpoint_factor
+                if ckpt_factor is None:
+                    ckpt_factor = training_cfg.get("activation_checkpointing_factor")
+                if ckpt_factor is None:
+                    ckpt_factor = 0.5 if training_cfg.get("activation_checkpointing") else 1.0
+                ckpt_factor = float(ckpt_factor)
+                if ckpt_factor <= 0:
+                    raise ValueError("activation_checkpointing_factor must be > 0.")
+                activation_bytes = (
+                    micro_batch
+                    * seq_len
+                    * hidden
+                    * layers
+                    * activation_multiplier
+                    * act_bytes_per_elem
+                    * ckpt_factor
+                )
             # partition_activations: shard activation memory across data parallel GPUs
             if partition_activations and num_gpus > 1:
                 activation_bytes = activation_bytes / num_gpus
@@ -1144,9 +1153,12 @@ class TrainingStage:
         activation_ckpt = training_cfg.get("activation_checkpointing", False)
         # Also check for partition_activations in training config (DeepSpeed-style)
         partition_activations = training_cfg.get("partition_activations", False)
+        # Reversible training also recomputes activations during backward
+        use_reversible = arch.get("reversible", training_cfg.get("reversible", False))
         
-        use_checkpointing = gradient_ckpt or activation_ckpt or partition_activations
-        recompute_multiplier = 4/3 if use_checkpointing else 1.0
+        use_checkpointing = gradient_ckpt or activation_ckpt or partition_activations or use_reversible
+        reversible_overhead = float(training_cfg.get("reversible_recompute_overhead", 4/3))
+        recompute_multiplier = reversible_overhead if use_checkpointing else 1.0
 
         # Linear layer FLOPs (includes recompute overhead)
         linear_multiplier = float(arch.get("linear_flops_multiplier", 1.0))

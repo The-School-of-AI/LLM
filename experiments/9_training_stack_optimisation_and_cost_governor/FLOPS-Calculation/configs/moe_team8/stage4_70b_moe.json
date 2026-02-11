@@ -92,7 +92,8 @@
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
           "master_weights": false
-        }
+        },
+        "reversible" : false
       }
     }
   ]
