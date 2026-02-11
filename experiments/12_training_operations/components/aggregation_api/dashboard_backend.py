@@ -59,19 +59,32 @@ class MockClickHouseClient:
             history.append({"timestamp": ts, "step": i*10, "value": val})
         return history
 
-class MockPrometheusClient:
-    """Simulates fetching live data from Prometheus"""
+class CustomMetricsClient:
+    """Fetches live data from the custom metrics server"""
+    def __init__(self, metrics_url: str = "http://localhost:8000"):
+        self.metrics_url = metrics_url
+
     def get_metric_range(self, run_id: str, metric: str, start_time: float):
-        """Get data newer than start_time"""
-        # Generate fake live points
-        live = []
-        now = time.time()
-        for i in range(10):
-            ts = start_time + (i * 5) # every 5s
-            if ts > now: break
-            val = 1.5 + (random.random() * 0.05) # Converged value
-            live.append({"timestamp": ts, "step": 1000 + (i), "value": val})
-        return live
+        """Get data newer than start_time from the custom metrics server"""
+        import requests
+        try:
+            response = requests.get(
+                f"{self.metrics_url}/history",
+                params={"metric": metric, "since": start_time},
+                timeout=5,
+            )
+            data = response.json()
+            points = []
+            for pt in data.get("data", []):
+                points.append({
+                    "timestamp": pt["timestamp"],
+                    "step": int(pt.get("step", 0)),
+                    "value": pt["value"],
+                })
+            return points
+        except Exception as e:
+            print(f"CustomMetricsClient error: {e}")
+            return []
 
 # ------------------------------------------------------------------------------
 # App Logic
@@ -79,7 +92,7 @@ class MockPrometheusClient:
 
 app = FastAPI(title="Training Dashboard Aggregator")
 ch_client = MockClickHouseClient()
-prom_client = MockPrometheusClient()
+metrics_client = CustomMetricsClient()
 
 @app.get("/runs", response_model=Dict[str, List[RunInfo]])
 async def list_runs():
@@ -95,7 +108,7 @@ async def get_metrics(
 ):
     """
     Unified Metric Query:
-    Merges Cold Data (ClickHouse) + Hot Data (Prometheus)
+    Merges Cold Data (ClickHouse) + Hot Data (Custom Metrics Server)
     """
     now = time.time()
     cutoff_time = now - 300 # Last 5 minutes is "Hot"
@@ -104,7 +117,7 @@ async def get_metrics(
     cold_data = ch_client.get_metric_history(run_id, metric, end_time=cutoff_time)
     
     # 2. Fetch Hot Data (Live)
-    hot_data = prom_client.get_metric_range(run_id, metric, start_time=cutoff_time)
+    hot_data = metrics_client.get_metric_range(run_id, metric, start_time=cutoff_time)
     
     # 3. Merge & Sort
     merged = cold_data + hot_data

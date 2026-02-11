@@ -8,7 +8,7 @@ It replaces SaaS tools with high-performance, local-first components.
 1.  **`json_logger.py`**: A non-blocking structured logger (The "Producer").
 2.  **`vector.toml`**: A configuration for the data shipper (The "Shipper").
 3.  **`watchdog.py`**: A control plane service (The "Enforcer").
-4.  **`metrics_server.py`**: Prometheus exporter for system/training metrics (The "Exporter").
+4.  **`metrics_server.py`**: Custom JSON API server for system/training metrics (The "Exporter").
 5.  **`dashboard_backend.py`**: Aggregation API for the frontend (The "API").
 6.  **`checkpoint_registry.py`**: Database for checkpoint governance (The "Registry").
 7.  **`system_architecture.md`**: Master architecture document and data flow diagram.
@@ -87,8 +87,8 @@ The logger writes to disk. **Vector** ships it to ClickHouse.
 
 ---
 
-## 📊 The Metrics Server (Prometheus Exporter)
-Exposes "Hot" data (CPU/RAM, Loss) for real-time scraping.
+## 📊 The Metrics Server (Custom JSON API)
+Exposes "Hot" data (CPU/RAM, Loss) for real-time querying.
 
 ### Usage
 In `train.py`, start the server and push updates:
@@ -107,7 +107,12 @@ metrics.update_training_metrics(
     step=step
 )
 ```
-**Prometheus Config**: Scrape `http://<pod_ip>:8000/metrics`.
+
+### Endpoints
+- `GET /metrics` — Full snapshot of all current metric values (JSON)
+- `GET /query?metric=training_loss` — Single metric current value
+- `GET /history?metric=training_loss&since=<epoch>` — Time-series history
+- `GET /health` — Liveness probe
 
 ---
 

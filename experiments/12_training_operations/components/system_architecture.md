@@ -9,22 +9,22 @@
 | :--- | :--- | :--- | :--- |
 | **Active Control** | **Watchdog** | ✅ Ready | PAUSE training instantly on anomalies (SEV-1). |
 | **High-Scale Logs** | **ClickHouse** | ✅ Configured | W&B cannot ingest 70B routing histograms at 60Hz. |
-| **Unified View** | **Aggregator** | ✅ Ready | Merge Live (Prometheus) and History (ClickHouse). |
+| **Unified View** | **Aggregator** | ✅ Ready | Merge Live (Custom Metrics) and History (ClickHouse). |
 
 ## 2. Integration Contracts
 
 ### 🟢 For the Training Team (Upstream)
 - **Logs (Push)**: Use `JSONLogger`. Writes to local NVMe.
 - **Safety**: Poll `check_control_plane()`. Watchdog writes to `/tmp/training_control.flag`.
-- **Metrics (Pull)**: `metrics_server.py` exposes port `8000`.
+- **Metrics (Pull)**: `metrics_server.py` exposes JSON API on port `8000`.
 
 ### 🔵 For the Dashboard Team (Downstream)
 - **API**: `GET /metrics?run_id=X&metric=loss`.
-- **Logic**: We merge "Hot" (Prometheus, <1h) and "Cold" (ClickHouse, >1h) data.
+- **Logic**: We merge "Hot" (Custom Metrics Server, <1h) and "Cold" (ClickHouse, >1h) data.
 
 ### 🔴 For Team 9 (Infrastructure)
 - **Sidecar**: `Vector` (DaemonSet) tails logs -> Push to ClickHouse.
-- **Scrape**: Prometheus must scrape pods on `http://pod_ip:8000/metrics`.
+- **Query**: Custom metrics server exposes JSON API on `http://pod_ip:8000/metrics`.
 
 ## 3. Architecture Diagram
 
@@ -37,7 +37,7 @@ graph TD
         A -->|Update| M(MetricsServer)
         M -->|Expose| P8[Port 8000]
         
-        W[Watchdog Service] -->|3. Poll| PROM
+        W[Watchdog Service] -->|3. Poll| P8
         W -->|Write Pause| FLAG[Control Flag]
         A -->|Read| FLAG
     end
@@ -47,13 +47,9 @@ graph TD
         V -->|Push| CH[(ClickHouse)]
     end
 
-    subgraph Control Plane
-        PROM[Prometheus] -->|2. Scrape| P8
-    end
-
     subgraph User Plane
         D[Dashboard UI] -->|Query| API[Aggregation API]
-        API -->|Fetch Hot| PROM
+        API -->|Fetch Hot| P8
         API -->|Fetch Cold| CH
     end
 ```
@@ -62,14 +58,14 @@ graph TD
 
 ### Phase 1: The "Extraction Run" (Logs & Metrics)
 *   **Logs (Push)**: `JSONLogger` writes to local disk. `Vector` picks it up and pushes to ClickHouse.
-*   **Metrics (Pull)**: `metrics_server.py` exposes system stats on Port 8000. Prometheus scrapes this endpoint every 15s.
+*   **Metrics (Pull)**: `metrics_server.py` exposes system stats as JSON on Port 8000. Watchdog and Dashboard query this endpoint directly.
 
 ### Phase 2: The "Safety Check" (Watchdog)
-*   `Watchdog` polls Prometheus.
+*   `Watchdog` polls the custom metrics server.
 *   If `loss > 10.0`, it writes `PAUSE` to `/tmp/training_control.flag`.
 *   Training loop sees the flag and enters a sleep loop.
 
 ### Phase 3: The "Viewing Run" (Dashboard)
 *   User requests "Loss".
-*   `dashboard_backend.py` queries ClickHouse (History) + Prometheus (Live).
+*   `dashboard_backend.py` queries ClickHouse (History) + Custom Metrics Server (Live).
 *   User sees a seamless real-time graph.

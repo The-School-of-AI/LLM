@@ -8,48 +8,43 @@ from pathlib import Path
 class Watchdog:
     """
     The Active Control Plane.
-    Polls Prometheus for critical alerts and enforces PAUSE/HALT actions.
+    Polls the custom metrics server for critical alerts and enforces PAUSE/HALT actions.
     """
     def __init__(self, 
-                 prometheus_url: str = "http://localhost:9090", 
+                 metrics_url: str = "http://localhost:8000", 
                  control_file_path: str = "/tmp/training_control.flag",
-                 poll_interval: int = 5):
-        self.prom_url = prometheus_url
+                 poll_interval: int = 5,
+                 loss_threshold: float = 10.0):
+        self.metrics_url = metrics_url
         self.control_file = Path(control_file_path)
         self.poll_interval = poll_interval
+        self.loss_threshold = loss_threshold
         self.running = True
         
         print(f"✓ Watchdog Initialized")
-        print(f"  Monitoring: {self.prom_url}")
+        print(f"  Monitoring: {self.metrics_url}")
         print(f"  Control File: {self.control_file}")
+        print(f"  Loss Threshold: {self.loss_threshold}")
 
     def check_alerts(self):
         """
-        Query Prometheus AlertManager or Evaluate Rules Locally.
-        For POC, we check a simple metric condition directly.
+        Query the custom metrics server and evaluate alert rules locally.
         """
-        # Example Rule: Pause if Loss > 10.0 (Divergence)
-        query = 'training_loss > 10.0'
-        
         try:
             response = requests.get(
-                f"{self.prom_url}/api/v1/query",
-                params={'query': query}
+                f"{self.metrics_url}/query",
+                params={'metric': 'training_loss'}
             )
             data = response.json()
             
-            if data['status'] == 'success' and len(data['data']['result']) > 0:
-                # Condition Met!
-                value = float(data['data']['result'][0]['value'][1])
-                print(f"⚠️  CRITICAL ALERT: Loss Divergence Detected (Value: {value:.2f})")
-                self.trigger_pause(reason=f"Loss Divergence (Value: {value:.2f})")
-            else:
-                # All good, ensure we are not unnecessarily paused
-                # (Optional: Implement auto-resume or manual-only resume logic)
-                pass
+            if 'value' in data:
+                value = float(data['value'])
+                if value > self.loss_threshold:
+                    print(f"⚠️  CRITICAL ALERT: Loss Divergence Detected (Value: {value:.2f})")
+                    self.trigger_pause(reason=f"Loss Divergence (Value: {value:.2f})")
                 
         except Exception as e:
-            print(f"Watchdog Error connecting to Prometheus: {e}")
+            print(f"Watchdog Error connecting to metrics server: {e}")
 
     def trigger_pause(self, reason: str):
         """
