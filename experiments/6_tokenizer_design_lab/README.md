@@ -4,6 +4,24 @@
 
 This directory contains the **TSAI 131K Tokenizer**, a pruned GPToss tokenizer optimized for 131,072 (2^17) vocabulary size while retaining Indic language support.
 
+## Directory Structure
+
+```text
+.
+├── tsai_131k_tokenizer/       # Generated tokenizer files
+│   ├── tokenizer.json         # Our tokenizer files
+│   ├── tokenizer_config.json
+│   └── special_tokens_map.json
+├── kronecker_embeddings/      # Kronecker embeddings scripts & docs
+│   ├── convert_tokenizer_to_kronecker.py
+│   └── README.md
+├── tokenizer_metrics/         # Evaluation metrics and graphs
+├── build_clean_tokenizer.py   # Script to build the tokenizer
+├── special_tokens.py          # Special token definitions
+├── requirements.txt           # Python dependencies
+└── README.md                  # This file
+```
+
 ## Installation
 
 To set up the environment, it is recommended to use a virtual environment:
