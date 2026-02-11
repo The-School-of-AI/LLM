@@ -30,7 +30,7 @@ from special_tokens import (
     NUM_ADDITIONAL_SPECIAL,
 )
 
-BASE_GPTOSS_PATH = "Tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
+BASE_GPTOSS_PATH = "tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
 OUTPUT_DIR = "tsai_131k_tokenizer"
 TARGET_VOCAB_SIZE = 131072  # 2^17
 NUM_RESERVED = 250
