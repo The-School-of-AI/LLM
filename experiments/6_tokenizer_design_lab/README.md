@@ -19,7 +19,7 @@ This directory contains the **TSAI 131K Tokenizer**, a pruned GPToss tokenizer o
 ├── build_clean_tokenizer.py   # Script to build the tokenizer
 ├── special_tokens.py          # Special token definitions
 ├── requirements.txt           # Python dependencies
-└── README.md                  # This file
+└── README.md                  
 ```
 
 ## Installation
