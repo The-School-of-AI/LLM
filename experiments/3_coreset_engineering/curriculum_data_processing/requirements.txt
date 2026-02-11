@@ -1,0 +1,7 @@
+pyarrow
+pandas
+boto3
+pyyaml
+tqdm
+s3fs
+python-dotenv
