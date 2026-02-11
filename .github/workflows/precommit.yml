@@ -2,8 +2,9 @@ name: Pre-commit
 
 on:
   pull_request:
+    branches: [main, staging]
   push:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   precommit:
@@ -27,4 +28,4 @@ jobs:
           done
 
       - name: Run hooks
-        run: pre-commit run --all-files
+        run: pre-commit run --all-files --show-diff-on-failure
