@@ -33,8 +33,12 @@
     },
     "zero_optimization": {
       "stage": 2,
-      "offload_optimizer": {"device": "none"},
-      "offload_param": {"device": "none"}
+      "offload_optimizer": {
+        "device": "none"
+      },
+      "offload_param": {
+        "device": "none"
+      }
     },
     "train_micro_batch_size_per_gpu": 16,
     "gradient_accumulation_steps": 8,
@@ -91,7 +95,9 @@
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
           "master_weights": false
-        }
+        },
+        "reversible": true,
+        "reversible_activation_reduction": 0.5
       }
     }
   ]
