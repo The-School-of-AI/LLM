@@ -15,12 +15,9 @@ Also generates:
   • Error correction pairs
 """
 
-import json
-import os
 import random
 import re
 import sys
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -36,46 +33,8 @@ from common.bands import (  # noqa: E402
     THINK_START,
     get_band_spec,
 )
+from common.ollama_client import ollama_chat  # noqa: E402
 from common.skills import FAILURE_MODES, get_skill_bucket  # noqa: E402
-
-# ================================================================
-# OLLAMA CLIENT
-# ================================================================
-
-OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-
-
-def ollama_chat(
-    model: str,
-    messages: list[dict],
-    max_tokens: int = 1024,
-    temperature: float = 0.7,
-) -> str:
-    """Chat completion via Ollama."""
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": temperature,
-        },
-    }
-
-    url = f"{OLLAMA_BASE}/api/chat"
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=300) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
-
-    return result.get("message", {}).get("content", "").strip()
-
 
 # ================================================================
 # GENERATION PROMPTS

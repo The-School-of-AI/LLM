@@ -11,7 +11,6 @@ Usage:
 """
 
 import json
-import os
 import re
 import sys
 from datetime import datetime
@@ -23,47 +22,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from common import SKILL_BUCKETS, get_skill_bucket  # noqa: E402
-
-# ================================================================
-# OLLAMA CLIENT
-# ================================================================
-
-OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-
-
-def ollama_chat(
-    model: str,
-    messages: list[dict],
-    max_tokens: int = 2048,
-    temperature: float = 0.8,
-) -> str:
-    """Chat completion via Ollama."""
-    import urllib.request
-
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": temperature,
-        },
-    }
-
-    url = f"{OLLAMA_BASE}/api/chat"
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=300) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
-
-    return result.get("message", {}).get("content", "").strip()
-
+from common.ollama_client import ollama_chat  # noqa: E402
 
 # ================================================================
 # SEED GENERATION PROMPTS

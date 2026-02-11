@@ -144,3 +144,6 @@ logs/
 
 # macOS specific files
 *.DS_Store
+
+# Synthetic data pipeline run logs
+experiments/4_synthetic_data_and_self_distillation/runs/

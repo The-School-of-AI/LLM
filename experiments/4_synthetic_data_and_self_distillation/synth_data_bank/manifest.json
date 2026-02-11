@@ -99,10 +99,10 @@
       "priority": "medium"
     },
     "RSN-ARITHMETIC": {
-      "samples": 3,
+      "samples": 2,
       "band": "B3",
       "cot_allowed": true,
-      "with_hard_negatives": 3,
+      "with_hard_negatives": 2,
       "shard_file": "RSN-ARITHMETIC.jsonl",
       "priority": "critical"
     },
@@ -173,6 +173,6 @@
       "priority": "critical"
     }
   },
-  "updated": "2026-02-06T20:58:37.564626",
+  "updated": "2026-02-09T18:32:20.572201",
   "synth_added": "2026-02-06T12:40:36.035354"
 }

@@ -23,6 +23,7 @@ Commands:
 
 import argparse
 import json
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -62,12 +63,18 @@ def cmd_generate_bank(args):
             if spec.priority in ("critical", "high")
         ]
 
+    tracker = args._tracker
+
     print("\n" + "=" * 60)
     print("  PHASE 1: PRE-GENERATING SYNTHETIC DATA BANK")
     print("=" * 60)
     print(f"  Bank directory: {bank_dir}")
     print(f"  Skills: {len(skills)}")
     print(f"  Samples per skill: {args.num}")
+    tracker.log(
+        "Phase 1: Pre-generating synthetic data bank",
+        data={"bank_dir": str(bank_dir), "skills_count": len(skills), "num": args.num},
+    )
 
     seed_gen = SeedGenerator(model=args.model)
     dual_gen = DualViewGenerator(model=args.model)
@@ -113,12 +120,19 @@ def cmd_generate_bank(args):
                 samples.append(sample)
             except Exception as e:
                 print(f"\n  [ERROR] {i}: {e}")
+                tracker.log(
+                    f"Sample generation failed: {e}",
+                    level="ERROR",
+                    data={"skill": skill_id, "sample_index": i},
+                )
 
         print(f"  Generated {len(samples)} samples")
+        tracker.log(f"Skill complete: {skill_id}", data={"samples": len(samples)})
 
         with open(shard_path, "w", encoding="utf-8") as f:
             for s in samples:
                 f.write(json.dumps(s.to_dict(), ensure_ascii=False) + "\n")
+        tracker.record_output(shard_path)
 
         manifest["skills"][skill_id] = {
             "samples": len(samples),
@@ -127,13 +141,34 @@ def cmd_generate_bank(args):
             "with_hard_negatives": sum(1 for s in samples if s.hard_negative),
             "shard_file": str(shard_path.name),
             "priority": skill.priority,
+            "last_run_id": tracker.run_id,
         }
+
+    # Record last run in manifest
+    manifest["last_run"] = {
+        "run_id": tracker.run_id,
+        "command": "generate-bank",
+        "config_hash": tracker.config_hash,
+        "timestamp": datetime.now().isoformat(),
+    }
 
     with open(bank_dir / "manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
+    tracker.record_output(bank_dir / "manifest.json")
 
     total = sum(m["samples"] for m in manifest["skills"].values())
     print(f"\n[Done] Created bank with {total} total samples")
+    tracker.log("Bank generation complete", data={"total_samples": total})
+
+    if args.glue_export:
+        from integration.glue_exporter import export_bank_to_glue
+
+        export_bank_to_glue(
+            bank_dir=str(bank_dir),
+            output_path=args.glue_output,
+            model=args.model,
+        )
+
     return manifest
 
 
@@ -276,6 +311,7 @@ def cmd_seeds(args):
     with open(output_path, "w", encoding="utf-8") as f:
         for seed in all_seeds:
             f.write(json.dumps(seed, ensure_ascii=False) + "\n")
+    args._tracker.record_output(output_path)
 
     print(f"[Done] Saved {len(all_seeds)} seeds to: {output_path}")
 
@@ -317,6 +353,7 @@ def cmd_generate(args):
     with open(output_path, "w", encoding="utf-8") as f:
         for s in samples:
             f.write(json.dumps(s.to_dict(), ensure_ascii=False) + "\n")
+    args._tracker.record_output(output_path)
 
     print(f"\n[Done] Saved {len(samples)} samples to: {output_path}")
 
@@ -375,8 +412,13 @@ def cmd_diagnose(args):
         results["weak_skills"] = weak_skills
         with open(args.output, "w") as f:
             json.dump(results, f, indent=2)
+        args._tracker.record_output(args.output)
         print(f"\nSaved to: {args.output}")
 
+    args._tracker.log(
+        "Diagnosis complete",
+        data={"weak_skills_count": len(weak_skills), "threshold": args.threshold},
+    )
     return {"results": results, "weak_skills": weak_skills}
 
 
@@ -473,6 +515,7 @@ def cmd_inject(args):
     with open(output_path, "w", encoding="utf-8") as f:
         for item in formatted:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    args._tracker.record_output(output_path)
 
     # Summary with band distribution and injection caps
     band_counts = {}
@@ -570,6 +613,32 @@ def cmd_import_synth(args):
     print(f"\n[Done] Imported {count} samples from SYNTH dataset")
 
 
+def cmd_export_glue(args):
+    """Export synth_data_bank to Glue normalized Parquet format."""
+    from integration.glue_exporter import export_bank_to_glue
+
+    summary = export_bank_to_glue(
+        bank_dir=args.bank_dir,
+        output_path=args.output,
+        skills=args.skills,
+        languages=args.languages,
+        model=args.model,
+    )
+
+    if summary.get("by_source"):
+        print("\n  Source breakdown:")
+        for source, count in summary["by_source"].items():
+            print(f"    {source}: {count} records")
+
+    # Hash all output parquet files
+    output_dir = Path(args.output)
+    if output_dir.exists():
+        for pq_file in output_dir.rglob("*.parquet"):
+            args._tracker.record_output(pq_file)
+
+    print(f"\n[Done] Exported {summary.get('exported', 0)} records to Glue format")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Synthetic Data Pipeline",
@@ -604,6 +673,22 @@ WORKFLOW:
     p.add_argument(
         "--no-error-correction", dest="error_correction", action="store_false"
     )
+    p.add_argument(
+        "--glue-export",
+        action="store_true",
+        help="Also export to Glue normalized Parquet",
+    )
+    p.add_argument(
+        "--glue-output",
+        default="./normalized_output",
+        help="Glue export output path",
+    )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for reproducibility (Ollama + Python)",
+    )
 
     # status
     p = sub.add_parser("status", help="Show bank status")
@@ -626,6 +711,12 @@ WORKFLOW:
     p.add_argument("--difficulty", default="mixed")
     p.add_argument("--output", "-o")
     p.add_argument("--builtin", action="store_true")
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for reproducibility (Ollama + Python)",
+    )
 
     # generate
     p = sub.add_parser("generate", help="Generate for single skill")
@@ -638,6 +729,12 @@ WORKFLOW:
     p.add_argument(
         "--no-error-correction", dest="error_correction", action="store_false"
     )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for reproducibility (Ollama + Python)",
+    )
 
     # diagnose
     p = sub.add_parser("diagnose", help="Run diagnostics (Phase 2)")
@@ -648,6 +745,12 @@ WORKFLOW:
     p.add_argument("--bank-dir", default="./synth_data_bank")
     p.add_argument("--output", "-o")
     p.add_argument("--quiet", "-q", action="store_true")
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for reproducibility (Ollama + Python)",
+    )
 
     # inject
     p = sub.add_parser("inject", help="Prepare injection from bank")
@@ -693,6 +796,12 @@ WORKFLOW:
         "--student", "-s", default="qwen3:4b", help="Student model for re-solve"
     )
     p.add_argument("--output", "-o", help="Output path for verified data")
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for reproducibility (Ollama + Python)",
+    )
 
     # import-synth
     p = sub.add_parser("import-synth", help="Import samples from PleIAs/SYNTH dataset")
@@ -704,11 +813,34 @@ WORKFLOW:
     p.add_argument("--skills", nargs="*", help="Filter by skill buckets")
     p.add_argument("--bands", nargs="*", help="Filter by bands")
 
+    # export-glue
+    p = sub.add_parser(
+        "export-glue", help="Export bank to Glue normalized Parquet format"
+    )
+    p.add_argument("--bank-dir", default="./synth_data_bank", help="Bank directory")
+    p.add_argument("--output", "-o", default="./normalized_output", help="Output path")
+    p.add_argument("--skills", nargs="*", help="Filter by skill IDs")
+    p.add_argument("--languages", nargs="*", help="Filter by language codes")
+    p.add_argument("--model", "-m", help="Model name override (default: from manifest)")
+
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    # Initialize run tracker for reproducibility
+    from common.ollama_client import set_ollama_seed  # noqa: E402
+    from common.run_tracker import RunTracker  # noqa: E402
+
+    tracker = RunTracker(command_name=args.command, args=args)
+    args._tracker = tracker
+
+    # Set seeds if provided
+    seed = getattr(args, "seed", None)
+    if seed is not None:
+        set_ollama_seed(seed)
+        random.seed(seed)
 
     cmds = {
         "generate-bank": cmd_generate_bank,
@@ -722,8 +854,23 @@ WORKFLOW:
         "check-contamination": cmd_check_contamination,
         "verify": cmd_verify,
         "import-synth": cmd_import_synth,
+        "export-glue": cmd_export_glue,
     }
-    cmds[args.command](args)
+
+    try:
+        cmds[args.command](args)
+        tracker.finish(status="success")
+    except KeyboardInterrupt:
+        tracker.log("Run interrupted by user", level="WARN")
+        tracker.finish(status="interrupted")
+        sys.exit(130)
+    except SystemExit:
+        tracker.finish(status="error")
+        raise
+    except Exception as e:
+        tracker.log(f"Run failed: {e}", level="ERROR")
+        tracker.finish(status="error")
+        raise
 
 
 if __name__ == "__main__":

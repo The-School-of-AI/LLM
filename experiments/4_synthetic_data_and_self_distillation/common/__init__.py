@@ -5,6 +5,8 @@ Exports:
   • Band definitions and COT policy
   • Skill buckets and failure modes
   • Special tokens
+  • Ollama client with seed support
+  • Run tracker for reproducibility
 """
 
 from .bands import (
@@ -25,6 +27,13 @@ from .bands import (
     get_cot_max_tokens,
     get_injection_cap,
 )
+from .ollama_client import check_ollama as check_ollama
+from .ollama_client import get_ollama_seed as get_ollama_seed
+from .ollama_client import get_ollama_version as get_ollama_version
+from .ollama_client import ollama_chat as ollama_chat
+from .ollama_client import ollama_generate as ollama_generate
+from .ollama_client import set_ollama_seed as set_ollama_seed
+from .run_tracker import RunTracker as RunTracker
 from .skills import (
     FAILURE_MODES,
     SKILL_BUCKETS,
@@ -69,4 +78,13 @@ __all__ = [
     "get_skill_failure_modes",
     # Languages
     "ALLOWED_LANGUAGES",
+    # Ollama client
+    "ollama_chat",
+    "ollama_generate",
+    "check_ollama",
+    "set_ollama_seed",
+    "get_ollama_seed",
+    "get_ollama_version",
+    # Run tracker
+    "RunTracker",
 ]

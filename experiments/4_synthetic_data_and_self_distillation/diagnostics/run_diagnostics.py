@@ -14,16 +14,15 @@ Usage:
 
 import argparse
 import json
-import os
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
 # Add parent to path for imports
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+from common.ollama_client import check_ollama, ollama_generate  # noqa: E402
 from diagnostics.diagnostic_tests import (  # noqa: E402
     DIAGNOSTIC_TESTS,
     DiagnosticTest,
@@ -31,54 +30,6 @@ from diagnostics.diagnostic_tests import (  # noqa: E402
     get_test_summary,
     get_tests_for_band,
 )
-
-# ================================================================
-# OLLAMA CLIENT (minimal)
-# ================================================================
-
-OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-
-
-def ollama_generate(model: str, prompt: str, max_tokens: int = 150) -> str:
-    """Generate text from Ollama."""
-    # Qwen3 models preamble before answering even with thinking off; enforce a floor
-    max_tokens = max(max_tokens, 100)
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "think": False,  # Top-level: disables Qwen3 thinking mode (ignored if nested in options)
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": 0.1,
-        },
-    }
-
-    url = f"{OLLAMA_BASE}/api/generate"
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
-
-    return result.get("response", "").strip()
-
-
-def check_ollama() -> bool:
-    """Check if Ollama is running."""
-    try:
-        url = f"{OLLAMA_BASE}/api/tags"
-        req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5):
-            return True
-    except Exception:
-        return False
-
 
 # ================================================================
 # TEST RUNNER

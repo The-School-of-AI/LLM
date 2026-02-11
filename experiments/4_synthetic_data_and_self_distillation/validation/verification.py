@@ -15,13 +15,17 @@ Usage:
 
 import json
 import re
-import urllib.request
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-OLLAMA_BASE = "http://localhost:11434"
+# Add parent to path for imports
+_VERIFY_SCRIPT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_VERIFY_SCRIPT_DIR))
+
+from common.ollama_client import ollama_generate as _ollama_generate_base  # noqa: E402
 
 
 @dataclass
@@ -125,27 +129,15 @@ def answers_match(answer1: str, answer2: str, tolerance: float = 0.01) -> bool:
 
 
 def ollama_generate(model: str, prompt: str, max_tokens: int = 200) -> str:
-    """Generate text from Ollama."""
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "think": False,  # Disable thinking mode
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": 0.1,
-        },
-    }
-
+    """Generate text from Ollama with error handling."""
     try:
-        url = f"{OLLAMA_BASE}/api/generate"
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+        return _ollama_generate_base(
+            model=model,
+            prompt=prompt,
+            max_tokens=max_tokens,
+            temperature=0.1,
+            think=False,
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-        return result.get("response", "").strip()
     except Exception as e:
         print(f"  [Ollama Error] {e}")
         return ""
