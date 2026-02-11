@@ -9,6 +9,7 @@
 | :--- | :--- | :--- | :--- |
 | **Active Control** | **Watchdog** | ✅ Ready | PAUSE training instantly on anomalies (SEV-1). |
 | **High-Scale Logs** | **ClickHouse** | ✅ Configured | W&B cannot ingest 70B routing histograms at 60Hz. |
+| **System Metrics** | **SystemMetricsCollector** | ✅ Ready | CPU/RAM/Disk/GPU/Net → JSONL → Vector → ClickHouse. |
 | **Unified View** | **Aggregator** | ✅ Ready | Merge Live (Custom Metrics) and History (ClickHouse). |
 
 ## 2. Integration Contracts
@@ -17,6 +18,7 @@
 - **Logs (Push)**: Use `JSONLogger`. Writes to local NVMe.
 - **Safety**: Poll `check_control_plane()`. Watchdog writes to `/tmp/training_control.flag`.
 - **Metrics (Pull)**: `metrics_server.py` exposes JSON API on port `8000`.
+- **System Metrics**: `SystemMetricsCollector` writes host metrics as JSONL alongside training logs.
 
 ### 🔵 For the Dashboard Team (Downstream)
 - **API**: `GET /metrics?run_id=X&metric=loss`.
@@ -36,6 +38,9 @@ graph TD
         
         A -->|Update| M(MetricsServer)
         M -->|Expose| P8[Port 8000]
+        
+        SC[SystemMetricsCollector] -->|Write| C
+        M -->|Start/Stop| SC
         
         W[Watchdog Service] -->|3. Poll| P8
         W -->|Write Pause| FLAG[Control Flag]
@@ -58,7 +63,8 @@ graph TD
 
 ### Phase 1: The "Extraction Run" (Logs & Metrics)
 *   **Logs (Push)**: `JSONLogger` writes to local disk. `Vector` picks it up and pushes to ClickHouse.
-*   **Metrics (Pull)**: `metrics_server.py` exposes system stats as JSON on Port 8000. Watchdog and Dashboard query this endpoint directly.
+*   **Metrics (Pull)**: `metrics_server.py` exposes training stats as JSON on Port 8000. Watchdog and Dashboard query this endpoint directly.
+*   **System Metrics (Push)**: `SystemMetricsCollector` writes CPU/RAM/Disk/GPU/Net as JSONL to the same log directory. Vector fans out each metric key into `metric_points` in ClickHouse.
 
 ### Phase 2: The "Safety Check" (Watchdog)
 *   `Watchdog` polls the custom metrics server.

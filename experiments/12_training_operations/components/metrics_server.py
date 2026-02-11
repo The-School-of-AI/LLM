@@ -1,5 +1,6 @@
 """Metrics server for P12 POC — Custom Implementation (no Prometheus)"""
 import json
+import os
 import time
 import yaml
 import psutil
@@ -164,9 +165,23 @@ class _MetricsHandler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 
 class MetricsServer:
-    def __init__(self, config_path="config.yaml"):
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
+    _DEFAULTS = {
+        "training": {
+            "metrics_port": 8000,
+        }
+    }
+
+    def __init__(self, config_path=None):
+        if config_path and os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                self.config = yaml.safe_load(f) or {}
+        else:
+            self.config = {}
+        # Merge defaults for any missing keys
+        for section, values in self._DEFAULTS.items():
+            self.config.setdefault(section, {})
+            for k, v in values.items():
+                self.config[section].setdefault(k, v)
 
         # Gauges
         self.loss = _Gauge('training_loss', 'Training loss')
@@ -216,7 +231,16 @@ class MetricsServer:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def start(self):
+    def start(self, system_collector=None):
+        """
+        Start the HTTP server and system metrics collection.
+
+        Parameters
+        ----------
+        system_collector : SystemMetricsCollector | None
+            If provided, the collector is started alongside this server.
+            Pass one in to have system metrics written to disk for Vector.
+        """
         port = self.config['training']['metrics_port']
 
         self._httpd = HTTPServer(("0.0.0.0", port), _MetricsHandler)
@@ -229,6 +253,11 @@ class MetricsServer:
         self.collection_thread = threading.Thread(target=self._collect_system_metrics, daemon=True)
         self.collection_thread.start()
 
+        # Optionally start the disk-writing system collector (for ClickHouse)
+        self._system_collector = system_collector
+        if self._system_collector is not None:
+            self._system_collector.start()
+
     def _collect_system_metrics(self):
         while self.running:
             try:
@@ -240,6 +269,8 @@ class MetricsServer:
 
     def stop(self):
         self.running = False
+        if self._system_collector is not None:
+            self._system_collector.stop()
         if self._httpd:
             self._httpd.shutdown()
         if self.collection_thread:
@@ -315,7 +346,7 @@ class MetricsServer:
 
 _metrics_server = None
 
-def get_metrics_server(config_path="config.yaml"):
+def get_metrics_server(config_path=None):
     global _metrics_server
     if _metrics_server is None:
         _metrics_server = MetricsServer(config_path)

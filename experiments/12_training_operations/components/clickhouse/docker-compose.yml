@@ -16,6 +16,7 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
       - ./initdb.d:/docker-entrypoint-initdb.d:ro
+      - ./users.d:/etc/clickhouse-server/users.d:ro
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
       interval: 5s

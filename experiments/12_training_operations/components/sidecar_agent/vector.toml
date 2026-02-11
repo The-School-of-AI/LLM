@@ -10,6 +10,13 @@
 [sources.training_logs]
 type = "file"
 include = ["/tmp/training_logs/**/*.jsonl"]
+exclude = ["/tmp/training_logs/**/system_metrics_*.jsonl"]
+ignore_older_secs = 600
+read_from = "beginning"
+
+[sources.system_metrics_logs]
+type = "file"
+include = ["/tmp/training_logs/**/system_metrics_*.jsonl"]
 ignore_older_secs = 600
 read_from = "beginning"
 
@@ -18,7 +25,7 @@ read_from = "beginning"
 # Step 1: Parse raw JSONL line into structured object
 [transforms.parse_json]
 type = "remap"
-inputs = ["training_logs"]
+inputs = ["training_logs", "system_metrics_logs"]
 source = '''
   . = parse_json!(.message)
   .host = get_hostname!()
@@ -29,8 +36,17 @@ source = '''
 type = "remap"
 inputs = ["parse_json"]
 source = '''
-  if exists(.metrics) { .metrics = encode_json(.metrics) }
-  if exists(.context) { .context = encode_json(.context) }
+  m = if exists(.metrics) { encode_json(.metrics) } else { "{}" }
+  c = if exists(.context) { encode_json(.context) } else { "{}" }
+  . = {
+    "timestamp": string!(.timestamp),
+    "step":      to_int(.step) ?? 0,
+    "metrics":   m,
+    "context":   c,
+    "host":      string!(.host),
+    "run_id":    string!(.run_id),
+    "rank":      to_int(.rank) ?? 0
+  }
 '''
 
 # Step 3: Explode metrics object into one event per metric key (fan-out)
@@ -39,7 +55,6 @@ source = '''
 type = "remap"
 inputs = ["parse_json"]
 source = '''
-  base_ts   = string!(.timestamp)
   base_rid  = string!(.run_id)
   base_host = string!(.host)
   base_rank = to_int(.rank) ?? 0
@@ -55,7 +70,6 @@ source = '''
     v = to_float(raw_val) ?? null
     if v != null {
       points = push(points, {
-        "event_time": base_ts,
         "run_id":     base_rid,
         "host":       base_host,
         "rank":       base_rank,
