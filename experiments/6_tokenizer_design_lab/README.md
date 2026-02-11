@@ -9,7 +9,7 @@ This directory contains the **TSAI 131K Tokenizer**, a pruned GPToss tokenizer o
 ```text
 .
 ├── tsai_131k_tokenizer/       # Generated tokenizer files
-│   ├── tokenizer.json         # Our tokenizer files
+│   ├── tokenizer.json         # Our tokenizer file
 │   ├── tokenizer_config.json
 │   └── special_tokens_map.json
 ├── kronecker_embeddings/      # Kronecker embeddings scripts & docs
