@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 from repro.ids import (
     generate_training_run_id,
@@ -50,7 +50,7 @@ def start_training_run(config: dict, seed: int, bucket="experiment-registry"):
     manifest = RunManifest(
         run_id=run_id,
         pipeline="training",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         git=GitInfo(
             repo_url=get_repo_url(),
             commit_hash=get_commit_hash(),
@@ -61,7 +61,7 @@ def start_training_run(config: dict, seed: int, bucket="experiment-registry"):
         status="STARTED",
     )
 
-    (run_dir / "manifest.json").write_text(manifest.json(indent=2))
+    (run_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2))
 
     s3 = ImmutableS3Writer(bucket, f"runs/{run_id}")
     return RunContext(run_id, run_dir, s3)
@@ -70,11 +70,11 @@ def finalize_run(ctx: RunContext, status: str = "COMPLETED"):
     assert status in {"COMPLETED", "FAILED", "ABORTED"}
 
     manifest_path = ctx.run_dir / "manifest.json"
-    manifest = RunManifest.parse_raw(manifest_path.read_text())
+    manifest = RunManifest.model_validate_json(manifest_path.read_text())
     manifest.status = status
 
     # Rewrite manifest locally
-    manifest_path.write_text(manifest.json(indent=2))
+    manifest_path.write_text(manifest.model_dump_json(indent=2))
 
     # Upload all artifacts EXCEPT manifest
     for p in sorted(ctx.run_dir.rglob("*")):

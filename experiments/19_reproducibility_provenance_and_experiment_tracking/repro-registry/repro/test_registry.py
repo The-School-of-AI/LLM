@@ -98,7 +98,7 @@ def test_start_training_run(monkeypatch, tmp_path: Path):
     manifest_path = rc.run_dir / "manifest.json"
     assert manifest_path.exists()
 
-    manifest = RunManifest.parse_raw(manifest_path.read_text())
+    manifest = RunManifest.model_validate_json(manifest_path.read_text())
 
     assert manifest.run_id == "run123"
     assert manifest.pipeline == "training"

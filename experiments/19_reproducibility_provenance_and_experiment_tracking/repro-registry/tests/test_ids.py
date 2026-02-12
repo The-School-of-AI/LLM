@@ -5,7 +5,7 @@ import pytest
 
 
 import re
-from run_id import (
+from repro.ids import (
     generate_run_id,
     generate_training_run_id,
     generate_coreset_run_id,
@@ -58,7 +58,7 @@ def test_generate_run_id_deterministic(monkeypatch):
     fixed_uuid = uuid.UUID("12345678-1234-5678-1234-567812345678")
 
     monkeypatch.setattr(
-        "run_id.datetime",
+        "repro.ids.datetime",
         type(
             "MockDateTime",
             (),
@@ -67,7 +67,7 @@ def test_generate_run_id_deterministic(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "run_id.uuid.uuid4",
+        "repro.ids.uuid.uuid4",
         lambda: fixed_uuid,
     )
 

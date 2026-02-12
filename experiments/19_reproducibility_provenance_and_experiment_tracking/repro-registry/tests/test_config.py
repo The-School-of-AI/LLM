@@ -1,7 +1,7 @@
 from pathlib import Path
 import yaml
 
-from repro.freeze import freeze_config, hash_file
+from repro.config import freeze_config, hash_file
 
 #Test hash_file() produces a valid SHA-256 hash
 

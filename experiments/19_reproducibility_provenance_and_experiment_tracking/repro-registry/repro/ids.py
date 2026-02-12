@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 def generate_run_id(prefix: str) -> str:
-    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     short = uuid.uuid4().hex[:6]
     return f"{prefix}_{ts}_{short}"
 
