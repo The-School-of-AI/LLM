@@ -1,404 +1,429 @@
 """
-Flexible Training Dashboard - Backend Server
-Automatically discovers and visualizes metrics from ANY training logs.
-
-Features:
-- Auto-discovers all metrics in logs (no hardcoded metric names)
-- Works with any framework (PyTorch, TensorFlow, JAX, custom)
-- Dynamic chart generation based on user selection
-- Supports local files and S3 storage
-- Zero configuration required
+dashboard_server.py
+ClickHouse-backed Training Dashboard Server — with auto table discovery
 """
 
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-import json
-import os
+import clickhouse_connect
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-import threading
-import time
 from collections import defaultdict
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION
+# -----------------------------------------------------------------------------
+
+CLICKHOUSE_HOST     = "100.30.191.29"
+CLICKHOUSE_PORT     = 8123
+CLICKHOUSE_USER     = "default"
+CLICKHOUSE_PASSWORD = ""
+CLICKHOUSE_DB       = "training_observability"
+
+DASHBOARD_DIR = Path("dashboard")
+
+# -----------------------------------------------------------------------------
+# APP SETUP
+# -----------------------------------------------------------------------------
 
 app = Flask(__name__)
 CORS(app)
 
-# Configuration
-LOG_DIR = Path("../training/deepspeed_template/logs")
-DASHBOARD_DIR = Path("dashboard")
+ch_client = clickhouse_connect.get_client(
+    host=CLICKHOUSE_HOST,
+    port=CLICKHOUSE_PORT,
+    username=CLICKHOUSE_USER,
+    password=CLICKHOUSE_PASSWORD,
+    database=CLICKHOUSE_DB
+)
 
+# -----------------------------------------------------------------------------
+# TABLE DISCOVERY
+# Runs once at startup, cached in TABLE_REGISTRY
+# Each entry describes what columns the table has so we know how to query it
+#
+# Roles assigned:
+#   "runs"    - has run_id but no step/metric → treated as run metadata
+#   "scalar"  - has run_id + step + metric + a float value → time-series charts
+#   "array"   - has run_id + step + metric + Array(Float) values → histograms
+#   "events"  - has run_id + step + event_type/message → event log
+#   "generic" - has run_id + step but unknown structure → still surfaced
+#   "ignored" - no run_id column, can't be linked to a run
+# -----------------------------------------------------------------------------
 
-class FlexibleMetricsServer:
-    """
-    Flexible metrics server that discovers and serves any metrics from logs.
-    No hardcoded metric names - works with anything!
-    """
-    
-    def __init__(self, log_dir: Path):
-        self.log_dir = log_dir
-        self.cache = {}
-        self.cache_lock = threading.Lock()
-        self.cache_ttl = 5  # seconds
-        self.last_cache_update = {}
-    
-    def get_runs(self) -> List[Dict[str, Any]]:
-        """
-        Get list of all training runs.
-        Scans log directory for any folders containing metrics.
-        """
-        runs = []
-        
-        if not self.log_dir.exists():
-            return runs
-        
-        for run_dir in self.log_dir.iterdir():
-            if not run_dir.is_dir():
-                continue
-            
-            # Check if this directory has metrics
-            metrics_dir = run_dir / "metrics"
-            if not metrics_dir.exists():
-                continue
-            
-            # Try to load metadata
-            metadata_file = run_dir / "metadata.json"
-            metadata = {
-                "run_id": run_dir.name,
-                "status": "unknown",
-                "start_time": None
-            }
-            
-            if metadata_file.exists():
-                try:
-                    with open(metadata_file) as f:
-                        loaded_metadata = json.load(f)
-                        metadata.update(loaded_metadata)
-                except Exception as e:
-                    print(f"Error reading metadata for {run_dir}: {e}")
-            
-            # Get summary if exists
-            summary_file = run_dir / "summary.json"
-            if summary_file.exists():
-                try:
-                    with open(summary_file) as f:
-                        summary = json.load(f)
-                    metadata["summary"] = summary
-                except Exception as e:
-                    print(f"Error reading summary for {run_dir}: {e}")
-            
-            runs.append(metadata)
-        
-        # Sort by start time (newest first)
-        runs.sort(key=lambda x: x.get("start_time", ""), reverse=True)
-        return runs
-    
-    def discover_metrics(self, run_id: str) -> Dict[str, List[str]]:
-        """
-        AUTO-DISCOVER all metrics in a run's logs.
-        This is the magic - no hardcoded metric names!
-        
-        Returns metrics grouped by category:
-        {
-            "train": ["train/loss", "train/lr"],
-            "gpu": ["gpu/temp", "gpu/util"],
-            "custom": ["my_metric", "another_one"]
+TABLE_REGISTRY = {}
+
+def discover_tables():
+    result = ch_client.query("""
+        SELECT table, name, type
+        FROM system.columns
+        WHERE database = %(db)s
+        ORDER BY table, position
+    """, {"db": CLICKHOUSE_DB})
+
+    # Group columns by table
+    tables = defaultdict(dict)
+    for row in result.result_rows:
+        table, col_name, col_type = row
+        tables[table][col_name] = col_type
+
+    registry = {}
+    for table, cols in tables.items():
+        col_names = set(cols.keys())
+
+        if "run_id" not in col_names:
+            registry[table] = {"columns": cols, "role": "ignored"}
+            continue
+
+        has_step   = "step"   in col_names
+        has_metric = "metric" in col_names
+
+        array_cols = [
+            c for c, t in cols.items()
+            if t.startswith("Array(Float") or t.startswith("Array(Int")
+        ]
+        scalar_cols = [
+            c for c, t in cols.items()
+            if any(t.startswith(p) for p in ("Float", "Int", "UInt"))
+            and c not in ("step", "rank", "device")
+            and not t.startswith("Array")
+        ]
+
+        if not has_step and not has_metric:
+            role = "runs"
+        elif has_step and has_metric and array_cols:
+            role = "array"
+        elif has_step and has_metric and scalar_cols:
+            role = "scalar"
+        elif has_step and ("event_type" in col_names or "message" in col_names):
+            role = "events"
+        elif has_step:
+            role = "generic"
+        else:
+            role = "ignored"
+
+        registry[table] = {
+            "columns":     cols,
+            "role":        role,
+            "array_cols":  array_cols,
+            "scalar_cols": scalar_cols,
         }
+
+    return registry
+
+
+def refresh_table_registry():
+    global TABLE_REGISTRY
+    TABLE_REGISTRY = discover_tables()
+    print(f"📋 Discovered {len(TABLE_REGISTRY)} tables:")
+    for t, info in TABLE_REGISTRY.items():
+        print(f"   {t:30s} → {info['role']}")
+
+
+refresh_table_registry()
+
+# -----------------------------------------------------------------------------
+# DATABASE FUNCTIONS
+# -----------------------------------------------------------------------------
+
+def get_runs():
+    """
+    Query the runs table (role=runs) for rich metadata.
+    Falls back to scanning all metric tables for distinct run_ids.
+    """
+    runs_tables = [t for t, info in TABLE_REGISTRY.items() if info["role"] == "runs"]
+
+    if runs_tables:
+        table = runs_tables[0]
+        cols  = set(TABLE_REGISTRY[table]["columns"].keys())
+
+        select_parts = ["run_id"]
+        if "status"       in cols: select_parts.append("status")
+        if "model_name"   in cols: select_parts.append("model_name")
+        if "model_size"   in cols: select_parts.append("model_size")
+        if "source"       in cols: select_parts.append("source")
+        if "cluster"      in cols: select_parts.append("cluster")
+        if "created_time" in cols:
+            select_parts.append("formatDateTime(created_time, '%Y-%m-%d %H:%i') AS created_at")
+
+        order = "created_time DESC" if "created_time" in cols else "run_id DESC"
+        query = f"""
+            SELECT {', '.join(select_parts)}
+            FROM {table}
+            FINAL
+            ORDER BY {order}
+            LIMIT 200
         """
-        cache_key = f"metrics_{run_id}"
-        
-        # Check cache
-        with self.cache_lock:
-            if cache_key in self.cache:
-                if time.time() - self.last_cache_update.get(cache_key, 0) < self.cache_ttl:
-                    return self.cache[cache_key]
-        
-        run_dir = self.log_dir / run_id
-        metrics_dir = run_dir / "metrics"
-        
-        if not metrics_dir.exists():
-            return {}
-        
-        # Find all JSONL files
-        jsonl_files = list(metrics_dir.glob("*.jsonl"))
-        
-        if not jsonl_files:
-            return {}
-        
-        # Scan files and extract unique metric names
-        unique_metrics = set()
-        
-        for jsonl_file in jsonl_files:
+        result = ch_client.query(query)
+
+        runs = []
+        for row in result.result_rows:
+            keys = [p.split(" AS ")[-1] for p in select_parts]
+            run  = dict(zip(keys, row))
+            runs.append({
+                "run_id":     run.get("run_id", ""),
+                "status":     run.get("status", "unknown"),
+                "model_name": run.get("model_name", ""),
+                "model_size": run.get("model_size", ""),
+                "source":     run.get("source", ""),
+                "cluster":    run.get("cluster", ""),
+                "created_at": run.get("created_at", ""),
+            })
+        if runs:
+            return runs
+
+    # Fallback: collect run_ids from all data tables
+    run_ids = set()
+    for table, info in TABLE_REGISTRY.items():
+        if info["role"] in ("scalar", "array", "events", "generic"):
             try:
-                with open(jsonl_file) as f:
-                    # Sample first 1000 lines to discover metrics quickly
-                    for i, line in enumerate(f):
-                        if i >= 1000:
-                            break
-                        
-                        try:
-                            entry = json.loads(line.strip())
-                            metric_name = entry.get("metric")
-                            if metric_name:
-                                unique_metrics.add(metric_name)
-                        except json.JSONDecodeError:
-                            continue
-            except Exception as e:
-                print(f"Error scanning {jsonl_file}: {e}")
-        
-        # Group metrics by category (prefix before "/")
-        grouped = defaultdict(list)
-        
-        for metric in sorted(unique_metrics):
-            if "/" in metric:
-                category = metric.split("/", 1)[0]
-            else:
-                category = "other"
-            
-            grouped[category].append(metric)
-        
-        result = dict(grouped)
-        
-        # Update cache
-        with self.cache_lock:
-            self.cache[cache_key] = result
-            self.last_cache_update[cache_key] = time.time()
-        
-        return result
-    
-    def get_metric_data(self, run_id: str, metric_names: List[str], 
-                       max_points: int = 1000) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        Get historical data for specific metrics.
-        Supports multiple metrics in one call.
-        
-        Args:
-            run_id: Run identifier
-            metric_names: List of metric names to fetch
-            max_points: Maximum data points per metric (downsamples if needed)
-        
-        Returns:
-            Dictionary mapping metric name to list of {step, value, timestamp}
-        """
-        run_dir = self.log_dir / run_id
-        metrics_dir = run_dir / "metrics"
-        
-        if not metrics_dir.exists():
-            return {}
-        
-        # Find JSONL files
-        jsonl_files = list(metrics_dir.glob("*.jsonl"))
-        
-        if not jsonl_files:
-            return {}
-        
-        # Collect data for requested metrics
-        data = {metric: [] for metric in metric_names}
-        
-        for jsonl_file in jsonl_files:
-            try:
-                with open(jsonl_file) as f:
-                    for line in f:
-                        try:
-                            entry = json.loads(line.strip())
-                            metric_name = entry.get("metric")
-                            
-                            if metric_name in metric_names:
-                                data[metric_name].append({
-                                    "step": entry.get("step"),
-                                    "value": entry.get("value"),
-                                    "timestamp": entry.get("timestamp")
-                                })
-                        except json.JSONDecodeError:
-                            continue
-            except Exception as e:
-                print(f"Error reading {jsonl_file}: {e}")
-        
-        # Downsample if needed
-        for metric_name in data:
-            if len(data[metric_name]) > max_points:
-                step_size = len(data[metric_name]) // max_points
-                data[metric_name] = data[metric_name][::step_size]
-        
-        return data
-    
-    def get_current_metrics(self, run_id: str) -> Dict[str, Any]:
-        """Get current/latest values for all metrics"""
-        cache_key = f"current_{run_id}"
-        
-        # Check cache
-        with self.cache_lock:
-            if cache_key in self.cache:
-                if time.time() - self.last_cache_update.get(cache_key, 0) < self.cache_ttl:
-                    return self.cache[cache_key]
-        
-        run_dir = self.log_dir / run_id
-        current_file = run_dir / "current_metrics.json"
-        
-        if not current_file.exists():
-            return {}
-        
+                rows = ch_client.query(f"""
+                    SELECT DISTINCT run_id FROM {table}
+                    WHERE run_id != '' LIMIT 200
+                """).result_rows
+                run_ids.update(r[0] for r in rows)
+            except Exception:
+                pass
+
+    return [{"run_id": rid, "status": "unknown", "model_name": "",
+             "model_size": "", "source": "", "cluster": "", "created_at": ""}
+            for rid in sorted(run_ids, reverse=True)]
+
+
+def discover_metrics(run_id):
+    """
+    Scan all scalar/array tables for metrics belonging to this run.
+    Groups them by the prefix before the first '/'.
+    """
+    grouped = defaultdict(list)
+
+    for table, info in TABLE_REGISTRY.items():
+        if info["role"] not in ("scalar", "array", "generic"):
+            continue
+        if "metric" not in info["columns"]:
+            continue
         try:
-            with open(current_file) as f:
-                data = json.load(f)
-            
-            # Update cache
-            with self.cache_lock:
-                self.cache[cache_key] = data
-                self.last_cache_update[cache_key] = time.time()
-            
-            return data
-        except Exception as e:
-            print(f"Error reading current metrics: {e}")
-            return {}
+            rows = ch_client.query(f"""
+                SELECT DISTINCT metric FROM {table}
+                WHERE run_id = %(run_id)s
+                ORDER BY metric
+            """, {"run_id": run_id}).result_rows
+        except Exception:
+            continue
+
+        kind = "array" if info["role"] == "array" else "scalar"
+        for (metric,) in rows:
+            category = metric.split("/", 1)[0] if "/" in metric else table
+            grouped[category].append({"name": metric, "kind": kind, "table": table})
+
+    return dict(grouped)
 
 
-# Initialize server
-metrics_server = FlexibleMetricsServer(LOG_DIR)
+def get_metric_data(run_id, metric_names, max_points=1000):
+    """
+    Fetch data for the requested metrics, auto-routing to the correct table.
+    Scalar → [{x: step, y: value}]
+    Array  → [{step, keys, value: [...]}]
+    """
+    # Build metric → (table, role) map
+    metric_table_map = {}
+    for table, info in TABLE_REGISTRY.items():
+        if info["role"] not in ("scalar", "array", "generic"):
+            continue
+        if "metric" not in info["columns"]:
+            continue
+        try:
+            rows = ch_client.query(f"""
+                SELECT DISTINCT metric FROM {table}
+                WHERE run_id = %(run_id)s
+            """, {"run_id": run_id}).result_rows
+            for (m,) in rows:
+                if m in metric_names:
+                    metric_table_map[m] = (table, info["role"])
+        except Exception:
+            pass
+
+    data = {}
+
+    for metric in metric_names:
+        if metric not in metric_table_map:
+            continue
+        table, role = metric_table_map[metric]
+
+        if role == "array":
+            try:
+                rows = ch_client.query(f"""
+                    SELECT step, keys, values FROM {table}
+                    WHERE run_id = %(run_id)s AND metric = %(metric)s
+                    ORDER BY step
+                """, {"run_id": run_id, "metric": metric}).result_rows
+                if rows:
+                    data[metric] = [
+                        {"step": int(r[0]), "keys": list(r[1]), "value": list(r[2])}
+                        for r in rows
+                    ]
+            except Exception:
+                pass
+        else:
+            try:
+                rows = ch_client.query(f"""
+                    SELECT step, avg(value) AS value
+                    FROM {table}
+                    WHERE run_id = %(run_id)s AND metric = %(metric)s
+                    GROUP BY step ORDER BY step
+                """, {"run_id": run_id, "metric": metric}).result_rows
+                if rows:
+                    points = [{"x": int(r[0]), "y": float(r[1])} for r in rows]
+                    if len(points) > max_points:
+                        step_size = max(1, len(points) // max_points)
+                        points = points[::step_size]
+                    data[metric] = points
+            except Exception:
+                pass
+
+    return data
 
 
-# ============================================================================
-# API Routes
-# ============================================================================
+def get_run_events(run_id, limit=200):
+    """Pull from all event-role tables for this run."""
+    events = []
+    for table, info in TABLE_REGISTRY.items():
+        if info["role"] != "events":
+            continue
+        cols = set(info["columns"].keys())
+        try:
+            select_parts = [
+                "formatDateTime(event_time, '%Y-%m-%d %H:%i:%S') AS ts" if "event_time" in cols else "'' AS ts",
+                "step"       if "step"       in cols else "0 AS step",
+                "event_type" if "event_type" in cols else "'' AS event_type",
+                "severity"   if "severity"   in cols else "'' AS severity",
+                "message"    if "message"    in cols else "'' AS message",
+                "host"       if "host"       in cols else "'' AS host",
+                "rank"       if "rank"       in cols else "0 AS rank",
+            ]
+            rows = ch_client.query(f"""
+                SELECT {', '.join(select_parts)}
+                FROM {table}
+                WHERE run_id = %(run_id)s
+                ORDER BY event_time DESC
+                LIMIT %(limit)s
+            """, {"run_id": run_id, "limit": limit}).result_rows
+            for r in rows:
+                events.append({
+                    "time": r[0], "step": int(r[1]), "event_type": r[2],
+                    "severity": r[3], "message": r[4],
+                    "host": r[5], "rank": int(r[6]),
+                    "source_table": table,
+                })
+        except Exception:
+            pass
+
+    return sorted(events, key=lambda e: e["time"], reverse=True)
+
+
+def get_current_metrics(run_id):
+    result_map = {}
+    for table, info in TABLE_REGISTRY.items():
+        if info["role"] not in ("scalar", "generic"):
+            continue
+        if "metric" not in info["columns"]:
+            continue
+        try:
+            rows = ch_client.query(f"""
+                SELECT metric, argMax(value, step)
+                FROM {table}
+                WHERE run_id = %(run_id)s
+                GROUP BY metric
+            """, {"run_id": run_id}).result_rows
+            for r in rows:
+                result_map[r[0]] = r[1]
+        except Exception:
+            pass
+    return result_map
+
+
+# -----------------------------------------------------------------------------
+# API ROUTES
+# -----------------------------------------------------------------------------
 
 @app.route("/api/runs")
 def api_runs():
-    """Get list of all training runs"""
-    runs = metrics_server.get_runs()
-    return jsonify({"runs": runs})
-
-
-@app.route("/api/runs/<run_id>")
-def api_run_details(run_id):
-    """Get details for a specific run"""
-    runs = metrics_server.get_runs()
-    run = next((r for r in runs if r["run_id"] == run_id), None)
-    
-    if not run:
-        return jsonify({"error": "Run not found"}), 404
-    
-    return jsonify(run)
-
+    return jsonify({"runs": get_runs()})
 
 @app.route("/api/runs/<run_id>/metrics")
 def api_discover_metrics(run_id):
-    """
-    AUTO-DISCOVER all metrics in a run.
-    This is the key endpoint that makes the dashboard flexible!
-    """
-    metrics = metrics_server.discover_metrics(run_id)
-    return jsonify({"metrics": metrics})
-
+    return jsonify({"metrics": discover_metrics(run_id)})
 
 @app.route("/api/runs/<run_id>/data")
 def api_metric_data(run_id):
-    """
-    Get data for selected metrics.
-    
-    Query params:
-        metrics: Comma-separated list of metric names
-        max_points: Maximum points per metric (default 1000)
-    """
-    # Parse query params
     metrics_param = request.args.get("metrics", "")
-    metric_names = [m.strip() for m in metrics_param.split(",") if m.strip()]
-    max_points = request.args.get("max_points", 1000, type=int)
-    
+    metric_names  = [m.strip() for m in metrics_param.split(",") if m.strip()]
+    max_points    = request.args.get("max_points", 1000, type=int)
     if not metric_names:
         return jsonify({"error": "No metrics specified"}), 400
-    
-    # Fetch data
-    data = metrics_server.get_metric_data(run_id, metric_names, max_points)
-    
-    return jsonify(data)
-
+    return jsonify(get_metric_data(run_id, metric_names, max_points))
 
 @app.route("/api/runs/<run_id>/current")
-def api_current_metrics(run_id):
-    """Get current/latest values for all metrics"""
-    metrics = metrics_server.get_current_metrics(run_id)
-    return jsonify(metrics)
+def api_current(run_id):
+    return jsonify(get_current_metrics(run_id))
 
+@app.route("/api/runs/<run_id>/events")
+def api_events(run_id):
+    limit = request.args.get("limit", 200, type=int)
+    return jsonify({"events": get_run_events(run_id, limit)})
+
+@app.route("/api/tables")
+def api_tables():
+    """See all discovered tables and their assigned roles."""
+    return jsonify({
+        table: {"role": info["role"], "columns": list(info["columns"].keys())}
+        for table, info in TABLE_REGISTRY.items()
+        if info["role"] != "ignored"
+    })
+
+@app.route("/api/tables/refresh")
+def api_refresh_tables():
+    """
+    Call this after your team adds a new table — no server restart needed.
+    Just hit: GET /api/tables/refresh
+    """
+    refresh_table_registry()
+    return jsonify({
+        table: {"role": info["role"], "columns": list(info["columns"].keys())}
+        for table, info in TABLE_REGISTRY.items()
+        if info["role"] != "ignored"
+    })
 
 @app.route("/api/health")
 def api_health():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "ok",
-        "log_dir": str(LOG_DIR.absolute()),
-        "log_dir_exists": LOG_DIR.exists()
-    })
+    try:
+        ch_client.query("SELECT 1")
+        return jsonify({
+            "status": "ok",
+            "clickhouse": "connected",
+            "tables_discovered": len([t for t in TABLE_REGISTRY if TABLE_REGISTRY[t]["role"] != "ignored"])
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "clickhouse": str(e)}), 500
 
-
-# ============================================================================
-# Serve Dashboard Frontend
-# ============================================================================
+# -----------------------------------------------------------------------------
+# SERVE FRONTEND
+# -----------------------------------------------------------------------------
 
 @app.route("/")
 def serve_dashboard():
-    """Serve the main dashboard HTML"""
-    dashboard_file = DASHBOARD_DIR / "index.html"
-    if dashboard_file.exists():
-        return send_from_directory(DASHBOARD_DIR, "index.html")
-    return "Dashboard not found. Please ensure dashboard/index.html exists.", 404
-
+    return send_from_directory(DASHBOARD_DIR, "index.html")
 
 @app.route("/<path:path>")
 def serve_static(path):
-    """Serve static files (CSS, JS, etc.)"""
     return send_from_directory(DASHBOARD_DIR, path)
 
-
-# ============================================================================
-# Main
-# ============================================================================
-
-def run_server(host="0.0.0.0", port=5000, debug=False, log_dir=None):
-    """
-    Run the flexible dashboard server.
-    
-    Args:
-        host: Host to bind to
-        port: Port to listen on
-        debug: Enable debug mode
-        log_dir: Custom log directory (overrides default)
-    """
-    global LOG_DIR, metrics_server
-    
-    if log_dir:
-        LOG_DIR = Path(log_dir)
-        metrics_server = FlexibleMetricsServer(LOG_DIR)
-    
-    print("=" * 80)
-    print("🚀 Flexible Training Dashboard Server")
-    print("=" * 80)
-    print(f"Server: http://{host}:{port}")
-    print(f"Logs: {LOG_DIR.absolute()}")
-    print(f"Logs exist: {LOG_DIR.exists()}")
-    print("=" * 80)
-    print("\nFeatures:")
-    print("  ✅ Auto-discovers ALL metrics (no hardcoded names)")
-    print("  ✅ Works with ANY framework")
-    print("  ✅ Dynamic chart generation")
-    print("  ✅ Zero configuration required")
-    print("=" * 80)
-    
-    app.run(host=host, port=port, debug=debug, threaded=True)
-
+# -----------------------------------------------------------------------------
+# MAIN
+# -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Flexible Training Dashboard Server")
-    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=5000, help="Port to listen on")
-    parser.add_argument("--log-dir", help="Directory containing logs")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
-    
-    args = parser.parse_args()
-    
-    run_server(
-        host=args.host,
-        port=args.port,
-        debug=args.debug,
-        log_dir=args.log_dir
-    )
+    print(f"\n🚀 ClickHouse Dashboard Server Running")
+    print(f"   Host:     {CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}")
+    print(f"   Database: {CLICKHOUSE_DB}")
+    print(f"   Tables:   {len([t for t in TABLE_REGISTRY if TABLE_REGISTRY[t]['role'] != 'ignored'])} active\n")
+    app.run(host="0.0.0.0", port=5050, debug=True)

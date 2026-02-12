@@ -1,543 +1,1162 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>Training Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e2e8f0; }
-        
-        .header { 
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); 
-            padding: 1.5rem 2rem; 
-            border-bottom: 2px solid #334155; 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        :root {
+            --bg: #080c14;
+            --surface: #0d1117;
+            --card: #111820;
+            --border: #1e2a38;
+            --border2: #2a3a50;
+            --text: #c9d8e8;
+            --muted: #4a6080;
+            --accent: #00d4ff;
+            --accent2: #7c3aed;
+            --green: #00e5a0;
+            --yellow: #f5a623;
+            --red: #ff4d6a;
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'DM Sans', sans-serif;
         }
-        .header h1 { font-size: 1.8rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem; }
-        .header-subtitle { font-size: 0.875rem; color: #94a3b8; font-weight: 500; }
-        
-        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-        
-        .controls { 
-            background: #111827; 
-            border: 1px solid #1e293b; 
-            border-radius: 0.75rem; 
-            padding: 1.5rem; 
-            margin-bottom: 1.5rem;
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            flex-wrap: wrap;
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .control-label { font-size: 0.875rem; color: #94a3b8; font-weight: 600; }
-        .control-select { 
-            flex: 1;
-            min-width: 250px;
-            background: #1e293b; 
-            color: #e2e8f0; 
-            border: 1px solid #334155; 
-            border-radius: 0.5rem; 
-            padding: 0.5rem 1rem; 
-            font-size: 0.875rem; 
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
         }
-        .control-button { 
-            background: #3b82f6; 
-            color: white; 
-            border: none; 
-            border-radius: 0.5rem; 
-            padding: 0.5rem 1.5rem; 
-            font-size: 0.875rem; 
-            font-weight: 600; 
-            cursor: pointer; 
-        }
-        .control-button:hover { background: #2563eb; }
-        
-        .stats-banner {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-            border: 1px solid #475569;
-            border-radius: 0.75rem;
-            padding: 1rem 1.5rem;
-            margin-bottom: 1.5rem;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-        }
-        .stat-item {
-            display: flex;
-            flex-direction: column;
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.25rem;
-        }
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #f1f5f9;
-        }
-        
-        .metric-selector { 
-            background: #111827; 
-            border: 1px solid #1e293b; 
-            border-radius: 0.75rem; 
-            padding: 1.5rem; 
-            margin-bottom: 1.5rem; 
-        }
-        .metric-selector h2 {
-            font-size: 1.1rem;
-            color: #f1f5f9;
-            margin-bottom: 1rem;
-        }
-        .metric-category { margin-bottom: 1.5rem; }
-        .category-title { 
-            font-size: 0.875rem; 
-            color: #60a5fa; 
-            font-weight: 600; 
-            text-transform: uppercase; 
-            margin-bottom: 0.75rem;
+
+        /* HEADER */
+        .header {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-        }
-        .category-badge {
-            background: rgba(96, 165, 250, 0.2);
-            padding: 0.125rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-        }
-        .metric-list { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
-            gap: 0.5rem; 
-        }
-        .metric-checkbox { 
-            display: flex; 
-            align-items: center; 
-            gap: 0.5rem; 
-            padding: 0.5rem; 
-            cursor: pointer; 
-            border-radius: 0.375rem;
-            transition: background 0.2s;
-        }
-        .metric-checkbox:hover { background: #1e293b; }
-        .metric-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
-        .metric-checkbox label { font-size: 0.875rem; color: #cbd5e1; cursor: pointer; user-select: none; }
-        
-        .charts-container { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr)); 
-            gap: 1.5rem; 
-        }
-        .chart-card { 
-            background: #111827; 
-            border: 1px solid #1e293b; 
-            border-radius: 0.75rem; 
-            padding: 1.5rem;
-            transition: all 0.3s;
-        }
-        .chart-card:hover {
-            border-color: #3b82f6;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
-        .chart-header {
-            display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
+            padding: 0.9rem 1.75rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
-        .chart-title-group {
-            flex: 1;
-        }
-        .chart-title { 
-            font-size: 1rem; 
-            font-weight: 600; 
-            color: #f1f5f9; 
-            margin-bottom: 0.5rem;
-        }
-        .chart-stats {
+
+        .header-left {
             display: flex;
-            gap: 1.5rem;
-            font-size: 0.75rem;
-            color: #94a3b8;
+            align-items: center;
+            gap: 1rem;
         }
-        .chart-stat {
-            display: flex;
-            flex-direction: column;
-        }
-        .chart-stat-label {
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-size: 0.65rem;
-        }
-        .chart-stat-value {
-            color: #e2e8f0;
-            font-weight: 600;
-            font-size: 0.875rem;
-        }
-        .chart-wrapper { position: relative; height: 300px; }
-        
-        .tooltip-custom {
-            position: absolute;
-            background: rgba(15, 23, 42, 0.95);
-            border: 1px solid #334155;
-            border-radius: 0.5rem;
-            padding: 0.75rem;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-        }
-        .tooltip-custom.active {
-            opacity: 1;
-        }
-        .tooltip-title {
-            font-size: 0.75rem;
-            color: #94a3b8;
-            margin-bottom: 0.25rem;
-        }
-        .tooltip-value {
+
+        .logo {
+            font-family: var(--mono);
             font-size: 1rem;
             font-weight: 700;
-            color: #f1f5f9;
+            color: var(--accent);
+            letter-spacing: -0.03em;
         }
-        
-        .loading { text-align: center; padding: 3rem; color: #64748b; }
-        .spinner { 
-            border: 3px solid #1e293b; 
-            border-top: 3px solid #3b82f6; 
-            border-radius: 50%; 
-            width: 40px; 
-            height: 40px; 
-            animation: spin 1s linear infinite; 
-            margin: 0 auto 1rem; 
+
+        .logo span {
+            color: var(--muted);
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        .empty-state { text-align: center; padding: 3rem; color: #64748b; }
-        .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
-        
-        @media (max-width: 768px) {
-            .charts-container { grid-template-columns: 1fr; }
-            .metric-list { grid-template-columns: 1fr; }
-            .stats-banner { grid-template-columns: 1fr; }
+
+        .live-status {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            color: var(--muted);
+        }
+
+        .pulse {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        .pulse.off {
+            background: var(--muted);
+            box-shadow: none;
+            animation: none;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.3
+            }
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .refresh-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 0.45rem;
+            padding: 0.3rem 0.65rem;
+        }
+
+        .refresh-label {
+            font-size: 0.68rem;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+
+        .refresh-select {
+            background: transparent;
+            border: none;
+            color: var(--accent);
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .refresh-select option {
+            background: var(--card);
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.8rem;
+            border-radius: 0.4rem;
+            border: 1px solid var(--border2);
+            background: var(--card);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        /* LAYOUT */
+        .layout {
+            display: grid;
+            grid-template-columns: 270px 1fr;
+            height: calc(100vh - 53px);
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            border-right: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-section {
+            border-bottom: 1px solid var(--border);
+            padding: 0.9rem;
+        }
+
+        .sidebar-title {
+            font-family: var(--mono);
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.6rem;
+        }
+
+        .compare-hint {
+            font-size: 0.63rem;
+            color: var(--muted);
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+
+        .compare-active-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(124, 58, 237, 0.1);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 0.4rem;
+            padding: 0.35rem 0.6rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .compare-active-label {
+            font-family: var(--mono);
+            font-size: 0.63rem;
+            color: #a78bfa;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+
+        .compare-clear {
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 0.7rem;
+            padding: 0 0.2rem;
+            flex-shrink: 0;
+        }
+
+        .compare-clear:hover {
+            color: var(--red);
+        }
+
+        /* RUN LIST */
+        .run-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            overflow-y: auto;
+            max-height: 260px;
+        }
+
+        .run-item {
+            padding: 0.5rem 0.65rem;
+            border-radius: 0.4rem;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.12s;
+            position: relative;
+        }
+
+        .run-item:hover {
+            background: var(--card);
+            border-color: var(--border);
+        }
+
+        .run-item.active {
+            background: rgba(0, 212, 255, 0.07);
+            border-color: rgba(0, 212, 255, 0.25);
+        }
+
+        .run-item.compare-sel {
+            background: rgba(124, 58, 237, 0.07);
+            border-color: rgba(124, 58, 237, 0.25);
+        }
+
+        .run-name {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 0.2rem;
+            padding-right: 2rem;
+        }
+
+        .run-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            font-family: var(--mono);
+            font-size: 0.58rem;
+            padding: 0.08rem 0.35rem;
+            border-radius: 0.2rem;
+            font-weight: 600;
+        }
+
+        .badge-running {
+            background: rgba(0, 229, 160, 0.12);
+            color: var(--green);
+        }
+
+        .badge-done,
+        .badge-completed {
+            background: rgba(74, 96, 128, 0.18);
+            color: var(--muted);
+        }
+
+        .badge-failed {
+            background: rgba(255, 77, 106, 0.12);
+            color: var(--red);
+        }
+
+        .badge-unknown {
+            background: rgba(74, 96, 128, 0.18);
+            color: var(--muted);
+        }
+
+        .run-model {
+            font-size: 0.62rem;
+            color: var(--muted);
+        }
+
+        .run-tag {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-family: var(--mono);
+            font-size: 0.58rem;
+            font-weight: 700;
+        }
+
+        .run-tag.a {
+            color: var(--accent);
+        }
+
+        .run-tag.b {
+            color: #a78bfa;
+        }
+
+        /* METRIC SELECTOR */
+        .metric-search-wrap {
+            padding: 0.9rem 0.9rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .metric-search {
+            width: 100%;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 0.4rem;
+            padding: 0.38rem 0.6rem;
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            outline: none;
+        }
+
+        .metric-search:focus {
+            border-color: var(--accent);
+        }
+
+        .metric-search::placeholder {
+            color: var(--muted);
+        }
+
+        .metric-scroll {
+            overflow-y: auto;
+            flex: 1;
+            padding: 0.75rem;
+        }
+
+        .metric-category {
+            margin-bottom: 0.9rem;
+        }
+
+        .cat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.35rem;
+        }
+
+        .cat-name {
+            font-family: var(--mono);
+            font-size: 0.62rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .cat-actions {
+            display: flex;
+            gap: 0.2rem;
+        }
+
+        .cat-btn {
+            font-family: var(--mono);
+            font-size: 0.58rem;
+            color: var(--muted);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.2rem;
+        }
+
+        .cat-btn:hover {
+            color: var(--accent);
+            background: rgba(0, 212, 255, 0.07);
+        }
+
+        .metric-item {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.28rem 0.35rem;
+            border-radius: 0.3rem;
+            cursor: pointer;
+        }
+
+        .metric-item:hover {
+            background: var(--card);
+        }
+
+        .metric-item input {
+            cursor: pointer;
+            accent-color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .metric-item label {
+            font-family: var(--mono);
+            font-size: 0.67rem;
+            color: var(--text);
+            cursor: pointer;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .kind-badge {
+            font-size: 0.53rem;
+            padding: 0.05rem 0.28rem;
+            border-radius: 0.2rem;
+            font-family: var(--mono);
+            flex-shrink: 0;
+        }
+
+        .kind-scalar {
+            background: rgba(0, 212, 255, 0.08);
+            color: var(--accent);
+        }
+
+        .kind-array {
+            background: rgba(124, 58, 237, 0.12);
+            color: #a78bfa;
+        }
+
+        /* MAIN */
+        .main {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .tabs {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            padding: 0 1.5rem;
+        }
+
+        .tab {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.8rem 1.1rem;
+            cursor: pointer;
+            color: var(--muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: all 0.15s;
+        }
+
+        .tab:hover {
+            color: var(--text);
+        }
+
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .panel {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.25rem;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        /* CHARTS */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+            gap: 1rem;
+        }
+
+        .chart-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 0.6rem;
+            padding: 1.1rem;
+            transition: border-color 0.2s;
+        }
+
+        .chart-card:hover {
+            border-color: var(--border2);
+        }
+
+        .chart-name {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.55rem;
+        }
+
+        .chart-stats-row {
+            display: flex;
+            gap: 1.1rem;
+            margin-bottom: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .cstat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cstat-label {
+            font-family: var(--mono);
+            font-size: 0.55rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .cstat-value {
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .chart-hint {
+            font-size: 0.6rem;
+            color: var(--muted);
+            margin-bottom: 0.45rem;
+            font-family: var(--mono);
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 220px;
+        }
+
+        .compare-legend {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.45rem;
+        }
+
+        .leg {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-family: var(--mono);
+            font-size: 0.62rem;
+            color: var(--muted);
+        }
+
+        .leg-line {
+            width: 18px;
+            height: 2px;
+            border-radius: 1px;
+        }
+
+        /* EVENTS */
+        .events-header {
+            display: grid;
+            grid-template-columns: 150px 70px 110px 80px 1fr;
+            gap: 0.6rem;
+            padding: 0.35rem 0.65rem;
+            font-family: var(--mono);
+            font-size: 0.58rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .events-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .event-row {
+            display: grid;
+            grid-template-columns: 150px 70px 110px 80px 1fr;
+            gap: 0.6rem;
+            align-items: center;
+            padding: 0.55rem 0.65rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 0.4rem;
+            font-family: var(--mono);
+            font-size: 0.67rem;
+        }
+
+        .event-time {
+            color: var(--muted);
+        }
+
+        .event-step {
+            color: var(--accent);
+        }
+
+        .event-type {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .sev-info {
+            color: var(--green);
+        }
+
+        .sev-warning {
+            color: var(--yellow);
+        }
+
+        .sev-error {
+            color: var(--red);
+        }
+
+        .event-msg {
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* EMPTY / LOADING */
+        .empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3.5rem;
+            color: var(--muted);
+            gap: 0.6rem;
+            text-align: center;
+        }
+
+        .empty-icon {
+            font-size: 2rem;
+            opacity: 0.35;
+        }
+
+        .empty-title {
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            color: var(--text);
+        }
+
+        .empty-sub {
+            font-size: 0.75rem;
+            max-width: 280px;
+            line-height: 1.6;
+        }
+
+        .spinner {
+            width: 26px;
+            height: 26px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        /* TOAST */
+        .toast {
+            position: fixed;
+            bottom: 1.25rem;
+            right: 1.25rem;
+            background: var(--card);
+            border: 1px solid var(--border2);
+            border-radius: 0.45rem;
+            padding: 0.5rem 0.9rem;
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            color: var(--text);
+            z-index: 999;
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all 0.22s;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        ::-webkit-scrollbar {
+            width: 3px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border2);
+            border-radius: 2px;
+        }
+
+        @media(max-width:860px) {
+            .layout {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+            }
+
+            .sidebar {
+                max-height: 45vh;
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
+
 <body>
+
     <div class="header">
-        <h1>📊 Dashboard</h1>
-        <div class="header-subtitle">Real-time monitoring and analysis for machine learning experiments</div>
+        <div class="header-left">
+            <div class="logo">train<span>/</span>watch</div>
+            <div class="live-status">
+                <div class="pulse off" id="liveDot"></div>
+                <span id="liveLabel">live off</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="refresh-bar">
+                <span class="refresh-label">auto-refresh</span>
+                <select class="refresh-select" id="refreshInterval" onchange="setAutoRefresh()">
+                    <option value="0">off</option>
+                    <option value="5000">5s</option>
+                    <option value="10000" selected>10s</option>
+                    <option value="30000">30s</option>
+                    <option value="60000">1m</option>
+                </select>
+            </div>
+            <button class="btn" onclick="manualRefresh()">↺ Refresh</button>
+            <button class="btn" id="compareBtn" onclick="toggleCompare()">⊕ Compare</button>
+        </div>
     </div>
 
-    <div class="container">
-        <div class="controls">
-            <span class="control-label">Training Run:</span>
-            <select id="runSelect" class="control-select"><option value="">Loading...</option></select>
-            <button onclick="refreshData()" class="control-button">🔄 Refresh</button>
-        </div>
-
-        <div id="statsBanner" style="display: none;"></div>
-        <div id="metricSelector" class="metric-selector" style="display: none;"></div>
-        <div id="chartsContainer" class="charts-container"></div>
-        
-        <div id="emptyState" class="empty-state">
-            <div class="empty-state-icon">📈</div>
-            <h3>Select a training run to begin monitoring</h3>
-            <p>Choose an experiment from the dropdown above to view detailed metrics and visualizations</p>
-        </div>
-    </div>
-
-    <script>
-        const API_BASE = '';
-        let currentRunId = null;
-        let availableMetrics = {};
-        let metricsData = {};
-        const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
-        
-        Chart.defaults.color = '#94a3b8';
-        Chart.defaults.borderColor = '#1e293b';
-
-        async function init() { await loadRuns(); }
-
-        async function loadRuns() {
-            const response = await fetch(`${API_BASE}/api/runs`);
-            const data = await response.json();
-            const select = document.getElementById('runSelect');
-            select.innerHTML = data.runs.length ? '<option value="">Select a run...</option>' : '<option value="">No runs found</option>';
-            data.runs.forEach(run => {
-                const option = document.createElement('option');
-                option.value = run.run_id;
-                option.textContent = `${run.run_id} (${run.status})`;
-                select.appendChild(option);
-            });
-        }
-
-        document.getElementById('runSelect').addEventListener('change', async (e) => {
-            currentRunId = e.target.value;
-            if (!currentRunId) {
-                document.getElementById('metricSelector').style.display = 'none';
-                document.getElementById('statsBanner').style.display = 'none';
-                document.getElementById('chartsContainer').innerHTML = '';
-                document.getElementById('emptyState').style.display = 'block';
-                return;
-            }
-            document.getElementById('emptyState').style.display = 'none';
-            await discoverMetrics();
-        });
-
-        async function discoverMetrics() {
-            document.getElementById('metricSelector').innerHTML = '<div class="loading"><div class="spinner"></div><p>Discovering metrics...</p></div>';
-            document.getElementById('metricSelector').style.display = 'block';
-            
-            const response = await fetch(`${API_BASE}/api/runs/${currentRunId}/metrics`);
-            const data = await response.json();
-            availableMetrics = data.metrics;
-            
-            // Calculate stats
-            const totalMetrics = Object.values(availableMetrics).reduce((sum, arr) => sum + arr.length, 0);
-            const categories = Object.keys(availableMetrics).length;
-            
-            // Show stats banner
-            const statsBanner = document.getElementById('statsBanner');
-            statsBanner.innerHTML = `
-                <div class="stat-item">
-                    <div class="stat-label">Total Metrics</div>
-                    <div class="stat-value">${totalMetrics}</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Categories</div>
-                    <div class="stat-value">${categories}</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Selected Run</div>
-                    <div class="stat-value" style="font-size: 1rem;">${currentRunId.substring(0, 20)}...</div>
-                </div>
-            `;
-            statsBanner.style.display = 'grid';
-            
-            renderMetricSelector();
-        }
-
-        function renderMetricSelector() {
-            let html = '<h2>Select Metrics to Visualize</h2>';
-            for (const [category, metrics] of Object.entries(availableMetrics)) {
-                html += `<div class="metric-category"><div class="category-title">${category} <span class="category-badge">${metrics.length}</span></div><div class="metric-list">`;
-                metrics.forEach(metric => {
-                    const id = `metric-${metric.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    html += `<div class="metric-checkbox"><input type="checkbox" id="${id}" value="${metric}" onchange="generateCharts()"><label for="${id}">${metric}</label></div>`;
-                });
-                html += '</div></div>';
-            }
-            document.getElementById('metricSelector').innerHTML = html;
-        }
-
-        async function generateCharts() {
-            const checkboxes = document.querySelectorAll('.metric-checkbox input:checked');
-            const selectedMetrics = Array.from(checkboxes).map(cb => cb.value);
-            
-            const container = document.getElementById('chartsContainer');
-            
-            if (!selectedMetrics.length) {
-                container.innerHTML = '';
-                return;
-            }
-            
-            container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading data...</p></div>';
-            
-            const response = await fetch(`${API_BASE}/api/runs/${currentRunId}/data?metrics=${encodeURIComponent(selectedMetrics.join(','))}`);
-            const data = await response.json();
-            metricsData = data;
-            container.innerHTML = '';
-            
-            selectedMetrics.forEach((metric, index) => {
-                const metricData = data[metric] || [];
-                if (metricData.length) createChart(metric, metricData, index);
-            });
-        }
-
-        function calculateStats(data) {
-            const values = data.map(d => Array.isArray(d.value) ? d.value.reduce((a, b) => a + b, 0) / d.value.length : d.value);
-            const min = Math.min(...values);
-            const max = Math.max(...values);
-            const mean = values.reduce((a, b) => a + b, 0) / values.length;
-            const latest = values[values.length - 1];
-            
-            return { min, max, mean, latest, count: data.length };
-        }
-
-        function createChart(metricName, data, colorIndex) {
-            const container = document.getElementById('chartsContainer');
-            const stats = calculateStats(data);
-            
-            const card = document.createElement('div');
-            card.className = 'chart-card';
-            card.innerHTML = `
-                <div class="chart-header">
-                    <div class="chart-title-group">
-                        <div class="chart-title">${metricName}</div>
-                        <div class="chart-stats">
-                            <div class="chart-stat">
-                                <div class="chart-stat-label">Current</div>
-                                <div class="chart-stat-value">${stats.latest.toFixed(4)}</div>
-                            </div>
-                            <div class="chart-stat">
-                                <div class="chart-stat-label">Min</div>
-                                <div class="chart-stat-value">${stats.min.toFixed(4)}</div>
-                            </div>
-                            <div class="chart-stat">
-                                <div class="chart-stat-label">Max</div>
-                                <div class="chart-stat-value">${stats.max.toFixed(4)}</div>
-                            </div>
-                            <div class="chart-stat">
-                                <div class="chart-stat-label">Mean</div>
-                                <div class="chart-stat-value">${stats.mean.toFixed(4)}</div>
-                            </div>
-                            <div class="chart-stat">
-                                <div class="chart-stat-label">Points</div>
-                                <div class="chart-stat-value">${stats.count}</div>
-                            </div>
-                        </div>
+    <div class="layout">
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Training Runs</div>
+                <div class="compare-hint" id="compareHint">Click a run to select it.</div>
+                <div id="compareBar" style="display:none"></div>
+                <div class="run-list" id="runList">
+                    <div class="empty" style="padding:1rem">
+                        <div class="spinner"></div>
                     </div>
                 </div>
-                <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.5rem;">
-                    💡 Scroll to zoom • Ctrl+Drag to pan • Double-click to reset
+            </div>
+
+            <div class="metric-search-wrap">
+                <div class="sidebar-title" style="margin-bottom:0.5rem">Metrics</div>
+                <input class="metric-search" id="metricSearch" placeholder="Search metrics…" oninput="filterMetrics()">
+            </div>
+            <div class="metric-scroll" id="metricScroll">
+                <div class="empty" style="padding:1rem"><span style="font-size:0.72rem">Select a run first</span></div>
+            </div>
+        </div>
+
+        <!-- MAIN -->
+        <div class="main">
+            <div class="tabs">
+                <div class="tab active" id="tab-charts" onclick="switchTab('charts')">Charts</div>
+                <div class="tab" id="tab-events" onclick="switchTab('events')">Events</div>
+            </div>
+            <div class="panel active" id="panel-charts">
+                <div id="chartsContent">
+                    <div class="empty">
+                        <div class="empty-icon">⬡</div>
+                        <div class="empty-title">Nothing selected</div>
+                        <div class="empty-sub">Pick a run from the sidebar, then check metrics to chart</div>
+                    </div>
                 </div>
-                <div class="chart-wrapper">
-                    <canvas id="chart-${colorIndex}"></canvas>
+            </div>
+            <div class="panel" id="panel-events">
+                <div id="eventsContent">
+                    <div class="empty">
+                        <div class="empty-icon">◈</div>
+                        <div class="empty-title">No run selected</div>
+                        <div class="empty-sub">Select a run to see its event log</div>
+                    </div>
                 </div>
-            `;
-            
-            container.appendChild(card);
-            
-            const ctx = document.getElementById(`chart-${colorIndex}`);
-            const color = COLORS[colorIndex % COLORS.length];
-            const isHistogram = Array.isArray(data[0]?.value);
-            
-            if (isHistogram) {
-                const latestValue = data[data.length - 1]?.value || [];
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: { 
-                        labels: latestValue.map((_, i) => `${i}`), 
-                        datasets: [{ 
-                            label: metricName, 
-                            data: latestValue, 
-                            backgroundColor: color 
-                        }] 
-                    },
-                    options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false,
-                        plugins: { 
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                                titleColor: '#94a3b8',
-                                bodyColor: '#f1f5f9',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 12,
-                                displayColors: false
-                            }
-                        },
-                        scales: {
-                            x: { grid: { color: '#1e293b' } },
-                            y: { grid: { color: '#1e293b' } }
-                        }
-                    }
-                });
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '';
+        const COL_A = ['#00d4ff', '#00e5a0', '#f5a623', '#ff4d6a', '#a78bfa', '#34d399', '#fb923c', '#38bdf8'];
+        const COL_B = ['#7c3aed', '#059669', '#b45309', '#be123c', '#6d28d9', '#065f46', '#9a3412', '#1e40af'];
+
+        let primaryRun = null;
+        let compareRun = null;
+        let compareMode = false;
+        let allMetrics = {};
+        let chartInsts = {};
+        let refreshTimer = null;
+
+        Chart.defaults.color = '#4a6080';
+        Chart.defaults.borderColor = '#1e2a38';
+
+        async function init() { await loadRuns(); setAutoRefresh(); }
+
+        // ─── RUNS ───
+        async function loadRuns() {
+            try {
+                const data = await fetch(`${API}/api/runs`).then(r => r.json());
+                renderRunList(data.runs || []);
+            } catch (e) { showToast('⚠ Could not reach server'); }
+        }
+
+        function renderRunList(runs) {
+            const el = document.getElementById('runList');
+            if (!runs.length) { el.innerHTML = '<div class="empty" style="padding:0.75rem"><span style="font-size:0.7rem;color:var(--muted)">No runs found</span></div>'; return; }
+            el.innerHTML = runs.map(r => {
+                const isA = primaryRun?.run_id === r.run_id;
+                const isB = compareRun?.run_id === r.run_id;
+                const sc = { 'running': 'badge-running', 'done': 'badge-done', 'completed': 'badge-done', 'failed': 'badge-failed' }[r.status] || 'badge-unknown';
+                return `<div class="run-item ${isA ? 'active' : ''} ${isB ? 'compare-sel' : ''}" onclick='selectRun(${JSON.stringify(r)})' title="${r.run_id}">
+            <div class="run-name">${r.run_id}</div>
+            <div class="run-meta">
+                <span class="badge ${sc}">${r.status || 'unknown'}</span>
+                ${r.model_name ? `<span class="run-model">${r.model_name}${r.model_size ? ' · ' + r.model_size : ''}</span>` : ''}
+            </div>
+            ${isA ? '<span class="run-tag a">A</span>' : isB ? '<span class="run-tag b">B</span>' : ''}
+        </div>`;
+            }).join('');
+        }
+
+        function selectRun(run) {
+            if (compareMode) {
+                if (run.run_id === primaryRun?.run_id) { showToast('⚠ Pick a different run for B'); return; }
+                compareRun = run;
+                updateCompareBar();
+                loadRuns().then(generateCharts);
             } else {
-                new Chart(ctx, {
-                    type: 'line',
-                    data: { 
-                        labels: data.map(d => d.step), 
-                        datasets: [{ 
-                            label: metricName, 
-                            data: data.map(d => d.value), 
-                            borderColor: color, 
-                            backgroundColor: color + '33', 
-                            borderWidth: 2, 
-                            tension: 0.3, 
-                            pointRadius: 0,
-                            pointHoverRadius: 5,
-                            pointHoverBackgroundColor: color,
-                            pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2
-                        }] 
-                    },
-                    options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false,
-                        interaction: {
-                            intersect: false,
-                            mode: 'index'
-                        },
-                        plugins: { 
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                                titleColor: '#94a3b8',
-                                bodyColor: '#f1f5f9',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 12,
-                                displayColors: true,
-                                callbacks: {
-                                    label: function(context) {
-                                        return `Value: ${context.parsed.y.toFixed(6)}`;
-                                    },
-                                    afterLabel: function(context) {
-                                        const step = context.parsed.x;
-                                        return `Step: ${step}`;
-                                    }
-                                }
-                            },
-                            zoom: {
-                                pan: {
-                                    enabled: true,
-                                    mode: 'x',
-                                    modifierKey: 'ctrl'
-                                },
-                                zoom: {
-                                    wheel: {
-                                        enabled: true,
-                                        speed: 0.1
-                                    },
-                                    pinch: {
-                                        enabled: true
-                                    },
-                                    mode: 'x'
-                                },
-                                limits: {
-                                    x: { min: 'original', max: 'original' }
-                                }
-                            }
-                        },
-                        scales: {
-                            x: { 
-                                title: { display: true, text: 'Step' },
-                                grid: { color: '#1e293b' }
-                            },
-                            y: { 
-                                title: { display: true, text: 'Value' },
-                                grid: { color: '#1e293b' }
-                            }
-                        }
-                    }
-                });
+                primaryRun = run;
+                compareRun = null;
+                loadRuns().then(discoverMetrics);
             }
         }
 
-        function refreshData() { currentRunId ? discoverMetrics() : loadRuns(); }
+        // ─── COMPARE ───
+        function toggleCompare() {
+            compareMode = !compareMode;
+            const btn = document.getElementById('compareBtn');
+            btn.classList.toggle('active', compareMode);
+            btn.textContent = compareMode ? '✕ Cancel' : '⊕ Compare';
+            document.getElementById('compareHint').textContent = compareMode
+                ? 'Now click a second run to compare (B).'
+                : 'Click a run to select it.';
+            if (!compareMode) { compareRun = null; updateCompareBar(); loadRuns().then(generateCharts); }
+        }
+
+        function updateCompareBar() {
+            const bar = document.getElementById('compareBar');
+            if (compareRun) {
+                bar.style.display = 'flex';
+                bar.innerHTML = `<span class="compare-active-label">B: ${compareRun.run_id}</span><button class="compare-clear" onclick="clearCompare()">✕</button>`;
+            } else { bar.style.display = 'none'; }
+        }
+
+        function clearCompare() {
+            compareRun = null; compareMode = false;
+            document.getElementById('compareBtn').classList.remove('active');
+            document.getElementById('compareBtn').textContent = '⊕ Compare';
+            document.getElementById('compareHint').textContent = 'Click a run to select it.';
+            updateCompareBar(); loadRuns().then(generateCharts);
+        }
+
+        // ─── METRICS ───
+        async function discoverMetrics() {
+            if (!primaryRun) return;
+            document.getElementById('metricScroll').innerHTML = '<div class="empty" style="padding:1.5rem"><div class="spinner"></div></div>';
+            try {
+                const data = await fetch(`${API}/api/runs/${primaryRun.run_id}/metrics`).then(r => r.json());
+                allMetrics = data.metrics || {};
+                renderMetricSelector(allMetrics);
+                loadEvents();
+                showToast(`Loaded: ${primaryRun.run_id.substring(0, 24)}…`);
+            } catch (e) { showToast('⚠ Failed to load metrics'); }
+        }
+
+        function renderMetricSelector(metrics, filter = '') {
+            const el = document.getElementById('metricScroll');
+            const low = filter.toLowerCase();
+            let html = '', any = false;
+
+            for (const [cat, items] of Object.entries(metrics)) {
+                const vis = items.filter(m => { const n = typeof m === 'object' ? m.name : m; return !low || n.toLowerCase().includes(low); });
+                if (!vis.length) continue;
+                any = true;
+                html += `<div class="metric-category">
+            <div class="cat-header">
+                <span class="cat-name">${cat}</span>
+                <div class="cat-actions">
+                    <button class="cat-btn" onclick="selCat('${cat}',true)">all</button>
+                    <button class="cat-btn" onclick="selCat('${cat}',false)">none</button>
+                </div>
+            </div>`;
+                vis.forEach(m => {
+                    const name = typeof m === 'object' ? m.name : m;
+                    const kind = typeof m === 'object' ? m.kind : 'scalar';
+                    const id = `m-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const prev = document.getElementById(id);
+                    const chk = prev?.checked ? 'checked' : '';
+                    html += `<div class="metric-item">
+                <input type="checkbox" id="${id}" value="${name}" data-cat="${cat}" ${chk} onchange="generateCharts()">
+                <label for="${id}">${name}</label>
+                <span class="kind-badge kind-${kind}">${kind === 'array' ? 'hist' : 'val'}</span>
+            </div>`;
+                });
+                html += '</div>';
+            }
+            el.innerHTML = any ? html : '<div class="empty" style="padding:1rem"><span style="font-size:0.7rem;color:var(--muted)">No metrics match</span></div>';
+        }
+
+        function filterMetrics() { renderMetricSelector(allMetrics, document.getElementById('metricSearch').value); }
+
+        function selCat(cat, on) {
+            document.querySelectorAll(`[data-cat="${cat}"]`).forEach(cb => cb.checked = on);
+            generateCharts();
+        }
+
+        // ─── CHARTS ───
+        async function generateCharts() {
+            const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
+            const el = document.getElementById('chartsContent');
+
+            Object.values(chartInsts).forEach(c => c.destroy());
+            chartInsts = {};
+
+            if (!sel.length || !primaryRun) {
+                el.innerHTML = '<div class="empty"><div class="empty-icon">⬡</div><div class="empty-title">No metrics selected</div><div class="empty-sub">Check metrics in the sidebar</div></div>';
+                return;
+            }
+
+            el.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+
+            const [pd, cd] = await Promise.all([
+                fetchData(primaryRun.run_id, sel),
+                compareRun ? fetchData(compareRun.run_id, sel) : Promise.resolve({})
+            ]);
+
+            el.innerHTML = '';
+            const grid = document.createElement('div');
+            grid.className = 'charts-grid';
+            el.appendChild(grid);
+
+            sel.forEach((metric, i) => {
+                const p = pd[metric] || [], c = cd[metric] || [];
+                if (p.length || c.length) createChart(grid, metric, p, c, i);
+            });
+        }
+
+        async function fetchData(runId, metrics) {
+            return fetch(`${API}/api/runs/${runId}/data?metrics=${encodeURIComponent(metrics.join(','))}`).then(r => r.json());
+        }
+
+        function stats(data) {
+            if (!data.length) return null;
+            const v = data.map(d => d.y ?? d.value ?? 0);
+            const min = Math.min(...v), max = Math.max(...v);
+            return { min, max, mean: v.reduce((a, b) => a + b, 0) / v.length, latest: v[v.length - 1], count: v.length };
+        }
+
+        function fmt(v) {
+            if (v == null) return '—';
+            return Math.abs(v) >= 1000 ? v.toFixed(1) : Math.abs(v) >= 1 ? v.toFixed(4) : v.toExponential(3);
+        }
+
+        function createChart(container, metric, pd, cd, idx) {
+            const ps = stats(pd), cs = cd.length ? stats(cd) : null;
+            const ca = COL_A[idx % COL_A.length], cb = COL_B[idx % COL_B.length];
+            const isHist = Array.isArray(pd[0]?.value);
+
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+
+            const legend = compareRun && !isHist ? `<div class="compare-legend">
+        <div class="leg"><div class="leg-line" style="background:${ca}"></div>A: ${primaryRun.run_id.substring(0, 18)}…</div>
+        <div class="leg"><div class="leg-line" style="background:${cb}; opacity:0.7"></div>B: ${compareRun.run_id.substring(0, 18)}…</div>
+    </div>` : '';
+
+            card.innerHTML = `
+        <div class="chart-name">${metric}</div>
+        <div class="chart-stats-row">
+            <div class="cstat"><span class="cstat-label">current</span><span class="cstat-value" style="color:${ca}">${ps ? fmt(ps.latest) : '—'}</span></div>
+            <div class="cstat"><span class="cstat-label">min</span><span class="cstat-value">${ps ? fmt(ps.min) : '—'}</span></div>
+            <div class="cstat"><span class="cstat-label">max</span><span class="cstat-value">${ps ? fmt(ps.max) : '—'}</span></div>
+            <div class="cstat"><span class="cstat-label">mean</span><span class="cstat-value">${ps ? fmt(ps.mean) : '—'}</span></div>
+            ${cs ? `<div class="cstat"><span class="cstat-label" style="color:#a78bfa">B current</span><span class="cstat-value" style="color:${cb}">${fmt(cs.latest)}</span></div>` : ''}
+        </div>
+        ${legend}
+        <div class="chart-hint">scroll zoom · ctrl+drag pan · dbl-click reset</div>
+        <div class="chart-wrapper"><canvas id="cv${idx}"></canvas></div>`;
+            container.appendChild(card);
+
+            const ctx = document.getElementById(`cv${idx}`);
+
+            if (isHist) {
+                const v = pd[pd.length - 1]?.value || [];
+                chartInsts[`cv${idx}`] = new Chart(ctx, { type: 'bar', data: { labels: v.map((_, i) => i), datasets: [{ data: v, backgroundColor: ca + '99', borderColor: ca, borderWidth: 1 }] }, options: baseOpts(false) });
+            } else {
+                const datasets = [{ label: 'A', data: pd.map(d => ({ x: Number(d.x), y: Number(d.y) })), borderColor: ca, backgroundColor: ca + '15', borderWidth: 2, tension: 0.3, pointRadius: 0, pointHoverRadius: 4, fill: !cd.length }];
+                if (cd.length) datasets.push({ label: 'B', data: cd.map(d => ({ x: Number(d.x), y: Number(d.y) })), borderColor: cb, backgroundColor: cb + '15', borderWidth: 2, tension: 0.3, pointRadius: 0, pointHoverRadius: 4, borderDash: [5, 3] });
+                chartInsts[`cv${idx}`] = new Chart(ctx, { type: 'line', data: { datasets }, options: baseOpts(true) });
+            }
+        }
+
+        function baseOpts(line) {
+            return {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(13,17,23,0.97)', titleColor: '#4a6080', bodyColor: '#c9d8e8', borderColor: '#1e2a38', borderWidth: 1, padding: 9,
+                        callbacks: line ? { title: i => `Step: ${i[0].parsed.x.toLocaleString()}` } : {}
+                    },
+                    zoom: { pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' } }
+                },
+                scales: line ? {
+                    x: { type: 'linear', title: { display: true, text: 'Step', color: '#4a6080', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#1e2a38' }, ticks: { maxTicksLimit: 8, font: { family: 'JetBrains Mono', size: 10 }, callback: v => v.toLocaleString() } },
+                    y: { grid: { color: '#1e2a38' }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 6 } }
+                } : { x: { grid: { color: '#1e2a38' } }, y: { grid: { color: '#1e2a38' } } }
+            };
+        }
+
+        // ─── EVENTS ───
+        async function loadEvents() {
+            if (!primaryRun) return;
+            const el = document.getElementById('eventsContent');
+            el.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+            try {
+                const data = await fetch(`${API}/api/runs/${primaryRun.run_id}/events`).then(r => r.json());
+                const evs = data.events || [];
+                if (!evs.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">◈</div><div class="empty-title">No events</div><div class="empty-sub">No events logged for this run</div></div>'; return; }
+                el.innerHTML = `
+            <div class="events-header"><span>Time</span><span>Step</span><span>Type</span><span>Severity</span><span>Message</span></div>
+            <div class="events-list">${evs.map(e => `
+            <div class="event-row">
+                <span class="event-time">${e.time}</span>
+                <span class="event-step">${Number(e.step).toLocaleString()}</span>
+                <span class="event-type">${e.event_type}</span>
+                <span class="sev-${e.severity || 'info'}">${e.severity || 'info'}</span>
+                <span class="event-msg" title="${e.message}">${e.message}</span>
+            </div>`).join('')}
+            </div>`;
+            } catch (e) { el.innerHTML = '<div class="empty"><span style="font-size:0.75rem;color:var(--muted)">Failed to load events</span></div>'; }
+        }
+
+        // ─── REFRESH ───
+        function setAutoRefresh() {
+            clearInterval(refreshTimer);
+            const ms = parseInt(document.getElementById('refreshInterval').value);
+            const dot = document.getElementById('liveDot'), lbl = document.getElementById('liveLabel');
+            if (ms > 0) {
+                dot.classList.remove('off');
+                lbl.textContent = `live · ${ms >= 60000 ? ms / 60000 + 'm' : ms / 1000 + 's'}`;
+                refreshTimer = setInterval(autoRefresh, ms);
+            } else { dot.classList.add('off'); lbl.textContent = 'live off'; }
+        }
+
+        async function autoRefresh() {
+            if (!primaryRun) return;
+            await loadRuns();
+            const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
+            if (sel.length) await generateCharts();
+            if (document.getElementById('panel-events').classList.contains('active')) await loadEvents();
+            showToast('↺ refreshed');
+        }
+
+        function manualRefresh() {
+            loadRuns();
+            if (primaryRun) {
+                const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
+                if (sel.length) generateCharts();
+            }
+            showToast('↺ refreshed');
+        }
+
+        // ─── TABS ───
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(`tab-${name}`).classList.add('active');
+            document.getElementById(`panel-${name}`).classList.add('active');
+            if (name === 'events' && primaryRun) loadEvents();
+        }
+
+        // ─── TOAST ───
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2200);
+        }
+
         init();
     </script>
 </body>
+
 </html>
