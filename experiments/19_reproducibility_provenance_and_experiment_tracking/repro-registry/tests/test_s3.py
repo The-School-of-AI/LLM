@@ -3,10 +3,10 @@ from unittest.mock import MagicMock
 
 import boto3
 import pytest
-
 from repro.s3 import ImmutableS3Writer
 
-#Test: S3 client is created on init
+# Test: S3 client is created on init
+
 
 def test_s3_client_created(monkeypatch):
     mock_s3 = MagicMock()
@@ -17,7 +17,9 @@ def test_s3_client_created(monkeypatch):
 
     assert writer.s3 is mock_s3
 
-#Test: upload_file() builds correct S3 key and calls API
+
+# Test: upload_file() builds correct S3 key and calls API
+
 
 def test_upload_file_calls_s3_with_correct_arguments(monkeypatch, tmp_path: Path):
     mock_s3 = MagicMock()
@@ -37,7 +39,9 @@ def test_upload_file_calls_s3_with_correct_arguments(monkeypatch, tmp_path: Path
         ExtraArgs={"ACL": "bucket-owner-full-control"},
     )
 
-#Test: prefix handling (no accidental mutation)
+
+# Test: prefix handling (no accidental mutation)
+
 
 def test_prefix_is_not_modified(monkeypatch, tmp_path: Path):
     mock_s3 = MagicMock()
@@ -52,7 +56,9 @@ def test_prefix_is_not_modified(monkeypatch, tmp_path: Path):
 
     assert writer.prefix == "immutable"
 
-#Test: upload propagates S3 errors (fail-fast)
+
+# Test: upload propagates S3 errors (fail-fast)
+
 
 def test_upload_file_propagates_s3_error(monkeypatch, tmp_path: Path):
     mock_s3 = MagicMock()

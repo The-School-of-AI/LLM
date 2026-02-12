@@ -1,19 +1,17 @@
 import json
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
-from repro.ids import (
-    generate_training_run_id,
-    generate_coreset_run_id,
-)
-from repro.git import get_commit_hash, get_repo_url, is_repo_dirty
 from repro.config import freeze_config
 from repro.env import capture_env
-from repro.seeds import capture_seeds
-from repro.manifest import RunManifest, GitInfo
+from repro.git import get_commit_hash, get_repo_url, is_repo_dirty
+from repro.ids import generate_training_run_id
+from repro.manifest import GitInfo, RunManifest
 from repro.s3 import ImmutableS3Writer
+from repro.seeds import capture_seeds
 
 TMP_ROOT = Path(".repro_tmp")
+
 
 class RunContext:
     def __init__(self, run_id: str, run_dir: Path, s3: ImmutableS3Writer):
@@ -33,10 +31,8 @@ class RunContext:
     def finalize(self):
         for p in self.run_dir.rglob("*"):
             if p.is_file():
-                self.s3.upload_file(
-                    p,
-                    p.relative_to(self.run_dir).as_posix()
-                )
+                self.s3.upload_file(p, p.relative_to(self.run_dir).as_posix())
+
 
 def start_training_run(config: dict, seed: int, bucket="experiment-registry"):
     run_id = generate_training_run_id()
@@ -66,6 +62,7 @@ def start_training_run(config: dict, seed: int, bucket="experiment-registry"):
     s3 = ImmutableS3Writer(bucket, f"runs/{run_id}")
     return RunContext(run_id, run_dir, s3)
 
+
 def finalize_run(ctx: RunContext, status: str = "COMPLETED"):
     assert status in {"COMPLETED", "FAILED", "ABORTED"}
 
@@ -79,10 +76,7 @@ def finalize_run(ctx: RunContext, status: str = "COMPLETED"):
     # Upload all artifacts EXCEPT manifest
     for p in sorted(ctx.run_dir.rglob("*")):
         if p.is_file() and p.name != "manifest.json":
-            ctx.s3.upload_file(
-                p,
-                p.relative_to(ctx.run_dir).as_posix()
-            )
+            ctx.s3.upload_file(p, p.relative_to(ctx.run_dir).as_posix())
 
     # Upload manifest LAST (atomic completion)
     ctx.s3.upload_file(manifest_path, "manifest.json")

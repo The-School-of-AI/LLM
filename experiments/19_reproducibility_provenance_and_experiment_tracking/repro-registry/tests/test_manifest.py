@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
-import pytest
 
+import pytest
 from repro.manifest import GitInfo, RunManifest
 
-#Test GitInfo creation (happy path)
+# Test GitInfo creation (happy path)
+
 
 def test_gitinfo_creation():
     git = GitInfo(
@@ -16,7 +17,9 @@ def test_gitinfo_creation():
     assert git.commit_hash == "abc123"
     assert git.dirty is False
 
-#Test RunManifest creation with nested GitInfo
+
+# Test RunManifest creation with nested GitInfo
+
 
 def test_runmanifest_creation():
     git = GitInfo(
@@ -41,7 +44,9 @@ def test_runmanifest_creation():
     assert manifest.seed == 42
     assert manifest.coreset_run_id is None
 
-#Test nested dict → GitInfo auto-parsing
+
+# Test nested dict → GitInfo auto-parsing
+
 
 def test_runmanifest_accepts_git_as_dict():
     manifest = RunManifest(
@@ -61,7 +66,9 @@ def test_runmanifest_accepts_git_as_dict():
     assert isinstance(manifest.git, GitInfo)
     assert manifest.git.dirty is False
 
-#Test datetime parsing from ISO string
+
+# Test datetime parsing from ISO string
+
 
 def test_created_at_accepts_iso_string():
     manifest = RunManifest(
@@ -80,7 +87,9 @@ def test_created_at_accepts_iso_string():
 
     assert isinstance(manifest.created_at, datetime)
 
-#Test optional coreset_run_id
+
+# Test optional coreset_run_id
+
 
 def test_coreset_run_id_optional():
     manifest = RunManifest(
@@ -101,7 +110,8 @@ def test_coreset_run_id_optional():
     assert manifest.coreset_run_id == "coreset_001"
 
 
-#Test missing required fields → validation error
+# Test missing required fields → validation error
+
 
 def test_runmanifest_missing_required_field_raises():
     with pytest.raises(Exception):
@@ -119,7 +129,9 @@ def test_runmanifest_missing_required_field_raises():
             status="STARTED",
         )
 
-#Test wrong type → validation error
+
+# Test wrong type → validation error
+
 
 def test_runmanifest_invalid_seed_type_raises():
     with pytest.raises(Exception):
@@ -137,7 +149,9 @@ def test_runmanifest_invalid_seed_type_raises():
             status="STARTED",
         )
 
-#Test serialization round-trip (important for manifests)
+
+# Test serialization round-trip (important for manifests)
+
 
 def test_runmanifest_json_roundtrip():
     manifest = RunManifest(

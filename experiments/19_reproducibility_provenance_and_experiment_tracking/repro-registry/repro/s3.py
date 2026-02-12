@@ -1,5 +1,7 @@
-import boto3
 from pathlib import Path
+
+import boto3
+
 
 class ImmutableS3Writer:
     def __init__(self, bucket: str, prefix: str):
@@ -13,5 +15,5 @@ class ImmutableS3Writer:
             str(local),
             self.bucket,
             full_key,
-            ExtraArgs={"ACL": "bucket-owner-full-control"}
+            ExtraArgs={"ACL": "bucket-owner-full-control"},
         )

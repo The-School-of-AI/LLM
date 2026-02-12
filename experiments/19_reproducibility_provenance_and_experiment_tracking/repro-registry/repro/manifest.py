@@ -1,11 +1,14 @@
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
+
 
 class GitInfo(BaseModel):
     repo_url: str
     commit_hash: str
     dirty: bool
+
 
 class RunManifest(BaseModel):
     run_id: str

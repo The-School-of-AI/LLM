@@ -4,7 +4,8 @@ from pathlib import Path
 
 import repro.seeds as seeds
 
-#Test set_all_seeds() sets Python random deterministically
+# Test set_all_seeds() sets Python random deterministically
+
 
 def test_set_all_seeds_sets_python_random():
     seeds.set_all_seeds(42)
@@ -16,7 +17,9 @@ def test_set_all_seeds_sets_python_random():
 
     assert value1 == value2
 
-#Test NumPy seeding (only if NumPy is available)
+
+# Test NumPy seeding (only if NumPy is available)
+
 
 def test_set_all_seeds_sets_numpy_random():
     if seeds.np is None:
@@ -30,7 +33,9 @@ def test_set_all_seeds_sets_numpy_random():
 
     assert v1 == v2
 
-#Test Torch seeding (only if Torch is available)
+
+# Test Torch seeding (only if Torch is available)
+
 
 def test_set_all_seeds_sets_torch_random():
     if seeds.torch is None:
@@ -45,7 +50,9 @@ def test_set_all_seeds_sets_torch_random():
 
     assert v1 == v2
 
-#Test capture_seeds() creates directories and file
+
+# Test capture_seeds() creates directories and file
+
 
 def test_capture_seeds_creates_file(tmp_path: Path):
     output_path = tmp_path / "a/b/seeds.json"
@@ -54,7 +61,9 @@ def test_capture_seeds_creates_file(tmp_path: Path):
 
     assert output_path.exists()
 
-#Test capture_seeds() JSON content
+
+# Test capture_seeds() JSON content
+
 
 def test_capture_seeds_writes_correct_json(tmp_path: Path):
     output_path = tmp_path / "seeds.json"
@@ -68,7 +77,9 @@ def test_capture_seeds_writes_correct_json(tmp_path: Path):
     assert data["numpy"] == (101 if seeds.np else None)
     assert data["torch"] == (101 if seeds.torch else None)
 
-#Test JSON formatting (pretty-printed)
+
+# Test JSON formatting (pretty-printed)
+
 
 def test_capture_seeds_json_is_pretty_printed(tmp_path: Path):
     output_path = tmp_path / "seeds.json"
@@ -77,4 +88,3 @@ def test_capture_seeds_json_is_pretty_printed(tmp_path: Path):
 
     text = output_path.read_text()
     assert "\n  " in text
-

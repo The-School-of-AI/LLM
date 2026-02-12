@@ -1,6 +1,7 @@
-from repro.seeds import set_seed
-from repro.registry import start_run
 from pathlib import Path
+
+from repro.registry import start_run
+from repro.seeds import set_seed
 
 set_seed(42)
 

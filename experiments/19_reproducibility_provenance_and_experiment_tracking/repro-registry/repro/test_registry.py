@@ -3,12 +3,12 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
 import repro.registry as registry
-from repro.registry import RunContext
 from repro.manifest import RunManifest
+from repro.registry import RunContext
 
-#Test RunContext.save_output() writes JSON
+# Test RunContext.save_output() writes JSON
+
 
 def test_save_output_writes_json(tmp_path: Path):
     s3 = MagicMock()
@@ -25,7 +25,9 @@ def test_save_output_writes_json(tmp_path: Path):
     data = json.loads(out.read_text())
     assert data == {"acc": 0.9}
 
-#Test save_output() rejects unsupported types
+
+# Test save_output() rejects unsupported types
+
 
 def test_save_output_rejects_unsupported_type(tmp_path: Path):
     rc = RunContext("run1", tmp_path, MagicMock())
@@ -33,7 +35,9 @@ def test_save_output_rejects_unsupported_type(tmp_path: Path):
     with pytest.raises(ValueError):
         rc.save_output("x.txt", "not allowed")
 
-#Test RunContext.finalize() uploads all files
+
+# Test RunContext.finalize() uploads all files
+
 
 def test_finalize_uploads_all_files(tmp_path: Path):
     s3 = MagicMock()
@@ -47,34 +51,28 @@ def test_finalize_uploads_all_files(tmp_path: Path):
     rc = RunContext("run1", run_dir, s3)
     rc.finalize()
 
-    uploaded_keys = {
-        call.args[1] for call in s3.upload_file.call_args_list
-    }
+    uploaded_keys = {call.args[1] for call in s3.upload_file.call_args_list}
 
     assert uploaded_keys == {"a.txt", "sub/b.txt"}
 
-#Test start_training_run() happy path (core test)
+
+# Test start_training_run() happy path (core test)
+
 
 def test_start_training_run(monkeypatch, tmp_path: Path):
     # Redirect TMP_ROOT
     monkeypatch.setattr(registry, "TMP_ROOT", tmp_path)
 
     # Deterministic run id
-    monkeypatch.setattr(
-        registry, "generate_training_run_id", lambda: "run123"
-    )
+    monkeypatch.setattr(registry, "generate_training_run_id", lambda: "run123")
 
     # Stub external side effects
-    monkeypatch.setattr(
-        registry, "freeze_config", lambda c, p: "cfg_hash"
-    )
+    monkeypatch.setattr(registry, "freeze_config", lambda c, p: "cfg_hash")
     monkeypatch.setattr(registry, "capture_env", lambda p: None)
     monkeypatch.setattr(registry, "capture_seeds", lambda s, p: None)
 
     monkeypatch.setattr(registry, "get_repo_url", lambda: "repo_url")
-    monkeypatch.setattr(
-        registry, "get_commit_hash", lambda: "commit_hash"
-    )
+    monkeypatch.setattr(registry, "get_commit_hash", lambda: "commit_hash")
     monkeypatch.setattr(registry, "is_repo_dirty", lambda: False)
 
     mock_s3 = MagicMock()
@@ -109,13 +107,13 @@ def test_start_training_run(monkeypatch, tmp_path: Path):
     assert manifest.git.dirty is False
     assert manifest.status == "STARTED"
 
-#Test: run directory already exists → failure
+
+# Test: run directory already exists → failure
+
 
 def test_start_training_run_fails_if_run_dir_exists(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(registry, "TMP_ROOT", tmp_path)
-    monkeypatch.setattr(
-        registry, "generate_training_run_id", lambda: "run123"
-    )
+    monkeypatch.setattr(registry, "generate_training_run_id", lambda: "run123")
 
     existing = tmp_path / "runs" / "run123"
     existing.mkdir(parents=True)

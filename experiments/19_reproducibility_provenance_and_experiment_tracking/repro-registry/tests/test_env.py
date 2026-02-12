@@ -4,7 +4,8 @@ from pathlib import Path
 
 import repro.env as env
 
-#Test _pip_freeze() success case
+# Test _pip_freeze() success case
+
 
 def test_pip_freeze_success(monkeypatch):
     def mock_check_output(cmd):
@@ -17,7 +18,9 @@ def test_pip_freeze_success(monkeypatch):
 
     assert result == ["numpy==1.26.0", "pandas==2.1.0"]
 
-#Test _pip_freeze() failure case
+
+# Test _pip_freeze() failure case
+
 
 def test_pip_freeze_failure_returns_empty_list(monkeypatch):
     def mock_check_output(*args, **kwargs):
@@ -29,7 +32,9 @@ def test_pip_freeze_failure_returns_empty_list(monkeypatch):
 
     assert result == []
 
-#Test capture_env() creates directories and file
+
+# Test capture_env() creates directories and file
+
 
 def test_capture_env_creates_output_file(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(env.platform, "platform", lambda: "TestOS")
@@ -44,7 +49,9 @@ def test_capture_env_creates_output_file(tmp_path: Path, monkeypatch):
 
     assert output_path.exists()
 
-#Test JSON content is correct and stable
+
+# Test JSON content is correct and stable
+
 
 def test_capture_env_writes_expected_json(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(env.platform, "platform", lambda: "Linux-Test")
@@ -67,7 +74,9 @@ def test_capture_env_writes_expected_json(tmp_path: Path, monkeypatch):
         "pip_freeze": ["a==1.0", "b==2.0"],
     }
 
-#Test JSON formatting (indentation)
+
+# Test JSON formatting (indentation)
+
 
 def test_capture_env_json_is_pretty_printed(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(env.platform, "platform", lambda: "OS")

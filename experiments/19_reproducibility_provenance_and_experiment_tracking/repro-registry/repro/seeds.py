@@ -12,6 +12,7 @@ try:
 except ImportError:
     torch = None
 
+
 def set_all_seeds(seed: int):
     random.seed(seed)
     if np:
@@ -19,6 +20,7 @@ def set_all_seeds(seed: int):
     if torch:
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+
 
 def capture_seeds(seed: int, output_path: Path):
     output_path.parent.mkdir(parents=True, exist_ok=True)
