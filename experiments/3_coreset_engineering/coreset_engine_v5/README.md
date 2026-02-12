@@ -187,6 +187,32 @@ python coreset_builder.py --config config/pipeline.yaml --curriculum config/curr
 
 Note: for single-file inputs, all shards will read the same file. For best throughput at very large scale, consider pre-splitting the JSONL into multiple files so file-level sharding can distribute I/O.
 
+### Optional: Band Inference for Curriculum Eligibility
+
+Some datasets provide a `band` label that makes large portions of the data curriculum-ineligible for early stages (e.g., many rows labeled `B0` but with domains only allowed in higher bands). In streaming mode, this can lead to unexpectedly low selection volume and skewed language/domain composition.
+
+To address this, the streaming builder supports optional band inference using `band_score` or `difficulty_score` when present:
+
+- `--band-inference none` (default): do not modify input bands.
+- `--band-inference infer_if_ineligible`: only re-band rows when the current `(band, domain)` is not eligible under the curriculum.
+- `--band-inference infer_if_missing`: only infer when `band` is missing/invalid.
+- `--band-inference force`: always infer a band when a score exists.
+
+Recommended setting for datasets with suspicious band/domain mismatches:
+
+```bash
+python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
+  --input-path data/cdset --input-format jsonl \
+  --stages 1B 3B 8B 70B \
+  --band-inference infer_if_ineligible
+```
+
+For sharded runs via `shard.sh`, you can pass the same option:
+
+```bash
+bash shard.sh --input-path "data/cdset" --band-inference infer_if_ineligible
+```
+
 ### S3 Inputs (Streaming)
 
 Streaming runs can read input data directly from S3 via `s3://...` paths.
