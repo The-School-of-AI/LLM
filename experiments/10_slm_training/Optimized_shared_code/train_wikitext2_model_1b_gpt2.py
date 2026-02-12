@@ -702,6 +702,17 @@ def main() -> None:
     print(f"delta_recurrence_mode={config.delta_recurrence_mode} chunk_size={config.delta_chunk_size}")
     print(f"fused_adamw={args.fused_adamw} tf32={args.tf32} non_blocking_transfer={args.non_blocking_transfer}")
 
+    if (
+        config.use_compile
+        and config.compile_target == "all"
+        and config.compile_mtp
+        and args.seq_length >= 1024
+    ):
+        print(
+            "[Perf hint] compile_target=all + compile_mtp + seq_length>=1024 can raise memory and reduce tok/s. "
+            "For better throughput, prefer --compile-target deltanet and omit --compile-mtp."
+        )
+
     if args.seq_length <= 512 and config.delta_recurrence_mode == "parallel_scan":
         print(
             "[Perf hint] seq_length <= 512 with parallel_scan can be slower than sequential; "

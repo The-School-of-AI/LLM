@@ -984,10 +984,18 @@ class GatedSparseAttention(nn.Module):
                 sink_mask[:, :, :sink_size] = True
                 importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
 
-            # Compile-friendly: use static upper bound (k_max) and then apply
-            # per-token k_t masking below. This preserves final selection_mask
-            # semantics while avoiding Tensor.item() graph breaks.
-            k_limit = min(T, max(self.k_max, sink_size))
+            # Use dynamic k_limit in eager mode (lower memory/compute).
+            # During compilation, keep static k_limit to avoid Tensor.item graph breaks.
+            is_compiling = False
+            if hasattr(torch, "compiler") and hasattr(torch.compiler, "is_compiling"):
+                is_compiling = bool(torch.compiler.is_compiling())
+            elif hasattr(torch, "_dynamo") and hasattr(torch._dynamo, "is_compiling"):
+                is_compiling = bool(torch._dynamo.is_compiling())
+
+            if is_compiling:
+                k_limit = min(T, max(self.k_max, sink_size))
+            else:
+                k_limit = min(T, max(int(k_t.max().item()), sink_size))
             _, top_indices = importance_for_selection.topk(k_limit, dim=-1)
 
             if is_reversible_forward:
