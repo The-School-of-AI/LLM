@@ -11,6 +11,27 @@ The pipeline is split into three layers:
 
 ---
 
+## 📜 The Two-Pipeline Strategy
+
+To balance **research speed** with **scientific rigor**, this project maintains two distinct benchmarking configurations.
+
+### 1. Developer Feedback Pipeline (`benchmark-config.yaml`)
+*   **Purpose**: Rapid iteration and regression testing during active pre-training.
+*   **Philosophy**: "Directional correctness over absolute precision."
+*   **Optimizations**: Uses `:easy` task subsets and fast **RC (Completion)** formulations.
+*   **When to use**: Hourly or nightly runs to ensure the model isn't "collapsing."
+
+### 2. Industry Standard Pipeline (`industry-benchmarks.yaml`)
+*   **Purpose**: Formal benchmarking for model cards and technical reports.
+*   **Philosophy**: "Maximum comparability and statistical significance."
+*   **Rigors**: Uses **N=1,000** samples or **Full** datasets, and the **Best of MC/RC** methodology (Best-of-both-worlds).
+*   **When to use**: Major milestones (e.g., end of 1B, 8B, 70B stages) or before a public release.
+
+For a deeper dive into the exact academic targets (Meta, Alibaba, AI2) and SOTA scores for each tier, see:
+👉 **[INDUSTRY_BENCHMARKS.md](./INDUSTRY_BENCHMARKS.md)**
+
+---
+
 ## 🚀 Execution Guide
 
 ### 1. Environment Setup

@@ -1,0 +1,110 @@
+# industry-benchmarks.yaml
+# Purpose: Tiered benchmarking configuration based on industry "Gold Standards" 
+# (Llama 3.1/3.2, Qwen 2.5, OLMo 2).
+
+version: 1
+
+defaults:
+  output_root: "./benchmark-results"
+  model_type_by_size:
+    small: "hf"
+    large: "vllm"
+  stages:
+    common:
+      max_new_tokens: 512
+      temperature: 0.0
+      top_p: 1.0
+      seed: 42
+
+stages:
+  # 🥉 Tier 1: 1B - 3B Parameters (Small/Fast)
+  # Focus on basic signal and core reasoning.
+  pretrain_small:
+    description: "Essential industry signal for small mobile-scale models."
+    backend: "hf"
+    benchmarks:
+      - name: "academic_core"
+        tasks:
+          - "core_9mcqa::olmes"
+      - name: "world_knowledge"
+        tasks:
+          - "mmlu::olmes"
+      - name: "multilingual_indic"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
+
+  # 🥈 Tier 2: 8B Parameters (Standard Milestone)
+  # The competitive baseline for most open-weight research.
+  pretrain_8b:
+    description: "Industry-standard competitive milestone (8B scale)."
+    backend: "hf"
+    benchmarks:
+      - name: "academic_core"
+        tasks:
+          - "core_9mcqa::olmes"
+      - name: "world_knowledge"
+        tasks:
+          - "mmlu::olmes"
+      - name: "mathematical_reasoning"
+        tasks:
+          - "gsm8k::olmes"
+      - name: "coding_capability"
+        tasks:
+          - "olmo3:base:code"
+      - name: "multilingual_indic"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
+
+  # 🥇 Tier 3: 70B Parameters (Frontier/Publishable)
+  # Comprehensive evaluation for flagship model releases.
+  pretrain_70b:
+    description: "Frontier-level capability sweep (70B scale)."
+    backend: "vllm"
+    decoding:
+      max_new_tokens: 1024
+    benchmarks:
+      - name: "academic_core"
+        tasks:
+          - "core_9mcqa::olmes"
+      - name: "world_knowledge"
+        tasks:
+          - "mmlu::olmes"
+      - name: "mathematical_reasoning"
+        tasks:
+          - "gsm8k::olmes"
+          - "minerva_math::olmes"
+      - name: "coding_capability"
+        tasks:
+          - "olmo3:base:code"
+      - name: "multilingual_indic"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
+          - "indic-bias"
+      - name: "expert_reasoning"
+        tasks:
+          - "bbh:cot::olmes"
+          - "gpqa::olmes"
+
+  # 🏅 Tier 4: SFT / Instruct (Alignment & Utility)
+  # Final evaluation for chat-aligned and instruction-following models.
+  sft:
+    description: "Post-SFT: Alignment, Instruction-following, and Factuality evaluation."
+    backend: "vllm"
+    decoding:
+      max_new_tokens: 2048
+      temperature: 0.7  # Standard for chat/creative generation
+      top_p: 0.95
+    benchmarks:
+      - name: "alignment_utility"
+        tasks:
+          - "olmo3:adapt"  # Includes IFEval, AlpacaEval, WildBench
+      - name: "factuality_safety"
+        tasks:
+          - "indic-bias"
+      - name: "multilingual_indic_instruct"
+        tasks:
+          - "indic_glue"
+          - "indic_qa"
