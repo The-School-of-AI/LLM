@@ -1,8 +1,0 @@
-stage: "test"
-description: "SimpleQA Verified Test Run"
-benchmarks:
-  - name: "SimpleQA_Verified"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
-    shots: 0
-    phases: ["pretraining"]

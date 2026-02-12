@@ -5,7 +5,7 @@
 version: 1
 
 defaults:
-  output_root: "./olmes_runs"
+  output_root: "./benchmark-results"
   model_type_by_size:
     small: "hf"      # 1B–8B
     large: "vllm"    # 70B+
@@ -29,9 +29,9 @@ buckets:
   english: ["core_9mcqa::olmes", "mmlu::olmes", "olmo3:base:stem_qa_mc", "olmo3:base:nonstem_qa_mc", "olmo3:base:gen",
             "olmo3:base_easy:qa_rc", "olmo3:base_easy:qa_bpb"]
   indic:   ["indic_glue", "indic_qa", "indic_bias"]
-  cot:     ["olmo3:base:math", "olmo3:base_easy:math_bpb", "bbh::olmes"]
+  cot:     ["olmo3:base:math", "olmo3:base_easy:math_bpb", "bbh:cot::olmes"]
   coding:  ["olmo3:base:code", "olmo3:base:code_fim", "olmo3:base_easy:code_bpb"]
-  agentic: ["olmo3:adapt:all"]
+  agentic: ["olmo3:adapt"]
 
 stages:
   # ----------------------------
@@ -164,7 +164,7 @@ stages:
       # Reasoning/CoT gate for agentic readiness
       - name: "reasoning_cot_bbh"
         tasks:
-          - "bbh::olmes"   # replace with exact task IDs from `oe-eval --list-tasks bbh` if different
+          - "bbh:cot::olmes"   # Corrected from bbh::olmes
 
       # Optional: execution-based coding (run via olmes-docker in a separate job)
       - name: "coding_exec"
@@ -223,7 +223,7 @@ stages:
         tasks:
           - "indic_glue"
           - "indic_qa"
-          - "indic_bias"
+          # - "indic_bias"  # Disabled due to gated dataset access issues
         enabled: true
 
     gating:
@@ -247,6 +247,6 @@ stages:
         tasks:
           - "olmo3:base_easy:qa_rc"    # English / RC
           - "indic_glue"               # Multilingual
-          - "bbh::olmes"               # Reasoning
+          - "bbh:cot::olmes"               # Reasoning
           - "olmo3:base_easy:code_bpb" # Coding
-          - "olmo3:adapt"          # Agentic
+          #- "olmo3:adapt"          # Agentic

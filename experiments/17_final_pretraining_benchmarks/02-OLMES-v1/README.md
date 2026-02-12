@@ -1,131 +1,92 @@
-# OLMES Reporting Pipeline: Pre-training & SFT Benchmarking
+# OLMES Evaluation Pipeline (v1)
 
-The **OLMES Reporting Pipeline** is a robust, production-ready framework designed to automate the evaluation of Large Language Models across various training stages (1B to 70B+). It integrates the **allenai/OLMES** evaluation standard, providing a unified interface for tracking model progress through pre-training and SFT.
+A unified benchmarking orchestrator designed to track model progress from early pre-training (1B) to high-scale alignment (70B+). This pipeline automates the execution of **OLMES**, **LM-Evaluation-Harness**, and **Custom Indic scripts** through a single declarative configuration.
 
-## 🌟 OLMES Capabilities
+## 🏗 Pipeline Architecture
 
-The OLMES engine brings several critical capabilities to this pipeline:
-- **Comprehensive Task Suites**: Built-in support for standardized suites like MMLU, ARC, and HellaSwag, optimized for the OLMES regime.
-- **Evaluation Paradigms**: Supports multiple evaluation styles including Multiple Choice (MC), Rank Classification (RC), and Chain-of-Thought (CoT).
-- **Metric Consistency**: Ensures metrics are computed using standardized filters (e.g., `acc_per_char`, `bits_per_byte_corr`) for fair cross-model comparison.
-- **Automated Setup**: Integrated auto-downloader and installer ensure the OLMES engine is always available and up-to-date.
+The pipeline is split into three layers:
+1.  **Orchestrator (`pipeline_runner.py`)**: Loads the stage configurations, resolves task types, and manages the run lifecycle.
+2.  **Core Executive (`eval_runner.py`)**: A shared library that handles environment setup, vendor patching (for macOS/HPC), and execution of specific engines.
+3.  **Config Layer (`benchmark-config.yaml`)**: Defines what benchmarks run at which training stage, along with capability groupings (buckets) and comparative baselines.
 
-## 🚀 Quick Start
+---
 
-### 1. Installation
-The evaluator automatically detects and uses a local `.venv` if present.
+## 🚀 Execution Guide
+
+### 1. Environment Setup
+The pipeline automatically detects and uses a local `.venv` if present. Ensure you have the dependencies installed:
 ```bash
-# Recommended: create and setup venv
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r 02-OLMES-v1/requirements.txt
 ```
 
-#### ⚠️ Environment Requirement (Mac/OSX)
-The **allenai/olmes** internal runner expects a `python` command to be available in the path. If your environment only provides `python3`, you must create an alias or symlink:
+### 2. Running a Training Stage
+To evaluate a model checkpoint against a specific stage (e.g., `pretrain_1b` or `pretrain_70b`):
 ```bash
-# Example fix for active shell
-alias python=python3
-
-# Or symlink inside your venv
-ln -s $(which python3) .venv/bin/python
+python3 02-OLMES-v1/src/pipeline_runner.py \
+    --config 02-OLMES-v1/configs/benchmark-config.yaml \
+    --stage pretrain_1b \
+    --model_args "pretrained=HuggingFaceTB/SmolLM2-135M" \
+    --device "cpu"
 ```
 
-### 2. Full Execution
-Run the benchmarking suite on your checkpoint:
+### 3. Smoke Testing (Quick Verification)
+Use the included helper script to run a "one of everything" test with a tiny sample limit (2 samples/task) across all stages:
 ```bash
-python3 02-OLMES-v1/src/eval_runner.py \
-    --config 02-OLMES-v1/configs/stage_1b.yaml \
-    --phase pretraining \
-    --model_args "pretrained=path/to/checkpoint" \
-    --device "cuda:0" \
-    --batch_size "1"
+./run_smoke_tests.sh
 ```
-
-> [!TIP]
-> To run a quick test, add `--limit 5` to the command above. 
-> **Note**: Avoid using `--limit 1`, as OLMES interprets it as 1.0 (100% of the dataset). Use integers like `2` or higher for sampling.
-
-### ☁️ Google Colab Execution
-Run the pipeline in a Colab notebook with a GPU (T4, L4, or A100):
-
-1. **Setup Repo**:
-   ```bash
-   !git clone <your-repo-url>
-   %cd <repo-folder>/experiments/17_final_pretraining_benchmarks
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   !pip install -r 02-OLMES-v1/requirements.txt
-   ```
-
-3. **Run Pipeline**:
-   ```python
-   # In a code cell
-   !python3 02-OLMES-v1/src/eval_runner.py \
-       --config 02-OLMES-v1/configs/stage_1b.yaml \
-       --phase pretraining \
-       --model_args "pretrained=HuggingFaceTB/SmolLM2-135M" \
-       --device "cuda" \
-       --batch_size 8 \
-       --limit 5
-   ```
-   *Note: The script automatically handles the `python` command shim and OLMES vendor setup on Colab.*
-
-## ⚡ Batch Size Recommendations
-
-The `--batch_size` parameter has a major impact on total evaluation time. **We recommend using a fixed value over `auto`** to avoid the slow per-task auto-detection phase.
-
-| Mode | Value | Recommended For | Rationale |
-| :--- | :--- | :--- | :--- |
-| **Standard** | `1` | **Default / Robustness** | Skips slow auto-detection. Safest for all hardware and model sizes. |
-| **High Perf** | `32`, `64` | **Optimized Runs** | Fastest execution if you know your GPU's VRAM limits. |
-| **Auto** | `auto` | *Discouraged* | Convenient but adds significant overhead by searching for batch size on every task. |
 
 ---
 
-## 📂 Output Structure
-Every execution creates a unique, timestamped directory to prevent data loss and ensure clean logs:
+## � Supported Training Stages
 
-```text
-benchmark-results/
-└── [stage]/                 (e.g., 1b, 8b)
-    └── [phase]/             (e.g., pretraining, sft)
-        └── [timestamp]/     (e.g., 20240201_123000)
-            ├── incremental_results.json  <-- Saved after every task
-            ├── logs/
-            │   └── execution.log         <-- Full stdout/stderr capture
-            ├── reports/
-            │   └── summary_report.md     <-- Human-readable Markdown
-            └── harness_raw/              <-- Raw JSON from lm-eval per task
-                ├── mmlu.json
-                └── gsm8k.json
-```
+The pipeline defines specialized stages to match the model's maturity:
 
-## 🛠 Features
-
-### 1. Granular Reporting
-The YAML configuration supports specific subjects and subsets. The evaluator will automatically:
-- Expand `subjects` (e.g., MMLU subjects) into individual harness tasks.
-- Aggregate these sub-tasks into a parent benchmark score.
-- Generate a nested Markdown report showing both the **Aggregate** and **↳ Sub-task** scores.
-
-### 2. Incremental Saving
-Results are saved to `incremental_results.json` immediately after each benchmark completes. If a 24-hour run crashes at hour 23, you still have 23 hours of data.
-
-### 3. Intelligent Execution
-- **Venv Detection**: Automatically uses `.venv/bin/python3` if available.
-- **Robust Parsing**: Extracts metrics from `lm-eval` regardless of the filter used (e.g., `acc`, `exact_match`, `acc_norm`).
-- **Conflict Resolution**: Strips potential `device` conflicts between CLI arguments and `model_args`.
-
-## ⚙️ Configuration (YAML)
-Each benchmark in `configs/*.yaml` can specify:
-- `harness_task`: Base task name in `lm-evaluation-harness`.
-- `subjects`: List of MMLU-style subjects to run specifically.
-- `tasks`: List of specific subsets (e.g., for BLiMP).
-- `subset`: Specific dataset subset (e.g., for TriviaQA).
-- `shots`: Number of few-shot examples.
-- `phases`: `[pretraining]` or `[sft]`.
+| Stage | Focus | Key Coverage |
+| :--- | :--- | :--- |
+| **`ci_breadth`** | **CI Smoke Test** | Fast representative sample (English, Indic, CoT, Code). |
+| **`pretrain_1b`** | **Early Signal** | Fast RC/BPB + Indic NLU trends. |
+| **`pretrain_3b`** | **Enhanced Signal** | Pretrain 1B + Core Knowledge & QA. |
+| **`pretrain_8b`** | **Full Milestone** | Full Base Suite (STEM, Math, Code) + MMLU. + Extended Indic.|
+| **`pretrain_70b`** | **Reasoning Ready** | Full Base + `bbh:cot` + Extended Indic. |
+| **`sft`** | **Agency & Chat** | IFEval, AlpacaEval, Factuality (SimpleQA/PopQA). |
 
 ---
+
+## �📊 Understanding Results
+
+Every run creates a unique timestamped directory in `benchmark-results/`.
+
+### 1. Human-Readable Reports
+Navigate to `benchmark-results/[stage]/[timestamp]/reports/summary_report.md`.
+- **Executive Summary**: Overall pass rate and completion status.
+- **Capability Mapping**: Benchmarks grouped into logical buckets (Reasoning, Coding, Indic, etc.).
+- **Granular Details**: Collapsible sections showing every individual sub-task score (e.g., individual MMLU subjects).
+
+### 2. Machine-Comparable Data
+For automated analysis or cross-run comparisons, use `reports/final_results.json`:
+- **`aggregates`**: Flat mapping of top-level benchmark suite scores.
+- **`granular`**: Flat mapping of **all** underlying sub-tasks and their scores across all suites.
+- **`metadata`**: Full context of the run (model args, device, limit, etc.).
+
+---
+
+## 🚧 Status & Roadmap
+
+The following benchmarks have known limitations or are currently under active development.
+
+| Feature / Benchmark | Status / Limitation | Next Steps / Required Setup |
+| :--- | :--- | :--- |
+| **Indic-Bias** | **Gated Access** | Requires access to `ai4bharat/Indic-Bias`. **TODO**: Automate `HF_TOKEN` injection. |
+| **olmo3:base:code** | **Docker Required** | Execution tasks (BCB/MBPP) need Docker. **TODO**: Latency optimization. |
+| **olmo3:adapt** | **Base Model Noise** | Unstable on base models. **TODO**: Validate on first instruction-aligned milestones. |
+| **MMLU-Pro** | **High Resource** | Very slow execution. **TODO**: Integrate into milestones after optimization. |
+| **HELM Safety** | **Network Fragility** | `RealToxicityPrompts` downloads are flaky. Recommendation: Pre-cache datasets locally. |
+
+---
+
+## �🔍 Detailed Benchmark Catalog
+
+For a complete breakdown of every task, dataset, and sub-task included in each suite, refer to:
+👉 **[BENCHMARK_DETAILS.md](./BENCHMARK_DETAILS.md)**
+
+This document explains the "Signal of Life" strategy, the progression from Bits-Per-Byte (BPB) to generative evaluation, and the specific composition of complex suites like `bbh:cot` and `olmo3:adapt`.

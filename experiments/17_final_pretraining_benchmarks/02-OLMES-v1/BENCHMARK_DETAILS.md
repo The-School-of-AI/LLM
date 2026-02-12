@@ -13,7 +13,7 @@ The evaluation strategy transitions from **"Easy/Fast"** tasks in early pretrain
 | **Pretrain 1B** | Frequent Monitoring | `base_easy`, `indic_nlu` | `./benchmark-results/pretrain_1b/` |
 | **Pretrain 3B** | Enhanced Signal | `base_easy`, `indic_standard`, `core_qa` | `./benchmark-results/pretrain_3b/` |
 | **Pretrain 8B** | Full Base Milestone | `olmo3_base`, `mmlu`, `indic_standard` | `./benchmark-results/pretrain_8b/` |
-| **Pretrain 70B** | Reasoning Readiness | `olmo3_base`, `bbh`, `indic_standard`, `coding_exec` | `./benchmark-results/pretrain_70b/` |
+| **Pretrain 70B** | Reasoning Readiness | `olmo3_base`, `bbh:cot::olmes`, `indic_standard`, `coding_exec` | `./benchmark-results/pretrain_70b/` |
 | **SFT / Instruct** | Instruction & Agency | `olmo3_adapt`, `indic_instruct`, `regression_guard` | `./benchmark-results/sft/` |
 
 ---
@@ -26,15 +26,15 @@ This table explicitly maps the high-level "Key Suites" to their individual compo
 | **`base_easy`** | ARC-Easy, ARC-Challenge, MMLU, CommonsenseQA, HellaSwag, Winogrande, SocialIQA, PIQA, CoQA, DROP, Jeopardy, NaturalQS, SQuAD, SciQ, QASPER, Basic Skills, Lab Bench, Lambada, MedMCQA, MedQA, SciRIFF. | Foundation / RC |
 | **`olmo3_base`** | MMLU (STEM, Humanities, Social Sciences, Other), ARC-MC, MedMCQA, MedQA, SciQ, HellaSwag, Winogrande, Lambada, Basic Skills, DROP, Jeopardy, NaturalQS, SQuAD, CoQA, GSM8K, GSM-Symbolic, Minerva Math, BigCodeBench, HumanEval, LeetCode, DS1000, MBPP, MultiPL-E, HumanEval-FIM. | Scale Milestone |
 | **`indic_standard`** | **IndicGLUE**: WNLI (hi, mr, gu, pa, bn), COPA (hi, mr, gu), CSQA (hi, te, ta, kn, as, ml, or), ACTSA (te). <br> **IndicQA**: (hi, bn, ta, te, ml, mr, gu, kn, pa, as). | Multilingual |
-| **`bbh::olmes`** | Boolean Expressions, Causal Judgement, Date Understanding, Disambiguation QA, Dyck Languages, Formal Fallacies, Geometric Shapes, Hyperbaton, Logical Deduction, Movie Recommendation, Multistep Arithmetic, Navigate, Object Counting, Penguins in a Table, Reasoning about Colored Objects, Ruin Names, Snarks, Sports Understanding, Temporal Sequences, Tracking Shuffled Objects, Web of Lies, Word Sorting. | Logic / CoT |
-| **`olmo3:adapt`** | IFEval, AlpacaEval, SimpleQA, PopQA, ZebraLogic, AGIEval (English), GPQA, Minerva Math, GSM8K, Omega, AIME (2024/2025), HumanEval+, MBPP+, LiveCodeBench. | Agency / Chat |
+| **`bbh:cot::olmes`** | Boolean Expressions, Causal Judgement, Date Understanding, Disambiguation QA, Dyck Languages, Formal Fallacies, Geometric Shapes, Hyperbaton, Logical Deduction, Movie Recommendation, Multistep Arithmetic, Navigate, Object Counting, Penguins in a Table, Reasoning about Colored Objects, Ruin Names, Snarks, Sports Understanding, Temporal Sequences, Tracking Shuffled Objects, Web of Lies, Word Sorting. | Logic / CoT |
+| **`olmo3:adapt`** | IFEval, AlpacaEval, SimpleQA, PopQA, ZebraLogic, AGIEval (English), GPQA, Minerva Math, GSM8K, Omega, AIME (2024/2025), HumanEval+, MBPP+, LiveCodeBench. | Agency / Chat / Instruct (SFT Only) |
 
 ---
 
 ### 3. Multi-Dimensional Breakdown
 
 #### 🇮🇳 Indic Language Coverage
-All phases now run these expanded sweeps in varying sample limits:
+All pretraining phases run these expanded sweeps (NLU focus) to ensure cross-lingual stability:
 *   **IndicGLUE (NLU):** WNLI (Logical), COPA (Causal), CSQA (Commonsense), ACTSA (Sentiment).
 *   **IndicQA (Gen):** 10 Languages (hi, bn, ta, te, ml, mr, gu, kn, pa, as).
 
@@ -67,7 +67,7 @@ Includes **57 subjects** across STEM, Humanities, Social Sciences, and more.
 *   **Other**: Business Ethics, Clinical Knowledge, Human Aging, Management, Marketing, Nutrition, Virology.
 
 ### C. BBH (Big-Bench Hard)
-*Suite Name:* `bbh::olmes`
+*Suite Name:* `bbh:cot::olmes`
 Tasks where LLMs traditionally struggled, requiring Chain-of-Thought (CoT).
 1.  Boolean Expressions
 2.  Causal Judgement

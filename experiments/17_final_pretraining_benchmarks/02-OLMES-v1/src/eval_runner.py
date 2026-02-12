@@ -9,207 +9,22 @@ from datetime import datetime
 
 import yaml
 
-# Check if running in Google Colab
-IS_COLAB = os.path.exists('/content') and os.path.exists('/usr/local/lib/python3.12/dist-packages')
-
-def check_torchvision_nms(logger):
-    """
-    Proactively checks if torchvision and its NMS operation are valid.
-    Specifically targets the common 'operator torchvision::nms does not exist' error.
-    """
-    try:
-        import torch
-        import torchvision
-        # Attempt to access nms
-        _ = torchvision.ops.nms
-        return True
-    except (ImportError, AttributeError, RuntimeError) as e:
-        logger.warning(f"  [Auto-Heal] Detected torchvision/torch sync issue: {str(e)}")
-        return False
-
-def sync_colab_dependencies(logger):
-    """
-    Explicitly synchronizes torch and torchvision in Colab to prevent NMS errors.
-    """
-    if not IS_COLAB:
-        return
-
-    logger.info("  [Colab] Synchronizing torch and torchvision...")
-    try:
-        # Specifically target the latest stable versions that are compatible
-        # In Colab, we often need to force-reinstall torchvision after updating torch
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu121"],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        logger.info("  [Colab] Synchronization complete.")
-    except Exception as e:
-        logger.error(f"  [Error] Failed to sync Colab dependencies: {str(e)}")
-
-def patch_vendor_requirements(logger, olmes_dir):
-    """
-    Patches the vendor's files to fix:
-    1. Broken/unrealistic requirements in pyproject.toml (Colab stabilization).
-    2. macOS filename issues in oe_eval/utils.py (replacing colons with underscores).
-    """
-    # --- 1. Patch pyproject.toml ---
-    pyproject_path = os.path.join(olmes_dir, "pyproject.toml")
-    if os.path.exists(pyproject_path):
-        logger.info("  [OLMES] Patching vendor pyproject.toml...")
-        try:
-            with open(pyproject_path, "r") as f:
-                content = f.read()
-            patched = content.replace("torch>=2.8.0", "torch>=2.4.0")
-            patched = patched.replace("transformers>=4.57.0", "transformers>=4.40.0")
-            if patched != content:
-                with open(pyproject_path, "w") as f:
-                    f.write(patched)
-                logger.info("  [OLMES] Successfully patched pyproject.toml")
-        except Exception as e:
-            logger.warning(f"  [OLMES] Failed to patch pyproject.toml: {str(e)}")
-
-    # --- 2. Patch oe_eval/utils.py (macOS Filename Fix) ---
-    utils_path = os.path.join(olmes_dir, "oe_eval", "utils.py")
-    if os.path.exists(utils_path):
-        logger.info("  [OLMES] Patching vendor utils.py for macOS compatibility...")
-        try:
-            with open(utils_path, "r") as f:
-                content = f.read()
-            
-            # Target the task_file_name function to sanitize the name
-            target = 'def task_file_name(output_dir: str, task_idx: int, task_name: str, file_name: str) -> str:\n    return os.path.join(output_dir, f"task-{task_idx:03d}-{task_name}-{file_name}")'
-            replacement = 'def task_file_name(output_dir: str, task_idx: int, task_name: str, file_name: str) -> str:\n    # Sanitize task_name for macOS/generic safety (no colons or slashes)\n    safe_name = task_name.replace(":", "_").replace("/", "_")\n    return os.path.join(output_dir, f"task-{task_idx:03d}-{safe_name}-{file_name}")'
-            
-            patched = content.replace(target, replacement)
-            if patched != content:
-                with open(utils_path, "w") as f:
-                    f.write(patched)
-                logger.info("  [OLMES] Successfully patched utils.py (Sanitized filenames enabled)")
-        except Exception as e:
-            logger.warning(f"  [OLMES] Failed to patch utils.py: {str(e)}")
-
-def ensure_olmes_vendor(logger):
-    """
-    Ensures that the OLMES vendor library is present and installed.
-    Clones it from GitHub if missing.
-    """
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    vendor_dir = os.path.join(root_dir, "vendor")
-    olmes_dir = os.path.join(vendor_dir, "olmes")
-
-    try:
-        # Colab specific pre-check
-        if IS_COLAB:
-            sync_colab_dependencies(logger)
-
-        if not os.path.exists(olmes_dir):
-            logger.info("  [OLMES] Vendor directory missing. Attempting to clone...")
-            if not os.path.exists(vendor_dir):
-                os.makedirs(vendor_dir)
-
-            subprocess.run(
-                ["git", "clone", "https://github.com/allenai/olmes.git", olmes_dir],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            logger.info(f"  [OLMES] Successfully cloned to {olmes_dir}")
-
-        # Patch requirements immediately after cloning or if already present
-        patch_vendor_requirements(logger, olmes_dir)
-
-        # Install the package
-        import shutil
-        uv_path = shutil.which("uv")
-        install_success = False
-
-        if uv_path:
-            try:
-                logger.info(f"  [OLMES] Using uv to install: {olmes_dir}")
-                subprocess.run(
-                    [uv_path, "pip", "install", "-e", olmes_dir],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                install_success = True
-            except subprocess.CalledProcessError:
-                logger.warning("  [OLMES] uv pip install failed, falling back to standard pip...")
-
-        if not install_success:
-            # Determine python executable (prefer .venv)
-            venv_python = os.path.join(root_dir, ".venv", "bin", "python3")
-            py_exec = venv_python if os.path.exists(venv_python) else sys.executable
-            
-            logger.info(f"  [OLMES] Using pip to install: {olmes_dir}")
-            subprocess.run(
-                [py_exec, "-m", "pip", "install", "-e", olmes_dir],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-
-        # Proactive Auto-Heal Check
-        if not check_torchvision_nms(logger):
-            logger.info("  [Auto-Heal] Triggering torchvision recovery...")
-            try:
-                subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "--upgrade", "torchvision"],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                if check_torchvision_nms(logger):
-                    logger.info("  [Auto-Heal] recovery successful.")
-                else:
-                    logger.warning("  [Auto-Heal] recovery failed. You might need to restart the Colab runtime.")
-            except Exception as e:
-                logger.warning(f"  [Auto-Heal] recovery script failed: {str(e)}")
-
-    except subprocess.CalledProcessError as e:
-        logger.error(f"  [Error] Failed to setup OLMES vendor: {e.stderr}")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"  [Error] Unexpected error during OLMES setup: {str(e)}")
-        sys.exit(1)
+from infra_utils import (
+    IS_COLAB,
+    setup_logging,
+    ensure_olmes_vendor,
+    check_torchvision_nms
+)
 
 
-def setup_logging(run_dir, timestamp):
-    log_dir = os.path.join(run_dir, "logs")
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    log_path = os.path.join(log_dir, "execution.log")
-
-    # Configure logging
-    logger = logging.getLogger()
-    # Clear existing handlers if any (to avoid duplicate logs in same process)
-    if logger.hasHandlers():
-        logger.handlers.clear()
-
-    logger.setLevel(logging.INFO)
-
-    # File handler
-    fh = logging.FileHandler(log_path)
-    fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-    logger.addHandler(fh)
-
-    # Console handler
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(ch)
-
-    return logger, log_path
-
-
-def generate_summary_report(results, run_dir):
+def generate_summary_report(results, run_dir, capability_map=None, baselines=None):
     report_dir = os.path.join(run_dir, "reports")
     if not os.path.exists(report_dir):
         os.makedirs(report_dir)
 
     report_path = os.path.join(report_dir, "summary_report.md")
+    if baselines is None:
+        baselines = {}
 
     metadata = results["metadata"]
     benchmarks = results["benchmarks"]
@@ -224,16 +39,41 @@ def generate_summary_report(results, run_dir):
         model_name = metadata["model_args"]
 
     # Capability Mapping
-    capability_map = {
-        "Knowledge": ["MMLU", "TriviaQA"],
-        "Reasoning": ["ARC-Challenge", "GSM8K", "BBH (Big Bench Hard)", "MATH", "HellaSwag", "Winogrande", "PIQA"],
-        "Language Modeling": ["LAMBADA", "BLiMP", "IFEval", "HumanEval"],
-        "Safety & Bias": ["TruthfulQA", "Indic-Bias", "HELM Safety"],
-        "Experimental/Custom": ["AIME 2025", "IndicGLUE", "IndicQA", "L-Eval", "RULER", "SimpleQA_Verified", "SWE-bench Verified"]
-    }
+    if capability_map is None:
+        capability_map = {
+            "Knowledge": ["MMLU", "TriviaQA"],
+            "Reasoning": ["ARC-Challenge", "GSM8K", "BBH (Big Bench Hard)", "MATH", "HellaSwag", "Winogrande", "PIQA"],
+            "Language Modeling": ["LAMBADA", "BLiMP", "IFEval", "HumanEval"],
+            "Safety & Bias": ["TruthfulQA", "Indic-Bias", "HELM Safety"],
+            "Experimental/Custom": ["AIME 2025", "IndicGLUE", "IndicQA", "L-Eval", "RULER", "SimpleQA_Verified", "SWE-bench Verified"]
+        }
 
     with open(report_path, "w") as f:
         f.write(f"# Evaluation Report: {model_name}\n\n")
+
+        # Longitudinal Tracking (Comparative Baselines)
+        if baselines:
+            f.write(f"## Comparative Baselines\n")
+            f.write(f"Metrics tracked across all stages for longitudinal analysis.\n\n")
+            
+            for bench_match, baseline_info in baselines.items():
+                label = baseline_info.get("label", f"{bench_match} Baseline")
+                target_tasks = baseline_info.get("tasks", [])
+                
+                baseline_score = None
+                for b in benchmarks:
+                    if b["name"] == bench_match:
+                        if b.get("subtasks"):
+                            scores = [st["score"] for st in b["subtasks"] if st["task"] in target_tasks]
+                            if scores:
+                                baseline_score = sum(scores) / len(scores)
+                        elif b.get("task") in target_tasks:
+                             baseline_score = b.get("score")
+                
+                if baseline_score is not None:
+                    display_val = f"{baseline_score:.4f}" if isinstance(baseline_score, (int, float)) else str(baseline_score)
+                    f.write(f"- **{label}**: {display_val}\n")
+            f.write("\n")
         
         # 1. Executive Summary
         f.write("## 1. Executive Summary\n\n")
@@ -252,7 +92,11 @@ def generate_summary_report(results, run_dir):
         f.write("## 2. Capability Benchmarks\n\n")
         
         for capability, names in capability_map.items():
-            cab_benchmarks = [b for b in benchmarks if b["name"] in names]
+            # Match if any target name is a substring of the benchmark name
+            cab_benchmarks = [
+                b for b in benchmarks 
+                if any(target.lower() in b["name"].lower() for target in names)
+            ]
             if not cab_benchmarks: continue
 
             f.write(f"### {capability}\n\n")
@@ -268,22 +112,26 @@ def generate_summary_report(results, run_dir):
                 subtasks = b.get("subtasks", [])
                 details = f"{len(subtasks)} subtasks" if subtasks else "-"
                 if subtasks:
-                    sub_items = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" for st in sorted(subtasks, key=lambda x: x['task'])[:10]])
-                    if len(subtasks) > 10: sub_items += "<li>...</li>"
+                    sub_items = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" for st in sorted(subtasks, key=lambda x: x['task'])])
                     details = f"<details><summary>{len(subtasks)} subtasks</summary><ul>{sub_items}</ul></details>"
 
                 f.write(f"| {b['name']} | {engine} | {status_icon} {b['status']} | {score_str} | {details} |\n")
             f.write("\n")
 
         # 3. Uncategorized Benchmarks (Fallback)
-        uncategorized = [b for b in benchmarks if not any(b["name"] in names for names in capability_map.values())]
+        uncategorized = [b for b in benchmarks if not any(b["name"] in (names or []) for names in (capability_map or {}).values())]
         if uncategorized:
             f.write("### Other / Uncategorized\n\n")
-            f.write("| Benchmark | Engine | Status | Score |\n")
-            f.write("| :--- | :--- | :--- | :--- |\n")
+            f.write("| Benchmark | Engine | Status | Score | Details |\n")
+            f.write("| :--- | :--- | :--- | :--- | :--- |\n")
             for b in uncategorized:
                 score_str = f"**{b.get('score', 'N/A')}**" if b["status"] == "success" else "N/A"
-                f.write(f"| {b['name']} | {b.get('type', 'N/A')} | {b['status']} | {score_str} |\n")
+                subtasks = b.get("subtasks", [])
+                details = f"{len(subtasks)} subtasks" if subtasks else "-"
+                if subtasks:
+                    sub_items = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" for st in sorted(subtasks, key=lambda x: x['task'])])
+                    details = f"<details><summary>{len(subtasks)} subtasks</summary><ul>{sub_items}</ul></details>"
+                f.write(f"| {b['name']} | {b.get('type', 'N/A')} | {b['status']} | {score_str} | {details} |\n")
             f.write("\n")
 
         # 4. Failure Analysis
@@ -311,11 +159,62 @@ def generate_summary_report(results, run_dir):
             f.write(f"{b['name']},{b['status']},{b.get('score', 'N/A')},{b.get('type', 'N/A')}\n")
         f.write("```\n")
 
+    # Save Structured Aggregated and Granular results in same way for comparison
+    flat_results = {
+        "metadata": metadata,
+        "aggregates": {b["name"]: b.get("score") for b in benchmarks if b.get("status") == "success"},
+        "granular": {}
+    }
+    for b in benchmarks:
+        if b.get("subtasks"):
+            for st in b["subtasks"]:
+                flat_results["granular"][st["task"]] = st.get("score")
+    
+    json_report_path = os.path.join(report_dir, "final_results.json")
+    with open(json_report_path, "w") as f:
+        json.dump(flat_results, f, indent=4)
+
     return report_path
 
 def load_config(config_path):
     with open(config_path, "r") as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f)
+    
+    # Handle base configuration inheritance
+    if base_file := config.get("base_config"):
+        base_path = os.path.join(os.path.dirname(config_path), base_file)
+        if os.path.exists(base_path):
+            with open(base_path, "r") as f:
+                base_cfg = yaml.safe_load(f)
+            # Merge: stage benchmarks override base benchmarks by 'name'
+            merged = {b["name"]: b for b in base_cfg.get("benchmarks", [])}
+            merged.update({b["name"]: b for b in config.get("benchmarks", [])})
+            config["benchmarks"] = list(merged.values())
+        else:
+            print(f"Warning: Base config {base_path} not found.")
+            
+    return config
+
+def get_baselines(benchmarks):
+    """
+    Helper to extract baseline task lists from benchmark definitions.
+    Shared between eval_runner and pipeline_runner.
+    """
+    baselines = {}
+    for b in benchmarks:
+        if not (bl_raw := b.get("baseline")): continue
+        
+        bl = {"label": bl_raw} if isinstance(bl_raw, str) else bl_raw.copy()
+        if not bl.get("tasks"):
+            prefix = f"{b.get('harness_task', b.get('olmes_task', ''))}_"
+            if source := (b.get("subjects") or b.get("tasks")):
+                bl["tasks"] = [f"{prefix}{t}" for t in ([source] if isinstance(source, str) else source)]
+            elif subset := b.get("subset"):
+                bl["tasks"] = [f"{prefix}{subset}"]
+            else:
+                bl["tasks"] = [b.get("harness_task", b.get("olmes_task", b["name"]))]
+        baselines[b["name"]] = bl
+    return baselines
 
 
 def run_harness_benchmark(
@@ -525,7 +424,7 @@ def run_harness_benchmark(
 
 
 def run_custom_benchmark(
-    benchmark_info, model_args, logger, config_dir=None, limit=None, device=None
+    benchmark_info, model_args, logger, run_dir, config_dir=None, limit=None, device=None
 ):
     """
     Executes a custom benchmark not covered by lm-evaluation-harness.
@@ -534,6 +433,12 @@ def run_custom_benchmark(
     script = benchmark_info.get("custom_script")
 
     logger.info(f"  [Custom] Running {name}...")
+
+    # Setup Custom raw status folder
+    task_safe = name.replace("/", "_").replace(":", "_")
+    custom_raw_dir = os.path.join(run_dir, "custom_raw", task_safe)
+    if not os.path.exists(custom_raw_dir):
+        os.makedirs(custom_raw_dir)
 
     # Resolve script path
     resolved_script = script
@@ -572,8 +477,36 @@ def run_custom_benchmark(
         if device:
             cmd += ["--device", device]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return json.loads(result.stdout)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        
+        # Save raw logs
+        with open(os.path.join(custom_raw_dir, "stdout.log"), "w") as f:
+            f.write(result.stdout)
+        if result.stderr:
+            with open(os.path.join(custom_raw_dir, "stderr.log"), "w") as f:
+                f.write(result.stderr)
+            logger.info(f"  [Custom] Stderr output preserved in {custom_raw_dir}/stderr.log")
+
+        # Check return code after saving logs
+        if result.returncode != 0:
+             logger.error(f"  [Custom] Script failed with exit code {result.returncode}")
+             return {
+                 "name": name, 
+                 "type": "custom", 
+                 "status": "failed", 
+                 "error": f"Script failed (exit {result.returncode}). Check logs in {custom_raw_dir}"
+             }
+
+        # Attempt to parse JSON from stdout (might be the last line if script logs to stdout)
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError:
+            # Fallback: try last non-empty line
+            lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
+            if lines:
+                return json.loads(lines[-1])
+            raise Exception("No JSON output found in stdout")
+            
     except Exception as e:
         logger.error(f"  [Error] {str(e)}")
         return {"name": name, "type": "custom", "status": "failed", "error": str(e)}
@@ -672,6 +605,14 @@ def run_olmes_benchmark(
                 check=True,
                 env=env
             )
+            
+            # Save raw logs for isolation
+            with open(os.path.join(task_raw_dir, "stdout.log"), "w") as f:
+                f.write(result.stdout)
+            if result.stderr:
+                with open(os.path.join(task_raw_dir, "stderr.log"), "w") as f:
+                    f.write(result.stderr)
+            
             if result.stdout:
                 logger.info(result.stdout)
 
@@ -774,6 +715,9 @@ def main():
         help="Device to use for evaluation (e.g. 'cuda:0', 'cpu')",
     )
     parser.add_argument(
+        "--trial", action="store_true", help="Rapid trial run (sets --limit 5)"
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -793,6 +737,10 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Honor --trial flag
+    if args.trial and args.limit is None:
+        args.limit = 5
 
     if not os.path.exists(args.config):
         print(f"Error: Config {args.config} not found.")
@@ -840,13 +788,16 @@ def main():
     output_json_path = os.path.join(run_dir, "incremental_results.json")
 
     for b in active_benchmarks:
+        # Limit handling: CLI/Trial override YAML
+        current_limit = args.limit if args.limit is not None else b.get("limit")
+
         if b.get("olmes_task"):
             res = run_olmes_benchmark(
                 b,
                 args.model_args,
                 logger,
                 run_dir,
-                limit=args.limit,
+                limit=current_limit,
                 device=args.device,
                 batch_size=args.batch_size,
             )
@@ -856,7 +807,7 @@ def main():
                 args.model_args,
                 logger,
                 run_dir,
-                limit=args.limit,
+                limit=current_limit,
                 device=args.device,
                 batch_size=args.batch_size,
             )
@@ -866,7 +817,7 @@ def main():
                 args.model_args,
                 logger,
                 config_dir=os.path.dirname(args.config),
-                limit=args.limit,
+                limit=current_limit,
                 device=args.device,
             )
         else:
@@ -883,7 +834,7 @@ def main():
             json.dump(results, f, indent=4)
 
     # Generate human-readable report inside the run directory
-    report_path = generate_summary_report(results, run_dir)
+    report_path = generate_summary_report(results, run_dir, baselines=get_baselines(config.get("benchmarks", [])))
 
     logger.info("\nEvaluation Complete.")
     logger.info(f"Primary Output: {output_json_path}")

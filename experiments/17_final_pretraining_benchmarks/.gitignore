@@ -1,0 +1,8 @@
+__pycache__/
+benchmark-results/
+olmes_runs/
+*.log
+all_groups.txt
+all_tasks.txt
+all_tasks_clean.txt
+
