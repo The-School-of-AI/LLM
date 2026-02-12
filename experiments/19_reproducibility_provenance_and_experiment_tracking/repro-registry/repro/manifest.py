@@ -1,10 +1,20 @@
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional
+from datetime import datetime
+
+class GitInfo(BaseModel):
+    repo_url: str
+    commit_hash: str
+    dirty: bool
 
 class RunManifest(BaseModel):
     run_id: str
-    type: str  # training | coreset
-    git: Dict
-    env: Dict
+    pipeline: str
+    created_at: datetime
+
+    git: GitInfo
     config_hash: str
+    seed: int
+
     coreset_run_id: Optional[str] = None
+    status: str  # STARTED / COMPLETED / FAILED

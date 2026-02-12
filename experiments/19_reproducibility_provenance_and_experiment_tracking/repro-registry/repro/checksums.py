@@ -1,10 +1,9 @@
 import hashlib
 from pathlib import Path
 
-def compute_checksums(root: Path):
-    out = {}
-    for p in root.rglob("*"):
-        if p.is_file():
-            h = hashlib.sha256(p.read_bytes()).hexdigest()
-            out[str(p.relative_to(root))] = f"sha256:{h}"
-    return out
+def checksum_path(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()

@@ -1,11 +1,13 @@
-from datetime import datetime
 import uuid
+from datetime import datetime
 
-def _utc_ts():
-    return datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%SZ")
+def generate_run_id(prefix: str) -> str:
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    short = uuid.uuid4().hex[:6]
+    return f"{prefix}_{ts}_{short}"
 
-def new_run_id(prefix: str = "run") -> str:
-    return f"{prefix}_{_utc_ts()}_{uuid.uuid4().hex[:8]}"
+def generate_training_run_id() -> str:
+    return generate_run_id("run")
 
-def new_coreset_id() -> str:
-    return new_run_id(prefix="coreset")
+def generate_coreset_run_id() -> str:
+    return generate_run_id("coreset")
