@@ -82,7 +82,6 @@ stages:
         tasks:
           - "indic_glue"
           - "indic_qa"
-          - "indic-bias"
       - name: "expert_reasoning"
         tasks:
           - "bbh:cot::olmes"
