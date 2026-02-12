@@ -6,7 +6,6 @@
 # Usage:
 #   bash shard.sh \
 #     --input-path "data/books/bands/" \
-#     --total-tokens 4523096944
 #
 #   bash shard.sh \
 #     --num-shards 8 --stages "1B 3B 8B 70B" \
@@ -24,7 +23,7 @@ INPUT_FORMAT="jsonl"
 CONFIG="config/pipeline.yaml"
 CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"
-TOTAL_TOKENS="4523096944"
+BAND_INFERENCE="none"
 
 # --------------- PARSE ARGS ---------------
 usage() {
@@ -32,15 +31,16 @@ usage() {
   echo ""
   echo "Required:"
   echo "  --input-path        Path to input data directory or file"
-  echo "  --total-tokens      Estimated total input tokens"
   echo ""
   echo "Optional:"
   echo "  --num-shards        Number of parallel shards (default: 4)"
   echo "  --stages            Space-separated stage list (default: \"1B 3B 8B 70B\")"
-  echo "  --input-format      Input format: parquet or jsonl (default: parquet)"
+  echo "  --input-format      Input format: parquet or jsonl (default: jsonl)"
   echo "  --config            Pipeline config path (default: config/pipeline.yaml)"
-  echo "  --curriculum        Curriculum config path (default: config/curriculum_v7.yaml)"
+  echo "  --curriculum        Curriculum config path (default: config/curriculum.yaml)"
   echo "  --checkpoint-base   Base dir for checkpoints (default: output/checkpoints)"
+  echo "  --band-inference    Band inference mode (default: none)"
+  echo "                     Values: none | infer_if_missing | infer_if_ineligible | force"
   exit 1
 }
 
@@ -53,14 +53,13 @@ while [[ $# -gt 0 ]]; do
     --config)           CONFIG="$2";           shift 2 ;;
     --curriculum)       CURRICULUM="$2";       shift 2 ;;
     --checkpoint-base)  CHECKPOINT_BASE="$2";  shift 2 ;;
-    --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
+    --band-inference)   BAND_INFERENCE="$2";   shift 2 ;;
     -h|--help)          usage ;;
     *)                  echo "Unknown option: $1"; usage ;;
   esac
 done
 
 if [[ -z "$INPUT_PATH" ]]; then echo "ERROR: --input-path is required"; usage; fi
-if [[ -z "$TOTAL_TOKENS" ]]; then echo "ERROR: --total-tokens is required"; usage; fi
 
 # Change to project root (directory containing this script)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -71,10 +70,10 @@ echo "  Coreset Sharded Run"
 echo "  Shards       : $NUM_SHARDS"
 echo "  Stages       : $STAGES"
 echo "  Input        : $INPUT_PATH ($INPUT_FORMAT)"
-echo "  Total Tokens : $(printf "%'d" "$TOTAL_TOKENS")"
 echo "  Config       : $CONFIG"
 echo "  Curriculum   : $CURRICULUM"
 echo "  Checkpoints  : $CHECKPOINT_BASE"
+echo "  Band Infer   : $BAND_INFERENCE"
 echo "============================================================"
 
 # Clean old outputs
@@ -99,7 +98,7 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
       --num-shards "$NUM_SHARDS" \
       --shard-id "$SHARD_ID" \
       --checkpoint-dir "$SHARD_DIR" \
-      --total-input-tokens-estimate "$TOTAL_TOKENS" \
+      --band-inference "$BAND_INFERENCE" \
       2>&1 | sed "s/^/[shard $SHARD_ID] /"
     echo "[shard $SHARD_ID] Done."
   ) &
@@ -122,7 +121,7 @@ else
   echo "  WARNING: $FAILED / $NUM_SHARDS shards failed!"
 fi
 echo "  Manifests: output/coresets/*/manifest_shard*.json"
-echo "  Report:    output/manifests/ablation_validation_report.md"
+echo "  Reports:   output/manifests/ablation_validation_report_shard*.md"
 echo "============================================================"
 
 exit $FAILED

@@ -23,7 +23,7 @@ import hashlib
 from typing import Dict, Optional, Any, Iterator, Tuple, List
 
 from src.core.config import PipelineConfig
-from src.core.types import StageName, ProtectedSliceRule, CoresetManifest
+from src.core.types import StageName, ProtectedSliceRule, CoresetManifest, DifficultyBand
 from src.curriculum.loader import CurriculumLoader
 from src.selection.engine import SelectionEngine
 from src.selection.engine_batched import BatchedSelectionEngine
@@ -284,10 +284,28 @@ class CoresetBuilder:
     def generate_reports(self, results: dict):
         """Generate ablation and diagnostic reports"""
         logger.info("\nGenerating reports...")
+
+        report_filename = "ablation_validation_report.md"
+        try:
+            shard_id = None
+            num_shards = None
+            for _stage, stage_results in (results or {}).items():
+                if isinstance(stage_results, dict):
+                    if stage_results.get("shard_id") is not None:
+                        shard_id = int(stage_results.get("shard_id"))
+                    if stage_results.get("num_shards") is not None:
+                        num_shards = int(stage_results.get("num_shards"))
+                    break
+            if num_shards and num_shards > 1 and shard_id is not None:
+                report_filename = f"ablation_validation_report_shard{shard_id:03d}.md"
+        except Exception:
+            # Best-effort only; fall back to default name.
+            report_filename = "ablation_validation_report.md"
         
         report_path = AblationReporter.generate_report(
             results,
-            self.config.io.output_manifest_path
+            self.config.io.output_manifest_path,
+            report_filename=report_filename,
         )
         
         logger.info(f"Report saved to: {report_path}")
@@ -311,6 +329,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
         max_rows: Optional[int] = None,
         stages: Optional[List[str]] = None,
         stage_target_scale: float = 1.0,
+        band_inference: str = "none",
     ):
         super().__init__(config_path, curriculum_path)
         self.input_path = input_path
@@ -322,6 +341,11 @@ class StreamingCoresetBuilder(CoresetBuilder):
         self.max_rows = int(max_rows) if max_rows else None
         self.stages = stages or ["1B", "3B", "8B", "70B"]
         self.stage_target_scale = float(stage_target_scale)
+        self.band_inference = str(band_inference or "none").lower()
+        if self.band_inference not in {"none", "infer_if_missing", "infer_if_ineligible", "force"}:
+            raise ValueError(
+                "Invalid --band-inference. Choose one of: none, infer_if_missing, infer_if_ineligible, force"
+            )
 
         self.batch_processor = BatchProcessor(batch_size=self.batch_size, checkpoint_dir=checkpoint_dir)
         self.error_recovery = ErrorRecoveryManager()
@@ -330,6 +354,45 @@ class StreamingCoresetBuilder(CoresetBuilder):
         used_dir = Path(self.config.io.output_coreset_path) / ".used_chunks"
         used_db = used_dir / f"used_chunks_shard{self.shard_id:03d}.sqlite"
         self.used_store = UsedChunksStore(used_db)
+
+    def _infer_band_from_score(self, score: float) -> DifficultyBand:
+        """Infer a DifficultyBand from a continuous difficulty score.
+
+        Uses curriculum difficulty centroids when available; otherwise falls back to defaults.
+        Deterministic tie-break by canonical band order.
+        """
+
+        try:
+            s = float(score)
+        except Exception:
+            return DifficultyBand.B0
+
+        centroids = {}
+        if getattr(self.curriculum, "difficulty_system", None) is not None:
+            centroids = dict(getattr(self.curriculum.difficulty_system, "difficulty_centroids", {}) or {})
+
+        if not centroids:
+            centroids = {"B0": 0.10, "B1": 0.22, "B2": 0.40, "B3": 0.60, "B4": 0.78, "B5": 0.92}
+
+        order = ["B0", "B1", "B2", "B3", "B4", "B5"]
+        best = "B0"
+        best_dist = float("inf")
+        for b in order:
+            c = centroids.get(b)
+            if c is None:
+                continue
+            try:
+                d = abs(float(c) - s)
+            except Exception:
+                continue
+            if d < best_dist:
+                best_dist = d
+                best = b
+
+        try:
+            return DifficultyBand(best)
+        except Exception:
+            return DifficultyBand.B0
 
     def build_coresets(self) -> dict:
         results = {}
@@ -632,23 +695,52 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             or "B0"
                         )
 
+                        # Optional: infer band from difficulty score when requested.
+                        # This is particularly useful when datasets use a placeholder band but provide
+                        # a continuous band_score/difficulty_score.
                         band_score = (
                             row.get("band_score", None)
                             or meta_dict.get("band_score", None)
+                            or row.get("difficulty_score", None)
+                            or meta_dict.get("difficulty_score", None)
                         )
                         try:
                             band_score_val = None if band_score is None else float(band_score)
                         except Exception:
                             band_score_val = None
 
+                        # Parse provided band (may be invalid in some datasets)
+                        try:
+                            provided_band = DifficultyBand(str(band_raw))
+                        except Exception:
+                            provided_band = None
+
+                        domain_raw = row.get("domain", None) or meta_dict.get("domain", "unknown")
+
+                        final_band = provided_band
+                        if self.band_inference == "force" and band_score_val is not None:
+                            final_band = self._infer_band_from_score(band_score_val)
+                        elif self.band_inference == "infer_if_missing" and (final_band is None) and band_score_val is not None:
+                            final_band = self._infer_band_from_score(band_score_val)
+                        elif self.band_inference == "infer_if_ineligible" and final_band is not None and band_score_val is not None:
+                            allowed_domains = self.curriculum.get_allowed_domains_for_band(final_band)
+                            if allowed_domains and domain_raw not in allowed_domains:
+                                inferred = self._infer_band_from_score(band_score_val)
+                                inferred_allowed = self.curriculum.get_allowed_domains_for_band(inferred)
+                                if (not inferred_allowed) or (domain_raw in inferred_allowed):
+                                    final_band = inferred
+
+                        if final_band is None:
+                            final_band = DifficultyBand.B0
+
                         meta = ChunkMetadata(
                             chunk_id=str(chunk_id),
                             dataset_id=row.get("dataset_id") or row.get("source") or meta_dict.get("source") or "ds",
                             token_count=token_count,
                             byte_length=int(row.get("byte_length", None) or meta_dict.get("byte_length", 0) or 0),
-                            domain=row.get("domain", None) or meta_dict.get("domain", "unknown"),
+                            domain=domain_raw,
                             language=row.get("language", None) or meta_dict.get("language", "en"),
-                            band=DifficultyBand(str(band_raw)),
+                            band=final_band,
                             source_doc_id=row.get("source_doc_id", None) or meta_dict.get("source_doc_id", ""),
                             source_url=row.get("source_url", None) or meta_dict.get("source_url", None),
                         )
@@ -989,6 +1081,17 @@ def main():
         help="Scale curriculum stage target tokens by this factor (useful for end-to-end runs on small samples)"
     )
     parser.add_argument(
+        "--band-inference",
+        type=str,
+        default="none",
+        choices=["none", "infer_if_missing", "infer_if_ineligible", "force"],
+        help=(
+            "Optional band inference from band_score/difficulty_score. "
+            "none=use provided band; infer_if_missing=infer only when band missing/invalid; "
+            "infer_if_ineligible=infer when (band,domain) is curriculum-ineligible; force=always infer when score present."
+        ),
+    )
+    parser.add_argument(
         "--ablation-variant",
         type=str,
         default="baseline",
@@ -1027,6 +1130,7 @@ def main():
                 max_rows=args.max_rows,
                 stages=args.stages,
                 stage_target_scale=args.stage_target_scale,
+                band_inference=args.band_inference,
             )
         
         # Build coresets

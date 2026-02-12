@@ -314,10 +314,26 @@ class OptimizedCoresetBuilder:
     def generate_reports(self, results: Dict):
         """Generate reports with error summaries"""
         logger.info("\nGenerating reports...")
+        report_filename = "ablation_validation_report.md"
+        try:
+            shard_id = None
+            num_shards = None
+            for _stage, stage_results in (results or {}).items():
+                if isinstance(stage_results, dict):
+                    if stage_results.get("shard_id") is not None:
+                        shard_id = int(stage_results.get("shard_id"))
+                    if stage_results.get("num_shards") is not None:
+                        num_shards = int(stage_results.get("num_shards"))
+                    break
+            if num_shards and num_shards > 1 and shard_id is not None:
+                report_filename = f"ablation_validation_report_shard{shard_id:03d}.md"
+        except Exception:
+            report_filename = "ablation_validation_report.md"
         
         report_path = AblationReporter.generate_report(
             results,
-            self.config.io.output_manifest_path
+            self.config.io.output_manifest_path,
+            report_filename=report_filename,
         )
         
         logger.info(f"Report saved to: {report_path}")
