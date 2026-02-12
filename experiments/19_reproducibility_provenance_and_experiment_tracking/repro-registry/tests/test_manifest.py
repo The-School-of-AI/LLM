@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import pytest
 
 from repro.manifest import GitInfo, RunManifest
@@ -28,7 +28,7 @@ def test_runmanifest_creation():
     manifest = RunManifest(
         run_id="run_001",
         pipeline="training",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         git=git,
         config_hash="cfg123",
         seed=42,
@@ -47,7 +47,7 @@ def test_runmanifest_accepts_git_as_dict():
     manifest = RunManifest(
         run_id="run_002",
         pipeline="eval",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         git={
             "repo_url": "https://example.com/repo.git",
             "commit_hash": "abc",
@@ -86,7 +86,7 @@ def test_coreset_run_id_optional():
     manifest = RunManifest(
         run_id="run_004",
         pipeline="pipeline",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         git={
             "repo_url": "url",
             "commit_hash": "hash",
@@ -126,7 +126,7 @@ def test_runmanifest_invalid_seed_type_raises():
         RunManifest(
             run_id="run_006",
             pipeline="pipeline",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             git={
                 "repo_url": "url",
                 "commit_hash": "hash",
@@ -143,7 +143,7 @@ def test_runmanifest_json_roundtrip():
     manifest = RunManifest(
         run_id="run_007",
         pipeline="train",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         git={
             "repo_url": "url",
             "commit_hash": "hash",
