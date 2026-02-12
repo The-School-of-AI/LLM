@@ -37,7 +37,7 @@ from datetime import datetime
 
 config = {
     "s3": {
-        "bucket": "abhi-t2-datacurriculum-353",
+        "bucket": "t2-datacurriculum-353",
         "base_prefix": "processed_dataset/curriculum_data",
         "output_prefix": "processed_dataset/curriculum_pyspark_output",
         "checkpoint_path": "processed_dataset/checkpoints/curriculum_pyspark"
