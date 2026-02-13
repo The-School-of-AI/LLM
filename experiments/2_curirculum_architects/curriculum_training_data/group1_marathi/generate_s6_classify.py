@@ -9,7 +9,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_marathi.marathi_vocabulary import CLASSIFICATION_CATEGORIES  # noqa: E402
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
+from prompt_utils import format_qa_pair_marathi  # noqa: E402
 
 # Question templates
 TEMPLATES = [
@@ -65,6 +65,6 @@ random.shuffle(samples)
 output_file = os.path.join(os.path.dirname(__file__), "group1_s6.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
-        f.write(format_qa_pair_hindi(query, answer) + "\n")
+        f.write(format_qa_pair_marathi(query, answer) + "\n")
 
 print(f"S6 Classification: Generated {len(samples)} samples")

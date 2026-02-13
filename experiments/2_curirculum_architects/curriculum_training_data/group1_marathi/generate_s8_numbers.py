@@ -8,9 +8,11 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_marathi.generate_s1_spelling import get_marathi_characters  # noqa: E402
+from group1_marathi.generate_s1_spelling import (  # noqa: E402
+    get_marathi_grapheme_clusters,
+)
 from group1_marathi.marathi_vocabulary import NUMBERS  # noqa: E402
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
+from prompt_utils import format_qa_pair_marathi  # noqa: E402
 
 # Question templates - two types: number to name, and name to spelling
 TEMPLATES_NAME = [
@@ -49,7 +51,7 @@ for num in range(1, 101):  # 1 to 100
 
 # Generate samples for name to spelling
 for word in NUMBERS:
-    chars = get_marathi_characters(word)
+    chars = get_marathi_grapheme_clusters(word)
     if len(chars) == 0:
         continue
 
@@ -75,7 +77,7 @@ while len(samples) < target_count:
     else:
         # Name to spelling
         word = random.choice(NUMBERS)
-        chars = get_marathi_characters(word)
+        chars = get_marathi_grapheme_clusters(word)
         if len(chars) > 0:
             template = random.choice(TEMPLATES_SPELLING)
             query = template.format(word=word)
@@ -87,6 +89,6 @@ random.shuffle(samples)
 output_file = os.path.join(os.path.dirname(__file__), "group1_s8.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
-        f.write(format_qa_pair_hindi(query, answer) + "\n")
+        f.write(format_qa_pair_marathi(query, answer) + "\n")
 
 print(f"S8 Number Spelling: Generated {len(samples)} samples")

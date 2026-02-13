@@ -13,6 +13,15 @@ from __future__ import annotations
 import json
 import re
 from typing import Iterable, List
+import regex
+
+
+def get_marathi_grapheme_clusters(word: str) -> List[str]:
+    """
+    Split a Marathi word into grapheme clusters (syllables).
+    Uses regex \\X which is Unicode UAX#29 compliant.
+    """
+    return regex.findall(r"\X", word)
 
 
 _RE_COMMA_SEPARATED_LETTERS = re.compile(r"\b[a-z](?:,\s*[a-z])+\b", re.IGNORECASE)
@@ -271,6 +280,34 @@ def format_qa_pair_hindi(query: str, answer: str) -> str:
     return f"{query_clean} {answer_clean}"
 
 
+def ensure_answer_full_stop(answer: str) -> str:
+    """
+    Ensure answer ends with a full stop (.) for Marathi.
+    """
+    answer = answer.strip()
+    if not answer.endswith("."):
+        return answer + "."
+    return answer
+
+
+def format_qa_pair_marathi(query: str, answer: str) -> str:
+    """
+    Format a query-answer pair for Marathi TXT output.
+    - Preserves quotes around target words/sequences
+    - Ensures query ends with ?
+    - Ensures answer ends with full stop (.)
+    - Returns formatted string: "query? answer."
+
+    CRITICAL: Queries MUST end with "?", answers MUST end with "."
+    """
+    query_clean = query.strip()
+    # Ensure query ends with ? (critical for LLM training)
+    query_clean = ensure_query_punctuation(query_clean)
+    # Ensure answer ends with . (full stop)
+    answer_clean = ensure_answer_full_stop(answer)
+    return f"{query_clean} {answer_clean}"
+
+
 def combine_qa_pairs_to_reach_min_tokens(
     qa_pairs: list[tuple[str, str]], min_tokens: int = 512
 ) -> list[str]:
@@ -314,6 +351,100 @@ def combine_qa_pairs_to_reach_min_tokens(
         # Join all parts with spaces
         sample = " ".join(current_sample_parts)
         samples.append(sample)
+
+    return samples
+
+
+def combine_qa_pairs_to_reach_min_tokens_marathi(
+    qa_pairs: list[tuple[str, str]], min_tokens: int = 512
+) -> list[str]:
+    """
+    Combine QA pairs into samples where all questions have answers (Marathi format).
+    Format: "Q1? A1. Q2? A2. Q3? A3. ..." (all questions with answers)
+    until reaching min_tokens per sample.
+
+    Args:
+        qa_pairs: List of (query, answer) tuples
+        min_tokens: Minimum tokens per sample
+
+    Returns:
+        List of formatted sample strings, each with >= min_tokens
+    """
+    if not qa_pairs:
+        return []
+
+    samples = []
+    used_indices = set()  # Track which pairs we've used
+    i = 0
+
+    while i < len(qa_pairs):
+        current_sample_parts = []
+        current_sample_qa_pairs = (
+            set()
+        )  # Track QA pairs to avoid duplicates in current sample
+        current_tokens = 0
+        attempts = 0
+        max_attempts = len(qa_pairs) * 2  # Prevent infinite loop
+
+        # Add QA pairs until we reach min_tokens
+        while current_tokens < min_tokens and attempts < max_attempts:
+            attempts += 1
+
+            # Find next unused pair
+            while i < len(qa_pairs) and i in used_indices:
+                i += 1
+
+            if i >= len(qa_pairs):
+                # If we've used all pairs, reset and allow reuse
+                if len(used_indices) == len(qa_pairs):
+                    used_indices.clear()
+                    i = 0
+                    continue
+                break
+
+            query, answer = qa_pairs[i]
+            qa_key = (query, answer)
+
+            # Add if not duplicate in current sample
+            if qa_key not in current_sample_qa_pairs:
+                qa_formatted = format_qa_pair_marathi(query, answer)
+                token_count = count_tokens(qa_formatted)
+
+                # Only add if it doesn't exceed reasonable limit (avoid single huge pair)
+                if (
+                    current_tokens + token_count <= min_tokens * 3
+                ):  # Reasonable upper bound
+                    current_sample_parts.append(qa_formatted)
+                    current_sample_qa_pairs.add(qa_key)
+                    current_tokens += token_count
+                    used_indices.add(i)
+
+            i += 1
+
+        # Only create sample if we have at least some tokens
+        if current_sample_parts:
+            # Join all parts with spaces
+            sample = " ".join(current_sample_parts)
+            # If still below min_tokens, try to add more pairs
+            if current_tokens < min_tokens:
+                # Try to find more pairs to add
+                for j in range(len(qa_pairs)):
+                    if j not in used_indices:
+                        q, a = qa_pairs[j]
+                        qa_key = (q, a)
+                        if qa_key not in current_sample_qa_pairs:
+                            qa_formatted = format_qa_pair_marathi(q, a)
+                            token_count = count_tokens(qa_formatted)
+                            if current_tokens + token_count <= min_tokens * 3:
+                                current_sample_parts.append(qa_formatted)
+                                current_sample_qa_pairs.add(qa_key)
+                                current_tokens += token_count
+                                used_indices.add(j)
+                                if current_tokens >= min_tokens:
+                                    break
+                sample = " ".join(current_sample_parts)
+
+            samples.append(sample)
 
     return samples
 

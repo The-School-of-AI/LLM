@@ -11,7 +11,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import (  # noqa: E402
-    combine_qa_pairs_to_reach_min_tokens_hindi,
+    combine_qa_pairs_to_reach_min_tokens_marathi,
     count_tokens,
 )
 
@@ -46,20 +46,17 @@ def load_qa_pairs_from_file(filepath: str) -> list[tuple[str, str]]:
             if not line:
                 continue
 
-            # Parse Q? A। format
-            # The files already have format_qa_pair_hindi format: "Q? A।"
-            # We need to split on "?" and then on "।"
+            # Parse Q? A. format
             if "?" in line:
                 # Split by "?" first
                 parts = line.split("?", 1)
                 if len(parts) == 2:
                     query = parts[0].strip() + "?"
                     answer_part = parts[1].strip()
-                    # Split by "।" to get individual answers
-                    # Format is: "A1। A2। A3।" or just "A1।"
-                    if "।" in answer_part:
-                        # Take first answer (before first "।")
-                        answer = answer_part.split("।", 1)[0].strip()
+                    # Split by "." to get individual answers
+                    if "." in answer_part:
+                        # Take first answer (before first ".")
+                        answer = answer_part.split(".", 1)[0].strip()
                     else:
                         answer = answer_part.strip()
                     qa_pairs.append((query, answer))
@@ -104,7 +101,7 @@ def main():
     print(
         f"\nCombining pairs into data points (min {MIN_TOKENS_PER_DATAPOINT} tokens each)..."
     )
-    combined_samples = combine_qa_pairs_to_reach_min_tokens_hindi(
+    combined_samples = combine_qa_pairs_to_reach_min_tokens_marathi(
         all_qa_pairs, min_tokens=MIN_TOKENS_PER_DATAPOINT
     )
 

@@ -65,7 +65,7 @@ The 335 unique words are sufficient for generating 200,000+ pairs through:
 
 ✅ **Correct**:
 ```
-"कमळ" ची वर्तनी काय आहे? क, म, ळ। "घर" ची वर्तनी काय आहे? घ, र।
+"कमळ" ची वर्तनी काय आहे? क, म, ळ. "घर" ची वर्तनी काय आहे? घ, र.
 ```
 
 ❌ **Wrong**:
@@ -78,26 +78,27 @@ The 335 unique words are sufficient for generating 200,000+ pairs through:
 ### Statement 1: वर्तनी (Spelling) - 28,600 pairs (14.3%)
 
 **Question patterns**:
-- `"कमळ" ची वर्तनी काय आहे?` → `क, म, ळ।`
-- `"घर" ची वर्तनी काय आहे?` → `घ, र।`
-- `"पाणी" ची वर्तनी काय आहे?` → `प, ा, ण, ी।`
-- `"कोंबडी" ची अक्षरे काय आहेत?` → `क, ो, ं, ब, ड, ी।`
+- `"कमळ" ची वर्तनी काय आहे?` → `क, म, ळ.`
+- `"घर" ची वर्तनी काय आहे?` → `घ, र.`
+- `"पाणी" ची वर्तनी काय आहे?` → `पा, णी.`
+- `"कोंबडी" ची अक्षरे काय आहेत?` → `कों, ब, डी.`
 
-**Answer format**: Comma-separated Unicode characters ending with `।`
+**Answer format**: Comma-separated grapheme clusters (syllables) ending with `.`
 
-**Character splitting**: Uses detailed Unicode character split (each Unicode codepoint = 1 character)
-- Example: "कोंबडी" → क, ो, ं, ब, ड, ी (6 Unicode characters)
+**Character splitting**: Uses grapheme clusters (user-perceived characters/syllables)
+- Example: "कोंबडी" → कों, ब, डी (3 grapheme clusters)
+- Example: "ज्वालामुखी" → ज्वा, ला, मु, खी (4 grapheme clusters)
 
 **Semantic variations**: 15+ templates per word (all use Marathi words only)
 
 ### Statement 2: Letter at Position (अक्षर स्थिती) - 25,800 pairs (12.9%)
 
 **Question patterns**:
-- `"कोंबडी" चे पहिले अक्षर काय आहे?` → `को।`
-- `"कोंबडी" चे दुसरे अक्षर काय आहे?` → `ंब।`
-- `"कमळ" चे पहिले अक्षर काय आहे?` → `क।`
+- `"कोंबडी" चे पहिले अक्षर काय आहे?` → `को.`
+- `"कोंबडी" मध्ये "ब" कोणत्या स्थानावर आहे?` → `२.`
+- `"पाणी" शब्दातील "पा" चे स्थान काय आहे?` → `१.`
 
-**Answer format**: Grapheme cluster ending with `।`
+**Answer format**: Number ending with `.`
 
 **Character splitting**: Uses grapheme clusters (user-perceived characters)
 - Example: "कोंबडी" → को, ंब, डी (3 grapheme clusters)
@@ -108,51 +109,53 @@ The 335 unique words are sufficient for generating 200,000+ pairs through:
 ### Statement 3: Sound Matching (ध्वनी जुळणी) - 20,000 pairs (10%)
 
 **Question patterns**:
-- `कोणता शब्द "/क/" ध्वनीने सुरू होतो, "कुत्रा" किंवा "मांजर"?` → `कुत्रा।`
+- `कोणता शब्द "/क/" ध्वनीने सुरू होतो, "कमळ" किंवा "घर"?` → `कमळ.`
+- `"/प/" ध्वनीने सुरू होणारा शब्द कोणता आहे, "पाणी" किंवा "आकाश"?` → `पाणी.`
 
-**Answer format**: Selected word ending with `।`
+**Answer format**: The correct word ending with `.`
 
 **Approach**: Multiple-choice format for clarity
 
 ### Statement 4: Letter Count (अक्षर गणना) - 25,800 pairs (12.9%)
 
 **Question patterns**:
-- `"कोंबडी" मध्ये किती अक्षरे आहेत?` → `3।`
-- `"कमळ" मध्ये किती अक्षरे आहेत?` → `3।`
-- `"शाळा" मध्ये किती अक्षरे आहेत?` → `2।`
+- `"कमळ" मध्ये किती अक्षरे आहेत?` → `३.`
+- `"घर" मध्ये किती अक्षरे आहेत?` → `२.`
+- `"कोंबडी" मध्ये किती अक्षरे आहेत?` → `३.`
 
-**Answer format**: Numeric value ending with `।`
+**Answer format**: Number (in Marathi script) ending with `.`
 
 **Character counting**: Uses grapheme cluster count (not Unicode character count)
-- Example: "कोंबडी" → 3 अक्षरे (को, ंब, डी)
+- Example: "कोंbडी" → 3 अक्षरे (को, ंब, डी)
 - Example: "पाणी" → 2 अक्षरे (पा, णी)
 
 ### Statement 5: Rhyming (यमक) - 20,000 pairs (10%)
 
 **Question patterns** (Multiple Choice):
-- `"कमळ" शी यमक करणारा शब्द कोणता आहे, "जमळ" किंवा "मांजर"?` → `जमळ।`
+- `"कमळ" शी यमक करणारा शब्द कोणता आहे, "जमळ" किंवा "घर"?` → `जमळ.`
+- `कोणता शब्द "घर" शी यमक करतो, "कर" किंवा "पाणी"?` → `कर.`
 
-**Answer format**: Rhyming word ending with `।`
+**Answer format**: The rhyming word ending with `.`
 
 **Approach**: Multiple-choice format recommended for validation
 
 ### Statement 6: Classification (वर्गीकरण) - 20,000 pairs (10%)
 
 **Question patterns**:
-- `"कुत्रा" हा व्यक्ती, प्राणी किंवा वस्तू आहे?` → `प्राणी।`
-- `"शिक्षक" हा व्यक्ती, प्राणी किंवा वस्तू आहे?` → `व्यक्ती।`
+- `"कुत्रा" काय आहे, प्राणी किंवा वस्तू?` → `प्राणी.`
+- `"कमळ" हे काय आहे, प्राणी किंवा वस्तू?` → `वस्तू.`
 
-**Answer format**: Category ending with `।`
+**Answer format**: Category name ending with `.`
 
 **Categories**: प्राणी (animal), व्यक्ती (person), वस्तू (object)
 
 ### Statement 7: Position of Letter (अक्षराची स्थिती) - 17,200 pairs (8.6%)
 
 **Question patterns**:
-- `"कोंबडी" मध्ये "को" अक्षर कोणत्या स्थानावर आहे?` → `पहिले।` or `1।`
-- `"कोंबडी" मध्ये "ंब" अक्षर कोणत्या स्थानावर आहे?` → `दुसरे।` or `2।`
+- `"कोंबडी" मध्ये "को" अक्षर कोणत्या स्थानावर आहे?` → `पहिले.` or `1.`
+- `"कोंबडी" मध्ये "ंब" अक्षर कोणत्या स्थानावर आहे?` → `दुसरे.` or `2.`
 
-**Answer format**: Position (word or numeric) ending with `।`
+**Answer format**: Position (word or numeric) ending with `.`
 
 **Character reference**: Questions ask for position of grapheme clusters (not individual Unicode characters)
 - Example: "कोंबडी" मध्ये "को" → पहिले (position of grapheme cluster "को")
@@ -160,13 +163,13 @@ The 335 unique words are sufficient for generating 200,000+ pairs through:
 ### Statement 8: संख्या वर्तनी (Number Spelling) - 10,000 pairs (5%)
 
 **Question patterns**:
-- `11 ची वर्तनी काय आहे?` → `अकरा।`
-- `"पन्नास" ची वर्तनी काय आहे?` → `प, न, ्, न, ा, स।`
+- `11 ची वर्तनी काय आहे?` → `अ, क, रा.`
+- `"पन्नास" ची वर्तनी काय आहे?` → `प, न्ना, स.`
 
-**Answer format**: Number name or वर्तनी ending with `।`
+**Answer format**: Number name or वर्तनी (as syllables) ending with `.`
 
-**Character splitting**: Uses detailed Unicode character split (same as S1)
-- Example: "पन्नास" → प, न, ्, न, ा, स (6 Unicode characters)
+**Character splitting**: Uses grapheme clusters (syllables)
+- Example: "पन्नास" → पन, ्ना, स (3 grapheme clusters)
 
 **Range**: Numbers 1-100
 
@@ -205,16 +208,17 @@ The 335 unique words are sufficient for generating 200,000+ pairs through:
 
 The dataset uses **two different character splitting methods** depending on the statement type:
 
-#### 1. Detailed Unicode Character Split (for Spelling: S1, S8)
+#### 1. Grapheme Cluster Split (for All Statements)
 
-**Function**: `get_marathi_characters(word: str) -> list[str]`
+**Function**: `get_marathi_grapheme_clusters(word: str) -> list[str]`
 
-**Method**: Each Unicode codepoint is a separate character
-- Used for: वर्तनी questions (S1, S8)
-- Example: "कोंबडी" → ['क', 'ो', 'ं', 'ब', 'ड', 'ी'] (6 Unicode characters)
-- Example: "पाणी" → ['प', 'ा', 'ण', 'ी'] (4 Unicode characters)
+**Method**: Uses `regex` library's `\X` pattern (Unicode UAX#29 compliant)
+- Used for: All statement types including Spelling (S1, S8)
+- Example: "कोंबडी" → ['कों', 'ब', 'डी'] (3 grapheme clusters)
+- Example: "पाणी" → ['पा', 'णी'] (2 grapheme clusters)
+- Example: "ज्वालामुखी" → ['ज्वा', 'ला', 'मु', 'खी'] (4 grapheme clusters)
 
-**Rationale**: Spelling requires showing every Unicode character separately, including matras, anusvara, and combining marks.
+**Rationale**: Since spelling is now requested at the syllable (grapheme cluster) level, all statements now use the same high-level splitting methodology.
 
 #### 2. Grapheme Cluster Split (for Counting/Position: S2, S4, S7, S9, S10)
 
@@ -357,8 +361,8 @@ curriculum_training_data/
 ```
 
 **Note**: 
-- Spelling (S1) shows detailed Unicode characters: "कोंबडी" → क, ो, ं, ब, ड, ी
-- Counting/Position (S2, S4) use grapheme clusters: "कोंबडी" → 3 अक्षरे (को, ंब, डी)
+- All Statements use grapheme clusters: "कोंबडी" → कों, ब, डी
+- "ज्वालामुखी" → ज्वा, ला, मु, खी
 
 ### Comparison with English Format
 

@@ -9,7 +9,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_marathi.marathi_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
+from prompt_utils import format_qa_pair_marathi, get_marathi_grapheme_clusters
 
 # Expand word list
 ALL_WORDS = ALL_WORDS_UNIQUE * 30
@@ -28,7 +28,8 @@ def get_first_sound(word: str) -> str:
     """Get the first sound/character of a Marathi word"""
     if not word:
         return ""
-    return word[0]
+    clusters = get_marathi_grapheme_clusters(word)
+    return clusters[0] if clusters else ""
 
 
 # Pre-compute word groups by first sound (OPTIMIZATION)
@@ -107,6 +108,6 @@ samples = samples[:target_count]
 output_file = os.path.join(os.path.dirname(__file__), "group1_s3.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
-        f.write(format_qa_pair_hindi(query, answer) + "\n")
+        f.write(format_qa_pair_marathi(query, answer) + "\n")
 
 print(f"S3 Sound Matching: Generated {len(samples)} samples")

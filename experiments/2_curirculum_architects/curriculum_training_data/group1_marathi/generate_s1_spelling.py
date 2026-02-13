@@ -7,15 +7,16 @@ import os
 import random
 import sys
 
-import regex  # noqa: E402
-
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_marathi.marathi_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
+from prompt_utils import (  # noqa: E402
+    format_qa_pair_marathi,
+    get_marathi_grapheme_clusters,
+)
 
 # Expand word lists to reach target count
 EASY_WORDS = EASY_WORDS_UNIQUE * 50
@@ -59,25 +60,9 @@ def get_marathi_characters(word: str) -> list[str]:
     return list(word)
 
 
-def get_marathi_grapheme_clusters(word: str) -> list[str]:
-    """
-    Get grapheme clusters for Marathi word (for counting/length/position).
-    Uses regex library's \\X pattern (Unicode UAX#29 compliant).
-    Each grapheme cluster = 1 अक्षर for counting/position questions.
-
-    Example: "कोंबडी" → ['को', 'ंब', 'डी'] (3 clusters)
-    Example: "पाणी" → ['पा', 'णी'] (2 clusters)
-    Example: "कमळ" → ['क', 'म', 'ळ'] (3 clusters)
-    Example: "विद्यालय" → ['वि', 'द्या', 'ल', 'य'] (4 clusters)
-
-    Used for: Counting, length, and position questions (S2, S4, S7, S9, S10)
-    """
-    return regex.findall(r"\X", word)
-
-
 def generate_spelling_answer(word: str) -> str:
-    """Generate spelling answer as comma-separated characters"""
-    chars = get_marathi_characters(word)
+    """Generate spelling answer as comma-separated grapheme clusters (syllables)"""
+    chars = get_marathi_grapheme_clusters(word)
     return ", ".join(chars)
 
 
@@ -113,6 +98,6 @@ random.shuffle(samples)
 output_file = os.path.join(os.path.dirname(__file__), "group1_s1.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
-        f.write(format_qa_pair_hindi(query, answer) + "\n")
+        f.write(format_qa_pair_marathi(query, answer) + "\n")
 
 print(f"S1 Spelling: Generated {len(samples)} samples")

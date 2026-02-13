@@ -4,6 +4,12 @@ This folder contains Marathi translations of the Hindi group1 curriculum dataset
 
 ## Overview
 - **Purpose**: Generate 200,000 Marathi Q&A pairs for language and literacy training
+
+**Command to generate all files**:
+
+```sh
+python3 generate_s1_spelling.py && python3 generate_s2_letter_position.py && python3 generate_s3_sound.py && python3 generate_s4_count.py && python3 generate_s5_rhyme.py && python3 generate_s6_classify.py && python3 generate_s7_position.py && python3 generate_s8_numbers.py && python3 generate_s9_last.py && python3 generate_s10_compare.py && python3 generate_group1_marathi_dataset.py
+```
 - **Output**: `output/group1_marathi.txt`
 - **Format**: Continuous Q?A pairs with purna-viram (।)
 

@@ -16,7 +16,7 @@ from group1_marathi.marathi_vocabulary import (  # noqa: E402
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
+from prompt_utils import format_qa_pair_marathi  # noqa: E402
 
 # Expand word lists
 EASY_WORDS = EASY_WORDS_UNIQUE * 50
@@ -108,6 +108,6 @@ random.shuffle(samples)
 output_file = os.path.join(os.path.dirname(__file__), "group1_s7.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
-        f.write(format_qa_pair_hindi(query, answer) + "\n")
+        f.write(format_qa_pair_marathi(query, answer) + "\n")
 
 print(f"S7 Position of Letter: Generated {len(samples)} samples")
