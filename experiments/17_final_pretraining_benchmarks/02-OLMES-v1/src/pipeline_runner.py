@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 import json
+import time
 from datetime import datetime
 
 # Add src to path to import eval_runner
@@ -84,6 +85,7 @@ def main():
     run_dir = os.path.join("benchmark-results", args.stage, timestamp)
     if not os.path.exists(run_dir): os.makedirs(run_dir)
     
+    pipeline_start = time.time()
     logger.info(f"Starting pipeline stage: {args.stage}")
     logger.info(f"Run directory: {run_dir}")
     
@@ -142,8 +144,15 @@ def main():
     
     output_json_path = os.path.join(run_dir, "incremental_results.json")
     
+    benchmark_timings = []  # List of (name, duration_seconds)
+    benchmarks_start = time.time()
+    
     for b in benchmarks_to_run:
         current_limit = args.limit if args.limit is not None else b.get("limit")
+        bench_name = b.get("olmes_task") or b.get("harness_task") or b.get("custom_script") or b["name"]
+        
+        logger.info(f"\n⏱  Starting benchmark: {bench_name}")
+        bench_start = time.time()
         
         if b.get("olmes_task"):
             res = eval_runner.run_olmes_benchmark(
@@ -161,6 +170,10 @@ def main():
                 limit=current_limit, device=args.device
             )
         
+        bench_elapsed = time.time() - bench_start
+        benchmark_timings.append((bench_name, bench_elapsed))
+        logger.info(f"⏱  Finished benchmark: {bench_name} in {bench_elapsed:.1f}s ({bench_elapsed/60:.1f}m)")
+        
         if res.get("status") == "success" and not res.get("subtasks"):
             # Enrichment: OLMES tasks might not return subtasks if eval_runner is kept vanilla
             if b.get("olmes_task"):
@@ -177,14 +190,53 @@ def main():
                                 ], key=lambda x: x["task"])
                     except Exception: pass
 
+        # Store timing in the result too
+        res["duration_seconds"] = round(bench_elapsed, 2)
         results["benchmarks"].append(res)
         with open(output_json_path, "w") as f:
             json.dump(results, f, indent=4)
+    
+    benchmarks_elapsed = time.time() - benchmarks_start
 
+    report_start = time.time()
     report_path = eval_runner.generate_summary_report(
         results, run_dir, capability_map=orchestrator_config.get("buckets", {}), 
         baselines=eval_runner.get_baselines(benchmarks_to_run)
     )
+    report_elapsed = time.time() - report_start
+    pipeline_elapsed = time.time() - pipeline_start
+
+    # Store timing in results metadata
+    results["metadata"]["timing"] = {
+        "benchmark_timings": [{"name": n, "duration_s": round(d, 2)} for n, d in benchmark_timings],
+        "total_benchmarks_s": round(benchmarks_elapsed, 2),
+        "report_generation_s": round(report_elapsed, 2),
+        "total_pipeline_s": round(pipeline_elapsed, 2),
+    }
+    with open(output_json_path, "w") as f:
+        json.dump(results, f, indent=4)
+
+    # Print timing summary
+    def fmt_time(s):
+        if s < 60:
+            return f"{s:.1f}s"
+        elif s < 3600:
+            return f"{s/60:.1f}m ({s:.0f}s)"
+        else:
+            return f"{s/3600:.1f}h ({s/60:.0f}m)"
+
+    logger.info(f"\n{'='*60}")
+    logger.info(f"⏱  TIMING SUMMARY")
+    logger.info(f"{'='*60}")
+    logger.info(f"{'Benchmark':<45} {'Duration':>12}")
+    logger.info(f"{'-'*45} {'-'*12}")
+    for name, dur in benchmark_timings:
+        logger.info(f"{name:<45} {fmt_time(dur):>12}")
+    logger.info(f"{'-'*45} {'-'*12}")
+    logger.info(f"{'Total benchmarks':<45} {fmt_time(benchmarks_elapsed):>12}")
+    logger.info(f"{'Report generation':<45} {fmt_time(report_elapsed):>12}")
+    logger.info(f"{'Total pipeline':<45} {fmt_time(pipeline_elapsed):>12}")
+    logger.info(f"{'='*60}")
 
     logger.info(f"\n--- Stage Complete: {args.stage} ---")
     logger.info(f"Report: {report_path}")
