@@ -322,91 +322,35 @@ def combine_qa_pairs_to_reach_min_tokens_hindi(
     qa_pairs: list[tuple[str, str]], min_tokens: int = 512
 ) -> list[str]:
     """
-    Combine QA pairs into samples where all questions have answers (Hindi format).
-    Format: "Q1? A1। Q2? A2। Q3? A3। ..." (all questions with answers)
-    until reaching min_tokens per sample.
-
-    Args:
-        qa_pairs: List of (query, answer) tuples
-        min_tokens: Minimum tokens per sample
-
-    Returns:
-        List of formatted sample strings, each with >= min_tokens
+    Super-optimized version of combining QA pairs for Hindi/Punjabi.
     """
     if not qa_pairs:
         return []
 
+    # Pre-format all pairs and calculate their tokens once
+    formatted_pairs = []
+    for q, a in qa_pairs:
+        fmt = format_qa_pair_hindi(q, a)
+        formatted_pairs.append((fmt, count_tokens(fmt)))
+
     samples = []
-    used_indices = set()  # Track which pairs we've used
-    i = 0
-
-    while i < len(qa_pairs):
-        current_sample_parts = []
-        current_sample_qa_pairs = (
-            set()
-        )  # Track QA pairs to avoid duplicates in current sample
-        current_tokens = 0
-        attempts = 0
-        max_attempts = len(qa_pairs) * 2  # Prevent infinite loop
-
-        # Add QA pairs until we reach min_tokens
-        while current_tokens < min_tokens and attempts < max_attempts:
-            attempts += 1
-
-            # Find next unused pair
-            while i < len(qa_pairs) and i in used_indices:
-                i += 1
-
-            if i >= len(qa_pairs):
-                # If we've used all pairs, reset and allow reuse
-                if len(used_indices) == len(qa_pairs):
-                    used_indices.clear()
-                    i = 0
-                    continue
-                break
-
-            query, answer = qa_pairs[i]
-            qa_key = (query, answer)
-
-            # Add if not duplicate in current sample
-            if qa_key not in current_sample_qa_pairs:
-                qa_formatted = format_qa_pair_hindi(query, answer)
-                token_count = count_tokens(qa_formatted)
-
-                # Only add if it doesn't exceed reasonable limit (avoid single huge pair)
-                if (
-                    current_tokens + token_count <= min_tokens * 3
-                ):  # Reasonable upper bound
-                    current_sample_parts.append(qa_formatted)
-                    current_sample_qa_pairs.add(qa_key)
-                    current_tokens += token_count
-                    used_indices.add(i)
-
-            i += 1
-
-        # Only create sample if we have at least some tokens
-        if current_sample_parts:
-            # Join all parts with spaces (Hindi format uses space after ।)
-            sample = " ".join(current_sample_parts)
-            # If still below min_tokens, try to add more pairs
-            if current_tokens < min_tokens:
-                # Try to find more pairs to add
-                for j in range(len(qa_pairs)):
-                    if j not in used_indices:
-                        q, a = qa_pairs[j]
-                        qa_key = (q, a)
-                        if qa_key not in current_sample_qa_pairs:
-                            qa_formatted = format_qa_pair_hindi(q, a)
-                            token_count = count_tokens(qa_formatted)
-                            if current_tokens + token_count <= min_tokens * 3:
-                                current_sample_parts.append(qa_formatted)
-                                current_sample_qa_pairs.add(qa_key)
-                                current_tokens += token_count
-                                used_indices.add(j)
-                                if current_tokens >= min_tokens:
-                                    break
-                sample = " ".join(current_sample_parts)
-
-            samples.append(sample)
-
+    current_sample_parts = []
+    current_tokens = 0
+    
+    for fmt, tokens in formatted_pairs:
+        current_sample_parts.append(fmt)
+        current_tokens += tokens
+        
+        if current_tokens >= min_tokens:
+            samples.append(" ".join(current_sample_parts))
+            current_sample_parts = []
+            current_tokens = 0
+            
+    # Add any remaining pairs to the last sample if it's too small, or as a new sample
+    if current_sample_parts:
+        if samples:
+            samples[-1] += " " + " ".join(current_sample_parts)
+        else:
+            samples.append(" ".join(current_sample_parts))
+            
     return samples

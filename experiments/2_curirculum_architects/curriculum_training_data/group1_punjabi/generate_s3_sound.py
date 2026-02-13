@@ -1,108 +1,67 @@
 #!/usr/bin/env python3
 """
 Generate Statement 3: Sound Matching (ਧੁਨੀ ਮਿਲਾਨ) questions for Punjabi
-Target: 20,000 pairs (10% of 200,000)
+Target: 20,000 pairs
 """
 import os
 import random
 import sys
+import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_punjabi.punjabi_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
+from group1_punjabi.punjabi_vocabulary import ALL_WORDS_UNIQUE
+from prompt_utils import format_qa_pair_hindi
 
-# Expand word list
-ALL_WORDS = ALL_WORDS_UNIQUE * 30
+def get_punjabi_first_sound(word: str) -> str:
+    clusters = regex.findall(r"\X", word)
+    if not clusters: return ""
+    # Simplified: first grapheme cluster
+    return clusters[0]
 
-# Question templates
 TEMPLATES = [
     'ਕਿਹੜਾ ਸ਼ਬਦ "/{sound}/" ਧੁਨੀ ਨਾਲ ਸ਼ੁਰੂ ਹੁੰਦਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?',
-    '"/{sound}/" ਧੁਨੀ ਨਾਲ ਸ਼ੁਰੂ ਹੋਣ ਵਾਲਾ ਸ਼ਬਦ ਕਿਹੜਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?',
-    'ਕਿਹੜਾ ਸ਼ਬਦ "/{sound}/" ਧੁਨੀ ਨਾਲ ਆਰੰਭ ਹੁੰਦਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?',
-    '"/{sound}/" ਧੁਨੀ ਨਾਲ ਸ਼ੁਰੂ ਹੋਣ ਵਾਲਾ ਸ਼ਬਦ "{word1}" ਅਤੇ "{word2}" ਵਿੱਚੋਂ ਕਿਹੜਾ ਹੈ?',
+    '"{word1}" ਅਤੇ "{word2}" ਵਿੱਚੋਂ ਕਿਹੜਾ ਸ਼ਬਦ "/{sound}/" ਨਾਲ ਸ਼ੁਰੂ ਹੁੰਦਾ ਹੈ?',
     'ਕਿਹੜਾ ਸ਼ਬਦ "/{sound}/" ਨਾਲ ਸ਼ੁਰੂ ਹੁੰਦਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?',
+    'ਕਿਹੜਾ ਸ਼ਬਦ "/{sound}/" ਨਾਲ ਆਰੰਭ ਹੁੰਦਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?',
+    '"{word1}" ਅਤੇ "{word2}" ਵਿੱਚੋਂ ਕਿਹੜਾ ਸ਼ਬਦ "/{sound}/" ਧੁਨੀ ਵਾਲਾ ਹੈ?',
+    'ਕਿਹੜਾ ਸ਼ਬਦ "/{sound}/" ਧੁਨੀ ਨਾਲ ਆਰੰਭ ਹੁੰਦਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?',
 ]
 
+def generate_samples(target_count):
+    samples = set()
+    words = ALL_WORDS_UNIQUE
+    
+    # Pre-group by sounds
+    word_groups = {}
+    for w in words:
+        s = get_punjabi_first_sound(w)
+        if s not in word_groups: word_groups[s] = []
+        word_groups[s].append(w)
+        
+    sounds = list(word_groups.keys())
+    
+    for sound in sounds:
+        correct_words = word_groups[sound]
+        wrong_words = [w for w in words if get_punjabi_first_sound(w) != sound]
+        if not wrong_words: continue
+        
+        for correct_word in correct_words:
+            # Pick a few wrong words to create variety
+            for _ in range(5):
+                wrong_word = random.choice(wrong_words)
+                w1, w2 = (correct_word, wrong_word) if random.random() < 0.5 else (wrong_word, correct_word)
+                for template in TEMPLATES:
+                    query = template.format(sound=sound, word1=w1, word2=w2)
+                    answer = correct_word
+                    samples.add((query, answer))
+                    if len(samples) >= target_count: return list(samples)
+    return list(samples)
 
-def get_first_sound(word: str) -> str:
-    """Get the first sound/character of a Punjabi word"""
-    if not word:
-        return ""
-    return word[0]
-
-
-# Pre-compute word groups by first sound
-unique_words = list(set(ALL_WORDS))
-words_by_sound = {}
-for word in unique_words:
-    sound = get_first_sound(word)
-    if sound:
-        if sound not in words_by_sound:
-            words_by_sound[sound] = []
-        words_by_sound[sound].append(word)
-
-# Pre-compute all sounds
-all_sounds = list(words_by_sound.keys())
-
-samples = []
-target_count = 20000
-unique_combinations = set()
-
-# Generate samples efficiently
-for word1 in unique_words:
-    sound1 = get_first_sound(word1)
-    if not sound1 or sound1 not in words_by_sound:
-        continue
-
-    # Get non-matching words from other sounds
-    non_matching_words = []
-    for sound in all_sounds:
-        if sound != sound1:
-            non_matching_words.extend(words_by_sound[sound])
-
-    if not non_matching_words:
-        continue
-
-    for template_idx, template in enumerate(TEMPLATES):
-        word2_nonmatch = random.choice(non_matching_words)
-        query = template.format(sound=sound1, word1=word1, word2=word2_nonmatch)
-        answer = word1
-        key = (word1, word2_nonmatch, template_idx)
-        if key not in unique_combinations:
-            unique_combinations.add(key)
-            samples.append((query, answer))
-
-# Sample with replacement to reach target
-if len(samples) > target_count:
-    samples = samples[:target_count]
-else:
-    while len(samples) < target_count:
-        word1 = random.choice(unique_words)
-        sound1 = get_first_sound(word1)
-        if not sound1 or sound1 not in words_by_sound:
-            continue
-
-        non_matching_words = []
-        for sound in all_sounds:
-            if sound != sound1:
-                non_matching_words.extend(words_by_sound[sound])
-
-        if not non_matching_words:
-            continue
-
-        template = random.choice(TEMPLATES)
-        word2 = random.choice(non_matching_words)
-
-        query = template.format(sound=sound1, word1=word1, word2=word2)
-        answer = word1
-        samples.append((query, answer))
-
-random.shuffle(samples)
-samples = samples[:target_count]
-
-output_file = os.path.join(os.path.dirname(__file__), "group1_s3.txt")
-with open(output_file, "w", encoding="utf-8") as f:
-    for query, answer in samples:
-        f.write(format_qa_pair_hindi(query, answer) + "\n")
-
-print(f"S3 Punjabi Sound Matching: Generated {len(samples)} samples")
+if __name__ == "__main__":
+    target_count = 20000
+    samples = generate_samples(target_count)
+    output_file = os.path.join(os.path.dirname(__file__), "group1_s3.txt")
+    with open(output_file, "w", encoding="utf-8") as f:
+        for query, answer in samples:
+            f.write(format_qa_pair_hindi(query, answer) + "\n")
+    print(f"S3 Punjabi Sound Matching: Generated {len(samples)} unique samples")

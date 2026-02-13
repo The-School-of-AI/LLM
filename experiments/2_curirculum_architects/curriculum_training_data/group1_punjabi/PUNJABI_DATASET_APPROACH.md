@@ -12,12 +12,12 @@ This document describes the approach for generating a Punjabi language curriculu
 
 ### Word Collection
 
-- **Total unique Punjabi words**: ~350 verified words (after deduplication)
-- **Sources**: Learnpunjabi.org, PunjabiCharm, basic vocabulary lists
+- **Total unique Punjabi words**: ~450 verified words
+- **Sources**: Learnpunjabi.org, PunjabiCharm, Preply, Gurbani Vocabulary
 - **Word distribution by difficulty**:
-  - Easy words (2-4 characters): ~150 unique words
-  - Medium words (5-6 characters): ~100 unique words
-  - Hard words (7+ characters): ~50 unique words
+  - Easy words (len <= 3): ~150 unique words
+  - Medium words (3 < len <= 5): ~180 unique words
+  - Hard words (len > 5): ~120 unique words
 
 ### Categories
 
@@ -49,37 +49,38 @@ Words are organized into categories:
 
 ## Statement Types Breakdown
 
-### Statement 1: Spelling (ਵਰਤਨੀ) - 28,600 pairs (14.3%)
+### Statement 1: Spelling (ਵਰਤਨੀ) - ~8,800 unique pairs
 - `"ਘਰ" ਦੀ ਵਰਤਨੀ ਕੀ ਹੈ?` → `ਘ, ਰ।`
 - Uses detailed Unicode character split.
 
-### Statement 2: Letter at Position (ਅੱਖਰ ਸਥਿਤੀ) - 25,800 pairs (12.9%)
+### Statement 2: Letter at Position (ਅੱਖਰ ਸਥਿਤੀ) - ~9,200 unique pairs
 - `"ਕਿਤਾਬ" ਦਾ ਪਹਿਲਾ ਅੱਖਰ ਕੀ ਹੈ?` → `ਕਿ।`
 - Uses grapheme clusters.
 
-### Statement 3: Sound Matching (ਧੁਨੀ ਮਿਲਾਨ) - 20,000 pairs (10%)
+### Statement 3: Sound Matching (ਧੁਨੀ ਮਿਲਾਨ) - ~16,500 unique pairs
 - `ਕਿਹੜਾ ਸ਼ਬਦ "/ਕ/" ਧੁਨੀ ਨਾਲ ਸ਼ੁਰੂ ਹੁੰਦਾ ਹੈ, "ਕੁੱਤਾ" ਜਾਂ "ਬਿੱਲੀ"?` → `ਕੁੱਤਾ।`
 
-### Statement 4: Letter Count (ਅੱਖਰ ਗਿਣਤੀ) - 25,800 pairs (12.9%)
+### Statement 4: Letter Count (ਅੱਖਰ ਗਿਣਤੀ) - ~3,800 unique pairs
 - `"ਪਾਣੀ" ਵਿੱਚ ਕਿੰਨੇ ਅੱਖਰ ਹਨ?` → `2।`
 
-### Statement 5: Rhyming (ਤੁਕਬੰਦੀ) - 20,000 pairs (10%)
+### Statement 5: Rhyming (ਤੁਕਬੰਦੀ) - ~1,600 unique pairs
 - `"{word}" ਨਾਲ ਤੁਕਬੰਦੀ ਕਰਨ ਵਾਲਾ ਸ਼ਬਦ ਕਿਹੜਾ ਹੈ, "{rhyme}" ਜਾਂ "{non_rhyme}"?`
 
-### Statement 6: Classification (ਸ਼੍ਰੇਣੀਬੱਧਤਾ) - 20,000 pairs (10%)
+### Statement 6: Classification (ਸ਼੍ਰੇਣੀਬੱਧਤਾ) - ~1,600 unique pairs
 - `"{word}" ਇੱਕ ਵਿਅਕਤੀ, ਜਾਨਵਰ ਜਾਂ ਵਸਤੂ ਹੈ?`
 
-### Statement 7: Position of Letter (ਅੱਖਰ ਦੀ ਸਥਿਤੀ) - 17,200 pairs (8.6%)
+### Statement 7: Position of Letter (ਅੱਖਰ ਦੀ ਸਥਿਤੀ) - ~7,700 unique pairs
 - `"{word}" ਵਿੱਚ "{char}" ਅੱਖਰ ਕਿਸ ਸਥਾਨ ਤੇ ਹੈ?`
 
-### Statement 8: Number Spelling (ਸੰਖਿਆ ਵਰਤਨੀ) - 10,000 pairs (5%)
+### Statement 8: Number Spelling (ਸੰਖਿਆ ਵਰਤਨੀ) - 600 unique pairs
 - `11 ਦੀ ਵਰਤਨੀ ਕੀ ਹੈ?` → `ਗਿਆਰਾਂ।`
 
-### Statement 9: Last Letter (ਆਖਰੀ ਅੱਖਰ) - 17,200 pairs (8.6%)
+### Statement 9: Last Letter (ਆਖਰੀ ਅੱਖਰ) - ~3,300 unique pairs
 - `"{word}" ਦਾ ਆਖਰੀ ਅੱਖਰ ਕੀ ਹੈ?`
 
-### Statement 10: Word Comparison (ਸ਼ਬਦ ਤੁਲਨਾ) - 11,000 pairs (5.5%)
+### Statement 10: Word Comparison (ਸ਼ਬਦ ਤੁਲਨਾ) - 170,000 unique pairs
 - `ਕਿਹੜਾ ਸ਼ਬਦ ਲੰਬਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?`
+- **Key contributor to uniqueness requirement.**
 
 ## Character Splitting Methodology
 
