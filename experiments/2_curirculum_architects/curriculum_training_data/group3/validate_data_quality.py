@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# isort: skip_file
 """
 Validation script to catch factual errors and unnatural phrasing in generated datasets.
 Run this before committing any generated data.

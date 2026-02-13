@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# isort: skip_file
 """
 Generate Group 1 Hindi Language Dataset (200,000 question-answer pairs)
 Combines all 10 statement types and creates final dataset with minimum 512 tokens per data point.
@@ -9,7 +10,10 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import combine_qa_pairs_to_reach_min_tokens_hindi, count_tokens  # noqa: E402
+from prompt_utils import (  # noqa: E402
+    combine_qa_pairs_to_reach_min_tokens_hindi,
+    count_tokens,
+)
 
 # Statement files and their target counts
 STATEMENT_FILES = [

@@ -1,3 +1,4 @@
+# isort: skip_file
 """
 Utilities for prompt-only curriculum dataset generation.
 
