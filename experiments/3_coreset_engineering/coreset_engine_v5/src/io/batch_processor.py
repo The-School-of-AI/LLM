@@ -177,7 +177,9 @@ class BatchProcessor:
         if not root.exists():
             return []
         if fmt == "jsonl":
-            return [str(p) for p in sorted(root.glob("**/*.jsonl"))]
+            # Support both .jsonl and .json extensions
+            files = list(root.glob("**/*.jsonl")) + list(root.glob("**/*.json"))
+            return [str(p) for p in sorted(set(files))]
         if fmt == "parquet":
             return [str(p) for p in sorted(root.glob("**/*.parquet"))]
         return []
@@ -231,14 +233,26 @@ class BatchProcessor:
         # as a prefix (common when users pass s3://bucket/path without trailing slash).
         prefix = key_prefix
 
+        suffix = suffix.lower()
         paginator = client.get_paginator("list_objects_v2")
         results: List[str] = []
+        
+        # When looking for JSONL, also accept .json S3 objects
+        suffixes = [suffix]
+        if suffix == ".jsonl":
+            suffixes.append(".json")
+
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             for obj in page.get("Contents", []) or []:
                 key = obj.get("Key")
                 if not key:
                     continue
-                if key.endswith(suffix):
+                # Skip "directory" marker objects
+                if key.endswith("/") or obj.get("Size", 0) == 0:
+                    continue
+                
+                key_lower = key.lower()
+                if any(key_lower.endswith(s) for s in suffixes):
                     results.append(f"s3://{bucket}/{key}")
 
         return sorted(results)
