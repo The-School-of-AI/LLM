@@ -96,9 +96,9 @@ def compute_phi_distribution(
             log_probs = F.log_softmax(shift_logits, dim=-1)
             probs = log_probs.exp()
 
-            token_log_probs = log_probs.gather(
-                -1, shift_labels.unsqueeze(-1)
-            ).squeeze(-1)
+            token_log_probs = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(
+                -1
+            )
             entropy = -(probs * log_probs).sum(dim=-1)
 
             phi = token_log_probs + entropy
@@ -185,14 +185,14 @@ def main():
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--max_samples", type=int, default=None)
-    parser.add_argument("--output_json", type=str, default="phi_diagnostic_results.json")
+    parser.add_argument(
+        "--output_json", type=str, default="phi_diagnostic_results.json"
+    )
     parser.add_argument("--device", type=str, default="auto")
     args = parser.parse_args()
 
     logger.info(f"Loading model: {args.model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -208,9 +208,7 @@ def main():
             args.model_name, torch_dtype=torch.bfloat16, **model_kwargs
         )
     except Exception:
-        model = AutoModelForCausalLM.from_pretrained(
-            args.model_name, **model_kwargs
-        )
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, **model_kwargs)
 
     logger.info(f"Loading dataset: {args.dataset_name}")
     dataset = load_dataset(args.dataset_name, split=args.dataset_split)

@@ -99,11 +99,16 @@ def run_lm_eval(
     """
     cmd = [
         "lm_eval",
-        "--model", "hf",
-        "--model_args", f"pretrained={model_path}",
-        "--tasks", task,
-        "--num_fewshot", str(num_fewshot),
-        "--batch_size", batch_size,
+        "--model",
+        "hf",
+        "--model_args",
+        f"pretrained={model_path}",
+        "--tasks",
+        task,
+        "--num_fewshot",
+        str(num_fewshot),
+        "--batch_size",
+        batch_size,
     ]
 
     if use_peft and base_model:
@@ -115,9 +120,7 @@ def run_lm_eval(
     logger.info(f"Running: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=3600
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
         if result.returncode != 0:
             logger.error(f"lm_eval failed: {result.stderr}")
             return {"error": result.stderr, "task": task}
@@ -132,9 +135,7 @@ def run_lm_eval(
         logger.error(f"Evaluation timed out for task {task}")
         return {"error": "timeout", "task": task}
     except FileNotFoundError:
-        logger.error(
-            "lm_eval not found. Install with: pip install lm-eval"
-        )
+        logger.error("lm_eval not found. Install with: pip install lm-eval")
         return {"error": "lm_eval not installed", "task": task}
 
 
@@ -321,7 +322,9 @@ def print_results_table(
             category = idft_results["benchmarks"][name].get("category", "")
 
         # Extract scores (placeholder - actual extraction depends on lm-eval output)
-        print(f"{name:<20} {category:<12} {base_score:>8} {sft_score:>8} {idft_score:>8} {delta:>8}")
+        print(
+            f"{name:<20} {category:<12} {base_score:>8} {sft_score:>8} {idft_score:>8} {delta:>8}"
+        )
 
     print("=" * 80)
 
@@ -334,28 +337,34 @@ def print_results_table(
 def main():
     parser = argparse.ArgumentParser(description="IDFT Smoke Test Evaluation")
     parser.add_argument(
-        "--checkpoint_dir", type=str, required=True,
-        help="Path to model checkpoint directory"
+        "--checkpoint_dir",
+        type=str,
+        required=True,
+        help="Path to model checkpoint directory",
     )
     parser.add_argument(
-        "--label", type=str, required=True,
-        help="Condition label (sft, idft, base)"
+        "--label", type=str, required=True, help="Condition label (sft, idft, base)"
     )
     parser.add_argument(
-        "--output_json", type=str, required=True,
-        help="Path to save results JSON"
+        "--output_json", type=str, required=True, help="Path to save results JSON"
     )
     parser.add_argument(
-        "--benchmarks", type=str, nargs="+", default=None,
-        help="Benchmarks to run (default: all)"
+        "--benchmarks",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Benchmarks to run (default: all)",
     )
     parser.add_argument(
-        "--use_peft", action="store_true",
-        help="Checkpoint is a PEFT adapter (requires --base_model)"
+        "--use_peft",
+        action="store_true",
+        help="Checkpoint is a PEFT adapter (requires --base_model)",
     )
     parser.add_argument(
-        "--base_model", type=str, default=None,
-        help="Base model name for PEFT adapter loading"
+        "--base_model",
+        type=str,
+        default=None,
+        help="Base model name for PEFT adapter loading",
     )
     args = parser.parse_args()
 
