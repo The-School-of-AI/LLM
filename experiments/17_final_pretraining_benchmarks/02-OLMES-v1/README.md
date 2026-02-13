@@ -53,8 +53,30 @@ python3 02-OLMES-v1/src/pipeline_runner.py \
 ### 3. Smoke Testing (Quick Verification)
 Use the included helper script to run a "one of everything" test with a tiny sample limit (2 samples/task) across all stages:
 ```bash
-./run_smoke_tests.sh
+# From 17_final_pretraining_benchmarks/02-OLMES-v1
+
+# Run with defaults (all stages, SmolLM2-135M, cpu)
+tests/run_smoke_tests.sh
+
+# Custom model and specific stages
+tests/run_smoke_tests.sh \
+    --model "your-org/your-model" \
+    --stages "pretrain_1b,pretrain_3b"
+
+# Full customization
+tests/run_smoke_tests.sh \
+    --config 02-OLMES-v1/configs/benchmark-config.yaml \
+    --model "your-org/your-model" \
+    --stages "pretrain_1b,ci_breadth" \
+    --device "cuda"
 ```
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `-c, --config` | `02-OLMES-v1/configs/benchmark-config.yaml` | Path to benchmark config YAML |
+| `-m, --model` | `HuggingFaceTB/SmolLM2-135M` | HuggingFace model name |
+| `-s, --stages` | `pretrain_1b,pretrain_3b,...,ci_breadth` | Comma-separated list of stages |
+| `-d, --device` | `cpu` | Execution device (`cpu`, `cuda`, `mps`) |
 
 ---
 
