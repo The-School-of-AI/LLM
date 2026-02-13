@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # --------------- DEFAULTS ---------------
-NUM_SHARDS=4
+NUM_SHARDS=8
 STAGES="1B 3B 8B 70B"
 INPUT_PATH="data/books/bands/"
 INPUT_FORMAT="jsonl"
@@ -24,6 +24,7 @@ CONFIG="config/pipeline.yaml"
 CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
+TOTAL_TOKENS=""
 
 # --------------- PARSE ARGS ---------------
 usage() {
@@ -54,6 +55,7 @@ while [[ $# -gt 0 ]]; do
     --curriculum)       CURRICULUM="$2";       shift 2 ;;
     --checkpoint-base)  CHECKPOINT_BASE="$2";  shift 2 ;;
     --band-inference)   BAND_INFERENCE="$2";   shift 2 ;;
+    --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
     -h|--help)          usage ;;
     *)                  echo "Unknown option: $1"; usage ;;
   esac
@@ -99,6 +101,7 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
       --shard-id "$SHARD_ID" \
       --checkpoint-dir "$SHARD_DIR" \
       --band-inference "$BAND_INFERENCE" \
+      ${TOTAL_TOKENS:+--total-input-tokens-estimate "$TOTAL_TOKENS"} \
       2>&1 | sed "s/^/[shard $SHARD_ID] /"
     echo "[shard $SHARD_ID] Done."
   ) &
