@@ -34,7 +34,7 @@ DEFAULT_CONFIG = {
     },
     "processing": {
         "parallelism": 200,
-        "default_bands": ["B0", "B1", "B2", "B3", "B4"],
+        "default_bands": ["B0", "B1", "B2", "B3", "B4", "B5"],
     },
     "schema": {
         "rename_columns": {"uuid": "chunk_id"},
@@ -228,17 +228,41 @@ class SparkDataProcessor:
         for df in df_list[1:]:
             consolidated_df = consolidated_df.unionByName(df, allowMissingColumns=True)
 
+        # 1. Thin out the data (rename and drop heavy columns before shuffle)
         transformed_df = self._transform_schema(consolidated_df)
 
-        # Deduplication - keep hash for partition, drop after
-        window_spec = Window.partitionBy("hash").orderBy(F.col("band"))
-        unique_df = transformed_df.withColumn("row_num", F.row_number().over(window_spec)) \
-            .filter(F.col("row_num") == 1) \
-            .drop("row_num")
+        # Ensure assigned_band exists (needed for dedup order and scoring)
+        if "assigned_band" not in transformed_df.columns:
+            # Fallback to current 'band' (derived from S3 path) if assigned_band is missing
+            transformed_df = transformed_df.withColumn("assigned_band", F.col("band"))
 
-        # Drop hash before save (if in drop_columns)
-        if "hash" in unique_df.columns and "hash" in self.config['schema']['drop_columns']:
-            unique_df = unique_df.drop("hash")
+        # 2. Deduplication on THIN data - based ONLY on the hash column
+        unique_df = transformed_df.dropDuplicates(["hash"])
+
+        # 3. Post-Dedup Logic: Band assignments and scoring
+        # Final 'band' is derived from 'assigned_band'
+        unique_df = unique_df.withColumn("band", F.col("assigned_band"))
+
+        # Ensure all probability columns exist (B0 to B5)
+        for i in range(6):
+            col_name = f"band_p_B{i}"
+            if col_name not in unique_df.columns:
+                unique_df = unique_df.withColumn(col_name, F.lit(0.0))
+
+        # Calculate band_score based on the final assigned_band
+        unique_df = unique_df.withColumn("band_score",
+            F.when(F.col("assigned_band") == "B0", F.col("band_p_B0"))
+             .when(F.col("assigned_band") == "B1", F.col("band_p_B1"))
+             .when(F.col("assigned_band") == "B2", F.col("band_p_B2"))
+             .when(F.col("assigned_band") == "B3", F.col("band_p_B3"))
+             .when(F.col("assigned_band") == "B4", F.col("band_p_B4"))
+             .when(F.col("assigned_band") == "B5", F.col("band_p_B5"))
+             .otherwise(F.lit(0.0))
+        )
+
+        # 4. Final Cleanup: Drop hash and assigned_band as the very last step
+        final_drops = ["hash", "assigned_band"]
+        unique_df = unique_df.drop(*[c for c in final_drops if c in unique_df.columns])
 
         num_partitions = self.config['processing'].get('parallelism', 200)
         unique_df = unique_df.coalesce(num_partitions)
@@ -246,21 +270,21 @@ class SparkDataProcessor:
         return unique_df
 
     def _transform_schema(self, df: DataFrame) -> DataFrame:
-        """Applies renames and column drops."""
+        """Applies renames and early column drops for shuffle efficiency."""
         rename_map = self.config['schema']['rename_columns']
         drop_cols = self.config['schema']['drop_columns']
-
-        band_p_cols = [c for c in df.columns if c.startswith("band_p_")]
-        if band_p_cols:
-            df = df.withColumn("band_score", F.coalesce(*[F.col(c) for c in band_p_cols]))
 
         for old_name, new_name in rename_map.items():
             if old_name in df.columns:
                 df = df.withColumnRenamed(old_name, new_name)
 
-        # Don't drop hash yet - needed for dedup
-        cols_to_drop = [c for c in drop_cols if c != "hash" and c in df.columns]
-        df = df.drop(*cols_to_drop)
+        # Early drop of heavy columns to optimize shuffle
+        # MUST preserve hash, assigned_band, and probability columns for later logic
+        prob_cols = [c for c in df.columns if c.startswith("band_p_")]
+        cols_to_keep = {"hash", "assigned_band"} | set(prob_cols)
+        
+        early_drop_targets = [c for c in drop_cols if c not in cols_to_keep and c in df.columns]
+        df = df.drop(*early_drop_targets)
 
         return df
 
@@ -296,7 +320,7 @@ def main():
         },
         "processing": {
             "parallelism": args.PARALLELISM,
-            "default_bands": ["B0", "B1", "B2", "B3", "B4"],
+            "default_bands": ["B0", "B1", "B2", "B3", "B4", "B5"],
         },
         "schema": DEFAULT_CONFIG["schema"]
     }
