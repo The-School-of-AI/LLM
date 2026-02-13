@@ -231,9 +231,28 @@ training:
   dpo:
     # Beta parameter for DPO loss
     beta: 0.1
-    
+
     # Label smoothing
     label_smoothing: 0.0
+
+  # -----------------------------
+  # IDFT-Specific Settings
+  # -----------------------------
+  idft:
+    # Enable IDFT loss (In-Distribution Fine-Tuning)
+    enabled: false
+
+    # Phi clipping bound [-B, B]. Paper recommends 3-10, sweet spot at 5.
+    clip_B: 5.0
+
+    # Learning rates to grid search (IDFT needs separate LR from SFT)
+    learning_rates:
+      - 5.0e-5
+      - 2.0e-5
+      - 1.0e-5
+
+    # Log phi/gamma diagnostics every N steps
+    log_diagnostics_every: 10
 
 # -----------------------------------------------------------------------------
 # Data Configuration
