@@ -1,0 +1,490 @@
+# Group 2: Math and Numbers - Dataset Generation Prompt
+
+## Overview
+Generate 600,000 samples for basic math and number skills training. This is a foundational group with high priority in curriculum learning.
+
+## Output Format
+Simple key-value JSON format in `curriculum_training_data/group2.json`:
+```json
+{
+  "Can you count till 5?": "1, 2, 3, 4, 5",
+  "What comes after 46?": "47",
+  "What is 2 + 2?": "4",
+  ...
+}
+```
+
+---
+
+## Statement Breakdown (6 Statement Types)
+
+### Statement 1: Counting Sequences (Till 100)
+**Example**: {Can you count till 5?: "1, 2, 3, 4, 5"}
+
+**Prompt**: Create data points for counting sequences up to 100. Try different combinations of:
+
+(i) **Semantic variations**:
+- "Can you count till X?"
+- "Count from 1 to X"
+- "What are the numbers from 1 to X?"
+- "List the numbers up to X"
+- "Count to X for me"
+- "Show me counting till X"
+- "What numbers come when counting to X?"
+- "Give me the count up to X"
+- "Recite numbers from 1 to X"
+- "Count the numbers till X"
+- "What is the sequence from 1 to X?"
+- "List numbers counting to X"
+
+(ii) **Target numbers**: Use numbers from 1 to 100
+- Small counts: 1-10 (frequent)
+- Medium counts: 11-30 (moderate)
+- Large counts: 31-100 (less frequent but covered)
+
+(iii) **Answer format**: Comma-separated sequence (e.g., "1, 2, 3, 4, 5")
+
+**Difficulty mix**: 40% easy (count to 1-10), 40% medium (count to 11-30), 20% hard (count to 31-100)
+
+---
+
+### Statement 2: Before and After Queries
+**Example**: {What comes after 46?: "47"}, {What comes before 50?: "49"}
+
+**Prompt**: Create data points for number sequence understanding (before/after). Try different combinations of:
+
+(i) **Semantic variations for "After"**:
+- "What comes after X?"
+- "What is the number after X?"
+- "Which number follows X?"
+- "What number is next after X?"
+- "Tell me what comes after X"
+- "Give me the number that follows X"
+- "What is X plus one?"
+- "Name the number after X"
+- "What succeeds X?"
+- "Which number comes right after X?"
+
+(ii) **Semantic variations for "Before"**:
+- "What comes before X?"
+- "What is the number before X?"
+- "Which number precedes X?"
+- "What number is just before X?"
+- "Tell me what comes before X"
+- "Give me the number that precedes X"
+- "What is X minus one?"
+- "Name the number before X"
+- "What precedes X?"
+- "Which number comes right before X?"
+
+(iii) **Number range**: 
+- Positive numbers: 1-1000
+- Zero: Include edge cases like "What comes after 0?" (answer: 1)
+- Negative numbers: -100 to 0 (e.g., "What comes after -5?": "-4")
+
+(iv) **Answer format**: Single number (e.g., "47", "-4", "100")
+
+**Difficulty mix**: 40% easy (1-100), 40% medium (101-500, includes negatives), 20% hard (501-1000, negative ranges)
+
+---
+
+### Statement 3: Word Problems with Objects
+**Example**: {If you have one apple, and get one more, how many apples now?: "2"}
+
+**Prompt**: Create data points for word problems involving objects and arithmetic reasoning. Try different combinations of:
+
+(i) **Semantic variations**:
+- "If you have X [objects], and get Y more, how many [objects] now?"
+- "You have X [objects]. If you get Y more, how many do you have?"
+- "There are X [objects]. If Y more are added, what is the total?"
+- "Start with X [objects], add Y more. How many in all?"
+- "X [objects] plus Y more [objects] equals how many?"
+- "If I give you Y [objects] and you already have X, how many total?"
+- "You had X [objects], then found Y more. How many [objects] altogether?"
+- "Combine X [objects] with Y [objects]. What do you get?"
+
+(ii) **Subtraction variations**:
+- "If you have X [objects], and give away Y, how many left?"
+- "You have X [objects]. If Y are taken away, how many remain?"
+- "There are X [objects]. If you lose Y, how many are left?"
+- "Start with X [objects], remove Y. How many now?"
+- "X [objects] minus Y equals how many?"
+- "If Y [objects] are eaten from X, how many left?"
+
+(iii) **Mixed operations**:
+- "You have X [objects], get Y more, then lose Z. How many now?"
+- "Start with X, add Y, subtract Z. What's the answer?"
+
+(iv) **Objects to use**: 
+- Fruits: apples, oranges, bananas, mangoes, grapes, strawberries, cherries
+- Animals: cats, dogs, birds, fish, rabbits, ducks, chickens
+- Toys: balls, dolls, cars, blocks, puzzles, crayons, marbles
+- Food: cookies, candies, chocolates, pizzas, cupcakes, sandwiches
+- School items: pencils, books, erasers, notebooks, pens, rulers
+- Nature: flowers, leaves, stones, shells, butterflies, stars
+
+(v) **Number combinations**:
+- Single digits: 1-9 combined with 1-9
+- Two digit with single: 10-50 combined with 1-9
+- Numbers can be written as words or digits: "one" or "1", "two" or "2"
+
+(vi) **Answer format**: Single number (e.g., "2", "15", "8")
+
+**Difficulty mix**: 40% easy (single digit + single digit), 40% medium (two operations or larger numbers), 20% hard (three operations, larger numbers)
+
+---
+
+### Statement 4: Number Comparisons (Including Positive and Negative)
+**Example**: {Which number is greater, 5 or -9?: "5"}, {Which number is smaller, 100 or 99?: "99"}
+
+**Prompt**: Create data points for comparing numbers including positive, negative, and zero. Try different combinations of:
+
+(i) **Semantic variations for "Greater"**:
+- "Which number is greater, X or Y?"
+- "Which is bigger, X or Y?"
+- "What is larger, X or Y?"
+- "Between X and Y, which is greater?"
+- "Compare X and Y. Which is bigger?"
+- "Is X greater than Y? If so, say X, else say Y"
+- "Pick the larger number: X or Y"
+- "Tell me which is more, X or Y"
+- "Which number is higher, X or Y?"
+- "The bigger of X and Y is?"
+
+(ii) **Semantic variations for "Smaller"**:
+- "Which number is smaller, X or Y?"
+- "Which is less, X or Y?"
+- "What is smaller, X or Y?"
+- "Between X and Y, which is smaller?"
+- "Compare X and Y. Which is less?"
+- "Pick the smaller number: X or Y"
+- "Tell me which is less, X or Y"
+- "Which number is lower, X or Y?"
+- "The smaller of X and Y is?"
+
+(iii) **Number combinations**:
+- **Positive vs Positive**: 5 vs 10, 100 vs 99, 1000 vs 999
+- **Negative vs Negative**: -5 vs -10 (answer: -5 is greater), -100 vs -50
+- **Positive vs Negative**: 5 vs -9 (answer: 5 is greater), -7 vs 3
+- **Zero comparisons**: 0 vs 5, 0 vs -5, 0 vs 0
+- **Large numbers**: 1000 vs 999, 5000 vs 5001
+- **Equal numbers**: 5 vs 5, -3 vs -3 (answer: "equal" or "both are equal")
+
+(iv) **Number ranges**:
+- Small: -100 to 100
+- Medium: -1000 to 1000
+- Large: -10000 to 10000
+
+(v) **Answer format**: The correct number, or "equal"/"both are equal" for equal values
+
+**Difficulty mix**: 
+- 30% easy (positive vs positive, obvious differences)
+- 40% medium (includes negatives, close numbers)
+- 20% hard (negative vs negative, large numbers, tricky cases like -1 vs -2)
+- 10% equal cases
+
+---
+
+### Statement 5: Direct Mathematical Queries (Up to 4 Terms)
+**Example**: {What is 2 + 2?: "4"}, {What is 5 x 5?: "25"}, {What is 10 - 3 + 2?: "9"}
+
+**Prompt**: Create data points for direct arithmetic queries. Go up to 4 term queries. Try different combinations of:
+
+(i) **Semantic variations**:
+- "What is X + Y?"
+- "Calculate X - Y"
+- "X times Y equals?"
+- "What is X multiplied by Y?"
+- "Compute X ÷ Y"
+- "What is X divided by Y?"
+- "X + Y = ?"
+- "Solve: X - Y"
+- "Find the value of X × Y"
+- "What do you get when you add X and Y?"
+- "What is the sum of X and Y?"
+- "What is the difference between X and Y?"
+- "What is the product of X and Y?"
+- "What is the quotient of X and Y?"
+
+(ii) **Operations**:
+- **Addition (+)**: "What is 5 + 3?", "What is 12 + 8?"
+- **Subtraction (-)**: "What is 10 - 4?", "What is 25 - 7?"
+- **Multiplication (× or x or *)**: "What is 6 × 7?", "What is 5 x 5?", "What is 3 * 4?"
+- **Division (÷ or /)**: "What is 20 ÷ 4?", "What is 15 / 3?"
+
+(iii) **Number of terms**:
+- **2 terms**: "What is 5 + 3?" → "8"
+- **3 terms**: "What is 5 + 3 - 2?" → "6"
+- **4 terms**: "What is 10 + 5 - 3 + 2?" → "14"
+
+(iv) **Mixed operations (for 3-4 terms)**:
+- "What is 5 + 3 × 2?" → "11" (order of operations)
+- "What is 10 - 4 + 2?" → "8"
+- "What is 6 × 2 ÷ 3?" → "4"
+- "What is 2 + 3 × 4 - 1?" → "13"
+
+(v) **Number ranges**:
+- Addition/Subtraction: operands 0-100, results -100 to 200
+- Multiplication: operands 0-12 (times tables), some larger (up to 20)
+- Division: ensure clean division (no remainders for basic), divisors 1-12
+
+(vi) **Special cases**:
+- Zero operations: "What is 5 + 0?", "What is 0 × 7?"
+- Identity: "What is 10 × 1?", "What is 15 ÷ 1?"
+- Negative results: "What is 3 - 8?" → "-5"
+
+(vii) **Answer format**: Single number (integer), can be negative
+
+**Difficulty mix**:
+- 30% easy (2 terms, single digits, basic operations)
+- 40% medium (2-3 terms, two-digit numbers, mixed operations)
+- 20% hard (3-4 terms, order of operations, larger numbers)
+- 10% special cases (zeros, negatives)
+
+---
+
+### Statement 6: Word-Based Mathematical Queries
+**Example**: {What is 4 less than 10?: "6"}, {What is 3 more than 7?: "10"}
+
+**Prompt**: Create data points for word-based arithmetic. Answer should always be a number. Try different combinations of:
+
+(i) **Semantic variations for Addition**:
+- "What is X more than Y?" → Y + X
+- "What is X added to Y?" → X + Y
+- "What is the sum of X and Y?" → X + Y
+- "What is X plus Y?" → X + Y
+- "If you add X to Y, what do you get?" → X + Y
+- "X increased by Y is?" → X + Y
+- "What is Y with X added?" → Y + X
+
+(ii) **Semantic variations for Subtraction**:
+- "What is X less than Y?" → Y - X
+- "What is Y minus X?" → Y - X
+- "What is the difference between Y and X?" → Y - X (larger - smaller)
+- "What is X subtracted from Y?" → Y - X
+- "Y decreased by X is?" → Y - X
+- "What remains when X is taken from Y?" → Y - X
+- "X fewer than Y is?" → Y - X
+
+(iii) **Semantic variations for Multiplication**:
+- "What is X times Y?" → X × Y
+- "What is double of X?" → X × 2
+- "What is triple of X?" → X × 3
+- "What is twice X?" → X × 2
+- "What is thrice X?" → X × 3
+- "What is X multiplied by Y?" → X × Y
+- "What is half of X?" → X ÷ 2
+- "What is a quarter of X?" → X ÷ 4
+
+(iv) **Semantic variations for Division**:
+- "What is X divided by Y?" → X ÷ Y
+- "X split into Y parts gives?" → X ÷ Y
+- "How many times does Y go into X?" → X ÷ Y
+- "What is X shared among Y?" → X ÷ Y
+
+(v) **Complex word phrases**:
+- "What is 5 more than the double of 3?" → (3 × 2) + 5 = 11
+- "What is twice 4 less than 15?" → 15 - (4 × 2) = 7
+- "What is half of 10 plus 3?" → (10 ÷ 2) + 3 = 8
+
+(vi) **Number combinations**:
+- Single digits with single digits: "3 more than 7"
+- Two digits with single digits: "5 less than 20"
+- Larger numbers: "100 more than 50"
+- Numbers as words: "four less than ten", "three more than seven"
+
+(vii) **Answer format**: Single number (can be negative if subtraction results in negative)
+
+**Difficulty mix**:
+- 30% easy (simple "more than" or "less than" with small numbers)
+- 40% medium (various operations, two-digit numbers)
+- 20% hard (complex phrases, multiple operations, numbers as words)
+- 10% edge cases (results in zero, negative numbers)
+
+---
+
+## Total Samples to Generate: 600,000
+
+### Distribution Breakdown:
+
+| Statement | Type | Samples | Percentage | Rationale |
+|-----------|------|---------|------------|-----------|
+| **Statement 1** | Counting Sequences | 60,000 | 10% | Foundation for number understanding; limited variation (1-100) |
+| **Statement 2** | Before/After | 80,000 | 13.3% | Number sequence understanding; includes negatives |
+| **Statement 3** | Word Problems | 120,000 | 20% | Real-world application; high variation (objects × numbers × operations) |
+| **Statement 4** | Number Comparison | 100,000 | 16.7% | Critical skill; includes positive, negative, zero |
+| **Statement 5** | Direct Math Queries | 150,000 | 25% | Core arithmetic; highest variation (4 operations × multiple terms × number ranges) |
+| **Statement 6** | Word-Based Math | 90,000 | 15% | Linguistic math understanding; bridges language and math |
+| **TOTAL** | | **600,000** | **100%** | |
+
+---
+
+## Detailed Sample Distribution
+
+### Statement 1: Counting Sequences (60,000 samples)
+| Difficulty | Count | Description |
+|------------|-------|-------------|
+| Easy (1-10) | 24,000 | 40% - Small counting sequences |
+| Medium (11-30) | 24,000 | 40% - Medium counting sequences |
+| Hard (31-100) | 12,000 | 20% - Longer counting sequences |
+
+### Statement 2: Before/After (80,000 samples)
+| Type | Count | Description |
+|------|-------|-------------|
+| After queries | 40,000 | 50% - "What comes after X?" |
+| Before queries | 40,000 | 50% - "What comes before X?" |
+
+Within each:
+- 40% positive small (1-100)
+- 30% positive large (101-1000)
+- 20% negative numbers
+- 10% edge cases (0, -1, etc.)
+
+### Statement 3: Word Problems (120,000 samples)
+| Operation | Count | Description |
+|-----------|-------|-------------|
+| Addition | 50,000 | 41.7% - "get more", "add", "total" |
+| Subtraction | 40,000 | 33.3% - "give away", "lose", "remain" |
+| Mixed (2+ ops) | 30,000 | 25% - Multi-step problems |
+
+### Statement 4: Number Comparison (100,000 samples)
+| Type | Count | Description |
+|------|-------|-------------|
+| Greater queries | 45,000 | 45% - "Which is greater/bigger?" |
+| Smaller queries | 45,000 | 45% - "Which is smaller/less?" |
+| Equal cases | 10,000 | 10% - Same numbers |
+
+Within comparison types:
+- 30% positive vs positive
+- 25% negative vs negative  
+- 25% positive vs negative
+- 10% zero comparisons
+- 10% large number comparisons
+
+### Statement 5: Direct Math Queries (150,000 samples)
+| Operation/Terms | Count | Description |
+|-----------------|-------|-------------|
+| 2-term Addition | 30,000 | 20% - "X + Y" |
+| 2-term Subtraction | 25,000 | 16.7% - "X - Y" |
+| 2-term Multiplication | 25,000 | 16.7% - "X × Y" |
+| 2-term Division | 20,000 | 13.3% - "X ÷ Y" |
+| 3-term Mixed | 30,000 | 20% - "X + Y - Z" |
+| 4-term Mixed | 20,000 | 13.3% - "W + X - Y + Z" |
+
+### Statement 6: Word-Based Math (90,000 samples)
+| Type | Count | Description |
+|------|-------|-------------|
+| "More than" | 25,000 | 27.8% - Addition phrasing |
+| "Less than" | 25,000 | 27.8% - Subtraction phrasing |
+| "Times/Double/Triple" | 15,000 | 16.7% - Multiplication phrasing |
+| "Half of/Quarter of" | 10,000 | 11.1% - Division phrasing |
+| Complex phrases | 15,000 | 16.7% - Multi-operation word phrases |
+
+---
+
+## Implementation Notes
+
+### Data Sources Needed:
+1. **Number ranges**: 1-10000 for various operations
+2. **Objects list**: 100+ common objects (fruits, animals, toys, etc.)
+3. **Semantic templates**: 10-20 templates per statement type
+4. **Operation symbols**: +, -, ×, x, *, ÷, /
+
+### Generation Strategies:
+- **Statement 1**: Systematic (limited to 100 count targets × 12 templates = ~1,200 base combinations, need repetition with variation)
+- **Statement 2**: Random selection with high capacity (number range × 20 templates)
+- **Statement 3**: Random selection (objects × numbers × operations × templates)
+- **Statement 4**: Random selection with balance across comparison types
+- **Statement 5**: Random selection with order of operations validation
+- **Statement 6**: Random selection with semantic diversity
+
+### Validation Checks:
+- All arithmetic answers are programmatically verified
+- Division results are integers (clean division)
+- Negative results are handled correctly
+- Word-number conversions are accurate
+- No duplicate queries
+
+### Answer Format Rules:
+- Single numbers: "4", "25", "-5"
+- Counting sequences: "1, 2, 3, 4, 5" (comma-separated)
+- Equal comparisons: "equal" or "both are equal"
+
+---
+
+## Files to Create/Modify
+- `generate_group2_dataset.py` - Main generation script
+- `curriculum_training_data/group2.json` - Output file (600,000 key-value pairs)
+
+---
+
+## Sample Examples for Each Statement Type
+
+### Statement 1 - Counting:
+```json
+{"Can you count till 5?": "1, 2, 3, 4, 5"}
+{"Count from 1 to 10": "1, 2, 3, 4, 5, 6, 7, 8, 9, 10"}
+{"What are the numbers from 1 to 3?": "1, 2, 3"}
+{"List the numbers up to 7": "1, 2, 3, 4, 5, 6, 7"}
+{"Count to 100 for me": "1, 2, 3, ..., 98, 99, 100"}
+```
+
+### Statement 2 - Before/After:
+```json
+{"What comes after 46?": "47"}
+{"What is the number before 50?": "49"}
+{"Which number follows 99?": "100"}
+{"What comes before 1?": "0"}
+{"What is the number after -5?": "-4"}
+{"Which number precedes -10?": "-11"}
+```
+
+### Statement 3 - Word Problems:
+```json
+{"If you have one apple, and get one more, how many apples now?": "2"}
+{"You have 5 cookies. If you eat 2, how many are left?": "3"}
+{"There are 3 birds. If 4 more come, how many birds in total?": "7"}
+{"Start with 10 marbles, give away 3, find 2 more. How many now?": "9"}
+```
+
+### Statement 4 - Comparisons:
+```json
+{"Which number is greater, 5 or -9?": "5"}
+{"Which is smaller, 100 or 99?": "99"}
+{"Between -5 and -10, which is greater?": "-5"}
+{"Is 0 greater than -1? Say the larger number": "0"}
+{"Compare 1000 and 999. Which is bigger?": "1000"}
+{"Which number is smaller, 7 or 7?": "equal"}
+```
+
+### Statement 5 - Direct Math:
+```json
+{"What is 2 + 2?": "4"}
+{"What is 5 x 5?": "25"}
+{"Calculate 20 ÷ 4": "5"}
+{"What is 10 - 3?": "7"}
+{"What is 5 + 3 - 2?": "6"}
+{"Solve: 2 + 3 × 4 - 1": "13"}
+{"What is 10 + 5 - 3 + 2?": "14"}
+```
+
+### Statement 6 - Word-Based Math:
+```json
+{"What is 4 less than 10?": "6"}
+{"What is 3 more than 7?": "10"}
+{"What is double of 8?": "16"}
+{"What is half of 20?": "10"}
+{"What is 5 times 6?": "30"}
+{"What is twice 9?": "18"}
+{"What is the sum of 12 and 8?": "20"}
+{"What is the difference between 15 and 7?": "8"}
+```
+
+---
+
+## Questions for Clarification (if needed):
+1. Should division always result in whole numbers, or include decimals?
+2. For counting sequences above 50, should we show "..." or full sequence?
+3. Should negative number comparisons follow strict mathematical rules (-5 > -10)?
+4. For 4-term expressions, should we follow BODMAS/PEMDAS order of operations?
+5. Should word problems include any division scenarios (sharing equally)?

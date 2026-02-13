@@ -1,0 +1,21 @@
+# Curriculum Training Data - Python Dependencies
+# 
+# All scripts use Python standard library only.
+# No external dependencies required.
+#
+# Python Version: 3.8 or higher
+
+# Standard library modules used:
+# - json (JSON encoding/decoding)
+# - random (Random sampling and shuffling)
+# - typing (Type hints: Dict, List, Tuple, Set)
+# - collections (defaultdict for categorization)
+# - operator (for Group 2 mathematical operations)
+
+# If you want to ensure Python version compatibility:
+# python_requires>=3.8
+
+# Optional: For development and testing
+# pytest>=7.0.0  # For running tests (if added)
+# black>=22.0.0   # For code formatting (if desired)
+# mypy>=0.950     # For type checking (if desired)

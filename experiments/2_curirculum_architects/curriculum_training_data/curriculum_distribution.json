@@ -1,0 +1,286 @@
+{
+  "total_samples": 2000000,
+  "current_samples": 70000,
+  "remaining_samples": 1930000,
+  "strategy": "Curriculum-Based Weighted Distribution",
+  "rationale": "Prioritizes foundational skills (language & math) for curriculum training, with progressive complexity from foundation to application",
+  "distribution": {
+    "Group1": {
+      "name": "Language and Literacy",
+      "current_samples": 70000,
+      "target_samples": 700000,
+      "remaining_samples": 630000,
+      "percentage": 35.0,
+      "priority": 1,
+      "complexity": "Low-Medium",
+      "variety_potential": "Very High",
+      "educational_priority": "Critical (Foundation)",
+      "query_types": 10,
+      "breakdown": {
+        "S1_Spelling": {
+          "current": 10000,
+          "target": 100000,
+          "remaining": 90000,
+          "percentage": 14.3
+        },
+        "S2_LetterAtPosition": {
+          "current": 9000,
+          "target": 90000,
+          "remaining": 81000,
+          "percentage": 12.9
+        },
+        "S3_SoundMatching": {
+          "current": 7000,
+          "target": 70000,
+          "remaining": 63000,
+          "percentage": 10.0
+        },
+        "S4_LetterCount": {
+          "current": 9000,
+          "target": 90000,
+          "remaining": 81000,
+          "percentage": 12.9
+        },
+        "S5_Rhyming": {
+          "current": 7000,
+          "target": 70000,
+          "remaining": 63000,
+          "percentage": 10.0
+        },
+        "S6_Classification": {
+          "current": 7000,
+          "target": 70000,
+          "remaining": 63000,
+          "percentage": 10.0
+        },
+        "S7_PositionOfLetter": {
+          "current": 6000,
+          "target": 60000,
+          "remaining": 54000,
+          "percentage": 8.6
+        },
+        "S8_NumberSpelling": {
+          "current": 3500,
+          "target": 35000,
+          "remaining": 31500,
+          "percentage": 5.0
+        },
+        "S9_LastLetter": {
+          "current": 6000,
+          "target": 60000,
+          "remaining": 54000,
+          "percentage": 8.6
+        },
+        "S10_WordComparison": {
+          "current": 5500,
+          "target": 55000,
+          "remaining": 49500,
+          "percentage": 7.9
+        }
+      }
+    },
+    "Group2": {
+      "name": "Math and Numbers",
+      "current_samples": 0,
+      "target_samples": 600000,
+      "remaining_samples": 600000,
+      "percentage": 30.0,
+      "priority": 2,
+      "complexity": "Low-Medium",
+      "variety_potential": "High",
+      "educational_priority": "Critical (Foundation)",
+      "query_types": 8,
+      "breakdown": {
+        "BasicArithmetic": {
+          "samples": 180000,
+          "percentage": 30.0,
+          "description": "Core math operations (+, -, ×, ÷), high variety"
+        },
+        "NumberSequences": {
+          "samples": 120000,
+          "percentage": 20.0,
+          "description": "Counting, before/after, patterns"
+        },
+        "WordProblems": {
+          "samples": 120000,
+          "percentage": 20.0,
+          "description": "Real-world application, reasoning"
+        },
+        "NumberComparison": {
+          "samples": 90000,
+          "percentage": 15.0,
+          "description": "Greater/lesser, ordering"
+        },
+        "AdvancedArithmetic": {
+          "samples": 60000,
+          "percentage": 10.0,
+          "description": "Multi-step, larger numbers"
+        },
+        "NegativeNumbers": {
+          "samples": 30000,
+          "percentage": 5.0,
+          "description": "Concept introduction"
+        }
+      }
+    },
+    "Group3": {
+      "name": "Shapes, Colors & Patterns",
+      "current_samples": 0,
+      "target_samples": 250000,
+      "remaining_samples": 250000,
+      "percentage": 12.5,
+      "priority": 4,
+      "complexity": "Low",
+      "variety_potential": "Medium",
+      "educational_priority": "Important (Visual concepts)",
+      "query_types": 4,
+      "breakdown": {
+        "ColorIdentification": {
+          "samples": 80000,
+          "percentage": 32.0,
+          "description": "High variety (many objects × colors)"
+        },
+        "ShapeIdentification": {
+          "samples": 80000,
+          "percentage": 32.0,
+          "description": "High variety (many objects × shapes)"
+        },
+        "ShapeProperties": {
+          "samples": 50000,
+          "percentage": 20.0,
+          "description": "Moderate variety (shape attributes)"
+        },
+        "PatternCompletion": {
+          "samples": 40000,
+          "percentage": 16.0,
+          "description": "Moderate variety (pattern types)"
+        }
+      }
+    },
+    "Group4": {
+      "name": "Everyday Thinking & Concepts",
+      "current_samples": 0,
+      "target_samples": 350000,
+      "remaining_samples": 350000,
+      "percentage": 17.5,
+      "priority": 3,
+      "complexity": "Medium-High",
+      "variety_potential": "Very High",
+      "educational_priority": "Important (General knowledge)",
+      "query_types": 6,
+      "breakdown": {
+        "CommonFacts": {
+          "samples": 100000,
+          "percentage": 28.6,
+          "description": "High variety (many facts)"
+        },
+        "CauseAndEffect": {
+          "samples": 70000,
+          "percentage": 20.0,
+          "description": "Reasoning skills"
+        },
+        "Categorization": {
+          "samples": 60000,
+          "percentage": 17.1,
+          "description": "Classification beyond person/animal/thing"
+        },
+        "ComparisonsAndAnalogies": {
+          "samples": 50000,
+          "percentage": 14.3,
+          "description": "Relational reasoning"
+        },
+        "WhyQuestions": {
+          "samples": 40000,
+          "percentage": 11.4,
+          "description": "Explanatory reasoning"
+        },
+        "HowQuestions": {
+          "samples": 30000,
+          "percentage": 8.6,
+          "description": "Procedural knowledge"
+        }
+      }
+    },
+    "Group5": {
+      "name": "Examples",
+      "current_samples": 0,
+      "target_samples": 100000,
+      "remaining_samples": 100000,
+      "percentage": 5.0,
+      "priority": 5,
+      "complexity": "Low",
+      "variety_potential": "Low",
+      "educational_priority": "Low (Format examples)",
+      "query_types": 1,
+      "breakdown": {
+        "CommonWords": {
+          "samples": 50000,
+          "percentage": 50.0,
+          "description": "High-frequency words"
+        },
+        "MediumWords": {
+          "samples": 30000,
+          "percentage": 30.0,
+          "description": "Moderate difficulty"
+        },
+        "ComplexWords": {
+          "samples": 20000,
+          "percentage": 20.0,
+          "description": "Advanced vocabulary"
+        }
+      }
+    }
+  },
+  "curriculum_progression": {
+    "Phase1_Foundation": {
+      "groups": ["Group1", "Group2"],
+      "samples": 1300000,
+      "percentage": 65.0,
+      "description": "Foundational skills (Language & Math)"
+    },
+    "Phase2_Application": {
+      "groups": ["Group3", "Group4"],
+      "samples": 600000,
+      "percentage": 30.0,
+      "description": "Apply foundational skills to visual and real-world contexts"
+    },
+    "Phase3_FormatMastery": {
+      "groups": ["Group5"],
+      "samples": 100000,
+      "percentage": 5.0,
+      "description": "Specific format training"
+    }
+  },
+  "generation_priorities": [
+    {
+      "priority": 1,
+      "group": "Group1",
+      "action": "Complete remaining 630k samples using existing group1_plan.md",
+      "rationale": "Already started, has clear plan, foundational"
+    },
+    {
+      "priority": 2,
+      "group": "Group2",
+      "action": "Create group2_plan.md and generate 600k samples",
+      "rationale": "Critical foundational skill, high variety potential"
+    },
+    {
+      "priority": 3,
+      "group": "Group4",
+      "action": "Expand beyond single example, create comprehensive plan, generate 350k samples",
+      "rationale": "High variety potential, important for general knowledge"
+    },
+    {
+      "priority": 4,
+      "group": "Group3",
+      "action": "Create plan for shapes/colors/patterns, generate 250k samples",
+      "rationale": "Visual concepts, moderate variety"
+    },
+    {
+      "priority": 5,
+      "group": "Group5",
+      "action": "Simple generation script, generate 100k samples",
+      "rationale": "Lower priority, format-specific"
+    }
+  ]
+}
