@@ -54,14 +54,22 @@ For your Milestone stages, code generation is a critical "emergent" capability.
 4.  **Stage 70B (State of the Art)**:
     *   **Target**: >80.0% HumanEval.
 
-### 3. AI2 OLMo 2 / 3 & OLMES (The "Open" Standard)
-The Allen Institute provides the most transparent data for pre-training trends and the most rigorous evaluation standards.
+### 3. Technical Benchmark Suites (The OLMES Implementation)
+The following are the exact task identifiers configured in `industry-benchmarks.yaml`, aligned with their high-scale academic sources and exhaustive underlying datasets.
 
-| Benchmark Suite | Academic Reference | Content |
-| :--- | :--- | :--- |
-| **OLMES Core (`core_9mcqa`)** | [arXiv:2406.08446](https://arxiv.org/abs/2406.08446) | ARC-C, ARC-E, BoolQ, CSQA, HSwag, OBQA, PIQA, SIQA, WinoG. |
-| **OLMo 3 Coding (`olmo3:base:code`)** | [arXiv:2512.13961](https://arxiv.org/abs/2512.13961) | BigCodeBench, HumanEval, DeepSeek-LeetCode, DS1000, MBPP, MultiPL-E. |
-| **OLMo 2 Reports** | [arXiv:2501.00656](https://arxiv.org/abs/2501.00656) | Comparative base model results across stages. |
+| Tier | Category | Technical Tasks | Benchmarks Included | Academic Reference |
+| :--- | :--- | :--- | :--- | :--- |
+| **🥉 Tier 1 (1B-3B)** | **Academic Core** | `core_9mcqa::olmes` | ARC-C, ARC-E, BoolQ, CSQA, HellaSwag, OBQA, PIQA, SIQA, Winogrande | [arXiv:2406.08446](https://arxiv.org/abs/2406.08446) |
+| | **World Knowledge** | `mmlu::olmes` | 57 subjects (STEM, Humanities, Social Sciences, etc.) | [arXiv:2009.03300](https://arxiv.org/abs/2009.03300) |
+| | **Multilingual** | `indic_glue`, `indic_qa` | Indic NLU (GLUE-style) and Multilingual QA | [arXiv:2212.05409](https://arxiv.org/abs/2212.05409) |
+| **🥈 Tier 2 (8B)** | **Reasoning & Math** | `gsm8k::olmes` | GSM8K (Manual Few-shot) | [arXiv:2110.14168](https://arxiv.org/abs/2110.14168) |
+| | **Coding** | `olmo3:base:code` | HumanEval, MBPP, BigCodeBench, DeepSeek-LeetCode, DS1000, MultiPL-E | [arXiv:2512.13961](https://arxiv.org/abs/2512.13961) |
+| **🥇 Tier 3 (70B)** | **Expert Reasoning** | `bbh:cot::olmes`, `gpqa` | 23 tasks (Boolean, Causal, Spatial, Logic, etc.), Graduate-Level QA | [arXiv:2501.00656](https://arxiv.org/abs/2501.00656) |
+| **🏅 Tier 4 (SFT)** | **Alignment Gate** | `olmo3:adapt` | IFEval, AlpacaEval 2, WildBench, PopQA, SimpleQA, MMLU:CoT, BBH:CoT | [arXiv:2311.07911](https://arxiv.org/abs/2311.07911) |
+| | **Safety/Bias** | `indic-bias` | Hindi Social Bias probes | [arXiv:2403.20147](https://arxiv.org/abs/2403.20147) |
+
+> [!NOTE]
+> **OLMES Core (`core_9mcqa`)** is the primary "signal of life" suite, maintaining a balanced evaluation of world knowledge, logic, and physical intuition.
 
 ### 🇮🇳 4. Indic Multi-Lingual Standards
 For models targeting low-resource Indic languages, these are the primary academic suites.
