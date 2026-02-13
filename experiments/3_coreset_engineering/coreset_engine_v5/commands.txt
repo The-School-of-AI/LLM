@@ -81,7 +81,8 @@ tail -f shard_run.log
 # To kill the session
 tmux kill-session -t coreset
 
-# copies to local machine - very heavy and wastes resources
+# Run this if processing completes or if it breaks in middle (if processing breaks then backup/sync to S3 and then resume)
+# Copies to local machine - very heavy and wastes resources
 # Public IP can change per the EC2 spot instance
 # rsync -avz -e "ssh -i <pem-file>" ubuntu@<public-ip>:/home/ubuntu/LLM/experiments/3_coreset_engineering/coreset_engine_v5/output/ ./coreset_engine_v5/outputs/
 OR
@@ -93,3 +94,5 @@ aws s3 sync /home/ubuntu/LLM/experiments/3_coreset_engineering/coreset_engine_v5
 
 # For uploading single file to S3
 aws s3 cp ./shard_run.log s3://<container-name>/coreset_outputs/run_2/
+aws s3 cp experiments/3_coreset_engineering/coreset_engine_v5/coreset_selection.log s3://t2-datacurriculum-353/coreset_outputs/run_2/
+aws s3 cp experiments/3_coreset_engineering/coreset_engine_v5/coreset_errors.log s3://t2-datacurriculum-353/coreset_outputs/run_2/
