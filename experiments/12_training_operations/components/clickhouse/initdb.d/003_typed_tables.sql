@@ -66,3 +66,21 @@ CREATE TABLE IF NOT EXISTS training_observability.events
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(event_time)
 ORDER BY (run_id, event_type, host, rank, device, step, event_time);
+
+CREATE TABLE IF NOT EXISTS training_observability.checkpoints
+(
+  `event_time`    DateTime64(3) DEFAULT now64(3),
+  `run_id`        LowCardinality(String),
+  `step`          UInt64,
+  `s3_key`        String,
+  `loss`          Float64 DEFAULT 0,
+  `tag`           LowCardinality(String) DEFAULT 'temporary',
+  `is_protected`  UInt8 DEFAULT 0,
+  `status`        LowCardinality(String) DEFAULT 'registered',
+  `host`          LowCardinality(String) DEFAULT '',
+  `duration_s`    Float64 DEFAULT 0,
+  `size_bytes`    UInt64 DEFAULT 0,
+  `metadata_json` String DEFAULT ''
+)
+ENGINE = ReplacingMergeTree(event_time)
+ORDER BY (run_id, s3_key);

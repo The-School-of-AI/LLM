@@ -1,106 +1,228 @@
+"""
+Checkpoint Registry — ClickHouse-backed governance layer.
 
+Stores checkpoint metadata (S3 paths, tags, protection status) in the
+training_observability.checkpoints table.  Uses ReplacingMergeTree so the
+latest row per (run_id, s3_key) wins; queries use FINAL for consistent reads.
+Soft-deletes via a `status` column instead of actual DELETEs.
+"""
+
+import json
 import os
-from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import urllib.request
+import urllib.error
+from datetime import datetime, timezone
 
-Base = declarative_base()
 
-class CheckpointRecord(Base):
-    """
-    SQLAlchemy Model for the Checkpoints Table.
-    Stores metadata about where the checkpoint lives (S3) and its status.
-    """
-    __tablename__ = 'checkpoints'
+PROTECTED_TAGS = frozenset(["growth", "lora", "release_candidate"])
 
-    id = Column(Integer, primary_key=True)
-    run_id = Column(String, index=True)
-    step = Column(Integer)
-    s3_key = Column(String, unique=True)
-    
-    # Metadata
-    loss = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    
-    # Governance Tags
-    tag = Column(String)  # 'growth', 'lora', 'temporary'
-    is_protected = Column(Boolean, default=False)
-    
-    def __repr__(self):
-        return f"<Checkpoint(step={self.step}, tag='{self.tag}', protected={self.is_protected})>"
 
 class CheckpointRegistry:
     """
-    The Governance Layer for Checkpoints.
-    Enforces 'No Delete' rules for critical checkpoints.
-    Connects to Postgres (AWS RDS) or SQLite (Local).
-    """
-    def __init__(self, db_url: str = "sqlite:////tmp/checkpoints.db"):
-        self.engine = create_engine(db_url)
-        Base.metadata.create_all(self.engine)
-        self.Session = sessionmaker(bind=self.engine)
-        print(f"✓ CheckpointRegistry connected to {db_url}")
+    Governance layer for checkpoints, backed by ClickHouse.
 
-    def register_checkpoint(self, run_id: str, step: int, s3_key: str, loss: float, tag: str = "temporary"):
-        """
-        Register a new checkpoint after it has been uploaded to S3.
-        Auto-protects 'growth' and 'lora' tags.
-        """
-        session = self.Session()
+    Parameters
+    ----------
+    clickhouse_url : str
+        ClickHouse HTTP endpoint, e.g. "http://localhost:8123".
+    database : str
+        Database name (default: training_observability).
+    """
+
+    def __init__(
+        self,
+        clickhouse_url: str | None = None,
+        database: str = "training_observability",
+    ):
+        self.clickhouse_url = (
+            clickhouse_url
+            or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT", "http://localhost:8123")
+        )
+        self.database = database
+        self.table = f"{database}.checkpoints"
+
+        # Quick connectivity check
         try:
-            # Policy Logic: Auto-protect certain tags
-            is_protected = tag in ['growth', 'lora', 'release_candidate']
-            
-            record = CheckpointRecord(
-                run_id=run_id,
-                step=step,
-                s3_key=s3_key,
-                loss=loss,
-                tag=tag,
-                is_protected=is_protected
-            )
-            session.add(record)
-            session.commit()
-            print(f"✓ Registered checkpoint: {s3_key} (Tag: {tag}, Protected: {is_protected})")
-            return record.id
+            self._query("SELECT 1")
+            print(f"✓ CheckpointRegistry connected to {self.clickhouse_url}")
         except Exception as e:
-            session.rollback()
-            print(f"✗ Failed to register checkpoint: {e}")
-            raise
-        finally:
-            session.close()
+            print(f"⚠ CheckpointRegistry: ClickHouse not reachable ({e})")
+
+    # ------------------------------------------------------------------
+    # Low-level ClickHouse HTTP helpers
+    # ------------------------------------------------------------------
+
+    def _query(self, sql: str) -> str:
+        """Execute a read query and return the response body as a string."""
+        url = f"{self.clickhouse_url}/?query={urllib.request.quote(sql)}"
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.read().decode()
+
+    def _insert(self, sql: str) -> None:
+        """Execute an INSERT statement via POST body."""
+        req = urllib.request.Request(
+            self.clickhouse_url,
+            data=sql.encode(),
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def register_checkpoint(
+        self,
+        run_id: str,
+        step: int,
+        s3_key: str,
+        loss: float = 0.0,
+        tag: str = "temporary",
+        host: str = "",
+        duration_s: float = 0.0,
+        size_bytes: int = 0,
+        metadata: dict | None = None,
+    ) -> None:
+        """
+        Register a checkpoint after it has been saved/uploaded.
+        Auto-protects 'growth', 'lora', and 'release_candidate' tags.
+        """
+        is_protected = 1 if tag in PROTECTED_TAGS else 0
+        metadata_json = json.dumps(metadata) if metadata else "{}"
+        host = host or os.environ.get("HOSTNAME", os.uname().nodename)
+
+        sql = (
+            f"INSERT INTO {self.table} "
+            f"(run_id, step, s3_key, loss, tag, is_protected, status, host, "
+            f"duration_s, size_bytes, metadata_json) VALUES "
+            f"('{_esc(run_id)}', {step}, '{_esc(s3_key)}', {loss}, "
+            f"'{_esc(tag)}', {is_protected}, 'registered', '{_esc(host)}', "
+            f"{duration_s}, {size_bytes}, '{_esc(metadata_json)}')"
+        )
+        self._insert(sql)
+        print(f"✓ Registered checkpoint: {s3_key} (tag={tag}, protected={bool(is_protected)})")
 
     def can_delete(self, s3_key: str) -> bool:
         """
-        Policy Check: Is it safe to delete this checkpoint?
-        Returns False if the checkpoint is protected.
+        Policy check: is it safe to delete this checkpoint?
+        Returns False if the checkpoint is protected or unknown.
         """
-        session = self.Session()
-        record = session.query(CheckpointRecord).filter_by(s3_key=s3_key).first()
-        session.close()
-        
-        if not record:
-            # If we don't know about it, assume it's unsafe to delete automatically
-            # (Or safe, depending on your risk tolerance. Here we say unsafe).
+        sql = (
+            f"SELECT is_protected, tag, status FROM {self.table} FINAL "
+            f"WHERE s3_key = '{_esc(s3_key)}' LIMIT 1"
+        )
+        result = self._query(sql).strip()
+        if not result:
             print(f"⚠️  Unknown checkpoint {s3_key}. Preventing deletion.")
             return False
-            
-        if record.is_protected:
-            print(f"⛔ Blocked deletion of protected checkpoint {s3_key} (Tag: {record.tag})")
+
+        parts = result.split("\t")
+        is_protected, tag, status = int(parts[0]), parts[1], parts[2]
+
+        if status == "deleted":
+            return True  # already soft-deleted
+
+        if is_protected:
+            print(f"⛔ Blocked deletion of protected checkpoint {s3_key} (tag={tag})")
             return False
-            
+
         return True
 
-    def mark_for_deletion(self, s3_key: str):
+    def mark_for_deletion(self, s3_key: str) -> None:
         """
-        Remove fro registry. ONLY if not protected.
+        Soft-delete a checkpoint. Appends a new row with status='deleted'.
+        Raises ValueError if the checkpoint is protected.
         """
         if not self.can_delete(s3_key):
             raise ValueError(f"Cannot delete protected checkpoint {s3_key}")
-            
-        session = self.Session()
-        session.query(CheckpointRecord).filter_by(s3_key=s3_key).delete()
-        session.commit()
-        session.close()
-        print(f"✓ Removed checkpoint record: {s3_key}")
+
+        # Read existing row to carry forward its fields
+        sql = (
+            f"SELECT run_id, step, loss, tag, host "
+            f"FROM {self.table} FINAL "
+            f"WHERE s3_key = '{_esc(s3_key)}' LIMIT 1"
+        )
+        result = self._query(sql).strip()
+        if not result:
+            raise ValueError(f"Checkpoint not found: {s3_key}")
+
+        run_id, step, loss, tag, host = result.split("\t")
+
+        insert_sql = (
+            f"INSERT INTO {self.table} "
+            f"(run_id, step, s3_key, loss, tag, is_protected, status, host) VALUES "
+            f"('{_esc(run_id)}', {step}, '{_esc(s3_key)}', {loss}, "
+            f"'{_esc(tag)}', 0, 'deleted', '{_esc(host)}')"
+        )
+        self._insert(insert_sql)
+        print(f"✓ Soft-deleted checkpoint: {s3_key}")
+
+    def get_checkpoint(self, s3_key: str) -> dict | None:
+        """Return the latest state of a single checkpoint, or None."""
+        sql = (
+            f"SELECT run_id, step, s3_key, loss, tag, is_protected, status, "
+            f"host, duration_s, size_bytes, event_time "
+            f"FROM {self.table} FINAL "
+            f"WHERE s3_key = '{_esc(s3_key)}' LIMIT 1"
+        )
+        result = self._query(sql).strip()
+        if not result:
+            return None
+        return _row_to_dict(result)
+
+    def list_checkpoints(self, run_id: str, status: str = "registered") -> list[dict]:
+        """List all checkpoints for a run, filtered by status."""
+        sql = (
+            f"SELECT run_id, step, s3_key, loss, tag, is_protected, status, "
+            f"host, duration_s, size_bytes, event_time "
+            f"FROM {self.table} FINAL "
+            f"WHERE run_id = '{_esc(run_id)}' AND status = '{_esc(status)}' "
+            f"ORDER BY step ASC"
+        )
+        result = self._query(sql).strip()
+        if not result:
+            return []
+        return [_row_to_dict(line) for line in result.split("\n") if line.strip()]
+
+    def best_checkpoint(self, run_id: str, metric: str = "loss", top_n: int = 1) -> list[dict]:
+        """Return the top-N checkpoints with the lowest loss for a run."""
+        sql = (
+            f"SELECT run_id, step, s3_key, loss, tag, is_protected, status, "
+            f"host, duration_s, size_bytes, event_time "
+            f"FROM {self.table} FINAL "
+            f"WHERE run_id = '{_esc(run_id)}' AND status = 'registered' "
+            f"ORDER BY loss ASC LIMIT {top_n}"
+        )
+        result = self._query(sql).strip()
+        if not result:
+            return []
+        return [_row_to_dict(line) for line in result.split("\n") if line.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _esc(value: str) -> str:
+    """Escape single quotes for ClickHouse SQL strings."""
+    return str(value).replace("'", "\\'")
+
+
+def _row_to_dict(tsv_line: str) -> dict:
+    """Parse a tab-separated ClickHouse row into a dict."""
+    parts = tsv_line.split("\t")
+    return {
+        "run_id": parts[0],
+        "step": int(parts[1]),
+        "s3_key": parts[2],
+        "loss": float(parts[3]),
+        "tag": parts[4],
+        "is_protected": bool(int(parts[5])),
+        "status": parts[6],
+        "host": parts[7],
+        "duration_s": float(parts[8]),
+        "size_bytes": int(parts[9]),
+        "event_time": parts[10],
+    }
