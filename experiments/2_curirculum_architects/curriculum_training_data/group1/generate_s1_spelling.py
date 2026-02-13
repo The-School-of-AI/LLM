@@ -6,9 +6,61 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import format_qa_pair  # noqa: E402
 
-EASY_WORDS = ["cat", "dog", "rat", "bat", "bee", "cow", "pig", "fox", "owl", "ant", "hat", "mat", "sat", "pat", "bed", "red", "pen", "sun", "run", "cup", "box", "key", "toy", "car", "bag", "egg"] * 20
-MEDIUM_WORDS = ["tiger", "horse", "mouse", "sheep", "whale", "table", "chair", "phone", "apple", "bread", "water", "cloud", "house", "train"] * 30
-HARD_WORDS = ["elephant", "giraffe", "penguin", "computer", "keyboard", "hospital", "chocolate", "sandwich", "butterfly"] * 40
+EASY_WORDS = [
+    "cat",
+    "dog",
+    "rat",
+    "bat",
+    "bee",
+    "cow",
+    "pig",
+    "fox",
+    "owl",
+    "ant",
+    "hat",
+    "mat",
+    "sat",
+    "pat",
+    "bed",
+    "red",
+    "pen",
+    "sun",
+    "run",
+    "cup",
+    "box",
+    "key",
+    "toy",
+    "car",
+    "bag",
+    "egg",
+] * 20
+MEDIUM_WORDS = [
+    "tiger",
+    "horse",
+    "mouse",
+    "sheep",
+    "whale",
+    "table",
+    "chair",
+    "phone",
+    "apple",
+    "bread",
+    "water",
+    "cloud",
+    "house",
+    "train",
+] * 30
+HARD_WORDS = [
+    "elephant",
+    "giraffe",
+    "penguin",
+    "computer",
+    "keyboard",
+    "hospital",
+    "chocolate",
+    "sandwich",
+    "butterfly",
+] * 40
 
 templates = [
     'What is the spelling of "{word}"?',

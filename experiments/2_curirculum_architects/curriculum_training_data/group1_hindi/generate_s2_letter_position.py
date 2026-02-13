@@ -54,7 +54,7 @@ for word in set(all_words):
     clusters = get_hindi_grapheme_clusters(word)
     if len(clusters) == 0:
         continue
-    
+
     for template_idx, template in enumerate(TEMPLATES):
         for pos_name, pos_num in POSITIONS:
             if pos_num <= len(clusters):

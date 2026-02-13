@@ -6,9 +6,35 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import format_qa_pair  # noqa: E402
 
-WORDS = ["cat", "dog", "rat", "bat", "tiger", "horse", "mouse", "sheep", "table", "chair", "phone", "apple", "bread", "elephant", "giraffe", "computer", "keyboard", "hospital"] * 30
+WORDS = [
+    "cat",
+    "dog",
+    "rat",
+    "bat",
+    "tiger",
+    "horse",
+    "mouse",
+    "sheep",
+    "table",
+    "chair",
+    "phone",
+    "apple",
+    "bread",
+    "elephant",
+    "giraffe",
+    "computer",
+    "keyboard",
+    "hospital",
+] * 30
 
-templates = ['How many alphabets are there in "{word}"?', 'Count the letters in "{word}"', 'Letter count of "{word}"', 'How many letters are in "{word}"?', 'What is the length of word "{word}"?', 'How many letters does "{word}" have?']
+templates = [
+    'How many alphabets are there in "{word}"?',
+    'Count the letters in "{word}"',
+    'Letter count of "{word}"',
+    'How many letters are in "{word}"?',
+    'What is the length of word "{word}"?',
+    'How many letters does "{word}" have?',
+]
 
 samples = {}
 attempts = 0

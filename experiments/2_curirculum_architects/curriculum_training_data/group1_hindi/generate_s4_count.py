@@ -43,7 +43,7 @@ for word in set(all_words):
     cluster_count = len(clusters)
     if cluster_count == 0:
         continue
-    
+
     for template_idx, template in enumerate(TEMPLATES):
         query = template.format(word=word)
         answer = str(cluster_count)

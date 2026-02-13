@@ -8,7 +8,13 @@ from prompt_utils import format_qa_pair  # noqa: E402
 
 WORDS = ["cat", "dog", "tiger", "banana", "elephant", "table", "computer"] * 50
 
-templates = ["At what location does letter '{letter}' come in '{word}'?", "Where is the letter '{letter}' in '{word}'?", "What position is '{letter}' in '{word}'?", "Find the position of letter '{letter}' in '{word}'", "What is the first position of '{letter}' in '{word}'?"]
+templates = [
+    "At what location does letter '{letter}' come in '{word}'?",
+    "Where is the letter '{letter}' in '{word}'?",
+    "What position is '{letter}' in '{word}'?",
+    "Find the position of letter '{letter}' in '{word}'",
+    "What is the first position of '{letter}' in '{word}'?",
+]
 
 samples = {}
 attempts = 0

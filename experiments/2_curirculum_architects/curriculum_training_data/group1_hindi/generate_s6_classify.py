@@ -20,6 +20,7 @@ TEMPLATES = [
     '"{word}" किस प्रकार की चीज़ है, व्यक्ति, जानवर या वस्तु?',
 ]
 
+
 def classify_word(word: str) -> str:
     """Classify a word into category"""
     for category, word_list in CLASSIFICATION_CATEGORIES.items():
@@ -27,6 +28,7 @@ def classify_word(word: str) -> str:
             return category
     # Default to वस्तु if not found
     return "वस्तु"
+
 
 samples = []
 target_count = 20000

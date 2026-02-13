@@ -23,11 +23,13 @@ TEMPLATES = [
     'कौन सा शब्द "/{sound}/" से शुरू होता है, "{word1}" या "{word2}"?',
 ]
 
+
 def get_first_sound(word: str) -> str:
     """Get the first sound/character of a Hindi word"""
     if not word:
         return ""
     return word[0]
+
 
 # Pre-compute word groups by first sound (OPTIMIZATION)
 unique_words = list(set(ALL_WORDS))
@@ -51,17 +53,17 @@ for word1 in unique_words:
     sound1 = get_first_sound(word1)
     if not sound1 or sound1 not in words_by_sound:
         continue
-    
+
     matching_words = [w for w in words_by_sound[sound1] if w != word1]
     # Get non-matching words from other sounds
     non_matching_words = []
     for sound in all_sounds:
         if sound != sound1:
             non_matching_words.extend(words_by_sound[sound])
-    
+
     if not matching_words or not non_matching_words:
         continue
-    
+
     for template_idx, template in enumerate(TEMPLATES):
         # CRITICAL FIX: Only create pairs where word2 does NOT match the sound
         # Both words matching the sound creates invalid questions (no correct answer)
@@ -80,21 +82,21 @@ while len(samples) < target_count:
     sound1 = get_first_sound(word1)
     if not sound1 or sound1 not in words_by_sound:
         continue
-    
+
     matching_words = [w for w in words_by_sound[sound1] if w != word1]
     non_matching_words = []
     for sound in all_sounds:
         if sound != sound1:
             non_matching_words.extend(words_by_sound[sound])
-    
+
     if not matching_words or not non_matching_words:
         continue
-    
+
     template = random.choice(TEMPLATES)
     # CRITICAL FIX: word2 must NOT match the sound (must be a distractor)
     # word1 matches the sound, so answer is always word1
     word2 = random.choice(non_matching_words)
-    
+
     query = template.format(sound=sound1, word1=word1, word2=word2)
     answer = word1  # word1 is correct because it matches the sound
     samples.append((query, answer))

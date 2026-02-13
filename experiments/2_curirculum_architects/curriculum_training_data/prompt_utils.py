@@ -18,7 +18,9 @@ from typing import Iterable, List
 _RE_COMMA_SEPARATED_LETTERS = re.compile(r"\b[a-z](?:,\s*[a-z])+\b", re.IGNORECASE)
 _RE_JSONISH_KEY_VALUE = re.compile(r'"\s*[^"]+\s*"\s*:\s*"', re.IGNORECASE)
 _RE_ARROW_DELIM = re.compile(r"\s->\s")
-_RE_LEADING_QA_LABEL = re.compile(r"^\s*(?:q|a|question|answer|prompt)\s*:\s*", re.IGNORECASE)
+_RE_LEADING_QA_LABEL = re.compile(
+    r"^\s*(?:q|a|question|answer|prompt)\s*:\s*", re.IGNORECASE
+)
 
 
 def normalize_prompt(p: str) -> str:
@@ -97,7 +99,7 @@ def remove_quotes(text: str) -> str:
     """
     Remove all single and double quotes from text.
     """
-    return text.replace("'", "").replace('"', '')
+    return text.replace("'", "").replace('"', "")
 
 
 def ensure_answer_period(answer: str) -> str:
@@ -105,8 +107,8 @@ def ensure_answer_period(answer: str) -> str:
     Ensure answer ends with a period.
     """
     answer = answer.strip()
-    if not answer.endswith('.'):
-        return answer + '.'
+    if not answer.endswith("."):
+        return answer + "."
     return answer
 
 
@@ -119,51 +121,61 @@ def ensure_query_punctuation(query: str) -> str:
     query = query.strip()
     if not query:
         return query
-    
+
     # Fix patterns like "Compare X and Y. Which is less?" -> "Compare X and Y, which is less?"
     # Fix patterns like "You have X. If..." -> "You have X, if..."
     # Fix patterns like "Add X. What's..." -> "Add X, what's..."
     import re
-    
+
     # Replace ". If" with ", if"
-    query = re.sub(r'\.\s+If\s', r', if ', query)
+    query = re.sub(r"\.\s+If\s", r", if ", query)
     # Replace ". How" with ", how" (when followed by question word)
-    query = re.sub(r'\.\s+How\s+(many|much|do|does|is|are|can)', r', how \1', query, flags=re.IGNORECASE)
+    query = re.sub(
+        r"\.\s+How\s+(many|much|do|does|is|are|can)",
+        r", how \1",
+        query,
+        flags=re.IGNORECASE,
+    )
     # Replace ". What" with ", what" (handles both "What " and "What's", "What's", etc.)
-    query = re.sub(r'\.\s+What(\'s|\'s| is| do| does| can|\s)', r', what\1', query, flags=re.IGNORECASE)
+    query = re.sub(
+        r"\.\s+What(\'s|\'s| is| do| does| can|\s)",
+        r", what\1",
+        query,
+        flags=re.IGNORECASE,
+    )
     # Replace ". Which" with ", which"
-    query = re.sub(r'\.\s+Which\s', r', which ', query)
+    query = re.sub(r"\.\s+Which\s", r", which ", query)
     # Replace ". Tell" with ", tell" (when it's "tell me")
-    query = re.sub(r'\.\s+Tell\s+me\s', r', tell me ', query, flags=re.IGNORECASE)
-    
+    query = re.sub(r"\.\s+Tell\s+me\s", r", tell me ", query, flags=re.IGNORECASE)
+
     # If already ends with '?', return as-is
-    if query.endswith('?'):
+    if query.endswith("?"):
         return query
-    
+
     # Remove any trailing punctuation (. ! , ; :) and add '?'
-    query = query.rstrip('.!?,;:')
-    return query + '?'
+    query = query.rstrip(".!?,;:")
+    return query + "?"
 
 
 def count_tokens(text: str) -> int:
     """
     Count tokens using LLM-like tokenization.
-    
+
     Tokenization rules:
     - For Devanagari/Hindi: Each Unicode character counts as 1 token (matches spelling format)
     - For other scripts: Word units (sequences of letters/digits) count as 1 token
     - Symbol units: punctuation, quotes, and other symbols each count as 1 token
     - Whitespace is skipped (not counted)
-    
+
     Examples:
     - "c, a, t." → 6 tokens (c, comma, a, comma, t, period)
     - "What is the spelling of cat?" → 7 tokens (What, is, the, spelling, of, cat, ?)
     - "पानी" → 4 tokens (प, ा, न, ी) - each Unicode char is 1 token
     - "प, ा, न, ी" → 7 tokens (प, comma, space, ा, comma, space, न, comma, space, ी)
-    
+
     Args:
         text: Input text to tokenize
-    
+
     Returns:
         Number of tokens according to LLM-like tokenization rules
     """
@@ -180,8 +192,8 @@ def count_tokens(text: str) -> int:
             continue
 
         # Check if character is Devanagari (U+0900 to U+097F)
-        is_devanagari = '\u0900' <= ch <= '\u097F'
-        
+        is_devanagari = "\u0900" <= ch <= "\u097f"
+
         if is_devanagari:
             # For Devanagari: each Unicode character = 1 token
             # This matches the spelling format where each character is shown separately
@@ -196,7 +208,7 @@ def count_tokens(text: str) -> int:
             while i < n:
                 # Don't group Devanagari characters with other alphanumeric
                 next_ch = text[i]
-                if '\u0900' <= next_ch <= '\u097F':
+                if "\u0900" <= next_ch <= "\u097f":
                     break
                 if next_ch.isalnum():
                     i += 1
@@ -234,8 +246,8 @@ def ensure_answer_purna_viraam(answer: str) -> str:
     Ensure answer ends with purna-viraam (।) for Hindi.
     """
     answer = answer.strip()
-    if not answer.endswith('।'):
-        return answer + '।'
+    if not answer.endswith("।"):
+        return answer + "।"
     return answer
 
 
@@ -246,7 +258,7 @@ def format_qa_pair_hindi(query: str, answer: str) -> str:
     - Ensures query ends with ? (NEVER use । in queries)
     - Ensures answer ends with purna-viraam (।)
     - Returns formatted string: "query? answer।"
-    
+
     CRITICAL: Queries MUST end with "?", answers MUST end with "।"
     """
     # Don't remove quotes - preserve quotes around target words/sequences
@@ -260,91 +272,91 @@ def format_qa_pair_hindi(query: str, answer: str) -> str:
 
 
 def combine_qa_pairs_to_reach_min_tokens(
-    qa_pairs: list[tuple[str, str]], 
-    min_tokens: int = 512
+    qa_pairs: list[tuple[str, str]], min_tokens: int = 512
 ) -> list[str]:
     """
     Combine QA pairs into samples where all questions have answers.
     Format: "Q1? A1. Q2? A2. Q3? A3. ..." (all questions with answers)
     until reaching min_tokens per sample.
-    
+
     Args:
         qa_pairs: List of (query, answer) tuples
         min_tokens: Minimum tokens per sample
-    
+
     Returns:
         List of formatted sample strings, each with >= min_tokens
     """
     if not qa_pairs:
         return []
-    
+
     samples = []
     i = 0
-    
+
     while i < len(qa_pairs):
         current_sample_parts = []
         current_sample_qa_pairs = set()  # Track QA pairs to avoid duplicates
         current_tokens = 0
-        
+
         # Add QA pairs (all with answers) until we reach min_tokens
         while current_tokens < min_tokens and i < len(qa_pairs):
             query, answer = qa_pairs[i]
             qa_key = (query, answer)  # Use tuple as key for deduplication
-            
+
             # Skip if this QA pair already in current sample
             if qa_key not in current_sample_qa_pairs:
                 qa_formatted = format_qa_pair(query, answer)
                 current_sample_parts.append(qa_formatted)
                 current_sample_qa_pairs.add(qa_key)
                 current_tokens += count_tokens(qa_formatted)
-            
+
             i += 1
-        
+
         # Join all parts with spaces
         sample = " ".join(current_sample_parts)
         samples.append(sample)
-    
+
     return samples
 
 
 def combine_qa_pairs_to_reach_min_tokens_hindi(
-    qa_pairs: list[tuple[str, str]], 
-    min_tokens: int = 512
+    qa_pairs: list[tuple[str, str]], min_tokens: int = 512
 ) -> list[str]:
     """
     Combine QA pairs into samples where all questions have answers (Hindi format).
     Format: "Q1? A1। Q2? A2। Q3? A3। ..." (all questions with answers)
     until reaching min_tokens per sample.
-    
+
     Args:
         qa_pairs: List of (query, answer) tuples
         min_tokens: Minimum tokens per sample
-    
+
     Returns:
         List of formatted sample strings, each with >= min_tokens
     """
     if not qa_pairs:
         return []
-    
+
     samples = []
     used_indices = set()  # Track which pairs we've used
     i = 0
-    
+
     while i < len(qa_pairs):
         current_sample_parts = []
-        current_sample_qa_pairs = set()  # Track QA pairs to avoid duplicates in current sample
+        current_sample_qa_pairs = (
+            set()
+        )  # Track QA pairs to avoid duplicates in current sample
         current_tokens = 0
         attempts = 0
         max_attempts = len(qa_pairs) * 2  # Prevent infinite loop
-        
+
         # Add QA pairs until we reach min_tokens
         while current_tokens < min_tokens and attempts < max_attempts:
             attempts += 1
-            
+
             # Find next unused pair
             while i < len(qa_pairs) and i in used_indices:
                 i += 1
-            
+
             if i >= len(qa_pairs):
                 # If we've used all pairs, reset and allow reuse
                 if len(used_indices) == len(qa_pairs):
@@ -352,24 +364,26 @@ def combine_qa_pairs_to_reach_min_tokens_hindi(
                     i = 0
                     continue
                 break
-            
+
             query, answer = qa_pairs[i]
             qa_key = (query, answer)
-            
+
             # Add if not duplicate in current sample
             if qa_key not in current_sample_qa_pairs:
                 qa_formatted = format_qa_pair_hindi(query, answer)
                 token_count = count_tokens(qa_formatted)
-                
+
                 # Only add if it doesn't exceed reasonable limit (avoid single huge pair)
-                if current_tokens + token_count <= min_tokens * 3:  # Reasonable upper bound
+                if (
+                    current_tokens + token_count <= min_tokens * 3
+                ):  # Reasonable upper bound
                     current_sample_parts.append(qa_formatted)
                     current_sample_qa_pairs.add(qa_key)
                     current_tokens += token_count
                     used_indices.add(i)
-            
+
             i += 1
-        
+
         # Only create sample if we have at least some tokens
         if current_sample_parts:
             # Join all parts with spaces (Hindi format uses space after ।)
@@ -392,8 +406,7 @@ def combine_qa_pairs_to_reach_min_tokens_hindi(
                                 if current_tokens >= min_tokens:
                                     break
                 sample = " ".join(current_sample_parts)
-            
-            samples.append(sample)
-    
-    return samples
 
+            samples.append(sample)
+
+    return samples

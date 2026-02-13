@@ -53,13 +53,13 @@ for word in set(all_words):
     clusters = get_hindi_grapheme_clusters(word)
     if len(clusters) == 0:
         continue
-    
+
     # Iterate through grapheme clusters (not Unicode characters)
     for cluster in clusters:
         cluster_positions = [i + 1 for i, c in enumerate(clusters) if c == cluster]
         if not cluster_positions:
             continue
-        
+
         # Use first occurrence
         pos_num = cluster_positions[0]
         if pos_num <= len(POSITIONS):
@@ -67,7 +67,7 @@ for word in set(all_words):
         else:
             pos_name = f"{pos_num}वां"
             pos_str = str(pos_num)
-        
+
         for template_idx, template in enumerate(TEMPLATES):
             query = template.format(word=word, char=cluster)
             # Use word form or numeric form randomly
@@ -83,19 +83,19 @@ while len(samples) < target_count:
     clusters = get_hindi_grapheme_clusters(word)
     if len(clusters) == 0:
         continue
-    
+
     cluster = random.choice(clusters)
     cluster_positions = [i + 1 for i, c in enumerate(clusters) if c == cluster]
     if not cluster_positions:
         continue
-    
+
     pos_num = cluster_positions[0]
     if pos_num <= len(POSITIONS):
         pos_name, pos_str = POSITIONS[pos_num - 1]
     else:
         pos_name = f"{pos_num}वां"
         pos_str = str(pos_num)
-    
+
     template = random.choice(TEMPLATES)
     query = template.format(word=word, char=cluster)
     answer = pos_name if random.random() < 0.5 else pos_str

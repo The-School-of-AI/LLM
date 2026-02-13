@@ -16,10 +16,10 @@ seen_queries: set[str] = set()
 
 # Load all existing files (TXT or JSON for backward compatibility)
 for i in range(1, 11):
-    txt_filename = f'group1_s{i}.txt'
-    json_filename = f'group1_s{i}.json'
+    txt_filename = f"group1_s{i}.txt"
+    json_filename = f"group1_s{i}.json"
     loaded = 0
-    
+
     # Try TXT first
     try:
         with open(txt_filename, "r", encoding="utf-8") as f:
@@ -29,24 +29,24 @@ for i in range(1, 11):
                     continue
                 # Parse "query answer." format
                 # Find the last period (end of answer)
-                last_period = line.rfind('.')
+                last_period = line.rfind(".")
                 if last_period > 0:
                     query = line[:last_period].rstrip()
                     # Find where answer starts (after query)
                     # Simple heuristic: find last ? or . before answer
-                    query_end = max(query.rfind('?'), query.rfind('.'))
+                    query_end = max(query.rfind("?"), query.rfind("."))
                     if query_end > 0:
-                        actual_query = query[:query_end + 1].strip()
-                        answer = query[query_end + 1:].strip() + '.'
+                        actual_query = query[: query_end + 1].strip()
+                        answer = query[query_end + 1 :].strip() + "."
                     else:
                         # Fallback: split on last space before period
-                        parts = line.rsplit(' ', 1)
+                        parts = line.rsplit(" ", 1)
                         if len(parts) == 2:
                             actual_query = parts[0]
                             answer = parts[1]
                         else:
                             continue
-                    
+
                     if actual_query not in seen_queries:
                         seen_queries.add(actual_query)
                         all_samples[actual_query] = answer
@@ -55,7 +55,7 @@ for i in range(1, 11):
         continue
     except FileNotFoundError:
         pass
-    
+
     # Try JSON for backward compatibility
     try:
         with open(json_filename, "r", encoding="utf-8") as f:
@@ -81,6 +81,7 @@ target = 70000
 print(f"\nTotal samples loaded: {len(all_samples)}")
 print(f"Need to generate: {max(target - len(all_samples), 0)} more samples")
 
+
 # Expand word pools massively
 def generate_words(length):
     """Generate pronounceable 3-letter combinations"""
@@ -93,12 +94,47 @@ def generate_words(length):
                 words.append(c1 + v + c2)
     return words
 
+
 # Generate lots of synthetic words
 synthetic_words = []
 for length in [3, 4, 5]:
     synthetic_words.extend(generate_words(length))
 
-common_words = ["cat", "dog", "rat", "bat", "bee", "cow", "pig", "fox", "owl", "ant", "hat", "mat", "sat", "pat", "bed", "red", "pen", "sun", "run", "cup", "tiger", "horse", "mouse", "sheep", "table", "chair", "phone", "apple", "bread", "water", "elephant", "giraffe", "computer"]
+common_words = [
+    "cat",
+    "dog",
+    "rat",
+    "bat",
+    "bee",
+    "cow",
+    "pig",
+    "fox",
+    "owl",
+    "ant",
+    "hat",
+    "mat",
+    "sat",
+    "pat",
+    "bed",
+    "red",
+    "pen",
+    "sun",
+    "run",
+    "cup",
+    "tiger",
+    "horse",
+    "mouse",
+    "sheep",
+    "table",
+    "chair",
+    "phone",
+    "apple",
+    "bread",
+    "water",
+    "elephant",
+    "giraffe",
+    "computer",
+]
 
 all_words = common_words + synthetic_words[:500]
 
@@ -109,8 +145,17 @@ spell_templates = [
     'Spell "{w}".',
     'Write the spelling of "{w}".',
 ]
-count_templates = ['How many letters are in "{w}"?', 'Count the letters in "{w}"', 'What is the length of word "{w}"?', 'How many alphabets are there in "{w}"?']
-last_templates = ['What letter does "{w}" end with?', 'What is the last letter of "{w}"?', 'Which letter does "{w}" end with?']
+count_templates = [
+    'How many letters are in "{w}"?',
+    'Count the letters in "{w}"',
+    'What is the length of word "{w}"?',
+    'How many alphabets are there in "{w}"?',
+]
+last_templates = [
+    'What letter does "{w}" end with?',
+    'What is the last letter of "{w}"?',
+    'Which letter does "{w}" end with?',
+]
 
 print("\nFilling remaining samples...")
 attempts = 0
@@ -118,10 +163,10 @@ max_attempts = 1000000
 
 while len(all_samples) < target and attempts < max_attempts:
     attempts += 1
-    
+
     # Randomly choose template type
     choice = random.randint(1, 10)
-    
+
     if choice <= 3:  # Spelling (30%)
         word = random.choice(all_words)
         template = random.choice(spell_templates)
@@ -144,7 +189,7 @@ while len(all_samples) < target and attempts < max_attempts:
             pos_words = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth"}
             pos_word = pos_words.get(pos, f"{pos}th")
             query = f'What is the {pos_word} letter in "{word}"?'
-            answer = word[pos-1].lower()
+            answer = word[pos - 1].lower()
         else:
             continue
     else:  # Word comparison (10%)
@@ -160,11 +205,11 @@ while len(all_samples) < target and attempts < max_attempts:
                 answer = "equal"
         else:
             continue
-    
+
     if query not in seen_queries:
         seen_queries.add(query)
         all_samples[query] = answer
-        
+
         if len(all_samples) % 5000 == 0:
             print(f"  Progress: {len(all_samples):,} / {target:,}")
 

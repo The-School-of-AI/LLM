@@ -6,9 +6,31 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import format_qa_pair  # noqa: E402
 
-WORDS = ["cat", "dog", "rat", "bat", "tiger", "horse", "mouse", "table", "chair", "phone", "apple", "elephant", "computer", "keyboard"] * 30
+WORDS = [
+    "cat",
+    "dog",
+    "rat",
+    "bat",
+    "tiger",
+    "horse",
+    "mouse",
+    "table",
+    "chair",
+    "phone",
+    "apple",
+    "elephant",
+    "computer",
+    "keyboard",
+] * 30
 
-templates = ["What letter does '{word}' end with?", "What is the last letter of '{word}'?", "Which letter does '{word}' end with?", "Tell me the ending letter of '{word}'", "Find the final letter in '{word}'", "What's the last letter of '{word}'?"]
+templates = [
+    "What letter does '{word}' end with?",
+    "What is the last letter of '{word}'?",
+    "Which letter does '{word}' end with?",
+    "Tell me the ending letter of '{word}'",
+    "Find the final letter in '{word}'",
+    "What's the last letter of '{word}'?",
+]
 
 samples = {}
 attempts = 0

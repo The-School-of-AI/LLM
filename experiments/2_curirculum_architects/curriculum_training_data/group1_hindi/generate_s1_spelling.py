@@ -47,12 +47,12 @@ def get_hindi_characters(word: str) -> list[str]:
     Break down a Hindi word into its constituent Unicode characters.
     Each Unicode character (consonant, vowel, matra, nukta) is separate.
     This matches the spelling format where each character is shown separately.
-    
+
     Example: "पानी" → ['प', 'ा', 'न', 'ी'] (4 Unicode chars)
     Example: "मूली" → ['म', 'ू', 'ल', 'ी'] (4 Unicode chars)
     Example: "जड़" → ['ज', 'ड', '़'] (3 Unicode chars - nukta is separate)
     Example: "कमल" → ['क', 'म', 'ल'] (3 Unicode chars)
-    
+
     Used for: Spelling questions (S1, S8)
     """
     # Simply return each Unicode character separately
@@ -65,15 +65,15 @@ def get_hindi_grapheme_clusters(word: str) -> list[str]:
     Get grapheme clusters for Hindi word (for counting/length/position).
     Uses regex library's \\X pattern (Unicode UAX#29 compliant).
     Each grapheme cluster = 1 अक्षर for counting/position questions.
-    
+
     Example: "मुर्गी" → ['मु', 'र्गी'] (2 clusters)
     Example: "पानी" → ['पा', 'नी'] (2 clusters)
     Example: "कमल" → ['क', 'म', 'ल'] (3 clusters)
     Example: "विद्यालय" → ['वि', 'द्या', 'ल', 'य'] (4 clusters)
-    
+
     Used for: Counting, length, and position questions (S2, S4, S7, S9, S10)
     """
-    return regex.findall(r'\X', word)
+    return regex.findall(r"\X", word)
 
 
 def generate_spelling_answer(word: str) -> str:

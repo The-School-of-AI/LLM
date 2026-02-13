@@ -134,7 +134,7 @@ def categorize_query(query: str) -> str:
     for pattern in comparison_patterns:
         if re.search(pattern, query_lower):
             return "Statement 10: Word Comparison"
-    
+
     return "Uncategorized"
 
 
@@ -160,7 +160,7 @@ def analyze_dataset(file_path):
     categories = Counter()
     category_examples = defaultdict(list)
     word_usage = Counter()
-    
+
     print("Categorizing queries...")
     for query in prompts:
         category = categorize_query(query)
@@ -242,11 +242,11 @@ def analyze_dataset(file_path):
     unique_words = len(word_usage)
     total_word_occurrences = sum(word_usage.values())
     avg_uses = total_word_occurrences / unique_words if unique_words > 0 else 0
-    
+
     print(f"\nUnique words: {unique_words:,}")
     print(f"Total word occurrences: {total_word_occurrences:,}")
     print(f"Average uses per word: {avg_uses:.1f}")
-    
+
     if word_usage:
         top_word, top_count = word_usage.most_common(1)[0]
         print(
@@ -267,6 +267,7 @@ def analyze_dataset(file_path):
         print("\nSample uncategorized queries:")
         for i, query in enumerate(uncategorized[:10], 1):
             print(f"  {i}. Query: {query}")
+
 
 if __name__ == "__main__":
     import os

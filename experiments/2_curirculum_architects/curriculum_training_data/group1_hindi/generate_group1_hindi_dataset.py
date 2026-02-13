@@ -39,13 +39,13 @@ def load_qa_pairs_from_file(filepath: str) -> list[tuple[str, str]]:
     if not os.path.exists(filepath):
         print(f"Warning: File {filepath} not found, skipping...")
         return qa_pairs
-    
+
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            
+
             # Parse Q? A। format
             # The files already have format_qa_pair_hindi format: "Q? A।"
             # We need to split on "?" and then on "।"
@@ -63,7 +63,7 @@ def load_qa_pairs_from_file(filepath: str) -> list[tuple[str, str]]:
                     else:
                         answer = answer_part.strip()
                     qa_pairs.append((query, answer))
-    
+
     return qa_pairs
 
 
@@ -73,58 +73,63 @@ def main():
     output_dir = os.path.join(os.path.dirname(script_dir), "output")
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "group1_hindi.txt")
-    
+
     print("=" * 80)
     print("Generating Group 1 Hindi Dataset")
     print("=" * 80)
-    
+
     # Load all Q&A pairs from statement files
     all_qa_pairs = []
     total_loaded = 0
-    
+
     for filename, target_count, description in STATEMENT_FILES:
         filepath = os.path.join(script_dir, filename)
         qa_pairs = load_qa_pairs_from_file(filepath)
         all_qa_pairs.extend(qa_pairs)
         total_loaded += len(qa_pairs)
         print(f"{description}: Loaded {len(qa_pairs)} pairs (target: {target_count})")
-    
+
     print(f"\nTotal Q&A pairs loaded: {total_loaded}")
     print(f"Target: {TOTAL_TARGET}")
-    
+
     if total_loaded < TOTAL_TARGET:
-        print(f"Warning: Only {total_loaded} pairs loaded, less than target {TOTAL_TARGET}")
-    
+        print(
+            f"Warning: Only {total_loaded} pairs loaded, less than target {TOTAL_TARGET}"
+        )
+
     # Shuffle all pairs
     random.shuffle(all_qa_pairs)
-    
+
     # Combine pairs into data points with minimum token count
-    print(f"\nCombining pairs into data points (min {MIN_TOKENS_PER_DATAPOINT} tokens each)...")
-    combined_samples = combine_qa_pairs_to_reach_min_tokens_hindi(
-        all_qa_pairs, 
-        min_tokens=MIN_TOKENS_PER_DATAPOINT
+    print(
+        f"\nCombining pairs into data points (min {MIN_TOKENS_PER_DATAPOINT} tokens each)..."
     )
-    
+    combined_samples = combine_qa_pairs_to_reach_min_tokens_hindi(
+        all_qa_pairs, min_tokens=MIN_TOKENS_PER_DATAPOINT
+    )
+
     print(f"Generated {len(combined_samples)} data points")
-    
+
     # Verify token counts (OPTIMIZED - compute once)
     print("\nVerifying token counts...")
     token_counts = [count_tokens(sample) for sample in combined_samples]
     min_tokens = min(token_counts)
     max_tokens = max(token_counts)
     avg_tokens = sum(token_counts) / len(token_counts)
-    
+
     print(f"Token count - Min: {min_tokens}, Max: {max_tokens}, Avg: {avg_tokens:.1f}")
-    
+
     if min_tokens < MIN_TOKENS_PER_DATAPOINT:
-        print(f"Warning: Some samples have fewer than {MIN_TOKENS_PER_DATAPOINT} tokens!")
-    
+        print(
+            f"Warning: Some samples have fewer than {MIN_TOKENS_PER_DATAPOINT} tokens!"
+        )
+
     # Write to output file
     print(f"\nWriting to {output_file}...")
     with open(output_file, "w", encoding="utf-8") as f:
         for sample in combined_samples:
             f.write(sample + "\n")
-    
+
     print("\n✓ Dataset generation complete!")
     print(f"  Output file: {output_file}")
     print(f"  Total data points: {len(combined_samples)}")

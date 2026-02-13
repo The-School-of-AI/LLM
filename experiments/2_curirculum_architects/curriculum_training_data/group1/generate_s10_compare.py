@@ -6,9 +6,33 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import format_qa_pair  # noqa: E402
 
-WORDS = ["cat", "dog", "rat", "bat", "tiger", "horse", "mouse", "sheep", "table", "chair", "phone", "apple", "bread", "elephant", "giraffe", "computer", "keyboard"] * 20
+WORDS = [
+    "cat",
+    "dog",
+    "rat",
+    "bat",
+    "tiger",
+    "horse",
+    "mouse",
+    "sheep",
+    "table",
+    "chair",
+    "phone",
+    "apple",
+    "bread",
+    "elephant",
+    "giraffe",
+    "computer",
+    "keyboard",
+] * 20
 
-templates = ["Which word is longer, '{w1}' or '{w2}'?", "Is '{w1}' longer than '{w2}'?", "Compare the length of '{w1}' and '{w2}'", "Which is the longer word: '{w1}' or '{w2}'?", "Tell me which word has more letters, '{w1}' or '{w2}'"]
+templates = [
+    "Which word is longer, '{w1}' or '{w2}'?",
+    "Is '{w1}' longer than '{w2}'?",
+    "Compare the length of '{w1}' and '{w2}'",
+    "Which is the longer word: '{w1}' or '{w2}'?",
+    "Tell me which word has more letters, '{w1}' or '{w2}'",
+]
 
 samples = {}
 attempts = 0

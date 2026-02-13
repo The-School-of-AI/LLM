@@ -14,6 +14,7 @@ from typing import Dict, List
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import combine_qa_pairs_to_reach_min_tokens  # noqa: E402
 
+
 # Post-processing for prompt style consistency (Group 3)
 def _finalize_group3_prompt(p: str) -> str:
     p = p.strip()
@@ -21,27 +22,51 @@ def _finalize_group3_prompt(p: str) -> str:
     p = p.replace("...", "").replace("…", "")
 
     # Prefer simple textbook phrasing
-    p = re.sub(r"^Do you know what color (.+?) is\??$", r"What color is \1?", p, flags=re.IGNORECASE)
-    p = re.sub(r"^Can you tell me what color (.+?) is\??$", r"What color is \1?", p, flags=re.IGNORECASE)
-    p = re.sub(r"^Tell me what color (.+?) is\??$", r"What color is \1?", p, flags=re.IGNORECASE)
-    p = re.sub(r"^What is the color of (.+?)\??$", r"What color is \1?", p, flags=re.IGNORECASE)
+    p = re.sub(
+        r"^Do you know what color (.+?) is\??$",
+        r"What color is \1?",
+        p,
+        flags=re.IGNORECASE,
+    )
+    p = re.sub(
+        r"^Can you tell me what color (.+?) is\??$",
+        r"What color is \1?",
+        p,
+        flags=re.IGNORECASE,
+    )
+    p = re.sub(
+        r"^Tell me what color (.+?) is\??$",
+        r"What color is \1?",
+        p,
+        flags=re.IGNORECASE,
+    )
+    p = re.sub(
+        r"^What is the color of (.+?)\??$", r"What color is \1?", p, flags=re.IGNORECASE
+    )
 
     # Fix patterns like "Compare X and Y. Which has..." -> "Compare X and Y, which has..."
     # Fix patterns like "You have X. If..." -> "You have X, if..."
     # Fix patterns like "Add X. What's..." -> "Add X, what's..."
-    
+
     # Replace ". If" with ", if"
-    p = re.sub(r'\.\s+If\s', r', if ', p)
+    p = re.sub(r"\.\s+If\s", r", if ", p)
     # Replace ". How" with ", how" (when followed by question word)
-    p = re.sub(r'\.\s+How\s+(many|much|do|does|is|are|can)', r', how \1', p, flags=re.IGNORECASE)
+    p = re.sub(
+        r"\.\s+How\s+(many|much|do|does|is|are|can)",
+        r", how \1",
+        p,
+        flags=re.IGNORECASE,
+    )
     # Replace ". What" with ", what" (handles both "What " and "What's", "What's", etc.)
-    p = re.sub(r'\.\s+What(\'s|\'s| is| do| does| can|\s)', r', what\1', p, flags=re.IGNORECASE)
+    p = re.sub(
+        r"\.\s+What(\'s|\'s| is| do| does| can|\s)", r", what\1", p, flags=re.IGNORECASE
+    )
     # Replace ". Which" with ", which"
-    p = re.sub(r'\.\s+Which\s', r', which ', p)
+    p = re.sub(r"\.\s+Which\s", r", which ", p)
     # Replace ". Tell" with ", tell" (when it's "tell me")
-    p = re.sub(r'\.\s+Tell\s+me\s', r', tell me ', p, flags=re.IGNORECASE)
+    p = re.sub(r"\.\s+Tell\s+me\s", r", tell me ", p, flags=re.IGNORECASE)
     # Replace ". Observe" with ", observe"
-    p = re.sub(r'\.\s+Observe\s', r', observe ', p, flags=re.IGNORECASE)
+    p = re.sub(r"\.\s+Observe\s", r", observe ", p, flags=re.IGNORECASE)
 
     # Ensure uniform question-mark ending
     p = p.rstrip()
@@ -50,52 +75,271 @@ def _finalize_group3_prompt(p: str) -> str:
         p = p + "?"
     return p
 
+
 # ============================================================================
 # DATA MODULES
 # ============================================================================
 
 # Color-Object Mappings (based on prompt lines 43-54)
 COLOR_OBJECTS = {
-    "red": ["apple", "tomato", "strawberry", "cherry", "fire truck", "stop sign", "rose", 
-            "ladybug", "cardinal", "blood", "brick", "chili pepper", "lobster", "crab", 
-            "pomegranate", "raspberry", "mars", "ruby", "poppy", "heart", 
-            "fire hydrant", "barn", "robin breast"],
-    "orange": ["orange", "carrot", "pumpkin", "goldfish", "tiger", "basketball", "traffic cone",
-               "autumn leaves", "marigold", "papaya", "sweet potato", "tangerine", 
-               "apricot", "peach", "cantaloupe", "salmon", "fox", "monarch butterfly"],
-    "yellow": ["banana", "sun", "lemon", "school bus", "taxi", "sunflower", "corn", "butter",
-               "daffodil", "canary", "rubber duck", "bee", "honey", "mustard", 
-               "egg yolk", "pineapple", "gold", "lightning", "tennis ball", "highlighter", 
-               "chick", "giraffe"],  # Mango removed (can be yellow/green depending on ripeness)
-    "green": ["grass", "leaf", "frog", "broccoli", "cucumber", "lime", "peas", "lettuce",
-              "spinach", "kale", "avocado", "kiwi", "green apple", "pickle", "shamrock", 
-              "alligator", "crocodile", "turtle", "parsley", "mint", "basil", "dollar bill",
-              "emerald", "green pepper", "celery", "cabbage", "asparagus", "zucchini"],
-    "blue": ["sky", "ocean", "water", "blueberry", "blue jay", "whale", "dolphin", "sapphire",
-             "jeans", "denim", "peacock feathers", "hydrangea", "cornflower", "bluebell", 
-             "bluebonnet", "swimming pool", "globe", "ink", "navy uniform"],
-             # Note: "police car lights" removed - they are red and blue, not just blue
-    "purple": ["grape", "eggplant", "plum", "lavender", "violet", "amethyst", "lilac", "iris",
-               "orchid", "purple cabbage", "beet", "fig", "blackberry", "bruise", "purple onion",
-               "purple potato", "wisteria"],
-    "pink": ["flamingo", "pig", "cotton candy", "rose", "cherry blossom", "peony", "carnation",
-             "bubblegum", "piglet", "salmon", "ham", "shrimp", "tongue", "lips", "grapefruit",
-             "dragon fruit"],
-    "brown": ["chocolate", "tree trunk", "wood", "dirt", "soil", "mud", "coffee", "bear", "horse",
-              "deer", "acorn", "walnut", "coconut shell", "bread crust", "cookie", "potato skin",
-              "mushroom", "cardboard", "leather", "football", "pinecone", "owl", "sparrow", 
-              "camel", "peanut"],
-    "black": ["coal", "crow", "raven", "panther", "tire", "night sky", "licorice", "blackberry",
-              "blackbird", "gorilla", "bat", "spider", "ant", "orca", "tuxedo", "piano keys",
-              "chalkboard", "shadow", "penguin"],
-    "white": ["snow", "cloud", "milk", "cotton", "polar bear", "swan", "dove", "egg", "rice",
-              "salt", "sugar", "vanilla ice cream", "paper", "sheep", "rabbit", "ghost",
-              "wedding dress", "teeth", "pearl", "daisy", "seagull", "marshmallow", "coconut flesh",
-              "garlic", "cauliflower", "onion"],
-              # Note: "wool" removed - uncountable noun, shouldn't use "a wool"
-    "gray": ["elephant", "dolphin", "shark", "mouse", "rat", "rhinoceros", "hippopotamus", "wolf",
-             "storm cloud", "concrete", "stone", "rock", "silver", "pencil lead", "ash", "smoke",
-             "seal", "pigeon", "donkey", "brain", "dust"],
+    "red": [
+        "apple",
+        "tomato",
+        "strawberry",
+        "cherry",
+        "fire truck",
+        "stop sign",
+        "rose",
+        "ladybug",
+        "cardinal",
+        "blood",
+        "brick",
+        "chili pepper",
+        "lobster",
+        "crab",
+        "pomegranate",
+        "raspberry",
+        "mars",
+        "ruby",
+        "poppy",
+        "heart",
+        "fire hydrant",
+        "barn",
+        "robin breast",
+    ],
+    "orange": [
+        "orange",
+        "carrot",
+        "pumpkin",
+        "goldfish",
+        "tiger",
+        "basketball",
+        "traffic cone",
+        "autumn leaves",
+        "marigold",
+        "papaya",
+        "sweet potato",
+        "tangerine",
+        "apricot",
+        "peach",
+        "cantaloupe",
+        "salmon",
+        "fox",
+        "monarch butterfly",
+    ],
+    "yellow": [
+        "banana",
+        "sun",
+        "lemon",
+        "school bus",
+        "taxi",
+        "sunflower",
+        "corn",
+        "butter",
+        "daffodil",
+        "canary",
+        "rubber duck",
+        "bee",
+        "honey",
+        "mustard",
+        "egg yolk",
+        "pineapple",
+        "gold",
+        "lightning",
+        "tennis ball",
+        "highlighter",
+        "chick",
+        "giraffe",
+    ],  # Mango removed (can be yellow/green depending on ripeness)
+    "green": [
+        "grass",
+        "leaf",
+        "frog",
+        "broccoli",
+        "cucumber",
+        "lime",
+        "peas",
+        "lettuce",
+        "spinach",
+        "kale",
+        "avocado",
+        "kiwi",
+        "green apple",
+        "pickle",
+        "shamrock",
+        "alligator",
+        "crocodile",
+        "turtle",
+        "parsley",
+        "mint",
+        "basil",
+        "dollar bill",
+        "emerald",
+        "green pepper",
+        "celery",
+        "cabbage",
+        "asparagus",
+        "zucchini",
+    ],
+    "blue": [
+        "sky",
+        "ocean",
+        "water",
+        "blueberry",
+        "blue jay",
+        "whale",
+        "dolphin",
+        "sapphire",
+        "jeans",
+        "denim",
+        "peacock feathers",
+        "hydrangea",
+        "cornflower",
+        "bluebell",
+        "bluebonnet",
+        "swimming pool",
+        "globe",
+        "ink",
+        "navy uniform",
+    ],
+    # Note: "police car lights" removed - they are red and blue, not just blue
+    "purple": [
+        "grape",
+        "eggplant",
+        "plum",
+        "lavender",
+        "violet",
+        "amethyst",
+        "lilac",
+        "iris",
+        "orchid",
+        "purple cabbage",
+        "beet",
+        "fig",
+        "blackberry",
+        "bruise",
+        "purple onion",
+        "purple potato",
+        "wisteria",
+    ],
+    "pink": [
+        "flamingo",
+        "pig",
+        "cotton candy",
+        "rose",
+        "cherry blossom",
+        "peony",
+        "carnation",
+        "bubblegum",
+        "piglet",
+        "salmon",
+        "ham",
+        "shrimp",
+        "tongue",
+        "lips",
+        "grapefruit",
+        "dragon fruit",
+    ],
+    "brown": [
+        "chocolate",
+        "tree trunk",
+        "wood",
+        "dirt",
+        "soil",
+        "mud",
+        "coffee",
+        "bear",
+        "horse",
+        "deer",
+        "acorn",
+        "walnut",
+        "coconut shell",
+        "bread crust",
+        "cookie",
+        "potato skin",
+        "mushroom",
+        "cardboard",
+        "leather",
+        "football",
+        "pinecone",
+        "owl",
+        "sparrow",
+        "camel",
+        "peanut",
+    ],
+    "black": [
+        "coal",
+        "crow",
+        "raven",
+        "panther",
+        "tire",
+        "night sky",
+        "licorice",
+        "blackberry",
+        "blackbird",
+        "gorilla",
+        "bat",
+        "spider",
+        "ant",
+        "orca",
+        "tuxedo",
+        "piano keys",
+        "chalkboard",
+        "shadow",
+        "penguin",
+    ],
+    "white": [
+        "snow",
+        "cloud",
+        "milk",
+        "cotton",
+        "polar bear",
+        "swan",
+        "dove",
+        "egg",
+        "rice",
+        "salt",
+        "sugar",
+        "vanilla ice cream",
+        "paper",
+        "sheep",
+        "rabbit",
+        "ghost",
+        "wedding dress",
+        "teeth",
+        "pearl",
+        "daisy",
+        "seagull",
+        "marshmallow",
+        "coconut flesh",
+        "garlic",
+        "cauliflower",
+        "onion",
+    ],
+    # Note: "wool" removed - uncountable noun, shouldn't use "a wool"
+    "gray": [
+        "elephant",
+        "dolphin",
+        "shark",
+        "mouse",
+        "rat",
+        "rhinoceros",
+        "hippopotamus",
+        "wolf",
+        "storm cloud",
+        "concrete",
+        "stone",
+        "rock",
+        "silver",
+        "pencil lead",
+        "ash",
+        "smoke",
+        "seal",
+        "pigeon",
+        "donkey",
+        "brain",
+        "dust",
+    ],
 }
 
 # All colors as a list (basic colors first for curriculum progression)
@@ -129,22 +373,49 @@ ADJECTIVES = [
 
 # Contexts/Locations where objects might be found
 CONTEXTS = [
-    "in nature", "in the wild", "in a garden", "in a kitchen", "in a forest",
-    "at the zoo", "at the farm", "at the beach", "in the ocean", "in a park",
-    "in a store", "at home", "in a classroom", "in a museum", "outside",
-    "in a field", "by the river", "in the mountains", "at the market",
+    "in nature",
+    "in the wild",
+    "in a garden",
+    "in a kitchen",
+    "in a forest",
+    "at the zoo",
+    "at the farm",
+    "at the beach",
+    "in the ocean",
+    "in a park",
+    "in a store",
+    "at home",
+    "in a classroom",
+    "in a museum",
+    "outside",
+    "in a field",
+    "by the river",
+    "in the mountains",
+    "at the market",
 ]
 
 # Time/State modifiers
 STATES = [
-    "usually", "typically", "normally", "generally", "commonly",
-    "most often", "in general", "as a rule", "by default",
+    "usually",
+    "typically",
+    "normally",
+    "generally",
+    "commonly",
+    "most often",
+    "in general",
+    "as a rule",
+    "by default",
 ]
 
 # Question starters for variety
 QUESTION_STARTERS = [
-    "Can you tell me", "Do you know", "I wonder", "Please tell me",
-    "I'd like to know", "Could you say", "What would you say",
+    "Can you tell me",
+    "Do you know",
+    "I wonder",
+    "Please tell me",
+    "I'd like to know",
+    "Could you say",
+    "What would you say",
 ]
 
 # Flatten all objects
@@ -154,22 +425,101 @@ for color_objs in COLOR_OBJECTS.values():
 
 # Shape-Object Mappings (based on prompt lines 205-224)
 SHAPE_OBJECTS_2D = {
-    "circle": ["pizza", "wheel", "clock face", "coin", "plate", "frisbee", "donut", "moon",
-               "sun", "CD", "pancake", "cookie", "orange slice", "basketball", "button",
-               "manhole cover", "pie", "ring", "zero"],
-    "square": ["window", "chessboard square", "tile", "cracker", "napkin", "sticky note",
-               "picture frame", "Rubik's cube face", "waffle", "sandwich", "dice face", 
-               "pixel", "coaster", "ice cube"],
-    "rectangle": ["door", "book", "phone", "TV screen", "laptop screen", "brick", "dollar bill",
-                  "envelope", "business card", "chocolate bar", "ruler", "notebook", "flag",
-                  "window pane", "desk", "table", "pool table", "mattress"],
-    "triangle": ["pizza slice", "sail", "yield sign", "pyramid face", "mountain peak", "tent",
-                 "arrow tip", "hanger", "slice of cake", "nachos chip", "sandwich", "roof",
-                 "ice cream cone"],
-    "oval": ["egg", "rugby ball", "face shape", "mirror", "track", "racetrack", "bathtub",
-             "leaf", "grape", "platter", "spoon", "eye shape", "zero"],
-    "diamond": ["kite", "playing card diamond", "baseball field", "argyle pattern", "gemstone",
-                "road sign"],
+    "circle": [
+        "pizza",
+        "wheel",
+        "clock face",
+        "coin",
+        "plate",
+        "frisbee",
+        "donut",
+        "moon",
+        "sun",
+        "CD",
+        "pancake",
+        "cookie",
+        "orange slice",
+        "basketball",
+        "button",
+        "manhole cover",
+        "pie",
+        "ring",
+        "zero",
+    ],
+    "square": [
+        "window",
+        "chessboard square",
+        "tile",
+        "cracker",
+        "napkin",
+        "sticky note",
+        "picture frame",
+        "Rubik's cube face",
+        "waffle",
+        "sandwich",
+        "dice face",
+        "pixel",
+        "coaster",
+        "ice cube",
+    ],
+    "rectangle": [
+        "door",
+        "book",
+        "phone",
+        "TV screen",
+        "laptop screen",
+        "brick",
+        "dollar bill",
+        "envelope",
+        "business card",
+        "chocolate bar",
+        "ruler",
+        "notebook",
+        "flag",
+        "window pane",
+        "desk",
+        "table",
+        "pool table",
+        "mattress",
+    ],
+    "triangle": [
+        "pizza slice",
+        "sail",
+        "yield sign",
+        "pyramid face",
+        "mountain peak",
+        "tent",
+        "arrow tip",
+        "hanger",
+        "slice of cake",
+        "nachos chip",
+        "sandwich",
+        "roof",
+        "ice cream cone",
+    ],
+    "oval": [
+        "egg",
+        "rugby ball",
+        "face shape",
+        "mirror",
+        "track",
+        "racetrack",
+        "bathtub",
+        "leaf",
+        "grape",
+        "platter",
+        "spoon",
+        "eye shape",
+        "zero",
+    ],
+    "diamond": [
+        "kite",
+        "playing card diamond",
+        "baseball field",
+        "argyle pattern",
+        "gemstone",
+        "road sign",
+    ],
     "pentagon": ["home plate", "road sign", "star fruit"],
     "hexagon": ["honeycomb cell", "nut", "benzene ring", "snowflake base"],
     "octagon": ["stop sign", "tile", "umbrella"],
@@ -177,16 +527,81 @@ SHAPE_OBJECTS_2D = {
 }
 
 SHAPE_OBJECTS_3D = {
-    "sphere": ["ball", "globe", "marble", "orange", "grape", "bubble", "pearl", "planet",
-               "moon", "basketball", "tennis ball", "golf ball", "ping pong ball", "balloon",
-               "eyeball", "cherry", "blueberry", "plum", "ornament"],
-    "cube": ["dice", "ice cube", "Rubik's cube", "sugar cube", "box", "building block", "gift box"],
-    "cylinder": ["can", "battery", "candle", "tube", "pipe", "log", "pillar", "column", "barrel",
-                 "drinking glass", "roll of tape", "crayon", "marker", "pencil", "lipstick", "test tube"],
-    "cone": ["ice cream cone", "traffic cone", "party hat", "funnel", "megaphone", "pine tree",
-             "tornado", "volcano", "teepee", "rocket nose"],
-    "rectangular prism": ["book", "brick", "box", "refrigerator", "shoe box", "cereal box", "door",
-                          "building", "eraser", "smartphone", "tissue box", "mattress", "loaf of bread"],
+    "sphere": [
+        "ball",
+        "globe",
+        "marble",
+        "orange",
+        "grape",
+        "bubble",
+        "pearl",
+        "planet",
+        "moon",
+        "basketball",
+        "tennis ball",
+        "golf ball",
+        "ping pong ball",
+        "balloon",
+        "eyeball",
+        "cherry",
+        "blueberry",
+        "plum",
+        "ornament",
+    ],
+    "cube": [
+        "dice",
+        "ice cube",
+        "Rubik's cube",
+        "sugar cube",
+        "box",
+        "building block",
+        "gift box",
+    ],
+    "cylinder": [
+        "can",
+        "battery",
+        "candle",
+        "tube",
+        "pipe",
+        "log",
+        "pillar",
+        "column",
+        "barrel",
+        "drinking glass",
+        "roll of tape",
+        "crayon",
+        "marker",
+        "pencil",
+        "lipstick",
+        "test tube",
+    ],
+    "cone": [
+        "ice cream cone",
+        "traffic cone",
+        "party hat",
+        "funnel",
+        "megaphone",
+        "pine tree",
+        "tornado",
+        "volcano",
+        "teepee",
+        "rocket nose",
+    ],
+    "rectangular prism": [
+        "book",
+        "brick",
+        "box",
+        "refrigerator",
+        "shoe box",
+        "cereal box",
+        "door",
+        "building",
+        "eraser",
+        "smartphone",
+        "tissue box",
+        "mattress",
+        "loaf of bread",
+    ],
     "pyramid": ["Egyptian pyramid", "tent", "roof", "mountain", "tetrahedron"],
     "oval": ["egg", "avocado", "lemon", "potato", "football"],
 }
@@ -374,14 +789,44 @@ CIRCLE_PROPERTIES = {
 
 # Pattern items (prompt lines 632-807)
 PATTERN_ITEMS = {
-    "colors": ["red", "blue", "green", "yellow", "orange", "purple", "pink", "black", "white"],
+    "colors": [
+        "red",
+        "blue",
+        "green",
+        "yellow",
+        "orange",
+        "purple",
+        "pink",
+        "black",
+        "white",
+    ],
     "letters": list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
     "shapes": ["circle", "square", "triangle", "star"],
     "sizes": ["big", "small", "medium"],
     "numbers": list(range(1, 101)),
-    "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-    "months": ["January", "February", "March", "April", "May", "June", "July", "August", 
-               "September", "October", "November", "December"],
+    "days": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ],
+    "months": [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ],
     "words": ["yes", "no", "up", "down", "left", "right"],
 }
 
@@ -511,42 +956,42 @@ TEMPLATES_1D = [
 # 1E: Color Mixing (expanded from 6 to 35+ templates)
 TEMPLATES_1E = [
     # Basic questions
-    "What color do you get when you mix \"{color1}\" and \"{color2}\"?",
-    "If you mix \"{color1}\" and \"{color2}\", what color do you get?",
-    "What is \"{color1}\" mixed with \"{color2}\"?",
-    "\"{color1}\" plus \"{color2}\" makes what color?",
-    "Combine \"{color1}\" and \"{color2}\", what color results?",
-    "What happens when you mix \"{color1}\" with \"{color2}\"?",
+    'What color do you get when you mix "{color1}" and "{color2}"?',
+    'If you mix "{color1}" and "{color2}", what color do you get?',
+    'What is "{color1}" mixed with "{color2}"?',
+    '"{color1}" plus "{color2}" makes what color?',
+    'Combine "{color1}" and "{color2}", what color results?',
+    'What happens when you mix "{color1}" with "{color2}"?',
     # Extended variations
-    "What color results from mixing \"{color1}\" and \"{color2}\"?",
-    "When \"{color1}\" and \"{color2}\" are combined, what color forms?",
-    "\"{color1}\" and \"{color2}\" together make what color?",
-    "What do you get from blending \"{color1}\" and \"{color2}\"?",
-    "What is the result of mixing \"{color1}\" with \"{color2}\"?",
-    "Mix \"{color1}\" and \"{color2}\", what color do you get?",
-    "Blending \"{color1}\" and \"{color2}\" gives what color?",
-    "If you combine \"{color1}\" with \"{color2}\", what results?",
-    "What color appears when you blend \"{color1}\" and \"{color2}\"?",
-    "\"{color1}\" combined with \"{color2}\" equals what color?",
-    "What is produced by mixing \"{color1}\" and \"{color2}\"?",
-    "Adding \"{color1}\" to \"{color2}\" creates what color?",
-    "\"{color1}\" + \"{color2}\" = ?",
-    "What does \"{color1}\" and \"{color2}\" make?",
-    "Mixing \"{color1}\" with \"{color2}\" produces?",
-    "What color is formed from \"{color1}\" and \"{color2}\"?",
-    "The combination of \"{color1}\" and \"{color2}\" is?",
-    "What new color comes from \"{color1}\" plus \"{color2}\"?",
-    "When you put \"{color1}\" and \"{color2}\" together, what color?",
-    "\"{color1}\" blended with \"{color2}\" creates?",
-    "What shade results from \"{color1}\" and \"{color2}\"?",
-    "Combining \"{color1}\" and \"{color2}\" gives?",
-    "What is \"{color1}\" + \"{color2}\"?",
-    "The mix of \"{color1}\" and \"{color2}\" is what color?",
-    "If I blend \"{color1}\" and \"{color2}\", what do I get?",
-    "\"{color1}\" mixed together with \"{color2}\" makes?",
-    "What color do \"{color1}\" and \"{color2}\" create together?",
-    "Name the color from mixing \"{color1}\" and \"{color2}\"",
-    "Tell me what \"{color1}\" and \"{color2}\" make when mixed",
+    'What color results from mixing "{color1}" and "{color2}"?',
+    'When "{color1}" and "{color2}" are combined, what color forms?',
+    '"{color1}" and "{color2}" together make what color?',
+    'What do you get from blending "{color1}" and "{color2}"?',
+    'What is the result of mixing "{color1}" with "{color2}"?',
+    'Mix "{color1}" and "{color2}", what color do you get?',
+    'Blending "{color1}" and "{color2}" gives what color?',
+    'If you combine "{color1}" with "{color2}", what results?',
+    'What color appears when you blend "{color1}" and "{color2}"?',
+    '"{color1}" combined with "{color2}" equals what color?',
+    'What is produced by mixing "{color1}" and "{color2}"?',
+    'Adding "{color1}" to "{color2}" creates what color?',
+    '"{color1}" + "{color2}" = ?',
+    'What does "{color1}" and "{color2}" make?',
+    'Mixing "{color1}" with "{color2}" produces?',
+    'What color is formed from "{color1}" and "{color2}"?',
+    'The combination of "{color1}" and "{color2}" is?',
+    'What new color comes from "{color1}" plus "{color2}"?',
+    'When you put "{color1}" and "{color2}" together, what color?',
+    '"{color1}" blended with "{color2}" creates?',
+    'What shade results from "{color1}" and "{color2}"?',
+    'Combining "{color1}" and "{color2}" gives?',
+    'What is "{color1}" + "{color2}"?',
+    'The mix of "{color1}" and "{color2}" is what color?',
+    'If I blend "{color1}" and "{color2}", what do I get?',
+    '"{color1}" mixed together with "{color2}" makes?',
+    'What color do "{color1}" and "{color2}" create together?',
+    'Name the color from mixing "{color1}" and "{color2}"',
+    'Tell me what "{color1}" and "{color2}" make when mixed',
 ]
 
 # 1F: Color Associations (expanded from 5 to 35+ templates)
@@ -1191,40 +1636,40 @@ TEMPLATES_3H = [
 # 3I: Shape Comparisons (expanded from 4 to 30+ templates)
 TEMPLATES_3I = [
     # Sides comparisons
-    "Which has more sides, a \"{shape1}\" or a \"{shape2}\"?",
-    "Which has fewer sides, a \"{shape1}\" or a \"{shape2}\"?",
-    "Between a \"{shape1}\" and a \"{shape2}\", which has more sides?",
-    "Compare a \"{shape1}\" and a \"{shape2}\", which has more sides?",
-    "Which shape has more sides: \"{shape1}\" or \"{shape2}\"?",
-    "Which shape has fewer sides: \"{shape1}\" or \"{shape2}\"?",
-    "Does a \"{shape1}\" or a \"{shape2}\" have more sides?",
-    "Which one has more sides, \"{shape1}\" or \"{shape2}\"?",
-    "Of \"{shape1}\" and \"{shape2}\", which has more sides?",
-    "Is it \"{shape1}\" or \"{shape2}\" that has more sides?",
+    'Which has more sides, a "{shape1}" or a "{shape2}"?',
+    'Which has fewer sides, a "{shape1}" or a "{shape2}"?',
+    'Between a "{shape1}" and a "{shape2}", which has more sides?',
+    'Compare a "{shape1}" and a "{shape2}", which has more sides?',
+    'Which shape has more sides: "{shape1}" or "{shape2}"?',
+    'Which shape has fewer sides: "{shape1}" or "{shape2}"?',
+    'Does a "{shape1}" or a "{shape2}" have more sides?',
+    'Which one has more sides, "{shape1}" or "{shape2}"?',
+    'Of "{shape1}" and "{shape2}", which has more sides?',
+    'Is it "{shape1}" or "{shape2}" that has more sides?',
     # Corners comparisons
-    "Which has more corners, a \"{shape1}\" or a \"{shape2}\"?",
-    "Which has fewer corners, a \"{shape1}\" or a \"{shape2}\"?",
-    "Between a \"{shape1}\" and a \"{shape2}\", which has more corners?",
-    "Compare a \"{shape1}\" and a \"{shape2}\", which has more corners?",
-    "Which shape has more corners: \"{shape1}\" or \"{shape2}\"?",
-    "Which shape has fewer corners: \"{shape1}\" or \"{shape2}\"?",
-    "Does a \"{shape1}\" or a \"{shape2}\" have more corners?",
-    "Which one has more corners, \"{shape1}\" or \"{shape2}\"?",
-    "Of \"{shape1}\" and \"{shape2}\", which has more corners?",
+    'Which has more corners, a "{shape1}" or a "{shape2}"?',
+    'Which has fewer corners, a "{shape1}" or a "{shape2}"?',
+    'Between a "{shape1}" and a "{shape2}", which has more corners?',
+    'Compare a "{shape1}" and a "{shape2}", which has more corners?',
+    'Which shape has more corners: "{shape1}" or "{shape2}"?',
+    'Which shape has fewer corners: "{shape1}" or "{shape2}"?',
+    'Does a "{shape1}" or a "{shape2}" have more corners?',
+    'Which one has more corners, "{shape1}" or "{shape2}"?',
+    'Of "{shape1}" and "{shape2}", which has more corners?',
     # Angles comparisons
-    "Which has more angles, a \"{shape1}\" or a \"{shape2}\"?",
-    "Which has fewer angles, a \"{shape1}\" or a \"{shape2}\"?",
-    "Between a \"{shape1}\" and a \"{shape2}\", which has more angles?",
-    "Compare a \"{shape1}\" and a \"{shape2}\", which has more angles?",
-    "Which shape has more angles: \"{shape1}\" or \"{shape2}\"?",
-    "Which shape has fewer angles: \"{shape1}\" or \"{shape2}\"?",
-    "Does a \"{shape1}\" or a \"{shape2}\" have more angles?",
-    "Which one has more angles, \"{shape1}\" or \"{shape2}\"?",
-    "Of \"{shape1}\" and \"{shape2}\", which has more angles?",
-    "Is it \"{shape1}\" or \"{shape2}\" that has more angles?",
+    'Which has more angles, a "{shape1}" or a "{shape2}"?',
+    'Which has fewer angles, a "{shape1}" or a "{shape2}"?',
+    'Between a "{shape1}" and a "{shape2}", which has more angles?',
+    'Compare a "{shape1}" and a "{shape2}", which has more angles?',
+    'Which shape has more angles: "{shape1}" or "{shape2}"?',
+    'Which shape has fewer angles: "{shape1}" or "{shape2}"?',
+    'Does a "{shape1}" or a "{shape2}" have more angles?',
+    'Which one has more angles, "{shape1}" or "{shape2}"?',
+    'Of "{shape1}" and "{shape2}", which has more angles?',
+    'Is it "{shape1}" or "{shape2}" that has more angles?',
     # General comparisons
-    "Which is larger in terms of sides, \"{shape1}\" or \"{shape2}\"?",
-    "Which polygon has more sides: \"{shape1}\" or \"{shape2}\"?",
+    'Which is larger in terms of sides, "{shape1}" or "{shape2}"?',
+    'Which polygon has more sides: "{shape1}" or "{shape2}"?',
 ]
 
 # 3J: Circle Properties (expanded from 6 to 35+ templates)
@@ -1348,21 +1793,22 @@ TEMPLATES_3L_RECT = [
 # 4A-4K: Pattern completion (expanded from 6 to 40+ templates)
 TEMPLATES_PATTERN = [
     # Basic questions
-    "What comes next: \"{pattern}\"?",
-    "What should come next: \"{pattern}\"?",
+    'What comes next: "{pattern}"?',
+    'What should come next: "{pattern}"?',
 ]
 
 # Additional pattern question styles with different phrasings
 TEMPLATES_PATTERN_ALT = [
-    "Look at this pattern: \"{pattern}\", what comes next?",
-    "Given the sequence \"{pattern}\", what follows?",
-    "In the pattern \"{pattern}\", what is the next item?",
-    "Observe this pattern: \"{pattern}\", what comes next?",
+    'Look at this pattern: "{pattern}", what comes next?',
+    'Given the sequence "{pattern}", what follows?',
+    'In the pattern "{pattern}", what is the next item?',
+    'Observe this pattern: "{pattern}", what comes next?',
 ]
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
 
 def get_color_for_object(obj: str) -> str:
     """Get the color for a given object."""
@@ -1370,6 +1816,7 @@ def get_color_for_object(obj: str) -> str:
         if obj in objects:
             return color
     return None
+
 
 def get_shape_for_object(obj: str) -> str:
     """Get the shape for a given object."""
@@ -1381,9 +1828,11 @@ def get_shape_for_object(obj: str) -> str:
             return shape
     return None
 
+
 def format_pattern(items: List) -> str:
     """Format a pattern list as a simple comma-separated string."""
     return ", ".join(str(item) for item in items)
+
 
 # ============================================================================
 # STATEMENT 1: COLOR PERCEPTION GENERATORS
@@ -1391,12 +1840,50 @@ def format_pattern(items: List) -> str:
 
 # Uncountable nouns that don't take articles
 UNCOUNTABLE_NOUNS = {
-    "wool", "butter", "milk", "water", "cheese", "bread", "rice", "sugar", 
-    "salt", "coffee", "tea", "juice", "honey", "dust", "dirt", "soil", "mud",
-    "grass", "hair", "money", "paper", "wood", "glass", "metal", "plastic",
-    "cotton", "silk", "leather", "stone", "rock", "concrete", "steel", "gold",
-    "silver", "ink", "paint", "blood", "water", "air", "fire", "smoke", "ash",
+    "wool",
+    "butter",
+    "milk",
+    "water",
+    "cheese",
+    "bread",
+    "rice",
+    "sugar",
+    "salt",
+    "coffee",
+    "tea",
+    "juice",
+    "honey",
+    "dust",
+    "dirt",
+    "soil",
+    "mud",
+    "grass",
+    "hair",
+    "money",
+    "paper",
+    "wood",
+    "glass",
+    "metal",
+    "plastic",
+    "cotton",
+    "silk",
+    "leather",
+    "stone",
+    "rock",
+    "concrete",
+    "steel",
+    "gold",
+    "silver",
+    "ink",
+    "paint",
+    "blood",
+    "water",
+    "air",
+    "fire",
+    "smoke",
+    "ash",
 }
+
 
 # Helper function to check if object is uncountable
 def is_uncountable(obj: str) -> bool:
@@ -1404,26 +1891,28 @@ def is_uncountable(obj: str) -> bool:
     obj_lower = obj.lower().strip()
     return obj_lower in UNCOUNTABLE_NOUNS
 
+
 # Helper function to get correct article (a/an) for objects
 def get_article(obj: str) -> str:
     """Return 'a' or 'an' based on the first letter/sound of the object."""
     # Uncountable nouns don't take articles
     if is_uncountable(obj):
         return ""
-    
+
     obj_lower = obj.lower().strip()
     if not obj_lower:
         return "a"
-    
+
     # Words starting with vowels (a, e, i, o, u) use "an"
     # Also handle silent 'h' cases
     first_char = obj_lower[0]
-    if first_char in 'aeiou':
+    if first_char in "aeiou":
         return "an"
     # Special cases: silent 'h' words
-    if obj_lower.startswith(('hour', 'honor', 'honest', 'heir')):
+    if obj_lower.startswith(("hour", "honor", "honest", "heir")):
         return "an"
     return "a"
+
 
 # Helper function to pluralize objects for simple worksheet prompts
 def pluralize_simple(obj: str) -> str:
@@ -1444,6 +1933,7 @@ def pluralize_simple(obj: str) -> str:
         return obj[:-1] + "ies"
     return obj + "s"
 
+
 # Helper function to format object with correct article
 def format_object(obj: str, template: str) -> str:
     """Format template with object, handling articles correctly."""
@@ -1459,19 +1949,20 @@ def format_object(obj: str, template: str) -> str:
     else:
         return template
 
+
 def generate_s1a_object_color_id(num_samples: int = 35000) -> Dict[str, str]:
     """1A: Object Color Identification (35,000 samples)"""
     samples = {}
     max_attempts = num_samples * 100
     attempt = 0
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         color = random.choice(ALL_COLORS)
         obj = random.choice(COLOR_OBJECTS[color])
-        
+
         # Use ONLY base templates (no adjectives, no contexts - creates unnatural phrasing)
         template = random.choice(TEMPLATES_1A)
-        
+
         # Handle articles correctly
         if "{article_obj}" in template:
             # Template uses {article_obj} placeholder
@@ -1485,10 +1976,18 @@ def generate_s1a_object_color_id(num_samples: int = 35000) -> Dict[str, str]:
             # Template uses {obj} - need to handle articles
             if is_uncountable(obj):
                 # Remove articles for uncountable nouns (handle both "a" and "an")
-                query = template.replace(" an {obj}", f" {obj}").replace(" a {obj}", f" {obj}")
-                query = query.replace("An {obj}", obj.capitalize()).replace("A {obj}", obj.capitalize())
+                query = template.replace(" an {obj}", f" {obj}").replace(
+                    " a {obj}", f" {obj}"
+                )
+                query = query.replace("An {obj}", obj.capitalize()).replace(
+                    "A {obj}", obj.capitalize()
+                )
                 query = query.replace("{obj}", obj)  # Handle any remaining {obj}
-            elif " a {obj}" in template or "is a {obj}" in template or "does a {obj}" in template:
+            elif (
+                " a {obj}" in template
+                or "is a {obj}" in template
+                or "does a {obj}" in template
+            ):
                 # Template has "a" - check if we need "an" instead
                 article = get_article(obj)
                 if article == "an":
@@ -1496,7 +1995,11 @@ def generate_s1a_object_color_id(num_samples: int = 35000) -> Dict[str, str]:
                     query = query.replace("{obj}", obj)
                 else:
                     query = template.replace("{obj}", obj)
-            elif " an {obj}" in template or "is an {obj}" in template or "does an {obj}" in template:
+            elif (
+                " an {obj}" in template
+                or "is an {obj}" in template
+                or "does an {obj}" in template
+            ):
                 # Template has "an" - check if we need "a" instead
                 article = get_article(obj)
                 if article == "a":
@@ -1516,52 +2019,54 @@ def generate_s1a_object_color_id(num_samples: int = 35000) -> Dict[str, str]:
                 query = template.replace("{obj}", obj)
         else:
             query = template
-        
+
         answer = color
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s1b_reverse_color_id(num_samples: int = 15000) -> Dict[str, str]:
     """1B: Reverse Color Identification (15,000 samples)"""
     samples = {}
     max_attempts = num_samples * 100
     attempt = 0
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         color = random.choice(ALL_COLORS)
-        
+
         # Use only base templates (no context - creates unnatural phrasing)
         template = random.choice(TEMPLATES_1B)
         query = template.format(color=color)
-        
+
         # Pick a random object of this color
         answer = random.choice(COLOR_OBJECTS[color])
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s1c_color_verification(num_samples: int = 8000) -> Dict[str, str]:
     """1C: Color Verification (8,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     # 70% true, 30% false
     true_count = int(num_samples * 0.7)
     current_true = 0
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         is_true = current_true < true_count
-        
+
         if is_true:
             # Pick a correct color-object pair
             color = random.choice(ALL_COLORS)
@@ -1572,19 +2077,25 @@ def generate_s1c_color_verification(num_samples: int = 8000) -> Dict[str, str]:
             # Pick an object from a different color
             wrong_color = random.choice([c for c in ALL_COLORS if c != color])
             obj = random.choice(COLOR_OBJECTS[wrong_color])
-        
+
         # Randomly choose template type (75% base, 25% with adjective)
         template_type = random.random()
-        
+
         if template_type < 0.75:
             # Base template
             template = random.choice(TEMPLATES_1C)
-            query = template.format(obj=obj, obj_plural=pluralize_simple(obj), color=color)
+            query = template.format(
+                obj=obj, obj_plural=pluralize_simple(obj), color=color
+            )
 
             # Fix article usage for uncountable nouns and a/an for vowel-starting objects.
             if is_uncountable(obj):
-                query = query.replace(f" an {obj}", f" {obj}").replace(f" a {obj}", f" {obj}")
-                query = query.replace(f"An {obj}", obj.capitalize()).replace(f"A {obj}", obj.capitalize())
+                query = query.replace(f" an {obj}", f" {obj}").replace(
+                    f" a {obj}", f" {obj}"
+                )
+                query = query.replace(f"An {obj}", obj.capitalize()).replace(
+                    f"A {obj}", obj.capitalize()
+                )
             else:
                 article = get_article(obj)
                 if article == "an":
@@ -1600,24 +2111,25 @@ def generate_s1c_color_verification(num_samples: int = 8000) -> Dict[str, str]:
                 attempt += 1
                 continue
             query = template.format(adj=adj, obj=obj, color=color)
-        
+
         answer = "yes" if is_true else "no"
-        
+
         if query not in samples:
             samples[query] = answer
             if is_true:
                 current_true += 1
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s1d_color_multiple_choice(num_samples: int = 5000) -> Dict[str, str]:
     """1D: Color Multiple Choice (5,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         color = random.choice(ALL_COLORS)
         # Pick one object with this color
@@ -1625,47 +2137,49 @@ def generate_s1d_color_multiple_choice(num_samples: int = 5000) -> Dict[str, str
         # Pick another object with a different color
         other_color = random.choice([c for c in ALL_COLORS if c != color])
         obj2 = random.choice(COLOR_OBJECTS[other_color])
-        
+
         # Randomize order
         if random.random() < 0.5:
             obj1, obj2 = obj2, obj1
-        
+
         template = random.choice(TEMPLATES_1D)
         query = template.format(color=color, obj1=obj1, obj2=obj2)
-        
+
         # Answer is the object that has the target color
         answer = obj1 if get_color_for_object(obj1) == color else obj2
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s1e_color_mixing(num_samples: int = 4000) -> Dict[str, str]:
     """1E: Color Mixing (4,000 samples)"""
     samples = {}
-    
+
     # Enumerate all combinations
     all_combos = []
     for (c1, c2), result in COLOR_MIXING.items():
         for template in TEMPLATES_1E:
             query = template.format(color1=c1, color2=c2)
             all_combos.append((query, result))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s1f_color_associations(num_samples: int = 3000) -> Dict[str, str]:
     """1F: Color Associations (3,000 samples)"""
     samples = {}
-    
+
     # Enumerate all combinations
     all_combos = []
     for color, meanings in COLOR_ASSOCIATIONS.items():
@@ -1673,36 +2187,38 @@ def generate_s1f_color_associations(num_samples: int = 3000) -> Dict[str, str]:
             for template in TEMPLATES_1F:
                 query = template.format(meaning=meaning)
                 all_combos.append((query, color))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 # ============================================================================
 # STATEMENT 2: SHAPE PERCEPTION GENERATORS
 # ============================================================================
+
 
 def generate_s2a_object_shape_id(num_samples: int = 35000) -> Dict[str, str]:
     """2A: Object Shape Identification (35,000 samples)"""
     samples = {}
     max_attempts = num_samples * 100
     attempt = 0
-    
+
     # Combine 2D and 3D shapes
     all_shape_data = {**SHAPE_OBJECTS_2D, **SHAPE_OBJECTS_3D}
     all_shapes = list(all_shape_data.keys())
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         shape = random.choice(all_shapes)
         obj = random.choice(all_shape_data[shape])
-        
+
         # Randomly choose template type (60% base, 25% with adjective, 15% with context)
         template_type = random.random()
-        
+
         if template_type < 0.60:
             # Base template
             template = random.choice(TEMPLATES_2A)
@@ -1717,26 +2233,27 @@ def generate_s2a_object_shape_id(num_samples: int = 35000) -> Dict[str, str]:
             context = random.choice(CONTEXTS)
             template = random.choice(TEMPLATES_2A_CONTEXT)
             query = template.format(obj=obj, context=context)
-        
+
         answer = shape
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s2b_reverse_shape_id(num_samples: int = 15000) -> Dict[str, str]:
     """2B: Reverse Shape Identification (15,000 samples)"""
     samples = {}
     max_attempts = num_samples * 100
     attempt = 0
-    
+
     # Combine 2D and 3D shapes
     all_shape_data = {**SHAPE_OBJECTS_2D, **SHAPE_OBJECTS_3D}
     all_shapes = list(all_shape_data.keys())
-    
+
     # Shape descriptors
     shape_descriptors = {
         "circle": ["round", "circular"],
@@ -1748,14 +2265,14 @@ def generate_s2b_reverse_shape_id(num_samples: int = 15000) -> Dict[str, str]:
         "cylinder": ["cylindrical"],
         "cone": ["conical"],
     }
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         shape = random.choice(all_shapes)
         descriptor = shape_descriptors.get(shape, [shape])[0]
-        
+
         # Randomly choose template type (80% base, 20% with context)
         template_type = random.random()
-        
+
         if template_type < 0.80:
             # Base template
             template = random.choice(TEMPLATES_2B)
@@ -1765,29 +2282,30 @@ def generate_s2b_reverse_shape_id(num_samples: int = 15000) -> Dict[str, str]:
             context = random.choice(CONTEXTS)
             template = random.choice(TEMPLATES_2B_CONTEXT)
             query = template.format(shape=descriptor, context=context)
-        
+
         answer = random.choice(all_shape_data[shape])
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s2c_shape_verification(num_samples: int = 8000) -> Dict[str, str]:
     """2C: Shape Verification (8,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     all_shape_data = {**SHAPE_OBJECTS_2D, **SHAPE_OBJECTS_3D}
     all_shapes = list(all_shape_data.keys())
-    
+
     # 70% true, 30% false
     true_count = int(num_samples * 0.7)
     current_true = 0
-    
+
     shape_descriptors = {
         "circle": ["round", "circular"],
         "square": ["square"],
@@ -1798,10 +2316,10 @@ def generate_s2c_shape_verification(num_samples: int = 8000) -> Dict[str, str]:
         "cylinder": ["cylindrical"],
         "cone": ["conical"],
     }
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         is_true = current_true < true_count
-        
+
         if is_true:
             shape = random.choice(all_shapes)
             obj = random.choice(all_shape_data[shape])
@@ -1811,15 +2329,21 @@ def generate_s2c_shape_verification(num_samples: int = 8000) -> Dict[str, str]:
             wrong_shape = random.choice([s for s in all_shapes if s != shape])
             obj = random.choice(all_shape_data[wrong_shape])
             descriptor = shape_descriptors.get(shape, [shape])[0]
-        
+
         template = random.choice(TEMPLATES_2C)
-        query = template.format(obj=obj, obj_plural=pluralize_simple(obj), shape=descriptor)
+        query = template.format(
+            obj=obj, obj_plural=pluralize_simple(obj), shape=descriptor
+        )
 
         # Fix a/an for vowel-starting objects in templates that include an article.
         # (Uncountable nouns are not expected in shape objects, but handle defensively.)
         if is_uncountable(obj):
-            query = query.replace(f" an {obj}", f" {obj}").replace(f" a {obj}", f" {obj}")
-            query = query.replace(f"An {obj}", obj.capitalize()).replace(f"A {obj}", obj.capitalize())
+            query = query.replace(f" an {obj}", f" {obj}").replace(
+                f" a {obj}", f" {obj}"
+            )
+            query = query.replace(f"An {obj}", obj.capitalize()).replace(
+                f"A {obj}", obj.capitalize()
+            )
         else:
             article = get_article(obj)
             if article == "an":
@@ -1827,25 +2351,26 @@ def generate_s2c_shape_verification(num_samples: int = 8000) -> Dict[str, str]:
             else:
                 query = query.replace(f"an {obj}", f"a {obj}")
         answer = "yes" if is_true else "no"
-        
+
         if query not in samples:
             samples[query] = answer
             if is_true:
                 current_true += 1
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s2d_shape_multiple_choice(num_samples: int = 5000) -> Dict[str, str]:
     """2D: Shape Multiple Choice (5,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     all_shape_data = {**SHAPE_OBJECTS_2D, **SHAPE_OBJECTS_3D}
     all_shapes = list(all_shape_data.keys())
-    
+
     shape_descriptors = {
         "circle": ["round", "circular"],
         "square": ["square"],
@@ -1856,177 +2381,187 @@ def generate_s2d_shape_multiple_choice(num_samples: int = 5000) -> Dict[str, str
         "cylinder": ["cylindrical"],
         "cone": ["conical"],
     }
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         shape = random.choice(all_shapes)
         obj1 = random.choice(all_shape_data[shape])
-        
+
         other_shape = random.choice([s for s in all_shapes if s != shape])
         obj2 = random.choice(all_shape_data[other_shape])
-        
+
         descriptor = shape_descriptors.get(shape, [shape])[0]
-        
+
         # Randomize order
         if random.random() < 0.5:
             obj1, obj2 = obj2, obj1
-        
+
         template = random.choice(TEMPLATES_2D)
         query = template.format(shape=descriptor, obj1=obj1, obj2=obj2)
-        
+
         # Answer is the object that has the target shape
         answer = obj1 if get_shape_for_object(obj1) == shape else obj2
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s2e_2d_vs_3d(num_samples: int = 4000) -> Dict[str, str]:
     """2E: 2D vs 3D Distinction (4,000 samples)"""
     samples = {}
-    
+
     # Enumerate all combinations
     all_combos = []
     for shape in ALL_SHAPES_2D:
         for template in TEMPLATES_2E:
             query = template.format(shape=shape, obj=shape)
             all_combos.append((query, "2D"))
-    
+
     for shape in ALL_SHAPES_3D:
         for template in TEMPLATES_2E:
             query = template.format(shape=shape, obj=shape)
             all_combos.append((query, "3D"))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s2f_2d_3d_relationship(num_samples: int = 3000) -> Dict[str, str]:
     """2F: 2D-3D Relationship (3,000 samples)"""
     samples = {}
-    
+
     # Enumerate all combinations
     all_combos = []
     for shape3d, shape2d in SHAPE_2D_3D.items():
         for template in TEMPLATES_2F_3D_TO_2D:
             query = template.format(shape3d=shape3d)
             all_combos.append((query, shape2d))
-        
+
         for template in TEMPLATES_2F_2D_TO_3D:
             query = template.format(shape2d=shape2d)
             all_combos.append((query, shape3d))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 # ============================================================================
 # STATEMENT 3: GEOMETRIC CONCEPTS GENERATORS
 # ============================================================================
 
+
 def generate_s3a_shape_by_sides(num_samples: int = 10000) -> Dict[str, str]:
     """3A: Shape by Number of Sides (10,000 samples)"""
     samples = {}
-    
+
     # Enumerate all combinations (avoids wasteful looping)
     all_combos = []
     for n_sides, shape_name in SIDES_TO_SHAPE.items():
         for template in TEMPLATES_3A:
             query = template.format(n=n_sides)
             all_combos.append((query, shape_name))
-    
+
     # Shuffle and select up to num_samples
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3b_sides_of_shape(num_samples: int = 10000) -> Dict[str, str]:
     """3B: Sides of Shape (10,000 samples)"""
     samples = {}
-    
+
     # Enumerate all combinations (avoids wasteful looping)
     all_combos = []
     for shape_name, n_sides in SHAPE_TO_SIDES.items():
         for template in TEMPLATES_3B:
             query = template.format(shape=shape_name)
             all_combos.append((query, str(n_sides)))
-    
+
     # Shuffle and select up to num_samples
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3c_corners_vertices(num_samples: int = 8000) -> Dict[str, str]:
     """3C: Corners/Vertices (8,000 samples)"""
     samples = {}
-    
+
     # 2D shapes have vertices = sides
     # 3D shapes have specific vertex counts
     shape_vertices_2d = SHAPE_TO_SIDES.copy()
-    shape_vertices_3d = {shape: props["vertices"] for shape, props in SHAPE_3D_PROPERTIES.items()}
-    
+    shape_vertices_3d = {
+        shape: props["vertices"] for shape, props in SHAPE_3D_PROPERTIES.items()
+    }
+
     all_shape_vertices = {**shape_vertices_2d, **shape_vertices_3d}
-    
+
     # Enumerate all combinations (avoids wasteful looping)
     all_combos = []
     for shape_name, n_vertices in all_shape_vertices.items():
         for template in TEMPLATES_3C:
             query = template.format(shape=shape_name)
             all_combos.append((query, str(n_vertices)))
-    
+
     # Shuffle and select up to num_samples
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3d_angles_count(num_samples: int = 5000) -> Dict[str, str]:
     """3D: Angles Count (5,000 samples)"""
     samples = {}
-    
+
     # 2D shapes have angles = sides
     shape_angles = SHAPE_TO_SIDES.copy()
-    
+
     # Enumerate all combinations (avoids wasteful looping)
     all_combos = []
     for shape_name, n_angles in shape_angles.items():
         for template in TEMPLATES_3D_ANGLES:
             query = template.format(shape=shape_name)
             all_combos.append((query, str(n_angles)))
-    
+
     # Shuffle and select up to num_samples
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3e_angle_types(num_samples: int = 8000) -> Dict[str, str]:
     """3E: Angle Types (8,000 samples)"""
     samples = {}
-    
+
     # Enumerate combinations
     all_combos = []
-    
+
     # Name queries
     for template in TEMPLATES_3E_NAME:
         if "less than 90" in template:
@@ -2039,7 +2574,7 @@ def generate_s3e_angle_types(num_samples: int = 8000) -> Dict[str, str]:
             all_combos.append((template, "straight angle"))
         elif "greater than 180" in template:
             all_combos.append((template, "reflex angle"))
-    
+
     # Definition queries
     for template in TEMPLATES_3E_DEF:
         if "acute" in template:
@@ -2047,22 +2582,25 @@ def generate_s3e_angle_types(num_samples: int = 8000) -> Dict[str, str]:
         elif "right" in template:
             all_combos.append((template, "90"))
         elif "obtuse" in template:
-            all_combos.append((template, "greater than 90 degrees but less than 180 degrees"))
+            all_combos.append(
+                (template, "greater than 90 degrees but less than 180 degrees")
+            )
         elif "straight" in template:
             all_combos.append((template, "180 degrees"))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3f_shape_properties(num_samples: int = 8000) -> Dict[str, str]:
     """3F: Shape Properties (8,000 samples)"""
     samples = {}
-    
+
     # Property descriptions
     properties = {
         "4 equal sides and 4 right angles": "square",
@@ -2076,32 +2614,33 @@ def generate_s3f_shape_properties(num_samples: int = 8000) -> Dict[str, str]:
         "one angle equals 90 degrees": "right triangle",
         "one angle greater than 90 degrees": "obtuse triangle",
     }
-    
+
     # Enumerate combinations
     all_combos = []
     for prop, shape in properties.items():
         for template in TEMPLATES_3F:
             query = template.format(property=prop)
             all_combos.append((query, shape))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3g_3d_faces_edges_vertices(num_samples: int = 6000) -> Dict[str, str]:
     """3G: 3D Faces/Edges/Vertices (6,000 samples)"""
     samples = {}
-    
+
     # Enumerate all combinations (avoids wasteful looping)
     all_combos = []
     for shape3d, props in SHAPE_3D_PROPERTIES.items():
         for template in TEMPLATES_3G:
             query = template.format(shape3d=shape3d)
-            
+
             # Determine which property is asked
             if "face" in template.lower() or "side" in template.lower():
                 answer = str(props["faces"])
@@ -2109,56 +2648,62 @@ def generate_s3g_3d_faces_edges_vertices(num_samples: int = 6000) -> Dict[str, s
             elif "edge" in template.lower():
                 answer = str(props["edges"])
                 all_combos.append((query, answer))
-            elif "vert" in template.lower() or "corner" in template.lower() or "point" in template.lower():
+            elif (
+                "vert" in template.lower()
+                or "corner" in template.lower()
+                or "point" in template.lower()
+            ):
                 answer = str(props["vertices"])
                 all_combos.append((query, answer))
-    
+
     # Shuffle and select up to num_samples
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3h_symmetry(num_samples: int = 3000) -> Dict[str, str]:
     """3H: Symmetry (3,000 samples)"""
     samples = {}
-    
+
     # Enumerate combinations
     all_combos = []
     for shape, sym_count in SHAPE_SYMMETRY.items():
         for template in TEMPLATES_3H:
             query = template.format(shape=shape)
             all_combos.append((query, str(sym_count)))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3i_shape_comparisons(num_samples: int = 3000) -> Dict[str, str]:
     """3I: Shape Comparisons (3,000 samples)"""
     samples = {}
-    
+
     shape_list = list(SHAPE_TO_SIDES.keys())
-    
+
     if len(shape_list) < 2:
         return samples
-    
+
     # Enumerate all combinations (avoids wasteful looping)
     all_combos = []
     for i, shape1 in enumerate(shape_list):
-        for shape2 in shape_list[i+1:]:  # Only unique pairs
+        for shape2 in shape_list[i + 1 :]:  # Only unique pairs
             sides1 = SHAPE_TO_SIDES[shape1]
             sides2 = SHAPE_TO_SIDES[shape2]
-            
+
             for template in TEMPLATES_3I:
                 query = template.format(shape1=shape1, shape2=shape2)
-                
+
                 # Determine answer based on template
                 if "more" in template.lower():
                     answer = shape1 if sides1 > sides2 else shape2
@@ -2166,7 +2711,7 @@ def generate_s3i_shape_comparisons(num_samples: int = 3000) -> Dict[str, str]:
                 elif "fewer" in template.lower() or "less" in template.lower():
                     answer = shape1 if sides1 < sides2 else shape2
                     all_combos.append((query, answer))
-                
+
                 # Also generate the reverse order pair
                 query_rev = template.format(shape1=shape2, shape2=shape1)
                 if "more" in template.lower():
@@ -2175,26 +2720,29 @@ def generate_s3i_shape_comparisons(num_samples: int = 3000) -> Dict[str, str]:
                 elif "fewer" in template.lower() or "less" in template.lower():
                     answer_rev = shape2 if sides2 < sides1 else shape1
                     all_combos.append((query_rev, answer_rev))
-    
+
     # Shuffle and select up to num_samples
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3j_circle_properties(num_samples: int = 4000) -> Dict[str, str]:
     """3J: Circle Properties (4,000 samples)"""
     samples = {}
-    
+
     # Enumerate combinations
     all_combos = []
     for desc, term in CIRCLE_PROPERTIES.items():
         for template in TEMPLATES_3J:
-            if desc in template.lower() or any(word in template.lower() for word in desc.split()):
+            if desc in template.lower() or any(
+                word in template.lower() for word in desc.split()
+            ):
                 all_combos.append((template, term))
-    
+
     # Manual mappings for specific templates
     specific_mappings = [
         ("What is the distance around a circle called?", "circumference"),
@@ -2202,33 +2750,37 @@ def generate_s3j_circle_properties(num_samples: int = 4000) -> Dict[str, str]:
         ("What is half of the diameter called?", "radius"),
         ("What do we call the distance from center to edge of a circle?", "radius"),
         ("What is the perimeter of a circle called?", "circumference"),
-        ("What is a line from one side of a circle to the other through the center?", "diameter"),
+        (
+            "What is a line from one side of a circle to the other through the center?",
+            "diameter",
+        ),
     ]
-    
+
     all_combos.extend(specific_mappings)
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3k_basic_perimeter(num_samples: int = 2500) -> Dict[str, str]:
     """3K: Basic Perimeter (2,500 samples)"""
     samples = {}
-    
+
     # Enumerate combinations
     all_combos = []
-    
+
     # Square perimeters (side 1-15)
     for n in range(1, 16):
         for template in TEMPLATES_3K_SQUARE:
             query = template.format(n=n)
             answer = str(4 * n)
             all_combos.append((query, answer))
-    
+
     # Rectangle perimeters
     for length in range(1, 13):
         for w in range(1, 11):
@@ -2237,29 +2789,30 @@ def generate_s3k_basic_perimeter(num_samples: int = 2500) -> Dict[str, str]:
                     query = template.format(l=length, w=w)
                     answer = str(2 * (length + w))
                     all_combos.append((query, answer))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s3l_basic_area(num_samples: int = 2500) -> Dict[str, str]:
     """3L: Basic Area (2,500 samples)"""
     samples = {}
-    
+
     # Enumerate combinations
     all_combos = []
-    
+
     # Square areas (side 1-12)
     for n in range(1, 13):
         for template in TEMPLATES_3L_SQUARE:
             query = template.format(n=n)
             answer = str(n * n)
             all_combos.append((query, answer))
-    
+
     # Rectangle areas
     for length in range(1, 13):
         for w in range(1, 11):
@@ -2268,164 +2821,169 @@ def generate_s3l_basic_area(num_samples: int = 2500) -> Dict[str, str]:
                     query = template.format(l=length, w=w)
                     answer = str(length * w)
                     all_combos.append((query, answer))
-    
+
     # Shuffle and select
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 # ============================================================================
 # STATEMENT 4: PATTERN RECOGNITION GENERATORS
 # ============================================================================
+
 
 def generate_s4a_2item_alternating(num_samples: int = 8000) -> Dict[str, str]:
     """4A: 2-item Alternating Patterns (8,000 samples)"""
     samples = {}
     max_attempts = num_samples * 100
     attempt = 0
-    
+
     pattern_types = ["colors", "letters", "shapes", "numbers", "words"]
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         ptype = random.choice(pattern_types)
         items = PATTERN_ITEMS[ptype]
-        
+
         # Ensure we have enough items to sample
         sample_pool = items if len(items) > 10 else list(items)[:10]
         if len(sample_pool) < 2:
             attempt += 1
             continue
-        
+
         item1, item2 = random.sample(sample_pool, 2)
-        
+
         # Create pattern showing 4-6 repetitions
         reps = random.randint(2, 3)
         pattern_list = [item1, item2] * reps + [item1]
         pattern_str = format_pattern(pattern_list)
-        
+
         template = random.choice(all_pattern_templates)
         query = template.format(pattern=pattern_str)
         answer = str(item2)
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s4b_3item_repeating(num_samples: int = 7000) -> Dict[str, str]:
     """4B: 3-item Repeating Patterns (7,000 samples)"""
     samples = {}
     max_attempts = num_samples * 100
     attempt = 0
-    
+
     pattern_types = ["colors", "letters", "shapes", "numbers"]
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         ptype = random.choice(pattern_types)
         items = PATTERN_ITEMS[ptype]
-        
+
         # Ensure we have enough items to sample
         sample_pool = items if len(items) > 10 else list(items)[:10]
         if len(sample_pool) < 3:
             attempt += 1
             continue
-        
+
         item1, item2, item3 = random.sample(sample_pool, 3)
-        
+
         # Create pattern showing 2-3 full cycles
         reps = random.randint(2, 3)
         pattern_list = [item1, item2, item3] * reps
         # Add partial next cycle
         pattern_list.append(item1)
-        
+
         pattern_str = format_pattern(pattern_list)
-        
+
         template = random.choice(all_pattern_templates)
         query = template.format(pattern=pattern_str)
         answer = str(item2)
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s4c_4item_repeating(num_samples: int = 4000) -> Dict[str, str]:
     """4C: 4-item Repeating Patterns (4,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     pattern_types = ["colors", "letters", "shapes", "days"]
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         ptype = random.choice(pattern_types)
         items = PATTERN_ITEMS[ptype]
-        
+
         if len(items) < 4:
             continue
-        
+
         # Ensure we have enough items to sample
         sample_pool = items if len(items) > 10 else list(items)[:10]
         if len(sample_pool) < 4:
             attempt += 1
             continue
-        
+
         item1, item2, item3, item4 = random.sample(sample_pool, 4)
-        
+
         # Create pattern showing 2 full cycles
         pattern_list = [item1, item2, item3, item4] * 2
         # Add partial next cycle
         pattern_list.append(item1)
-        
+
         pattern_str = format_pattern(pattern_list)
-        
+
         template = random.choice(all_pattern_templates)
         query = template.format(pattern=pattern_str)
         answer = str(item2)
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s4d_number_sequences(num_samples: int = 8000) -> Dict[str, str]:
     """4D: Simple Number Sequences (8,000 samples)"""
     samples = {}
     max_attempts = num_samples * 100
     attempt = 0
-    
+
     # Sequence types: count by 1, 2, 3, 4, 5, 10
     increments = [1, 2, 3, 4, 5, 10, -1, -2]
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         inc = random.choice(increments)
         start = random.randint(1, 50) if inc > 0 else random.randint(10, 50)
-        
+
         # Generate 4-5 numbers
         length = random.randint(4, 5)
         pattern_list = [start + i * inc for i in range(length)]
-        
+
         # Only keep if all positive and reasonable
         if all(n > 0 and n < 100 for n in pattern_list):
             answer_val = pattern_list[-1] + inc
@@ -2435,138 +2993,154 @@ def generate_s4d_number_sequences(num_samples: int = 8000) -> Dict[str, str]:
                 template = random.choice(all_pattern_templates)
                 query = template.format(pattern=pattern_str)
                 answer = str(answer_val)
-                
+
                 if query not in samples:
                     samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s4e_growing_shrinking(num_samples: int = 4000) -> Dict[str, str]:
     """4E: Growing/Shrinking Patterns (4,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     base_items = ["A", "1", "X", "*", "O", "#", "@", "B", "C", "Z"]
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         base = random.choice(base_items)
-        
+
         # Create pattern A, AA, AAA, AAAA (with variations in starting length)
         start_len = random.randint(1, 2)
         pattern_list = [base * (start_len + i) for i in range(4)]
         pattern_str = format_pattern(pattern_list)
-        
+
         template = random.choice(all_pattern_templates)
         query = template.format(pattern=pattern_str)
         answer = base * (start_len + 4)
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s4f_doubling(num_samples: int = 3000) -> Dict[str, str]:
     """4F: Doubling Patterns (3,000 samples)"""
     samples = {}
-    
+
     # Expanded start values
     starts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     all_combos = []
     for start in starts:
         # Doubling pattern
-        pattern_list = [start * (2 ** i) for i in range(4)]
+        pattern_list = [start * (2**i) for i in range(4)]
         if pattern_list[-1] * 2 < 1000:  # Keep answers reasonable
             pattern_str = format_pattern(pattern_list)
-            
+
             for template in all_pattern_templates:
                 query = template.format(pattern=pattern_str)
                 answer = str(pattern_list[-1] * 2)
                 all_combos.append((query, answer))
-    
+
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s4g_square_numbers(num_samples: int = 2000) -> Dict[str, str]:
     """4G: Square Numbers (2,000 samples)"""
     samples = {}
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     # Square sequences
     all_combos = []
     for start_idx in range(1, 12):  # Start from 1², 2², etc. (expanded range)
         pattern_list = [(start_idx + i) ** 2 for i in range(4)]
         pattern_str = format_pattern(pattern_list)
-        
+
         for template in all_pattern_templates:
             query = template.format(pattern=pattern_str)
             answer = str((start_idx + 4) ** 2)
             all_combos.append((query, answer))
-    
+
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s4h_fibonacci(num_samples: int = 2000) -> Dict[str, str]:
     """4H: Fibonacci-like Patterns (2,000 samples)"""
     samples = {}
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     # Fibonacci sequences (expanded starting pairs)
     all_combos = []
-    starts = [(1, 1), (2, 2), (1, 2), (0, 1), (1, 3), (2, 3), (2, 5), (3, 5), (1, 4), (2, 4)]
-    
+    starts = [
+        (1, 1),
+        (2, 2),
+        (1, 2),
+        (0, 1),
+        (1, 3),
+        (2, 3),
+        (2, 5),
+        (3, 5),
+        (1, 4),
+        (2, 4),
+    ]
+
     for a, b in starts:
         fib = [a, b]
         for _ in range(4):
             fib.append(fib[-1] + fib[-2])
-        
+
         pattern_list = fib[:5]
         pattern_str = format_pattern(pattern_list)
-        
+
         for template in all_pattern_templates:
             query = template.format(pattern=pattern_str)
             answer = str(fib[5])
             all_combos.append((query, answer))
-    
+
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s4i_day_month_sequences(num_samples: int = 4000) -> Dict[str, str]:
     """4I: Day and Month Sequences (4,000 samples)"""
     samples = {}
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     all_combos = []
-    
+
     # Day sequences
     days = PATTERN_ITEMS["days"]
     for i in range(len(days)):
@@ -2574,12 +3148,12 @@ def generate_s4i_day_month_sequences(num_samples: int = 4000) -> Dict[str, str]:
         for length in [3, 4, 5]:
             pattern_list = [days[(i + j) % len(days)] for j in range(length)]
             pattern_str = format_pattern(pattern_list)
-            
+
             for template in all_pattern_templates:
                 query = template.format(pattern=pattern_str)
                 answer = days[(i + length) % len(days)]
                 all_combos.append((query, answer))
-    
+
     # Month sequences
     months = PATTERN_ITEMS["months"]
     for i in range(len(months)):
@@ -2587,32 +3161,33 @@ def generate_s4i_day_month_sequences(num_samples: int = 4000) -> Dict[str, str]:
         for length in [3, 4, 5]:
             pattern_list = [months[(i + j) % len(months)] for j in range(length)]
             pattern_str = format_pattern(pattern_list)
-            
+
             for template in all_pattern_templates:
                 query = template.format(pattern=pattern_str)
                 answer = months[(i + length) % len(months)]
                 all_combos.append((query, answer))
-    
+
     random.shuffle(all_combos)
     for query, answer in all_combos[:num_samples]:
         if query not in samples:
             samples[query] = answer
-    
+
     return samples
+
 
 def generate_s4j_letter_sequences(num_samples: int = 4000) -> Dict[str, str]:
     """4J: Letter Sequences (4,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     letters = PATTERN_ITEMS["letters"]
     max_idx = len(letters) - 1  # 25 for 26 letters (0-indexed)
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         # Choose sequence type: sequential, skip one, skip two, reverse
         seq_type = random.choice(["sequential", "skip_one", "skip_two", "reverse"])
-        
+
         # Calculate valid start_idx range based on sequence type
         if seq_type == "sequential":
             max_start = max_idx - 4  # Need start + 4 to be valid
@@ -2646,12 +3221,12 @@ def generate_s4j_letter_sequences(num_samples: int = 4000) -> Dict[str, str]:
             start_idx = random.randint(0, max_start)
             max_idx_needed = max_idx - start_idx
             next_idx = max_idx - start_idx - 4
-        
+
         # Check bounds before accessing
         if max_idx_needed > max_idx or next_idx > max_idx or next_idx < 0:
             attempt += 1
             continue
-        
+
         # Now safe to access
         if seq_type == "sequential":
             pattern_list = [letters[start_idx + i] for i in range(4)]
@@ -2670,43 +3245,46 @@ def generate_s4j_letter_sequences(num_samples: int = 4000) -> Dict[str, str]:
                 continue
             pattern_list = [letters[idx] for idx in reverse_indices]
             next_letter = letters[next_idx]
-        
+
         pattern_str = format_pattern(pattern_list)
         # Combine both template lists
         all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
         template = random.choice(all_pattern_templates)
         query = template.format(pattern=pattern_str)
         answer = next_letter
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 def generate_s4k_mixed_attributes(num_samples: int = 4000) -> Dict[str, str]:
     """4K: Mixed Attribute Patterns (4,000 samples)"""
     samples = {}
     max_attempts = num_samples * 50
     attempt = 0
-    
+
     # Expanded attribute options
     sizes = PATTERN_ITEMS["sizes"]  # All sizes
     colors = PATTERN_ITEMS["colors"][:8]  # More colors
     shapes = PATTERN_ITEMS["shapes"][:6]  # More shapes
-    
+
     # Combine both template lists
     all_pattern_templates = TEMPLATES_PATTERN + TEMPLATES_PATTERN_ALT
-    
+
     while len(samples) < num_samples and attempt < max_attempts:
         # Choose attribute types
-        attr_types = random.choice([
-            ("size", "color"),
-            ("color", "shape"),
-            ("size", "shape"),
-        ])
-        
+        attr_types = random.choice(
+            [
+                ("size", "color"),
+                ("color", "shape"),
+                ("size", "shape"),
+            ]
+        )
+
         if attr_types == ("size", "color"):
             vals1 = sizes
             vals2 = colors
@@ -2716,42 +3294,44 @@ def generate_s4k_mixed_attributes(num_samples: int = 4000) -> Dict[str, str]:
         else:  # size, shape
             vals1 = sizes
             vals2 = shapes
-        
+
         # Ensure we have enough items
         if len(vals1) < 2 or len(vals2) < 2:
             attempt += 1
             continue
-        
+
         # Create 2-item alternating pattern
         val1_1, val1_2 = random.sample(list(vals1), 2)
         val2_1, val2_2 = random.sample(list(vals2), 2)
-        
+
         item1 = f"{val1_1} {val2_1}"
         item2 = f"{val1_2} {val2_2}"
-        
+
         pattern_list = [item1, item2] * 2 + [item1]
         pattern_str = format_pattern(pattern_list)
-        
+
         template = random.choice(all_pattern_templates)
         query = template.format(pattern=pattern_str)
         answer = item2
-        
+
         if query not in samples:
             samples[query] = answer
-        
+
         attempt += 1
-    
+
     return samples
+
 
 # ============================================================================
 # VALIDATION FUNCTION
 # ============================================================================
 
+
 def validate_distribution(all_samples: Dict[str, str]) -> None:
     """
     Validate that samples match expected distribution by categorizing them.
     """
-    
+
     # Realistic targets based on combinatorial limits (quality over quantity)
     expected_counts = {
         "Statement 1: Color Perception": 55000,
@@ -2760,74 +3340,245 @@ def validate_distribution(all_samples: Dict[str, str]) -> None:
         "Statement 4: Pattern Recognition": 45000,
     }
     # Total target: ~150,000 (vs original 250,000)
-    
+
     categories = defaultdict(int)
-    
+
     # Color association keywords (meanings that map to colors)
     color_association_keywords = [
-        "love", "stop", "danger", "warning", "passion", "anger", "fire", "heat",
-        "caution", "happiness", "joy", "sunshine", "optimism", "energy", "cheerful",
-        "nature", "growth", "freshness", "environment", "health", "money", "luck",
-        "calm", "peace", "trust", "loyalty", "sadness", "cold", "water", "sky",
-        "royalty", "luxury", "mystery", "creativity", "wisdom", "spirituality",
-        "femininity", "romance", "sweetness", "innocence", "youth", "softness",
-        "warmth", "earth", "stability", "comfort", "reliability", "rustic",
-        "elegance", "power", "sophistication", "darkness", "death", "evil",
-        "purity", "cleanliness", "simplicity", "innocence", "surrender", "snow",
-        "neutral", "balance", "maturity", "formal", "professional",
-        "represents", "symbolizes", "associated with", "means", "stands for",
-        "signifies", "denotes", "indicates", "conveys",
+        "love",
+        "stop",
+        "danger",
+        "warning",
+        "passion",
+        "anger",
+        "fire",
+        "heat",
+        "caution",
+        "happiness",
+        "joy",
+        "sunshine",
+        "optimism",
+        "energy",
+        "cheerful",
+        "nature",
+        "growth",
+        "freshness",
+        "environment",
+        "health",
+        "money",
+        "luck",
+        "calm",
+        "peace",
+        "trust",
+        "loyalty",
+        "sadness",
+        "cold",
+        "water",
+        "sky",
+        "royalty",
+        "luxury",
+        "mystery",
+        "creativity",
+        "wisdom",
+        "spirituality",
+        "femininity",
+        "romance",
+        "sweetness",
+        "innocence",
+        "youth",
+        "softness",
+        "warmth",
+        "earth",
+        "stability",
+        "comfort",
+        "reliability",
+        "rustic",
+        "elegance",
+        "power",
+        "sophistication",
+        "darkness",
+        "death",
+        "evil",
+        "purity",
+        "cleanliness",
+        "simplicity",
+        "innocence",
+        "surrender",
+        "snow",
+        "neutral",
+        "balance",
+        "maturity",
+        "formal",
+        "professional",
+        "represents",
+        "symbolizes",
+        "associated with",
+        "means",
+        "stands for",
+        "signifies",
+        "denotes",
+        "indicates",
+        "conveys",
     ]
-    
+
     # Color mixing keywords
     color_mixing_keywords = [
-        "mix", "mixing", "blend", "blending", "combine", "combining",
-        "plus", "together", "added", "result", "makes", "create",
+        "mix",
+        "mixing",
+        "blend",
+        "blending",
+        "combine",
+        "combining",
+        "plus",
+        "together",
+        "added",
+        "result",
+        "makes",
+        "create",
     ]
-    
+
     for query, answer in all_samples.items():
         query_lower = query.lower()
-        
+
         # S4: Pattern Recognition - check first (most specific)
         # Check for pattern-specific phrases and also for "..." which indicates a sequence
-        if any(p in query_lower for p in ["what comes next", "complete the pattern", 
-                                          "next item in the sequence", "continue the pattern",
-                                          "find the next", "what follows", "next item:",
-                                          "continue:", "next?", "what's next", "next term",
-                                          "the pattern", "sequence:", "series:", "after",
-                                          "pattern:", "extend the pattern", "finish the sequence",
-                                          "look at this pattern", "given the sequence", "in the pattern",
-                                          "for the sequence", "observe:", "following", "then next",
-                                          "starting with", "if we have"]) or \
-           ", ..." in query:  # Patterns contain ", ..." like "red, blue, red, ..."
+        if (
+            any(
+                p in query_lower
+                for p in [
+                    "what comes next",
+                    "complete the pattern",
+                    "next item in the sequence",
+                    "continue the pattern",
+                    "find the next",
+                    "what follows",
+                    "next item:",
+                    "continue:",
+                    "next?",
+                    "what's next",
+                    "next term",
+                    "the pattern",
+                    "sequence:",
+                    "series:",
+                    "after",
+                    "pattern:",
+                    "extend the pattern",
+                    "finish the sequence",
+                    "look at this pattern",
+                    "given the sequence",
+                    "in the pattern",
+                    "for the sequence",
+                    "observe:",
+                    "following",
+                    "then next",
+                    "starting with",
+                    "if we have",
+                ]
+            )
+            or ", ..." in query
+        ):  # Patterns contain ", ..." like "red, blue, red, ..."
             categories["Statement 4: Pattern Recognition"] += 1
-        
+
         # S3: Geometric Concepts - geometry terminology
-        elif any(p in query_lower for p in ["sides", "vertices", "corners", "angles", "faces", "edges",
-                                            "perimeter", "area", "symmetry", "degrees", "acute", "obtuse",
-                                            "right angle", "diameter", "radius", "circumference",
-                                            "polygon", "polyhedron", "-sided", "-gon", "property",
-                                            "equal sides", "parallel", "right angles", "lines of symmetry"]):
+        elif any(
+            p in query_lower
+            for p in [
+                "sides",
+                "vertices",
+                "corners",
+                "angles",
+                "faces",
+                "edges",
+                "perimeter",
+                "area",
+                "symmetry",
+                "degrees",
+                "acute",
+                "obtuse",
+                "right angle",
+                "diameter",
+                "radius",
+                "circumference",
+                "polygon",
+                "polyhedron",
+                "-sided",
+                "-gon",
+                "property",
+                "equal sides",
+                "parallel",
+                "right angles",
+                "lines of symmetry",
+            ]
+        ):
             categories["Statement 3: Geometric Concepts"] += 1
-        
+
         # S1: Color Perception - color keywords and associations
-        elif any(p in query_lower for p in ["color", "red", "blue", "green", "yellow", "orange",
-                                            "purple", "pink", "brown", "black", "white", "gray", "grey",
-                                            "hue", "shade"]) or \
-             any(kw in query_lower for kw in color_association_keywords) or \
-             any(kw in query_lower for kw in color_mixing_keywords):
+        elif (
+            any(
+                p in query_lower
+                for p in [
+                    "color",
+                    "red",
+                    "blue",
+                    "green",
+                    "yellow",
+                    "orange",
+                    "purple",
+                    "pink",
+                    "brown",
+                    "black",
+                    "white",
+                    "gray",
+                    "grey",
+                    "hue",
+                    "shade",
+                ]
+            )
+            or any(kw in query_lower for kw in color_association_keywords)
+            or any(kw in query_lower for kw in color_mixing_keywords)
+        ):
             categories["Statement 1: Color Perception"] += 1
-        
+
         # S2: Shape Perception - shape keywords
-        elif any(p in query_lower for p in ["shape", "circle", "square", "rectangle", "triangle",
-                                            "sphere", "cube", "cylinder", "cone", "pyramid",
-                                            "round", "circular", "rectangular", "triangular",
-                                            "2d", "3d", "flat", "solid", "hexagon", "pentagon",
-                                            "octagon", "oval", "diamond", "star", "heart",
-                                            "prism", "oval-shaped", "star-shaped", "shaped like",
-                                            "geometric", "outline", "form"]):
+        elif any(
+            p in query_lower
+            for p in [
+                "shape",
+                "circle",
+                "square",
+                "rectangle",
+                "triangle",
+                "sphere",
+                "cube",
+                "cylinder",
+                "cone",
+                "pyramid",
+                "round",
+                "circular",
+                "rectangular",
+                "triangular",
+                "2d",
+                "3d",
+                "flat",
+                "solid",
+                "hexagon",
+                "pentagon",
+                "octagon",
+                "oval",
+                "diamond",
+                "star",
+                "heart",
+                "prism",
+                "oval-shaped",
+                "star-shaped",
+                "shaped like",
+                "geometric",
+                "outline",
+                "form",
+            ]
+        ):
             categories["Statement 2: Shape Perception"] += 1
-        
+
         else:
             categories["Uncategorized"] += 1
             # Debug: collect first 20 uncategorized samples
@@ -2835,7 +3586,7 @@ def validate_distribution(all_samples: Dict[str, str]) -> None:
                 categories["uncategorized_samples"] = []
             if len(categories["uncategorized_samples"]) < 20:
                 categories["uncategorized_samples"].append((query, answer))
-    
+
     # Print uncategorized samples for debugging
     if "uncategorized_samples" in categories and categories["uncategorized_samples"]:
         print("\n" + "=" * 80)
@@ -2845,20 +3596,22 @@ def validate_distribution(all_samples: Dict[str, str]) -> None:
             print(f"{i}. Q: {q[:80]}...")
             print(f"   A: {a}")
         print("=" * 80)
-    
+
     print("\n" + "=" * 80)
     print("DISTRIBUTION VALIDATION")
     print("=" * 80)
-    print(f"{'Category':<40} {'Actual':>10} {'Expected':>10} {'Difference':>12} {'Status':>10}")
+    print(
+        f"{'Category':<40} {'Actual':>10} {'Expected':>10} {'Difference':>12} {'Status':>10}"
+    )
     print("-" * 80)
-    
+
     has_issues = False
     for category in sorted(expected_counts.keys()):
         actual = categories.get(category, 0)
         expected = expected_counts[category]
         diff = actual - expected
         percent_diff = abs(diff) / expected * 100 if expected > 0 else 0
-        
+
         # Tolerance: ±5% OK, ±10% WARNING, >10% ERROR
         if percent_diff <= 5.0:
             status = "✓ OK"
@@ -2868,262 +3621,274 @@ def validate_distribution(all_samples: Dict[str, str]) -> None:
         else:
             status = "✗ ERROR"
             has_issues = True
-        
-        print(f"{category:<40} {actual:>10,} {expected:>10,} {diff:>+12,} ({percent_diff:>5.1f}%) {status:>10}")
-    
+
+        print(
+            f"{category:<40} {actual:>10,} {expected:>10,} {diff:>+12,} ({percent_diff:>5.1f}%) {status:>10}"
+        )
+
     # Show uncategorized if any
     uncategorized = categories.get("Uncategorized", 0)
     if uncategorized > 0:
-        print(f"{'Uncategorized':<40} {uncategorized:>10,} {'0':>10} {'+' + str(uncategorized):>12} {'✗ ERROR':>10}")
+        print(
+            f"{'Uncategorized':<40} {uncategorized:>10,} {'0':>10} {'+' + str(uncategorized):>12} {'✗ ERROR':>10}"
+        )
         has_issues = True
-    
+
     print("-" * 80)
-    total_categorized = sum(v for k, v in categories.items() if k != "Uncategorized" and isinstance(v, int))
-    print(f"{'TOTAL (categorized)':<40} {total_categorized:>10,} {sum(expected_counts.values()):>10,}")
-    
+    total_categorized = sum(
+        v for k, v in categories.items() if k != "Uncategorized" and isinstance(v, int)
+    )
+    print(
+        f"{'TOTAL (categorized)':<40} {total_categorized:>10,} {sum(expected_counts.values()):>10,}"
+    )
+
     if has_issues:
-        print("\n⚠ WARNING: Distribution has significant deviations from expected values!")
+        print(
+            "\n⚠ WARNING: Distribution has significant deviations from expected values!"
+        )
         print("  This is normal if there are many duplicate queries across generators.")
     else:
         print("\n✓ Distribution looks good!")
+
 
 # ============================================================================
 # MAIN FUNCTION
 # ============================================================================
 
+
 def main():
     """Generate all samples and save to JSON."""
     print("Generating Group 3 Shapes, Colors & Patterns Dataset (250,000 samples)...")
     print("=" * 80)
-    
+
     all_samples = {}
     before_count = 0
-    
+
     # Statement 1: Color Perception (55,000 target - realistic)
     print("\n1. Generating Statement 1: Color Perception (55,000 target)...")
-    
+
     print("   1A. Object Color ID (30,000)...")
     s1a = generate_s1a_object_color_id(30000)
     before_count = len(all_samples)
     all_samples.update(s1a)
     print(f"      Generated: {len(s1a)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   1B. Reverse Color ID (5,000)...")
     s1b = generate_s1b_reverse_color_id(5000)
     before_count = len(all_samples)
     all_samples.update(s1b)
     print(f"      Generated: {len(s1b)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   1C. Color Verification (8,000)...")
     s1c = generate_s1c_color_verification(8000)
     before_count = len(all_samples)
     all_samples.update(s1c)
     print(f"      Generated: {len(s1c)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   1D. Color Multiple Choice (5,000)...")
     s1d = generate_s1d_color_multiple_choice(5000)
     before_count = len(all_samples)
     all_samples.update(s1d)
     print(f"      Generated: {len(s1d)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   1E. Color Mixing (2,000)...")
     s1e = generate_s1e_color_mixing(2000)
     before_count = len(all_samples)
     all_samples.update(s1e)
     print(f"      Generated: {len(s1e)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   1F. Color Associations (2,500)...")
     s1f = generate_s1f_color_associations(2500)
     before_count = len(all_samples)
     all_samples.update(s1f)
     print(f"      Generated: {len(s1f)}, Added: {len(all_samples) - before_count}")
-    
+
     # Statement 2: Shape Perception (40,000 target - realistic)
     print("\n2. Generating Statement 2: Shape Perception (40,000 target)...")
-    
+
     print("   2A. Object Shape ID (25,000)...")
     s2a = generate_s2a_object_shape_id(25000)
     before_count = len(all_samples)
     all_samples.update(s2a)
     print(f"      Generated: {len(s2a)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   2B. Reverse Shape ID (5,000)...")
     s2b = generate_s2b_reverse_shape_id(5000)
     before_count = len(all_samples)
     all_samples.update(s2b)
     print(f"      Generated: {len(s2b)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   2C. Shape Verification (5,000)...")
     s2c = generate_s2c_shape_verification(5000)
     before_count = len(all_samples)
     all_samples.update(s2c)
     print(f"      Generated: {len(s2c)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   2D. Shape Multiple Choice (4,000)...")
     s2d = generate_s2d_shape_multiple_choice(4000)
     before_count = len(all_samples)
     all_samples.update(s2d)
     print(f"      Generated: {len(s2d)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   2E. 2D vs 3D (1,000)...")
     s2e = generate_s2e_2d_vs_3d(1000)
     before_count = len(all_samples)
     all_samples.update(s2e)
     print(f"      Generated: {len(s2e)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   2F. 2D-3D Relationship (500)...")
     s2f = generate_s2f_2d_3d_relationship(500)
     before_count = len(all_samples)
     all_samples.update(s2f)
     print(f"      Generated: {len(s2f)}, Added: {len(all_samples) - before_count}")
-    
+
     # Statement 3: Geometric Concepts (10,000 target - limited by finite facts)
     print("\n3. Generating Statement 3: Geometric Concepts (10,000 target)...")
-    
+
     print("   3A. Shape by Sides (500)...")
     s3a = generate_s3a_shape_by_sides(500)
     before_count = len(all_samples)
     all_samples.update(s3a)
     print(f"      Generated: {len(s3a)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3B. Sides of Shape (600)...")
     s3b = generate_s3b_sides_of_shape(600)
     before_count = len(all_samples)
     all_samples.update(s3b)
     print(f"      Generated: {len(s3b)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3C. Corners/Vertices (800)...")
     s3c = generate_s3c_corners_vertices(800)
     before_count = len(all_samples)
     all_samples.update(s3c)
     print(f"      Generated: {len(s3c)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3D. Angles Count (500)...")
     s3d = generate_s3d_angles_count(500)
     before_count = len(all_samples)
     all_samples.update(s3d)
     print(f"      Generated: {len(s3d)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3E. Angle Types (500)...")
     s3e = generate_s3e_angle_types(500)
     before_count = len(all_samples)
     all_samples.update(s3e)
     print(f"      Generated: {len(s3e)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3F. Shape Properties (500)...")
     s3f = generate_s3f_shape_properties(500)
     before_count = len(all_samples)
     all_samples.update(s3f)
     print(f"      Generated: {len(s3f)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3G. 3D Faces/Edges/Vertices (1,000)...")
     s3g = generate_s3g_3d_faces_edges_vertices(1000)
     before_count = len(all_samples)
     all_samples.update(s3g)
     print(f"      Generated: {len(s3g)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3H. Symmetry (500)...")
     s3h = generate_s3h_symmetry(500)
     before_count = len(all_samples)
     all_samples.update(s3h)
     print(f"      Generated: {len(s3h)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3I. Shape Comparisons (3,000)...")
     s3i = generate_s3i_shape_comparisons(3000)
     before_count = len(all_samples)
     all_samples.update(s3i)
     print(f"      Generated: {len(s3i)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3J. Circle Properties (500)...")
     s3j = generate_s3j_circle_properties(500)
     before_count = len(all_samples)
     all_samples.update(s3j)
     print(f"      Generated: {len(s3j)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3K. Basic Perimeter (1,000)...")
     s3k = generate_s3k_basic_perimeter(1000)
     before_count = len(all_samples)
     all_samples.update(s3k)
     print(f"      Generated: {len(s3k)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   3L. Basic Area (1,000)...")
     s3l = generate_s3l_basic_area(1000)
     before_count = len(all_samples)
     all_samples.update(s3l)
     print(f"      Generated: {len(s3l)}, Added: {len(all_samples) - before_count}")
-    
+
     # Statement 4: Pattern Recognition (45,000 target - high combinatorial space)
     print("\n4. Generating Statement 4: Pattern Recognition (45,000 target)...")
-    
+
     print("   4A. 2-item Alternating (7,000)...")
     s4a = generate_s4a_2item_alternating(7000)
     before_count = len(all_samples)
     all_samples.update(s4a)
     print(f"      Generated: {len(s4a)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4B. 3-item Repeating (6,000)...")
     s4b = generate_s4b_3item_repeating(6000)
     before_count = len(all_samples)
     all_samples.update(s4b)
     print(f"      Generated: {len(s4b)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4C. 4-item Repeating (4,000)...")
     s4c = generate_s4c_4item_repeating(4000)
     before_count = len(all_samples)
     all_samples.update(s4c)
     print(f"      Generated: {len(s4c)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4D. Number Sequences (7,000)...")
     s4d = generate_s4d_number_sequences(7000)
     before_count = len(all_samples)
     all_samples.update(s4d)
     print(f"      Generated: {len(s4d)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4E. Growing/Shrinking (4,000)...")
     s4e = generate_s4e_growing_shrinking(4000)
     before_count = len(all_samples)
     all_samples.update(s4e)
     print(f"      Generated: {len(s4e)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4F. Doubling (3,000)...")
     s4f = generate_s4f_doubling(3000)
     before_count = len(all_samples)
     all_samples.update(s4f)
     print(f"      Generated: {len(s4f)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4G. Square Numbers (2,000)...")
     s4g = generate_s4g_square_numbers(2000)
     before_count = len(all_samples)
     all_samples.update(s4g)
     print(f"      Generated: {len(s4g)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4H. Fibonacci (2,000)...")
     s4h = generate_s4h_fibonacci(2000)
     before_count = len(all_samples)
     all_samples.update(s4h)
     print(f"      Generated: {len(s4h)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4I. Day/Month Sequences (4,000)...")
     s4i = generate_s4i_day_month_sequences(4000)
     before_count = len(all_samples)
     all_samples.update(s4i)
     print(f"      Generated: {len(s4i)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4J. Letter Sequences (3,000)...")
     s4j = generate_s4j_letter_sequences(3000)
     before_count = len(all_samples)
     all_samples.update(s4j)
     print(f"      Generated: {len(s4j)}, Added: {len(all_samples) - before_count}")
-    
+
     print("   4K. Mixed Attributes (3,000)...")
     s4k = generate_s4k_mixed_attributes(3000)
     before_count = len(all_samples)
     all_samples.update(s4k)
     print(f"      Generated: {len(s4k)}, Added: {len(all_samples) - before_count}")
-    
+
     # Validate distribution
     validate_distribution(all_samples)
-    
+
     # Save to TXT (in curriculum_training_data/output folder)
     script_dir = os.path.dirname(os.path.dirname(__file__))
     output_dir = os.path.join(script_dir, "output")
@@ -3135,46 +3900,82 @@ def main():
     # - Patterns first (Statement 4)
     # - Then colors (Statement 1), then shapes (Statement 2), then geometry (Statement 3)
     ordered_qa_pairs_dict = {}
-    
+
     # Collect QA pairs in curriculum order and deduplicate
-    for sample_dict in [s4a, s4b, s4c, s4d, s4e, s4f, s4g, s4h, s4i, s4j, s4k,
-                         s1a, s1b, s1c, s1d, s1e, s1f,
-                         s2a, s2b, s2c, s2d, s2e, s2f,
-                         s3a, s3b, s3c, s3d, s3e, s3f, s3g, s3h, s3i, s3j, s3k, s3l]:
+    for sample_dict in [
+        s4a,
+        s4b,
+        s4c,
+        s4d,
+        s4e,
+        s4f,
+        s4g,
+        s4h,
+        s4i,
+        s4j,
+        s4k,
+        s1a,
+        s1b,
+        s1c,
+        s1d,
+        s1e,
+        s1f,
+        s2a,
+        s2b,
+        s2c,
+        s2d,
+        s2e,
+        s2f,
+        s3a,
+        s3b,
+        s3c,
+        s3d,
+        s3e,
+        s3f,
+        s3g,
+        s3h,
+        s3i,
+        s3j,
+        s3k,
+        s3l,
+    ]:
         for query, answer in sample_dict.items():
             finalized_query = _finalize_group3_prompt(query)
             # Deduplicate: if same finalized query exists, keep the first one
             if finalized_query not in ordered_qa_pairs_dict:
                 ordered_qa_pairs_dict[finalized_query] = answer
-    
+
     # Convert to list maintaining curriculum order
     ordered_qa_pairs = [(q, a) for q, a in ordered_qa_pairs_dict.items()]
-    
+
     # Combine QA pairs into samples where all questions have answers
     # Format: "Q1? A1. Q2? A2. Q3? A3. ..." until reaching 512 tokens per sample
     print(f"\n{'=' * 80}")
     print("Combining QA pairs into samples (all questions with answers)...")
     print("  Target: >= 512 tokens per sample")
-    combined_samples = combine_qa_pairs_to_reach_min_tokens(ordered_qa_pairs, min_tokens=512)
+    combined_samples = combine_qa_pairs_to_reach_min_tokens(
+        ordered_qa_pairs, min_tokens=512
+    )
     print(f"  Original QA pairs: {len(ordered_qa_pairs):,}")
     print(f"  Combined samples: {len(combined_samples):,}")
-    
+
     print(f"\nSaving {len(combined_samples):,} samples to {output_path}...")
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
+
+    with open(output_path, "w", encoding="utf-8") as f:
         for sample in combined_samples:
             f.write(sample + "\n")
-    
+
     print(f"\n✓ Successfully saved {len(combined_samples):,} samples!")
     print("\nValidation Summary:")
     print(f"  - Total samples (after combining): {len(combined_samples):,}")
     print("  - Expected: 250,000")
     print(f"  - Difference: {len(ordered_qa_pairs) - 250000:,}")
-    
+
     if abs(len(ordered_qa_pairs) - 250000) / 250000 <= 0.10:
         print("\n✓ Sample count is within expected range!")
     else:
         print("\n⚠ Note: Sample count differs from expected.")
+
 
 if __name__ == "__main__":
     main()

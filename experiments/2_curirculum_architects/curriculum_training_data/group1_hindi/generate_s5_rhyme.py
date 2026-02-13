@@ -34,10 +34,10 @@ unique_combinations = set()
 for word, rhyme_word in RHYMING_PAIRS.items():
     # Find non-rhyming words (OPTIMIZED - use pre-computed list)
     non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
-    
+
     if not non_rhyming_words:
         continue
-    
+
     for template_idx, template in enumerate(TEMPLATES):
         non_rhyme = random.choice(non_rhyming_words)
         query = template.format(word=word, rhyme=rhyme_word, non_rhyme=non_rhyme)
@@ -50,10 +50,10 @@ for word, rhyme_word in RHYMING_PAIRS.items():
 # Also generate reverse (rhyme_word -> word)
 for rhyme_word, word in RHYMING_PAIRS.items():
     non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
-    
+
     if not non_rhyming_words:
         continue
-    
+
     for template_idx, template in enumerate(TEMPLATES):
         non_rhyme = random.choice(non_rhyming_words)
         query = template.format(word=rhyme_word, rhyme=word, non_rhyme=non_rhyme)
@@ -77,11 +77,11 @@ while len(samples) < target_count:
         else:
             # Pick a random word as "rhyme"
             rhyme_word = random.choice([w for w in unique_words if w != word])
-    
+
     non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
     if not non_rhyming_words:
         continue
-    
+
     template = random.choice(TEMPLATES)
     non_rhyme = random.choice(non_rhyming_words)
     query = template.format(word=word, rhyme=rhyme_word, non_rhyme=non_rhyme)

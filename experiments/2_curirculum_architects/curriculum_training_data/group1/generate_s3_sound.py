@@ -15,7 +15,10 @@ sound_map = {
     "/m/": ["mouse", "moon", "milk", "man", "map", "mat", "meat", "meet"],
 }
 
-templates = ["Which word starts with the sound {sound}, '{w1}' or '{w2}'?", "Pick the word that begins with sound {sound}: '{w1}' or '{w2}'"]
+templates = [
+    "Which word starts with the sound {sound}, '{w1}' or '{w2}'?",
+    "Pick the word that begins with sound {sound}: '{w1}' or '{w2}'",
+]
 
 samples = {}
 attempts = 0

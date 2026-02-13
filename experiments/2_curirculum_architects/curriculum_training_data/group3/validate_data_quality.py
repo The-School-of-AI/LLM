@@ -65,6 +65,7 @@ UNNATURAL_PATTERNS = [
 # VALIDATION FUNCTIONS
 # ============================================================================
 
+
 def check_factual_warnings(query: str) -> List[str]:
     """
     Prompt-only factual warnings.
@@ -73,27 +74,29 @@ def check_factual_warnings(query: str) -> List[str]:
     """
     warnings: list[str] = []
     query_lower = query.lower()
-    
+
     if "what color" in query_lower or "color" in query_lower:
         for obj, reason in AMBIGUOUS_OBJECTS.items():
             if obj in query_lower:
                 warnings.append(f"Ambiguous object: '{obj}' ({reason})")
     return warnings
 
+
 def check_unnatural_phrasing(query: str) -> List[str]:
     """Check for unnatural English phrasing."""
     issues = []
-    
+
     for pattern in UNNATURAL_PATTERNS:
         if re.search(pattern, query, re.IGNORECASE):
             issues.append(f"Unnatural phrasing: matches pattern '{pattern}'")
-    
+
     return issues
+
 
 def check_grammar(query: str) -> List[str]:
     """Check for grammar errors."""
     errors = []
-    
+
     # Article errors
     if re.search(r"\ba orange\b", query, re.IGNORECASE):
         errors.append("Grammar: 'a orange' should be 'an orange'")
@@ -101,31 +104,33 @@ def check_grammar(query: str) -> List[str]:
         errors.append("Grammar: 'a apple' should be 'an apple'")
     if re.search(r"\ba elephant\b", query, re.IGNORECASE):
         errors.append("Grammar: 'a elephant' should be 'an elephant'")
-    
+
     # Non-countable nouns with articles
     for noun, correct in NEEDS_ARTICLE_FIX.items():
         if re.search(rf"\ba {noun}\b", query, re.IGNORECASE):
             errors.append(f"Grammar: 'a {noun}' should be '{correct}'")
-    
+
     return errors
+
 
 def check_formatting(query: str) -> List[str]:
     """Check for formatting issues."""
     issues = []
-    
+
     # Colon after question mark
     if re.search(r"\?\s*:", query):
         issues.append("Formatting: Colon after question mark")
-    
+
     # Colon at end
-    if query.rstrip().endswith(':'):
+    if query.rstrip().endswith(":"):
         issues.append("Formatting: Colon at end of query")
-    
+
     # Training-related text
     if "training" in query.lower():
         issues.append("Formatting: Contains 'training' text")
-    
+
     return issues
+
 
 def validate_sample(query: str) -> Dict[str, List[str]]:
     """Validate a single prompt string."""
@@ -136,17 +141,18 @@ def validate_sample(query: str) -> Dict[str, List[str]]:
         "formatting_issues": check_formatting(query),
     }
 
+
 def validate_dataset(file_path: str, max_samples: int = None) -> Dict:
     """Validate an entire dataset file."""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # Backward compatibility: older datasets were dicts of {query: answer}
     prompts = list(data.keys()) if isinstance(data, dict) else list(data)
-    
+
     total_samples = len(prompts)
     samples_to_check = prompts[:max_samples] if max_samples else prompts
-    
+
     results = {
         "total_samples": total_samples,
         "checked_samples": len(samples_to_check),
@@ -157,39 +163,39 @@ def validate_dataset(file_path: str, max_samples: int = None) -> Dict:
         "warning_count": 0,
         "error_count": 0,
     }
-    
+
     for query in samples_to_check:
         validation = validate_sample(query)
-        
+
         if validation["factual_warnings"]:
-            results["factual_warnings"].append({
-                "query": query,
-                "warnings": validation["factual_warnings"],
-            })
+            results["factual_warnings"].append(
+                {
+                    "query": query,
+                    "warnings": validation["factual_warnings"],
+                }
+            )
             results["warning_count"] += len(validation["factual_warnings"])
-        
+
         if validation["unnatural_phrasing"]:
-            results["unnatural_phrasing"].append({
-                "query": query,
-                "issues": validation["unnatural_phrasing"]
-            })
+            results["unnatural_phrasing"].append(
+                {"query": query, "issues": validation["unnatural_phrasing"]}
+            )
             results["error_count"] += len(validation["unnatural_phrasing"])
-        
+
         if validation["grammar_errors"]:
-            results["grammar_errors"].append({
-                "query": query,
-                "errors": validation["grammar_errors"]
-            })
+            results["grammar_errors"].append(
+                {"query": query, "errors": validation["grammar_errors"]}
+            )
             results["error_count"] += len(validation["grammar_errors"])
-        
+
         if validation["formatting_issues"]:
-            results["formatting_issues"].append({
-                "query": query,
-                "issues": validation["formatting_issues"]
-            })
+            results["formatting_issues"].append(
+                {"query": query, "issues": validation["formatting_issues"]}
+            )
             results["error_count"] += len(validation["formatting_issues"])
-    
+
     return results
+
 
 def print_report(results: Dict, show_examples: int = 10):
     """Print validation report."""
@@ -200,7 +206,7 @@ def print_report(results: Dict, show_examples: int = 10):
     print(f"Samples checked: {results['checked_samples']:,}")
     print(f"Total errors found: {results['error_count']}")
     print(f"Total warnings found: {results.get('warning_count', 0)}")
-    
+
     # Factual warnings
     if results["factual_warnings"]:
         print(f"\n⚠ FACTUAL WARNINGS: {len(results['factual_warnings'])} found")
@@ -209,72 +215,77 @@ def print_report(results: Dict, show_examples: int = 10):
             print(f"\n{i}. Query: {item['query']}")
             for warning in item["warnings"]:
                 print(f"   → {warning}")
-    
+
     # Unnatural phrasing
     if results["unnatural_phrasing"]:
         print(f"\n⚠️  UNNATURAL PHRASING: {len(results['unnatural_phrasing'])} found")
         print("-" * 80)
         for i, item in enumerate(results["unnatural_phrasing"][:show_examples], 1):
             print(f"\n{i}. Query: {item['query']}")
-            for issue in item['issues']:
+            for issue in item["issues"]:
                 print(f"   → {issue}")
-    
+
     # Grammar errors
     if results["grammar_errors"]:
         print(f"\n❌ GRAMMAR ERRORS: {len(results['grammar_errors'])} found")
         print("-" * 80)
         for i, item in enumerate(results["grammar_errors"][:show_examples], 1):
             print(f"\n{i}. Query: {item['query']}")
-            for error in item['errors']:
+            for error in item["errors"]:
                 print(f"   → {error}")
-    
+
     # Formatting issues
     if results["formatting_issues"]:
         print(f"\n⚠️  FORMATTING ISSUES: {len(results['formatting_issues'])} found")
         print("-" * 80)
         for i, item in enumerate(results["formatting_issues"][:show_examples], 1):
             print(f"\n{i}. Query: {item['query']}")
-            for issue in item['issues']:
+            for issue in item["issues"]:
                 print(f"   → {issue}")
-    
+
     # Summary
     print("\n" + "=" * 80)
     if results["error_count"] == 0:
         if results.get("warning_count", 0) == 0:
             print("✅ NO ERRORS OR WARNINGS FOUND - Dataset quality is good!")
         else:
-            print(f"✅ NO ERRORS FOUND - Dataset has {results.get('warning_count', 0)} warning(s)")
+            print(
+                f"✅ NO ERRORS FOUND - Dataset has {results.get('warning_count', 0)} warning(s)"
+            )
     else:
         print(f"❌ {results['error_count']} ERROR(S) FOUND - Dataset needs fixes")
     print("=" * 80)
 
+
 if __name__ == "__main__":
     import sys
     import os
-    
+
     if len(sys.argv) < 2:
         print("Usage: python validate_data_quality.py <dataset.json> [max_samples]")
         print("\nExamples:")
         print("  python validate_data_quality.py ../group3.json 1000")
-        print("  python validate_data_quality.py ../../curriculum_training_data/group3.json 1000")
+        print(
+            "  python validate_data_quality.py ../../curriculum_training_data/group3.json 1000"
+        )
         sys.exit(1)
-    
+
     file_path = sys.argv[1]
-    
+
     # Resolve relative paths
     if not os.path.isabs(file_path):
         file_path = os.path.abspath(file_path)
-    
+
     if not os.path.exists(file_path):
         print(f"Error: File not found: {file_path}")
         print(f"Current directory: {os.getcwd()}")
         sys.exit(1)
-    
+
     max_samples = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    
+
     print(f"Validating: {file_path}")
     if max_samples:
         print(f"Checking first {max_samples:,} samples...")
-    
+
     results = validate_dataset(file_path, max_samples)
     print_report(results, show_examples=15)

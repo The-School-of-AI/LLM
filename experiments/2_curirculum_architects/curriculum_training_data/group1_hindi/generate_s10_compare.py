@@ -37,9 +37,11 @@ for word in unique_words:
     clusters = get_hindi_grapheme_clusters(word)
     word_lengths[word] = len(clusters)
 
+
 def get_word_length(word: str) -> int:
     """Get the length of a word in grapheme clusters (cached)"""
     return word_lengths.get(word, 0)
+
 
 samples = []
 target_count = 11000
@@ -47,7 +49,9 @@ unique_combinations = set()
 
 # Generate samples efficiently - limit iterations
 word_list = unique_words
-max_pairs_to_generate = min(target_count * 2, len(word_list) * (len(word_list) - 1) // 2)
+max_pairs_to_generate = min(
+    target_count * 2, len(word_list) * (len(word_list) - 1) // 2
+)
 pairs_generated = 0
 
 for i, word1 in enumerate(word_list):
@@ -58,21 +62,21 @@ for i, word1 in enumerate(word_list):
             continue
         if pairs_generated >= max_pairs_to_generate:
             break
-        
+
         len1 = get_word_length(word1)
         len2 = get_word_length(word2)
-        
+
         # Skip equal-length pairs - can't compare when lengths are equal
         if len1 == len2:
             continue
-        
+
         if len1 > len2:
             longer_word = word1
             shorter_word = word2
         else:
             longer_word = word2
             shorter_word = word1
-        
+
         # Generate longer questions
         for template_idx, template in enumerate(TEMPLATES_LONGER):
             query = template.format(word1=word1, word2=word2)
@@ -81,7 +85,7 @@ for i, word1 in enumerate(word_list):
             if key not in unique_combinations:
                 unique_combinations.add(key)
                 samples.append((query, answer))
-        
+
         # Generate shorter questions
         for template_idx, template in enumerate(TEMPLATES_SHORTER):
             query = template.format(word1=word1, word2=word2)
@@ -90,35 +94,35 @@ for i, word1 in enumerate(word_list):
             if key not in unique_combinations:
                 unique_combinations.add(key)
                 samples.append((query, answer))
-        
+
         pairs_generated += 1
 
 # Sample with replacement to reach target
 while len(samples) < target_count:
     word1 = random.choice(word_list)
     word2 = random.choice([w for w in word_list if w != word1])
-    
+
     len1 = get_word_length(word1)
     len2 = get_word_length(word2)
-    
+
     # Skip equal-length pairs - can't compare when lengths are equal
     if len1 == len2:
         continue
-    
+
     if len1 > len2:
         longer_word = word1
         shorter_word = word2
     else:
         longer_word = word2
         shorter_word = word1
-    
+
     if random.random() < 0.5:
         template = random.choice(TEMPLATES_LONGER)
         answer = longer_word
     else:
         template = random.choice(TEMPLATES_SHORTER)
         answer = shorter_word
-    
+
     query = template.format(word1=word1, word2=word2)
     samples.append((query, answer))
 

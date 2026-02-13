@@ -14,11 +14,11 @@ from prompt_utils import format_qa_pair_hindi  # noqa: E402
 
 # Question templates - two types: number to name, and name to spelling
 TEMPLATES_NAME = [
-    '{num} की वर्तनी क्या है?',
-    '{num} का नाम क्या है?',
-    '{num} को हिंदी में क्या कहते हैं?',
-    '{num} का हिंदी नाम क्या है?',
-    '{num} की संख्या का नाम क्या है?',
+    "{num} की वर्तनी क्या है?",
+    "{num} का नाम क्या है?",
+    "{num} को हिंदी में क्या कहते हैं?",
+    "{num} का हिंदी नाम क्या है?",
+    "{num} की संख्या का नाम क्या है?",
 ]
 
 TEMPLATES_SPELLING = [
@@ -39,7 +39,7 @@ for num in range(1, 101):  # 1 to 100
         word = NUMBERS[num - 1]
     else:
         continue
-    
+
     for template_idx, template in enumerate(TEMPLATES_NAME):
         query = template.format(num=num)
         answer = word
@@ -52,7 +52,7 @@ for word in NUMBERS:
     chars = get_hindi_characters(word)
     if len(chars) == 0:
         continue
-    
+
     for template_idx, template in enumerate(TEMPLATES_SPELLING):
         query = template.format(word=word)
         answer = ", ".join(chars)

@@ -41,7 +41,7 @@ for word in set(all_words):
     clusters = get_hindi_grapheme_clusters(word)
     if len(clusters) == 0:
         continue
-    
+
     last_cluster = clusters[-1]
     for template_idx, template in enumerate(TEMPLATES):
         query = template.format(word=word)
@@ -57,7 +57,7 @@ while len(samples) < target_count:
     clusters = get_hindi_grapheme_clusters(word)
     if len(clusters) == 0:
         continue
-    
+
     last_cluster = clusters[-1]
     template = random.choice(TEMPLATES)
     query = template.format(word=word)
