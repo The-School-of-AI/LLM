@@ -1044,32 +1044,40 @@ class GatedSparseAttention(nn.Module):
         w_raw = self.W_Iw(x)        # [B, T, indexer_heads] — pre-sigmoid (kernel applies sigmoid)
         scale_idx = 1.0 / math.sqrt(self.d_idx)
 
+        # Stateless re-computation: always recompute indices via fused_indexer_topk.
+        # This avoids the gradient-accumulation race condition where _saved_selection
+        # from micro-batch B would overwrite micro-batch A's indices before A's backward pass.
+        # The fused_indexer_topk kernel is O(N) and adds <1% overhead vs O(N·K) attention.
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = (self.training and torch.is_grad_enabled()
-                                      and getattr(self, "_saved_selection", None) is not None)
+        is_reversible_reconstruct = self.training and torch.is_grad_enabled()
 
-        if is_reversible_reconstruct:
-            k_t, top_indices = self._saved_selection
-            self._saved_selection = None
-        else:
-            # fused_indexer_topk: never materializes [B,T,T], processes in [B,C,T] chunks
-            # We pass is_training=False so the kernel doesn't update EMA (we do it below with DDP sync)
-            var_t, k_t, top_indices = fused_indexer_topk(
-                q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
-                scale=scale_idx, causal=True,
-                k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
-                variance_ema=self.variance_ema,  # kernel uses for avg_V reference
-                is_training=False,
-                sink_size=4,
+        var_t, k_t, top_indices = fused_indexer_topk(
+            q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
+            scale=scale_idx, causal=True,
+            k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
+            variance_ema=self.variance_ema,  # kernel uses for avg_V reference
+            is_training=False,
+            sink_size=4,
+        )
+        # var_t: [B, T], k_t: [B, T] (long), top_indices: [B, T, k_limit] (int32)
+
+        # Debug: verify stateless recomputation is producing valid indices
+        if _kernel_log.isEnabledFor(logging.DEBUG):
+            _phase = "reconstruct" if is_reversible_reconstruct else ("rev_fwd" if is_reversible_forward else "fwd")
+            _kernel_log.debug(
+                "[GSA stateless] phase=%s B=%d T=%d k_t_mean=%.1f k_t_min=%d k_t_max=%d "
+                "top_indices_shape=%s var_ema=%.4f",
+                _phase, B, T,
+                k_t.float().mean().item(), k_t.min().item(), k_t.max().item(),
+                list(top_indices.shape), self.variance_ema.item(),
             )
-            # var_t: [B, T], k_t: [B, T] (long), top_indices: [B, T, k_limit] (int32)
 
-            if is_reversible_forward:
-                var_t_mean = var_t.mean().detach()
-                if torch.distributed.is_initialized():
-                    torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
-                self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
-                self._saved_selection = (k_t, top_indices)
+        # Update variance EMA only during the reversible forward pass (no grad)
+        if is_reversible_forward:
+            var_t_mean = var_t.mean().detach()
+            if torch.distributed.is_initialized():
+                torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
+            self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
 
         # Expand indices for mask construction
         k_limit = top_indices.size(-1)
