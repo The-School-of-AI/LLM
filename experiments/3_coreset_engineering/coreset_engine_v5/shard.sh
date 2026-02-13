@@ -25,6 +25,7 @@ CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
 TOTAL_TOKENS=""
+RESUME=0
 
 # --------------- PARSE ARGS ---------------
 usage() {
@@ -42,6 +43,7 @@ usage() {
   echo "  --checkpoint-base   Base dir for checkpoints (default: output/checkpoints)"
   echo "  --band-inference    Band inference mode (default: none)"
   echo "                     Values: none | infer_if_missing | infer_if_ineligible | force"
+  echo "  --resume            Resume from last checkpoints (don't clean output dirs)"
   exit 1
 }
 
@@ -56,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --checkpoint-base)  CHECKPOINT_BASE="$2";  shift 2 ;;
     --band-inference)   BAND_INFERENCE="$2";   shift 2 ;;
     --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
+    --resume)           RESUME=1;              shift 1 ;;
     -h|--help)          usage ;;
     *)                  echo "Unknown option: $1"; usage ;;
   esac
@@ -79,8 +82,12 @@ echo "  Band Infer   : $BAND_INFERENCE"
 echo "============================================================"
 
 # Clean old outputs
-echo "[*] Cleaning previous outputs..."
-rm -rf "$CHECKPOINT_BASE" output/coresets output/manifests 2>/dev/null || true
+if [[ $RESUME -eq 0 ]]; then
+  echo "[*] Cleaning previous outputs..."
+  rm -rf "$CHECKPOINT_BASE" output/coresets output/manifests 2>/dev/null || true
+else
+  echo "[*] Resuming: keeping previous outputs..."
+fi
 
 # Launch all shards in parallel using background processes
 echo "[*] Launching $NUM_SHARDS shards..."

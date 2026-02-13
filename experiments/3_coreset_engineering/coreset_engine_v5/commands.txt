@@ -1,6 +1,7 @@
+# Ask ChatGPT for any issues
 # Steps to run the coresets pipeline on EC2 machine
 # Convert this into a CI GH Action #TODO
-# On your local machineß
+# Change permissions on your local machine
 chmod 400 <pem_file>
 
 # Login to EC2
@@ -15,10 +16,10 @@ sudo apt update
 sudo apt install -y python3.12 python3.12-venv git python3-pip
 sudo apt install unzip
 
-# Check S3 listing access
-aws s3 ls s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=flan/
+# Check S3 listing access, if access issue then reach out to AWS team and share the error with them
+aws s3 ls s3://<container-name>/processed_dataset/curriculum_pyspark_output/source=flan/
 
-# Install AWS CLI if previous command did not work
+# Install AWS CLI if previous command did not work due to awscli not present in the OS
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
 unzip awscliv2.zip
 sudo ./aws/install
@@ -59,13 +60,13 @@ pip install -r experiments/3_coreset_engineering/coreset_engine_v5/requirements.
 tmux new -s coreset
 source venv/bin/activate
 python --version
-
 nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
   --num-shards 8 \
   --stages "1B" \
-  --input-path "s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/" \
+  --input-path "s3://<container-name>/processed_dataset/curriculum_pyspark_output/" \
   --input-format jsonl \
   --total-tokens 4523096944 \
+  --resume \
   > shard_run.log 2>&1 &
 
 ps aux | grep shard.sh
@@ -88,4 +89,7 @@ OR
 
 # copy from EC2/EBs to s3
 # Run only after confirming with AWS team
-aws s3 sync /home/ubuntu/LLM/experiments/3_coreset_engineering/coreset_engine_v5/output/ s3://t2-datacurriculum-353/coreset_outputs/
+aws s3 sync /home/ubuntu/LLM/experiments/3_coreset_engineering/coreset_engine_v5/output/ s3://<container-name>/coreset_outputs/run_2/
+
+# For uploading single file to S3
+aws s3 cp ./shard_run.log s3://<container-name>/coreset_outputs/run_2/
