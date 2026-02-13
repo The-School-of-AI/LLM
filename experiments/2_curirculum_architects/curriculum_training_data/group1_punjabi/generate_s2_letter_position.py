@@ -3,19 +3,33 @@
 Generate Statement 2: Letter Position (ਅੱਖਰ ਸਥਿਤੀ) questions for Punjabi
 Target: 25,800 pairs
 """
+
 import os
-import random
 import sys
+
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_punjabi.punjabi_vocabulary import ALL_WORDS_UNIQUE
 from prompt_utils import format_qa_pair_hindi
 
+
 def get_punjabi_grapheme_clusters(word: str) -> list[str]:
     return regex.findall(r"\X", word)
 
-POSITIONS = ["ਪਹਿਲਾ", "ਦੂਜਾ", "ਤੀਜਾ", "ਚੌਥਾ", "ਪੰਜਵਾਂ", "ਛੇਵਾਂ", "ਸੱਤਵਾਂ", "ਅੱਠਵਾਂ", "ਨੌਵਾਂ", "ਦਸਵਾਂ"]
+
+POSITIONS = [
+    "ਪਹਿਲਾ",
+    "ਦੂਜਾ",
+    "ਤੀਜਾ",
+    "ਚੌਥਾ",
+    "ਪੰਜਵਾਂ",
+    "ਛੇਵਾਂ",
+    "ਸੱਤਵਾਂ",
+    "ਅੱਠਵਾਂ",
+    "ਨੌਵਾਂ",
+    "ਦਸਵਾਂ",
+]
 
 TEMPLATES = [
     '"{word}" ਦਾ {pos} ਅੱਖਰ ਕੀ ਹੈ?',
@@ -26,22 +40,26 @@ TEMPLATES = [
     '"{word}" ਵਿੱਚ {pos_num} ਸਥਾਨ ਤੇ ਕੀ ਹੈ?',
 ]
 
+
 def generate_samples(target_count):
     samples = set()
     words = ALL_WORDS_UNIQUE
-    
+
     for word in words:
         clusters = get_punjabi_grapheme_clusters(word)
         for i, char in enumerate(clusters):
-            if i >= len(POSITIONS): break
+            if i >= len(POSITIONS):
+                break
             pos_word = POSITIONS[i]
             pos_num = str(i + 1)
             for template in TEMPLATES:
                 query = template.format(word=word, pos=pos_word, pos_num=pos_num)
                 answer = char
                 samples.add((query, answer))
-                if len(samples) >= target_count: return list(samples)
+                if len(samples) >= target_count:
+                    return list(samples)
     return list(samples)
+
 
 if __name__ == "__main__":
     target_count = 25800

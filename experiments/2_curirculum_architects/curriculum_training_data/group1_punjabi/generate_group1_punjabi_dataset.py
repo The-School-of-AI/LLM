@@ -16,7 +16,7 @@ from prompt_utils import (  # noqa: E402
 )
 
 # Statement files and their target counts
-# We expect S1-S9 to generate ~30k-40k unique pairs. 
+# We expect S1-S9 to generate ~30k-40k unique pairs.
 # S10 will fill the rest to reach 200,000 unique.
 STATEMENT_FILES = [
     ("group1_s1.txt", 10000, "S1: Spelling"),

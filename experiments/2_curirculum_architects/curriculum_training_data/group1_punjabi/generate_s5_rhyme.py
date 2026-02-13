@@ -3,6 +3,7 @@
 Generate Statement 5: Rhyming (ਤੁਕਬੰਦੀ) questions for Punjabi
 Target: 20,000 pairs
 """
+
 import os
 import random
 import sys
@@ -20,18 +21,21 @@ TEMPLATES = [
     '"{rhyme}" ਅਤੇ "{non_rhyme}" ਵਿੱਚੋਂ ਕਿਹੜਾ ਸ਼ਬਦ "{word}" ਨਾਲ ਤੁਕਬੰਦੀ ਕਰਦਾ ਹੈ?',
 ]
 
+
 def generate_samples(target_count):
     samples = set()
     pairs = list(RHYMING_PAIRS.items())
     all_words = ALL_WORDS_UNIQUE
-    
+
     for word, rhyme in pairs:
         non_rhymes = [w for w in all_words if w != rhyme and w != word]
-        for _ in range(10): # variety of non-rhymes
+        for _ in range(10):  # variety of non-rhymes
             non_rhyme = random.choice(non_rhymes)
             w1, w2 = (rhyme, non_rhyme) if random.random() < 0.5 else (non_rhyme, rhyme)
             for template in TEMPLATES:
-                query = template.format(word=word, rhyme=rhyme, non_rhyme=non_rhyme, w1=w1, w2=w2) # w1,w2 handles switch
+                query = template.format(
+                    word=word, rhyme=rhyme, non_rhyme=non_rhyme, w1=w1, w2=w2
+                )  # w1,w2 handles switch
                 # Wait, template needs {rhyme} and {non_rhyme} but also order variation
                 # Fix template above to use {option1} and {option2}
                 pass
@@ -45,7 +49,7 @@ def generate_samples(target_count):
         'ਕਿਹੜਾ ਸ਼ਬਦ "{word}" ਨਾਲ ਤੁਕਬੰਦੀ ਕਰਦਾ ਹੈ, "{o1}" ਜਾਂ "{o2}"?',
         '"{o1}" ਅਤੇ "{o2}" ਵਿੱਚੋਂ ਕਿਹੜਾ ਸ਼ਬਦ "{word}" ਨਾਲ ਤੁਕਬੰਦੀ ਕਰਦਾ ਹੈ?',
     ]
-    
+
     samples = set()
     for word, rhyme in pairs:
         non_rhymes = [w for w in all_words if w != rhyme and w != word]
@@ -56,8 +60,10 @@ def generate_samples(target_count):
                 query = template.format(word=word, o1=o1, o2=o2)
                 answer = rhyme
                 samples.add((query, answer))
-                if len(samples) >= target_count: return list(samples)
+                if len(samples) >= target_count:
+                    return list(samples)
     return list(samples)
+
 
 if __name__ == "__main__":
     target_count = 20000

@@ -3,8 +3,8 @@
 Generate Statement 6: Classification (ਸ਼੍ਰੇਣੀਬੱਧਤਾ) questions for Punjabi
 Target: 20,000 pairs
 """
+
 import os
-import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -20,19 +20,22 @@ TEMPLATES = [
     '"{word}" ਕਿਸ ਵਰਗ ਵਿੱਚ ਆਉਂਦਾ ਹੈ, {options}?',
 ]
 
+
 def generate_samples(target_count):
     samples = set()
     categories = list(CLASSIFICATION_CATEGORIES.keys())
     options_str = ", ".join(categories[:-1]) + " ਜਾਂ " + categories[-1]
-    
+
     for cat, words in CLASSIFICATION_CATEGORIES.items():
         for word in words:
             for template in TEMPLATES:
                 query = template.format(word=word, options=options_str)
                 answer = cat
                 samples.add((query, answer))
-                if len(samples) >= target_count: return list(samples)
+                if len(samples) >= target_count:
+                    return list(samples)
     return list(samples)
+
 
 if __name__ == "__main__":
     target_count = 20000

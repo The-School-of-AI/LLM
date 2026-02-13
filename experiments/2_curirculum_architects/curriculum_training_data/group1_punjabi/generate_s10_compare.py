@@ -3,18 +3,22 @@
 Generate Statement 10: Word Comparison (ਸ਼ਬਦ ਤੁਲਨਾ) questions for Punjabi
 Target: 170,000 unique pairs to reach the 200,000 total unique goal.
 """
+
 import os
 import random
 import sys
-import regex
 from itertools import combinations
+
+import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_punjabi.punjabi_vocabulary import ALL_WORDS_UNIQUE
 from prompt_utils import format_qa_pair_hindi
 
+
 def get_punjabi_grapheme_clusters(word: str) -> list[str]:
     return regex.findall(r"\X", word)
+
 
 TEMPLATES_LONGER = [
     '"{word1}" ਅਤੇ "{word2}" ਵਿੱਚੋਂ ਕਿਹੜਾ ਸ਼ਬਦ ਲੰਬਾ ਹੈ?',
@@ -32,24 +36,26 @@ TEMPLATES_SHORTER = [
     'ਲੰਬਾਈ ਵਿੱਚ ਕਿਹੜਾ ਸ਼ਬਦ ਛੋਟਾ ਹੈ, "{word1}" ਜਾਂ "{word2}"?',
 ]
 
+
 def generate_samples(target_count):
     samples = set()
     words = ALL_WORDS_UNIQUE
-    
+
     # Pre-calculate counts
     word_counts = {w: len(get_punjabi_grapheme_clusters(w)) for w in words}
-    
+
     # Generate all pairs
     all_pairs = list(combinations(words, 2))
     random.shuffle(all_pairs)
-    
+
     for w1, w2 in all_pairs:
         c1, c2 = word_counts[w1], word_counts[w2]
-        if c1 == c2: continue
-        
+        if c1 == c2:
+            continue
+
         longer = w1 if c1 > c2 else w2
         shorter = w2 if c1 > c2 else w1
-        
+
         # Longer questions
         for template in TEMPLATES_LONGER:
             # Randomize order of options
@@ -57,17 +63,20 @@ def generate_samples(target_count):
             query = template.format(word1=o1, word2=o2)
             answer = longer
             samples.add((query, answer))
-            if len(samples) >= target_count: return list(samples)
-            
+            if len(samples) >= target_count:
+                return list(samples)
+
         # Shorter questions
         for template in TEMPLATES_SHORTER:
             o1, o2 = (w1, w2) if random.random() < 0.5 else (w2, w1)
             query = template.format(word1=o1, word2=o2)
             answer = shorter
             samples.add((query, answer))
-            if len(samples) >= target_count: return list(samples)
-            
+            if len(samples) >= target_count:
+                return list(samples)
+
     return list(samples)
+
 
 if __name__ == "__main__":
     target_count = 170000

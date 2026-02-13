@@ -3,17 +3,20 @@
 Generate Statement 9: Last Letter (ਆਖਰੀ ਅੱਖਰ) questions for Punjabi
 Target: 17,200 pairs
 """
+
 import os
-import random
 import sys
+
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_punjabi.punjabi_vocabulary import ALL_WORDS_UNIQUE
 from prompt_utils import format_qa_pair_hindi
 
+
 def get_punjabi_grapheme_clusters(word: str) -> list[str]:
     return regex.findall(r"\X", word)
+
 
 TEMPLATES = [
     '"{word}" ਦਾ ਆਖਰੀ ਅੱਖਰ ਕੀ ਹੈ?',
@@ -24,20 +27,24 @@ TEMPLATES = [
     '"{word}" ਕਿਸ ਅੱਖਰ ਤੇ ਸਮਾਪਤ ਹੁੰਦਾ ਹੈ?',
 ]
 
+
 def generate_samples(target_count):
     samples = set()
     words = ALL_WORDS_UNIQUE
-    
+
     for word in words:
         clusters = get_punjabi_grapheme_clusters(word)
-        if not clusters: continue
+        if not clusters:
+            continue
         last_char = clusters[-1]
         for template in TEMPLATES:
             query = template.format(word=word)
             answer = last_char
             samples.add((query, answer))
-            if len(samples) >= target_count: return list(samples)
+            if len(samples) >= target_count:
+                return list(samples)
     return list(samples)
+
 
 if __name__ == "__main__":
     target_count = 17200

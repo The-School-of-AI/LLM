@@ -3,19 +3,34 @@
 Generate Statement 7: Position of Letter (ਅੱਖਰ ਦਾ ਸਥਾਨ) questions for Punjabi
 Target: 17,200 pairs
 """
+
 import os
 import random
 import sys
+
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_punjabi.punjabi_vocabulary import ALL_WORDS_UNIQUE
 from prompt_utils import format_qa_pair_hindi
 
+
 def get_punjabi_grapheme_clusters(word: str) -> list[str]:
     return regex.findall(r"\X", word)
 
-POSITIONS_ANS = ["ਪਹਿਲੇ", "ਦੂਜੇ", "ਤੀਜੇ", "ਚੌਥੇ", "ਪੰਚਵੇਂ", "ਛੇਵੇਂ", "ਸੱਤਵੇਂ", "ਅੱਠਵੇਂ", "ਨੌਵੇਂ", "ਦਸਵੇਂ"]
+
+POSITIONS_ANS = [
+    "ਪਹਿਲੇ",
+    "ਦੂਜੇ",
+    "ਤੀਜੇ",
+    "ਚੌਥੇ",
+    "ਪੰਚਵੇਂ",
+    "ਛੇਵੇਂ",
+    "ਸੱਤਵੇਂ",
+    "ਅੱਠਵੇਂ",
+    "ਨੌਵੇਂ",
+    "ਦਸਵੇਂ",
+]
 
 TEMPLATES = [
     '"{word}" ਵਿੱਚ "{char}" ਕਿਹੜੇ ਸਥਾਨ ਤੇ ਹੈ?',
@@ -25,31 +40,39 @@ TEMPLATES = [
     '"{char}" ਅੱਖਰ "{word}" ਵਿੱਚ ਕਿਹੜੇ ਸਥਾਨ ਤੇ ਹੈ?',
 ]
 
+
 def generate_samples(target_count):
     samples = set()
     words = ALL_WORDS_UNIQUE
-    
+
     for word in words:
         clusters = get_punjabi_grapheme_clusters(word)
         for i, char in enumerate(clusters):
-            if i >= len(POSITIONS_ANS): break
+            if i >= len(POSITIONS_ANS):
+                break
             pos_ans = POSITIONS_ANS[i]
-            
+
             # For the option template
-            others = [p for p in POSITIONS_ANS[:len(clusters)] if p != pos_ans]
+            others = [p for p in POSITIONS_ANS[: len(clusters)] if p != pos_ans]
             if others:
                 opt1 = pos_ans
                 opt2 = random.choice(others)
-                opts = f"{opt1} ਜਾਂ {opt2}" if random.random() < 0.5 else f"{opt2} ਜਾਂ {opt1}"
+                opts = (
+                    f"{opt1} ਜਾਂ {opt2}"
+                    if random.random() < 0.5
+                    else f"{opt2} ਜਾਂ {opt1}"
+                )
             else:
                 opts = pos_ans
-                
+
             for template in TEMPLATES:
                 query = template.format(word=word, char=char, options=opts)
                 answer = pos_ans
                 samples.add((query, answer))
-                if len(samples) >= target_count: return list(samples)
+                if len(samples) >= target_count:
+                    return list(samples)
     return list(samples)
+
 
 if __name__ == "__main__":
     target_count = 17200

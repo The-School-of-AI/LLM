@@ -3,8 +3,8 @@
 Generate Statement 8: Number Spelling (ਸੰਖਿਆ ਵਰਤਨੀ) questions for Punjabi
 Target: 10,000 pairs
 """
+
 import os
-import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -20,17 +20,20 @@ TEMPLATES = [
     '"{num}" ਦਾ ਸ਼ਬਦ ਰੂਪ ਦੱਸੋ?',
 ]
 
+
 def generate_samples(target_count):
     samples = set()
     num_list = list(NUMBERS_1_100.items())
-    
+
     for num, name in num_list:
         for template in TEMPLATES:
             query = template.format(num=num)
             answer = name
             samples.add((query, answer))
-            if len(samples) >= target_count: return list(samples)
+            if len(samples) >= target_count:
+                return list(samples)
     return list(samples)
+
 
 if __name__ == "__main__":
     target_count = 10000
