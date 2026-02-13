@@ -20,7 +20,7 @@
       "efficiency_at_256": 0.80,
       "efficiency_at_1024": 0.65
     },
-    "expert_parallel_size": 4,
+    "expert_parallel_size": 1,
     "cpu_offload": false,
     "cpu_offload_config": {
       "system_memory_limit_gb": 1000,
@@ -58,7 +58,6 @@
           "num_deltanet_layers": 6,
           "num_gsa_layers": 2,
           "delta_v_heads": 32,
-          "delta_qk_heads": 16,
           "delta_head_dim": 128,
           "delta_gate_dim": 384,
           "gsa_num_heads": 16,
@@ -77,6 +76,7 @@
         "moe_layer_frequency": 1,
         "use_multi_token_prediction": true,
         "mtp_num_predictions": 2,
+        "mtp_attention_type": "gsa",
         "lm_head_multiplier": 1,
         "embedding_type": "kronecker",
         "kronecker_config": {
@@ -85,6 +85,11 @@
           "D": 8192
         },
         "tie_embeddings": false,
+        "recurrence": {
+          "enabled": true,
+          "stream_idx": 3
+        },
+        "reversible": true,
         "precision": {
           "weight_precision": "auto",
           "gradient_precision": "fp32",
