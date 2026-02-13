@@ -40,6 +40,15 @@ The pipeline automatically detects and uses a local `.venv` if present. Ensure y
 pip install -r 02-OLMES-v1/requirements.txt
 ```
 
+### Gated Datasets (Indic-Bias, etc.)
+Some benchmarks require access to gated HuggingFace datasets. To enable them:
+1. **Accept the dataset terms** on HuggingFace (e.g., visit [ai4bharat/Indic-Bias](https://huggingface.co/datasets/ai4bharat/Indic-Bias) and click "Accept").
+2. **Set your token** before running the pipeline:
+```bash
+export HF_TOKEN="hf_your_token_here"
+```
+The pipeline will confirm detection at startup with a `🔑 HF_TOKEN detected` message.
+
 ### 2. Running a Training Stage
 To evaluate a model checkpoint against a specific stage (e.g., `pretrain_1b` or `pretrain_70b`):
 ```bash
@@ -53,8 +62,31 @@ python3 02-OLMES-v1/src/pipeline_runner.py \
 ### 3. Smoke Testing (Quick Verification)
 Use the included helper script to run a "one of everything" test with a tiny sample limit (2 samples/task) across all stages:
 ```bash
-./run_smoke_tests.sh
+# From 17_final_pretraining_benchmarks/02-OLMES-v1
+
+# Run with defaults (all stages, SmolLM2-135M, cpu)
+tests/run_smoke_tests.sh
+
+# Custom model and specific stages
+tests/run_smoke_tests.sh \
+    --model "your-org/your-model" \
+    --stages "pretrain_1b,pretrain_3b"
+
+# Full customization
+tests/run_smoke_tests.sh \
+    --config 02-OLMES-v1/configs/benchmark-config.yaml \
+    --model "your-org/your-model" \
+    --stages "pretrain_1b,ci_breadth" \
+    --device "cuda"
 ```
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `-c, --config` | `02-OLMES-v1/configs/benchmark-config.yaml` | Path to benchmark config YAML |
+| `-m, --model` | `HuggingFaceTB/SmolLM2-135M` | HuggingFace model name |
+| `-s, --stages` | `pretrain_1b,pretrain_3b,...,ci_breadth` | Comma-separated list of stages |
+| `-d, --device` | `cpu` | Execution device (`cpu`, `cuda`, `mps`) |
+| `-t, --hf-token` | *(env `HF_TOKEN`)* | HuggingFace API token for gated datasets |
 
 ---
 
@@ -97,7 +129,7 @@ The following benchmarks have known limitations or are currently under active de
 
 | Feature / Benchmark | Status / Limitation | Next Steps / Required Setup |
 | :--- | :--- | :--- |
-| **Indic-Bias** | **Gated Access** | Requires access to `ai4bharat/Indic-Bias`. **TODO**: Automate `HF_TOKEN` injection. |
+| **Indic-Bias** | **Gated Access** | Requires access to `ai4bharat/Indic-Bias`. ✅ `HF_TOKEN` injection implemented — see [Environment Setup](#-execution-guide). |
 | **olmo3:base:code** | **Docker Required** | Execution tasks (BCB/MBPP) need Docker. **TODO**: Latency optimization. |
 | **olmo3:adapt** | **Base Model Noise** | Unstable on base models. **TODO**: Validate on first instruction-aligned milestones. |
 | **MMLU-Pro** | **High Resource** | Very slow execution. **TODO**: Integrate into milestones after optimization. |
