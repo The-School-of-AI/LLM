@@ -121,7 +121,7 @@ def main():
         for sample in combined_samples:
             f.write(sample + "\n")
     
-    print(f"\n✓ Dataset generation complete!")
+    print("\n✓ Dataset generation complete!")
     print(f"  Output file: {output_file}")
     print(f"  Total data points: {len(combined_samples)}")
     print(f"  Total Q&A pairs: {total_loaded}")

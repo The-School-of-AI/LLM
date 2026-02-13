@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import regex  # noqa: E402
 from prompt_utils import format_qa_pair_hindi  # noqa: E402
 from group1_hindi.hindi_vocabulary import (  # noqa: E402
-    EASY_WORDS_UNIQUE, MEDIUM_WORDS_UNIQUE, HARD_WORDS_UNIQUE, ALL_WORDS_UNIQUE
+    EASY_WORDS_UNIQUE, MEDIUM_WORDS_UNIQUE, HARD_WORDS_UNIQUE
 )
 
 # Expand word lists to reach target count
