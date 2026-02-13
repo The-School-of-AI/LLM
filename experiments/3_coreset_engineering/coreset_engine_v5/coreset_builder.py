@@ -230,7 +230,15 @@ class CoresetBuilder:
         metadata_dict = {
             cid: {
                 'dataset_id': all_chunks[cid].dataset_id,
+                # Canonical field name going forward.
+                'token_count': all_chunks[cid].token_count,
+                # Backward compatibility for older tooling.
                 'token_count_estimate': all_chunks[cid].token_count,
+                'byte_length': getattr(all_chunks[cid], 'byte_length', 0),
+                'source_doc_id': getattr(all_chunks[cid], 'source_doc_id', ''),
+                'source_url': getattr(all_chunks[cid], 'source_url', None),
+                # Many datasets use `source` as the dataset identifier; keep both.
+                'source': getattr(all_chunks[cid], 'dataset_id', None) or all_chunks[cid].dataset_id,
                 'band': all_chunks[cid].band.value,
                 'domain': all_chunks[cid].domain,
                 'language': all_chunks[cid].language,
@@ -735,7 +743,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
 
                         meta = ChunkMetadata(
                             chunk_id=str(chunk_id),
-                            dataset_id=row.get("dataset_id") or row.get("source") or meta_dict.get("source") or "ds",
+                            dataset_id=row.get("dataset_id") or row.get("source") or meta_dict.get("dataset_id") or meta_dict.get("source") or "ds",
                             token_count=token_count,
                             byte_length=int(row.get("byte_length", None) or meta_dict.get("byte_length", 0) or 0),
                             domain=domain_raw,
@@ -744,6 +752,19 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             source_doc_id=row.get("source_doc_id", None) or meta_dict.get("source_doc_id", ""),
                             source_url=row.get("source_url", None) or meta_dict.get("source_url", None),
                         )
+
+                        # Preserve raw input source when available (some datasets distinguish dataset_id vs source).
+                        source_val = (
+                            row.get("source", None)
+                            or meta_dict.get("source", None)
+                            or row.get("dataset_id", None)
+                            or meta_dict.get("dataset_id", None)
+                            or meta.dataset_id
+                        )
+                        try:
+                            setattr(meta, "source", str(source_val) if source_val is not None else meta.dataset_id)
+                        except Exception:
+                            pass
                         # Optional schema v0.6+ fields
                         if band_score_val is not None:
                             setattr(meta, "band_score", band_score_val)
@@ -813,7 +834,15 @@ class StreamingCoresetBuilder(CoresetBuilder):
                         rows.append({
                             "chunk_id": meta.chunk_id,
                             "dataset_id": meta.dataset_id,
+                            # Canonical field name going forward.
+                            "token_count": tc,
+                            # Backward compatibility for older tooling.
                             "token_count_estimate": tc,
+                            "byte_length": int(getattr(meta, "byte_length", 0) or 0),
+                            "source_doc_id": getattr(meta, "source_doc_id", ""),
+                            "source_url": getattr(meta, "source_url", None),
+                            # Preserve original `source` when present; fallback to dataset_id.
+                            "source": getattr(meta, "source", None) or meta.dataset_id,
                             "band": meta.band.value,
                             "domain": meta.domain,
                             "language": meta.language,

@@ -110,10 +110,19 @@ class ChunkLoader:
         
         for _, row in df.iterrows():
             try:
+                token_val = None
+                try:
+                    if 'token_count' in row.index and row['token_count'] is not None:
+                        token_val = row['token_count']
+                except Exception:
+                    token_val = None
+                if token_val is None:
+                    token_val = row.get('token_count_estimate')
+
                 metadata = ChunkMetadata(
                     chunk_id=row['chunk_id'],
                     dataset_id=row['dataset_id'],
-                    token_count=int(row['token_count_estimate']),
+                    token_count=int(token_val or 0),
                     byte_length=int(row['byte_length']),
                     domain=row['domain'],
                     language=row['language'],
