@@ -98,7 +98,7 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
 
   (
     echo "[shard $SHARD_ID] Starting..."
-    python coreset_builder.py \
+    python3 coreset_builder.py \
       --config "$CONFIG" \
       --curriculum "$CURRICULUM" \
       --input-path "$INPUT_PATH" \
