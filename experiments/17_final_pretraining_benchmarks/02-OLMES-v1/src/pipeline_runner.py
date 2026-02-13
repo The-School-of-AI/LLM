@@ -89,6 +89,14 @@ def main():
     logger.info(f"Starting pipeline stage: {args.stage}")
     logger.info(f"Run directory: {run_dir}")
     
+    # Check for HuggingFace token (needed for gated datasets like Indic-Bias)
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if hf_token:
+        logger.info("🔑 HF_TOKEN detected — gated datasets (e.g., Indic-Bias) will be accessible.")
+    else:
+        logger.warning("⚠️  HF_TOKEN not set — benchmarks requiring gated datasets will fail. "
+                       "Set it with: export HF_TOKEN=\"hf_your_token_here\"")
+    
     # Initialize eval_runner logging (redirects execution logs to run_dir)
     eval_runner.setup_logging(run_dir, timestamp)
     

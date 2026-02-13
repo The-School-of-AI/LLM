@@ -10,6 +10,7 @@
 #   -m, --model     HuggingFace model name          (default: HuggingFaceTB/SmolLM2-135M)
 #   -s, --stages    Comma-separated list of stages  (default: pretrain_1b,pretrain_3b,pretrain_8b,pretrain_70b,sft,ci_breadth)
 #   -d, --device    Execution device                (default: cpu)
+#   -t, --hf-token  HuggingFace API token            (for gated datasets; can also use env var HF_TOKEN)
 #   -h, --help      Show this help message
 
 # Defaults
@@ -37,6 +38,10 @@ while [[ $# -gt 0 ]]; do
             DEVICE="$2"
             shift 2
             ;;
+        -t|--hf-token)
+            export HF_TOKEN="$2"
+            shift 2
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -45,6 +50,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -m, --model     HuggingFace model name          (default: HuggingFaceTB/SmolLM2-135M)"
             echo "  -s, --stages    Comma-separated list of stages  (default: pretrain_1b,pretrain_3b,...,ci_breadth)"
             echo "  -d, --device    Execution device                (default: cpu)"
+            echo "  -t, --hf-token  HuggingFace API token            (for gated datasets)"
             echo "  -h, --help      Show this help message"
             exit 0
             ;;
@@ -66,6 +72,11 @@ echo "Model:  $MODEL"
 echo "Device: $DEVICE"
 echo "Stages: ${STAGES[*]}"
 echo "Limit:  2 samples per task"
+if [ -n "$HF_TOKEN" ]; then
+    echo "HF_TOKEN: ✅ Set"
+else
+    echo "HF_TOKEN: ❌ Not set (gated datasets will fail)"
+fi
 echo "=========================================="
 
 for STAGE in "${STAGES[@]}"; do
