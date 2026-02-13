@@ -198,7 +198,12 @@ def prepare_dataset(
         train_dataset = format_dpo_dataset(train_dataset, config)
         if eval_dataset:
             eval_dataset = format_dpo_dataset(eval_dataset, config)
-    
+    elif config.training.method == "idft":
+        # IDFT uses the same data format as SFT
+        train_dataset = format_sft_dataset(train_dataset, config, tokenizer)
+        if eval_dataset:
+            eval_dataset = format_sft_dataset(eval_dataset, config, tokenizer)
+
     return train_dataset, eval_dataset
 
 
@@ -594,7 +599,82 @@ def train_dpo(
     tokenizer.save_pretrained(output_dir)
     
     logger.info(f"DPO training complete. Model saved to: {output_dir}")
-    
+
+    return trainer
+
+
+def train_idft(
+    model: Any,
+    tokenizer: Any,
+    train_dataset: Dataset,
+    eval_dataset: Optional[Dataset],
+    config: QLoRAConfig,
+) -> Any:
+    """
+    Train using IDFT (In-Distribution Fine-Tuning) loss.
+
+    Uses a custom SFTTrainer subclass that replaces cross-entropy
+    with the IDFT reweighted loss from arXiv:2602.12222.
+
+    Args:
+        model: The model to train
+        tokenizer: Tokenizer
+        train_dataset: Training dataset
+        eval_dataset: Evaluation dataset (optional)
+        config: Configuration
+
+    Returns:
+        Trainer instance
+    """
+    from idft_trainer import IDFTTrainer
+    from trl import SFTConfig
+
+    logger.info("Starting IDFT training...")
+    logger.info(f"  clip_B = {config.training.idft.clip_B}")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"{config.training.output_dir}/idft_{timestamp}"
+
+    training_args = SFTConfig(
+        output_dir=output_dir,
+        per_device_train_batch_size=config.training.per_device_train_batch_size,
+        per_device_eval_batch_size=config.training.per_device_eval_batch_size,
+        gradient_accumulation_steps=config.training.gradient_accumulation_steps,
+        learning_rate=config.training.learning_rate,
+        lr_scheduler_type=config.training.lr_scheduler_type,
+        warmup_ratio=config.training.warmup_ratio,
+        weight_decay=config.training.weight_decay,
+        num_train_epochs=config.training.num_train_epochs,
+        max_steps=config.training.max_steps,
+        bf16=config.training.bf16,
+        fp16=config.training.fp16,
+        logging_steps=config.training.logging_steps,
+        save_steps=config.training.save_steps,
+        save_total_limit=config.training.save_total_limit,
+        eval_strategy=config.training.eval_strategy if eval_dataset else "no",
+        eval_steps=config.training.eval_steps if eval_dataset else None,
+        seed=config.training.seed,
+        dataloader_num_workers=config.training.dataloader_num_workers,
+        report_to=config.training.report_to,
+        max_seq_length=config.model.max_seq_length,
+        gradient_checkpointing=config.training.gradient_checkpointing,
+    )
+
+    trainer = IDFTTrainer(
+        clip_B=config.training.idft.clip_B,
+        log_diagnostics_every=config.training.idft.log_diagnostics_every,
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        processing_class=tokenizer,
+    )
+
+    trainer.train()
+    trainer.save_model()
+    tokenizer.save_pretrained(output_dir)
+
+    logger.info(f"IDFT training complete. Model saved to: {output_dir}")
     return trainer
 
 
@@ -629,6 +709,8 @@ def train(config: QLoRAConfig, reward_func: Optional[Callable] = None) -> Any:
         trainer = train_grpo(model, tokenizer, train_dataset, eval_dataset, config, reward_func)
     elif config.training.method == "dpo":
         trainer = train_dpo(model, tokenizer, train_dataset, eval_dataset, config)
+    elif config.training.method == "idft":
+        trainer = train_idft(model, tokenizer, train_dataset, eval_dataset, config)
     else:
         raise ValueError(f"Unknown training method: {config.training.method}")
     
