@@ -8,11 +8,13 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
-from group1_hindi.hindi_vocabulary import (  # noqa: E402
-    EASY_WORDS_UNIQUE, MEDIUM_WORDS_UNIQUE, HARD_WORDS_UNIQUE
-)
 from group1_hindi.generate_s1_spelling import get_hindi_grapheme_clusters  # noqa: E402
+from group1_hindi.hindi_vocabulary import (  # noqa: E402
+    EASY_WORDS_UNIQUE,
+    HARD_WORDS_UNIQUE,
+    MEDIUM_WORDS_UNIQUE,
+)
+from prompt_utils import format_qa_pair_hindi  # noqa: E402
 
 # Expand word lists
 EASY_WORDS = EASY_WORDS_UNIQUE * 50

@@ -8,9 +8,9 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
-from group1_hindi.hindi_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
 from group1_hindi.generate_s1_spelling import get_hindi_grapheme_clusters  # noqa: E402
+from group1_hindi.hindi_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
+from prompt_utils import format_qa_pair_hindi  # noqa: E402
 
 # Expand word list
 ALL_WORDS = ALL_WORDS_UNIQUE * 30

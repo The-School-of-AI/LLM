@@ -8,8 +8,8 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
 from group1_hindi.hindi_vocabulary import CLASSIFICATION_CATEGORIES  # noqa: E402
+from prompt_utils import format_qa_pair_hindi  # noqa: E402
 
 # Question templates
 TEMPLATES = [

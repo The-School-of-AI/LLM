@@ -8,9 +8,9 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import format_qa_pair_hindi  # noqa: E402
-from group1_hindi.hindi_vocabulary import NUMBERS  # noqa: E402
 from group1_hindi.generate_s1_spelling import get_hindi_characters  # noqa: E402
+from group1_hindi.hindi_vocabulary import NUMBERS  # noqa: E402
+from prompt_utils import format_qa_pair_hindi  # noqa: E402
 
 # Question templates - two types: number to name, and name to spelling
 TEMPLATES_NAME = [

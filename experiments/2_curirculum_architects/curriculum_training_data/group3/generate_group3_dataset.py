@@ -8,8 +8,8 @@ import os
 import random
 import re
 import sys
-from typing import Dict, List
 from collections import defaultdict
+from typing import Dict, List
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import combine_qa_pairs_to_reach_min_tokens  # noqa: E402
