@@ -103,18 +103,8 @@ uv run python train_recurrence_1b.py \
 | `--log-interval` | `1` | Log every N steps |
 | `--num-workers` | Auto | DataLoader workers (auto per device) |
 
-### Auto batch size selection
 
-The script automatically selects batch size based on GPU memory:
-
-| GPU Memory | Batch Size |
-|---|---|
-| ≥ 70 GB (A100-80GB, H100) | 8 |
-| ≥ 35 GB (A100-40GB) | 4 |
-| ≥ 14 GB (T4, V100) | 2 |
-| < 14 GB / MPS | 1–2 |
-
-### Training output
+### Example Training output
 
 ```
 step    0 | loss_ntp: 10.8542 | loss_mtp: 10.8327 | aux: 0.0000 | dt: 1234.5ms | tok/s: 828 (avg: 828) | mem: 5.2/8.1 GB
