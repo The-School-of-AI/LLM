@@ -27,9 +27,11 @@ Preflight checks:
     - ClickHouse reachable    → WARN if down (Vector buffers until recovery)
 """
 
+import base64
 import json
 import os
 import shutil
+import ssl
 import subprocess
 import sys
 import time
@@ -59,8 +61,14 @@ class TrainingOps:
     metrics_port : int
         Port for the live metrics HTTP server.
     clickhouse_url : str | None
-        ClickHouse HTTP endpoint.  Falls back to CLICKHOUSE_HTTP_ENDPOINT
-        env var, then http://localhost:8123.
+        ClickHouse HTTP(S) endpoint.  Falls back to CLICKHOUSE_HTTPS_ENDPOINT
+        or CLICKHOUSE_HTTP_ENDPOINT env var.
+    clickhouse_user : str | None
+        ClickHouse user.  Falls back to CLICKHOUSE_USER env var.
+    clickhouse_password : str | None
+        ClickHouse password.  Falls back to CLICKHOUSE_PASSWORD env var.
+    clickhouse_ca_cert : str | None
+        Path to CA cert for TLS.  Falls back to CLICKHOUSE_CA_CERT env var.
     system_metrics_interval : float
         How often (seconds) to collect system metrics.
     default_context : dict | None
@@ -74,6 +82,9 @@ class TrainingOps:
         log_dir: str = "/tmp/training_logs",
         metrics_port: int = 8000,
         clickhouse_url: str | None = None,
+        clickhouse_user: str | None = None,
+        clickhouse_password: str | None = None,
+        clickhouse_ca_cert: str | None = None,
         system_metrics_interval: float = 5.0,
         default_context: dict | None = None,
         skip_vector_check: bool = False,
@@ -83,8 +94,26 @@ class TrainingOps:
         self.log_dir = log_dir
         self._clickhouse_url = (
             clickhouse_url
+            or os.environ.get("CLICKHOUSE_HTTPS_ENDPOINT")
             or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT", "http://localhost:8123")
         )
+        self._ch_user = clickhouse_user or os.environ.get("CLICKHOUSE_USER", "")
+        self._ch_password = clickhouse_password or os.environ.get("CLICKHOUSE_PASSWORD", "")
+        self._ch_ca_cert = clickhouse_ca_cert if clickhouse_ca_cert is not None else os.environ.get("CLICKHOUSE_CA_CERT", "")
+
+        # Build auth header + TLS context for preflight check
+        self._auth_header = ""
+        if self._ch_user:
+            creds = base64.b64encode(f"{self._ch_user}:{self._ch_password}".encode()).decode()
+            self._auth_header = f"Basic {creds}"
+        self._ssl_ctx = None
+        if self._clickhouse_url.startswith("https"):
+            self._ssl_ctx = ssl.create_default_context()
+            if self._ch_ca_cert and os.path.isfile(self._ch_ca_cert):
+                self._ssl_ctx.load_verify_locations(self._ch_ca_cert)
+            else:
+                self._ssl_ctx.check_hostname = False
+                self._ssl_ctx.verify_mode = ssl.CERT_NONE
 
         print("=" * 60)
         print(f"  P12 TrainingOps — initializing for run '{run_id}'")
@@ -121,6 +150,9 @@ class TrainingOps:
         # ---- CheckpointRegistry (ClickHouse-backed) ----
         self.checkpoint_registry = CheckpointRegistry(
             clickhouse_url=self._clickhouse_url,
+            user=self._ch_user,
+            password=self._ch_password,
+            ca_cert=self._ch_ca_cert,
         )
 
         print("=" * 60)
@@ -167,11 +199,14 @@ class TrainingOps:
         sys.exit(1)
 
     def _check_clickhouse(self):
-        """Verify ClickHouse is reachable. WARN if not (Vector buffers)."""
+        """Verify ClickHouse is reachable (with auth). WARN if not (Vector buffers)."""
         try:
             url = f"{self._clickhouse_url}/?query={urllib.request.quote('SELECT 1')}"
             req = urllib.request.Request(url, method="GET")
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            if self._auth_header:
+                req.add_header("Authorization", self._auth_header)
+            ctx = self._ssl_ctx if self._ssl_ctx else None
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as resp:
                 resp.read()
             print(f"✓ Preflight: ClickHouse reachable at {self._clickhouse_url}")
         except Exception as e:

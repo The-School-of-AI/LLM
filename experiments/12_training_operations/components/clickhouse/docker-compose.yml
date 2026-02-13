@@ -4,8 +4,8 @@ services:
     container_name: p12-clickhouse
     restart: unless-stopped
     ports:
-      - "0.0.0.0:8123:8123"
-      - "0.0.0.0:9000:9000"
+      - "127.0.0.1:8123:8123"   # HTTP — localhost only (admin / healthcheck)
+      - "0.0.0.0:8443:8443"     # HTTPS — public, requires auth
     ulimits:
       nofile:
         soft: 262144
@@ -17,6 +17,8 @@ services:
       - clickhouse_logs:/var/log/clickhouse-server
       - ./initdb.d:/docker-entrypoint-initdb.d:ro
       - ./users.d:/etc/clickhouse-server/users.d:ro
+      - ./config.d:/etc/clickhouse-server/config.d:ro
+      - ./tls:/etc/clickhouse-server/tls:ro
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
       interval: 5s

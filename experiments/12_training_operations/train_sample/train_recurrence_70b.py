@@ -29,6 +29,9 @@ from recurrence_model_70b import create_model_70b, KroneckerEmbeddings, Kronecke
 # Import existing data utilities
 from data_utils import SYNTHStream, SYNTHPromptSampler
 
+# P12 Observability (all env vars are set before launch — see train_sample/README.md)
+from components import TrainingOps
+
 
 def load_tokenizer_from_json(tokenizer_path):
     """Load tokenizer from tokenizer.json"""
@@ -96,7 +99,7 @@ def create_model(vocab_size, bpe_vocab, pf_codec, device):
     return model
 
 
-def simple_training_loop(model, train_loader, device, num_steps=100):
+def simple_training_loop(model, train_loader, device, num_steps=100, ops=None):
     """Simplified training loop just to test if everything runs"""
     print("🔥 Starting training loop...")
 
@@ -189,6 +192,18 @@ def simple_training_loop(model, train_loader, device, num_steps=100):
                   f"loss_mtp: {loss_mtp.item():.4f} | aux: {aux_loss.item():.4f} | "
                   f"dt: {dt:6.1f}ms | tok/sec: {tok_sec:8.1f}")
 
+            # P12: log training metrics
+            if ops is not None:
+                ops.log_step(step=step, metrics={
+                    "loss": loss.item(),
+                    "loss_ntp": loss_ntp.item(),
+                    "loss_mtp": loss_mtp.item(),
+                    "aux_loss": aux_loss.item(),
+                    "lr": optimizer.param_groups[0]["lr"],
+                    "tokens_per_second": tok_sec,
+                    "step_time_ms": dt,
+                })
+
         # Cleanup
         del logits_ntp, logits_mtp, x_input, y_ntp, y_mtp, loss
 
@@ -264,7 +279,18 @@ def main():
     print("Testing training loop (100 steps)...")
     print("=" * 80)
 
-    simple_training_loop(model, train_loader, device, num_steps=100)
+    # --- P12 Observability ---
+    run_id = f"70b_kron_{int(time.time())}"
+    ops = TrainingOps(
+        run_id=run_id,
+        rank=int(os.environ.get("RANK", 0)),
+        default_context={"model": "recurrence_70b", "embedding": "kronecker"},
+    )
+
+    simple_training_loop(model, train_loader, device, num_steps=100, ops=ops)
+
+    # --- P12 Cleanup ---
+    ops.shutdown()
 
     print("\n" + "=" * 80)
     print("✅ SUCCESS! Model loads and trains correctly.")

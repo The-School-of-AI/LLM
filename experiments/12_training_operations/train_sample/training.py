@@ -10,6 +10,7 @@ Includes:
 import os
 import math
 import glob
+import time
 import torch
 import torch.nn as nn
 from typing import Tuple, Optional
@@ -114,7 +115,7 @@ def update_learning_rate(optimizer, lr: float):
 # ============================================================================
 
 def save_checkpoint(model, optimizer, lr_scheduler, step, loss, embedding_type,
-                   save_dir="checkpoints"):
+                   save_dir="checkpoints", ops=None, s3_key=None, tag="temporary"):
     """
     Save model checkpoint with embedding_type prefix.
 
@@ -126,6 +127,10 @@ def save_checkpoint(model, optimizer, lr_scheduler, step, loss, embedding_type,
         loss: Current loss value
         embedding_type: Type of embedding ("fourier" or "baseline")
         save_dir: Directory to save checkpoints
+        ops: TrainingOps instance (optional). If provided, registers the
+             checkpoint in the observability stack automatically.
+        s3_key: S3 URI if checkpoint will be uploaded (optional).
+        tag: Governance tag: "temporary", "growth", "lora", "release_candidate".
     """
     os.makedirs(save_dir, exist_ok=True)
 
@@ -140,7 +145,10 @@ def save_checkpoint(model, optimizer, lr_scheduler, step, loss, embedding_type,
 
     # Save with embedding_type prefix and step number
     path = os.path.join(save_dir, f'{embedding_type}_checkpoint_step_{step:07d}.pt')
+    t0 = time.time()
     torch.save(checkpoint, path)
+    duration_s = time.time() - t0
+    size_bytes = os.path.getsize(path)
 
     # Also save as latest for easy resuming
     latest_path = os.path.join(save_dir, f'{embedding_type}_latest.pt')
@@ -148,6 +156,18 @@ def save_checkpoint(model, optimizer, lr_scheduler, step, loss, embedding_type,
 
     print(f"💾 Checkpoint saved: {path}")
     print(f"💾 Latest checkpoint: {latest_path}")
+
+    # Register with P12 observability (if TrainingOps is available)
+    if ops is not None:
+        ops.log_checkpoint(
+            step=step,
+            path=path,
+            s3_key=s3_key,
+            loss=float(loss) if loss is not None else 0.0,
+            tag=tag,
+            duration_s=duration_s,
+            size_bytes=size_bytes,
+        )
 
 
 def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,

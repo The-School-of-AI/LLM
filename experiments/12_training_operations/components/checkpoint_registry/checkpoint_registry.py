@@ -7,8 +7,10 @@ latest row per (run_id, s3_key) wins; queries use FINAL for consistent reads.
 Soft-deletes via a `status` column instead of actual DELETEs.
 """
 
+import base64
 import json
 import os
+import ssl
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -24,22 +26,53 @@ class CheckpointRegistry:
     Parameters
     ----------
     clickhouse_url : str
-        ClickHouse HTTP endpoint, e.g. "http://localhost:8123".
+        ClickHouse HTTP(S) endpoint, e.g. "https://db-host:8443".
     database : str
         Database name (default: training_observability).
+    user : str | None
+        ClickHouse user.  Falls back to CLICKHOUSE_USER env var.
+    password : str | None
+        ClickHouse password.  Falls back to CLICKHOUSE_PASSWORD env var.
+    ca_cert : str | None
+        Path to CA certificate for TLS verification.  Falls back to
+        CLICKHOUSE_CA_CERT env var.  Set to empty string to skip verification.
     """
 
     def __init__(
         self,
         clickhouse_url: str | None = None,
         database: str = "training_observability",
+        user: str | None = None,
+        password: str | None = None,
+        ca_cert: str | None = None,
     ):
         self.clickhouse_url = (
             clickhouse_url
+            or os.environ.get("CLICKHOUSE_HTTPS_ENDPOINT")
             or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT", "http://localhost:8123")
         )
         self.database = database
         self.table = f"{database}.checkpoints"
+
+        # Auth
+        self._user = user or os.environ.get("CLICKHOUSE_USER", "")
+        self._password = password or os.environ.get("CLICKHOUSE_PASSWORD", "")
+        self._auth_header = ""
+        if self._user:
+            creds = base64.b64encode(f"{self._user}:{self._password}".encode()).decode()
+            self._auth_header = f"Basic {creds}"
+
+        # TLS
+        ca_path = ca_cert if ca_cert is not None else os.environ.get("CLICKHOUSE_CA_CERT", "")
+        self._ssl_ctx = None
+        if self.clickhouse_url.startswith("https"):
+            self._ssl_ctx = ssl.create_default_context()
+            if ca_path and os.path.isfile(ca_path):
+                self._ssl_ctx.load_verify_locations(ca_path)
+            else:
+                # Self-signed cert without CA file: skip verification
+                self._ssl_ctx.check_hostname = False
+                self._ssl_ctx.verify_mode = ssl.CERT_NONE
 
         # Quick connectivity check
         try:
@@ -52,12 +85,19 @@ class CheckpointRegistry:
     # Low-level ClickHouse HTTP helpers
     # ------------------------------------------------------------------
 
+    def _make_request(self, req: urllib.request.Request) -> str:
+        """Send an HTTP(S) request with auth headers and TLS context."""
+        if self._auth_header:
+            req.add_header("Authorization", self._auth_header)
+        ctx = self._ssl_ctx if self._ssl_ctx else None
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            return resp.read().decode()
+
     def _query(self, sql: str) -> str:
         """Execute a read query and return the response body as a string."""
         url = f"{self.clickhouse_url}/?query={urllib.request.quote(sql)}"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.read().decode()
+        return self._make_request(req)
 
     def _insert(self, sql: str) -> None:
         """Execute an INSERT statement via POST body."""
@@ -66,8 +106,7 @@ class CheckpointRegistry:
             data=sql.encode(),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            resp.read()
+        self._make_request(req)
 
     # ------------------------------------------------------------------
     # Public API
