@@ -1,12 +1,13 @@
 """
-Main entry point for DeepSpeed training with 3B Model.
+Main entry point for DeepSpeed training with 1B Model.
 
-This script trains a 3.9B parameter model with:
+This script trains a 1.513B parameter dense model with:
 - TSAI 131K Tokenizer (2^17 vocab, byte-level Kronecker embeddings)
 - Hybrid Gated DeltaNet + Gated Sparse Attention architecture
 - Reversible midpoint integration for memory efficiency
-- MoE with null experts (20 real + 20 null)
+- Dense FFN (no MoE)
 - 256k context length target with YARN RoPE scaling
+- Memory Stream Recurrence for infinite-length documents
 
 Supports ZeRO Stage 2/3, S3 checkpointing, and resume from checkpoint.
 
@@ -47,7 +48,7 @@ import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
-from src.models.model_3b import Model3B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
+from src.models.recurrence_model_1b import Model1B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
@@ -159,7 +160,7 @@ def main():
     set_seed(args.seed)
 
     print_rank_0("=" * 80)
-    print_rank_0("3B Model Training - DeepSpeed + Reversible Architecture")
+    print_rank_0("1B Dense Model Training - DeepSpeed + Reversible Architecture")
     print_rank_0("=" * 80)
     print_rank_0(f"Configuration File: {cmd_args.config}")
     print_rank_0(f"DeepSpeed Version: {deepspeed.__version__}")
@@ -168,7 +169,7 @@ def main():
     if torch.cuda.is_available():
         print_rank_0(f"CUDA Devices: {torch.cuda.device_count()}")
     print_rank_0("\nConfiguration:")
-    print_rank_0(f"  Model: 3B (3.9B params, ~1.74B active)")
+    print_rank_0(f"  Model: 1B Dense (1.513B params, 100% active)")
     print_rank_0(f"  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
     print_rank_0(f"  Embedding Type: {args.embedding_type}")
     print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
@@ -205,10 +206,10 @@ def main():
     print_rank_0(f"  Test batches: {len(test_loader)}")
 
     # ========================================
-    # Step 2: Load Model (3B Model Only)
+    # Step 2: Load Model (1B Dense Model)
     # ========================================
     print_rank_0("\n[2/5] Loading model...")
-    print_rank_0("  Creating 3B Model with memory-efficient reversible architecture...")
+    print_rank_0("  Creating 1B Dense Model with memory-efficient reversible architecture...")
     
     # Create model configuration
     config = ModelConfig()
@@ -250,8 +251,8 @@ def main():
     else:
         print_rank_0("  Using Standard Embeddings")
     
-    # Create the 3B model
-    model = Model3B(
+    # Create the 1B model
+    model = Model1B(
         config=config,
         embedding_type=args.embedding_type,
         bpe_vocab=bpe_vocab,
