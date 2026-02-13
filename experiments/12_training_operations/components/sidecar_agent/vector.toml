@@ -86,6 +86,37 @@ source = '''
   . = points
 '''
 
+# Step 4: Extract checkpoint events and map to the checkpoints table schema.
+#   Only events with context.event == "checkpoint_saved" pass through.
+#   This is the durable path: JSONL → Vector → ClickHouse checkpoints table.
+[transforms.to_checkpoints]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  ctx = object(.context) ?? {}
+  evt = string(ctx.event) ?? ""
+  if evt != "checkpoint_saved" { abort }
+
+  tag = string(ctx.tag) ?? "temporary"
+  is_protected = if includes(["growth", "lora", "release_candidate"], tag) { 1 } else { 0 }
+
+  metrics = object(.metrics) ?? {}
+
+  . = {
+    "run_id":        string!(.run_id),
+    "step":          to_int(.step) ?? 0,
+    "s3_key":        string(ctx.canonical_path) ?? "",
+    "loss":          to_float(metrics.checkpoint_loss) ?? 0.0,
+    "tag":           tag,
+    "is_protected":  is_protected,
+    "status":        "registered",
+    "host":          string!(.host),
+    "duration_s":    to_float(metrics.checkpoint_duration_s) ?? 0.0,
+    "size_bytes":    to_int(metrics.checkpoint_size_bytes) ?? 0,
+    "metadata_json": encode_json(ctx)
+  }
+'''
+
 # SINKS
 
 # 1. Debug Sink
@@ -111,5 +142,15 @@ inputs = ["to_metric_points"]
 endpoint = "${CLICKHOUSE_HTTP_ENDPOINT}"
 database = "training_observability"
 table = "metric_points"
+compression = "gzip"
+batch.max_bytes = 10485760
+
+# 4. Checkpoint registry (governance — durable path via Vector)
+[sinks.clickhouse_checkpoints]
+type = "clickhouse"
+inputs = ["to_checkpoints"]
+endpoint = "${CLICKHOUSE_HTTP_ENDPOINT}"
+database = "training_observability"
+table = "checkpoints"
 compression = "gzip"
 batch.max_bytes = 10485760

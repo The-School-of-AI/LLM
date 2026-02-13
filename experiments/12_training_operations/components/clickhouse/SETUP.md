@@ -1,25 +1,26 @@
 # Observability Stack Setup
 
-Two instances: **DB instance** (ClickHouse) and **Training instance** (logger + Vector sidecar + system metrics collector).
+Two instances: **DB instance** (ClickHouse) and **Training instance** (TrainingOps + Vector sidecar).
 
 ## Architecture
 
 ```
-Training Instance                         DB Instance
-┌──────────────────────┐                  ┌──────────────────┐
-│ Training loop        │                  │ ClickHouse       │
-│   → JSONLogger ──────┼──┐              │   logs           │
-│                      │  ├─ .jsonl ──┐  │   metric_points  │
-│ SystemMetricsCollector──┘           │  │   metric_arrays  │
-│   (CPU/RAM/GPU/Disk/Net)            │  │   events         │
-│                      │  HTTP :8123  │  │   runs           │
-│ Vector sidecar ──────┼──────────────┼─▶│                  │
-│   (fan-out)          │              │  └──────────────────┘
-│                      │              │         ▲
-│ MetricsServer :8000  │              │  Dashboard API queries
-│   (live JSON API)    │              │  metric_points
-└──────────────────────┘              │
-                                      └─ /tmp/training_logs/
+Training Instance                              DB Instance
+┌────────────────────────────────┐             ┌──────────────────────┐
+│                                │             │ ClickHouse           │
+│  TrainingOps (single object)   │             │                      │
+│    ├─ JSONLogger ──────┐       │             │   logs               │
+│    ├─ SystemMetrics ───┤ .jsonl│             │   metric_points      │
+│    ├─ MetricsServer    │       │             │   checkpoints        │
+│    └─ CheckpointRegistry       │             │   events             │
+│                        │       │             │   runs               │
+│  Vector sidecar ───────┼───────┼── HTTP ───▶ │                      │
+│    ├─ to_raw_logs      │       │    :8123    └──────────────────────┘
+│    ├─ to_metric_points │       │
+│    └─ to_checkpoints   │       │
+│                        │       │
+│  /tmp/training_logs/*.jsonl    │
+└────────────────────────────────┘
 ```
 
 ## DB Instance Setup
@@ -79,6 +80,7 @@ vector --version
 ```
 components/
 ├── __init__.py
+├── training_ops.py                    # TrainingOps facade
 ├── json_logger.py                     # re-export
 ├── train_logger/
 │   └── json_logger.py                 # structured logger
@@ -86,6 +88,9 @@ components/
 ├── system_metrics/
 │   ├── __init__.py
 │   └── collector.py                   # system metrics → JSONL
+├── checkpoint_registry/
+│   ├── __init__.py
+│   └── checkpoint_registry.py         # ClickHouse-backed governance
 └── sidecar_agent/
     └── vector.toml                    # Vector config
 ```
@@ -110,72 +115,67 @@ If this fails → check AWS security group (port 8123).
 ### 6) Run Vector
 
 ```bash
+# Vector MUST be running before training starts — TrainingOps checks for it.
 CLICKHOUSE_HTTP_ENDPOINT="http://<DB_INSTANCE_PRIVATE_IP>:8123" \
   vector --config /path/to/vector.toml --data-dir /tmp/vector-data
 ```
 
 ### 7) Integrate into train.py
 
+`TrainingOps` is the single entry point. One import, one init, two methods, one cleanup.
+
 ```python
 import os
-from components.json_logger import JSONLogger
-from components.metrics_server import get_metrics_server
-from components.system_metrics import SystemMetricsCollector
+from components import TrainingOps
 
-RUN_ID = "run_2026_02_11_exp1"
-RANK = int(os.environ.get("RANK", 0))
-LOG_DIR = "/tmp/training_logs"
-
-# --- 1. Structured Logger (training metrics → JSONL → ClickHouse) ---
-logger = JSONLogger(
-    base_dir=LOG_DIR,
-    run_id=RUN_ID,
-    rank=RANK,
+# --- 1. Initialize (starts all backend services, runs preflight checks) ---
+ops = TrainingOps(
+    run_id="run_2026_02_13_70b_v4",
+    rank=int(os.environ.get("RANK", 0)),
+    log_dir="/tmp/training_logs",
     default_context={"model": "70B_v4", "cluster": "us-east-1-p4d"},
 )
 
-# --- 2. System Metrics Collector (CPU/RAM/GPU/Disk/Net → JSONL → ClickHouse) ---
-sys_collector = SystemMetricsCollector(
-    log_dir=LOG_DIR,
-    run_id=RUN_ID,
-    rank=RANK,
-    interval=5.0,       # collect every 5 seconds
-)
-
-# --- 3. Metrics Server (live JSON API for watchdog / dashboard) ---
-metrics = get_metrics_server()          # no config file needed, defaults to port 8000
-metrics.start(system_collector=sys_collector)
-
-# --- 4. Training Loop ---
+# --- 2. Training Loop ---
 for step, batch in enumerate(dataloader):
     loss = train_step(batch)
 
+    # Log every N steps
     if step % 10 == 0:
-        logger.log_step(
+        ops.log_step(
             step=step,
             metrics={"loss": loss.item(), "lr": scheduler.get_last_lr()[0]},
         )
-        metrics.update_training_metrics(
-            loss=loss.item(),
-            lr=scheduler.get_last_lr()[0],
+
+    # After saving a checkpoint
+    if step % 1000 == 0:
+        path = f"checkpoints/ckpt_step_{step}.pt"
+        torch.save(checkpoint_state, path)
+        ops.log_checkpoint(
             step=step,
+            path=path,
+            s3_key=f"s3://bucket/ckpt_step_{step}.pt",  # omit if local-only
+            loss=loss.item(),
+            tag="temporary",
         )
 
-# --- 5. Cleanup ---
-logger.close()
-metrics.stop()   # stops both the HTTP server and the system collector
+# --- 3. Cleanup ---
+ops.shutdown()
 ```
 
 ---
 
 ## Data Flow
 
-Vector reads `/tmp/training_logs/**/*.jsonl` and does two things per log line:
+Vector reads `/tmp/training_logs/**/*.jsonl` and routes each log line to multiple ClickHouse tables:
 
 - **`logs` table** — raw row with `metrics`/`context` as JSON strings (audit trail)
 - **`metric_points` table** — one row per numeric metric key (dashboard-friendly)
+- **`checkpoints` table** — checkpoint events only (filtered by `context.event == "checkpoint_saved"`)
 
 Only numeric metric values land in `metric_points`. Non-numeric values (strings, arrays) are skipped.
+
+Checkpoint registration has a **dual path**: the JSONL → Vector route is the durable guarantee (buffered, retried). A best-effort direct HTTP INSERT provides immediate query-ability when ClickHouse is reachable.
 
 ---
 
@@ -202,6 +202,9 @@ sudo docker exec p12-clickhouse clickhouse-client --query \
 
 sudo docker exec p12-clickhouse clickhouse-client --query \
   "SELECT metric, count(), min(value), max(value) FROM training_observability.metric_points GROUP BY metric"
+
+sudo docker exec p12-clickhouse clickhouse-client --query \
+  "SELECT run_id, step, s3_key, tag, is_protected, status FROM training_observability.checkpoints FINAL"
 ```
 
 ---
@@ -213,26 +216,6 @@ sudo docker exec p12-clickhouse clickhouse-client --query \
 | `logs` | Raw audit trail | `event_time`, `timestamp`, `step`, `metrics` (JSON), `context` (JSON), `run_id`, `host`, `rank` |
 | `metric_points` | Typed scalars (training + system) | `event_time`, `metric`, `value`, `step`, `run_id`, `host`, `rank` |
 | `metric_arrays` | Array metrics (grad norms, etc.) | `event_time`, `metric`, `keys`, `values`, `step`, `run_id` |
-| `events` | Discrete events (checkpoint, OOM) | `event_time`, `event_type`, `severity`, `message`, `run_id` |
+| `checkpoints` | Checkpoint governance (ReplacingMergeTree) | `run_id`, `s3_key`, `step`, `loss`, `tag`, `is_protected`, `status` |
+| `events` | Discrete events (OOM, etc.) | `event_time`, `event_type`, `severity`, `message`, `run_id` |
 | `runs` | Run metadata | `run_id`, `status`, `model_name`, `cluster` |
-
----
-
-## Logging (Training Code)
-
-```python
-from components.json_logger import JSONLogger
-
-logger = JSONLogger(
-    base_dir="/tmp/training_logs",
-    run_id="run_001",
-    rank=0,
-    default_context={"model": "1B_v4", "cluster": "us-east-1"},
-)
-
-# Metrics must be numeric (float/int) — not raw tensors
-logger.log_step(step=1, metrics={"loss": loss.item(), "lr": 0.001})
-logger.close()
-```
-
-**Important:** Call `.item()` on tensors before logging. The serializer handles this automatically for PyTorch tensors, but explicit `.item()` is preferred.
