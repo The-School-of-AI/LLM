@@ -37,7 +37,7 @@
       "offload_optimizer": {"device": "none"},
       "offload_param": {"device": "none"}
     },
-    "train_micro_batch_size_per_gpu": 8,
+    "train_micro_batch_size_per_gpu": 1024,
     "gradient_accumulation_steps": 16,
     "mfu": 0.3
   },
@@ -93,7 +93,7 @@
           "optimizer_states_count": 2,
           "master_weights": false
         },
-        "reversible" : false
+        "reversible" : true
       }
     }
   ]

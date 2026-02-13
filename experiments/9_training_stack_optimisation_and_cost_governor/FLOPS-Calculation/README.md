@@ -46,10 +46,10 @@ python3 compute.py --config configs/1b_presets/1b_deepseek_gsa.json
 
 #### Team‑8 MoE configs
 | File | Use when you want... |
-|------|-----------------------|
-| `stage1_1b_dense.json` | Stage‑1 only (dense). |
-| `stage2_3b_moe.json` | Stage‑2 only (3B MoE). |
-| `stage3_8b_moe.json` | Stage‑3 only (8B MoE). |
+|------|----------------------|
+| `stage1_1b_dense.json` | Stage‑1 only (1B dense, recurrence + MTP GSA). |
+| `stage2_3b_moe.json` | Stage‑2 only (3B MoE, recurrence + MTP GSA). |
+| `stage3_8b_moe.json` | Stage‑3 only (8B MoE, recurrence + MTP GSA). |
 | `stage4_70b_moe.json` | Stage‑4 only (70B MoE). |
 | `moe_team8_all_stages.json` | Combined 1B→70B plan (all stages). |
 
@@ -879,12 +879,54 @@ Reversible training eliminates the need to store intermediate activations for al
 
 **Throughput Impact:** The freed memory allows larger `micro_batch_size`, improving GPU utilization. This manifests as higher MFU — adjust `mfu` in the hardware config (e.g., 0.30 → 0.35–0.40) to model this effect.
 
-**Example Impact (1B Dense, BF16):**
+#### Memory Stream Recurrence
 
-| Metric | Standard | Reversible |
-|--------|----------|------------|
-| Mem/GPU | 15.3 GiB | **5.6 GiB** (-63%) |
-| ZFLOPs | 0.26 | 0.34 (+33%) |
+Memory Stream Recurrence extends the model's effective context to **infinite length** by maintaining a persistent memory state across segments. One of the mHC streams (typically stream 3) is designated as the "memory stream," which accumulates information via a gated exponential moving average across training segments.
+
+**Config:**
+```json
+"architecture": {
+  "recurrence": {
+    "enabled": true,
+    "stream_idx": 3
+  }
+}
+```
+
+**Parameters added** (per model, ~12K total — negligible):
+| Component | Formula | Example (H=4096) |
+|-----------|---------|-------------------|
+| `lambda_r_raw` | 1 | 1 |
+| `memory_ln` (LayerNorm) | 2 × H | 8,192 |
+| `memory_gate_proj` (Linear) | H + 1 | 4,097 |
+| **Total** | **2H + H + 2** | **12,290** |
+
+**How it works:**
+1. The model processes segments of `sequence_length` tokens
+2. After each segment, the memory stream state is passed to the next segment
+3. `lambda_r = sigmoid(lambda_r_raw)` controls the decay rate (learned)
+4. `memory_gate_proj` projects the current memory stream to a gating signal
+5. The memory state is updated via: `M_new = lambda_r * M_old + (1 - lambda_r) * gate * current_stream`
+
+> **Note:** Recurrence parameters are included in both total and active parameter counts. They are independent of MoE — even dense models use recurrence when enabled.
+
+#### MTP Attention Type
+
+By default, the MTP (Multi-Token Prediction) block uses DeltaNet attention. However, the recurrence model variants use **GSA** for MTP instead, since MTP runs only once per step and GSA provides better gradient quality at negligible extra cost.
+
+**Config:**
+```json
+"architecture": {
+  "mtp_attention_type": "gsa"
+}
+```
+
+| Value | Description |
+|-------|-------------|
+| `"deltanet"` (default) | MTP block uses DeltaNet attention params |
+| `"gsa"` | MTP block uses GSA attention params (recommended for recurrence models) |
+
+This affects the parameter count of the MTP block — GSA attention has different projection counts and includes indexer parameters.
 
 #### MoE Upcycling Cost Calculation
 
