@@ -105,13 +105,13 @@ all_words = common_words + synthetic_words[:500]
 
 # Templates for each type
 spell_templates = [
-    "What is the spelling of "{w}"?",
-    "How do you spell "{w}"?",
-    "Spell "{w}".",
-    "Write the spelling of "{w}".",
+    'What is the spelling of "{w}"?',
+    'How do you spell "{w}"?',
+    'Spell "{w}".',
+    'Write the spelling of "{w}".',
 ]
-count_templates = ["How many letters are in "{w}"?", "Count the letters in "{w}"", "What is the length of word "{w}"?", "How many alphabets are there in "{w}"?"]
-last_templates = ["What letter does "{w}" end with?", "What is the last letter of "{w}"?", "Which letter does "{w}" end with?"]
+count_templates = ['How many letters are in "{w}"?', 'Count the letters in "{w}"', 'What is the length of word "{w}"?', 'How many alphabets are there in "{w}"?']
+last_templates = ['What letter does "{w}" end with?', 'What is the last letter of "{w}"?', 'Which letter does "{w}" end with?']
 
 print("\nFilling remaining samples...")
 attempts = 0
@@ -144,7 +144,7 @@ while len(all_samples) < target and attempts < max_attempts:
             pos = random.randint(1, len(word))
             pos_words = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth"}
             pos_word = pos_words.get(pos, f"{pos}th")
-            query = f"What is the {pos_word} letter in "{word}"?"
+            query = f'What is the {pos_word} letter in "{word}"?'
             answer = word[pos-1].lower()
         else:
             continue

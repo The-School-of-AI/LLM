@@ -11,11 +11,11 @@ MEDIUM_WORDS = ["tiger", "horse", "mouse", "sheep", "whale", "table", "chair", "
 HARD_WORDS = ["elephant", "giraffe", "penguin", "computer", "keyboard", "hospital", "chocolate", "sandwich", "butterfly"] * 40
 
 templates = [
-    "What is the spelling of "{word}"?",
-    "How do you spell "{word}"?",
-    "Can you spell "{word}"?",
-    "Write the spelling of "{word}".",
-    "Spell "{word}".",
+    'What is the spelling of "{word}"?',
+    'How do you spell "{word}"?',
+    'Can you spell "{word}"?',
+    'Write the spelling of "{word}".',
+    'Spell "{word}".',
 ]
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
