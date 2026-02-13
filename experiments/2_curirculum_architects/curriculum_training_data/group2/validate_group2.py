@@ -171,6 +171,6 @@ for key in ["S1", "S2", "S3", "S4", "S5", "S6"]:
             print(ex)
 
 if "Uncat" in examples and examples["Uncat"]:
-    print(f"\nUncategorized Examples (first 5):")
+    print("\nUncategorized Examples (first 5):")
     for ex in examples["Uncat"][:5]:
         print(ex)

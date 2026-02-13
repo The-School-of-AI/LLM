@@ -4,14 +4,12 @@ Generate Group 2 Math and Numbers Dataset (600,000 samples)
 Creates 6 different statement types with semantic variations and diverse number ranges.
 """
 
-import json
 import os
 import random
 import re
 import sys
-from typing import Dict, List, Tuple, Set
+from typing import Dict
 from collections import defaultdict
-import operator
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import combine_qa_pairs_to_reach_min_tokens  # noqa: E402
@@ -532,7 +530,7 @@ def evaluate_expression(expr: str) -> str:
                 return f"{result:.2f}".rstrip('0').rstrip('.')
         else:
             return str(result)
-    except:
+    except Exception:
         return "0"
 
 def format_decimal(value: float) -> str:
@@ -643,7 +641,6 @@ def generate_s2_before_after(num_samples: int = 80000) -> Dict[str, str]:
     
     # 50% after, 50% before
     after_count = num_samples // 2
-    before_count = num_samples - after_count
     
     # Track counts
     current_after = 0
@@ -721,7 +718,6 @@ def generate_s3_word_problems(num_samples: int = 120000) -> Dict[str, str]:
     # Distribution: 41.7% addition, 33.3% subtraction, 25% mixed
     add_count = int(num_samples * 0.417)
     sub_count = int(num_samples * 0.333)
-    mixed_count = num_samples - add_count - sub_count
     
     # Track counts
     current_add = 0
@@ -795,7 +791,6 @@ def generate_s4_comparisons(num_samples: int = 100000) -> Dict[str, str]:
     # Distribution: 45% greater, 45% smaller, 10% equal
     greater_count = int(num_samples * 0.45)
     smaller_count = int(num_samples * 0.45)
-    equal_count = num_samples - greater_count - smaller_count
     
     # Track counts
     current_greater = 0
@@ -873,7 +868,6 @@ def generate_s5_direct_math(num_samples: int = 150000) -> Dict[str, str]:
     mul_2term = int(num_samples * 0.167)
     div_2term = int(num_samples * 0.133)
     term_3 = int(num_samples * 0.20)
-    term_4 = num_samples - add_2term - sub_2term - mul_2term - div_2term - term_3
     
     max_attempts = num_samples * 100  # Keep at 100 since this one is working
     attempt = 0
@@ -960,7 +954,6 @@ def generate_s6_word_based_math(num_samples: int = 90000) -> Dict[str, str]:
     less_count = int(num_samples * 0.278)
     mult_count = int(num_samples * 0.167)
     div_count = int(num_samples * 0.111)
-    complex_count = num_samples - more_count - less_count - mult_count - div_count
     
     max_attempts = num_samples * 200  # Increased from 50
     attempt = 0
@@ -1138,7 +1131,6 @@ def validate_distribution(all_samples: Dict[str, str]) -> None:
     See DISTRIBUTION_JUSTIFICATION.md for detailed technical rationale.
     """
     import re
-    from collections import Counter
     
     # Realistic expected counts based on combinatorial limits and curriculum learning
     # Justification: See DISTRIBUTION_JUSTIFICATION.md for technical committee review
@@ -1401,20 +1393,20 @@ def main():
             f.write(sample + "\n")
     
     print(f"\n✓ Successfully saved {len(qa_pairs):,} QA pairs!")
-    print(f"\nValidation Summary:")
+    print("\nValidation Summary:")
     print(f"  - Total samples: {len(qa_pairs):,}")
-    print(f"  - Expected (curriculum-optimized): ~383,000")
+    print("  - Expected (curriculum-optimized): ~383,000")
     print(f"  - Difference: {len(qa_pairs) - 383000:,}")
-    print(f"\n  Distribution is optimized for curriculum learning principles.")
-    print(f"  See DISTRIBUTION_JUSTIFICATION.md for technical committee review.")
+    print("\n  Distribution is optimized for curriculum learning principles.")
+    print("  See DISTRIBUTION_JUSTIFICATION.md for technical committee review.")
     
     # Check if within reasonable range (±10% of 383K)
     expected_total = 383000
     if abs(len(qa_pairs) - expected_total) / expected_total <= 0.10:
-        print(f"\n✓ Sample count is within expected curriculum-optimized range!")
+        print("\n✓ Sample count is within expected curriculum-optimized range!")
     else:
-        print(f"\n⚠ Note: Sample count differs from expected, but distribution validation")
-        print(f"  shows appropriate curriculum learning balance across statement types.")
+        print("\n⚠ Note: Sample count differs from expected, but distribution validation")
+        print("  shows appropriate curriculum learning balance across statement types.")
 
 if __name__ == "__main__":
     main()

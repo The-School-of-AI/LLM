@@ -4,12 +4,11 @@ Generate Group 3 Shapes, Colors & Patterns Dataset (250,000 samples)
 Creates 4 statement types with 35 sub-generators total.
 """
 
-import json
 import os
 import random
 import re
 import sys
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List
 from collections import defaultdict
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -2025,15 +2024,6 @@ def generate_s3e_angle_types(num_samples: int = 8000) -> Dict[str, str]:
     """3E: Angle Types (8,000 samples)"""
     samples = {}
     
-    # Angle types
-    angle_types = {
-        "acute": "less than 90 degrees",
-        "right": "90 degrees",
-        "obtuse": "greater than 90 degrees but less than 180 degrees",
-        "straight": "180 degrees",
-        "reflex": "greater than 180 degrees",
-    }
-    
     # Enumerate combinations
     all_combos = []
     
@@ -2240,12 +2230,12 @@ def generate_s3k_basic_perimeter(num_samples: int = 2500) -> Dict[str, str]:
             all_combos.append((query, answer))
     
     # Rectangle perimeters
-    for l in range(1, 13):
+    for length in range(1, 13):
         for w in range(1, 11):
-            if l != w:  # Avoid squares
+            if length != w:  # Avoid squares
                 for template in TEMPLATES_3K_RECT:
-                    query = template.format(l=l, w=w)
-                    answer = str(2 * (l + w))
+                    query = template.format(l=length, w=w)
+                    answer = str(2 * (length + w))
                     all_combos.append((query, answer))
     
     # Shuffle and select
@@ -2271,12 +2261,12 @@ def generate_s3l_basic_area(num_samples: int = 2500) -> Dict[str, str]:
             all_combos.append((query, answer))
     
     # Rectangle areas
-    for l in range(1, 13):
+    for length in range(1, 13):
         for w in range(1, 11):
-            if l != w:  # Avoid squares
+            if length != w:  # Avoid squares
                 for template in TEMPLATES_3L_RECT:
-                    query = template.format(l=l, w=w)
-                    answer = str(l * w)
+                    query = template.format(l=length, w=w)
+                    answer = str(length * w)
                     all_combos.append((query, answer))
     
     # Shuffle and select
@@ -2761,8 +2751,6 @@ def validate_distribution(all_samples: Dict[str, str]) -> None:
     """
     Validate that samples match expected distribution by categorizing them.
     """
-    import re
-    from collections import Counter
     
     # Realistic targets based on combinatorial limits (quality over quantity)
     expected_counts = {
@@ -3178,15 +3166,15 @@ def main():
             f.write(sample + "\n")
     
     print(f"\n✓ Successfully saved {len(combined_samples):,} samples!")
-    print(f"\nValidation Summary:")
+    print("\nValidation Summary:")
     print(f"  - Total samples (after combining): {len(combined_samples):,}")
-    print(f"  - Expected: 250,000")
+    print("  - Expected: 250,000")
     print(f"  - Difference: {len(ordered_qa_pairs) - 250000:,}")
     
     if abs(len(ordered_qa_pairs) - 250000) / 250000 <= 0.10:
-        print(f"\n✓ Sample count is within expected range!")
+        print("\n✓ Sample count is within expected range!")
     else:
-        print(f"\n⚠ Note: Sample count differs from expected.")
+        print("\n⚠ Note: Sample count differs from expected.")
 
 if __name__ == "__main__":
     main()

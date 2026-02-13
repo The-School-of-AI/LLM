@@ -182,7 +182,7 @@ def calculate_distribution(total_samples=2_000_000):
         print(f"  Number of examples: {num_examples}")
         print(f"  Base samples per example: {samples_per_example:,}")
         print(f"  Remainder: {remainder:,}")
-        print(f"\n  Example distribution:")
+        print("\n  Example distribution:")
         
         for i, example in enumerate(group_info['examples'], 1):
             # Distribute remainder to first examples
