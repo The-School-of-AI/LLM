@@ -240,6 +240,9 @@ class TrainingOps:
         context : dict | None
             Optional per-step context, e.g. {"epoch": 1, "phase": "warmup"}.
         """
+        # 0. Update system collector step so GPU/CPU samples are attributed correctly
+        self.system_collector.set_step(step)
+
         # 1. Durable log (JSONL → Vector → ClickHouse)
         self.logger.log_step(step=step, metrics=metrics, context=context)
 

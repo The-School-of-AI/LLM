@@ -6,8 +6,11 @@ as JSONL to disk so Vector can pick them up and push to ClickHouse via the
 existing metric_points pipeline.
 
 The output format matches what the training JSONLogger produces:
-    {"timestamp": "...", "run_id": "...", "host": "...", "rank": 0, "step": 0,
+    {"timestamp": "...", "run_id": "...", "host": "...", "rank": 0, "step": <current>,
      "metrics": {"sys.cpu_percent": 42.1, ...}, "context": {"collector": "system"}}
+
+The ``step`` field is updated via ``set_step()`` from the training loop, so system
+metric samples are attributed to the correct training step.
 
 This means the existing Vector transforms (parse_json → to_metric_points → ClickHouse)
 work without any changes for the scalar fan-out path.
@@ -70,6 +73,10 @@ class SystemMetricsCollector:
 
         self._running = False
         self._thread: threading.Thread | None = None
+
+        # Thread-safe training step tracker (updated by training loop)
+        self._current_step = 0
+        self._step_lock = threading.Lock()
 
         # GPU support (optional)
         self._gpu_available = False
@@ -210,12 +217,14 @@ class SystemMetricsCollector:
     def _build_payload(self, metrics: dict) -> dict:
         """Build a JSONL-compatible payload matching the training logger format."""
         ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._step_lock:
+            step = self._current_step
         return {
             "timestamp": ts,
             "run_id": self.run_id,
             "rank": self.rank,
             "host": self.host,
-            "step": 0,
+            "step": step,
             "metrics": metrics,
             "context": {"collector": "system"},
         }
@@ -243,6 +252,11 @@ class SystemMetricsCollector:
             except Exception as e:
                 print(f"SystemMetricsCollector error: {e}")
             time.sleep(self.interval)
+
+    def set_step(self, step: int):
+        """Update the current training step (called from the training loop)."""
+        with self._step_lock:
+            self._current_step = step
 
     def start(self):
         if self._running:

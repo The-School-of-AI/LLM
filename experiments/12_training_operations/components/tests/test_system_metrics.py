@@ -76,7 +76,7 @@ def test_system_metrics_collector():
 
         assert record["run_id"] == run_id
         assert record["rank"] == rank
-        assert record["step"] == 0  # system metrics always step=0
+        assert isinstance(record["step"], int)  # step is injected from training loop
         assert record["context"]["collector"] == "system"
 
         # Metrics should be a dict of numeric values
@@ -112,5 +112,52 @@ def test_system_metrics_collector():
     print("\n✅ All SystemMetricsCollector tests passed!")
 
 
+def test_set_step_injection():
+    """Verify set_step() causes subsequent payloads to carry the real training step."""
+
+    log_dir = "/tmp/test_system_metrics_step"
+    if os.path.exists(log_dir):
+        shutil.rmtree(log_dir)
+
+    from components.system_metrics.collector import SystemMetricsCollector
+
+    collector = SystemMetricsCollector(
+        log_dir=log_dir,
+        run_id="test_step_run",
+        rank=0,
+        interval=0.5,
+        gpu=False,
+    )
+
+    # Step defaults to 0
+    payload = collector._build_payload({"dummy": 1.0})
+    assert payload["step"] == 0, f"Expected step=0, got {payload['step']}"
+
+    # Inject step
+    collector.set_step(42)
+    payload = collector._build_payload({"dummy": 1.0})
+    assert payload["step"] == 42, f"Expected step=42, got {payload['step']}"
+
+    # Verify it persists in written JSONL
+    collector.start()
+    time.sleep(1.2)  # at least 2 samples at 0.5s interval
+    collector.set_step(100)
+    time.sleep(1.2)
+    collector.stop()
+
+    log_file = os.path.join(log_dir, "system_metrics_rank_0.jsonl")
+    with open(log_file, "r") as f:
+        lines = [json.loads(line) for line in f if line.strip()]
+
+    # Early lines should have step=42, later lines step=100
+    steps = [r["step"] for r in lines]
+    assert 42 in steps, f"Expected step=42 in output, got steps: {steps}"
+    assert 100 in steps, f"Expected step=100 in output, got steps: {steps}"
+
+    shutil.rmtree(log_dir)
+    print("\n✅ set_step() injection test passed!")
+
+
 if __name__ == "__main__":
     test_system_metrics_collector()
+    test_set_step_injection()
