@@ -178,11 +178,25 @@ class BatchProcessor:
             return []
         if fmt == "jsonl":
             # Support both .jsonl and .json extensions strictly.
-            files = list(root.glob("**/*.jsonl")) + list(root.glob("**/*.json"))
-            return [str(p) for p in sorted(set(files))]
+            all_files = list(root.glob("**/*.jsonl")) + list(root.glob("**/*.json"))
+            # Filter out stats/ and _SUCCESS
+            filtered = [
+                f for f in all_files 
+                if "/stats/" not in f.as_posix() 
+                and not f.as_posix().startswith("stats/")
+                and f.name != "_SUCCESS"
+            ]
+            return [str(p) for p in sorted(set(filtered))]
         
         if fmt == "parquet":
-            return [str(p) for p in sorted(root.glob("**/*.parquet"))]
+            all_files = list(root.glob("**/*.parquet"))
+            filtered = [
+                f for f in all_files 
+                if "/stats/" not in f.as_posix() 
+                and not f.as_posix().startswith("stats/")
+                and f.name != "_SUCCESS"
+            ]
+            return [str(p) for p in sorted(set(filtered))]
         return []
 
     def shard_files(self, files: List[str], shard_id: int, num_shards: int) -> List[str]:
@@ -248,8 +262,15 @@ class BatchProcessor:
                 key = obj.get("Key")
                 if not key:
                     continue
+                
+                # Filter out _SUCCESS and stats/ folder. 
+                # stats/ can be anywhere under the prefix.
+                key_lower = key.lower()
+                if key_lower.endswith("_success") or "/stats/" in key_lower or key_lower.startswith("stats/"):
+                    continue
+
                 # Match if key ends with any allowed suffix
-                if any(key.lower().endswith(s) for s in allowed_suffixes):
+                if any(key_lower.endswith(s) for s in allowed_suffixes):
                     results.append(f"s3://{bucket}/{key}")
 
         return sorted(results)
