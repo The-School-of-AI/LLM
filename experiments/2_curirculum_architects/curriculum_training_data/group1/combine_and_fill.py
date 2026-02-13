@@ -82,7 +82,6 @@ print(f"\nTotal samples loaded: {len(all_samples)}")
 print(f"Need to generate: {max(target - len(all_samples), 0)} more samples")
 
 # Expand word pools massively
-import string
 def generate_words(length):
     """Generate pronounceable 3-letter combinations"""
     consonants = list("bcdfghjklmnpqrstvwxyz")
@@ -192,7 +191,7 @@ with open(output_file, "w", encoding="utf-8") as f:
         f.write(sample + "\n")
 
 print(f"\n✓ Successfully saved {len(combined_samples):,} samples to {output_file}")
-print(f"\nValidation:")
-print(f"  - Target: 70,000")
+print("\nValidation:")
+print("  - Target: 70,000")
 print(f"  - Generated: {len(all_samples):,}")
 print(f"  - Difference: {len(all_samples) - target:,}")

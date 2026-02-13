@@ -4,11 +4,10 @@ Generate Group 1 Language and Literacy Dataset (70,000 samples)
 Creates 10 different statement types with semantic variations and diverse target words.
 """
 
-import json
 import os
 import random
 import sys
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List
 from collections import defaultdict
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -1583,7 +1582,7 @@ PHONETIC_SOUNDS = {
     "pack": "/p/", "page": "/p/", "paid": "/p/", "pain": "/p/", "pair": "/p/",
     "pale": "/p/", "palm": "/p/", "paper": "/p/", "party": "/p/", "pass": "/p/",
     "past": "/p/", "path": "/p/", "pay": "/p/", "peace": "/p/", "peak": "/p/",
-    "pear": "/p/", "pen": "/p/", "people": "/p/", "pick": "/p/", "piece": "/p/",
+    "pear": "/p/", "people": "/p/", "pick": "/p/", "piece": "/p/",
     "pile": "/p/", "pink": "/p/", "pipe": "/p/", "place": "/p/", "plan": "/p/",
     "plant": "/p/", "plate": "/p/", "please": "/p/", "plus": "/p/", "point": "/p/",
     
@@ -1602,19 +1601,19 @@ PHONETIC_SOUNDS = {
     "city": "/s/", "cent": "/s/", "circle": "/s/", "cycle": "/s/", "ceiling": "/s/",
     "sad": "/s/", "safe": "/s/", "said": "/s/", "sail": "/s/", "sale": "/s/",
     "salt": "/s/", "same": "/s/", "sand": "/s/", "save": "/s/", "say": "/s/",
-    "scene": "/s/", "school": "/s/", "science": "/s/", "search": "/s/", "season": "/s/",
+    "school": "/s/", "science": "/s/", "search": "/s/", "season": "/s/",
     "seat": "/s/", "second": "/s/", "secret": "/s/", "section": "/s/", "seek": "/s/",
     "seem": "/s/", "sell": "/s/", "send": "/s/", "sense": "/s/", "sent": "/s/",
     "serve": "/s/", "set": "/s/", "seven": "/s/", "several": "/s/", "side": "/s/",
     
     # /t/ sound (40 words)
-    "tiger": "/t/", "table": "/t/", "tree": "/t/", "tea": "/t/", "ten": "/t/",
+    "tiger": "/t/", "table": "/t/", "tea": "/t/", "ten": "/t/",
     "top": "/t/", "toe": "/t/", "toy": "/t/", "tall": "/t/", "time": "/t/",
-    "tail": "/t/", "take": "/t/", "talk": "/t/", "tall": "/t/", "tank": "/t/",
+    "tail": "/t/", "take": "/t/", "talk": "/t/", "tank": "/t/",
     "tape": "/t/", "target": "/t/", "task": "/t/", "taste": "/t/", "tax": "/t/",
     "teach": "/t/", "team": "/t/", "tear": "/t/", "teen": "/t/", "tell": "/t/",
     "tend": "/t/", "tent": "/t/", "term": "/t/", "test": "/t/", "text": "/t/",
-    "thank": "/t/", "thick": "/t/", "thin": "/t/", "thing": "/t/", "tie": "/t/",
+    "tie": "/t/",
     "tight": "/t/", "till": "/t/", "tip": "/t/", "title": "/t/", "today": "/t/",
     
     # /v/ sound (30 words)
@@ -1669,12 +1668,12 @@ PHONETIC_SOUNDS = {
     # Blends - /bl/ (15 words)
     "black": "/bl/", "blade": "/bl/", "blame": "/bl/", "blank": "/bl/", "blanket": "/bl/",
     "blast": "/bl/", "blaze": "/bl/", "bleed": "/bl/", "blend": "/bl/", "bless": "/bl/",
-    "blind": "/bl/", "block": "/bl/", "blood": "/bl/", "bloom": "/bl/", "blue": "/bl/",
+    "blind": "/bl/", "block": "/bl/", "blood": "/bl/", "bloom": "/bl/",
     
     # Blends - /br/ (15 words)
-    "brain": "/br/", "brake": "/br/", "branch": "/br/", "brand": "/br/", "brave": "/br/",
-    "bread": "/br/", "break": "/br/", "breath": "/br/", "breed": "/br/", "breeze": "/br/",
-    "brick": "/br/", "bridge": "/br/", "brief": "/br/", "bright": "/br/", "bring": "/br/",
+    "brake": "/br/", "branch": "/br/", "brand": "/br/", "brave": "/br/",
+    "breath": "/br/", "breed": "/br/", "breeze": "/br/",
+    "brick": "/br/", "bridge": "/br/", "brief": "/br/", "bright": "/br/",
     
     # Blends - /cl/ (15 words)
     "claim": "/cl/", "clamp": "/cl/", "clap": "/cl/", "class": "/cl/", "classic": "/cl/",
@@ -1687,12 +1686,12 @@ PHONETIC_SOUNDS = {
     "crime": "/cr/", "crisp": "/cr/", "crop": "/cr/", "cross": "/cr/", "crowd": "/cr/",
     
     # Blends - /dr/ (15 words)
-    "draft": "/dr/", "drag": "/dr/", "drain": "/dr/", "drama": "/dr/", "draw": "/dr/",
-    "dream": "/dr/", "dress": "/dr/", "dried": "/dr/", "drift": "/dr/", "drill": "/dr/",
-    "drink": "/dr/", "drive": "/dr/", "drop": "/dr/", "drought": "/dr/", "drum": "/dr/",
+    "draft": "/dr/", "drag": "/dr/", "drain": "/dr/", "drama": "/dr/",
+    "dried": "/dr/", "drift": "/dr/", "drill": "/dr/",
+    "drought": "/dr/",
     
     # Blends - /fl/ (15 words)
-    "flag": "/fl/", "flame": "/fl/", "flash": "/fl/", "flat": "/fl/", "flavor": "/fl/",
+    "flame": "/fl/", "flash": "/fl/", "flavor": "/fl/",
     "flee": "/fl/", "flesh": "/fl/", "flight": "/fl/", "float": "/fl/", "flock": "/fl/",
     "flood": "/fl/", "floor": "/fl/", "flour": "/fl/", "flow": "/fl/", "flower": "/fl/",
     
@@ -1702,19 +1701,19 @@ PHONETIC_SOUNDS = {
     "from": "/fr/", "front": "/fr/", "frost": "/fr/", "fruit": "/fr/", "fry": "/fr/",
     
     # Blends - /gl/ (15 words)
-    "glad": "/gl/", "glance": "/gl/", "gland": "/gl/", "glare": "/gl/", "glass": "/gl/",
+    "glance": "/gl/", "gland": "/gl/", "glare": "/gl/",
     "gleam": "/gl/", "glee": "/gl/", "glide": "/gl/", "glimpse": "/gl/", "glitter": "/gl/",
-    "globe": "/gl/", "gloom": "/gl/", "glory": "/gl/", "gloss": "/gl/", "glow": "/gl/",
+    "globe": "/gl/", "gloom": "/gl/", "glory": "/gl/", "gloss": "/gl/",
     
     # Blends - /gr/ (15 words)
-    "grab": "/gr/", "grace": "/gr/", "grade": "/gr/", "grain": "/gr/", "grand": "/gr/",
-    "grant": "/gr/", "grape": "/gr/", "graph": "/gr/", "grasp": "/gr/", "grass": "/gr/",
-    "grave": "/gr/", "gray": "/gr/", "grease": "/gr/", "great": "/gr/", "green": "/gr/",
+    "grace": "/gr/",
+    "grant": "/gr/", "graph": "/gr/", "grasp": "/gr/",
+    "grave": "/gr/", "grease": "/gr/",
     
     # Blends - /pl/ (15 words)
-    "place": "/pl/", "plain": "/pl/", "plan": "/pl/", "plane": "/pl/", "planet": "/pl/",
-    "plant": "/pl/", "plastic": "/pl/", "plate": "/pl/", "play": "/pl/", "plaza": "/pl/",
-    "plea": "/pl/", "please": "/pl/", "pledge": "/pl/", "plenty": "/pl/", "plot": "/pl/",
+    "plain": "/pl/", "plane": "/pl/", "planet": "/pl/",
+    "plastic": "/pl/", "plaza": "/pl/",
+    "plea": "/pl/", "pledge": "/pl/", "plenty": "/pl/", "plot": "/pl/",
     
     # Blends - /pr/ (15 words)
     "practice": "/pr/", "praise": "/pr/", "pray": "/pr/", "precious": "/pr/", "predict": "/pr/",
@@ -1724,7 +1723,7 @@ PHONETIC_SOUNDS = {
     # Blends - /sk/ (15 words)
     "skate": "/sk/", "sketch": "/sk/", "ski": "/sk/", "skill": "/sk/", "skin": "/sk/",
     "skip": "/sk/", "skirt": "/sk/", "skull": "/sk/", "sky": "/sk/", "scare": "/sk/",
-    "scale": "/sk/", "scan": "/sk/", "scatter": "/sk/", "scene": "/sk/", "scope": "/sk/",
+    "scale": "/sk/", "scan": "/sk/", "scatter": "/sk/", "scope": "/sk/",
     
     # Blends - /sl/ (15 words)
     "slab": "/sl/", "slam": "/sl/", "slap": "/sl/", "slash": "/sl/", "slate": "/sl/",
@@ -1754,7 +1753,7 @@ PHONETIC_SOUNDS = {
     # Blends - /tr/ (15 words)
     "trace": "/tr/", "track": "/tr/", "trade": "/tr/", "trail": "/tr/", "train": "/tr/",
     "trap": "/tr/", "trash": "/tr/", "travel": "/tr/", "tray": "/tr/", "treat": "/tr/",
-    "tree": "/tr/", "trend": "/tr/", "trial": "/tr/", "trick": "/tr/", "trip": "/tr/",
+    "trend": "/tr/", "trial": "/tr/", "trick": "/tr/", "trip": "/tr/",
 }
 
 # Number words (1-100)
@@ -2092,9 +2091,6 @@ def generate_s3_sound_matching(num_samples: int = 70000) -> Dict[str, str]:
         query = template.format(sound=sound, word1=word1, word2=word2)
         if query not in samples:
             samples[query] = correct_word
-        
-        if query not in samples:
-            samples[query] = answer
     
     return samples
 
@@ -3020,16 +3016,16 @@ def main():
             f.write(sample + "\n")
     
     print(f"\n✓ Successfully saved {len(all_samples):,} QA pairs!")
-    print(f"\nValidation:")
+    print("\nValidation:")
     print(f"  - Total samples: {len(all_samples):,}")
-    print(f"  - Expected: 700,000")
+    print("  - Expected: 700,000")
     print(f"  - Difference: {len(all_samples) - 700000:,}")
     
     if len(all_samples) != 700000:
-        print(f"\n⚠ Warning: Sample count doesn't match expected 700,000")
-        print(f"  This may be due to duplicate queries across different generators.")
+        print("\n⚠ Warning: Sample count doesn't match expected 700,000")
+        print("  This may be due to duplicate queries across different generators.")
     else:
-        print(f"\n✓ Sample count matches expected value!")
+        print("\n✓ Sample count matches expected value!")
 
 if __name__ == "__main__":
     main()
