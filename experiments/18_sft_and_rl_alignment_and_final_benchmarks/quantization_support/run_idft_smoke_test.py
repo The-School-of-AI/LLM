@@ -103,9 +103,7 @@ def phase1_ddt_validation(setup: Dict[str, Any]) -> Dict[str, Any]:
     import torch
 
     logger.info(f"Loading model for phi diagnostic: {config.model.name}")
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.model.name, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained(config.model.name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -182,26 +180,24 @@ def phase2_training_runs(setup: Dict[str, Any]) -> Dict[str, Any]:
         run_config = deepcopy(config)
         run_config.training.method = "sft"
         run_config.training.learning_rate = lr
-        run_config.training.output_dir = str(
-            base_output / "sft_runs" / f"lr_{lr}"
-        )
+        run_config.training.output_dir = str(base_output / "sft_runs" / f"lr_{lr}")
 
         try:
             from train_qlora import train
 
             trainer = train(run_config)
             eval_loss = _get_best_eval_loss(trainer)
-            results["sft_runs"].append({
-                "lr": lr,
-                "output_dir": run_config.training.output_dir,
-                "eval_loss": eval_loss,
-                "status": "success",
-            })
+            results["sft_runs"].append(
+                {
+                    "lr": lr,
+                    "output_dir": run_config.training.output_dir,
+                    "eval_loss": eval_loss,
+                    "status": "success",
+                }
+            )
         except Exception as e:
             logger.error(f"SFT run failed at LR={lr}: {e}")
-            results["sft_runs"].append({
-                "lr": lr, "status": "failed", "error": str(e)
-            })
+            results["sft_runs"].append({"lr": lr, "status": "failed", "error": str(e)})
 
     # --- IDFT Runs ---
     for lr in learning_rates:
@@ -209,26 +205,24 @@ def phase2_training_runs(setup: Dict[str, Any]) -> Dict[str, Any]:
         run_config = deepcopy(config)
         run_config.training.method = "idft"
         run_config.training.learning_rate = lr
-        run_config.training.output_dir = str(
-            base_output / "idft_runs" / f"lr_{lr}"
-        )
+        run_config.training.output_dir = str(base_output / "idft_runs" / f"lr_{lr}")
 
         try:
             from train_qlora import train
 
             trainer = train(run_config)
             eval_loss = _get_best_eval_loss(trainer)
-            results["idft_runs"].append({
-                "lr": lr,
-                "output_dir": run_config.training.output_dir,
-                "eval_loss": eval_loss,
-                "status": "success",
-            })
+            results["idft_runs"].append(
+                {
+                    "lr": lr,
+                    "output_dir": run_config.training.output_dir,
+                    "eval_loss": eval_loss,
+                    "status": "success",
+                }
+            )
         except Exception as e:
             logger.error(f"IDFT run failed at LR={lr}: {e}")
-            results["idft_runs"].append({
-                "lr": lr, "status": "failed", "error": str(e)
-            })
+            results["idft_runs"].append({"lr": lr, "status": "failed", "error": str(e)})
 
     # Select best checkpoint per condition
     results["sft_best"] = _select_best_run(results["sft_runs"])
@@ -383,24 +377,27 @@ def _select_best_run(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="IDFT Smoke Test Orchestrator"
+    parser = argparse.ArgumentParser(description="IDFT Smoke Test Orchestrator")
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        default="idft_smoke_config.yaml",
+        help="Path to experiment config YAML",
     )
     parser.add_argument(
-        "--config", "-c", type=str, default="idft_smoke_config.yaml",
-        help="Path to experiment config YAML"
+        "--phase", type=int, default=None, help="Run only a specific phase (0-4)"
     )
     parser.add_argument(
-        "--phase", type=int, default=None,
-        help="Run only a specific phase (0-4)"
+        "--skip_phase1",
+        action="store_true",
+        help="Skip Phase 1 DDT validation (not recommended)",
     )
     parser.add_argument(
-        "--skip_phase1", action="store_true",
-        help="Skip Phase 1 DDT validation (not recommended)"
-    )
-    parser.add_argument(
-        "--training_results_json", type=str, default=None,
-        help="Path to Phase 2 results JSON (to skip training and go to eval)"
+        "--training_results_json",
+        type=str,
+        default=None,
+        help="Path to Phase 2 results JSON (to skip training and go to eval)",
     )
     args = parser.parse_args()
 
