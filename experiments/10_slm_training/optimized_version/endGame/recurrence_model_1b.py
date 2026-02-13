@@ -1273,20 +1273,22 @@ class MoEFFN(nn.Module):
 
     For dense models (num_experts=0), acts as a simple dense FFN using only the shared expert.
     """
-    def __init__(self, d_model: int, d_hidden: int, num_experts: int = 270, top_k: int = 10,
+    def __init__(self, d_model: int, d_hidden: int, d_shared_hidden: Optional[int] = 2048,
+                  num_experts: int = 270, top_k: int = 10,
                  dropout: float = 0.0, data_sparsity: float = 0.5):
         super().__init__()
         self.d_model = d_model
         self.d_hidden = d_hidden
+        self.d_shared_hidden = d_shared_hidden
         self.num_experts = num_experts
         self.top_k = top_k
         self.dropout = dropout
         self.is_dense = (num_experts == 0 or data_sparsity == 0.0)
 
         # Shared Expert (always present - acts as dense FFN for dense models)
-        self.shared_gate = nn.Linear(d_model, d_hidden, bias=False)
-        self.shared_up = nn.Linear(d_model, d_hidden, bias=False)
-        self.shared_down = nn.Linear(d_hidden, d_model, bias=False)
+        self.shared_gate = nn.Linear(d_model, d_shared_hidden, bias=False)
+        self.shared_up = nn.Linear(d_model, d_shared_hidden, bias=False)
+        self.shared_down = nn.Linear(d_shared_hidden, d_model, bias=False)
         self._init_shared_weights()
 
         # Only create MoE components for sparse models
@@ -1377,13 +1379,14 @@ class MoEFFN(nn.Module):
 
 class LightningMLP(nn.Module):
     """MLP wrapper using MoEFFN."""
-    def __init__(self, hidden_size, intermediate_size, num_experts, top_k,
-                 data_sparsity=0.5):
+    def __init__(self, hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
+                 shared_intermediate_size=2048,data_sparsity=0.5):
         super().__init__()
         self.moe = MoEFFN(
             d_model=hidden_size,
             d_hidden=intermediate_size,
             num_experts=num_experts,
+            d_shared_hidden=shared_intermediate_size,
             top_k=top_k,
             dropout=0.0,
             data_sparsity=data_sparsity
@@ -1551,7 +1554,9 @@ class LightningDecoderLayer(nn.Module):
         mlp = LightningMLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.expert_intermediate_size,
+            shared_intermediate_size=config.shared_expert_intermediate_size,
             num_experts=config.num_real_experts,
+            num_shared_experts=1,
             top_k=config.top_k,
             data_sparsity=config.data_sparsity
         )
@@ -1639,7 +1644,9 @@ class MTPTransformerBlock(nn.Module):
         self.mlp = LightningMLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.expert_intermediate_size,
+            shared_intermediate_size=config.shared_expert_intermediate_size,
             num_experts=config.num_real_experts,
+            num_shared_experts=1,
             top_k=config.top_k,
             data_sparsity=config.data_sparsity
         )
