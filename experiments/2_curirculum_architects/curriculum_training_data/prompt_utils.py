@@ -112,6 +112,22 @@ def ensure_answer_period(answer: str) -> str:
     return answer
 
 
+def format_qa_pair_kannada(query: str, answer: str) -> str:
+    """
+    Format a query-answer pair for Kannada TXT output.
+    - Preserves quotes around target words/sequences
+    - Ensures query ends with ?
+    - Ensures answer ends with period (.)
+    - Returns formatted string: "query? answer."
+
+    CRITICAL: Queries MUST end with "?", answers MUST end with "."
+    """
+    query_clean = query.strip()
+    query_clean = ensure_query_punctuation(query_clean)
+    answer_clean = ensure_answer_period(answer)
+    return f"{query_clean} {answer_clean}"
+
+
 def ensure_query_punctuation(query: str) -> str:
     """
     Ensure query ends with a question mark.
@@ -128,25 +144,25 @@ def ensure_query_punctuation(query: str) -> str:
     import re
 
     # Replace ". If" with ", if"
-    query = re.sub(r"\.\s+If\s", r", if ", query)
+    query = re.sub(r"\.s+If\s", r", if ", query)
     # Replace ". How" with ", how" (when followed by question word)
     query = re.sub(
-        r"\.\s+How\s+(many|much|do|does|is|are|can)",
+        r"\.s+How\s+(many|much|do|does|is|are|can)",
         r", how \1",
         query,
         flags=re.IGNORECASE,
     )
     # Replace ". What" with ", what" (handles both "What " and "What's", "What's", etc.)
     query = re.sub(
-        r"\.\s+What(\'s|\'s| is| do| does| can|\s)",
+        r"\.s+What(\'s|'s| is| do| does| can|\s)",
         r", what\1",
         query,
         flags=re.IGNORECASE,
     )
     # Replace ". Which" with ", which"
-    query = re.sub(r"\.\s+Which\s", r", which ", query)
+    query = re.sub(r"\.s+Which\s", r", which ", query)
     # Replace ". Tell" with ", tell" (when it's "tell me")
-    query = re.sub(r"\.\s+Tell\s+me\s", r", tell me ", query, flags=re.IGNORECASE)
+    query = re.sub(r"\.s+Tell\s+me\s", r", tell me ", query, flags=re.IGNORECASE)
 
     # If already ends with '?', return as-is
     if query.endswith("?"):
@@ -168,10 +184,10 @@ def count_tokens(text: str) -> int:
     - Whitespace is skipped (not counted)
 
     Examples:
-    - "c, a, t." → 6 tokens (c, comma, a, comma, t, period)
-    - "What is the spelling of cat?" → 7 tokens (What, is, the, spelling, of, cat, ?)
-    - "पानी" → 4 tokens (प, ा, न, ी) - each Unicode char is 1 token
-    - "प, ा, न, ी" → 7 tokens (प, comma, space, ा, comma, space, न, comma, space, ी)
+    - "c, a, t." -> 6 tokens (c, comma, a, comma, t, period)
+    - "What is the spelling of cat?" -> 7 tokens (What, is, the, spelling, of, cat, ?)
+    - "पानी" -> 4 tokens (प, ा, न, ी) - each Unicode char is 1 token
+    - "प, ा, न, ी" -> 7 tokens (प, comma, space, ा, comma, space, न, comma, space, ी)
 
     Args:
         text: Input text to tokenize
@@ -191,11 +207,12 @@ def count_tokens(text: str) -> int:
             i += 1
             continue
 
-        # Check if character is Devanagari (U+0900 to U+097F)
+        # Check if character is Devanagari (U+0900 to U+097F) or Kannada (U+0C80 to U+0CFF)
         is_devanagari = "\u0900" <= ch <= "\u097f"
+        is_kannada = "\u0C80" <= ch <= "\u0CFF"
 
-        if is_devanagari:
-            # For Devanagari: each Unicode character = 1 token
+        if is_devanagari or is_kannada:
+            # For Devanagari/Kannada: each Unicode character = 1 token
             # This matches the spelling format where each character is shown separately
             count += 1
             i += 1
@@ -208,7 +225,7 @@ def count_tokens(text: str) -> int:
             while i < n:
                 # Don't group Devanagari characters with other alphanumeric
                 next_ch = text[i]
-                if "\u0900" <= next_ch <= "\u097f":
+                if "\u0900" <= next_ch <= "\u097f" or "\u0C80" <= next_ch <= "\u0CFF":
                     break
                 if next_ch.isalnum():
                     i += 1
@@ -318,11 +335,11 @@ def combine_qa_pairs_to_reach_min_tokens(
     return samples
 
 
-def combine_qa_pairs_to_reach_min_tokens_hindi(
+def combine_qa_pairs_to_reach_min_tokens_kannada(
     qa_pairs: list[tuple[str, str]], min_tokens: int = 512
 ) -> list[str]:
     """
-    Super-optimized version of combining QA pairs for Hindi/Punjabi.
+    Super-optimized version of combining QA pairs for Kannada.
     """
     if not qa_pairs:
         return []
@@ -330,7 +347,7 @@ def combine_qa_pairs_to_reach_min_tokens_hindi(
     # Pre-format all pairs and calculate their tokens once
     formatted_pairs = []
     for q, a in qa_pairs:
-        fmt = format_qa_pair_hindi(q, a)
+        fmt = format_qa_pair_kannada(q, a)
         formatted_pairs.append((fmt, count_tokens(fmt)))
 
     samples = []
@@ -342,15 +359,16 @@ def combine_qa_pairs_to_reach_min_tokens_hindi(
         current_tokens += tokens
         
         if current_tokens >= min_tokens:
-            samples.append(" ".join(current_sample_parts))
+            samples.append(" ".join(current_sample_parts) + "\n")
             current_sample_parts = []
             current_tokens = 0
             
     # Add any remaining pairs to the last sample if it's too small, or as a new sample
     if current_sample_parts:
+        # If there are already samples, append to the last one, otherwise create a new one
         if samples:
-            samples[-1] += " " + " ".join(current_sample_parts)
+            samples[-1] = samples[-1].rstrip("\n") + " " + " ".join(current_sample_parts) + "\n"
         else:
-            samples.append(" ".join(current_sample_parts))
+            samples.append(" ".join(current_sample_parts) + "\n")
             
     return samples
