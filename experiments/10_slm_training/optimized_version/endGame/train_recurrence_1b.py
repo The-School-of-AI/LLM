@@ -248,10 +248,25 @@ def training_loop(model, train_loader, device, args):
             prev_memory_stream=None
         )
 
-        # Compute losses
+        # Compute losses (upcast logits to float32 for stable cross-entropy
+        # over 131k vocab — bf16 log_softmax accumulation can lose precision)
         vocab_size = logits_ntp.size(-1)
-        loss_ntp = criterion(logits_ntp.view(-1, vocab_size), y_ntp.view(-1))
-        loss_mtp = criterion(logits_mtp.view(-1, vocab_size), y_mtp.view(-1))
+        loss_ntp = criterion(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+        loss_mtp = criterion(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+
+        # NaN watchdog — detect which component produced NaN
+        if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or torch.isnan(aux_loss):
+            with torch.no_grad():
+                print(f"\n⚠️  NaN detected at step {step}!")
+                print(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}, aux={aux_loss.item()}")
+                print(f"  logits_ntp: nan={torch.isnan(logits_ntp).any().item()}, "
+                      f"inf={torch.isinf(logits_ntp).any().item()}, "
+                      f"range=[{logits_ntp.min().item():.2f}, {logits_ntp.max().item():.2f}]")
+                if logits_mtp is not None:
+                    print(f"  logits_mtp: nan={torch.isnan(logits_mtp).any().item()}, "
+                          f"inf={torch.isinf(logits_mtp).any().item()}, "
+                          f"range=[{logits_mtp.min().item():.2f}, {logits_mtp.max().item():.2f}]")
+
         loss = (loss_ntp + 0.3 * loss_mtp + aux_loss) / args.grad_accum
 
         # Backward

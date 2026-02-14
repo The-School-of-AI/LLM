@@ -111,7 +111,15 @@ def triton_rmsnorm(
     BLOCK_SIZE = triton.next_power_of_2(n_cols)
     if BLOCK_SIZE < n_cols:
         BLOCK_SIZE = BLOCK_SIZE * 2
-    BLOCK_SIZE = min(max(BLOCK_SIZE, 128), 4096)
+    # FIX: BLOCK_SIZE must be >= n_cols for correctness. The old cap of 4096
+    # silently dropped columns beyond 4096, producing uninitialized output
+    # (caused NaN at batch_size > ~4 due to stale CUDA memory).
+    # Triton supports BLOCK_SIZE up to 65536 on modern GPUs.
+    BLOCK_SIZE = max(BLOCK_SIZE, 128)
+
+    # Safety: fall back to PyTorch if dim is too large for Triton's tl.arange
+    if BLOCK_SIZE > 65536:
+        return pytorch_rmsnorm(x, weight, eps, residual)
 
     has_residual = residual is not None
     if has_residual:
