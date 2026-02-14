@@ -301,7 +301,12 @@ def main():
         bpe_vocab=bpe_vocab,
         pf_codec=pf_codec
     )
+
+    print_rank_0("  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...")
+    model = model.to(dtype=torch.bfloat16)
+    # ----------------------
     
+    print_rank_0(f"  ✓ Model cast to bfloat16")
     print_rank_0(f"  ✓ Model created successfully")
 
     # ========================================

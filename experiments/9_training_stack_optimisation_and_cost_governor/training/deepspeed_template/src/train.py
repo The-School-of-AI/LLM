@@ -85,31 +85,38 @@ def train_epoch(
         
         if is_reversible:
             # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)
+            x_input = input_ids[:, :-2].contiguous()
+            y_ntp = input_ids[:, 1:-1].contiguous()
+            y_mtp = input_ids[:, 2:].contiguous()
+            
+            # 2. Forward pass
             logits_ntp, logits_mtp, aux_loss = model_engine(
-                input_ids, 
-                next_token_ids=None,  # Will be computed from shifted labels if needed
-                attention_mask=attention_mask,
+                x_input, 
+                next_token_ids=y_ntp,
+                attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
                 return_loss=True,
-                return_memory=False
+                return_memory=False,
+                prev_memory_stream=None
             )
             
-            # Compute cross-entropy loss for next token prediction
-            # Shift logits and labels for causal LM
-            shift_logits = logits_ntp[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            
-            # Flatten the tokens
+            # 3. Compute loss (UPCAST TO FLOAT32 FOR STABILITY OVER 131K VOCAB)
+            vocab_size = logits_ntp.size(-1)
             loss_fct = torch.nn.CrossEntropyLoss()
-            ntp_loss = loss_fct(
-                shift_logits.view(-1, shift_logits.size(-1)),
-                shift_labels.view(-1)
-            )
             
-            # Add auxiliary loss (from MoE routing, etc.)
+            loss_ntp = loss_fct(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+            loss_mtp = loss_fct(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+            
+            # 4. NaN Watchdog
+            if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
+                with torch.no_grad():
+                    print_rank_0(f"\n⚠️ NaN detected at epoch {epoch}, step {i}!")
+                    print_rank_0(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}")
+
+            # 5. Combine Loss
             if aux_loss is not None and aux_loss.numel() > 0:
-                loss = ntp_loss + aux_loss
+                loss = loss_ntp + 0.3 * loss_mtp + aux_loss
             else:
-                loss = ntp_loss
+                loss = loss_ntp + 0.3 * loss_mtp
             
             # MTP loss (if enabled and logits_mtp is not None)
             # For now, we focus on NTP loss
@@ -314,29 +321,29 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
             
             if is_reversible:
                 # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)
+                x_input = input_ids[:, :-2].contiguous()
+                y_ntp = input_ids[:, 1:-1].contiguous()
+                y_mtp = input_ids[:, 2:].contiguous()
+                
                 logits_ntp, logits_mtp, aux_loss = model_engine(
-                    input_ids,
-                    next_token_ids=None,
-                    attention_mask=attention_mask,
+                    x_input,
+                    next_token_ids=y_ntp,
+                    attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
                     return_loss=True,
-                    return_memory=False
+                    return_memory=False,
+                    prev_memory_stream=None
                 )
                 
-                # Compute cross-entropy loss for next token prediction
-                shift_logits = logits_ntp[..., :-1, :].contiguous()
-                shift_labels = labels[..., 1:].contiguous()
-                
+                vocab_size = logits_ntp.size(-1)
                 loss_fct = torch.nn.CrossEntropyLoss()
-                ntp_loss = loss_fct(
-                    shift_logits.view(-1, shift_logits.size(-1)),
-                    shift_labels.view(-1)
-                )
                 
-                # Add auxiliary loss
+                loss_ntp = loss_fct(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+                loss_mtp = loss_fct(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+                
                 if aux_loss is not None and aux_loss.numel() > 0:
-                    loss = ntp_loss + aux_loss
+                    loss = loss_ntp + 0.3 * loss_mtp + aux_loss
                 else:
-                    loss = ntp_loss
+                    loss = loss_ntp + 0.3 * loss_mtp
             else:
                 # Standard transformer model
                 outputs = model_engine(
