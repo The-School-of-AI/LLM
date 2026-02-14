@@ -18,7 +18,7 @@
 | Avg tokens per data point | **536.1** |
 | Lines below 512 tokens | **0** |
 | Blank lines in output | **0** |
-| Vocabulary (unique words) | **958** |
+| Vocabulary (unique words) | **3,082** |
 | Output file size | ~27 MB |
 
 ---
@@ -81,23 +81,42 @@ Extracts individual Unicode characters: consonants (U+0C15-U+0C39), vowels (U+0C
 
 | Category | Unique Count |
 |----------|-------------|
-| Easy words | 278 |
-| Medium words | 354 |
-| Hard words | 79 |
-| **Total unique** | **958** |
-| Rhyming pairs | 834 |
-| Number words (1-100) | 100 |
+| Easy words | 291 |
+| Medium words | 372 |
+| Hard words | 81 |
+| Additional vocabulary | 269 |
+| Extra words (5 expansion batches) | 1,368 |
+| **Total unique (ALL_WORDS_UNIQUE)** | **3,082** |
+| Rhyming pairs | 1,248 |
+| Number words (1-1200) | 1,200 |
 | Varga consonant groups | 7 |
 | Classification categories | **13** |
-| Classification words | 365+ |
 
-Categories breakdown:
-- **Easy**: Animals (44), Objects (69), Body Parts (39), Colors (18), Nature (45), People (30), Food (40)
-- **Medium**: Animals (30), Objects (64), Professions (45), Nature (60), Vehicles (35), Food (80), Household (48)
-- **Hard**: Complex Nouns (30), Abstract (30), Days (7), Months (12)
-- **Additional**: ~250 supplementary words
+### Word Tiers
 
-Classification categories (13): జంతువు, వ్యక్తి, వృత్తి, శరీర భాగం, పండు, కూరగాయ, దుస్తులు, వాహనం, స్థలం, ఆహారం, రంగు, ప్రకృతి, వస్తువు
+- **Easy (2-3 aksharas)**: Animals (45), Objects (70), Body Parts (40), Colors (18), Nature (46), People (30), Food (42)
+- **Medium (3-4 aksharas)**: Animals (31), Objects (65), Professions (46), Nature (62), Vehicles (37), Food (81), Household (50)
+- **Hard (5+ aksharas)**: Complex Nouns (32), Abstract (30), Days (7), Months (12)
+- **Additional**: 269 supplementary words
+- **Extra**: 5 expansion batches — Animals (74), People (95), Objects (126), Food (81), Nature (43), Abstract (106), Places (59), Batch3 (211), Batch4 (195), Batch5 (477)
+
+### Classification Categories (13) — Words per Category
+
+| Category | Telugu | Words |
+|----------|--------|-------|
+| Animal | జంతువు | 195 |
+| Food | ఆహారం | 261 |
+| Nature | ప్రకృతి | 237 |
+| Profession | వృత్తి | 180 |
+| Object | వస్తువు | 388 |
+| Place | స్థలం | 79 |
+| Person | వ్యక్తి | 52 |
+| Vehicle | వాహనం | 48 |
+| Body Part | శరీర భాగం | 46 |
+| Clothing | దుస్తులు | 45 |
+| Color | రంగు | 32 |
+| Vegetable | కూరగాయ | 26 |
+| Fruit | పండు | 25 |
 
 ---
 
@@ -383,7 +402,7 @@ S11 teaches the **compositional structure** of Telugu script:
 |------|---------|------|
 | `prompt_utils_telugu.py` | Token counting, QA formatting, line combining | 4.6 KB |
 | `telugu_grammar.py` | Akshara segmentation + root character extraction | ~1.5 KB |
-| `telugu_vocabulary.py` | 958 unique words, numbers, vargas, rhyming, 13 classification categories | 38 KB |
+| `telugu_vocabulary.py` | 3,082 unique words, 1,200 numbers, vargas, 1,248 rhyming pairs, 13 classification categories | 38 KB |
 
 ### Generators
 | File | Statement | Target |
@@ -502,9 +521,9 @@ for f in group1_telugu/group1_s*.txt; do echo "$f: $(wc -l < $f)"; done
 - QA pair combining to reach 512-token minimum
 
 **Vocabulary (`test_telugu_vocabulary.py`)**
-- All 958 words contain Telugu characters, zero Kannada/Devanagari leakage
+- All 3,082 words contain Telugu characters, zero Kannada/Devanagari leakage
 - Category minimum thresholds: EASY_ANIMALS >= 30, EASY_OBJECTS >= 50, MEDIUM_FOOD >= 50, etc.
-- Numbers: exactly 100, first = ఒకటి, last = వంద, tens verified
+- Numbers: 1,200 (1-1200), first = ఒకటి, last = వంద, tens verified
 - Vargas: 7 groups, ka-varga = [క, ఖ, గ, ఘ, ఙ], ta-varga = [త, థ, ద, ధ, న]
 - Classification: 13 categories with correct ordering
 - Rhyming pairs share last akshara (<=5 mismatches tolerance)
@@ -527,9 +546,9 @@ for f in group1_telugu/group1_s*.txt; do echo "$f: $(wc -l < $f)"; done
 | All 11 generators hit targets | All match | All match | PASS |
 | Akshara segmentation correct | 8/8 pass | 8/8 pass | PASS |
 | Root-level spelling (S1, S8) | Roots extracted | Roots extracted | PASS |
-| Unique vocabulary >= 950 | >= 950 | 958 | PASS |
-| Rhyming pairs >= 100 | >= 100 | 834 | PASS |
-| Number words = 100 | 100 | 100 | PASS |
+| Unique vocabulary >= 3,000 | >= 3,000 | 3,082 | PASS |
+| Rhyming pairs >= 1,000 | >= 1,000 | 1,248 | PASS |
+| Number words = 1,200 | 1,200 | 1,200 | PASS |
 | Classification categories = 13 | 13 | 13 | PASS |
 | S6 negative examples ~38% | ~33-40% | ~38% | PASS |
 | S6 category ordering correct | Specific-first | Specific-first | PASS |
