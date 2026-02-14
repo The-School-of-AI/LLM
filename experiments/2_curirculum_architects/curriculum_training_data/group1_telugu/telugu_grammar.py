@@ -36,3 +36,20 @@ def get_telugu_aksharas(word: str) -> list[str]:
         aksharas.append(akshara)
         i += 1
     return aksharas
+
+# Function to extract Telugu letters (ignoring vowel signs if desired)
+def get_telugu_aksharas_with_roots(word, ignore_vowels=False):
+    """
+    Returns a list of Telugu letters in the word.
+    If ignore_vowels=True, vowel signs are skipped.
+    """
+    letters = []
+    for ch in word:
+        code = ord(ch)
+        # Telugu consonants range
+        if 0x0C15 <= code <= 0x0C39 or 0x0C05 <= code <= 0x0C14 or 0x0C02 <= code <= 0x0C03:
+            letters.append(ch)
+        # Include vowel signs only if not ignoring
+        elif not ignore_vowels and 0x0C3E <= code <= 0x0C4C:
+            letters.append(ch)
+    return letters
