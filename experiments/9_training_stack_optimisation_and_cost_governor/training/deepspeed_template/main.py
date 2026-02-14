@@ -61,8 +61,8 @@ class Config:
         # Data configuration
         self.dataset_name = config_dict["data"]["dataset_name"]
         self.dataset_config = config_dict["data"]["dataset_config"]
-        self.batch_size = config_dict["data"]["batch_size"]
         self.max_length = config_dict["data"]["max_length"]
+        self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
 
         # Training configuration
         self.num_epochs = config_dict["training"]["num_epochs"]
@@ -77,6 +77,12 @@ class Config:
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
         self.local_rank = config_dict["deepspeed"]["local_rank"]
+        
+        # Load batch size from DeepSpeed config
+        import json
+        with open(self.deepspeed_config, 'r') as f:
+            deepspeed_cfg = json.load(f)
+        self.batch_size = deepspeed_cfg.get('train_micro_batch_size_per_gpu', 1)
 
         # Model configuration
         self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
@@ -176,6 +182,7 @@ def main():
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  Batch Size: {args.batch_size}")
     print_rank_0(f"  Max Length: {args.max_length}")
+    print_rank_0(f"  DataLoader Workers: {args.num_workers} per GPU")
     print_rank_0(f"  Epochs: {args.num_epochs}")
     print_rank_0(f"  Checkpoint Interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"  Output Directory: {args.output_dir}")
@@ -235,6 +242,7 @@ def main():
         tokenizer=tokenizer,
         batch_size=micro_batch_size,  # Use DeepSpeed config value instead of args.batch_size
         max_length=args.max_length,
+        num_workers=args.num_workers,
     )
     print_rank_0(f"  Train batches: {len(train_loader)}")
     print_rank_0(f"  Eval batches: {len(eval_loader)}")

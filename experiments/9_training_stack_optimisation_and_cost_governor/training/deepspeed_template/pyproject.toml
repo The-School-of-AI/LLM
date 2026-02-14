@@ -20,4 +20,6 @@ dependencies = [
     "torch>=2.10.0",
     "torchvision>=0.25.0",
     "transformers>=5.0.0",
+    "triton>=3.6.0",
+    "flash-linear-attention>=0.4.1",
 ]

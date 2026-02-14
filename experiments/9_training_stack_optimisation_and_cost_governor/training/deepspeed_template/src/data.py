@@ -85,7 +85,7 @@ def get_dataloaders(
     tokenizer=None,
     batch_size: int = 8,
     max_length: int = 128,
-    num_workers: int = 0,
+    num_workers: int = 12,  # 12 workers per GPU = 96 total workers on p4d.24xlarge (96 vCPUs, 8 GPUs)
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
     Load dataset and create dataloaders for training, validation, and testing.
@@ -125,29 +125,43 @@ def get_dataloaders(
     # Set format for PyTorch
     tokenized_dataset.set_format(type="torch")
 
-    # Create dataloaders
+    # Create dataloaders with AGGRESSIVE optimizations for p4d.24xlarge (96 vCPUs, 8 GPUs)
+    # With DeepSpeed, each GPU process creates its own dataloader
+    # num_workers=12 per GPU × 8 GPUs = 96 total worker processes (uses ALL vCPUs)
+    # prefetch_factor=4 keeps 4 batches ready per worker (384 batches total pre-loaded!)
+    # This ensures GPU NEVER waits for data
+    # persistent_workers=True keeps workers alive between epochs (eliminates startup overhead)
+    effective_workers = num_workers if num_workers > 0 else 12
+    
     train_loader = DataLoader(
         tokenized_dataset["train"],
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=effective_workers,
         pin_memory=True,
+        prefetch_factor=4,  # Increased from 2 to 4 for maximum throughput
+        persistent_workers=True if effective_workers > 0 else False,
+        # NOTE: Don't use multiprocessing_context='fork' with DeepSpeed - breaks NCCL!
     )
 
     eval_loader = DataLoader(
         tokenized_dataset["validation"],
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
+        num_workers=effective_workers,
         pin_memory=True,
+        prefetch_factor=4,
+        persistent_workers=True if effective_workers > 0 else False,
     )
 
     test_loader = DataLoader(
         tokenized_dataset["test"],
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
+        num_workers=effective_workers,
         pin_memory=True,
+        prefetch_factor=4,
+        persistent_workers=True if effective_workers > 0 else False,
     )
 
     # Dataset info
