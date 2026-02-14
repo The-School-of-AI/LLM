@@ -91,7 +91,7 @@ for w in fruits:
 #        same_pronunciation, animal_starting, identify_sound, first_sound, word_with_nasal,
 #        another_rhyme, fruit_starting, similar_sound, two_words_with_sound, verb_starting, same_pronunciation_sh_sha
 TEMPLATES = [
-    ('"{word}" ಪದವಿಗೆ ಪ್ರಾಸಬದ್ಧವಾದ ಪದ ಯಾವುದು?', "rhyme_word"),
+    ('"{word}" ಪದಕ್ಕೆ ಪ್ರಾಸಬದ್ಧವಾದ ಪದ ಯಾವುದು?', "rhyme_word"),
     ('"{letter}" ಅಕ್ಷರದಿಂದ ಪ್ರಾರಂಭವಾಗುವ ಒಂದು ಪದ ಹೇಳಿ?', "word_starting"),
     ('"{word1}" ಮತ್ತು "{word2}" ಪದಗಳು ಪ್ರಾಸವಾಗುತ್ತವೆಯೇ?', "do_rhyme_yes_no"),
     ('"ಅ" ಸ್ವರದ ಧ್ವನಿ ಇರುವ ಪದ ಯಾವುದು?', "word_with_vowel"),
@@ -101,15 +101,15 @@ TEMPLATES = [
     ('"ತ" ವರ್ಗದ ಅಕ್ಷರಗಳ ಧ್ವನಿಯನ್ನು ಗುರುತಿಸಿ?', "identify_sound"),
     ('"{word}" ಪದದ ಮೊದಲ ಧ್ವನಿ ಯಾವುದು?', "first_sound"),
     ('"ನ" ಅಕ್ಷರದ ಅನುನಾಸಿಕ ಧ್ವನಿ ಇರುವ ಪದ ಯಾವುದು?', "word_with_nasal"),
-    ('"{word}" ಪದವಿಗೆ ಪ್ರಾಸವಾಗುವ ಮತ್ತೊಂದು ಪದ ತಿಳಿಸಿ?', "rhyme_word"),
+    ('"{word}" ಪದಕ್ಕೆ ಪ್ರಾಸವಾಗುವ ಮತ್ತೊಂದು ಪದ ತಿಳಿಸಿ?', "rhyme_word"),
     ('"{word1}" ಮತ್ತು "{word2}" ಪದಗಳು ಪ್ರಾಸಬದ್ಧವೇ?', "do_rhyme_yes_no"),
     ('"{letter}" ಅಕ್ಷರದಿಂದ ಶುರುವಾಗುವ ಹಣ್ಣಿನ ಹೆಸರು ಹೇಳಿ?', "fruit_starting"),
-    ('"{word}" ಪದವಿಗೆ ಹೋಲುವ ಧ್ವನಿಯ ಪದ ಯಾವುದು?', "similar_sound"),
+    ('"{word}" ಪದಕ್ಕೆ ಹೋಲುವ ಧ್ವನಿಯ ಪದ ಯಾವುದು?', "similar_sound"),
     ('"{letter}" ಧ್ವನಿಯಿಂದ ಕೊನೆಗೊಳ್ಳುವ ಪದವನ್ನು ಹೆಸರಿಸಿ?', "word_ending"),
     ('"ಶ" ಮತ್ತು "ಷ" ಉಚ್ಚಾರಣೆಯಲ್ಲಿ ಸಮಾನತೆ ಇದೆಯೇ?', "same_pronunciation_sh_sha"),
     ('"{letter}" ಅಕ್ಷರದ ಧ್ವನಿ ಇರುವ ಎರಡು ಪದಗಳನ್ನು ನೀಡಿ?', "two_words_with_sound"),
     ('"{letter}" ಅಕ್ಷರದಿಂದ ಆರಂಭವಾಗುವ ಕ್ರಿಯಾಪದ ಯಾವುದು?', "verb_starting"),
-    ('"{word}" ಪದದ ಮೊದಲ ಶಬ್ದ ಯಾವುದು?', "first_sound"),
+    ('"{word}" ಪದದ ಮೊದಲ ಅಕ್ಷರ ಯಾವುದು?', "first_sound"),
     ('"{word}" ಪದದ ಧ್ವನಿಗೆ ಹತ್ತಿರವಿರುವ ಪದ ತಿಳಿಸಿ?', "similar_sound"),
 ]
 
