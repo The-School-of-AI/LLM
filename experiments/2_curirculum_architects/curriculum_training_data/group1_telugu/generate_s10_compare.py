@@ -35,7 +35,7 @@ TEMPLATES_SHORTER = [
 unique_words = list(set(ALL_WORDS))
 word_lengths = {}
 for word in unique_words:
-    clusters = get_telugu_grapheme_clusters(word)
+    clusters = [c for c in get_telugu_grapheme_clusters(word) if c.strip()]
     word_lengths[word] = len(clusters)
 
 

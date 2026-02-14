@@ -39,11 +39,11 @@ POSITIONS = [
 # Templates — Telugu uses invariant లో (no genitive suffix needed)
 TEMPLATES = [
     '"{word}" లో "{char}" అక్షరం ఏ స్థానంలో ఉంది?',
-    '"{word}" లో "{char}" అక్షరం ఎక్కడ ఉంది?',
+    '"{word}" పదంలో "{char}" ఎన్నవ అక్షరం?',
     '"{word}" పదంలో "{char}" అక్షరం ఏ స్థానంలో ఉంది?',
     '"{word}" లో "{char}" ఏ స్థానంలో వస్తుంది?',
     '"{char}" అక్షరం "{word}" పదంలో ఏ స్థానంలో ఉంది?',
-    '"{word}" పదంలో "{char}" ఎంతవ స్థానంలో వస్తుంది?',
+    '"{word}" పదంలో "{char}" అక్షరం ఎన్నవ స్థానంలో ఉంది?',
 ]
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS + list(ALL_WORDS_UNIQUE)

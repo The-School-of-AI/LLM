@@ -114,7 +114,7 @@ def main():
     print(f"\nWriting to {output_file}...")
     with open(output_file, "w", encoding="utf-8") as f:
         for sample in combined_samples:
-            f.write(sample + "\n")
+            f.write(sample.rstrip("\n") + "\n")
 
     print("\n✓ Dataset generation complete!")
     print(f"  Output file: {output_file}")

@@ -8,7 +8,7 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.telugu_grammar import get_telugu_aksharas  # noqa: E402
+from group1_telugu.telugu_grammar import get_telugu_aksharas_with_roots  # noqa: E402
 from group1_telugu.telugu_vocabulary import NUMBERS_EXTENDED  # noqa: E402
 from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 
@@ -43,15 +43,15 @@ for num in range(1, len(NUMBERS_EXTENDED) + 1):
         if key not in unique_combinations:
             unique_combinations[key] = (query, answer)
 
-# Name to spelling (akshara-level)
+# Name to spelling (root-level)
 for word in NUMBERS_EXTENDED:
-    aksharas = get_telugu_aksharas(word)
-    if len(aksharas) == 0:
+    roots = get_telugu_aksharas_with_roots(word)
+    if len(roots) == 0:
         continue
 
     for template_idx, template in enumerate(TEMPLATES_SPELLING):
         query = template.format(word=word)
-        answer = ", ".join(aksharas)
+        answer = ",".join(roots)
         key = (word, template_idx, "spelling")
         if key not in unique_combinations:
             unique_combinations[key] = (query, answer)
@@ -76,11 +76,11 @@ while len(samples) < target_count and attempts < max_attempts:
         a = word
     else:
         word = random.choice(NUMBERS_EXTENDED)
-        aksharas = get_telugu_aksharas(word)
-        if len(aksharas) > 0:
+        roots = get_telugu_aksharas_with_roots(word)
+        if len(roots) > 0:
             template = random.choice(TEMPLATES_SPELLING)
             q = template.format(word=word)
-            a = ", ".join(aksharas)
+            a = ",".join(roots)
 
     if q and a and (q, a) not in seen_lines:
         seen_lines.add((q, a))

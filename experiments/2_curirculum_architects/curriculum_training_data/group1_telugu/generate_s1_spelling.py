@@ -35,7 +35,7 @@ def get_telugu_grapheme_clusters(word: str) -> list[str]:
 def generate_spelling_answer(word: str) -> str:
     """Generate spelling answer as comma-separated aksharas (e.g. పు, స్త, కం)"""
     aksharas = get_telugu_aksharas_with_roots(word)
-    return ", ".join(aksharas)
+    return ",".join(aksharas)
 
 
 # Spelling templates: sequence of aksharas in a word
@@ -82,7 +82,7 @@ TEMPLATES = TEMPLATES_SPELLING + TEMPLATES_LISTING
 def generate_listing_answer(word: str, template: str) -> str:
     """Generate listing answer as comma-separated aksharas (e.g. శు, క్ర, వా, రం)"""
     clusters = get_telugu_aksharas_with_roots(word)
-    return ", ".join(clusters)
+    return ",".join(clusters)
 
 
 if __name__ == "__main__":
