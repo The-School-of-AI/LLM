@@ -14,6 +14,7 @@ from group1_telugu.telugu_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
 from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 
 # ─── Telugu Consonants (హల్లులు) ───
+# Full traditional alphabet including ఱ (hard ra) and క్ష (conjunct, but taught as part of alphabet)
 CONSONANTS = [
     "క", "ఖ", "గ", "ఘ", "ఙ",
     "చ", "ఛ", "జ", "ఝ", "ఞ",
@@ -22,48 +23,43 @@ CONSONANTS = [
     "ప", "ఫ", "బ", "భ", "మ",
     "య", "ర", "ల", "వ",
     "శ", "ష", "స", "హ", "ళ",
-]
-
-# Common consonants (skip rare ఙ, ఝ, ఞ for gunintalu charts)
-COMMON_CONSONANTS = [
-    "క", "ఖ", "గ", "ఘ",
-    "చ", "ఛ", "జ",
-    "ట", "ఠ", "డ", "ఢ", "ణ",
-    "త", "థ", "ద", "ధ", "న",
-    "ప", "ఫ", "బ", "భ", "మ",
-    "య", "ర", "ల", "వ",
-    "శ", "ష", "స", "హ", "ళ",
+    "ఱ", "క్ష",
 ]
 
 # ─── Telugu Vowels & Vowel Signs (అచ్చులు & గుణింతాలు) ───
 # (vowel_independent, vowel_sign_unicode, vowel_name)
-# అ has no vowel sign (inherent vowel)
+# అ has no combining sign — the consonant's base form is itself the అ-కారం form
 VOWELS_WITH_SIGNS = [
+    ("అ", "", "అ-కారం"),
     ("ఆ", "\u0C3E", "ఆ-కారం"),
     ("ఇ", "\u0C3F", "ఇ-కారం"),
     ("ఈ", "\u0C40", "ఈ-కారం"),
     ("ఉ", "\u0C41", "ఉ-కారం"),
     ("ఊ", "\u0C42", "ఊ-కారం"),
     ("ఋ", "\u0C43", "ఋ-కారం"),
+    ("ౠ", "\u0C44", "ౠ-కారం"),
     ("ఎ", "\u0C46", "ఎ-కారం"),
     ("ఏ", "\u0C47", "ఏ-కారం"),
     ("ఐ", "\u0C48", "ఐ-కారం"),
     ("ఒ", "\u0C4A", "ఒ-కారం"),
     ("ఓ", "\u0C4B", "ఓ-కారం"),
     ("ఔ", "\u0C4C", "ఔ-కారం"),
+    ("అం", "\u0C02", "అనుస్వారం"),
+    ("అః", "\u0C03", "విసర్గ"),
 ]
 
-# Independent vowels for classification
-INDEPENDENT_VOWELS = ["అ", "ఆ", "ఇ", "ఈ", "ఉ", "ఊ", "ఋ", "ఎ", "ఏ", "ఐ", "ఒ", "ఓ", "ఔ"]
+# Independent vowels for classification (including అయోగవాహాలు: అం, అః)
+INDEPENDENT_VOWELS = ["అ", "ఆ", "ఇ", "ఈ", "ఉ", "ఊ", "ఋ", "ౠ", "ఎ", "ఏ", "ఐ", "ఒ", "ఓ", "ఔ", "అం", "అః"]
 
 TELUGU_VIRAMA = "\u0C4D"  # ్
 
 
 def build_gunintam_chart(consonant: str) -> list[str]:
     """Build full gunintam chart for a consonant: క, కా, కి, కీ, ..."""
-    chart = [consonant]  # inherent అ
+    chart = [consonant]  # inherent అ (అ-కారం has no combining sign)
     for _, sign, _ in VOWELS_WITH_SIGNS:
-        chart.append(consonant + sign)
+        if sign:  # skip అ — already added as base form
+            chart.append(consonant + sign)
     return chart
 
 
@@ -157,7 +153,7 @@ target_count = 8000
 seen = set()
 
 # 1. Gunintalu: consonant + vowel sign = combined (systematic)
-for cons in COMMON_CONSONANTS:
+for cons in CONSONANTS:
     for vowel_indep, sign, vowel_name in VOWELS_WITH_SIGNS:
         combined = cons + sign
         template = random.choice(TEMPLATES_GUNINTAM_COMBINE)
@@ -169,7 +165,7 @@ for cons in COMMON_CONSONANTS:
             samples.append((q, a))
 
 # 2. Gunintalu: identify base consonant
-for cons in COMMON_CONSONANTS:
+for cons in CONSONANTS:
     for vowel_indep, sign, vowel_name in random.sample(VOWELS_WITH_SIGNS, min(4, len(VOWELS_WITH_SIGNS))):
         combined = cons + sign
         template = random.choice(TEMPLATES_GUNINTAM_BASE)
@@ -181,7 +177,7 @@ for cons in COMMON_CONSONANTS:
             samples.append((q, a))
 
 # 3. Gunintalu: identify vowel in combined form
-for cons in COMMON_CONSONANTS:
+for cons in CONSONANTS:
     for vowel_indep, sign, vowel_name in random.sample(VOWELS_WITH_SIGNS, min(4, len(VOWELS_WITH_SIGNS))):
         combined = cons + sign
         template = random.choice(TEMPLATES_GUNINTAM_VOWEL)
@@ -193,7 +189,7 @@ for cons in COMMON_CONSONANTS:
             samples.append((q, a))
 
 # 4. Gunintalu: full chart for each consonant
-for cons in COMMON_CONSONANTS:
+for cons in CONSONANTS:
     chart = build_gunintam_chart(cons)
     template = random.choice(TEMPLATES_GUNINTAM_CHART)
     q = template.format(cons=cons)
@@ -264,13 +260,21 @@ for char in CONSONANTS:
         seen.add(key)
         samples.append((q, a))
 
-# ─── Fill to target with random variations ───
-while len(samples) < target_count:
+# ─── Fill to target with unique random variations ───
+seen_lines = set()
+for q, a in samples:
+    seen_lines.add((q, a))
+
+max_attempts = target_count * 10  # safety limit to avoid infinite loop
+attempts = 0
+while len(samples) < target_count and attempts < max_attempts:
+    attempts += 1
     choice = random.random()
+    q, a = None, None
 
     if choice < 0.35:
         # Random gunintalu combination
-        cons = random.choice(COMMON_CONSONANTS)
+        cons = random.choice(CONSONANTS)
         vowel_indep, sign, vowel_name = random.choice(VOWELS_WITH_SIGNS)
         combined = cons + sign
         r = random.random()
@@ -286,16 +290,14 @@ while len(samples) < target_count:
             template = random.choice(TEMPLATES_GUNINTAM_VOWEL)
             q = template.format(combined=combined)
             a = vowel_name
-        samples.append((q, a))
 
     elif choice < 0.55:
         # Random gunintalu chart
-        cons = random.choice(COMMON_CONSONANTS)
+        cons = random.choice(CONSONANTS)
         chart = build_gunintam_chart(cons)
         template = random.choice(TEMPLATES_GUNINTAM_CHART)
         q = template.format(cons=cons)
         a = ", ".join(chart)
-        samples.append((q, a))
 
     elif choice < 0.80:
         # Random ottulu
@@ -313,13 +315,10 @@ while len(samples) < target_count:
                     template = random.choice(TEMPLATES_OTTULU_DECOMPOSE)
                     q = template.format(conjunct=conj)
                     a = ", ".join(parts)
-                else:
-                    continue
             else:
                 template = random.choice(TEMPLATES_OTTULU_EXISTS)
                 q = template.format(word=word)
                 a = f"అవును, {conj}"
-            samples.append((q, a))
 
     elif choice < 0.90:
         # Random ottulu exists (no conjunct)
@@ -329,7 +328,6 @@ while len(samples) < target_count:
             template = random.choice(TEMPLATES_OTTULU_EXISTS)
             q = template.format(word=word)
             a = "లేదు"
-            samples.append((q, a))
 
     else:
         # Random classification
@@ -341,7 +339,20 @@ while len(samples) < target_count:
             a = "వ్యంజనం"
         template = random.choice(TEMPLATES_CLASSIFY)
         q = template.format(char=char)
+
+    if q and a and (q, a) not in seen_lines:
+        seen_lines.add((q, a))
         samples.append((q, a))
+
+# Final dedup: remove any duplicates from seed vs fill overlap
+unique_samples = []
+final_seen = set()
+for q, a in samples:
+    line = (q, a)
+    if line not in final_seen:
+        final_seen.add(line)
+        unique_samples.append((q, a))
+samples = unique_samples
 
 random.shuffle(samples)
 samples = samples[:target_count]

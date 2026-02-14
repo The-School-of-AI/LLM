@@ -10,6 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
+    ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
@@ -45,7 +46,7 @@ TEMPLATES = [
     '"{word}" పదంలో "{char}" ఎంతవ స్థానంలో వస్తుంది?',
 ]
 
-all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
+all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS + list(ALL_WORDS_UNIQUE)
 samples = []
 target_count = 18000
 
@@ -76,7 +77,16 @@ for word in set(all_words):
                 unique_combinations[key] = (query, answer)
 
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
+
+# Track seen lines for dedup
+seen_lines = set()
+for q, a in samples:
+    seen_lines.add((q, a))
+
+max_attempts = target_count * 10
+attempts = 0
+while len(samples) < target_count and attempts < max_attempts:
+    attempts += 1
     word = random.choice(list(set(all_words)))
     clusters = get_telugu_grapheme_clusters(word)
     if len(clusters) == 0:
@@ -95,11 +105,23 @@ while len(samples) < target_count:
         pos_str = str(pos_num)
 
     template = random.choice(TEMPLATES)
-    query = template.format(word=word, char=cluster)
-    answer = pos_name if random.random() < 0.5 else pos_str
-    samples.append((query, answer))
+    q = template.format(word=word, char=cluster)
+    a = pos_name if random.random() < 0.5 else pos_str
+    if (q, a) not in seen_lines:
+        seen_lines.add((q, a))
+        samples.append((q, a))
+
+# Final dedup
+unique_samples = []
+final_seen = set()
+for q, a in samples:
+    if (q, a) not in final_seen:
+        final_seen.add((q, a))
+        unique_samples.append((q, a))
+samples = unique_samples
 
 random.shuffle(samples)
+samples = samples[:target_count]
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s7.txt")
 with open(output_file, "w", encoding="utf-8") as f:

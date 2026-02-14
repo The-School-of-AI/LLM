@@ -63,7 +63,15 @@ for rhyme_word, word in RHYMING_PAIRS.items():
             unique_combinations.add(key)
             samples.append((query, answer))
 
-while len(samples) < target_count:
+# Track seen lines for dedup
+seen_lines = set()
+for q, a in samples:
+    seen_lines.add((q, a))
+
+max_attempts = target_count * 10
+attempts = 0
+while len(samples) < target_count and attempts < max_attempts:
+    attempts += 1
     if not RHYMING_PAIRS:
         break
     word = random.choice(list(RHYMING_PAIRS.keys()))
@@ -76,9 +84,20 @@ while len(samples) < target_count:
     template = random.choice(TEMPLATES)
     non_rhyme = random.choice(non_rhyming_words)
     option1, option2 = random.sample([rhyme_word, non_rhyme], 2)
-    query = template.format(word=word, option1=option1, option2=option2)
-    answer = rhyme_word
-    samples.append((query, answer))
+    q = template.format(word=word, option1=option1, option2=option2)
+    a = rhyme_word
+    if (q, a) not in seen_lines:
+        seen_lines.add((q, a))
+        samples.append((q, a))
+
+# Final dedup
+unique_samples = []
+final_seen = set()
+for q, a in samples:
+    if (q, a) not in final_seen:
+        final_seen.add((q, a))
+        unique_samples.append((q, a))
+samples = unique_samples
 
 random.shuffle(samples)
 samples = samples[:target_count]

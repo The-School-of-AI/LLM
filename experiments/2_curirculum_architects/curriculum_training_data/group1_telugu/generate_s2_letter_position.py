@@ -10,6 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
+    ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
@@ -61,7 +62,7 @@ TEMPLATES = [
 EASY_WORDS = EASY_WORDS_UNIQUE * 50
 MEDIUM_WORDS = MEDIUM_WORDS_UNIQUE * 60
 HARD_WORDS = HARD_WORDS_UNIQUE * 70
-all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
+all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS + list(ALL_WORDS_UNIQUE)
 unique_words = list(set(all_words))
 
 samples = []
@@ -186,8 +187,16 @@ for word in unique_words:
             seen.add(key)
             samples.append((q, a))
 
+# Track seen lines for dedup in fill loop
+seen_lines = set()
+for q, a in samples:
+    seen_lines.add((q, a))
+
 # Fill to target with random samples
-while len(samples) < target_count:
+max_attempts = target_count * 10
+fill_attempts = 0
+while len(samples) < target_count and fill_attempts < max_attempts:
+    fill_attempts += 1
     word = random.choice(unique_words)
     clusters = get_telugu_grapheme_clusters(word)
     n = len(clusters)
@@ -251,8 +260,18 @@ while len(samples) < target_count:
     else:
         q, a = None, None
 
-    if q is not None and a is not None:
+    if q is not None and a is not None and (q, a) not in seen_lines:
+        seen_lines.add((q, a))
         samples.append((q, a))
+
+# Final dedup
+unique_samples = []
+final_seen = set()
+for q, a in samples:
+    if (q, a) not in final_seen:
+        final_seen.add((q, a))
+        unique_samples.append((q, a))
+samples = unique_samples
 
 random.shuffle(samples)
 samples = samples[:target_count]
