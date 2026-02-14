@@ -1557,7 +1557,9 @@ class LightningDecoderLayer(nn.Module):
                 aux = aux + aux2
 
         if aux is None:
-            aux = x.new_zeros((), dtype=torch.float32)
+            # Must have a grad_fn for reversible midpoint backward
+            # (torch.autograd.grad requires all outputs to be differentiable)
+            aux = (delta * 0.0).sum()
 
         return delta, aux
 

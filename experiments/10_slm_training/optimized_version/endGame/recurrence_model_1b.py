@@ -1055,13 +1055,13 @@ class GatedSparseAttention(nn.Module):
         # Debug: verify stateless recomputation is producing valid indices
         if _kernel_log.isEnabledFor(logging.INFO):
             _phase = "reconstruct" if is_reversible_reconstruct else ("rev_fwd" if is_reversible_forward else "fwd")
-            _kernel_log.debug(
-                "[GSA stateless] phase=%s B=%d T=%d k_t_mean=%.1f k_t_min=%d k_t_max=%d "
-                "top_indices_shape=%s var_ema=%.4f",
-                _phase, B, T,
-                k_t.float().mean().item(), k_t.min().item(), k_t.max().item(),
-                list(top_indices.shape), self.variance_ema.item(),
-            )
+            # _kernel_log.debug(
+            #     "[GSA stateless] phase=%s B=%d T=%d k_t_mean=%.1f k_t_min=%d k_t_max=%d "
+            #     "top_indices_shape=%s var_ema=%.4f",
+            #     _phase, B, T,
+            #     k_t.float().mean().item(), k_t.min().item(), k_t.max().item(),
+            #     list(top_indices.shape), self.variance_ema.item(),
+            # )
 
         # Update variance EMA only during the reversible forward pass (no grad)
         if is_reversible_forward:
@@ -1385,23 +1385,50 @@ class MoEFFN(nn.Module):
         return y, aux_loss
 
 
-class LightningMLP(nn.Module):
-    """MLP wrapper using MoEFFN."""
-    def __init__(self, hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
-                 shared_intermediate_size=2048,data_sparsity=0.5):
+class DenseMLP(nn.Module):
+    """Simple SwiGLU FFN for dense (non-MoE) models.
+
+    Replaces the MoEFFN-with-is_dense hack that used `x.sum() * 0.0` to fake
+    an aux_loss.  This is torch.compile-friendly: no dead branches, no ghost
+    MoE graph nodes.  Returns a plain tensor (no aux_loss tuple).
+    """
+    def __init__(self, d_model: int, d_hidden: int):
         super().__init__()
-        self.moe = MoEFFN(
-            d_model=hidden_size,
-            d_hidden=intermediate_size,
-            num_experts=num_experts,
-            d_shared_hidden=shared_intermediate_size,
-            top_k=top_k,
-            dropout=0.0,
-            data_sparsity=data_sparsity
-        )
+        self.gate_proj = nn.Linear(d_model, d_hidden, bias=False)
+        self.up_proj = nn.Linear(d_model, d_hidden, bias=False)
+        self.down_proj = nn.Linear(d_hidden, d_model, bias=False)
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in [self.gate_proj, self.up_proj, self.down_proj]:
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
+
+
+class LightningMLP(nn.Module):
+    """MLP wrapper: uses DenseMLP when num_experts==0, MoEFFN otherwise."""
+    def __init__(self, hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
+                 shared_intermediate_size=2048, data_sparsity=0.5):
+        super().__init__()
+        self.is_dense = (num_experts == 0 or data_sparsity == 0.0)
+
+        if self.is_dense:
+            self.mlp = DenseMLP(d_model=hidden_size, d_hidden=shared_intermediate_size)
+        else:
+            self.mlp = MoEFFN(
+                d_model=hidden_size,
+                d_hidden=intermediate_size,
+                num_experts=num_experts,
+                d_shared_hidden=shared_intermediate_size,
+                top_k=top_k,
+                dropout=0.0,
+                data_sparsity=data_sparsity
+            )
 
     def forward(self, x):
-        return self.moe(x)
+        return self.mlp(x)
 
 
 # ============================================================================
@@ -1603,7 +1630,9 @@ class LightningDecoderLayer(nn.Module):
                 aux = aux + aux2
 
         if aux is None:
-            aux = x.new_zeros((), dtype=torch.float32)
+            # Must have a grad_fn for reversible midpoint backward
+            # (torch.autograd.grad requires all outputs to be differentiable)
+            aux = (delta * 0.0).sum()
 
         return delta, aux
 
@@ -1679,7 +1708,7 @@ class MTPTransformerBlock(nn.Module):
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
-        if isinstance(module, (MoEFFN, MoEGate, MHCCoeffs)):
+        if isinstance(module, (DenseMLP, MoEFFN, MoEGate, MHCCoeffs)):
             return
 
         if isinstance(module, nn.Linear):
@@ -1879,7 +1908,7 @@ class Model1B(nn.Module):
                 if module is submodule:
                     return
 
-        if isinstance(module, (MoEFFN, MoEGate, MHCCoeffs)):
+        if isinstance(module, (DenseMLP, MoEFFN, MoEGate, MHCCoeffs)):
             return
 
         if isinstance(module, nn.Linear):
