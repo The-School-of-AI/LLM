@@ -12,6 +12,11 @@ if [ -z "$URL_FILE" ]; then
     exit 1
 fi
 
+if [ ! -f "$URL_FILE" ]; then
+    echo "Error: URL file '$URL_FILE' does not exist."
+    exit 1
+fi
+
 # Get prefix from input file name (strip path and extension)
 BASE_NAME=$(basename "$URL_FILE")
 PREFIX="${BASE_NAME%%.*}"
@@ -41,7 +46,7 @@ export SUB_DEST_DIR LOG_FILE ERR_FILE
 cat "$URL_FILE" | xargs -n 1 -P 2 -I {} bash -c '
     url="{}"
     fname=$(basename "$url")
-    wget -q -P "$SUB_DEST_DIR" "$url"
+    wget -q -c --tries=3 --waitretry=5 -P "$SUB_DEST_DIR" "$url"
     status=$?
     if [ $status -eq 0 ]; then
         echo "SUCCESS: $fname" >> "$LOG_FILE"

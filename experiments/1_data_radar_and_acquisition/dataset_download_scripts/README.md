@@ -12,6 +12,14 @@ This folder contains scripts for downloading Dolma datasets to your local device
   ```
   - `<dataset_url>`: The URL of the dataset file to download.
   - `<output_path>`: The local path where the file will be saved.
+- ** Prerequisites:**
+   Install the required packages for environment reproducibility:
+
+  ```bash
+     pip install uv wget boto3
+  ```
+-** Logging:**
+  Logs and audit trails are stored in the `/data/dolma/logs` directory. Check this location for detailed logs.
 
 ### 2. download_dolma_all_dataset_batch.sh
 - **Purpose:** Batch script to download multiple datasets by iterating over a list of dataset URLs and calling `download_dolma_dataset.sh` for each.
