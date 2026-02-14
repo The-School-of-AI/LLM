@@ -5,7 +5,6 @@
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  batch_size: 2  # Reduced to fit in 4x L4 (15GB) GPUs
   max_length: 64  # Reduced to conserve memory
 
 # Training Configuration

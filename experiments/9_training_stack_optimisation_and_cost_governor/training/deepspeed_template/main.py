@@ -189,6 +189,41 @@ def main():
     print_rank_0("=" * 80)
 
     # ========================================
+    # Step 0.5: Read DeepSpeed Config to Get Batch Size
+    # ========================================
+    print_rank_0("\n[0.5/5] Reading DeepSpeed configuration...")
+    import json
+    with open(args.deepspeed_config, 'r') as f:
+        deepspeed_config = json.load(f)
+    
+    # Extract batch size from DeepSpeed config
+    micro_batch_size = deepspeed_config.get('train_micro_batch_size_per_gpu', 1)
+    gradient_accumulation_steps = deepspeed_config.get('gradient_accumulation_steps', 1)
+    train_batch_size = deepspeed_config.get('train_batch_size', None)
+    
+    print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
+    print_rank_0(f"  train_micro_batch_size_per_gpu: {micro_batch_size}")
+    print_rank_0(f"  gradient_accumulation_steps: {gradient_accumulation_steps}")
+    
+    # Calculate expected global batch size
+    # train_batch_size = micro_batch × accum_steps × num_gpus
+    import torch.distributed as dist
+    num_gpus = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+    expected_global_batch = micro_batch_size * gradient_accumulation_steps * num_gpus
+    
+    if train_batch_size is not None:
+        print_rank_0(f"  train_batch_size (from config): {train_batch_size}")
+        if train_batch_size != expected_global_batch:
+            print_rank_0(f"  ⚠️  WARNING: train_batch_size ({train_batch_size}) != "
+                        f"micro_batch ({micro_batch_size}) × accum_steps ({gradient_accumulation_steps}) × "
+                        f"num_gpus ({num_gpus}) = {expected_global_batch}")
+            print_rank_0(f"  This mismatch may cause unexpected behavior.")
+    else:
+        print_rank_0(f"  Calculated global batch size: {expected_global_batch}")
+    
+    print_rank_0(f"  ✓ Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
+
+    # ========================================
     # Step 1: Load Tokenizer & Data
     # ========================================
     print_rank_0("\n[1/5] Loading tokenizer and data...")
@@ -198,7 +233,7 @@ def main():
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
         tokenizer=tokenizer,
-        batch_size=args.batch_size,
+        batch_size=micro_batch_size,  # Use DeepSpeed config value instead of args.batch_size
         max_length=args.max_length,
     )
     print_rank_0(f"  Train batches: {len(train_loader)}")

@@ -5,7 +5,6 @@
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  batch_size: 32
   max_length: 128
 
 # Training Configuration
@@ -24,8 +23,8 @@ deepspeed:
 
 # Model Configuration
 model:
-  tokenizer_name: "Qwen/Qwen2.5-0.5B"  # or "distilgpt2"
-  # model_name: "distilgpt2"  # Uncomment if using different model
+  model_type: "reversible"  # Use "reversible", "qwen2_moe", or "standard"
+  embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
 
 # Checkpoint Configuration
 checkpoint:

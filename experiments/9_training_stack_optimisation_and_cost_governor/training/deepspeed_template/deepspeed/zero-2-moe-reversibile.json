@@ -37,6 +37,14 @@
         "allgather_bucket_size": 5e7
     },
     
+    "activation_checkpointing": {
+        "partition_activations": false,
+        "cpu_checkpointing": false,
+        "contiguous_memory_optimization": false,
+        "synchronize_checkpoint_boundary": false,
+        "_comment": "DISABLED - Reversible models handle activation memory through midpoint integration"
+    },
+    
     "bf16": {
         "enabled": true
     },
@@ -45,8 +53,6 @@
     "steps_per_print": 10,
     "wall_clock_breakdown": false,
     "dump_state": false,
-    
-    "_comment_activation_checkpointing": "DISABLED for reversible models - they handle memory efficiency through their architecture",
     "_comment_batch_size": "Reduced for 4x L4 (15GB) GPUs - effective batch size 16 via gradient accumulation",
     "_comment_micro_batch": "Set to 1 to minimize per-GPU memory usage",
     "_comment_dropout": "Model has dropout=0.0 set in config (required for reversibility)",

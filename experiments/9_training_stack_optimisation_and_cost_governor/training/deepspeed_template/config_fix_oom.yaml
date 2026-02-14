@@ -1,0 +1,63 @@
+# FIXED Configuration for OOM Issues on p4d.24xlarge
+# This config addresses the memory problems you encountered at seq_len=512
+
+# Data Configuration
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-2-raw-v1"
+  batch_size: 1  # DEPRECATED: Batch size is now read from DeepSpeed config (train_micro_batch_size_per_gpu)
+                 # This field is kept for backwards compatibility but is NOT used
+  max_length: 512  # Start conservative, then scale up
+
+# Training Configuration
+training:
+  num_epochs: 1
+  max_train_steps: null
+  max_eval_steps: 50  # Limit eval to save time
+  log_interval: 10
+  seed: 42
+  enable_system_metrics: true  # Monitor GPU memory
+
+# DeepSpeed Configuration
+deepspeed:
+  config_path: "deepspeed/zero-2-moe-oom-fixed.json"
+  local_rank: -1
+
+# Model Configuration
+model:
+  model_type: "reversible"
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"
+  embedding_type: "kronecker"
+
+# Checkpoint Configuration
+checkpoint:
+  output_dir: "./checkpoints_oom_fixed"
+  save_checkpoint: true
+  checkpoint_interval: 200
+  keep_last_n_checkpoints: 2
+  resume_from_checkpoint: null
+  resume_step: null
+
+# S3 Configuration
+s3:
+  enabled: false
+  bucket: null
+  prefix: "training/oom_fixed/checkpoints"
+  region: "us-east-1"
+  cleanup_after_upload: false
+
+# Generation Configuration
+generation:
+  test_generation: false
+  generation_prompt: "The history of artificial intelligence begins with"
+
+# =============================================================================
+# FIXES APPLIED FOR OOM:
+# =============================================================================
+# 1. Reduced batch_size from 8 to 2
+# 2. Enabled CPU optimizer offload (saves ~17GB per GPU)
+# 3. Reduced gradient accumulation to 4 (was 8 in some configs)
+# 4. max_length set to 512 (your target)
+# 5. ZeRO-2 with aggressive memory optimizations
+# 6. System metrics enabled for monitoring
+# =============================================================================

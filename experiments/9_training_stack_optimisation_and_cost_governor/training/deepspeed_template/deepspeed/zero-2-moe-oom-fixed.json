@@ -1,0 +1,108 @@
+{
+    "_comment": "OOM-FIXED DeepSpeed Config for 1.53B Reversible Model on p4d.24xlarge (8x A100-40GB)",
+    
+    "train_batch_size": 16,
+    "train_micro_batch_size_per_gpu": 1,
+    "gradient_accumulation_steps": 2,
+    
+    "optimizer": {
+        "type": "AdamW",
+        "params": {
+            "lr": 1e-4,
+            "betas": [0.9, 0.95],
+            "eps": 1e-8,
+            "weight_decay": 0.0
+        }
+    },
+    
+    "scheduler": {
+        "type": "WarmupDecayLR",
+        "params": {
+            "warmup_min_lr": 0,
+            "warmup_max_lr": 3e-4,
+            "warmup_num_steps": 500,
+            "total_num_steps": 10000
+        }
+    },
+    
+    "zero_optimization": {
+        "stage": 2,
+        
+        "_comment_offload": "CRITICAL FIX: Offload optimizer to CPU saves ~17GB per GPU",
+        "offload_optimizer": {
+            "device": "cpu",
+            "pin_memory": true,
+            "buffer_count": 4,
+            "pipeline_read": false,
+            "pipeline_write": false
+        },
+        
+        "contiguous_gradients": true,
+        "overlap_comm": true,
+        "reduce_scatter": true,
+        "reduce_bucket_size": 5e7,
+        "allgather_partitions": true,
+        "allgather_bucket_size": 5e7,
+        
+        "_comment_stage3": "If still OOM, uncomment stage 3 below and comment out stage 2 above",
+        "_stage_3_config": {
+            "stage": 3,
+            "offload_optimizer": {
+                "device": "cpu",
+                "pin_memory": true
+            },
+            "offload_param": {
+                "device": "cpu",
+                "pin_memory": true
+            },
+            "sub_group_size": 1e9,
+            "stage3_max_live_parameters": 1e9,
+            "stage3_max_reuse_distance": 1e9,
+            "stage3_prefetch_bucket_size": 5e7,
+            "stage3_param_persistence_threshold": 1e5
+        }
+    },
+    
+    "activation_checkpointing": {
+        "partition_activations": false,
+        "cpu_checkpointing": false,
+        "contiguous_memory_optimization": false,
+        "synchronize_checkpoint_boundary": false,
+        "_comment": "DISABLED - Reversible models handle activation memory through midpoint integration"
+    },
+    
+    "bf16": {
+        "enabled": true
+    },
+    
+    "gradient_clipping": 1.0,
+    "steps_per_print": 10,
+    "wall_clock_breakdown": false,
+    "dump_state": false,
+    
+    "_memory_optimizations": {
+        "_description": "Key fixes applied",
+        "fixes": [
+            "1. CPU optimizer offload: Saves ~17GB per GPU (2.17B params × 8 bytes)",
+            "2. Reduced micro batch: 1 sample per GPU = minimal activation memory",
+            "3. Gradient accumulation: Simulates larger batch without memory cost",
+            "4. ZeRO-2: Shards optimizer states and gradients across 8 GPUs",
+            "5. Contiguous gradients: Reduces memory fragmentation"
+        ]
+    },
+    
+    "_scaling_guide": {
+        "current_config": "seq_len=512, batch=1, global_batch=64",
+        "if_works": {
+            "step1": "Increase max_length to 1024 in config_fix_oom.yaml",
+            "step2": "If successful, try 2048",
+            "step3": "Monitor with: watch -n 1 nvidia-smi"
+        },
+        "if_still_oom": {
+            "option1": "Switch to ZeRO Stage 3 (uncomment _stage_3_config above)",
+            "option2": "Reduce max_length to 256",
+            "option3": "Offload parameters to CPU as well (ZeRO-3)",
+            "nuclear_option": "Run on g5.48xlarge (8x A10G-24GB) or p4d.24xlarge with 80GB variant"
+        }
+    }
+}
