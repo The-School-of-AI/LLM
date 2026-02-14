@@ -14,10 +14,7 @@ from group1_marathi.marathi_vocabulary import (  # noqa: E402
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import (  # noqa: E402
-    format_qa_pair_marathi,
-    get_marathi_grapheme_clusters,
-)
+from prompt_utils import format_qa_pair_marathi
 
 # Expand word lists to reach target count
 EASY_WORDS = EASY_WORDS_UNIQUE * 50
@@ -62,8 +59,9 @@ def get_marathi_characters(word: str) -> list[str]:
 
 
 def generate_spelling_answer(word: str) -> str:
-    """Generate spelling answer as comma-separated grapheme clusters (syllables)"""
-    chars = get_marathi_grapheme_clusters(word)
+    """Generate spelling answer as comma-separated Unicode characters"""
+    # Use Unicode characters (including matras as separate chars) as requested
+    chars = list(word)
     return ", ".join(chars)
 
 
