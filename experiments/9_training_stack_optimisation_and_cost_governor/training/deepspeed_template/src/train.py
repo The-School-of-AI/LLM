@@ -89,7 +89,8 @@ def train_epoch(
                 input_ids, 
                 next_token_ids=None,  # Will be computed from shifted labels if needed
                 attention_mask=attention_mask,
-                return_loss=True
+                return_loss=True,
+                return_memory=False
             )
             
             # Compute cross-entropy loss for next token prediction
@@ -317,7 +318,8 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
                     input_ids,
                     next_token_ids=None,
                     attention_mask=attention_mask,
-                    return_loss=True
+                    return_loss=True,
+                    return_memory=False
                 )
                 
                 # Compute cross-entropy loss for next token prediction

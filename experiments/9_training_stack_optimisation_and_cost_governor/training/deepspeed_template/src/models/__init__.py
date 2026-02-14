@@ -2,12 +2,12 @@
 Reversible Model Modules.
 """
 
-from .model_3b import Model3B, ModelConfig, create_model_3b, KroneckerConfig, KroneckerEmbeddings
+from .recurrence_model_1b import Model1B, ModelConfig, create_model_1b, KroneckerConfig, KroneckerEmbeddings
 
 __all__ = [
-    "Model3B",
+    "Model1B",
     "ModelConfig", 
-    "create_model_3b",
+    "create_model_1b",
     "KroneckerConfig",
     "KroneckerEmbeddings",
 ]
