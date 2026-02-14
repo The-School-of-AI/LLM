@@ -8,8 +8,9 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.telugu_grammar import get_telugu_aksharas  # noqa: E402
+from group1_telugu.telugu_grammar import get_telugu_aksharas, get_telugu_aksharas_with_roots  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
+    ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
@@ -32,9 +33,9 @@ def get_telugu_grapheme_clusters(word: str) -> list[str]:
 
 
 def generate_spelling_answer(word: str) -> str:
-    """Generate spelling answer as hyphen-separated aksharas (e.g. పు-స్త-కం)"""
-    aksharas = get_telugu_aksharas(word)
-    return "-".join(aksharas)
+    """Generate spelling answer as comma-separated aksharas (e.g. పు, స్త, కం)"""
+    aksharas = get_telugu_aksharas_with_roots(word)
+    return ",".join(aksharas)
 
 
 # Spelling templates: sequence of aksharas in a word
@@ -72,38 +73,20 @@ TEMPLATES_LISTING = [
     '"{word}" పదంలోని అక్షరాలను చూపించండి?',
     '"{word}" పదంలోని అక్షరాలను ప్రత్యేకంగా తెలియజేయండి?',
     '"{word}" పదంలోని అక్షరాలు ఏవి?',
-    '"{word}" పదంలోని అక్షరాలను అనుక్రమంగా వ్రాయండి?',
+    '"{word}" పదంలోని అక్షరాలను వరుసగా పేర్కొనండి?',
 ]
 
 TEMPLATES = TEMPLATES_SPELLING + TEMPLATES_LISTING
 
 
 def generate_listing_answer(word: str, template: str) -> str:
-    """Generate listing answer based on specific template rules (akshara-level)"""
-    clusters = get_telugu_aksharas(word)
-
-    if "అనుక్రమంగా వ్రాయండి" in template or "క్రమంలో చూపించండి" in template or "ప్రత్యేకంగా తెలియజేయండి" in template:
-        return ", ".join(clusters)
-    elif "అక్షర భాగాలను జాబితా చేయండి" in template:
-        return ", ".join(clusters)
-    elif "విభజించి వ్రాయండి" in template:
-        return "-".join(clusters)
-    elif "విడదీసి జాబితా రూపంలో ఇవ్వండి" in template:
-        return ", ".join(clusters)
-    elif "అక్షరాలు ఏవి" in template:
-        if len(clusters) == 2:
-            return f"{clusters[0]} మరియు {clusters[1]}"
-        return ", ".join(clusters)
-    elif "క్రమాంకంలో ఇవ్వండి" in template:
-        return ", ".join([f"{i+1}: {c}" for i, c in enumerate(clusters)])
-    elif "స్వరాలు మరియు వ్యంజనాలను జాబితా చేయండి" in template:
-        return ", ".join(clusters)
-    else:
-        return ", ".join(clusters)
+    """Generate listing answer as comma-separated aksharas (e.g. శు, క్ర, వా, రం)"""
+    clusters = get_telugu_aksharas_with_roots(word)
+    return ",".join(clusters)
 
 
 if __name__ == "__main__":
-    all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
+    all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS + list(ALL_WORDS_UNIQUE)
     samples = []
     target_count = 30000
 
@@ -122,18 +105,39 @@ if __name__ == "__main__":
         samples = list(unique_combinations.values())[:target_count]
     else:
         samples = list(unique_combinations.values())
-        while len(samples) < target_count:
+
+        # Track seen lines for dedup
+        seen_lines = set()
+        for q, a in samples:
+            seen_lines.add((q, a))
+
+        max_attempts = target_count * 10
+        attempts = 0
+        while len(samples) < target_count and attempts < max_attempts:
+            attempts += 1
             word = random.choice(list(set(all_words)))
             template_idx = random.randint(0, len(TEMPLATES) - 1)
             template = TEMPLATES[template_idx]
-            query = template.format(word=word)
+            q = template.format(word=word)
             if template in TEMPLATES_SPELLING:
-                answer = generate_spelling_answer(word)
+                a = generate_spelling_answer(word)
             else:
-                answer = generate_listing_answer(word, template)
-            samples.append((query, answer))
+                a = generate_listing_answer(word, template)
+            if (q, a) not in seen_lines:
+                seen_lines.add((q, a))
+                samples.append((q, a))
+
+    # Final dedup
+    unique_samples = []
+    final_seen = set()
+    for q, a in samples:
+        if (q, a) not in final_seen:
+            final_seen.add((q, a))
+            unique_samples.append((q, a))
+    samples = unique_samples
 
     random.shuffle(samples)
+    samples = samples[:target_count]
 
     output_file = os.path.join(os.path.dirname(__file__), "group1_s1.txt")
     with open(output_file, "w", encoding="utf-8") as f:

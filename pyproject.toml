@@ -4,4 +4,8 @@ version = "0.1.0"
 description = "TSAI 70B LLM Training"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "notebook>=7.5.3",
+    "pip>=26.0.1",
+    "regex>=2026.1.15",
+]
