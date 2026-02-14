@@ -121,6 +121,18 @@ def ensure_answer_period(answer: str) -> str:
     return answer
 
 
+# Kannada digits ೦-೯ (U+0CE6 to U+0CEF)
+_KANNADA_DIGITS = "೦೧೨೩೪೫೬೭೮೯"
+
+
+def int_to_kannada(n: int) -> str:
+    """Convert integer to Kannada numeral string (೦, ೧, ೨, ... ೯, ೧೦, ...)."""
+    if n < 0:
+        return "-" + int_to_kannada(-n)
+    s = str(n)
+    return "".join(_KANNADA_DIGITS[int(d)] for d in s)
+
+
 def format_qa_pair_kannada(query: str, answer: str) -> str:
     """
     Format a query-answer pair for Kannada TXT output.

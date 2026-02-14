@@ -10,6 +10,7 @@ from collections import defaultdict
 from group1_kannada.kannada_grammar import get_kannada_aksharas
 
 # Easy Words (2-4 grapheme clusters / short words)
+# Animals only (mammals, reptiles, fish, insects); birds are in EASY_BIRDS
 EASY_ANIMALS = [
     "ನಾಯಿ",
     "ಬೆಕ್ಕು",
@@ -18,13 +19,11 @@ EASY_ANIMALS = [
     "ಮೇಕೆ",
     "ಕುರಿ",
     "ಹಂದಿ",
-    "ಕೋಳಿ",
     "ಇಲಿ",
     "ನರಿ",
     "ಮೊಲ",
     "ಆಮೆ",
     "ಮೀನು",
-    "ಪಕ್ಷಿ",
     "ಕರಡಿ",
     "ಆನೆ",
     "ಹುಲಿ",
@@ -32,22 +31,10 @@ EASY_ANIMALS = [
     "ಕೋತಿ",
     "ಒಂಟೆ",
     "ಜಿರಾಫೆ",
-    "ಪೆಂಗ್ವಿನ್",
-    "ಕಾಗೆ",
-    "ಗಿಳಿ",
-    "ನವಿಲು",
-    "ಬಾಜ್",
-    "ಗೂಬೆ",
-    "ಬಾತುಕೋಳಿ",
-    "ಹಂಸ",
-    "ರಣಹದ್ದು",
-    "ಕೋಗಿಲೆ",
-    "ಹಕ್ಕಿ",
     "ಗೂಳಿ",
     "ಎಮ್ಮೆ",
     "ಕತ್ತೆ",
     "ಹಾವು",
-    "ಪಾರಿವಾಳ",
     "ಬಾವಲಿ",
     "ಮೊಸಳೆ",
     "ಕೀಟ",
@@ -56,6 +43,24 @@ EASY_ANIMALS = [
     "ಇರುವೆ",
     "ಕಾಡುಹಂದಿ",
     "ಕಾಡುಹುಲಿ",
+]
+
+# Birds only (ಪಕ್ಷಿ) - kept separate from animals
+EASY_BIRDS = [
+    "ಪಕ್ಷಿ",
+    "ಹಕ್ಕಿ",
+    "ಕಾಗೆ",
+    "ಗಿಳಿ",
+    "ನವಿಲು",
+    "ಗೂಬೆ",
+    "ಬಾತುಕೋಳಿ",
+    "ಹಂಸ",
+    "ರಣಹದ್ದು",
+    "ಕೋಗಿಲೆ",
+    "ಪಾರಿವಾಳ",
+    "ಪೆಂಗ್ವಿನ್",
+    "ಬಾಜ್",
+    "ಕೋಳಿ",
 ]
 
 EASY_OBJECTS = [
@@ -318,6 +323,7 @@ EASY_FOOD = [
 ]
 
 # Medium Words (5-6 chars)
+# Animals only (mammals, reptiles, fish, insects); birds are in MEDIUM_BIRDS
 MEDIUM_ANIMALS = [
     "ಆನೆ",
     "ಹುಲಿ",
@@ -326,7 +332,26 @@ MEDIUM_ANIMALS = [
     "ಮೊಲ",
     "ಒಂಟೆ",
     "ಜಿರಾಫೆ",
-    "ಪೆಂಗ್ವಿನ್",
+    "ಇಲಿ",
+    "ನರಿ",
+    "ಆಮೆ",
+    "ಕರಡಿ",
+    "ಮೀನು",
+    "ಹಂದಿ",
+    "ಮೇಕೆ",
+    "ಕುರಿ",
+    "ಗೂಳಿ",
+    "ಎಮ್ಮೆ",
+    "ಕತ್ತೆ",
+    "ಹಾವು",
+    "ಬಾವಲಿ",
+    "ಮೊಸಳೆ",
+]
+
+# Birds only (ಪಕ್ಷಿ) - kept separate from animals
+MEDIUM_BIRDS = [
+    "ಪಕ್ಷಿ",
+    "ಹಕ್ಕಿ",
     "ನವಿಲು",
     "ಗಿಳಿ",
     "ಕಾಗೆ",
@@ -334,23 +359,9 @@ MEDIUM_ANIMALS = [
     "ಬಾತುಕೋಳಿ",
     "ಹಂಸ",
     "ರಣಹದ್ದು",
-    "ಇಲಿ",
-    "ನರಿ",
-    "ಆಮೆ",
-    "ಕರಡಿ",
-    "ಮೀನು",
-    "ಪಕ್ಷಿ",
-    "ಹಂದಿ",
-    "ಕೋಳಿ",
-    "ಮೇಕೆ",
-    "ಕುರಿ",
-    "ಗೂಳಿ",
-    "ಎಮ್ಮೆ",
-    "ಕತ್ತೆ",
-    "ಹಾವು",
     "ಪಾರಿವಾಳ",
-    "ಬಾವಲಿ",
-    "ಮೊಸಳೆ",
+    "ಪೆಂಗ್ವಿನ್",
+    "ಕೋಳಿ",
 ]
 
 MEDIUM_OBJECTS = [
@@ -1512,16 +1523,95 @@ VARGAS = {
 # Replaces artificially constructed pairs (e.g. ಮನೆ->ಕನೆ) with real word pairs
 # that share the same last grapheme cluster. See build_real_rhyming_pairs() below.
 
-# Classification categories (Kannada: ವ್ಯಕ್ತಿ=person, ಪ್ರಾಣಿ=animal, ವಸ್ತು=object)
+# Import expanded vocabulary for ~200k Q&A support
+from group1_kannada.kannada_expanded_vocabulary import (
+    EXPANDED_ANIMALS,
+    EXPANDED_BIRDS,
+    EXPANDED_OBJECTS,
+    EXPANDED_FOOD,
+    EXPANDED_NATURE,
+    EXPANDED_PEOPLE,
+    EXPANDED_VOCABULARY_200K,
+)
+
+# Additional classification categories (order matters: more specific first)
+# ಹಣ್ಣು (fruit)
+CLASS_FRUITS = [
+    "ಮಾವು", "ಬಾಳೆ", "ಪಪ್ಪಾಯಿ", "ದ್ರಾಕ್ಷಿ", "ಸೀಬೆ", "ನಾರಂಗಿ", "ಕಿತ್ತಳೆ",
+    "ದಾಳಿಂಬೆ", "ಅನಾನಸ್", "ಕಲ್ಲಂಗಡಿ", "ಸೌತೆಕಾಯಿ", "ಹಲಸು", "ಗುವಾವು",
+    "ನಿಂಬೆ", "ಮಾವಳಿ", "ಬೆರಿ", "ಕೇಸರಿ", "ಸೀಬೆಹಣ್ಣು", "ಮಾವಿನಕಾಯಿ",
+    "ಬಾಳೆಹಣ್ಣು", "ದಾಸವಾಳ", "ಕನ್ನೇಕಾಯಿ", "ಮೋಸಂಬಿ", "ಚಿಕ್ಕು",
+]
+# ತರಕಾರಿ (vegetable)
+CLASS_VEGETABLES = [
+    "ಬಟಾಣಿ", "ಗಜ್ಜರಿ", "ಆಲೂಗಡ್ಡೆ", "ಟೊಮ್ಯಾಟೊ", "ಬದನೆ", "ಕುಂಬಳ",
+    "ಸೋರೆ", "ಹಾಗಲ", "ಹುರುಳಿ", "ಅವರೆ", "ತೊಗರು", "ಕಡಲೆ", "ಎಲೆಕೋಸು",
+    "ಹೂಕೋಸು", "ಬೀಟ್ರೂಟ್", "ಈರುಳ್ಳಿ", "ಬೆಳ್ಳುಳ್ಳಿ", "ಶುಂಠಿ", "ಅರಿಸಿನ",
+    "ಕೊತ್ತಂಬರಿ", "ಮೆಣಸಿನಕಾಯಿ", "ಕೆರೆಬಳ್ಳಿ", "ಹರಳು", "ಹೆಸರು", "ಉದ್ದು",
+]
+# ಹೂವು (flower)
+CLASS_FLOWERS = [
+    "ಹೂವು", "ಮಲ್ಲಿಗೆ", "ಗುಲಾಬಿ", "ದಾಸವಾಳ", "ಚೆಂಡುಹೂ", "ಕಮಲ",
+    "ಸೂರ್ಯಕಾಂತಿ", "ಜಾಲಿ", "ಪುಷ್ಪ", "ಹಂಗು",
+]
+# ಪ್ರಕೃತಿ (nature) - natural elements, weather, landscape
+CLASS_NATURE = [
+    "ನದಿ", "ಸಮುದ್ರ", "ಪರ್ವತ", "ಕಾಡು", "ಮಳೆ", "ಗಾಳಿ", "ಸೂರ್ಯ", "ಚಂದ್ರ",
+    "ನಕ್ಷತ್ರ", "ಮೇಘ", "ಬರ್ಫ್", "ಬೆಂಕಿ", "ಮಣ್ಣು", "ಮರಳು", "ಸರೋವರ",
+    "ಆಕಾಶ", "ಬೆಟ್ಟ", "ಹುಲ್ಲು", "ಬೀಜ", "ಬೇರು", "ಕೊಂಬೆ", "ವನ", "ಕೆರೆ",
+    "ಕೊಳ", "ಗುಹೆ", "ಮಿಂಚು", "ಸಿಡಿಲು", "ಮರುಭೂಮಿ", "ಜ್ವಾಲಾಮುಖಿ",
+    "ಮಹಾಸಾಗರ", "ನೀರ್ಗಲ್ಲು", "ಹೊಳೆ", "ಕಾಲುವೆ", "ಝರಿ", "ತಪ್ಪಲು",
+    "ಮೈದಾನ", "ಉದ್ಯಾನ", "ಹೊಲ", "ಗದ್ದೆ", "ಕಣಿವೆ", "ಗಿರಿ", "ಶಿಖರ",
+    "ದ್ವೀಪ", "ಪ್ರದೇಶ", "ಭೂಮಿ", "ಶಿಲೆ", "ಬಂಡೆ", "ಗಿಡ", "ಮರ", "ಲತೆ",
+    "ವೃಕ್ಷ", "ಸಸ್ಯ", "ಎಲೆ", "ಕಾಂಡ", "ಕಾಯಿ", "ಫಲ", "ಸೊಪ್ಪು", "ವರ್ಷ",
+    "ಋತು", "ವಸಂತ", "ಬೇಸಿಗೆ", "ಶರತ್", "ಚಳಿಗಾಲ", "ವಾತಾವರಣ",
+]
+# ಸ್ಥಳ (place) - buildings, cities, geography
+CLASS_PLACES = [
+    "ಮನೆ", "ಶಾಲೆ", "ಅಂಗಡಿ", "ನಗರ", "ವಿದ್ಯಾಲಯ", "ಆಸ್ಪತ್ರೆ", "ಗ್ರಂಥಾಲಯ",
+    "ದೇವಾಲಯ", "ಬ್ಯಾಂಕು", "ಕಚೇರಿ", "ಮಂಟಪ", "ಕೋಟೆ", "ಸೌಧ", "ಮಂದಿರ",
+    "ಸಂಗ್ರಹಾಲಯ", "ಪ್ರೇಕ್ಷಾಗೃಹ", "ವಸತಿಗೃಹ", "ನೆರೆಹೊರೆ", "ಪಟ್ಟಣ",
+    "ಗ್ರಾಮ", "ಹಳ್ಳಿ", "ನಾಡು", "ದೇಶ", "ರಾಜ್ಯ", "ರಾಷ್ಟ್ರ", "ಕರಾವಳಿ",
+    "ಮಹಾಸಾಗರ", "ನಿಲ್ದಾಣ", "ಬಸ್ ನಿಲ್ದಾಣ", "ರೈಲ್ವೆ ನಿಲ್ದಾಣ",
+    "ವಿಮಾನ ನಿಲ್ದಾಣ", "ರಸ್ತೆ", "ಹೆದ್ದಾರಿ", "ಪೆಟ್ರೋಲ್ ನಿಲ್ದಾಣ",
+]
+# ವಾಹನ (vehicle)
+CLASS_VEHICLES = [
+    "ಕಾರು", "ಬಸ್", "ರೈಲು", "ರೈಲುಗಾಡಿ", "ಟ್ರಕ್", "ಸೈಕಲ್", "ಹಡಗು",
+    "ವಿಮಾನ", "ಮೋಟಾರ್ಸೈಕಲ್", "ಸ್ಕೂಟರ್", "ರಿಕ್ಷಾ", "ಟ್ರ್ಯಾಕ್ಟರ್",
+    "ಜೀಪ್", "ದೋಣಿ", "ಯಾತ್ರಿನೌಕೆ", "ಹೆಲಿಕಾಪ್ಟರ್", "ಗ್ಲೈಡರ್",
+    "ಟ್ರಾಮ್", "ಮೆಟ್ರೋ", "ಟ್ಯಾಕ್ಸಿ", "ವಾಹನ", "ಯಾನ", "ಪ್ರವಾಸ",
+]
+
+# Classification categories - order matters (first match wins)
+# ವಸ್ತು = general objects (household, tools, etc.) - catch-all last
 CLASSIFICATION_CATEGORIES = {
-    "ಪ್ರಾಣಿ": EASY_ANIMALS + MEDIUM_ANIMALS,
-    "ವ್ಯಕ್ತಿ": EASY_PEOPLE + MEDIUM_PROFESSIONS,
-    "ವಸ್ತು": EASY_OBJECTS + MEDIUM_OBJECTS + MEDIUM_HOUSEHOLD + MEDIUM_VEHICLES,
+    "ಹಣ್ಣು": CLASS_FRUITS,
+    "ತರಕಾರಿ": CLASS_VEGETABLES,
+    "ಹೂವು": CLASS_FLOWERS,
+    "ಪ್ರಾಣಿ": EASY_ANIMALS + MEDIUM_ANIMALS + EXPANDED_ANIMALS,
+    "ಪಕ್ಷಿ": EASY_BIRDS + MEDIUM_BIRDS + EXPANDED_BIRDS,
+    "ವಾಹನ": CLASS_VEHICLES,
+    "ಸ್ಥಳ": CLASS_PLACES,
+    "ಪ್ರಕೃತಿ": CLASS_NATURE,
+    "ವ್ಯಕ್ತಿ": EASY_PEOPLE + MEDIUM_PROFESSIONS + EXPANDED_PEOPLE,
+    "ವಸ್ತು": (
+        EASY_OBJECTS
+        + MEDIUM_OBJECTS
+        + MEDIUM_HOUSEHOLD
+        + EXPANDED_OBJECTS
+        + EASY_FOOD
+        + MEDIUM_FOOD
+        + EXPANDED_FOOD
+        + MEDIUM_VEHICLES
+        + EXPANDED_NATURE
+    ),
 }
 
 # Combined word lists by difficulty
 EASY_WORDS = (
     EASY_ANIMALS
+    + EASY_BIRDS
     + EASY_OBJECTS
     + EASY_BODY_PARTS
     + EASY_COLORS
@@ -1531,17 +1621,25 @@ EASY_WORDS = (
 )
 MEDIUM_WORDS = (
     MEDIUM_ANIMALS
+    + MEDIUM_BIRDS
     + MEDIUM_OBJECTS
     + MEDIUM_PROFESSIONS
     + MEDIUM_NATURE
     + MEDIUM_VEHICLES
     + MEDIUM_FOOD
     + MEDIUM_HOUSEHOLD
+    + EXPANDED_VOCABULARY_200K
 )
 HARD_WORDS = HARD_COMPLEX_NOUNS + HARD_ABSTRACT + DAYS_OF_WEEK + MONTHS
 
-# All words (for general use) - includes additional vocabulary to reach ~1000 words
-ALL_WORDS = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS + ADDITIONAL_VOCABULARY
+# All words (for general use) - includes expanded vocab for ~200k unique Q&A
+ALL_WORDS = (
+    EASY_WORDS
+    + MEDIUM_WORDS
+    + HARD_WORDS
+    + ADDITIONAL_VOCABULARY
+    + EXPANDED_VOCABULARY_200K
+)
 
 
 def get_unique_words(word_list):

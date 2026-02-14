@@ -95,7 +95,10 @@ for i, word1 in enumerate(word_list):
 
         pairs_generated += 1
 
-while len(samples) < target_count:
+seen_qa = set((q, a) for q, a in samples)
+no_progress_limit = 50000
+no_progress = 0
+while len(samples) < target_count and no_progress < no_progress_limit:
     word1 = random.choice(word_list)
     word2 = random.choice([w for w in word_list if w != word1])
 
@@ -120,7 +123,12 @@ while len(samples) < target_count:
         answer = shorter_word
 
     query = template.format(word1=word1, word2=word2)
-    samples.append((query, answer))
+    if (query, answer) not in seen_qa:
+        seen_qa.add((query, answer))
+        samples.append((query, answer))
+        no_progress = 0
+    else:
+        no_progress += 1
 
 random.shuffle(samples)
 samples = samples[:target_count]

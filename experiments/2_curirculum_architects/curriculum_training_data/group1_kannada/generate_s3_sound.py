@@ -109,7 +109,7 @@ TEMPLATES = [
     ('"ಶ" ಮತ್ತು "ಷ" ಉಚ್ಚಾರಣೆಯಲ್ಲಿ ಸಮಾನತೆ ಇದೆಯೇ?', "same_pronunciation_sh_sha"),
     ('"{letter}" ಅಕ್ಷರದ ಧ್ವನಿ ಇರುವ ಎರಡು ಪದಗಳನ್ನು ನೀಡಿ?', "two_words_with_sound"),
     ('"{letter}" ಅಕ್ಷರದಿಂದ ಆರಂಭವಾಗುವ ಕ್ರಿಯಾಪದ ಯಾವುದು?', "verb_starting"),
-    ('"{word}" ಪದದ ಮೊದಲ ಅಕ್ಷರ ಯಾವುದು?', "first_sound"),
+    ('"{word}" ಪದದ ಮೊದಲ ಅಕ್ಷರ ಯಾವುದು?', "first_sound"),  # ಶಬ್ದ=ಪದ; ಅಕ್ಷರ=syllable/letter
     ('"{word}" ಪದದ ಧ್ವನಿಗೆ ಹತ್ತಿರವಿರುವ ಪದ ತಿಳಿಸಿ?', "similar_sound"),
 ]
 
@@ -235,10 +235,10 @@ if key not in seen:
     seen.add(key)
     samples.append((q, a))
 
-# 7. animal_starting with ಬಾ - use ಬಾತುಕೋಳಿ (duck) as correct answer, not ಬಾಜ್
-ba_animals = [w for w in animals_by_first.get("ಬಾ", []) if w != "ಬಾಜ್"]
+# 7. animal_starting with ಬಾ - animals only (no birds); ಬಾವಲಿ (bat) is mammal
+ba_animals = animals_by_first.get("ಬಾ", [])
 if not ba_animals:
-    ba_animals = ["ಬಾತುಕೋಳಿ"]
+    ba_animals = ["ಬಾವಲಿ"]
 for w in ba_animals:
     q = TEMPLATES[6][0]
     a = w
@@ -337,8 +337,11 @@ for letter, word_list in words_by_first.items():
         seen.add(key)
         samples.append((q, a))
 
-# Fill to target
-while len(samples) < target_count:
+# Fill to target (deduplicate, no duplicates)
+seen_qa = set((q, a) for q, a in samples)
+no_progress_limit = 50000
+no_progress = 0
+while len(samples) < target_count and no_progress < no_progress_limit:
     tpl_full, ttype = random.choice(TEMPLATES)
     q, a = None, None # Initialize q and a
     template_text = tpl_full # Use full template text as template_text
@@ -378,9 +381,9 @@ while len(samples) < target_count:
     elif ttype == "same_pronunciation_sh_sha":
         q, a = template_text, "ಹೌದು"
     elif ttype == "animal_starting":
-        lst = [w for w in animals_by_first.get("ಬಾ", []) if w != "ಬಾಜ್"]
+        lst = animals_by_first.get("ಬಾ", [])
         if not lst:
-            lst = ["ಬಾತುಕೋಳಿ"]
+            lst = ["ಬಾವಲಿ"]
         a = random.choice(lst)
         q = template_text
     elif ttype == "identify_sound":
@@ -426,8 +429,12 @@ while len(samples) < target_count:
     else:
         q, a = None, None
 
-    if q is not None and a is not None:
+    if q is not None and a is not None and (q, a) not in seen_qa:
+        seen_qa.add((q, a))
         samples.append((q, a))
+        no_progress = 0
+    else:
+        no_progress += 1
 
 random.shuffle(samples)
 samples = samples[:target_count]

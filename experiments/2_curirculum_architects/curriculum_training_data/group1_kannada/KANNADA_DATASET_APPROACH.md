@@ -2,7 +2,7 @@
 
 ## Overview
 
-A curriculum dataset of ~200,000 Kannada question-answer pairs for language and literacy training. Each data point contains at least 512 tokens, combining multiple Q&A pairs per line.
+A curated curriculum dataset of Kannada question-answer pairs for language and literacy training. **No duplicates** — each (query, answer) pair appears at most once. Each data point contains at least 512 tokens, combining multiple Q&A pairs per line.
 
 **Output**: `curriculum_training_data/output/group1_kannada.txt`
 
@@ -53,7 +53,7 @@ All counting, position, spelling-listing, and last-letter logic use aksharas (S1
 
 **`kannada_vocabulary.py`**:
 - Word lists by category (Animals, Objects, Body, Colors, Nature, People, Food, Professions, etc.)
-- ~950+ unique words in `ALL_WORDS_UNIQUE`
+- ~2,300+ unique words in `ALL_WORDS_UNIQUE` (from Wiktionary, Swadesh, learnentry, 1000mostcommon Kannada)
 - `RHYMING_PAIRS` built via `build_real_rhyming_pairs()` — only real words; grouped by last akshara, paired cyclically for variety
 - Classification categories: ವ್ಯಕ್ತಿ (person), ಪ್ರಾಣಿ (animal), ವಸ್ತು (object)
 - Kannada number names 1–100 (ಒಂದು … ನೂರು)
@@ -127,19 +127,21 @@ The final script reads `group1_s1.txt` … `group1_s11.txt` from `group1_kannada
 
 ---
 
-## Target Distribution
+## Target Distribution (Unique Pairs Only)
 
-| Statement | Target pairs |
-|-----------|--------------|
-| S1 | 28,600 |
-| S2 | 25,800 |
-| S3 | 20,000 |
-| S4 | 25,800 |
-| S5 | 20,000 |
-| S6 | 10,000 |
-| S7 | 21,200 |
-| S8 | 12,000 |
-| S9 | 19,200 |
-| S10 | 13,000 |
-| S11 | 10,000 |
-| **Total** | **210,000** |
+| Statement | Target | Unique capacity |
+|-----------|--------|-----------------|
+| S1 | 28,600 | ~16,650 |
+| S2 | 25,800 | ~13,900 |
+| S3 | 20,000 | 20,000 |
+| S4 | 25,800 | ~11,100 |
+| S5 | 20,000 | 20,000 |
+| S6 | 10,000 | ~1,800 |
+| S7 | 21,200 | ~19,200 |
+| S8 | 12,000 | 1,000 |
+| S9 | 19,200 | ~3,900 |
+| S10 | 13,000 | 13,000 |
+| S11 | 10,000 | 20 |
+| **Total** | **~120,000** | unique pairs |
+
+All generators deduplicate; fill loops stop when no new unique pairs can be found. Final combine step also deduplicates across files.

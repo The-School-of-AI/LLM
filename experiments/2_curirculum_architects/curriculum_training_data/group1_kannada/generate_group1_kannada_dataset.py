@@ -79,8 +79,21 @@ def main():
         print(f"{description}: Loaded {len(qa_pairs)} pairs (target: {target_count})")
 
     print(f"\nTotal Q&A pairs loaded: {total_loaded}")
-    print(f"Target: {TOTAL_TARGET}")
 
+    # Curated set: deduplicate by (query, answer), no duplicates
+    seen = set()
+    unique_pairs = []
+    for q, a in all_qa_pairs:
+        key = (q, a)
+        if key not in seen:
+            seen.add(key)
+            unique_pairs.append((q, a))
+    if len(unique_pairs) < total_loaded:
+        print(f"Deduplicated: {total_loaded} -> {len(unique_pairs)} unique pairs")
+    all_qa_pairs = unique_pairs
+    total_loaded = len(all_qa_pairs)
+
+    print(f"Target: {TOTAL_TARGET}")
     if total_loaded < TOTAL_TARGET:
         print(
             f"Warning: Only {total_loaded} pairs loaded, less than target {TOTAL_TARGET}"

@@ -15,42 +15,35 @@ from group1_kannada.kannada_vocabulary import (  # noqa: E402
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import format_qa_pair_kannada  # noqa: E402
+from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 
 # Expand word lists
 EASY_WORDS = EASY_WORDS_UNIQUE * 50
 MEDIUM_WORDS = MEDIUM_WORDS_UNIQUE * 60
 HARD_WORDS = HARD_WORDS_UNIQUE * 70
 
-# Position names in Kannada
+# Position names in Kannada; numeric answer uses Kannada digits (೧–೧೦)
 POSITIONS = [
-    ("ಮೊದಲನೇ", "1"),
-    ("ಎರಡನೇ", "2"),
-    ("ಮೂರನೇ", "3"),
-    ("ನಾಲ್ಕನೇ", "4"),
-    ("ಐದನೇ", "5"),
-    ("ಆರನೇ", "6"),
-    ("ಏಳನೇ", "7"),
-    ("ಎಂಟನೇ", "8"),
-    ("ಒಂಬತ್ತನೇ", "9"),
-    ("ಹತ್ತನೇ", "10"),
+    ("ಮೊದಲನೇ", "೧"),
+    ("ಎರಡನೇ", "೨"),
+    ("ಮೂರನೇ", "೩"),
+    ("ನಾಲ್ಕನೇ", "೪"),
+    ("ಐದನೇ", "೫"),
+    ("ಆರನೇ", "೬"),
+    ("ಏಳನೇ", "೭"),
+    ("ಎಂಟನೇ", "೮"),
+    ("ಒಂಬತ್ತನೇ", "೯"),
+    ("ಹತ್ತನೇ", "೧೦"),
 ]
 
-# Question templates: {suffix} = get_genitive_suffix(word). Varied phrasings.
-TEMPLATES = [
-    '"{word}" {suffix}ಲ್ಲಿ "{char}" ಅಕ್ಷರ ಯಾವ ಸ್ಥಾನದಲ್ಲಿದೆ?',
-    '"{word}" {suffix}ಲ್ಲಿ "{char}" ಅಕ್ಷರ ಎಲ್ಲಿ ಇದೆ?',
-    '"{word}" ಪದದಲ್ಲಿ "{char}" ಅಕ್ಷರ ಯಾವ ಸ್ಥಾನದಲ್ಲಿದೆ?',
-    '"{word}" {suffix}ಲ್ಲಿ "{char}" ಯಾವ ಸ್ಥಾನದಲ್ಲಿ ಸಿಗುತ್ತದೆ?',
-    '"{char}" ಅಕ್ಷರ "{word}" ಪದದಲ್ಲಿ ಎಂಥ ಸ್ಥಾನದಲ್ಲಿದೆ?',
-    '"{word}" ಪದದಲ್ಲಿ "{char}" ಎಂಥ ಸ್ಥಾನದಲ್ಲಿ ಬರುತ್ತದೆ?',
-]
+# Single canonical phrasing to avoid duplicate questions (e.g. "ಎಲ್ಲಿ ಇದೆ" vs "ಯಾವ ಸ್ಥಾನದಲ್ಲಿದೆ").
+TEMPLATE = '"{word}" {suffix}ಲ್ಲಿ "{char}" ಅಕ್ಷರ ಯಾವ ಸ್ಥಾನದಲ್ಲಿದೆ?'
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
 samples = []
 target_count = 21200
 
-# Generate samples
+# Generate samples: one (word, cluster) -> one question (canonical phrasing only)
 unique_combinations = {}
 for word in set(all_words):
     clusters = get_kannada_grapheme_clusters(word)
@@ -66,19 +59,21 @@ for word in set(all_words):
         if pos_num <= len(POSITIONS):
             pos_name, pos_str = POSITIONS[pos_num - 1]
         else:
-            pos_name = f"{pos_num}ನೇ"
-            pos_str = str(pos_num)
+            pos_name = f"{int_to_kannada(pos_num)}ನೇ"
+            pos_str = int_to_kannada(pos_num)
 
         suffix = get_genitive_suffix(word)
-        for template_idx, template in enumerate(TEMPLATES):
-            query = template.format(word=word, char=cluster, suffix=suffix)
-            answer = pos_name if random.random() < 0.5 else pos_str
-            key = (word, cluster, template_idx)
-            if key not in unique_combinations:
-                unique_combinations[key] = (query, answer)
+        query = TEMPLATE.format(word=word, char=cluster, suffix=suffix)
+        answer = pos_name if random.random() < 0.5 else pos_str
+        key = (word, cluster)
+        if key not in unique_combinations:
+            unique_combinations[key] = (query, answer)
 
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
+seen_qa = set((q, a) for q, a in samples)
+no_progress_limit = 50000
+no_progress = 0
+while len(samples) < target_count and no_progress < no_progress_limit:
     word = random.choice(list(set(all_words)))
     clusters = get_kannada_grapheme_clusters(word)
     if len(clusters) == 0:
@@ -96,11 +91,15 @@ while len(samples) < target_count:
         pos_name = f"{pos_num}ನೇ"
         pos_str = str(pos_num)
 
-    template = random.choice(TEMPLATES)
     suffix = get_genitive_suffix(word)
-    query = template.format(word=word, char=cluster, suffix=suffix)
+    query = TEMPLATE.format(word=word, char=cluster, suffix=suffix)
     answer = pos_name if random.random() < 0.5 else pos_str
-    samples.append((query, answer))
+    if (query, answer) not in seen_qa:
+        seen_qa.add((query, answer))
+        samples.append((query, answer))
+        no_progress = 0
+    else:
+        no_progress += 1
 
 random.shuffle(samples)
 
