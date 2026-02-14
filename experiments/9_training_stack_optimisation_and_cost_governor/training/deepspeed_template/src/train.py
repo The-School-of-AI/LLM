@@ -104,7 +104,10 @@ def train_epoch(
             loss_fct = torch.nn.CrossEntropyLoss()
             
             loss_ntp = loss_fct(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+            del logits_ntp
+
             loss_mtp = loss_fct(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+            del logits_mtp
             
             # 4. NaN Watchdog
             if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
