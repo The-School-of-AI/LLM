@@ -150,7 +150,7 @@ from dataclasses import dataclass
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
 # All kernels have automatic PyTorch fallbacks when Triton/fla unavailable.
 try:
-    from kernels import (
+    from ..kernels import (
         HAS_TRITON, HAS_FLA,
         triton_sparse_attention, pytorch_sparse_attention,
         triton_sinkhorn_knopp, pytorch_sinkhorn_knopp,
