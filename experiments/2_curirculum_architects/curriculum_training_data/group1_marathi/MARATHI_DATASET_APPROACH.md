@@ -80,14 +80,14 @@ The 335 unique words are sufficient for generating 200,000+ pairs through:
 **Question patterns**:
 - `"कमळ" ची वर्तनी काय आहे?` → `क, म, ळ.`
 - `"घर" ची वर्तनी काय आहे?` → `घ, र.`
-- `"पाणी" ची वर्तनी काय आहे?` → `पा, णी.`
+- `"पाणी" ची वर्तनी काय आहे?` → `प, ा, ण, ी.`
 - `"कोंबडी" ची अक्षरे काय आहेत?` → `कों, ब, डी.`
 
-**Answer format**: Comma-separated grapheme clusters (syllables) ending with `.`
+**Answer format**: Comma-separated Unicode characters (consonants, vowels, matras, anusvaras) ending with `.`
 
-**Character splitting**: Uses grapheme clusters (user-perceived characters/syllables)
-- Example: "कोंबडी" → कों, ब, डी (3 grapheme clusters)
-- Example: "ज्वालामुखी" → ज्वा, ला, मु, खी (4 grapheme clusters)
+**Character splitting**: Uses Unicode characters
+- Example: "कोंबडी" → क, ो, ं, ब, ड, ी (6 Unicode characters)
+- Example: "ज्वालामुखी" → ज, ्, व, ा, ल, ा, म, ु, ख, ी (10 Unicode characters)
 
 **Semantic variations**: 15+ templates per word (all use Marathi words only)
 

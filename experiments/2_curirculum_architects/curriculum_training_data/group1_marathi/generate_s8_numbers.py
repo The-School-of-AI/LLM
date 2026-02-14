@@ -9,9 +9,6 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_marathi.generate_s1_spelling import (  # noqa: E402
-    get_marathi_grapheme_clusters,
-)
 from group1_marathi.marathi_vocabulary import NUMBERS  # noqa: E402
 from prompt_utils import format_qa_pair_marathi  # noqa: E402
 
@@ -52,7 +49,8 @@ for num in range(1, 101):  # 1 to 100
 
 # Generate samples for name to spelling
 for word in NUMBERS:
-    chars = get_marathi_grapheme_clusters(word)
+    # Use Unicode characters for spelling (matras separate)
+    chars = list(word)
     if len(chars) == 0:
         continue
 
@@ -78,7 +76,8 @@ while len(samples) < target_count:
     else:
         # Name to spelling
         word = random.choice(NUMBERS)
-        chars = get_marathi_grapheme_clusters(word)
+        # Use Unicode characters for spelling (matras separate)
+        chars = list(word)
         if len(chars) > 0:
             template = random.choice(TEMPLATES_SPELLING)
             query = template.format(word=word)
