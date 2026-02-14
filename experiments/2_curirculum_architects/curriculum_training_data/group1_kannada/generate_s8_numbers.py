@@ -33,7 +33,7 @@ TEMPLATES_SPELLING = [
 ]
 
 samples = []
-target_count = 10000
+target_count = 12000
 unique_combinations = {}
 
 # Number to name (suffix for numeral is ರ)

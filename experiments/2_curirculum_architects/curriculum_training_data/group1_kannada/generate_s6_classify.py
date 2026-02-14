@@ -32,7 +32,7 @@ def classify_word(word: str) -> str:
 
 
 samples = []
-target_count = 20000
+target_count = 10000
 all_words = []
 for word_list in CLASSIFICATION_CATEGORIES.values():
     all_words.extend(word_list)

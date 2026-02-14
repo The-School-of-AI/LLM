@@ -20,11 +20,11 @@ STATEMENT_FILES = [
     ("group1_s3.txt", 20000, "S3: Sound Matching"),
     ("group1_s4.txt", 25800, "S4: Letter Count"),
     ("group1_s5.txt", 20000, "S5: Rhyming"),
-    ("group1_s6.txt", 20000, "S6: Classification"),
-    ("group1_s7.txt", 17200, "S7: Position of Letter"),
-    ("group1_s8.txt", 10000, "S8: Number Spelling"),
-    ("group1_s9.txt", 17200, "S9: Last Letter"),
-    ("group1_s10.txt", 11000, "S10: Word Comparison"),
+    ("group1_s6.txt", 10000, "S6: Classification"),
+    ("group1_s7.txt", 21200, "S7: Position of Letter"),
+    ("group1_s8.txt", 12000, "S8: Number Spelling"),
+    ("group1_s9.txt", 19200, "S9: Last Letter"),
+    ("group1_s10.txt", 13000, "S10: Word Comparison"),
     ("group1_s11.txt", 10000, "S11: Ottakshara & Kagunita"),
 ]
 
@@ -113,7 +113,7 @@ def main():
     print(f"\nWriting to {output_file}...")
     with open(output_file, "w", encoding="utf-8") as f:
         for sample in combined_samples:
-            f.write(sample + "\n")
+            f.write(sample)
 
     print("\n✓ Dataset generation complete!")
     print(f"  Output file: {output_file}")

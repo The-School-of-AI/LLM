@@ -91,7 +91,7 @@ for w in fruits:
 #        same_pronunciation, animal_starting, identify_sound, first_sound, word_with_nasal,
 #        another_rhyme, fruit_starting, similar_sound, two_words_with_sound, verb_starting, same_pronunciation_sh_sha
 TEMPLATES = [
-    ('"{word}" ಪದವಿಗೆ ಪ್ರಾಸಬದ್ಧವಾದ (rhyming) ಪದ ಯಾವುದು?', "rhyme_word"),
+    ('"{word}" ಪದವಿಗೆ ಪ್ರಾಸಬದ್ಧವಾದ ಪದ ಯಾವುದು?', "rhyme_word"),
     ('"{letter}" ಅಕ್ಷರದಿಂದ ಪ್ರಾರಂಭವಾಗುವ ಒಂದು ಪದ ಹೇಳಿ?', "word_starting"),
     ('"{word1}" ಮತ್ತು "{word2}" ಪದಗಳು ಪ್ರಾಸವಾಗುತ್ತವೆಯೇ?', "do_rhyme_yes_no"),
     ('"ಅ" ಸ್ವರದ ಧ್ವನಿ ಇರುವ ಪದ ಯಾವುದು?', "word_with_vowel"),

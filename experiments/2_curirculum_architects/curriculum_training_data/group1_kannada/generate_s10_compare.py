@@ -46,7 +46,7 @@ def get_word_length(word: str) -> int:
 
 
 samples = []
-target_count = 11000
+target_count = 13000
 unique_combinations = set()
 
 word_list = unique_words

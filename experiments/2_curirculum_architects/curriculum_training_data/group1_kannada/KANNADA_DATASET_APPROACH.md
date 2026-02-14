@@ -21,6 +21,22 @@ A curriculum dataset of ~200,000 Kannada question-answer pairs for language and 
 
 ---
 
+## Sample Output
+
+Example line from `output/group1_kannada.txt` (each line has multiple Q&A pairs, ≥512 tokens):
+
+```
+"ಬಕೆಟ್" ಪದದಲ್ಲಿರುವ ಅಕ್ಷರ ಘಟಕಗಳನ್ನು ಪಟ್ಟಿ ಮಾಡಿ? ಬ, ಕೆ, ಟ್. "ಚಿನ್ನದ" ಪದದಲ್ಲಿ ಐದನೇ ಸ್ಥಾನದಲ್ಲಿರುವ ಅಕ್ಷರ ಯಾವುದು? ಇಲ್ಲ, ಇದರಲ್ಲಿರುವುದು 3 ಅಕ್ಷರಗಳು. "ಮಣ್ಣು" ಪದವನ್ನು ಅಕ್ಷರಶಃ ಬಿಡಿಸಿ ಬರೆಯಿರಿ? ಮ-ಣ್ಣು. "ಚಾರ್ಟ್" ಪದವಿಗೆ ಪ್ರಾಸ ಪದ ಯಾವುದು, "ಪದ" ಅಥವಾ "ಶರ್ಟ್"? ಶರ್ಟ್. "ಗಾಳಿ" ಯಾವ ಅಕ್ಷರದಿಂದ ಕೊನೆಗೊಳ್ಳುತ್ತದೆ? ಳಿ. "ಕುಟುಂಬ" ಅನ್ನು ಯಾವ ವರ್ಗದಲ್ಲಿ ಇಡಬಹುದು, ವ್ಯಕ್ತಿ, ಪ್ರಾಣಿ ಅಥವಾ ವಸ್ತು? ವ್ಯಕ್ತಿ.
+```
+
+Another sample (S7 position, S9 last letter, S10 comparison, S8 number spelling):
+
+```
+"ಬೆಳ್ಳುಳ್ಳಿ" ಪದದಲ್ಲಿ "ಳ್ಳಿ" ಅಕ್ಷರ ಯಾವ ಸ್ಥಾನದಲ್ಲಿದೆ? 3. "ಬುಟ್ಟಿ" ಯಲ್ಲಿ "ಟ್ಟಿ" ಯಾವ ಸ್ಥಾನದಲ್ಲಿ ಸಿಗುತ್ತದೆ? 2. ಅಕ್ಷರಗಳಲ್ಲಿ ಕಿರಿದಾದ ಪದ "ಪಾನೀಯ" ಮತ್ತು "ಹಾಳೆ" ರಲ್ಲಿ ಯಾವುದು? ಹಾಳೆ. "ಮೂವತ್ತೇಳು" ಪದದ ಅಕ್ಷರಗಳು ಯಾವುವು? ಮೂ, ವ, ತ್ತೇ, ಳು. "ನೆಲಗಡಲೆ" ಪದದಲ್ಲಿ ಕೊನೆಯಲ್ಲಿ ಬರುವ ಅಕ್ಷರ ಯಾವುದು? ಲೆ. "ಅಲಂಕಾರ" ದಲ್ಲಿ "ರ" ಅಕ್ಷರ ಎಲ್ಲಿ ಇದೆ? ನಾಲ್ಕನೇ.
+```
+
+---
+
 ## Akshara-Level Segmentation
 
 Kannada uses syllabic units (aksharas), not raw Unicode graphemes. `kannada_grammar.get_kannada_aksharas(word)` segments words per Kannada linguistics:
@@ -120,10 +136,10 @@ The final script reads `group1_s1.txt` … `group1_s11.txt` from `group1_kannada
 | S3 | 20,000 |
 | S4 | 25,800 |
 | S5 | 20,000 |
-| S6 | 20,000 |
-| S7 | 17,200 |
-| S8 | 10,000 |
-| S9 | 17,200 |
-| S10 | 11,000 |
+| S6 | 10,000 |
+| S7 | 21,200 |
+| S8 | 12,000 |
+| S9 | 19,200 |
+| S10 | 13,000 |
 | S11 | 10,000 |
 | **Total** | **210,000** |
