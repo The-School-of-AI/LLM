@@ -8,70 +8,171 @@ import os
 import random
 import sys
 
+import regex
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import format_qa_pair_kannada  # noqa: E402
-from group1_kannada.kannada_vocabulary import VARGAS # noqa: E402
+from prompt_utils import format_qa_pair_kannada, get_kannada_grapheme_clusters  # noqa: E402
+from group1_kannada.kannada_vocabulary import ALL_WORDS_UNIQUE, VARGAS  # noqa: E402
+from group1_kannada.kannada_grammar import get_kannada_aksharas
 
-# User-specified Ottakshara/Kagunita (word, question_template, answer).
-# Template may use {word} or be literal.
-OTTAKSHARA_QA = [
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರ ಯಾವುದು?', "ಅಪ್ಪ", "ಪ್ಪ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಋ-ಕಾರ ಗುರುತಿಸಿ?', "ಕೃಷಿ", "ಋ"),
-    ('"{word}" ಪದದಲ್ಲಿ ಯಾವ ಸಂಯುಕ್ತಾಕ್ಷರ ಇದೆ?', "ಜ್ಞಾನ", "ಜ್ಞ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಓ-ತ್ವ ಚಿಹ್ನೆ ಯಾವುದು?', "ಕೋಳಿ", "ೋ"),
-    ('"{letter}" ಅಕ್ಷರದ ಗುಣಿತಾಕ್ಷರಗಳನ್ನು ಬರೆಯಿರಿ?', "ಕ", "ಕ, ಕಾ, ಕಿ, ಕೀ, ಕು, ಕೂ, ಕೃ, ಕೆ, ಕೇ, ಕೈ, ಕೊ, ಕೋ, ಕೌ"),
-    ('"ಷ" ಮತ್ತು "ಶ" ಅಕ್ಷರಗಳ ವ್ಯತ್ಯಾಸವೇನು?', None, "ಅವು ವಿಭಿನ್ನ ವ್ಯಂಜನಾಕ್ಷರಗಳು; ಉಚ್ಚಾರಣೆ ಮತ್ತು ಲಿಪಿ ವಿಭಿನ್ನವಾಗಿವೆ."),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವನ್ನು ಹೆಸರಿಸಿ?', "ದೃಶ್ಯ", "ದೃ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಐ-ಕಾರ ಯಾವುದು?', "ಐದು", "ೈ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಔ-ತ್ವ ಚಿಹ್ನೆಯನ್ನು ತೋರಿಸಿ?', "ಸೌರ", "ೌ"),
-    ('"{char}" ಅಕ್ಷರವು ಸ್ವರವೋ ಅಥವಾ ವ್ಯಂಜನವೋ?', "ಕ್ಷ", "ವ್ಯಂಜನ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಸಂಯುಕ್ತಾಕ್ಷರ ಯಾವುದು?', "ಲಕ್ಷ್ಮಿ", "ಕ್ಷ್ಮಿ"),
-    ('"{word}" ಪದದಲ್ಲಿ ಯಾವ ಎ-ತ್ವ ಚಿಹ್ನೆ ಇದೆ?', "ಕೇಸರಿ", "ೇ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು ಚಿಹ್ನೆಯನ್ನು ಗುರುತಿಸಿ?', "ಸೂರ್ಯ", "್ರ್ಯ"),
-    ('"{letter}" ವರ್ಗದ ಐದನೇ ಅಕ್ಷರ (ಅನುನಾಸಿಕ) ಯಾವುದು?', "ಕ", "ಙ"),
-    ('"{letter}" ಅಕ್ಷರದ ಒತ್ತಕ್ಷರ ಹೇಗೆ ಬರೆಯುವುದು?', "ತ", "ತ್"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಸ್ವರಾಕ್ಷರ ಯಾವುದು?', "ಋಷಿ", "ಋ"),
-    ('"{word}" ಪದದಲ್ಲಿ ಗುಣಿತಾಕ್ಷರಗಳು ಇವೆಯೇ?', "ಗಗನ", "ಇಲ್ಲ"),
-    ('"{word}" ಪದದ ಮೊದಲ ಅಕ್ಷರ ಯಾವುದು?', "ಔಷಧ", "ಔ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ದ-ಕಾರದ ಒತ್ತಕ್ಷರ ಗುರುತಿಸಿ?', "ವಿದ್ಯೆ", "ದ್ಯೆ"),
-    ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಸ್ವತಂತ್ರ ಅಕ್ಷರಗಳಿವೆ?', "ಕನ್ನಡ", "4"),
+# Vowel signs (Matras) mapping
+MATRA_MAP = {
+    '\u0BE7': 'ಆ-ಕಾರ', # ಾ
+    '\u0BE8': 'ಇ-ಕಾರ', # ಿ
+    '\u0BE9': 'ಈ-ಕಾರ', # ೀ
+    '\u0BEA': 'ಉ-ಕಾರ', # ು
+    '\u0BEB': 'ಊ-ಕಾರ', # ೂ
+    '\u0BEC': 'ಋ-ಕಾರ', # ೃ
+    '\u0BED': 'ಎ-ತ್ವ', # ೆ
+    '\u0BEE': 'ಏ-ತ್ವ', # ೇ
+    '\u0BEF': 'ಐ-ಕಾರ', # ೈ
+    '\u0BF0': 'ಓ-ತ್ವ', # ೊ
+    '\u0BF1': 'ಓ-ತ್ವ', # ೋ (Note: Both can be called O-tva or O-kara, using consistent naming)
+    '\u0BF2': 'ಔ-ತ್ವ', # ೌ
+    '\u0C01': 'ಅಕ',    # ಁ (Gumm) - Anusvara logic usually handles ಂ (\u0C02)
+    '\u0C02': 'ಅನುಸ್ವಾರ', # ಂ
+    '\u0C03': 'ವಿಸರ್ಗ',   # ಃ
+}
+
+# Unicode constants
+VIRAMA = '\u0CCD'
+RA = '\u0CB0'
+
+ORDINALS = ["", "ಮೊದಲ", "ಎರಡನೇ", "ಮೂರನೇ", "ನಾಲ್ಕನೇ", "ಐದನೇ"]
+
+def get_ottakshara_component(akshara: str) -> str:
+    """
+    Extract the Ottakshara (subscript) part from a complex Akshara.
+    E.g., 'ಪ್ಪ' -> 'ಪ' (base) + '್' + 'ಪ' (sub). Wait, logically 'ಪ್ಪ' is the ottakshara syllable.
+    The question 'Ottakshara yavudu?' usually expects the *cluster* or the *subscript*.
+    Hardcoded example 'ಅಪ್ಪ' -> 'ಪ್ಪ'. So it expects the full conjunct Akshara.
+    """
+    # Check if it has Virama + Consonant (but not just Virama at end)
+    # Regex for Consonant+Virama+Consonant
+    if regex.search(r'[\u0C95-\u0CB9]\u0CCD[\u0C95-\u0CB9]', akshara):
+        return akshara
+    return None
+
+def get_base_consonant(akshara: str) -> str:
+    """Return base consonant of the cluster."""
+    # First char usually
+    return akshara[0]
+
+def analyze_word_for_questions(word: str) -> list:
+    """Generate QA pairs for a single word."""
+    questions = []
+    
+    aksharas = get_kannada_aksharas(word)
+    clusters = get_kannada_grapheme_clusters(word) # Use for precise matra finding if needed
+    
+    # 1. Ottakshara Identification
+    for ak in aksharas:
+        ottakshara = get_ottakshara_component(ak)
+        if ottakshara:
+             questions.append((
+                 f'"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರ ಯಾವುದು?',
+                 ottakshara
+             ))
+             questions.append((
+                 f'"{word}" ಪದದಲ್ಲಿರುವ ಸಂಯುಕ್ತಾಕ್ಷರ ಯಾವುದು?',
+                 ottakshara
+             ))
+    
+    # 2. Matra Identification
+    for cluster in clusters:
+        for char in cluster:
+            if char in MATRA_MAP:
+                matra_name = MATRA_MAP[char]
+                questions.append((
+                    f'"{word}" ಪದದಲ್ಲಿರುವ {matra_name} ಯಾವುದು?',
+                    char
+                ))
+    
+    # 3. Arkavattu (Repha) - Ra + Virama + Consonant
+    # Visually typically Ra+Virama+Consonant (e.g. ರ್ಯ).
+    # But in stored unicode it is Ra+Virama+Ya.
+    # Check if word contains Ra+Virama+Consonant
+    if re_arkavattu := regex.search(fr'{RA}{VIRAMA}([\u0C95-\u0CB9])', word):
+        # Result is the cluster containing it.
+        # Find the specific cluster
+        for cluster in clusters:
+            if RA + VIRAMA in cluster:
+                # This cluster has Arkavattu
+                questions.append((
+                   f'"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು ಚಿಹ್ನೆಯನ್ನು ಗುರುತಿಸಿ?',
+                   cluster
+                ))
+
+    # 4. Independent Letter Count (Akshara count)
+    count = len(aksharas)
+    questions.append((
+        f'"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಸ್ವತಂತ್ರ ಅಕ್ಷರಗಳಿವೆ?',
+        str(count)
+    ))
+    
+    return questions
+
+def generate_varga_questions():
+    """Generate questions about Vargas."""
+    qs = []
+    for varga_name, letters in VARGAS.items():
+        # "X ವರ್ಗದ Yನೇ ಅಕ್ಷರ ಯಾವುದು?"
+        for idx, letter in enumerate(letters):
+            ordinal = ORDINALS[idx + 1]
+            qs.append((
+                f'"{varga_name}" ವರ್ಗದ {ordinal} ಅಕ್ಷರ ಯಾವುದು?',
+                letter
+            ))
+            # Inverse
+            qs.append((
+                f'"{letter}" ಅಕ್ಷರವು ಯಾವ ವರ್ಗಕ್ಕೆ ಸೇರಿದೆ?',
+                f'"{varga_name}" ವರ್ಗ'
+            ))
+            # Nasal (5th letter)
+            if idx == 4:
+                qs.append((
+                    f'"{varga_name}" ವರ್ಗದ ಅನುನಾಸಿಕ ಅಕ್ಷರ ಯಾವುದು?',
+                    letter
+                ))
+    return qs
+
+# Main Generation
+generated_samples = set()
+
+# 1. Vocabulary based
+for word in ALL_WORDS_UNIQUE:
+    qas = analyze_word_for_questions(word)
+    for q, a in qas:
+        generated_samples.add((q, a))
+
+# 2. Varga based
+for q, a in generate_varga_questions():
+    generated_samples.add((q, a))
+
+# 3. Add manual existing ones (if not covered or specific)
+OTTAKSHARA_QA_MANUAL = [
+    ('"ಷ" ಮತ್ತು "ಶ" ಅಕ್ಷರಗಳ ವ್ಯತ್ಯಾಸವೇನು?', "ಅವು ವಿಭಿನ್ನ ವ್ಯಂಜನಾಕ್ಷರಗಳು; ಉಚ್ಚಾರಣೆ ಮತ್ತು ಲಿಪಿ ವಿಭಿನ್ನವಾಗಿವೆ."),
+    ('"{char}" ಅಕ್ಷರವು ಸ್ವರವೋ ಅಥವಾ ವ್ಯಂಜನವೋ?'.format(char="ಕ್ಷ"), "ವ್ಯಂಜನ"), # ಕ್ಷ is technically compound
 ]
+for q, a in OTTAKSHARA_QA_MANUAL:
+    generated_samples.add((q, a))
 
-# Expand: each QA can be repeated with same or rephrased question to reach target
-samples = []
-target_count = 10000
+# Convert to list
+samples_list = list(generated_samples)
 
-for template, word_or_letter, answer in OTTAKSHARA_QA:
-    if "{word}" in template and word_or_letter:
-        q = template.format(word=word_or_letter)
-    elif "{letter}" in template and word_or_letter:
-        q = template.format(letter=word_or_letter)
-    elif "{char}" in template and word_or_letter:
-        q = template.format(char=word_or_letter)
-    else:
-        q = template  # literal (e.g. ಷ and ಶ)
-    samples.append((q, answer))
-
-# Fill to target by repeating and shuffling
-while len(samples) < target_count:
-    idx = random.randint(0, len(OTTAKSHARA_QA) - 1)
-    template, word_or_letter, answer = OTTAKSHARA_QA[idx]
-    if "{word}" in template and word_or_letter:
-        q = template.format(word=word_or_letter)
-    elif "{letter}" in template and word_or_letter:
-        q = template.format(letter=word_or_letter)
-    elif "{char}" in template and word_or_letter:
-        q = template.format(char=word_or_letter)
-    else:
-        q = template
-    samples.append((q, answer))
-
-random.shuffle(samples)
-samples = samples[:target_count]
+# Fill to target count by repetition if needed (though 10k unique might be hard with 1000 words)
+# With 1000 words, maybe 3-4 questions per word -> ~3000-4000 questions.
+# We will repeat the list to fill.
+final_samples = []
+target_count = 10000 
+while len(final_samples) < target_count:
+    random.shuffle(samples_list)
+    needed = target_count - len(final_samples)
+    final_samples.extend(samples_list[:needed])
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s11.txt")
 with open(output_file, "w", encoding="utf-8") as f:
-    for query, answer in samples:
+    for query, answer in final_samples:
         f.write(format_qa_pair_kannada(query, answer) + "\n")
 
-print(f"S11 Ottakshara/Kagunita (Kannada): Generated {len(samples)} samples")
+print(f"S11 Ottakshara/Kagunita (Kannada): Generated {len(final_samples)} samples (Unique: {len(samples_list)})")

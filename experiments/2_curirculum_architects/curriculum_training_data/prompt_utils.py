@@ -505,3 +505,23 @@ def combine_qa_pairs_to_reach_min_tokens_kannada(
             samples.append(" ".join(current_sample_parts) + "\n")
 
     return samples
+
+
+def get_kannada_grapheme_clusters(word: str) -> list[str]:
+    """
+    Get grapheme clusters for Kannada word (for counting/length/position).
+    Uses regex library's \\X pattern (Unicode UAX#29 compliant).
+    Each grapheme cluster = 1 अक्षर (akshara) for counting/position questions.
+    """
+    import regex
+    return regex.findall(r"\X", word)
+
+
+def get_kannada_characters(word: str) -> list[str]:
+    """
+    Break down a Kannada word into its constituent Unicode characters.
+    Each Unicode character (consonant, vowel, matra, nukta, virama) is separate.
+    This matches the spelling format where each character is shown separately.
+    """
+    # Simply return each Unicode character separately
+    return list(word)
