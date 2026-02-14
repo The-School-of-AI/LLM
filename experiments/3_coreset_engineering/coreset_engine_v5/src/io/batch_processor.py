@@ -78,47 +78,48 @@ class BatchProcessor:
             line_iter = _local_iter()
 
         for line in line_iter:
-                if max_chunks and emitted >= max_chunks:
-                    break
-                try:
-                    data = json.loads(line)
-                    # Normalize the unique chunk identifier.
-                    # Some datasets use uid/guid/id instead of chunk_id.
-                    chunk_id = (
-                        data.get('chunk_id')
-                        or data.get('uid')
-                        or data.get('guid')
-                        or data.get('id')
-                    )
+            if max_chunks and emitted >= max_chunks:
+                break
+            try:
+                data = json.loads(line)
+                # Normalize the unique chunk identifier.
+                # Some datasets use uid/guid/id instead of chunk_id.
+                chunk_id = (
+                    data.get('chunk_id')
+                    or data.get('uid')
+                    or data.get('guid')
+                    or data.get('id')
+                )
 
-                    # Optional row-level sharding (useful when input is a single huge file).
-                    if num_shards > 1:
-                        key_val = data.get(shard_key)
+                # Optional row-level sharding (useful when input is a single huge file).
+                if num_shards > 1:
+                    key_val = data.get(shard_key)
 
-                        # Treat empty/falsey ids as missing for sharding.
-                        # This matters when the raw field exists (e.g., chunk_id="") but the
-                        # real identifier is in uid/guid/id; without this, all such rows hash
-                        # to the same shard and create severe imbalance.
-                        if shard_key == "chunk_id" and not key_val:
-                            key_val = chunk_id
+                    # Treat empty/falsey ids as missing for sharding.
+                    # This matters when the raw field exists (e.g., chunk_id="") but the
+                    # real identifier is in uid/guid/id; without this, all such rows hash
+                    # to the same shard and create severe imbalance.
+                    if shard_key == "chunk_id" and not key_val:
+                        key_val = chunk_id
 
-                        if not key_val:
-                            # Fallback: shard by line index so every row deterministically belongs
-                            # to exactly one shard even if chunk_id is missing.
-                            key_bytes = str(count).encode("utf-8")
-                        else:
-                            key_bytes = str(key_val).encode("utf-8")
-                        h = xxhash.xxh64(key_bytes).intdigest()
-                        if int(h % num_shards) != shard_id:
-                            count += 1
-                            continue
+                    if not key_val:
+                        # Fallback: shard by line index so every row deterministically belongs
+                        # to exactly one shard even if chunk_id is missing.
+                        key_bytes = str(count).encode("utf-8")
+                    else:
+                        key_bytes = str(key_val).encode("utf-8")
+                    h = xxhash.xxh64(key_bytes).intdigest()
+                    if int(h % num_shards) != shard_id:
+                        continue
 
-                    yield chunk_id, data
-                    count += 1
-                    emitted += 1
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Skipped malformed JSON line {count}: {e}")
-                    continue
+                yield chunk_id, data
+                emitted += 1
+            except json.JSONDecodeError as e:
+                logger.warning(f"Skipped malformed JSON line {count}: {e}")
+            finally:
+                # count is the physical line index (0-based) and must advance
+                # even when a line is malformed or skipped due to sharding.
+                count += 1
 
     def batch_iterator(
         self,
@@ -314,7 +315,28 @@ class BatchProcessor:
             raise RuntimeError("pyarrow is required for parquet streaming; install pyarrow") from e
 
         dataset = ds.dataset(path, format="parquet")
-        scanner = dataset.scan(columns=columns, batch_size=int(batch_size_rows))
+
+        # If the caller asks for optional columns that are not present in a particular parquet
+        # dataset, pyarrow will raise at scan time. Filter to existing schema names so
+        # callers can request a superset of columns safely.
+        scan_columns = None
+        if columns is not None:
+            try:
+                available = set(getattr(dataset.schema, "names", []) or [])
+            except Exception:
+                available = set()
+            if available:
+                scan_columns = [c for c in columns if c in available]
+            else:
+                scan_columns = list(columns)
+
+        # pyarrow.dataset API differs across versions:
+        # - newer versions: Dataset.scan(...)
+        # - others: Dataset.scanner(...)
+        try:
+            scanner = dataset.scan(columns=scan_columns, batch_size=int(batch_size_rows))
+        except AttributeError:
+            scanner = dataset.scanner(columns=scan_columns, batch_size=int(batch_size_rows))
         emitted = 0
 
         for record_batch in scanner.to_batches():

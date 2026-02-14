@@ -194,16 +194,18 @@ for fmt in ["parquet", "jsonl", "csv"]:
 ## What Gets Included in Output
 
 Each row/object contains:
-- **chunk_id**: Unique identifier for the chunk
-- **dataset_id**: Source dataset
+- **chunk_id**: Unique identifier -> maps to record id in source dataset file 
+- **dataset_id**: Source dataset (to be removed-DONOTUSE)
 - **token_count**: Number of tokens in chunk (canonical)
 - **byte_length**: Byte size of chunk
 - **domain**: Domain classification (code, math, etc.)
 - **language**: Language code (en, hi, zh, etc.)
 - **band**: Difficulty band (B0-B5)
 - **source**: Original dataset source label when provided (often same as dataset_id)
-- **source_doc_id**: Document source
+- **source_doc_id**: Document source file name
 - **source_url**: URL if available
+
+* source_url+source_doc_id -->  Leads to the source dataset file and then use chunk_id to pull the exact record data (Raw dataset)
 
 ## Performance Comparison
 

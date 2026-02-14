@@ -338,6 +338,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
         stages: Optional[List[str]] = None,
         stage_target_scale: float = 1.0,
         band_inference: str = "none",
+        band_score_source: str = "auto",
     ):
         super().__init__(config_path, curriculum_path)
         self.input_path = input_path
@@ -353,6 +354,26 @@ class StreamingCoresetBuilder(CoresetBuilder):
         if self.band_inference not in {"none", "infer_if_missing", "infer_if_ineligible", "force"}:
             raise ValueError(
                 "Invalid --band-inference. Choose one of: none, infer_if_missing, infer_if_ineligible, force"
+            )
+
+        self.band_score_source = str(band_score_source or "auto").lower().strip()
+        valid_sources = {
+            "auto",
+            "band_score",
+            "difficulty_score",
+            "band_p_max",
+            "band_p_argmax",
+            "band_p_b0",
+            "band_p_b1",
+            "band_p_b2",
+            "band_p_b3",
+            "band_p_b4",
+            "band_p_b5",
+        }
+        if self.band_score_source not in valid_sources:
+            raise ValueError(
+                "Invalid --band-score-source. Choose one of: "
+                + ", ".join(sorted(valid_sources))
             )
 
         self.batch_processor = BatchProcessor(batch_size=self.batch_size, checkpoint_dir=checkpoint_dir)
@@ -401,6 +422,122 @@ class StreamingCoresetBuilder(CoresetBuilder):
             return DifficultyBand(best)
         except Exception:
             return DifficultyBand.B0
+
+    def _extract_band_score(self, row: Dict[str, Any], meta_dict: Dict[str, Any]) -> Optional[float]:
+        """Extract a continuous band score from a row according to --band-score-source.
+
+        Supported sources:
+        - auto: band_score -> difficulty_score -> band_p_max
+        - band_score: use band_score only
+        - difficulty_score: use difficulty_score only
+        - band_p_Bx: use that specific probability
+        - band_p_max: pick the max across band_p_B0..band_p_B5 (deterministic tie-break)
+        - band_p_argmax: uses band_p_max as the score value (see _extract_band_from_band_p)
+        """
+
+        def _get(key: str):
+            return row.get(key, None) if isinstance(row, dict) else None
+
+        def _get_meta(key: str):
+            return meta_dict.get(key, None) if isinstance(meta_dict, dict) else None
+
+        def _to_float(val) -> Optional[float]:
+            if val is None:
+                return None
+            try:
+                return float(val)
+            except Exception:
+                return None
+
+        def _band_p_value(band_name: str) -> Optional[float]:
+            # Accept canonical "band_p_B0" style keys. Also tolerate lowercase.
+            key = f"band_p_{band_name}"
+            v = _get(key)
+            if v is None:
+                v = _get_meta(key)
+            if v is None:
+                v = _get(key.lower())
+            if v is None:
+                v = _get_meta(key.lower())
+            return _to_float(v)
+
+        src = self.band_score_source
+        if src == "band_score":
+            return _to_float(_get("band_score") or _get_meta("band_score"))
+        if src == "difficulty_score":
+            return _to_float(_get("difficulty_score") or _get_meta("difficulty_score"))
+
+        if src.startswith("band_p_b") and len(src) == len("band_p_b0"):
+            band_name = "B" + src[-1]
+            return _band_p_value(band_name)
+
+        if src in {"band_p_max", "band_p_argmax"} or src == "auto":
+            # auto first attempts band_score and difficulty_score for backward compatibility.
+            if src == "auto":
+                v = _to_float(_get("band_score") or _get_meta("band_score"))
+                if v is not None:
+                    return v
+                v = _to_float(_get("difficulty_score") or _get_meta("difficulty_score"))
+                if v is not None:
+                    return v
+
+            order = ["B0", "B1", "B2", "B3", "B4", "B5"]
+            best_val = None
+            for b in order:
+                pv = _band_p_value(b)
+                if pv is None:
+                    continue
+                if best_val is None or pv > best_val:
+                    best_val = pv
+            return best_val
+
+        # Should be unreachable because we validate.
+        return None
+
+    def _extract_band_from_band_p(self, row: Dict[str, Any], meta_dict: Dict[str, Any]) -> Optional[DifficultyBand]:
+        """Infer the discrete band label as argmax over band_p_B0..band_p_B5.
+
+        Deterministic tie-break: prefers lower bands first (B0..B5 order).
+        """
+
+        def _to_float(val) -> Optional[float]:
+            if val is None:
+                return None
+            try:
+                return float(val)
+            except Exception:
+                return None
+
+        def _get_prob(band_name: str) -> Optional[float]:
+            key = f"band_p_{band_name}"
+            v = None
+            if isinstance(row, dict):
+                v = row.get(key)
+                if v is None:
+                    v = row.get(key.lower())
+            if v is None and isinstance(meta_dict, dict):
+                v = meta_dict.get(key)
+                if v is None:
+                    v = meta_dict.get(key.lower())
+            return _to_float(v)
+
+        order = ["B0", "B1", "B2", "B3", "B4", "B5"]
+        best_band = None
+        best_val = None
+        for b in order:
+            pv = _get_prob(b)
+            if pv is None:
+                continue
+            if best_val is None or pv > best_val:
+                best_val = pv
+                best_band = b
+
+        if best_band is None:
+            return None
+        try:
+            return DifficultyBand(best_band)
+        except Exception:
+            return None
 
     def build_coresets(self) -> dict:
         results = {}
@@ -475,6 +612,15 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 "source_doc_id",
                 "source_url",
                 "token_ids",
+                # Optional continuous score columns used by --band-score-source.
+                "band_score",
+                "difficulty_score",
+                "band_p_B0",
+                "band_p_B1",
+                "band_p_B2",
+                "band_p_B3",
+                "band_p_B4",
+                "band_p_B5",
             ]
 
             batch_idx = 0
@@ -706,16 +852,11 @@ class StreamingCoresetBuilder(CoresetBuilder):
                         # Optional: infer band from difficulty score when requested.
                         # This is particularly useful when datasets use a placeholder band but provide
                         # a continuous band_score/difficulty_score.
-                        band_score = (
-                            row.get("band_score", None)
-                            or meta_dict.get("band_score", None)
-                            or row.get("difficulty_score", None)
-                            or meta_dict.get("difficulty_score", None)
-                        )
-                        try:
-                            band_score_val = None if band_score is None else float(band_score)
-                        except Exception:
-                            band_score_val = None
+                        band_score_val = self._extract_band_score(row, meta_dict)
+
+                        band_from_p = None
+                        if self.band_score_source == "band_p_argmax":
+                            band_from_p = self._extract_band_from_band_p(row, meta_dict)
 
                         # Parse provided band (may be invalid in some datasets)
                         try:
@@ -726,17 +867,29 @@ class StreamingCoresetBuilder(CoresetBuilder):
                         domain_raw = row.get("domain", None) or meta_dict.get("domain", "unknown")
 
                         final_band = provided_band
-                        if self.band_inference == "force" and band_score_val is not None:
-                            final_band = self._infer_band_from_score(band_score_val)
+                        if self.band_inference == "force":
+                            if band_from_p is not None:
+                                final_band = band_from_p
+                            elif band_score_val is not None:
+                                final_band = self._infer_band_from_score(band_score_val)
                         elif self.band_inference == "infer_if_missing" and (final_band is None) and band_score_val is not None:
-                            final_band = self._infer_band_from_score(band_score_val)
+                            if band_from_p is not None:
+                                final_band = band_from_p
+                            else:
+                                final_band = self._infer_band_from_score(band_score_val)
                         elif self.band_inference == "infer_if_ineligible" and final_band is not None and band_score_val is not None:
                             allowed_domains = self.curriculum.get_allowed_domains_for_band(final_band)
                             if allowed_domains and domain_raw not in allowed_domains:
-                                inferred = self._infer_band_from_score(band_score_val)
-                                inferred_allowed = self.curriculum.get_allowed_domains_for_band(inferred)
-                                if (not inferred_allowed) or (domain_raw in inferred_allowed):
-                                    final_band = inferred
+                                # First preference (when configured): choose argmax band_p_Bx.
+                                if band_from_p is not None:
+                                    inferred_allowed = self.curriculum.get_allowed_domains_for_band(band_from_p)
+                                    if (not inferred_allowed) or (domain_raw in inferred_allowed):
+                                        final_band = band_from_p
+                                else:
+                                    inferred = self._infer_band_from_score(band_score_val)
+                                    inferred_allowed = self.curriculum.get_allowed_domains_for_band(inferred)
+                                    if (not inferred_allowed) or (domain_raw in inferred_allowed):
+                                        final_band = inferred
 
                         if final_band is None:
                             final_band = DifficultyBand.B0
@@ -814,7 +967,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 for k, v in (batch_stats.get("timings_s") or {}).items():
                     timing_totals[k] = float(timing_totals.get(k, 0.0)) + float(v)
 
-                # Write selected indices for this batch as a parquet part file
+                # Write selected indices for this batch as a part file in the configured format.
                 if selected_ids:
                     meta_by_id = {cid: meta for cid, meta in stream}
                     rows = []
@@ -849,16 +1002,31 @@ class StreamingCoresetBuilder(CoresetBuilder):
                         })
                     if rows:
                         part_base = stage_dir / f"selected_indices_part_shard{self.shard_id:03d}_batch{batch_idx:06d}"
-                        part_path = part_base.with_suffix(".parquet")
+                        output_fmt = str(getattr(self.config.io, "output_index_format", "parquet") or "parquet").lower()
+                        if output_fmt in {"json", "jsonl"}:
+                            part_path = part_base.with_suffix(".jsonl")
+                        elif output_fmt == "csv":
+                            part_path = part_base.with_suffix(".csv")
+                        else:
+                            part_path = part_base.with_suffix(".parquet")
+                        
                         wrote = False
                         try:
-                            pd.DataFrame(rows).to_parquet(part_path, index=False)
+                            if part_path.suffix.lower() == ".parquet":
+                                pd.DataFrame(rows).to_parquet(part_path, index=False)
+                            elif part_path.suffix.lower() == ".csv":
+                                pd.DataFrame(rows).to_csv(part_path, index=False)
+                            elif part_path.suffix.lower() == ".jsonl":
+                                with open(part_path, "w", encoding="utf-8") as f:
+                                    for r in rows:
+                                        f.write(json.dumps(r, ensure_ascii=False) + "\n")
+                            else:
+                                raise ValueError(f"Unsupported part suffix: {part_path.suffix}")
                             wrote = True
                         except Exception as e:
-                            # Fall back to JSONL parts when parquet dependencies are unavailable.
-                            # Without this, the batch loop can silently skip all output parts.
+                            # Fall back to JSONL parts when the configured format isn't available.
                             logger.warning(
-                                "Failed to write parquet part %s (%s); falling back to JSONL",
+                                "Failed to write selected-indices part %s (%s); falling back to JSONL",
                                 part_path,
                                 e,
                             )
@@ -1121,6 +1289,31 @@ def main():
         ),
     )
     parser.add_argument(
+        "--band-score-source",
+        type=str,
+        default="auto",
+        choices=[
+            "auto",
+            "band_score",
+            "difficulty_score",
+            "band_p_max",
+            "band_p_argmax",
+            "band_p_B0",
+            "band_p_B1",
+            "band_p_B2",
+            "band_p_B3",
+            "band_p_B4",
+            "band_p_B5",
+        ],
+        help=(
+            "Select which field to use as the continuous band score for --band-inference. "
+            "auto=band_score->difficulty_score->band_p_max. "
+            "band_p_max picks the max of band_p_B0..band_p_B5. "
+            "band_p_argmax infers the discrete band as argmax(band_p_B0..band_p_B5) when band inference triggers. "
+            "You can also pin a single probability via band_p_Bx."
+        ),
+    )
+    parser.add_argument(
         "--ablation-variant",
         type=str,
         default="baseline",
@@ -1160,6 +1353,7 @@ def main():
                 stages=args.stages,
                 stage_target_scale=args.stage_target_scale,
                 band_inference=args.band_inference,
+                band_score_source=args.band_score_source,
             )
         
         # Build coresets

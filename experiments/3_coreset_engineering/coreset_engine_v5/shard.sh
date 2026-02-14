@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # --------------- DEFAULTS ---------------
-NUM_SHARDS=8
+NUM_SHARDS=4
 STAGES="1B 3B 8B 70B"
 INPUT_PATH="data/books/bands/"
 INPUT_FORMAT="jsonl"
@@ -24,6 +24,7 @@ CONFIG="config/pipeline.yaml"
 CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
+BAND_SCORE_SOURCE="auto"
 TOTAL_TOKENS=""
 RESUME=0
 
@@ -43,6 +44,8 @@ usage() {
   echo "  --checkpoint-base   Base dir for checkpoints (default: output/checkpoints)"
   echo "  --band-inference    Band inference mode (default: none)"
   echo "                     Values: none | infer_if_missing | infer_if_ineligible | force"
+  echo "  --band-score-source Band score source (default: auto)"
+  echo "                     Values: auto | band_score | difficulty_score | band_p_max | band_p_argmax | band_p_B0..band_p_B5"
   echo "  --resume            Resume from last checkpoints (don't clean output dirs)"
   exit 1
 }
@@ -57,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --curriculum)       CURRICULUM="$2";       shift 2 ;;
     --checkpoint-base)  CHECKPOINT_BASE="$2";  shift 2 ;;
     --band-inference)   BAND_INFERENCE="$2";   shift 2 ;;
+    --band-score-source) BAND_SCORE_SOURCE="$2"; shift 2 ;;
     --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
     --resume)           RESUME=1;              shift 1 ;;
     -h|--help)          usage ;;
@@ -79,7 +83,73 @@ echo "  Config       : $CONFIG"
 echo "  Curriculum   : $CURRICULUM"
 echo "  Checkpoints  : $CHECKPOINT_BASE"
 echo "  Band Infer   : $BAND_INFERENCE"
+echo "  Band Score   : $BAND_SCORE_SOURCE"
 echo "============================================================"
+
+# --------------- PYTHON DETECTION (WINDOWS/GIT-BASH FRIENDLY) ---------------
+# Key pitfall on Windows: `python` may resolve to the Microsoft Store alias stub.
+# So we don't just check `command -v`; we also verify the interpreter can execute.
+
+_python_cmd_works() {
+  local -a _cmd=("$@")
+  "${_cmd[@]}" -c "import sys; sys.exit(0)" >/dev/null 2>&1
+}
+
+_choose_python() {
+  local spec
+  local -a cmd
+
+  # Allow override (supports values like: "py -3")
+  if [[ -n "${PYTHON_BIN:-}" ]]; then
+    read -r -a cmd <<<"$PYTHON_BIN"
+    if _python_cmd_works "${cmd[@]}"; then
+      PYTHON_CMD=("${cmd[@]}")
+      return 0
+    fi
+    echo "ERROR: PYTHON_BIN='$PYTHON_BIN' does not appear to work." >&2
+    return 1
+  fi
+
+  # Prefer a local virtualenv interpreter if present (keeps deps consistent).
+  # These paths work in Git Bash on Windows and also in typical Unix venv layouts.
+  for spec in \
+    "./.venv/Scripts/python.exe" \
+    "./venv/Scripts/python.exe" \
+    "./.venv/bin/python" \
+    "./venv/bin/python"; do
+    if [[ -f "$spec" ]]; then
+      cmd=("$spec")
+      if _python_cmd_works "${cmd[@]}"; then
+        PYTHON_CMD=("${cmd[@]}")
+        return 0
+      fi
+    fi
+  done
+
+  # Prefer py launcher (most reliable on Windows), then python3, then python.
+  for spec in "py -3" "python3" "python"; do
+    read -r -a cmd <<<"$spec"
+    if ! command -v "${cmd[0]}" >/dev/null 2>&1; then
+      continue
+    fi
+    if _python_cmd_works "${cmd[@]}"; then
+      PYTHON_CMD=("${cmd[@]}")
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+if ! _choose_python; then
+  echo "ERROR: Could not find a working Python interpreter." >&2
+  echo "Tried: 'py -3', 'python3', 'python' (and optional PYTHON_BIN override)." >&2
+  echo "Hint: install Python 3.10+ and ensure it's on PATH, or set PYTHON_BIN='py -3'." >&2
+  echo "Hint: disable the Microsoft Store python alias: Settings > Apps > Advanced app settings > App execution aliases." >&2
+  exit 1
+fi
+
+echo "  Python       : ${PYTHON_CMD[*]}"
 
 # Clean old outputs
 if [[ $RESUME -eq 0 ]]; then
@@ -98,7 +168,7 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
 
   (
     echo "[shard $SHARD_ID] Starting..."
-    python3 coreset_builder.py \
+    "${PYTHON_CMD[@]}" coreset_builder.py \
       --config "$CONFIG" \
       --curriculum "$CURRICULUM" \
       --input-path "$INPUT_PATH" \
@@ -108,6 +178,7 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
       --shard-id "$SHARD_ID" \
       --checkpoint-dir "$SHARD_DIR" \
       --band-inference "$BAND_INFERENCE" \
+      --band-score-source "$BAND_SCORE_SOURCE" \
       ${TOTAL_TOKENS:+--total-input-tokens-estimate "$TOTAL_TOKENS"} \
       2>&1 | sed "s/^/[shard $SHARD_ID] /"
     echo "[shard $SHARD_ID] Done."

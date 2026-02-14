@@ -1,4 +1,10 @@
 output
+outputv2
+output1
+output2
+output_wo_bandinference
+output_w_bandinferbeforeauto(bandscore)
+output_w_bandinferauto(banbd_pmax)
 data
 __pycache__
 *.pyc
@@ -8,3 +14,5 @@ venv
 *.sqlite
 *.log
 *.pem
+gogi
+

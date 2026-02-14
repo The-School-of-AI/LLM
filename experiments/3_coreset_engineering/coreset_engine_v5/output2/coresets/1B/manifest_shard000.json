@@ -1,0 +1,72 @@
+{
+  "stage_name": "1B",
+  "coreset_id": "f87ab0ca9a9577a97b76fbc003d7b3319bddef4d68ceb2c09c164421faca19b8",
+  "target_tokens": 5000000000,
+  "target_tokens_global": 20000000000,
+  "target_tokens_shard": 5000000000,
+  "actual_tokens": 1020235,
+  "created_at": "2026-02-15T03:20:40.737720",
+  "pipeline_version": "1.0.0",
+  "curriculum_version": "0.7",
+  "seed": 42,
+  "config_hash": "cdf0edc14a81b37fda201fd457dc9c3c54e4150721c4b9c7973a400a6eb797da",
+  "selected_chunks_count": 2209,
+  "selected_chunks_file": "output\\coresets\\1B",
+  "shard_id": 0,
+  "num_shards": 4,
+  "stage_target_scale": 1.0,
+  "composition": {
+    "band_distribution": {
+      "B0": 1.0,
+      "B1": 0.0,
+      "B2": 0.0,
+      "B3": 0.0,
+      "B4": 0.0,
+      "B5": 0.0
+    },
+    "domain_distribution": {
+      "total": {
+        "education": 0.05823952324709503,
+        "web": 0.941760476752905
+      },
+      "by_band": {
+        "B0": {
+          "education": 0.05823952324709503,
+          "web": 0.941760476752905
+        }
+      }
+    },
+    "language_distribution": {
+      "en": 0.05823952324709503,
+      "as": 0.08402475900160257,
+      "pa": 0.8577357177513024
+    }
+  },
+  "protected_slices_preserved": {
+    "B4_preservation_ratio": 0.95,
+    "B5_preservation_ratio": 0.95,
+    "code_preservation_ratio": 0.9,
+    "agentic_preservation_ratio": 0.9,
+    "indic_preservation_ratio": 0.85
+  },
+  "dedup_stats": null,
+  "coverage_audit": null,
+  "rolling_window_stats": {
+    "window_tokens": 2000000.0,
+    "max_band_delta": 0.0,
+    "max_domain_delta": 0.0
+  },
+  "availability_stats": {
+    "eligible_unused_tokens_total": 307805508,
+    "eligible_unused_chunks_total": 390378,
+    "eligible_unused_tokens_by_band": {
+      "B0": 307805508
+    },
+    "eligible_unused_chunks_by_band": {
+      "B0": 390378
+    },
+    "definition": "Counts chunks/tokens that were unused (non-overlap filtered) and eligible for this stage by band/domain/language policy before selection."
+  },
+  "deterministic": true,
+  "algorithm_version": "1.0.0"
+}

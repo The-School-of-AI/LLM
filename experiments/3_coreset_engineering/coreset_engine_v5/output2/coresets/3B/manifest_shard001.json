@@ -1,0 +1,69 @@
+{
+  "stage_name": "3B",
+  "coreset_id": "c23efff6930206f7232241569b2d4f7c088aac57012682201454442880a9e79a",
+  "target_tokens": 10000000000,
+  "target_tokens_global": 40000000000,
+  "target_tokens_shard": 10000000000,
+  "actual_tokens": 985237,
+  "created_at": "2026-02-15T03:21:40.099773",
+  "pipeline_version": "1.0.0",
+  "curriculum_version": "0.7",
+  "seed": 42,
+  "config_hash": "f53dd95d401cd3a4c9401a689150e306b4406f5a87597503c7289356ca62954c",
+  "selected_chunks_count": 1670,
+  "selected_chunks_file": "output\\coresets\\3B",
+  "shard_id": 1,
+  "num_shards": 4,
+  "stage_target_scale": 1.0,
+  "composition": {
+    "band_distribution": {
+      "B0": 1.0,
+      "B1": 0.0,
+      "B2": 0.0,
+      "B3": 0.0,
+      "B4": 0.0,
+      "B5": 0.0
+    },
+    "domain_distribution": {
+      "total": {
+        "web": 1.0
+      },
+      "by_band": {
+        "B0": {
+          "web": 1.0
+        }
+      }
+    },
+    "language_distribution": {
+      "as": 0.018788372746861924,
+      "pa": 0.981211627253138
+    }
+  },
+  "protected_slices_preserved": {
+    "B4_preservation_ratio": 0.95,
+    "B5_preservation_ratio": 0.95,
+    "code_preservation_ratio": 0.9,
+    "agentic_preservation_ratio": 0.9,
+    "indic_preservation_ratio": 0.85
+  },
+  "dedup_stats": null,
+  "coverage_audit": null,
+  "rolling_window_stats": {
+    "window_tokens": 2000000.0,
+    "max_band_delta": 0.0,
+    "max_domain_delta": 0.0
+  },
+  "availability_stats": {
+    "eligible_unused_tokens_total": 359462848,
+    "eligible_unused_chunks_total": 449741,
+    "eligible_unused_tokens_by_band": {
+      "B0": 359462848
+    },
+    "eligible_unused_chunks_by_band": {
+      "B0": 449741
+    },
+    "definition": "Counts chunks/tokens that were unused (non-overlap filtered) and eligible for this stage by band/domain/language policy before selection."
+  },
+  "deterministic": true,
+  "algorithm_version": "1.0.0"
+}
