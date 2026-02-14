@@ -10,6 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
+    ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
@@ -48,7 +49,7 @@ TEMPLATES = [
     ('"{word}" పదంలో సంయుక్తాక్షరాలతో కలిపి ఎన్ని అక్షరాలు ఉన్నాయి?', "count"),
 ]
 
-all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
+all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS + list(ALL_WORDS_UNIQUE)
 samples = []
 target_count = 26000
 unique_combinations = {}
@@ -63,17 +64,17 @@ for word in set(all_words):
         query = template.format(word=word)
         answer = ""
         if answer_type == "count":
-            answer = f"{cluster_count} అక్షరాలు"
+            answer = str(cluster_count)
         elif answer_type == "two_letter_yes_no":
             answer = "అవును" if cluster_count == 2 else "కాదు"
         elif answer_type == "three_letter_yes_no":
             answer = "అవును" if cluster_count == 3 else "కాదు"
         elif answer_type == "vowel_count":
             vowels_in_word = [c for c in clusters if c[0] in VOWELS]
-            answer = f"{len(vowels_in_word)} స్వరాలు"
+            answer = str(len(vowels_in_word))
         elif answer_type == "consonant_count":
             consonants_in_word = [c for c in clusters if c[0] in CONSONANTS]
-            answer = f"{len(consonants_in_word)} వ్యంజనాలు"
+            answer = str(len(consonants_in_word))
         else:
             continue
 
@@ -82,32 +83,53 @@ for word in set(all_words):
             unique_combinations[key] = (query, answer)
 
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
+
+# Track seen lines for dedup
+seen_lines = set()
+for q, a in samples:
+    seen_lines.add((q, a))
+
+max_attempts = target_count * 10
+attempts = 0
+while len(samples) < target_count and attempts < max_attempts:
+    attempts += 1
     word = random.choice(list(set(all_words)))
     clusters = get_telugu_grapheme_clusters(word)
     cluster_count = len(clusters)
     if cluster_count == 0:
         continue
     template, answer_type = random.choice(TEMPLATES)
-    query = template.format(word=word)
-    answer = ""
+    q = template.format(word=word)
+    a = ""
     if answer_type == "count":
-        answer = f"{cluster_count} అక్షరాలు"
+        a = str(cluster_count)
     elif answer_type == "two_letter_yes_no":
-        answer = "అవును" if cluster_count == 2 else "కాదు"
+        a = "అవును" if cluster_count == 2 else "కాదు"
     elif answer_type == "three_letter_yes_no":
-        answer = "అవును" if cluster_count == 3 else "కాదు"
+        a = "అవును" if cluster_count == 3 else "కాదు"
     elif answer_type == "vowel_count":
         vowels_in_word = [c for c in clusters if c[0] in VOWELS]
-        answer = f"{len(vowels_in_word)} స్వరాలు"
+        a = str(len(vowels_in_word))
     elif answer_type == "consonant_count":
         consonants_in_word = [c for c in clusters if c[0] in CONSONANTS]
-        answer = f"{len(consonants_in_word)} వ్యంజనాలు"
+        a = str(len(consonants_in_word))
     else:
         continue
-    samples.append((query, answer))
+    if (q, a) not in seen_lines:
+        seen_lines.add((q, a))
+        samples.append((q, a))
+
+# Final dedup
+unique_samples = []
+final_seen = set()
+for q, a in samples:
+    if (q, a) not in final_seen:
+        final_seen.add((q, a))
+        unique_samples.append((q, a))
+samples = unique_samples
 
 random.shuffle(samples)
+samples = samples[:target_count]
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s4.txt")
 with open(output_file, "w", encoding="utf-8") as f:

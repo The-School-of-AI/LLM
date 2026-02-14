@@ -93,7 +93,15 @@ for i, word1 in enumerate(word_list):
 
         pairs_generated += 1
 
-while len(samples) < target_count:
+# Track seen lines for dedup
+seen_lines = set()
+for q, a in samples:
+    seen_lines.add((q, a))
+
+max_attempts = target_count * 10
+attempts = 0
+while len(samples) < target_count and attempts < max_attempts:
+    attempts += 1
     word1 = random.choice(word_list)
     word2 = random.choice([w for w in word_list if w != word1])
 
@@ -112,13 +120,24 @@ while len(samples) < target_count:
 
     if random.random() < 0.5:
         template = random.choice(TEMPLATES_LONGER)
-        answer = longer_word
+        a = longer_word
     else:
         template = random.choice(TEMPLATES_SHORTER)
-        answer = shorter_word
+        a = shorter_word
 
-    query = template.format(word1=word1, word2=word2)
-    samples.append((query, answer))
+    q = template.format(word1=word1, word2=word2)
+    if (q, a) not in seen_lines:
+        seen_lines.add((q, a))
+        samples.append((q, a))
+
+# Final dedup
+unique_samples = []
+final_seen = set()
+for q, a in samples:
+    if (q, a) not in final_seen:
+        final_seen.add((q, a))
+        unique_samples.append((q, a))
+samples = unique_samples
 
 random.shuffle(samples)
 samples = samples[:target_count]

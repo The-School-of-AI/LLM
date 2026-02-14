@@ -12,10 +12,10 @@
 |--------|-------|
 | Total Q&A pairs | **208,000** |
 | Statement types | 11 (S1–S11) |
-| Final data points (combined lines) | **17,709** |
+| Final data points (combined lines) | **17,738** |
 | Min tokens per data point | **512** |
-| Max tokens per data point | **632** |
-| Avg tokens per data point | **535.6** |
+| Max tokens per data point | **791** |
+| Avg tokens per data point | **535.5** |
 | Lines below 512 tokens | **0** |
 | Vocabulary (unique words) | **958** |
 | Output file size | **27 MB** |
@@ -103,10 +103,10 @@ Every line in the final output meets the 512-token minimum:
 
 | Metric | Value |
 |--------|-------|
-| Total data points | 17,709 |
+| Total data points | 17,738 |
 | Min tokens | 512 |
-| Max tokens | 632 |
-| Avg tokens | 535.6 |
+| Max tokens | 791 |
+| Avg tokens | 535.5 |
 | Lines < 512 tokens | **0** |
 
 Token counting uses Telugu-aware `count_tokens_telugu()` where each Telugu Unicode character (U+0C00–U+0C7F) = 1 token.
@@ -199,16 +199,20 @@ S11 teaches the **compositional structure** of Telugu script:
 
 | Component | Seed pairs | Fill | Allocation |
 |-----------|-----------|------|------------|
-| Gunintalu combinations (30 consonants × 12 vowels) | ~360 | ~2,400 | ~35% |
-| Base consonant identification | ~120 | ~800 | ~12% |
-| Vowel sign identification | ~120 | ~800 | ~12% |
-| Gunintam charts (full series) | ~30 | ~1,200 | ~15% |
+| Gunintalu combinations (37 consonants × 16 vowels) | ~592 | ~2,200 | ~35% |
+| Base consonant identification | ~148 | ~800 | ~12% |
+| Vowel sign identification | ~148 | ~800 | ~12% |
+| Gunintam charts (full series) | ~37 | ~1,200 | ~15% |
 | Ottulu in words | ~400 | ~700 | ~14% |
 | Conjunct decomposition | ~100 | ~200 | ~4% |
 | Conjunct detection (yes/no) | ~300 | ~200 | ~6% |
-| Vowel/consonant classification | ~48 | ~150 | ~2% |
+| Vowel/consonant classification | ~53 | ~150 | ~2% |
 
-**vs Kannada S11**: Kannada used only 20 hardcoded Q&A pairs repeated to fill 10K. Telugu S11 generates **programmatically diverse** pairs from 30 consonants × 12 vowel signs × multiple template variants + vocabulary-based ottulu detection.
+**Consonants (37)**: Full traditional alphabet including all vargas (క–ఙ, చ–ఞ, ట–ణ, త–న, ప–మ), semi-vowels/sibilants (య, ర, ల, వ, శ, ష, స, హ, ళ), plus ఱ (hard ra) and క్ష (traditionally taught as alphabet entry).
+
+**Vowel signs (16)**: అ (inherent, no sign), ఆ–ఔ (12 standard vowel signs), ౠ (long vocalic r), అం (anusvara), అః (visarga).
+
+**vs Kannada S11**: Kannada used only 20 hardcoded Q&A pairs repeated to fill 10K. Telugu S11 generates **programmatically diverse** pairs from 37 consonants × 16 vowel signs × multiple template variants + vocabulary-based ottulu detection.
 
 ---
 
@@ -363,7 +367,7 @@ for f in group1_telugu/group1_s*.txt; do echo "$f: $(wc -l < $f)"; done
 | Lines < 512 tokens = 0 | 0 | 0 | PASS |
 | Kannada leakage = 0 | 0 | 0 | PASS |
 | Hindi leakage = 0 | 0 | 0 | PASS |
-| S11 gunintalu systematic | 30 consonants × 12 vowels | Covered | PASS |
+| S11 gunintalu systematic | 37 consonants × 16 vowels | Covered | PASS |
 | S11 ottulu from vocabulary | Words with conjuncts | Covered | PASS |
 
 **Result: ALL CHECKS PASSED**

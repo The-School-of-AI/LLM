@@ -9,7 +9,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_telugu.telugu_grammar import get_telugu_aksharas  # noqa: E402
-from group1_telugu.telugu_vocabulary import NUMBERS  # noqa: E402
+from group1_telugu.telugu_vocabulary import NUMBERS_EXTENDED  # noqa: E402
 from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 
 # Templates — Telugu uses invariant యొక్క (no genitive suffix needed)
@@ -34,11 +34,8 @@ target_count = 12000
 unique_combinations = {}
 
 # Number to name
-for num in range(1, 101):
-    if num <= len(NUMBERS):
-        word = NUMBERS[num - 1]
-    else:
-        continue
+for num in range(1, len(NUMBERS_EXTENDED) + 1):
+    word = NUMBERS_EXTENDED[num - 1]
     for template_idx, template in enumerate(TEMPLATES_NAME):
         query = template.format(num=num)
         answer = word
@@ -47,7 +44,7 @@ for num in range(1, 101):
             unique_combinations[key] = (query, answer)
 
 # Name to spelling (akshara-level)
-for word in NUMBERS:
+for word in NUMBERS_EXTENDED:
     aksharas = get_telugu_aksharas(word)
     if len(aksharas) == 0:
         continue
@@ -60,25 +57,46 @@ for word in NUMBERS:
             unique_combinations[key] = (query, answer)
 
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
+
+# Track seen lines for dedup
+seen_lines = set()
+for q, a in samples:
+    seen_lines.add((q, a))
+
+max_attempts = target_count * 10
+attempts = 0
+while len(samples) < target_count and attempts < max_attempts:
+    attempts += 1
+    q, a = None, None
     if random.random() < 0.5:
-        num = random.randint(1, 100)
-        if num <= len(NUMBERS):
-            word = NUMBERS[num - 1]
-            template = random.choice(TEMPLATES_NAME)
-            query = template.format(num=num)
-            answer = word
-            samples.append((query, answer))
+        num = random.randint(1, len(NUMBERS_EXTENDED))
+        word = NUMBERS_EXTENDED[num - 1]
+        template = random.choice(TEMPLATES_NAME)
+        q = template.format(num=num)
+        a = word
     else:
-        word = random.choice(NUMBERS)
+        word = random.choice(NUMBERS_EXTENDED)
         aksharas = get_telugu_aksharas(word)
         if len(aksharas) > 0:
             template = random.choice(TEMPLATES_SPELLING)
-            query = template.format(word=word)
-            answer = ", ".join(aksharas)
-            samples.append((query, answer))
+            q = template.format(word=word)
+            a = ", ".join(aksharas)
+
+    if q and a and (q, a) not in seen_lines:
+        seen_lines.add((q, a))
+        samples.append((q, a))
+
+# Final dedup
+unique_samples = []
+final_seen = set()
+for q, a in samples:
+    if (q, a) not in final_seen:
+        final_seen.add((q, a))
+        unique_samples.append((q, a))
+samples = unique_samples
 
 random.shuffle(samples)
+samples = samples[:target_count]
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s8.txt")
 with open(output_file, "w", encoding="utf-8") as f:
