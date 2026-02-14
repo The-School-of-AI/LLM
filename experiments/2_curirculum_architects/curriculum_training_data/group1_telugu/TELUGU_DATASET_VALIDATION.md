@@ -303,7 +303,53 @@ for f in group1_telugu/group1_s*.txt; do echo "$f: $(wc -l < $f)"; done
 
 ---
 
-## 12. Verdict
+## 12. Test Suite
+
+**183 tests** across 4 test files, all passing in ~3.10s.
+
+**Run:** `uv run python -m pytest group1_telugu/tests/ -v`
+
+### Test Files
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `test_telugu_grammar.py` | 24 | Virama detection, akshara segmentation (15 words), reconstruction invariant, empty input |
+| `test_prompt_utils_telugu.py` | 25 | Token counting (Telugu/Kannada/Devanagari/English/mixed/empty), formatting helpers, QA pair formatting, combining |
+| `test_telugu_vocabulary.py` | 34 | Word counts (≥950 unique), no duplicates, category minimums (16 categories), Telugu script validation, no Kannada/Hindi chars, numbers (100), days/months, vargas (7 groups), classification (3 categories), rhyming pairs (≥100) |
+| `test_telugu_generators.py` | 100 | File existence (11 statement files + final output), line counts (all 11 match targets), total = 208,000, format validation (Q? A. on first 100 lines), no danda (।), cross-script leakage (all files), token minimums (≥512), S11 gunintalu/ottulu content checks |
+| **Total** | **183** | |
+
+### Key Test Categories
+
+**Grammar (`test_telugu_grammar.py`)**
+- Virama (్) detection: present, absent, empty, standalone
+- Akshara segmentation: simple words (బడి, నీరు), gemination (అమ్మ, కుక్క), complex conjuncts (పుస్తకం, విద్యార్థి, జ్ఞానం), anusvara (నగరం)
+- Reconstruction: `"".join(aksharas) == word` for all test words
+- Count verification: exact akshara counts for 7 key words
+
+**Prompt Utils (`test_prompt_utils_telugu.py`)**
+- Token counting across Unicode ranges: Telugu (U+0C00–U+0C7F), Kannada (U+0C80–U+0CFF), Devanagari (U+0900–U+097F)
+- Period/question mark enforcement (no danda)
+- QA pair combining to reach 512-token minimum
+
+**Vocabulary (`test_telugu_vocabulary.py`)**
+- All 958 words contain Telugu characters, zero Kannada/Devanagari leakage
+- Category minimum thresholds: EASY_ANIMALS ≥ 30, EASY_OBJECTS ≥ 50, MEDIUM_FOOD ≥ 50, etc.
+- Numbers: exactly 100, first = ఒకటి, last = వంద, tens verified (పది, ఇరవై, ముప్పై, నలభై, యాభై)
+- Vargas: 7 groups, ka-varga = [క, ఖ, గ, ఘ, ఙ], ta-varga = [త, థ, ద, ధ, న]
+- Rhyming pairs share last akshara (≤5 mismatches tolerance)
+
+**Generators (`test_telugu_generators.py`)**
+- All 11 `group1_sN.txt` files exist with exact line counts
+- Total = 208,000 pairs verified
+- Format: every line (first 100 sampled) contains `?` and ends with `.`
+- Zero Kannada (U+0C80–U+0CFF) and Hindi (U+0900–U+097F) characters in all files
+- Final output: ≥10,000 data points, all lines ≥512 tokens
+- S11-specific: gunintam chart entries present, ottulu entries present, vowel/consonant classification present, క gunintam correctness (కా, కి, కు verified)
+
+---
+
+## 13. Verdict
 
 | Check | Expected | Actual | Status |
 |-------|----------|--------|--------|
