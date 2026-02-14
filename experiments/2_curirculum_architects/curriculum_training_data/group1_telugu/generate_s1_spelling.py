@@ -8,7 +8,7 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.telugu_grammar import get_telugu_aksharas  # noqa: E402
+from group1_telugu.telugu_grammar import get_telugu_aksharas, get_telugu_aksharas_with_roots  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
@@ -34,7 +34,7 @@ def get_telugu_grapheme_clusters(word: str) -> list[str]:
 
 def generate_spelling_answer(word: str) -> str:
     """Generate spelling answer as comma-separated aksharas (e.g. పు, స్త, కం)"""
-    aksharas = get_telugu_aksharas(word)
+    aksharas = get_telugu_aksharas_with_roots(word)
     return ", ".join(aksharas)
 
 
@@ -81,7 +81,7 @@ TEMPLATES = TEMPLATES_SPELLING + TEMPLATES_LISTING
 
 def generate_listing_answer(word: str, template: str) -> str:
     """Generate listing answer as comma-separated aksharas (e.g. శు, క్ర, వా, రం)"""
-    clusters = get_telugu_aksharas(word)
+    clusters = get_telugu_aksharas_with_roots(word)
     return ", ".join(clusters)
 
 

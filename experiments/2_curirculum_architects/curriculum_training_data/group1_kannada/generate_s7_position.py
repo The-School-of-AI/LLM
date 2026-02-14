@@ -48,7 +48,7 @@ TEMPLATES = [
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
 samples = []
-target_count = 17200
+target_count = 21200
 
 # Generate samples
 unique_combinations = {}
