@@ -200,12 +200,12 @@ if [ "$SKIP_CREDENTIALS" = "false" ]; then
     --overwrite \
     --region "$P12_REGION" >/dev/null
 
-  aws ssm put-parameter \
-    --name "/p12/training/clickhouse-endpoint" \
-    --value "https://${DB_PRIVATE_IP}:8443" \
-    --type String \
-    --overwrite \
-    --region "$P12_REGION" >/dev/null
+  aws ssm put-parameter --region "$P12_REGION" --cli-input-json "{
+    \"Name\": \"/p12/training/clickhouse-endpoint\",
+    \"Value\": \"https://${DB_PRIVATE_IP}:8443\",
+    \"Type\": \"String\",
+    \"Overwrite\": true
+  }" >/dev/null
 
   echo "✓ Credentials stored in SSM Parameter Store"
 
