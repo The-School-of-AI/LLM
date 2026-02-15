@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8123:8123"   # HTTP — localhost only (admin / healthcheck)
+      - "0.0.0.0:9000:9000"     # Native TCP — required for clients like Vector (auth via users.d)
       - "0.0.0.0:8443:8443"     # HTTPS — public, requires auth
     ulimits:
       nofile:
