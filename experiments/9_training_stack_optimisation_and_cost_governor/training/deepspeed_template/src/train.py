@@ -78,6 +78,12 @@ def train_epoch(
         input_ids = batch["input_ids"].to(model_engine.device)
         attention_mask = batch["attention_mask"].to(model_engine.device)
         labels = batch["labels"].to(model_engine.device)
+        
+        # Memory profiling on first step
+        if i == 0:
+            torch.cuda.reset_peak_memory_stats(model_engine.device)
+            mem_before = torch.cuda.memory_allocated(model_engine.device) / 1e9
+            print_rank_0(f"\n[MEMORY] Before forward pass: {mem_before:.2f}GB")
 
         # Forward pass
         # Check if this is a reversible model (has custom forward signature)
@@ -90,10 +96,8 @@ def train_epoch(
             y_mtp = input_ids[:, 2:].contiguous()
             
             # 2. Forward pass with reversibility fix
-            # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper to enable true reversibility
-            # - torch.autocast(enabled=False) prevents PyTorch from caching the 25GB forward graph
-            # - model_engine.module bypasses DeepSpeedEngine wrapper (safe for ZeRO Stage 2)
-            with torch.autocast(device_type="cuda", enabled=False):
+            # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper
+            with torch.amp.autocast('cuda',enabled=False):
                 logits_ntp, logits_mtp, aux_loss = model_engine.module(
                     x_input, 
                     next_token_ids=y_ntp,
@@ -103,16 +107,40 @@ def train_epoch(
                     prev_memory_stream=None
                 )
             
-            # 3. Compute loss sequentially and free BF16 tensors instantly
+            # Memory profiling after forward
+            if i == 0:
+                mem_after_fwd = torch.cuda.memory_allocated(model_engine.device) / 1e9
+                mem_peak = torch.cuda.max_memory_allocated(model_engine.device) / 1e9
+                print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
+                print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
+            
+            # 3. Compute loss with aggressive memory management
             vocab_size = logits_ntp.size(-1)
             
-            # Compute NTP loss and free logits immediately
-            loss_ntp = torch.nn.functional.cross_entropy(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
-            del logits_ntp  # Free BF16 tensor immediately
+            # Compute NTP and MTP losses sequentially with immediate cleanup
+            with torch.amp.autocast('cuda',enabled=False):
+                loss_ntp = torch.nn.functional.cross_entropy(
+                    logits_ntp.float().view(-1, vocab_size), 
+                    y_ntp.view(-1)
+                )
             
-            # Compute MTP loss and free logits immediately
-            loss_mtp = torch.nn.functional.cross_entropy(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
-            del logits_mtp  # Free BF16 tensor immediately
+            # Memory profiling after NTP loss
+            if i == 0:
+                mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
+                print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
+            
+            del logits_ntp
+            torch.cuda.empty_cache()
+            
+            # Compute MTP loss
+            with torch.amp.autocast('cuda',enabled=False):
+                loss_mtp = torch.nn.functional.cross_entropy(
+                    logits_mtp.float().view(-1, vocab_size), 
+                    y_mtp.view(-1)
+                )
+            
+            del logits_mtp
+            torch.cuda.empty_cache()
             
             # 4. NaN Watchdog
             if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
@@ -120,10 +148,17 @@ def train_epoch(
                     print_rank_0(f"\n⚠️ NaN detected at epoch {epoch}, step {i}!")
                     print_rank_0(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}")
 
-            # 5. Combine Loss
+            # 5. Combine Loss (NTP + 0.3*MTP + aux)
             loss = loss_ntp + 0.3 * loss_mtp
             if aux_loss is not None and aux_loss.numel() > 0:
                 loss += aux_loss
+            
+            # Memory profiling before backward
+            if i == 0:
+                mem_before_bwd = torch.cuda.memory_allocated(model_engine.device) / 1e9
+                print_rank_0(f"[MEMORY] Before backward: {mem_before_bwd:.2f}GB")
+                print_rank_0(f"[MEMORY] === MEMORY SUMMARY ===")
+                print_rank_0(torch.cuda.memory_summary(device=model_engine.device, abbreviated=True))
             
             # MTP loss (if enabled and logits_mtp is not None)
             # For now, we focus on NTP loss
@@ -332,8 +367,8 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
                 y_ntp = input_ids[:, 1:-1].contiguous()
                 y_mtp = input_ids[:, 2:].contiguous()
                 
-                # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper (same as training)
-                with torch.autocast(device_type="cuda", enabled=False):
+                # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper
+                with torch.amp.autocast('cuda',enabled=False):
                     logits_ntp, logits_mtp, aux_loss = model_engine.module(
                         x_input,
                         next_token_ids=y_ntp,
@@ -345,12 +380,22 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
                 
                 vocab_size = logits_ntp.size(-1)
                 
-                # Compute losses and free logits immediately
-                loss_ntp = torch.nn.functional.cross_entropy(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+                # Compute both NTP and MTP losses
+                with torch.amp.autocast('cuda',enabled=False):
+                    loss_ntp = torch.nn.functional.cross_entropy(
+                        logits_ntp.float().view(-1, vocab_size), 
+                        y_ntp.view(-1)
+                    )
                 del logits_ntp
+                torch.cuda.empty_cache()
                 
-                loss_mtp = torch.nn.functional.cross_entropy(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+                with torch.amp.autocast('cuda',enabled=False):
+                    loss_mtp = torch.nn.functional.cross_entropy(
+                        logits_mtp.float().view(-1, vocab_size), 
+                        y_mtp.view(-1)
+                    )
                 del logits_mtp
+                torch.cuda.empty_cache()
                 
                 loss = loss_ntp + 0.3 * loss_mtp
                 if aux_loss is not None and aux_loss.numel() > 0:

@@ -313,9 +313,17 @@ def main():
     # Step 3: Initialize DeepSpeed
     # ========================================
     print_rank_0("\n[3/5] Initializing DeepSpeed...")
+
+    with open(args.deepspeed_config, 'r') as f:
+        ds_config = json.load(f)
+        
     model_engine, optimizer, _, _ = deepspeed.initialize(
-        args=args, model=model, model_parameters=model.parameters()
+        config_params=ds_config,
+        model=model, 
+        model_parameters=model.parameters(),
     )
+
+    print_rank_0(f"ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
     # ========================================
     # Step 3.5: Initialize Checkpoint Manager

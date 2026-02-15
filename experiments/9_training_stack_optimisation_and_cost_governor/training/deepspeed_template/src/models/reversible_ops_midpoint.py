@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 from torch.func import functional_call
 
 
@@ -35,14 +36,19 @@ class MidpointFunction(torch.autograd.Function):
         params = {f"layer.{k}": v for k, v in zip(param_keys, flat_tensors[:n_params])}
         buffers = {f"layer.{k}": v for k, v in zip(buffer_keys, flat_tensors[n_params:])}
 
-        # Save what we truly need for backward
-        ctx.save_for_backward(p_prev, p_cur, *flat_tensors[:n_params])
+        # CRITICAL FIX: Save buffer tensors for backward pass
+        # This prevents race conditions with NCCL gradient sync in distributed training
+        buffer_tensors = flat_tensors[n_params:]  # Extract buffer tensors from flat_tensors
+        
+        # Save what we truly need for backward (including buffer tensors now!)
+        ctx.save_for_backward(p_prev, p_cur, *flat_tensors[:n_params], *buffer_tensors)
         ctx.two_h = float(two_h)
         ctx.a = float(a)
         ctx.module = module
         ctx.param_keys = param_keys
         ctx.buffer_keys = buffer_keys
         ctx.n_params = n_params
+        ctx.n_buffers = len(buffer_keys)  # Track number of buffers
 
         with torch.no_grad():
             delta, aux = functional_call(module, (params, buffers), (p_cur,), tie_weights=True)
@@ -52,32 +58,42 @@ class MidpointFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_p_next, grad_aux):
-        p_prev, p_cur, *param_tensors = ctx.saved_tensors
+        # CRITICAL FIX: Retrieve saved tensors including buffers (no live module access!)
+        saved_tensors = ctx.saved_tensors
         n_params = ctx.n_params
+        n_buffers = ctx.n_buffers
+        
+        p_prev = saved_tensors[0]
+        p_cur = saved_tensors[1]
+        param_tensors = saved_tensors[2:2+n_params]
+        buffer_tensors = saved_tensors[2+n_params:2+n_params+n_buffers]
 
-        # Rebuild params/buffers for functional_call
+        # Rebuild params/buffers for functional_call using SAVED buffers
         params = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_tensors)}
-        # buffers are non-diff; we still need them for correct forward recompute
-        # they come from the original module at runtime via named_buffers
-        # so we recreate them here from the live module's buffers:
-        live_buffers = dict(ctx.module.named_buffers())
-        buffers = {f"layer.{k}": live_buffers.get(f"layer.{k}", None) for k in ctx.buffer_keys}
-        # Remove None entries (some layers may have no buffers)
-        buffers = {k: v for k, v in buffers.items() if v is not None}
+        buffers = {f"layer.{k}": v for k, v in zip(ctx.buffer_keys, buffer_tensors)}
 
         # Direct paths:
         # p_next = a*p_prev + (1-a)*p_cur + two_h*delta(p_cur)
         grad_p_prev = grad_p_next * ctx.a
         grad_p_cur_direct = grad_p_next * (1.0 - ctx.a)
 
+        # CRITICAL FIX: Ensure CUDA synchronization before recomputation in distributed training
+        if torch.cuda.is_available() and dist.is_initialized():
+            torch.cuda.synchronize()
+        
         with torch.enable_grad():
-            p_cur_req = p_cur.detach().requires_grad_(True)
+            # Clone and detach to ensure no shared memory with forward pass
+            p_cur_req = p_cur.detach().clone().requires_grad_(True)
 
             # Need param tensors to require_grad for autograd.grad to produce param grads
-            param_req = [t.detach().requires_grad_(True) for t in param_tensors]
+            # Clone parameters to avoid any shared memory issues
+            param_req = [t.detach().clone().requires_grad_(True) for t in param_tensors]
             params_req = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_req)}
+            
+            # Clone buffers to ensure thread safety
+            buffers_cloned = {k: v.detach().clone() if v is not None else None for k, v in buffers.items()}
 
-            delta, aux = functional_call(ctx.module, (params_req, buffers), (p_cur_req,), tie_weights=True)
+            delta, aux = functional_call(ctx.module, (params_req, buffers_cloned), (p_cur_req,), tie_weights=False)
 
             if grad_aux is None:
                 # aux may be scalar or tensor
@@ -109,7 +125,7 @@ class MidpointFunction(torch.autograd.Function):
         grad_buffer_keys = None
 
         # buffers are non-diff
-        grad_buffers = (None,) * len(ctx.buffer_keys)
+        grad_buffers = (None,) * n_buffers
 
         return (grad_p_prev, grad_p_cur, grad_two_h, grad_a, grad_module, grad_param_keys, grad_buffer_keys, *grad_params, *grad_buffers)
 
