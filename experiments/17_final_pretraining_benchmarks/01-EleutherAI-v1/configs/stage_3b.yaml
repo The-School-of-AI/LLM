@@ -1,148 +1,48 @@
 stage: "3b"
-description: "Pre-training benchmarks for 3B model (Frontier Phase)"
+description: "Pre-training benchmarks for 3B model (Reasoning & Code Diagnostics)"
+base_config: "base_benchmarks.yaml"
 benchmarks:
-  # Standard Harness Benchmarks
   - name: "MMLU"
-    enabled: true
-    harness_task: "mmlu"
-    shots: 5
-    phases: ["pretraining"]
+    subjects: 
+      - "elementary_mathematics"
+      - "high_school_biology"
+      - "high_school_chemistry"
+      - "high_school_physics"
+      - "high_school_computer_science"
+      - "high_school_us_history"
+      - "high_school_geography"
+      - "high_school_psychology"
+      - "high_school_mathematics"
+      - "high_school_government_and_politics"
+      - "astronomy"
+      - "world_religions"
+      - "philosophy"
+      - "logical_fallacies"
+      - "moral_disputes"
+      - "anatomy"
+      - "business_ethics"
+      - "clinical_knowledge"
+      - "conceptual_physics"
+      - "econometrics"
+    limit: 100
 
   - name: "TriviaQA"
-    enabled: true
-    harness_task: "triviaqa"
-    shots: 5
-    cot: true
-    phases: ["pretraining"]
-
-  - name: "GSM8K"
-    enabled: true
-    harness_task: "gsm8k"
-    shots: 16
-    cot: true
-    phases: ["pretraining"]
-
-  - name: "BBH (Big Bench Hard)"
-    enabled: true
-    harness_task: "bbh_cot_fewshot"
-    shots: 3
-    cot: true
-    phases: ["pretraining"]
-
-  - name: "ARC-Challenge"
-    enabled: true
-    harness_task: "arc_challenge"
-    shots: 25
-    phases: ["pretraining"]
-
-  - name: "MATH"
-    enabled: true
-    harness_task: "hendrycks_math"
-    shots: 8
-    phases: ["pretraining"]
-
-  - name: "IFEval"
-    enabled: true
-    harness_task: "ifeval"
-    shots: 0
-    phases: ["pretraining"]
 
   - name: "HumanEval"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
-    shots: 0
-    phases: ["pretraining"]
+    limit: 75
 
-  - name: "MSGS"
-    enabled: false
-    harness_task: "msgs"
-    shots: 0
-    phases: ["pretraining"]
-
-  - name: "BLiMP"
-    enabled: true
-    harness_task: "blimp"
-    shots: 0
-    phases: ["pretraining"]
-
-  - name: "TruthfulQA"
-    enabled: true
-    harness_task: "truthfulqa"
-    mode: "MC2"
-    shots: 0
-    phases: ["pretraining"]
-
-  - name: "HellaSwag"
-    enabled: true
-    harness_task: "hellaswag"
-    shots: 0
-    phases: ["pretraining"]
-
-  - name: "Winogrande"
-    enabled: true
-    harness_task: "winogrande"
-    shots: 0
-    phases: ["pretraining"]
-
-  - name: "PIQA"
-    enabled: true
-    harness_task: "piqa"
-    shots: 0
-    phases: ["pretraining"]
-
-  - name: "LAMBADA"
-    enabled: true
-    harness_task: "lambada_openai"
-    shots: 0
-    phases: ["pretraining"]
-
-  # Custom Benchmarks Pipeline
   - name: "SimpleQA_Verified"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
-    paradigm: "Hard Filtering"
-    phases: ["pretraining"]
+    limit: 75
 
-  - name: "AIME 2025"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
-    paradigm: "8-shot CoT"
-    phases: ["pretraining"]
+  - name: "BBH (Big Bench Hard)"
+    limit: 100
 
-  - name: "IndicGLUE"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
-    tasks: ["indic-wnli", "indic-copa", "xquad-in"]
-    phases: ["pretraining"]
-
-  - name: "IndicQA"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
-    paradigm: "5-10 shot"
-    phases: ["pretraining"]
+  - name: "ARC-Challenge"
+    limit: 150
+    shots: 5
 
   - name: "L-Eval"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
-    phases: ["pretraining"]
-
-  - name: "RULER"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
-    tasks: ["longchat_qa"]
-    phases: ["pretraining"]
-
-  - name: "Indic-Bias (FairITales)"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
-    phases: ["pretraining"]
-
-  - name: "HELM Safety"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/helm_safety.py"
-    phases: ["pretraining"]
-
-  - name: "SWE-bench Verified"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
+    limit: 30
     phases: ["pretraining"]

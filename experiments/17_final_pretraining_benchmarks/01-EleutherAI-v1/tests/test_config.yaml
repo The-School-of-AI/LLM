@@ -1,8 +1,34 @@
 stage: "test"
-description: "HumanEval Test Run"
+description: "Isolated MMLU test configuration"
 benchmarks:
-  - name: "HumanEval"
+  - name: "MMLU-Pro"
     enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+    harness_task: "mmlu_pro"  # Unified group name (English only)
     shots: 5
-    phases: ["pretraining"]
+    limit: 100
+    subjects: 
+      - "biology"
+      - "business"
+      - "chemistry"
+      - "computer_science"
+      - "economics"
+      - "engineering"
+      - "health"
+      - "history"
+      - "law"
+      - "math"
+      - "other"
+      - "philosophy"
+      - "physics"
+      - "psychology"
+    phases: ["pretraining", "sft"]
+  - name: "MMLU"
+    enabled: true
+    harness_task: "mmlu"
+    subjects:
+      - "anatomy"
+      - "college_biology"
+    shots: 5
+    limit: 5
+    phases: ["pretraining", "sft"]
+

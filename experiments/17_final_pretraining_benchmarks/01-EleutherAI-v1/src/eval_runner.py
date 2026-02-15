@@ -1,12 +1,12 @@
-import argparse
+import yaml
 import json
 import logging
-import os
+import argparse
 import subprocess
 import sys
+import os
 from datetime import datetime
-
-import yaml
+from typing import Optional
 
 # Check if running in Google Colab
 IS_COLAB = os.path.exists('/content') and os.path.exists('/usr/local/lib/python3.12/dist-packages')
@@ -76,12 +76,15 @@ def setup_logging(run_dir, timestamp):
     return logger, log_path
 
 
-def generate_summary_report(results, run_dir):
+def generate_summary_report(results, run_dir, baselines=None):
     report_dir = os.path.join(run_dir, "reports")
     if not os.path.exists(report_dir):
         os.makedirs(report_dir)
 
     report_path = os.path.join(report_dir, "summary_report.md")
+    
+    if baselines is None:
+        baselines = {}
 
     with open(report_path, "w") as f:
         f.write("# Evaluation Summary Report\n\n")
@@ -90,63 +93,51 @@ def generate_summary_report(results, run_dir):
         f.write(f"- **Timestamp**: {results['metadata']['timestamp']}\n")
         f.write(f"- **Model Args**: `{results['metadata']['model_args']}`\n")
         f.write(f"- **Device**: `{results['metadata']['device']}`\n")
-        f.write(f"- **Batch Size**: `{results['metadata']['batch_size']}`\n")
         f.write(f"- **Limit**: {results['metadata']['limit']}\n\n")
 
-        f.write("## Benchmark Overview\n\n")
-        f.write("| Benchmark | Type | Status | Agg. Score | Sub-tasks |\n")
-        f.write("| :--- | :--- | :--- | :--- | :--- |\n")
-
-        for b in results["benchmarks"]:
-            score = b.get("score", "N/A")
-            subtasks = b.get("subtasks", [])
-            subtask_count = len(subtasks)
+        # ---------------------------------------------------------
+        # Pre-process: Calculate Comparative Baselines (Generic)
+        # ---------------------------------------------------------
+        if baselines:
+            f.write(f"### Comparative Baselines\n")
+            f.write(f"Metrics common to all stages for longitudinal tracking.\n\n")
             
-            subtasks_col = str(subtask_count)
-            if subtask_count > 0:
-                # Small preview for the summary table
-                preview_list = [f"• {st['task']}" for st in sorted(subtasks, key=lambda x: x['task'])[:5]]
-                preview_text = "<br>".join(preview_list)
-                if subtask_count > 5:
-                    preview_text += f"<br>... and {subtask_count - 5} more"
-                subtasks_col = f"<details><summary>{subtask_count} tasks</summary>{preview_text}</details>"
+            for bench_match, baseline_info in baselines.items():
+                label = baseline_info.get("label", f"{bench_match} Baseline")
+                target_tasks = baseline_info.get("tasks", [])
+                
+                baseline_score = None
+                for b in results["benchmarks"]:
+                    if b["name"] == bench_match:
+                        # Case 1: Result has subtasks (multiple subjects run)
+                        if b.get("subtasks"):
+                            scores = [st["score"] for st in b["subtasks"] if st["task"] in target_tasks]
+                            if scores:
+                                baseline_score = sum(scores) / len(scores)
+                        # Case 2: Result is a single task, check if it matches a baseline task
+                        elif b.get("task") in target_tasks:
+                             baseline_score = b.get("score")
+                
+                if baseline_score is not None:
+                    display_val = f"{baseline_score:.4f}" if isinstance(baseline_score, (int, float)) else str(baseline_score)
+                    f.write(f"- **{label}**: {display_val}\n")
+            f.write("\n")
 
-            f.write(
-                f"| **{b['name']}** | {b.get('type', 'N/A')} | {b['status']} | **{score}** | {subtasks_col} |\n"
-            )
-
-        # ---------------------------------------------------------
-        # Detailed Results (Expandable)
-        # ---------------------------------------------------------
-        f.write("\n\n## Detailed Results (per subject/subset)\n\n")
-        f.write("| Task/Subject | Status | Score | Details |\n")
+        f.write("## Benchmark Overview\n\n")
+        f.write("| Benchmark | Type | Status | Agg. Score |\n")
         f.write("| :--- | :--- | :--- | :--- |\n")
 
         for b in results["benchmarks"]:
-            if b["status"] == "failed":
-                f.write(
-                    f"| **{b['name']} (FAILED)** | error | - | {b.get('error', '')[:300]} |\n"
-                )
-                continue
-
             score = b.get("score", "N/A")
-            subtasks = b.get("subtasks", [])
-            
-            if not subtasks:
-                f.write(
-                    f"| **{b['name']}** | {b['status']} | **{score}** | - |\n"
-                )
-            else:
-                # Construct HTML list for the details cell
-                subtask_items = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" 
-                                       for st in sorted(subtasks, key=lambda x: x['task'])])
-                details_md = (
-                    f"<details><summary><b>Expand {len(subtasks)} tasks</b></summary>"
-                    f"<ul>{subtask_items}</ul></details>"
-                )
-                f.write(
-                    f"| **{b['name']} (Aggregate)** | {b['status']} | **{score}** | {details_md} |\n"
-                )
+            if isinstance(score, (int, float)):
+                score = f"{score:.4f}"
+
+            f.write(
+                f"| **{b['name']}** | {b.get('type', 'N/A')} | {b['status']} | **{score}** |\n"
+            )
+
+        # CSV section remains for data export but report is kept high-level
+        f.write("\n\n---\n*Detailed subtask data is available in `incremental_results.json` and the CSV section below.*\n")
 
         # ---------------------------------------------------------
         # Add CSV-Friendly Section for Comparative Analysis
@@ -198,7 +189,40 @@ def generate_summary_report(results, run_dir):
 
 def load_config(config_path):
     with open(config_path, "r") as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f)
+    
+    # Check for base configuration inheritance
+    base_file = config.get("base_config")
+    if base_file:
+        config_dir = os.path.dirname(config_path)
+        base_path = os.path.join(config_dir, base_file)
+        
+        if os.path.exists(base_path):
+            with open(base_path, "r") as f:
+                base_config = yaml.safe_load(f)
+            
+            # Merge logic: Base benchmarks are the foundation
+            # Stage benchmarks override or add by name
+            merged_benchmarks_dict = {b["name"]: b for b in base_config.get("benchmarks", [])}
+            stage_benchmarks = config.get("benchmarks", [])
+            
+            # Update with stage-specific overrides
+            for b in stage_benchmarks:
+                merged_benchmarks_dict[b["name"]] = b
+            
+            config["benchmarks"] = list(merged_benchmarks_dict.values())
+
+            # Merge logic for baselines (Base + Overrides)
+            base_baselines = base_config.get("baselines", {})
+            stage_baselines = config.get("baselines", {})
+            base_baselines.update(stage_baselines)
+            config["baselines"] = base_baselines
+            # Copy other fields from stage config if they exist
+            # Note: 'stage', 'description' etc remain from the child config
+        else:
+            print(f"Warning: Base config {base_path} not found.")
+            
+    return config
 
 
 def run_harness_benchmark(
@@ -290,17 +314,28 @@ def run_harness_benchmark(
 
         # Determine the actual result file (lm-eval might add a timestamp or create a directory)
         actual_path = task_output_path
-        if not os.path.exists(actual_path) and os.path.isdir(harness_raw_dir):
-            # Check for files starting with task name in the directory
-            files = [
-                f
-                for f in os.listdir(harness_raw_dir)
-                if f.startswith(task_filename) and f.endswith(".json")
-            ]
-            if files:
-                # Get the most recent one if multiple exist
-                files.sort()
-                actual_path = os.path.join(harness_raw_dir, files[-1])
+        if not os.path.isfile(actual_path):
+            # lm-eval 0.4+ often creates a directory structure: output_path/model_name/results_timestamp.json
+            # or it might not have created the file at the exact path if it added a timestamp.
+            search_base = harness_raw_dir
+            if os.path.isdir(task_output_path):
+                search_base = task_output_path
+            
+            found_path = None
+            for root, dirs, files in os.walk(search_base):
+                # Look for files that look like results (results_*.json or starting with task name)
+                matches = [f for f in files if f.endswith(".json") and (f.startswith("results_") or f.startswith(task_filename))]
+                if matches:
+                    # Sort by modification time to get the latest
+                    matches.sort(key=lambda x: os.path.getmtime(os.path.join(root, x)))
+                    found_path = os.path.join(root, matches[-1])
+                    break # Found the most relevant file in this branch
+            
+            if found_path:
+                actual_path = found_path
+            else:
+                logger.error(f"  [Error] Could not find results file for {task_str} in {search_base}")
+                return {"name": benchmark_info["name"], "status": "failed", "reason": "Results file not found"}
 
         with open(actual_path, "r") as f:
             full_res = json.load(f)
@@ -567,13 +602,16 @@ def main():
             logger.warning(f"  [Auto-Heal] recovery script failed: {str(e)}")
 
     for b in active_benchmarks:
+        # Limit handling: CLI/Trial override YAML
+        current_limit = args.limit if args.limit is not None else b.get("limit")
+
         if b.get("harness_task"):
             res = run_harness_benchmark(
                 b,
                 args.model_args,
                 logger,
                 run_dir,
-                limit=args.limit,
+                limit=current_limit,
                 device=args.device,
                 batch_size=args.batch_size,
             )
@@ -583,7 +621,7 @@ def main():
                 args.model_args,
                 logger,
                 config_dir=os.path.dirname(args.config),
-                limit=args.limit,
+                limit=current_limit,
                 device=args.device,
             )
         else:
@@ -599,8 +637,35 @@ def main():
         with open(output_json_path, "w") as f:
             json.dump(results, f, indent=4)
 
+    # Collect baselines from benchmarks for reporting
+    baselines = {}
+    for b in config.get("benchmarks", []):
+        if b.get("baseline"):
+            bl = b["baseline"]
+            if isinstance(bl, str):
+                bl = {"label": bl}
+            else:
+                bl = bl.copy()
+
+            if not bl.get("tasks"):
+                # Derive from subjects, tasks, or subset
+                source_tasks = b.get("subjects") or b.get("tasks")
+                if source_tasks:
+                    if isinstance(source_tasks, str):
+                        source_tasks = [source_tasks]
+                    prefix = f"{b['harness_task']}_" if b.get("harness_task") else ""
+                    bl["tasks"] = [f"{prefix}{t}" for t in source_tasks]
+                elif b.get("subset"):
+                    prefix = f"{b['harness_task']}_" if b.get("harness_task") else ""
+                    bl["tasks"] = [f"{prefix}{b['subset']}"]
+                else:
+                    # Default: use the harness task name itself
+                    bl["tasks"] = [b.get("harness_task", b["name"])]
+            
+            baselines[b["name"]] = bl
+
     # Generate human-readable report inside the run directory
-    report_path = generate_summary_report(results, run_dir)
+    report_path = generate_summary_report(results, run_dir, baselines=baselines)
 
     logger.info("\nEvaluation Complete.")
     logger.info(f"Primary Output: {output_json_path}")

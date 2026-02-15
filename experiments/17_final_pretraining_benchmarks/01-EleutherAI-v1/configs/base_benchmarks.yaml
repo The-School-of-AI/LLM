@@ -1,0 +1,178 @@
+# Base benchmarks common to all model stages
+benchmarks:
+  # Standard Harness Benchmarks
+  - name: "MMLU"
+    enabled: true
+    harness_task: "mmlu"
+    subjects: 
+      - "elementary_mathematics"
+      - "high_school_biology"
+      - "high_school_chemistry"
+      - "high_school_physics"
+      - "high_school_computer_science"
+      - "high_school_us_history"
+      - "high_school_geography"
+      - "high_school_psychology"
+      - "high_school_mathematics"
+      - "high_school_government_and_politics"
+      - "astronomy"
+      - "world_religions"
+      - "philosophy"
+      - "logical_fallacies"
+      - "moral_disputes"
+    shots: 5
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "MMLU-Pro"
+    enabled: true
+    harness_task: "mmlu_pro"  # Unified group name
+    shots: 5
+    limit: 100
+    subjects: 
+      - "biology"
+      - "business"
+      - "chemistry"
+      - "computer_science"
+      - "economics"
+      - "engineering"
+      - "health"
+      - "history"
+      - "law"
+      - "math"
+      - "other"
+      - "philosophy"
+      - "physics"
+      - "psychology"
+    phases: ["pretraining", "sft"]
+
+  - name: "TriviaQA"
+    enabled: true
+    harness_task: "triviaqa"
+    subset: "wiki"
+    shots: 5
+    limit: 100
+    phases: ["pretraining", "sft"]
+    baseline: "TriviaQA Wiki-Only"
+
+  - name: "GSM8K"
+    enabled: true
+    harness_task: "gsm8k"
+    shots: 16
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "BBH (Big Bench Hard)"
+    enabled: true
+    harness_task: "bbh_cot_fewshot"
+    shots: 3
+    limit: 50
+    phases: ["pretraining", "sft"]
+
+  - name: "ARC-Challenge"
+    enabled: true
+    harness_task: "arc_challenge"
+    shots: 5
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "MATH"
+    enabled: true
+    harness_task: "hendrycks_math"
+    shots: 8
+    limit: 50
+    phases: ["pretraining", "sft"]
+
+  - name: "IFEval"
+    enabled: true
+    harness_task: "ifeval"
+    shots: 0
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "HumanEval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+    shots: 0
+    limit: 50
+    phases: ["pretraining", "sft"]
+
+  - name: "MSGS"
+    enabled: false  # Task not found in harness registry
+    harness_task: "msgs"
+    shots: 0
+    phases: ["pretraining", "sft"]
+
+  - name: "BLiMP"
+    enabled: true
+    harness_task: "blimp"
+    shots: 0
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "TruthfulQA"
+    enabled: true
+    harness_task: "truthfulqa"
+    mode: "MC2"
+    shots: 0
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "HellaSwag"
+    enabled: true
+    harness_task: "hellaswag"
+    shots: 0
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "Winogrande"
+    enabled: true
+    harness_task: "winogrande"
+    shots: 0
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "PIQA"
+    enabled: true
+    harness_task: "piqa"
+    shots: 0
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  - name: "LAMBADA"
+    enabled: true
+    harness_task: "lambada_openai"
+    shots: 0
+    limit: 100
+    phases: ["pretraining", "sft"]
+
+  # Custom Benchmarks Pipeline
+  - name: "SimpleQA_Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
+    paradigm: "Hard Filtering"
+    limit: 50
+    phases: ["pretraining", "sft"]
+
+  - name: "IndicGLUE"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
+    tasks: ["indic-wnli", "indic-copa", "xquad-in"]
+    phases: ["pretraining", "sft"]
+
+  - name: "IndicQA"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
+    paradigm: "5-10 shot"
+    phases: ["pretraining", "sft"]
+
+  - name: "Indic-Bias (FairITales)"
+    enabled: false  # Gated dataset requires HF token
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
+    phases: ["pretraining", "sft"]
+
+  - name: "Safety (Toxicity)"
+    enabled: true
+    harness_task: "realtoxicityprompts"
+    limit: 100
+    phases: ["pretraining", "sft"]

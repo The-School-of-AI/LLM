@@ -81,7 +81,7 @@ stages:
       - name: "expert_reasoning"
         tasks:
           - "bbh:cot::olmes"
-          - "gpqa:0shot_cot_v1"
+          - '{"task_name": "gpqa:0shot_cot_v1", "dataset_path": "Wanfq/gpqa"}'
 
   # 🏅 Tier 4: SFT / Instruct (Alignment & Utility)
   # Final evaluation for chat-aligned and instruction-following models.

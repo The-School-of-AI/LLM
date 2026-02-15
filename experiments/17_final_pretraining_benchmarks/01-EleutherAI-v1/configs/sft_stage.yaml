@@ -1,148 +1,89 @@
 stage: "sft_70b"
-description: "SFT benchmarks for 70B model (Frontier Phase)"
+description: "SFT benchmarks for 70B model (Frontier Phase Diagnostics)"
+base_config: "base_benchmarks.yaml"
 benchmarks:
-  # Standard Harness Benchmarks
   - name: "MMLU"
-    enabled: true
-    harness_task: "mmlu"
-    shots: 5
+    subjects: null
+    limit: 250
+    phases: ["sft"]
+
+  - name: "MMLU-Pro"
+    limit: 250
     phases: ["sft"]
 
   - name: "TriviaQA"
+    limit: 250
+    phases: ["sft"]
+
+  - name: "GPQA Diamond"
     enabled: true
-    harness_task: "triviaqa"
-    shots: 5
-    cot: true
+    harness_task: "gpqa_diamond_n_shot"
+    shots: 0
+    limit: 100
     phases: ["sft"]
 
   - name: "GSM8K"
-    enabled: true
-    harness_task: "gsm8k"
-    shots: 16
-    cot: true
+    limit: 250
     phases: ["sft"]
 
   - name: "BBH (Big Bench Hard)"
-    enabled: true
-    harness_task: "bbh_cot_fewshot"
-    shots: 3
-    cot: true
+    limit: 100
     phases: ["sft"]
 
   - name: "ARC-Challenge"
-    enabled: true
-    harness_task: "arc_challenge"
-    shots: 25
+    limit: 250
     phases: ["sft"]
 
   - name: "MATH"
-    enabled: true
-    harness_task: "hendrycks_math"
-    shots: 8
+    limit: 100
     phases: ["sft"]
 
   - name: "IFEval"
-    enabled: true
-    harness_task: "ifeval"
-    shots: 0
+    limit: 250
     phases: ["sft"]
 
   - name: "HumanEval"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
-    shots: 0
+    limit: 100
     phases: ["sft"]
 
-  - name: "MSGS"
-    enabled: false
-    harness_task: "msgs"
-    shots: 0
-    phases: ["sft"]
-
-  - name: "BLiMP"
-    enabled: true
-    harness_task: "blimp"
-    shots: 0
-    phases: ["sft"]
-
-  - name: "TruthfulQA"
-    enabled: true
-    harness_task: "truthfulqa"
-    mode: "MC2"
-    shots: 0
-    phases: ["sft"]
-
-  - name: "HellaSwag"
-    enabled: true
-    harness_task: "hellaswag"
-    shots: 0
-    phases: ["sft"]
-
-  - name: "Winogrande"
-    enabled: true
-    harness_task: "winogrande"
-    shots: 0
-    phases: ["sft"]
-
-  - name: "PIQA"
-    enabled: true
-    harness_task: "piqa"
-    shots: 0
-    phases: ["sft"]
-
-  - name: "LAMBADA"
-    enabled: true
-    harness_task: "lambada_openai"
-    shots: 0
-    phases: ["sft"]
-
-  # Custom Benchmarks Pipeline
   - name: "SimpleQA_Verified"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/simpleqa.py"
-    paradigm: "Hard Filtering"
+    limit: 100
     phases: ["sft"]
 
   - name: "AIME 2025"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
     paradigm: "8-shot CoT"
+    limit: 100
     phases: ["sft"]
 
   - name: "IndicGLUE"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_glue.py"
-    tasks: ["indic-wnli", "indic-copa", "xquad-in"]
     phases: ["sft"]
 
   - name: "IndicQA"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_qa.py"
-    paradigm: "5-10 shot"
     phases: ["sft"]
 
   - name: "L-Eval"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
+    limit: 50
     phases: ["sft"]
 
   - name: "RULER"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
     tasks: ["longchat_qa"]
+    limit: 50
     phases: ["sft"]
 
   - name: "Indic-Bias (FairITales)"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/indic_bias.py"
     phases: ["sft"]
 
   - name: "HELM Safety"
-    enabled: true
-    custom_script: "01-EleutherAI-v1/src/custom-scripts/helm_safety.py"
     phases: ["sft"]
 
   - name: "SWE-bench Verified"
     enabled: true
     custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
+    limit: 50
     phases: ["sft"]
