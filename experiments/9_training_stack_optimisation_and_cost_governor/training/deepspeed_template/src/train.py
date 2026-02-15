@@ -89,22 +89,30 @@ def train_epoch(
             y_ntp = input_ids[:, 1:-1].contiguous()
             y_mtp = input_ids[:, 2:].contiguous()
             
-            # 2. Forward pass
-            logits_ntp, logits_mtp, aux_loss = model_engine(
-                x_input, 
-                next_token_ids=y_ntp,
-                attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
-                return_loss=True,
-                return_memory=False,
-                prev_memory_stream=None
-            )
+            # 2. Forward pass with reversibility fix
+            # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper to enable true reversibility
+            # - torch.autocast(enabled=False) prevents PyTorch from caching the 25GB forward graph
+            # - model_engine.module bypasses DeepSpeedEngine wrapper (safe for ZeRO Stage 2)
+            with torch.autocast(device_type="cuda", enabled=False):
+                logits_ntp, logits_mtp, aux_loss = model_engine.module(
+                    x_input, 
+                    next_token_ids=y_ntp,
+                    attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                    return_loss=True,
+                    return_memory=False,
+                    prev_memory_stream=None
+                )
             
-            # 3. Compute loss (UPCAST TO FLOAT32 FOR STABILITY OVER 131K VOCAB)
+            # 3. Compute loss sequentially and free BF16 tensors instantly
             vocab_size = logits_ntp.size(-1)
-            loss_fct = torch.nn.CrossEntropyLoss()
             
-            loss_ntp = loss_fct(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
-            loss_mtp = loss_fct(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+            # Compute NTP loss and free logits immediately
+            loss_ntp = torch.nn.functional.cross_entropy(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+            del logits_ntp  # Free BF16 tensor immediately
+            
+            # Compute MTP loss and free logits immediately
+            loss_mtp = torch.nn.functional.cross_entropy(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+            del logits_mtp  # Free BF16 tensor immediately
             
             # 4. NaN Watchdog
             if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
@@ -113,10 +121,9 @@ def train_epoch(
                     print_rank_0(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}")
 
             # 5. Combine Loss
+            loss = loss_ntp + 0.3 * loss_mtp
             if aux_loss is not None and aux_loss.numel() > 0:
-                loss = loss_ntp + 0.3 * loss_mtp + aux_loss
-            else:
-                loss = loss_ntp + 0.3 * loss_mtp
+                loss += aux_loss
             
             # MTP loss (if enabled and logits_mtp is not None)
             # For now, we focus on NTP loss
@@ -325,25 +332,29 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
                 y_ntp = input_ids[:, 1:-1].contiguous()
                 y_mtp = input_ids[:, 2:].contiguous()
                 
-                logits_ntp, logits_mtp, aux_loss = model_engine(
-                    x_input,
-                    next_token_ids=y_ntp,
-                    attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
-                    return_loss=True,
-                    return_memory=False,
-                    prev_memory_stream=None
-                )
+                # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper (same as training)
+                with torch.autocast(device_type="cuda", enabled=False):
+                    logits_ntp, logits_mtp, aux_loss = model_engine.module(
+                        x_input,
+                        next_token_ids=y_ntp,
+                        attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                        return_loss=True,
+                        return_memory=False,
+                        prev_memory_stream=None
+                    )
                 
                 vocab_size = logits_ntp.size(-1)
-                loss_fct = torch.nn.CrossEntropyLoss()
                 
-                loss_ntp = loss_fct(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
-                loss_mtp = loss_fct(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+                # Compute losses and free logits immediately
+                loss_ntp = torch.nn.functional.cross_entropy(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+                del logits_ntp
                 
+                loss_mtp = torch.nn.functional.cross_entropy(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+                del logits_mtp
+                
+                loss = loss_ntp + 0.3 * loss_mtp
                 if aux_loss is not None and aux_loss.numel() > 0:
-                    loss = loss_ntp + 0.3 * loss_mtp + aux_loss
-                else:
-                    loss = loss_ntp + 0.3 * loss_mtp
+                    loss += aux_loss
             else:
                 # Standard transformer model
                 outputs = model_engine(
