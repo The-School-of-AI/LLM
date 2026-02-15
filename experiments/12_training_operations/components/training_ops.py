@@ -94,6 +94,7 @@ class TrainingOps:
         self.log_dir = log_dir
         self._clickhouse_url = (
             clickhouse_url
+            or os.environ.get("CLICKHOUSE_ENDPOINT")
             or os.environ.get("CLICKHOUSE_HTTPS_ENDPOINT")
             or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT", "http://localhost:8123")
         )

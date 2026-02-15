@@ -31,6 +31,30 @@ from components import TrainingOps
 
 
 # ---------------------------------------------------------------------------
+# Env helpers
+# ---------------------------------------------------------------------------
+
+def _load_env_file_if_present(path: str) -> bool:
+    """Load KEY=VALUE pairs from a simple env file if it exists."""
+    if not os.path.isfile(path):
+        return False
+
+    loaded_any = False
+    with open(path, "r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and value and key not in os.environ:
+                os.environ[key] = value
+                loaded_any = True
+    return loaded_any
+
+
+# ---------------------------------------------------------------------------
 # Synthetic dataset (no tokenizer needed)
 # ---------------------------------------------------------------------------
 
@@ -60,7 +84,6 @@ def train(model, loader, device, num_steps=50, ops=None):
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss()
     data_iter = iter(loader)
-    prev_memory = None
 
     for step in range(num_steps):
         try:
@@ -76,16 +99,13 @@ def train(model, loader, device, num_steps=50, ops=None):
 
         t0 = time.time()
 
-        logits_ntp, logits_mtp, aux_loss, memory_out = model(
+        logits_ntp, logits_mtp, aux_loss = model(
             x,
             next_token_ids=y_ntp,
             return_loss=True,
-            return_memory=True,
-            prev_memory_stream=prev_memory,
+            return_memory=False,
+            prev_memory_stream=None,
         )
-
-        # Detach memory for next step (cross-chunk recurrence)
-        prev_memory = memory_out.detach() if memory_out is not None else None
 
         V = logits_ntp.size(-1)
         loss_ntp = criterion(logits_ntp.reshape(-1, V), y_ntp.reshape(-1))
@@ -140,6 +160,10 @@ def main():
     )
     print(f"Device: {device}")
 
+    # Best-effort env bootstrap for local dry-runs.
+    _load_env_file_if_present(os.path.expanduser("~/.p12.env"))
+    _load_env_file_if_present(os.path.expanduser("~/temp/training-instance.env"))
+
     # Build mini config
     config = ModelConfig()
     apply_mini_config(config)
@@ -151,22 +175,32 @@ def main():
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {total_params:,} ({total_params/1e6:.1f}M)")
 
-    # Synthetic data
-    seq_len = 64
-    batch_size = 4
+    # Synthetic data (high-util defaults for A10 24GB)
+    seq_len = int(os.environ.get("DRYRUN_SEQ_LEN", "256"))
+    batch_size = int(os.environ.get("DRYRUN_BATCH_SIZE", "16"))
+    num_steps = int(os.environ.get("DRYRUN_STEPS", "100"))
     dataset = SyntheticTokenDataset(config.vocab_size, seq_len, num_samples=500)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    print(f"Dry-run workload: batch_size={batch_size}, seq_len={seq_len}, steps={num_steps}")
 
     # P12 Observability
     run_id = f"dry_run_{int(time.time())}"
+    clickhouse_url = (
+        os.environ.get("CLICKHOUSE_ENDPOINT")
+        or os.environ.get("CLICKHOUSE_HTTPS_ENDPOINT")
+        or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT")
+    )
+    if clickhouse_url is not None:
+        print(f"ClickHouse endpoint: {clickhouse_url}")
     ops = TrainingOps(
         run_id=run_id,
         rank=int(os.environ.get("RANK", 0)),
+        clickhouse_url=clickhouse_url,
         default_context={"model": "mini_70b_arch", "test": "dry_run"},
-        skip_vector_check=True,
+        skip_vector_check=False,
     )
 
-    train(model, loader, device, num_steps=50, ops=ops)
+    train(model, loader, device, num_steps=num_steps, ops=ops)
     ops.shutdown()
 
     print("\n" + "=" * 60)

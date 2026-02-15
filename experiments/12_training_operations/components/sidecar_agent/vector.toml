@@ -5,6 +5,8 @@
 # Requires: Vector >= 0.30
 # ------------------------------------------------------------------------------
 
+ data_dir = "/tmp/vector-data"
+
 # SOURCES
 
 [sources.training_logs]
@@ -129,7 +131,7 @@ encoding.codec = "json"
 [sinks.clickhouse_logs]
 type = "clickhouse"
 inputs = ["to_raw_logs"]
-endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+endpoint = "${CLICKHOUSE_ENDPOINT}"
 database = "training_observability"
 table = "logs"
 compression = "gzip"
@@ -137,13 +139,12 @@ batch.max_bytes = 10485760
 auth.strategy = "basic"
 auth.user = "${CLICKHOUSE_USER}"
 auth.password = "${CLICKHOUSE_PASSWORD}"
-tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 
 # 3. Typed scalar metrics (one row per metric per step — dashboard-friendly)
 [sinks.clickhouse_metric_points]
 type = "clickhouse"
 inputs = ["to_metric_points"]
-endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+endpoint = "${CLICKHOUSE_ENDPOINT}"
 database = "training_observability"
 table = "metric_points"
 compression = "gzip"
@@ -151,13 +152,12 @@ batch.max_bytes = 10485760
 auth.strategy = "basic"
 auth.user = "${CLICKHOUSE_USER}"
 auth.password = "${CLICKHOUSE_PASSWORD}"
-tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 
 # 4. Checkpoint registry (governance — durable path via Vector)
 [sinks.clickhouse_checkpoints]
 type = "clickhouse"
 inputs = ["to_checkpoints"]
-endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+endpoint = "${CLICKHOUSE_ENDPOINT}"
 database = "training_observability"
 table = "checkpoints"
 compression = "gzip"
@@ -165,4 +165,3 @@ batch.max_bytes = 10485760
 auth.strategy = "basic"
 auth.user = "${CLICKHOUSE_USER}"
 auth.password = "${CLICKHOUSE_PASSWORD}"
-tls.ca_file = "${CLICKHOUSE_CA_CERT}"

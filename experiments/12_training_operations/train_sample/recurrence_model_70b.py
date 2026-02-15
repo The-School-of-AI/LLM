@@ -1755,7 +1755,8 @@ class Model70B(nn.Module):
         # ============================================================================
         # Memory Stream Recurrence (for infinite-length document processing)
         # ============================================================================
-        self.recurrence_stream_idx = 3  # Use stream 3 for memory
+        # Use stream 3 for memory when available, otherwise fall back to the last stream.
+        self.recurrence_stream_idx = min(3, self.n_streams - 1)
         self.lambda_r_raw = nn.Parameter(torch.tensor(-2.5))  # Initial strength ~0.078
         self.memory_ln = nn.LayerNorm(config.hidden_size)  # Normalize memory before injection
         # FIX #25: Content-dependent memory gating (prevents uniform broadcast shortcut learning)

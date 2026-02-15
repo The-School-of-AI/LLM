@@ -92,10 +92,12 @@ Required variables:
 
 | Variable | Example |
 |----------|---------|
-| `CLICKHOUSE_HTTPS_ENDPOINT` | `https://10.0.1.5:8443` |
+| `CLICKHOUSE_ENDPOINT` | `http://10.0.1.5:8123` or `https://10.0.1.5:8443` |
 | `CLICKHOUSE_USER` | `p12_writer` |
 | `CLICKHOUSE_PASSWORD` | `<password>` |
-| `CLICKHOUSE_CA_CERT` | `/etc/p12/ca.crt` |
+| `CLICKHOUSE_CA_CERT` | `/etc/p12/ca.crt` (HTTPS only) |
+
+`TrainingOps` also accepts `CLICKHOUSE_HTTPS_ENDPOINT` and `CLICKHOUSE_HTTP_ENDPOINT` as legacy fallbacks.
 
 ### 4. Vector Sidecar
 
@@ -105,7 +107,7 @@ curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y --pr
 
 # Run (Vector MUST be running before training starts — TrainingOps checks for it)
 # Env vars must be set (see above) — Vector reads them from the environment.
-vector --config /path/to/vector.toml --data-dir /tmp/vector-data
+vector --config /path/to/vector.toml
 ```
 
 ---
@@ -118,7 +120,8 @@ vector --config /path/to/vector.toml --data-dir /tmp/vector-data
 from components import TrainingOps
 
 # --- 1. Initialize (starts all backend services, runs preflight checks) ---
-#     Reads CLICKHOUSE_HTTPS_ENDPOINT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD,
+#     Reads CLICKHOUSE_ENDPOINT (preferred), CLICKHOUSE_HTTPS_ENDPOINT,
+#     CLICKHOUSE_HTTP_ENDPOINT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD,
 #     CLICKHOUSE_CA_CERT from environment automatically.
 ops = TrainingOps(
     run_id="run_2026_02_13_70b_v4",

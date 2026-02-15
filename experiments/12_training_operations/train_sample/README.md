@@ -24,9 +24,15 @@ export $(cat ~/.p12.env | grep -v '^#' | xargs)
 Or set them manually:
 
 ```bash
-export CLICKHOUSE_HTTPS_ENDPOINT="https://<DB_INSTANCE_IP>:8443"
+export CLICKHOUSE_ENDPOINT="http://<DB_INSTANCE_IP>:8123"
 export CLICKHOUSE_USER="p12_writer"
 export CLICKHOUSE_PASSWORD="<password>"
+```
+
+If you run ClickHouse over HTTPS, use:
+
+```bash
+export CLICKHOUSE_ENDPOINT="https://<DB_INSTANCE_IP>:8443"
 export CLICKHOUSE_CA_CERT="/etc/p12/ca.crt"
 ```
 
@@ -35,17 +41,22 @@ export CLICKHOUSE_CA_CERT="/etc/p12/ca.crt"
 Vector **must** be running before training starts. `TrainingOps` will check and exit if it's not.
 
 ```bash
-CLICKHOUSE_HTTPS_ENDPOINT="https://<DB_INSTANCE_IP>:8443" \
+CLICKHOUSE_ENDPOINT="http://<DB_INSTANCE_IP>:8123" \
 CLICKHOUSE_USER="p12_writer" \
 CLICKHOUSE_PASSWORD="<password>" \
-CLICKHOUSE_CA_CERT="/etc/p12/ca.crt" \
-  vector --config /path/to/vector.toml --data-dir /tmp/vector-data
+  vector --config /path/to/vector.toml
 ```
 
 ### 3. Run Training
 
 ```bash
 python train_recurrence_70b.py
+```
+
+For a fast synthetic pipeline check (no tokenizer/dataset), run:
+
+```bash
+python train_dry_run.py
 ```
 
 That's it. All observability is handled automatically.
@@ -111,10 +122,12 @@ If `ops` is `None` (or not passed), checkpointing works exactly as before — no
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `CLICKHOUSE_HTTPS_ENDPOINT` | Yes | ClickHouse HTTPS URL, e.g. `https://10.0.1.5:8443` |
+| `CLICKHOUSE_ENDPOINT` | Yes | ClickHouse endpoint, e.g. `http://10.0.1.5:8123` or `https://10.0.1.5:8443` |
 | `CLICKHOUSE_USER` | Yes | ClickHouse username (`p12_writer`) |
 | `CLICKHOUSE_PASSWORD` | Yes | ClickHouse password |
-| `CLICKHOUSE_CA_CERT` | Yes | Path to CA certificate for TLS verification |
+| `CLICKHOUSE_CA_CERT` | HTTPS only | Path to CA certificate for TLS verification |
+| `CLICKHOUSE_HTTPS_ENDPOINT` | Legacy fallback | Older variable still accepted by `TrainingOps` |
+| `CLICKHOUSE_HTTP_ENDPOINT` | Legacy fallback | Older variable still accepted by `TrainingOps` |
 | `RANK` | No | Distributed training rank (default: 0) |
 
 ## Files
