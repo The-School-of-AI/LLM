@@ -506,6 +506,13 @@ echo "Volume $VOLUME_ID attached to $DB_INSTANCE_ID as /dev/xvdf"
 ### Step 6: Connect via SSM and Deploy ClickHouse
 
 Wait ~1-2 minutes for user data to finish, then connect via SSM Session Manager (no SSH key needed):
+Follow below steps to install SSM on top of aws cli
+
+``` bash
+curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/mac_arm64/session-manager-plugin.pkg" -o "session-manager-plugin.pkg"
+sudo installer -pkg session-manager-plugin.pkg -target /
+sudo ln -s /usr/local/sessionmanagerplugin/bin/session-manager-plugin /usr/local/bin/session-manager-plugin
+```
 
 ```bash
 # From operator workstation

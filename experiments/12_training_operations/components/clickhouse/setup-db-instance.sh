@@ -29,10 +29,12 @@ echo "[1/5] Setting up EBS volume..."
 
 DEVICE="/dev/xvdf"
 if [ ! -b "$DEVICE" ]; then
-  # Nitro instances use nvme naming — find the unformatted/unmounted device
-  DEVICE=$(lsblk -o NAME,SIZE -dn | awk 'NR>1{print "/dev/"$1}' | while read d; do
-    if ! mount | grep -q "$d"; then echo "$d"; break; fi
-  done)
+  # Nitro instances expose EBS as NVMe — find the data volume
+  # 1. Identify the root disk (parent of the mounted root partition)
+  # 2. List only real disks (TYPE=disk excludes loop devices and partitions)
+  # 3. Exclude the root disk — whatever remains is our EBS data volume
+  ROOT_DISK=$(lsblk -ndo PKNAME "$(findmnt -no SOURCE /)")
+  DEVICE=$(lsblk -dnpo NAME,TYPE | awk '$2 == "disk"' | awk '{print $1}' | grep -v "$ROOT_DISK" | head -1)
 fi
 echo "Data device: $DEVICE"
 
