@@ -15,6 +15,8 @@ from group1_kannada.kannada_grammar import get_genitive_suffix  # noqa: E402
 from group1_kannada.kannada_vocabulary import NUMBERS  # noqa: E402
 from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 
+HALANT = "\u0CCD"  # Virama (ottakshara check)
+
 # Question templates - number to name (ಹೆಸರು). Use {num} for digit, {num_k} for Kannada digit.
 TEMPLATES_NAME = [
     ("{num} {suffix} ಹೆಸರು ಏನು?", False),
