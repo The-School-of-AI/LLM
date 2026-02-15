@@ -221,69 +221,83 @@ def training_loop(model, train_loader, device, args):
     t_start = time.time()
 
     for step in range(args.max_steps):
-        # Get batch
-        try:
-            batch = next(data_iter)
-        except StopIteration:
-            data_iter = iter(train_loader)
-            batch = next(data_iter)
-
-        input_ids = batch["input_ids"].to(device, non_blocking=True)
-
-        # Prepare multi-token prediction inputs
-        x_input = input_ids[:, :-2].contiguous()
-        y_ntp = input_ids[:, 1:-1].contiguous()
-        y_mtp = input_ids[:, 2:].contiguous()
-        del input_ids
-
         t0 = time.time()
 
-        # Forward pass (no autocast — model already in bf16, reversible stack
-        # recomputes forward during backward outside any autocast context)
-        logits_ntp, logits_mtp, aux_loss = model(
-            x_input,
-            next_token_ids=y_ntp,
-            return_loss=True,
-            return_memory=False,
-            prev_memory_stream=None
-        )
+        # Accumulate gradients over micro-batches
+        accum_loss_ntp = 0.0
+        accum_loss_mtp = 0.0
+        accum_aux = 0.0
+        step_tokens = 0
 
-        # Compute losses (upcast logits to float32 for stable cross-entropy
-        # over 131k vocab — bf16 log_softmax accumulation can lose precision)
-        vocab_size = logits_ntp.size(-1)
-        loss_ntp = criterion(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
-        loss_mtp = criterion(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+        for micro in range(args.grad_accum):
+            # Get batch
+            try:
+                batch = next(data_iter)
+            except StopIteration:
+                data_iter = iter(train_loader)
+                batch = next(data_iter)
 
-        # NaN watchdog — detect which component produced NaN
-        if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or torch.isnan(aux_loss):
-            with torch.no_grad():
-                print(f"\n⚠️  NaN detected at step {step}!")
-                print(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}, aux={aux_loss.item()}")
-                print(f"  logits_ntp: nan={torch.isnan(logits_ntp).any().item()}, "
-                      f"inf={torch.isinf(logits_ntp).any().item()}, "
-                      f"range=[{logits_ntp.min().item():.2f}, {logits_ntp.max().item():.2f}]")
-                if logits_mtp is not None:
-                    print(f"  logits_mtp: nan={torch.isnan(logits_mtp).any().item()}, "
-                          f"inf={torch.isinf(logits_mtp).any().item()}, "
-                          f"range=[{logits_mtp.min().item():.2f}, {logits_mtp.max().item():.2f}]")
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
 
-        loss = (loss_ntp + 0.3 * loss_mtp + aux_loss) / args.grad_accum
+            # Prepare multi-token prediction inputs
+            x_input = input_ids[:, :-2].contiguous()
+            y_ntp = input_ids[:, 1:-1].contiguous()
+            y_mtp = input_ids[:, 2:].contiguous()
+            del input_ids
 
-        # Backward
-        loss.backward()
+            # Forward pass (no autocast — model already in bf16, reversible stack
+            # recomputes forward during backward outside any autocast context)
+            logits_ntp, logits_mtp, aux_loss = model(
+                x_input,
+                next_token_ids=y_ntp,
+                return_loss=True,
+                return_memory=False,
+                prev_memory_stream=None
+            )
 
-        # Gradient accumulation step
-        if (step + 1) % args.grad_accum == 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
+            # Compute losses (upcast logits to float32 for stable cross-entropy
+            # over 131k vocab — bf16 log_softmax accumulation can lose precision)
+            vocab_size = logits_ntp.size(-1)
+            loss_ntp = criterion(logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1))
+            loss_mtp = criterion(logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1))
+
+            # NaN watchdog — detect which component produced NaN
+            if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or torch.isnan(aux_loss):
+                with torch.no_grad():
+                    print(f"\n⚠️  NaN detected at step {step} micro {micro}!")
+                    print(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}, aux={aux_loss.item()}")
+
+            loss = (loss_ntp + 0.3 * loss_mtp + aux_loss) / args.grad_accum
+
+            # Backward — accumulates gradients
+            loss.backward()
+
+            # Track losses for logging (detached scalars, no graph references)
+            accum_loss_ntp += loss_ntp.item()
+            accum_loss_mtp += loss_mtp.item()
+            accum_aux += aux_loss.item()
+            step_tokens += x_input.numel()
+
+            # CRITICAL: Free computation graph immediately after backward.
+            # Without this, the next micro-batch's forward allocates memory
+            # while the previous graph is still alive, doubling peak VRAM.
+            del logits_ntp, logits_mtp, x_input, y_ntp, y_mtp, loss, loss_ntp, loss_mtp, aux_loss
+
+        # Optimizer step (after all micro-batches accumulated)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
 
         dt = (time.time() - t0) * 1000.0
-        total_tokens += x_input.numel()
+        total_tokens += step_tokens
 
-        # Logging
+        # Logging (averaged over micro-batches)
         if step % args.log_interval == 0:
-            tok_sec = x_input.numel() / max(dt / 1000.0, 1e-9)
+            avg_ntp = accum_loss_ntp / args.grad_accum
+            avg_mtp = accum_loss_mtp / args.grad_accum
+            avg_aux = accum_aux / args.grad_accum
+
+            tok_sec = step_tokens / max(dt / 1000.0, 1e-9)
             avg_tok_sec = total_tokens / max(time.time() - t_start, 1e-9)
 
             mem_str = ""
@@ -292,20 +306,15 @@ def training_loop(model, train_loader, device, args):
                 mem_peak = torch.cuda.max_memory_allocated() / 1e9
                 mem_str = f" | mem: {mem_cur:.1f}/{mem_peak:.1f} GB"
 
-            print(f"step {step:4d} | loss_ntp: {loss_ntp.item():.4f} | "
-                  f"loss_mtp: {loss_mtp.item():.4f} | aux: {aux_loss.item():.4f} | "
+            print(f"step {step:4d} | loss_ntp: {avg_ntp:.4f} | "
+                  f"loss_mtp: {avg_mtp:.4f} | aux: {avg_aux:.4f} | "
                   f"dt: {dt:6.1f}ms | tok/s: {tok_sec:,.0f} (avg: {avg_tok_sec:,.0f})"
                   f"{mem_str}")
 
             # Step 0: detailed debug
             if step == 0:
-                print(f"  shapes: x={x_input.shape}, logits_ntp={logits_ntp.shape}, "
-                      f"logits_mtp={logits_mtp.shape if logits_mtp is not None else 'None'}")
                 if device.type == "cuda":
                     print(f"  CUDA peak memory: {torch.cuda.max_memory_allocated()/1e9:.2f} GB")
-
-        # Cleanup
-        del logits_ntp, logits_mtp, x_input, y_ntp, y_mtp, loss, aux_loss
 
         # Periodic memory cleanup
         if step % 50 == 0:
