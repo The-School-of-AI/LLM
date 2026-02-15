@@ -1,6 +1,5 @@
 {
-    "train_batch_size": 16,
-    "train_micro_batch_size_per_gpu": 1,
+    "train_micro_batch_size_per_gpu": 2,
     "gradient_accumulation_steps": 4,
     
     "optimizer": {
@@ -25,17 +24,14 @@
     
     "zero_optimization": {
         "stage": 2,
-        "offload_optimizer": {
-            "device": "cpu",
-            "pin_memory": true
-        },
         "contiguous_gradients": true,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 5e7,
+        "reduce_bucket_size": 2e8,
         "allgather_partitions": true,
-        "allgather_bucket_size": 5e7
+        "allgather_bucket_size": 2e8
     },
+    "_comment_offload": "CPU offload REMOVED: A100 80GB has plenty of memory. Offload adds 5-10x latency per optimizer step via PCIe transfers.",
     
     "activation_checkpointing": {
         "partition_activations": false,
@@ -46,8 +42,9 @@
     },
     
     "bf16": {
-        "enabled": true
+        "enabled": false
     },
+    "_comment_bf16": "DISABLED: Model is pre-cast to bf16 in main.py. DeepSpeed bf16 wraps forward in autocast which breaks reversible midpoint backward.",
     
     "gradient_clipping": 1.0,
     "steps_per_print": 10,

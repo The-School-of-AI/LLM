@@ -218,17 +218,19 @@ def main():
     num_gpus = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
     expected_global_batch = micro_batch_size * gradient_accumulation_steps * num_gpus
     
-    if train_batch_size is not None:
+    # Inject computed train_batch_size into config so DeepSpeed doesn't complain
+    # train_batch_size = micro_batch × accum_steps × num_gpus
+    if train_batch_size is None or train_batch_size <= 0:
+        deepspeed_config['train_batch_size'] = expected_global_batch
+        print_rank_0(f"  train_batch_size: {expected_global_batch} (auto = {micro_batch_size} x {gradient_accumulation_steps} x {num_gpus} GPUs)")
+    else:
         print_rank_0(f"  train_batch_size (from config): {train_batch_size}")
         if train_batch_size != expected_global_batch:
-            print_rank_0(f"  ⚠️  WARNING: train_batch_size ({train_batch_size}) != "
-                        f"micro_batch ({micro_batch_size}) × accum_steps ({gradient_accumulation_steps}) × "
+            print_rank_0(f"  WARNING: train_batch_size ({train_batch_size}) != "
+                        f"micro_batch ({micro_batch_size}) x accum_steps ({gradient_accumulation_steps}) x "
                         f"num_gpus ({num_gpus}) = {expected_global_batch}")
-            print_rank_0(f"  This mismatch may cause unexpected behavior.")
-    else:
-        print_rank_0(f"  Calculated global batch size: {expected_global_batch}")
-    
-    print_rank_0(f"  ✓ Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
+
+    print_rank_0(f"  Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
 
     # ========================================
     # Step 1: Load Tokenizer & Data
@@ -314,12 +316,10 @@ def main():
     # ========================================
     print_rank_0("\n[3/5] Initializing DeepSpeed...")
 
-    with open(args.deepspeed_config, 'r') as f:
-        ds_config = json.load(f)
-        
+    # Use the deepspeed_config dict we already loaded and patched (with computed train_batch_size)
     model_engine, optimizer, _, _ = deepspeed.initialize(
-        config_params=ds_config,
-        model=model, 
+        config_params=deepspeed_config,
+        model=model,
         model_parameters=model.parameters(),
     )
 

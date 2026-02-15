@@ -3,13 +3,16 @@ Data loading utilities for DeepSpeed training.
 
 This module provides functions for loading tokenizers and creating dataloaders
 for training language models.
+
+Uses the standard LLM pre-training approach: concatenate all text, tokenize,
+then chunk into fixed-length sequences. Every token is a real token — no
+padding waste.
 """
 
 from typing import Tuple
 
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
 
 from .utils import print_rank_0
 
@@ -25,23 +28,24 @@ def get_tokenizer(tokenizer_path: str = None):
         Configured tokenizer instance (TSAI 131K - 2^17 vocab size)
     """
     import os
-    
+
     # Default to the TSAI 131K tokenizer in src/tokenizer/
     if tokenizer_path is None:
         # Get the directory of this file (src/data.py)
         current_dir = os.path.dirname(os.path.abspath(__file__))
         tokenizer_path = os.path.join(current_dir, "tokenizer")
-    
+
     if not os.path.exists(tokenizer_path):
         raise FileNotFoundError(
             f"TSAI 131K tokenizer not found at: {tokenizer_path}\n"
             "Expected directory structure: src/tokenizer/ with tokenizer.json, "
             "tokenizer_config.json, and special_tokens_map.json"
         )
-    
+
     print_rank_0(f"  Loading TSAI 131K tokenizer from: {tokenizer_path}")
+    from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-    
+
     print_rank_0(f"  Tokenizer loaded:")
     print_rank_0(f"    - Vocab size: {tokenizer.vocab_size:,}")
     print_rank_0(f"    - Total tokens (with special): {len(tokenizer):,}")
@@ -52,43 +56,23 @@ def get_tokenizer(tokenizer_path: str = None):
     return tokenizer
 
 
-def tokenize_function(examples, tokenizer, max_length=128):
-    """
-    Tokenize text examples for language modeling.
-
-    Args:
-        examples: Dictionary with 'text' key containing text examples
-        tokenizer: Tokenizer instance
-        max_length: Maximum sequence length
-
-    Returns:
-        Dictionary with tokenized inputs
-    """
-    # Tokenize the texts
-    tokenized = tokenizer(
-        examples["text"],
-        truncation=True,
-        padding="max_length",
-        max_length=max_length,
-        return_tensors=None,
-    )
-
-    # For causal language modeling, labels are the same as input_ids
-    tokenized["labels"] = tokenized["input_ids"].copy()
-
-    return tokenized
-
-
 def get_dataloaders(
     dataset_name: str = "wikitext",
     dataset_config: str = "wikitext-2-raw-v1",
     tokenizer=None,
     batch_size: int = 8,
     max_length: int = 128,
-    num_workers: int = 12,  # 12 workers per GPU = 96 total workers on p4d.24xlarge (96 vCPUs, 8 GPUs)
+    num_workers: int = 12,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
     Load dataset and create dataloaders for training, validation, and testing.
+
+    Uses the standard LLM pre-training approach:
+    1. Concatenate all text with EOS separators
+    2. Tokenize the entire concatenation at once
+    3. Chunk into fixed-length sequences of max_length
+
+    Every token in every batch is a real token. No padding.
 
     Args:
         dataset_name: Name of the dataset from HuggingFace datasets
@@ -108,67 +92,113 @@ def get_dataloaders(
     print_rank_0(f"Loading dataset: {dataset_name} ({dataset_config})")
     dataset = load_dataset(dataset_name, dataset_config)
 
-    # Filter out empty examples
-    def filter_empty(example):
-        return len(example["text"].strip()) > 0
+    eos_token = tokenizer.eos_token if tokenizer.eos_token else ""
 
-    dataset = dataset.filter(filter_empty)
+    def tokenize_and_concat(split_dataset):
+        """Concatenate all texts, tokenize, and chunk into fixed-length sequences."""
+        # Concatenate all non-empty texts with EOS separator
+        all_text = eos_token.join(
+            text for text in split_dataset["text"] if text.strip()
+        )
 
-    # Tokenize dataset
-    print_rank_0("Tokenizing dataset...")
-    tokenized_dataset = dataset.map(
-        lambda examples: tokenize_function(examples, tokenizer, max_length),
-        batched=True,
-        remove_columns=dataset["train"].column_names,
-    )
+        # Tokenize the entire concatenation at once (no truncation, no padding)
+        all_ids = tokenizer(all_text, return_attention_mask=False)["input_ids"]
 
-    # Set format for PyTorch
-    tokenized_dataset.set_format(type="torch")
+        total_tokens = len(all_ids)
+        n_chunks = total_tokens // max_length
+        print_rank_0(
+            f"    Total tokens: {total_tokens:,} → {n_chunks:,} chunks of {max_length:,}"
+        )
 
-    # Create dataloaders with AGGRESSIVE optimizations for p4d.24xlarge (96 vCPUs, 8 GPUs)
-    # With DeepSpeed, each GPU process creates its own dataloader
-    # num_workers=12 per GPU × 8 GPUs = 96 total worker processes (uses ALL vCPUs)
-    # prefetch_factor=4 keeps 4 batches ready per worker (384 batches total pre-loaded!)
-    # This ensures GPU NEVER waits for data
-    # persistent_workers=True keeps workers alive between epochs (eliminates startup overhead)
-    effective_workers = num_workers if num_workers > 0 else 12
-    
-    train_loader = DataLoader(
-        tokenized_dataset["train"],
+        # Chunk into fixed-length sequences (drop the remainder)
+        chunks = {
+            "input_ids": [],
+            "attention_mask": [],
+            "labels": [],
+        }
+        for i in range(n_chunks):
+            start = i * max_length
+            end = start + max_length
+            ids = all_ids[start:end]
+            chunks["input_ids"].append(ids)
+            chunks["attention_mask"].append([1] * max_length)
+            chunks["labels"].append(ids.copy())
+
+        return chunks
+
+    # Process each split
+    import torch
+    from torch.utils.data import TensorDataset
+
+    def make_tensor_dataset(split_dataset, split_name):
+        print_rank_0(f"  Processing {split_name} split...")
+        chunks = tokenize_and_concat(split_dataset)
+        n = len(chunks["input_ids"])
+        if n == 0:
+            print_rank_0(f"    WARNING: {split_name} has 0 packed sequences!")
+            return TensorDataset(
+                torch.zeros(1, max_length, dtype=torch.long),
+                torch.ones(1, max_length, dtype=torch.long),
+                torch.zeros(1, max_length, dtype=torch.long),
+            )
+        input_ids = torch.tensor(chunks["input_ids"], dtype=torch.long)
+        attention_mask = torch.tensor(chunks["attention_mask"], dtype=torch.long)
+        labels = torch.tensor(chunks["labels"], dtype=torch.long)
+        return TensorDataset(input_ids, attention_mask, labels)
+
+    print_rank_0("Tokenizing and packing dataset...")
+    train_dataset = make_tensor_dataset(dataset["train"], "train")
+    eval_dataset = make_tensor_dataset(dataset["validation"], "validation")
+    test_dataset = make_tensor_dataset(dataset["test"], "test")
+
+    # Create dataloaders
+    effective_workers = num_workers if num_workers > 0 else 0
+    loader_kwargs = dict(
         batch_size=batch_size,
-        shuffle=True,
         num_workers=effective_workers,
         pin_memory=True,
-        prefetch_factor=4,  # Increased from 2 to 4 for maximum throughput
-        persistent_workers=True if effective_workers > 0 else False,
-        # NOTE: Don't use multiprocessing_context='fork' with DeepSpeed - breaks NCCL!
+    )
+    if effective_workers > 0:
+        loader_kwargs["prefetch_factor"] = 4
+        loader_kwargs["persistent_workers"] = True
+
+    # Custom collate to return dict with named keys (matching existing train.py interface)
+    def collate_fn(batch):
+        input_ids = torch.stack([b[0] for b in batch])
+        attention_mask = torch.stack([b[1] for b in batch])
+        labels = torch.stack([b[2] for b in batch])
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+
+    train_loader = DataLoader(
+        train_dataset,
+        shuffle=True,
+        collate_fn=collate_fn,
+        **loader_kwargs,
     )
 
     eval_loader = DataLoader(
-        tokenized_dataset["validation"],
-        batch_size=batch_size,
+        eval_dataset,
         shuffle=False,
-        num_workers=effective_workers,
-        pin_memory=True,
-        prefetch_factor=4,
-        persistent_workers=True if effective_workers > 0 else False,
+        collate_fn=collate_fn,
+        **loader_kwargs,
     )
 
     test_loader = DataLoader(
-        tokenized_dataset["test"],
-        batch_size=batch_size,
+        test_dataset,
         shuffle=False,
-        num_workers=effective_workers,
-        pin_memory=True,
-        prefetch_factor=4,
-        persistent_workers=True if effective_workers > 0 else False,
+        collate_fn=collate_fn,
+        **loader_kwargs,
     )
 
     # Dataset info
     dataset_info = {
-        "train_size": len(tokenized_dataset["train"]),
-        "eval_size": len(tokenized_dataset["validation"]),
-        "test_size": len(tokenized_dataset["test"]),
+        "train_size": len(train_dataset),
+        "eval_size": len(eval_dataset),
+        "test_size": len(test_dataset),
         "vocab_size": tokenizer.vocab_size,
     }
 

@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.distributed as dist
 from torch.func import functional_call
 
 
@@ -77,10 +76,15 @@ class MidpointFunction(torch.autograd.Function):
         grad_p_prev = grad_p_next * ctx.a
         grad_p_cur_direct = grad_p_next * (1.0 - ctx.a)
 
-        # CRITICAL FIX: Ensure CUDA synchronization before recomputation in distributed training
-        if torch.cuda.is_available() and dist.is_initialized():
-            torch.cuda.synchronize()
-        
+        # NOTE: No torch.cuda.synchronize() needed here.
+        # The backward runs entirely on the default CUDA stream. All operations
+        # below (clone, functional_call, autograd.grad) are properly ordered via
+        # intra-stream serialization. NCCL allreduce (via overlap_comm) runs on
+        # a separate stream but only touches .grad tensors — never the parameter
+        # *value* tensors we read here. Additionally, we clone all tensors below,
+        # creating independent memory. PyTorch's NCCL backend manages its own
+        # stream synchronization automatically (same pattern as torch.utils.checkpoint).
+
         with torch.enable_grad():
             # Clone and detach to ensure no shared memory with forward pass
             p_cur_req = p_cur.detach().clone().requires_grad_(True)

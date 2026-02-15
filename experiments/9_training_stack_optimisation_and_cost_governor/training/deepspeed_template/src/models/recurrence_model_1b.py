@@ -994,6 +994,13 @@ class GatedSparseAttention(nn.Module):
         self.gate_bias = nn.Parameter(torch.zeros(indexer_heads))
 
         self.register_buffer("variance_ema", torch.tensor(1.0))
+        # Snapshot of variance_ema captured at the start of each reversible
+        # forward pass (torch.no_grad()).  The backward reconstruct (torch.enable_grad())
+        # reads this snapshot instead of the live EMA, guaranteeing that
+        # fused_indexer_topk produces identical k_t / top_indices in both passes.
+        # Without this, gradient-accumulation or async NCCL updates can mutate
+        # variance_ema between forward and reconstruct, breaking reversibility.
+        self.register_buffer("_variance_ema_snapshot", torch.tensor(1.0))
         self.variance_alpha = 0.01
 
         # Attention Projections
@@ -1042,28 +1049,31 @@ class GatedSparseAttention(nn.Module):
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
         is_reversible_reconstruct = self.training and torch.is_grad_enabled()
 
+        # REVERSIBILITY FIX: During the forward pass (no_grad), snapshot the
+        # current variance_ema BEFORE computing indices, then update the live
+        # EMA afterwards.  During backward reconstruct (enable_grad), use the
+        # snapshot so that fused_indexer_topk produces identical k_t/indices.
+        # This prevents the race where gradient-accumulation micro-batch N+1
+        # mutates variance_ema before micro-batch N's backward reconstruct.
+        if is_reversible_forward:
+            self._variance_ema_snapshot.copy_(self.variance_ema)
+
+        # Use snapshot for the indexer call (both forward and reconstruct)
+        ema_for_indexer = self._variance_ema_snapshot
+
         var_t, k_t, top_indices = fused_indexer_topk(
             q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
             scale=scale_idx, causal=True,
             k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
-            variance_ema=self.variance_ema,  # kernel uses for avg_V reference
+            variance_ema=ema_for_indexer,  # snapshot, not live EMA
             is_training=False,
             sink_size=4,
         )
         # var_t: [B, T], k_t: [B, T] (long), top_indices: [B, T, k_limit] (int32)
 
-        # Debug: verify stateless recomputation is producing valid indices
-        if _kernel_log.isEnabledFor(logging.INFO):
-            _phase = "reconstruct" if is_reversible_reconstruct else ("rev_fwd" if is_reversible_forward else "fwd")
-            # _kernel_log.debug(
-            #     "[GSA stateless] phase=%s B=%d T=%d k_t_mean=%.1f k_t_min=%d k_t_max=%d "
-            #     "top_indices_shape=%s var_ema=%.4f",
-            #     _phase, B, T,
-            #     k_t.float().mean().item(), k_t.min().item(), k_t.max().item(),
-            #     list(top_indices.shape), self.variance_ema.item(),
-            # )
-
-        # Update variance EMA only during the reversible forward pass (no grad)
+        # Update live variance EMA only during the reversible forward pass (no grad)
+        # This happens AFTER the indexer call, so it doesn't affect this micro-batch's
+        # indices.  The snapshot ensures backward reconstruct sees the same value.
         if is_reversible_forward:
             var_t_mean = var_t.mean().detach()
             if torch.distributed.is_initialized():
