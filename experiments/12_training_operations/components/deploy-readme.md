@@ -292,6 +292,30 @@ aws iam put-role-policy \
     }]
   }'
 
+# Inline policy: S3 config bucket (setup-auth.sh creates bucket, uploads ca.crt + vector.toml)
+aws iam put-role-policy \
+  --role-name p12-clickhouse-db-role \
+  --policy-name p12-db-s3-config \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:ListBucket",
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::p12-config-*",
+        "arn:aws:s3:::p12-config-*/*"
+      ]
+    }]
+  }'
+
 # Create instance profile and attach role
 aws iam create-instance-profile \
   --instance-profile-name p12-clickhouse-db-profile
@@ -1092,7 +1116,7 @@ aws cloudwatch describe-alarms \
 
 | Role | Attached to | Permissions |
 |------|-------------|-------------|
-| `p12-clickhouse-db-role` | DB EC2 instance | SSM Session Manager, CloudWatch PutMetricData |
+| `p12-clickhouse-db-role` | DB EC2 instance | SSM Session Manager, CloudWatch PutMetricData, S3 config bucket (create/upload) |
 | `p12-training-instance-role` | Training EC2 instances | SSM Session Manager, SSM GetParameter (`/p12/training/*`), CloudWatch PutMetricData |
 
 ### Files that must NOT be committed to git
