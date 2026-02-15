@@ -133,6 +133,28 @@ def int_to_kannada(n: int) -> str:
     return "".join(_KANNADA_DIGITS[int(d)] for d in s)
 
 
+# Kannada number words (for "ಕೇವಲ ಮೂರು ಅಕ್ಷರಗಳಿವೆ" style phrases)
+_KANNADA_NUM_WORDS = {
+    1: "ಒಂದು",
+    2: "ಎರಡು",
+    3: "ಮೂರು",
+    4: "ನಾಲ್ಕು",
+    5: "ಐದು",
+    6: "ಆರು",
+    7: "ಏಳು",
+    8: "ಎಂಟು",
+    9: "ಒಂಬತ್ತು",
+    10: "ಹತ್ತು",
+}
+
+
+def int_to_kannada_word(n: int) -> str:
+    """Convert small integer to Kannada word form (ಮೂರು, ನಾಲ್ಕು, etc.) for prose."""
+    if 1 <= n <= 10:
+        return _KANNADA_NUM_WORDS[n]
+    return int_to_kannada(n)
+
+
 def format_qa_pair_kannada(query: str, answer: str) -> str:
     """
     Format a query-answer pair for Kannada TXT output.

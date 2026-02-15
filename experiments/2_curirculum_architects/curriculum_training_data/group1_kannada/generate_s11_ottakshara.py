@@ -12,11 +12,55 @@ import regex
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
+from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
 from group1_kannada.kannada_vocabulary import ALL_WORDS_UNIQUE, VARGAS  # noqa: E402
 
 # Halant and vowel signs that make an akshara a conjunct (ottakshara)
 HALANT = "\u0CCD"
 R_VOWEL, RR_VOWEL = "\u0CC3", "\u0CC4"  # ೃ, ೄ
+VIRAMA = HALANT
+RA = "\u0CB0"
+
+# Vowel signs (Matras) mapping - for matra identification questions
+MATRA_MAP = {
+    "\u0BE7": "ಆ-ಕಾರ",  # ಾ
+    "\u0BE8": "ಇ-ಕಾರ",  # ಿ
+    "\u0BE9": "ಈ-ಕಾರ",  # ೀ
+    "\u0BEA": "ಉ-ಕಾರ",  # ು
+    "\u0BEB": "ಊ-ಕಾರ",  # ೂ
+    "\u0BEC": "ಋ-ಕಾರ",  # ೃ
+    "\u0BED": "ಎ-ತ್ವ",   # ೆ
+    "\u0BEE": "ಏ-ತ್ವ",   # ೇ
+    "\u0BEF": "ಐ-ಕಾರ",  # ೈ
+    "\u0BF0": "ಓ-ತ್ವ",   # ೊ
+    "\u0BF1": "ಓ-ತ್ವ",   # ೋ
+    "\u0BF2": "ಔ-ತ್ವ",   # ೌ
+    "\u0C01": "ಅಕ",     # ಁ
+    "\u0C02": "ಅನುಸ್ವಾರ",  # ಂ
+    "\u0C03": "ವಿಸರ್ಗ",  # ಃ
+}
+
+ORDINALS = ["", "ಮೊದಲ", "ಎರಡನೇ", "ಮೂರನೇ", "ನಾಲ್ಕನೇ", "ಐದನೇ"]
+
+# Question templates for rephrasing (from colleague f3a5869)
+OTTAKSHARA_TEMPLATES = [
+    '"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರ ಯಾವುದು?',
+    '"{word}" ಪದದಲ್ಲಿರುವ ಸಂಯುಕ್ತಾಕ್ಷರವನ್ನು ಗುರುತಿಸಿ.',
+    '"{word}" ಪದದಲ್ಲಿ ಯಾವ ಸಂಯುಕ್ತಾಕ್ಷರ ಇದೆ?',
+    '"{word}" ಪದದಲ್ಲಿ ಕಂಡುಬರುವ ಒತ್ತಕ್ಷರ ಯಾವುದು?',
+]
+
+SAJATIYA_TEMPLATES = [
+    '"{word}" ಪದದಲ್ಲಿರುವ ಸಂಯುಕ್ತಾಕ್ಷರವು ಸಜಾತೀಯವೇ ಅಥವಾ ವಿಜಾತೀಯವೇ?',
+    '"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರ ಯಾವ ವಿಧವಾಗಿದೆ (ಸಜಾತೀಯ/ವಿಜಾತೀಯ)?',
+    '"{word}" ಪದದ ಸಂಯುಕ್ತಾಕ್ಷರವನ್ನು ವಿಂಗಡಿಸಿ (ಸಜಾತೀಯ/ವಿಜಾತೀಯ).',
+]
+
+YES_NO_TEMPLATES = [
+    ('"{word}" ಪದದಲ್ಲಿ ಒತ್ತಕ್ಷರ ಇದೆಯೇ?', "ಹೌದು"),
+    ('"{word}" ಪದದಲ್ಲಿ ಸಂಯುಕ್ತಾಕ್ಷರ ಇದೆಯೇ?', "ಹೌದು"),
+    ('"{word}" ಪದವು ಒತ್ತಕ್ಷರರಹಿತವೇ?', "ಇಲ್ಲ"),
+]
 
 
 def get_all_ottakshara_in_word(word: str) -> list[str]:
@@ -34,6 +78,91 @@ def format_ottakshara_answer(ottakshara_list: list[str]) -> str:
     if len(ottakshara_list) == 2:
         return f"{ottakshara_list[0]} ಮತ್ತು {ottakshara_list[1]}"
     return f"{', '.join(ottakshara_list[:-1])} ಮತ್ತು {ottakshara_list[-1]}"
+
+
+def get_ottakshara_component(akshara: str) -> str | None:
+    """Extract full Ottakshara (syllable with conjunct) from Akshara."""
+    if regex.search(r"[\u0C95-\u0CB9]\u0CCD[\u0C95-\u0CB9]", akshara):
+        return akshara
+    return None
+
+
+def is_sajatiya(akshara: str) -> bool:
+    """
+    Check if akshara is Sajatiya (same consonant conjunct).
+    E.g. 'ಪ್ಪ' -> True, 'ಕ್ತ' -> False.
+    """
+    consonants = regex.findall(r"[\u0C95-\u0CB9]", akshara)
+    if len(consonants) >= 2:
+        return consonants[0] == consonants[1]
+    return False
+
+
+def analyze_word_for_questions(word: str) -> list[tuple[str, str]]:
+    """Generate QA pairs for a single word (vocabulary-based, from colleague f3a5869)."""
+    questions = []
+    aksharas = get_kannada_aksharas(word)
+    clusters = get_kannada_grapheme_clusters(word)
+    has_ottakshara = False
+
+    # 1. Ottakshara Identification & Classification
+    for ak in aksharas:
+        ottakshara = get_ottakshara_component(ak)
+        if ottakshara:
+            has_ottakshara = True
+            template = random.choice(OTTAKSHARA_TEMPLATES)
+            questions.append((template.format(word=word), ottakshara))
+            classification = "ಸಜಾತೀಯ" if is_sajatiya(ak) else "ವಿಜಾತೀಯ"
+            template_cls = random.choice(SAJATIYA_TEMPLATES)
+            questions.append((template_cls.format(word=word), classification))
+
+    # 2. Yes/No Questions (Has Ottakshara?)
+    if has_ottakshara:
+        q_tmpl, ans = random.choice(YES_NO_TEMPLATES)
+        questions.append((q_tmpl.format(word=word), ans))
+
+    # 3. Matra Identification
+    for cluster in clusters:
+        for char in cluster:
+            if char in MATRA_MAP:
+                matra_name = MATRA_MAP[char]
+                q_variations = [
+                    f'"{word}" ಪದದಲ್ಲಿರುವ {matra_name} ಯಾವುದು?',
+                    f'"{word}" ಪದದಲ್ಲಿ {matra_name} ಇದೆಯೇ? ಹೌದು, ಅದು "{char}".',
+                ]
+                questions.append((random.choice(q_variations), char))
+
+    # 4. Arkavattu (Repha)
+    if regex.search(rf"{RA}{VIRAMA}([\u0C95-\u0CB9])", word):
+        for cluster in clusters:
+            if RA + VIRAMA in cluster:
+                questions.append((
+                    f'"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು ಚಿಹ್ನೆಯನ್ನು ಗುರುತಿಸಿ?',
+                    cluster,
+                ))
+                break
+
+    # 5. Independent Letter Count (Akshara count)
+    count = len(aksharas)
+    questions.append((
+        f'"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಸ್ವತಂತ್ರ ಅಕ್ಷರಗಳಿವೆ?',
+        int_to_kannada(count),
+    ))
+
+    return questions
+
+
+def generate_varga_questions() -> list[tuple[str, str]]:
+    """Generate questions about Vargas (varga, ordinal, nasal)."""
+    qs = []
+    for varga_name, letters in VARGAS.items():
+        for idx, letter in enumerate(letters):
+            ordinal = ORDINALS[idx + 1]
+            qs.append((f'"{varga_name}" ವರ್ಗದ {ordinal} ಅಕ್ಷರ ಯಾವುದು?', letter))
+            qs.append((f'"{letter}" ಅಕ್ಷರವು ಯಾವ ವರ್ಗಕ್ಕೆ ಸೇರಿದೆ?', f'"{varga_name}" ವರ್ಗ'))
+            if idx == 4:
+                qs.append((f'"{varga_name}" ವರ್ಗದ ಅನುನಾಸಿಕ ಅಕ್ಷರ ಯಾವುದು?', letter))
+    return qs
 
 
 # User-specified Ottakshara/Kagunita (word, question_template, answer).
@@ -174,6 +303,40 @@ for template_str, filter_fn, answer_fn in MULTI_WORD_TEMPLATES:
         if key not in seen_qa:
             seen_qa.add(key)
             samples.append((q, ans))
+
+# Colleague's vocabulary-based generation (f3a5869, 2054b43): rephrasing, Sajatiya/Vijatiya, yes/no, matra
+for word in ALL_WORDS_UNIQUE:
+    if not word:
+        continue
+    for q, a in analyze_word_for_questions(word):
+        key = (q, a)
+        if key not in seen_qa:
+            seen_qa.add(key)
+            samples.append((q, a))
+
+# Negation: words WITHOUT ottakshara -> "ಒತ್ತಕ್ಷರ ಇದೆಯೇ?" -> "ಇಲ್ಲ"
+simple_words = [
+    w for w in ALL_WORDS_UNIQUE
+    if w and not any(get_ottakshara_component(ak) for ak in get_kannada_aksharas(w))
+]
+for word in simple_words[:1000]:  # Cap to avoid imbalance
+    for q_tmpl, ans in [
+        ('"{word}" ಪದದಲ್ಲಿ ಒತ್ತಕ್ಷರ ಇದೆಯೇ?', "ಇಲ್ಲ"),
+        ('"{word}" ಪದದಲ್ಲಿ ಸಂಯುಕ್ತಾಕ್ಷರ ಇದೆಯೇ?', "ಇಲ್ಲ"),
+        ('"{word}" ಪದವು ಒತ್ತಕ್ಷರರಹಿತವೇ?', "ಹೌದು"),
+    ]:
+        q = q_tmpl.format(word=word)
+        key = (q, ans)
+        if key not in seen_qa:
+            seen_qa.add(key)
+            samples.append((q, ans))
+
+# Varga-based questions
+for q, a in generate_varga_questions():
+    key = (q, a)
+    if key not in seen_qa:
+        seen_qa.add(key)
+        samples.append((q, a))
 
 random.shuffle(samples)
 

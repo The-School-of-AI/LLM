@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
 from group1_kannada.kannada_vocabulary import (
     ALL_WORDS_UNIQUE,
+    BAD_RHYME_PAIRS,
     CLASSIFICATION_CATEGORIES,
     RHYMING_PAIRS,
     VARGAS,
@@ -55,10 +56,10 @@ for a, b in RHYMING_PAIRS.items():
     rhyme_set.add((b, a))
 
 def do_rhyme(w1: str, w2: str) -> bool:
-    # Check RHYMING_PAIRS first
+    if (w1, w2) in BAD_RHYME_PAIRS or (w2, w1) in BAD_RHYME_PAIRS:
+        return False
     if (w1, w2) in rhyme_set or (w2, w1) in rhyme_set:
         return True
-    # Fallback: check if last grapheme cluster is the same
     clusters1 = get_kannada_grapheme_clusters(w1)
     clusters2 = get_kannada_grapheme_clusters(w2)
     if clusters1 and clusters2 and clusters1[-1] == clusters2[-1]:
@@ -76,8 +77,8 @@ def get_verbs(word_list):
 
 VERBS = get_verbs(unique_words)
 
-# Helper to get fruits
-fruits = list(CLASSIFICATION_CATEGORIES.get("ವಸ್ತು", []))
+# Helper to get fruits (use dedicated fruit list - ವಸ್ತು contains non-fruits like ಡಬ್ಬಿ, ವಾಹನ)
+fruits = list(CLASSIFICATION_CATEGORIES.get("ಹಣ್ಣು", []))
 FRUITS_STARTING = {}
 for w in fruits:
     if not w:
@@ -161,7 +162,7 @@ for _ in range(100):
             continue
         word2 = random.choice(non_rhyming_words)
         q = TEMPLATES[2][0].format(word1=word1, word2=word2)
-        a = "ಇಲ್ಲ"
+        a = "ಅಲ್ಲ"  # ಪ್ರಾಸವಾಗುತ್ತವೆಯೇ? → quality → ಅಲ್ಲ
     key = ("do_rhyme_yes_no", word1, word2, TEMPLATES[2][0])
     if key not in seen:
         seen.add(key)
@@ -180,7 +181,7 @@ for _ in range(100):
             continue
         word2 = random.choice(non_rhyming_words)
         q = TEMPLATES[11][0].format(word1=word1, word2=word2)
-        a = "ಇಲ್ಲ"
+        a = "ಅಲ್ಲ"  # ಪ್ರಾಸಬದ್ಧವೇ? → quality → ಅಲ್ಲ
     key = ("do_rhyme_yes_no", word1, word2, TEMPLATES[11][0])
     if key not in seen:
         seen.add(key)
@@ -301,12 +302,30 @@ for w in (words_with_n or unique_words)[:80]:
         seen.add(key)
         samples.append((q, a))
 
-# New: 14 & 20. similar_sound
+# New: 14 & 20. similar_sound (ಹೋಲುವ ಧ್ವನಿ): same last akshara + similar length (ಪ್ರಾಸ-like)
+def get_similar_sound_words(word: str, word_list: list) -> list:
+    """Words with same last akshara and same akshara count (phonetically similar length)."""
+    clusters = get_kannada_grapheme_clusters(word)
+    if not clusters:
+        return []
+    last = clusters[-1]
+    n = len(clusters)
+    return [
+        w for w in word_list
+        if w != word
+        and (c := get_kannada_grapheme_clusters(w))
+        and c[-1] == last
+        and len(c) == n
+    ]
+
+# New: 14 & 20. similar_sound (skip when no different similar word exists)
 for word in unique_words[:100]:
-    q_idx = random.choice([13, 19]) # Templates 14 and 20
+    similar_words = get_similar_sound_words(word, unique_words)
+    if not similar_words:
+        continue  # avoid answer = question
+    q_idx = random.choice([13, 19])  # Templates 14 and 20
     q = TEMPLATES[q_idx][0].format(word=word)
-    similar_words = [w for w in unique_words if w != word and get_kannada_grapheme_clusters(w)[-1] == get_kannada_grapheme_clusters(word)[-1]]
-    a = random.choice(similar_words) if similar_words else word
+    a = random.choice(similar_words)
     key = ("similar_sound", word, TEMPLATES[q_idx][0])
     if key not in seen:
         seen.add(key)
@@ -365,7 +384,7 @@ while len(samples) < target_count and no_progress < no_progress_limit:
                 q, a = None, None # Skip if no non-rhyming words found
             else:
                 word2 = random.choice(non_rhyming_words)
-                a = "ಇಲ್ಲ"
+                a = "ಅಲ್ಲ"  # ಪ್ರಾಸಬದ್ಧವೇ? → quality → ಅಲ್ಲ
         if q is not None and a is not None: # Check if a valid pair was generated
             q = template_text.format(word1=word1, word2=word2)
     elif ttype == "word_with_vowel":
@@ -406,9 +425,12 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         q = template_text.format(letter=letter)
     elif ttype == "similar_sound":
         word = random.choice(unique_words)
-        similar_words = [w for w in unique_words if w != word and get_kannada_grapheme_clusters(w)[-1] == get_kannada_grapheme_clusters(word)[-1]]
-        a = random.choice(similar_words) if similar_words else word
-        q = template_text.format(word=word)
+        similar_words = get_similar_sound_words(word, unique_words)
+        if not similar_words:
+            q, a = None, None  # skip - avoid answer = question
+        else:
+            a = random.choice(similar_words)
+            q = template_text.format(word=word)
     elif ttype == "two_words_with_sound" and words_by_first:
         letter = random.choice(list(words_by_first.keys()))
         words_with_letter = [w for w in unique_words if w.startswith(letter)]

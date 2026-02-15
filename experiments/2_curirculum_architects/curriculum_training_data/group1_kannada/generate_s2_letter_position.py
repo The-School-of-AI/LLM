@@ -15,7 +15,7 @@ from group1_kannada.kannada_vocabulary import (  # noqa: E402
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
+from prompt_utils import format_qa_pair_kannada, int_to_kannada, int_to_kannada_word  # noqa: E402
 
 HALANT = "\u0CCD"  # Virama for ottakshara check
 # Mahaprana (aspirated) consonants: ಖ, ಛ, ಠ, ಥ, ಫ, ಘ, ಝ, ಢ, ಧ, ಭ
@@ -88,6 +88,23 @@ def get_position_name(pos_1based: int) -> str:
     return f"{int_to_kannada(pos_1based)}ನೇ"
 
 
+# Position names for "Nth letter doesn't exist" answer format
+POSITION_NAME_FOR_NTH = {
+    "second": "ಎರಡನೇ",
+    "third": "ಮೂರನೇ",
+    "fourth": "ನಾಲ್ಕನೇ",
+    "fifth": "ಐದನೇ",
+    "sixth": "ಆರನೇ",
+}
+
+
+def _answer_nth_letter_missing(word: str, n: int, ttype: str) -> str:
+    """Format when requested Nth letter doesn't exist. E.g. ಕಾಣಿಕೆ ನಾಲ್ಕನೇ → ಕೇವಲ ಮೂರು ಅಕ್ಷರಗಳಿವೆ, ನಾಲ್ಕನೇ ಅಕ್ಷರ ಇಲ್ಲ."""
+    pos_name = POSITION_NAME_FOR_NTH.get(ttype, f"{int_to_kannada(n + 1)}ನೇ")
+    n_word = int_to_kannada_word(n)
+    return f'"{word}" ಎಂಬ ಪದದಲ್ಲಿ ಕೇವಲ {n_word} ಅಕ್ಷರಗಳಿವೆ, {pos_name} ಅಕ್ಷರ ಇಲ್ಲ.'
+
+
 for word in unique_words:
     clusters = get_kannada_grapheme_clusters(word)
     n = len(clusters)
@@ -105,38 +122,23 @@ for word in unique_words:
             key = (word, "last")
         elif ttype == "second":
             q = template.format(word=word)
-            if n >= 2:
-                a = clusters[1]
-            else:
-                a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+            a = clusters[1] if n >= 2 else _answer_nth_letter_missing(word, n, "second")
             key = (word, "second", template)
         elif ttype == "third":
             q = template.format(word=word)
-            if n >= 3:
-                a = clusters[2]
-            else:
-                a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+            a = clusters[2] if n >= 3 else _answer_nth_letter_missing(word, n, "third")
             key = (word, "third", template)
         elif ttype == "fourth":
             q = template.format(word=word)
-            if n >= 4:
-                a = clusters[3]
-            else:
-                a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+            a = clusters[3] if n >= 4 else _answer_nth_letter_missing(word, n, "fourth")
             key = (word, "fourth", template)
         elif ttype == "fifth":
             q = template.format(word=word)
-            if n >= 5:
-                a = clusters[4]
-            else:
-                a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+            a = clusters[4] if n >= 5 else _answer_nth_letter_missing(word, n, "fifth")
             key = (word, "fifth", template)
         elif ttype == "sixth":
             q = template.format(word=word)
-            if n >= 6:
-                a = clusters[5]
-            else:
-                a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+            a = clusters[5] if n >= 6 else _answer_nth_letter_missing(word, n, "sixth")
             key = (word, "sixth", template)
         elif ttype == "middle":
             q = template.format(word=word)
@@ -170,7 +172,7 @@ for word in unique_words:
         elif ttype == "at_end":
             for c in clusters:
                 q = template.format(word=word, char=c)
-                a = "ಹೌದು" if clusters[-1] == c else "ಅಲ್ಲ"
+                a = "ಹೌದು" if clusters[-1] == c else "ಇಲ್ಲ"  # ಕೊನೆಯಲ್ಲಿದೆಯೇ? → presence → ಇಲ್ಲ
                 key = (word, "at_end", c, template)
                 if key not in seen:
                     seen.add(key)
@@ -218,7 +220,7 @@ for word in unique_words:
             mid_idx = n // 2
             for c in clusters:
                 q = template.format(word=word, char=c)
-                a = "ಹೌದು" if clusters[mid_idx] == c else "ಅಲ್ಲ"
+                a = "ಹೌದು" if clusters[mid_idx] == c else "ಇಲ್ಲ"  # ಮಧ್ಯದಲ್ಲಿ ಬಂದಿದೆಯೇ? → presence → ಇಲ್ಲ
                 key = (word, "char_in_middle", c)
                 if key not in seen:
                     seen.add(key)
@@ -256,7 +258,7 @@ for word in unique_words:
             for c in clusters:
                 count = sum(1 for x in clusters if x == c)
                 q = template.format(word=word, char=c)
-                a = "ಹೌದು" if count > 1 else "ಅಲ್ಲ"
+                a = "ಹೌದು" if count > 1 else "ಇಲ್ಲ"
                 key = (word, "char_repeated", c)
                 if key not in seen:
                     seen.add(key)
@@ -291,34 +293,19 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         a = clusters[-1]
     elif ttype == "second":
         q = template.format(word=word)
-        if n >= 2:
-            a = clusters[1]
-        else:
-            a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+        a = clusters[1] if n >= 2 else _answer_nth_letter_missing(word, n, "second")
     elif ttype == "third":
         q = template.format(word=word)
-        if n >= 3:
-            a = clusters[2]
-        else:
-            a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+        a = clusters[2] if n >= 3 else _answer_nth_letter_missing(word, n, "third")
     elif ttype == "fourth":
         q = template.format(word=word)
-        if n >= 4:
-            a = clusters[3]
-        else:
-            a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+        a = clusters[3] if n >= 4 else _answer_nth_letter_missing(word, n, "fourth")
     elif ttype == "fifth":
         q = template.format(word=word)
-        if n >= 5:
-            a = clusters[4]
-        else:
-            a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+        a = clusters[4] if n >= 5 else _answer_nth_letter_missing(word, n, "fifth")
     elif ttype == "sixth":
         q = template.format(word=word)
-        if n >= 6:
-            a = clusters[5]
-        else:
-            a = f"ಅಲ್ಲ, ಇದರಲ್ಲಿರುವುದು {int_to_kannada(n)} ಅಕ್ಷರಗಳು"
+        a = clusters[5] if n >= 6 else _answer_nth_letter_missing(word, n, "sixth")
     elif ttype == "middle":
         q = template.format(word=word)
         a = clusters[n // 2]
@@ -335,7 +322,7 @@ while len(samples) < target_count and no_progress < no_progress_limit:
     elif ttype == "at_end":
         c = random.choice(clusters)
         q = template.format(word=word, char=c)
-        a = "ಹೌದು" if clusters[-1] == c else "ಅಲ್ಲ"
+        a = "ಹೌದು" if clusters[-1] == c else "ಇಲ್ಲ"  # ಕೊನೆಯಲ್ಲಿದೆಯೇ? → presence → ಇಲ್ಲ
     elif ttype == "fifth_exists":
         q = template.format(word=word)
         a = f"ಹೌದು, {clusters[4]}" if n >= 5 else "ಅಲ್ಲ"
@@ -365,7 +352,7 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         c = random.choice(clusters)
         mid_idx = n // 2
         q = template.format(word=word, char=c)
-        a = "ಹೌದು" if clusters[mid_idx] == c else "ಅಲ್ಲ"
+        a = "ಹೌದು" if clusters[mid_idx] == c else "ಇಲ್ಲ"  # ಮಧ್ಯದಲ್ಲಿ ಬಂದಿದೆಯೇ? → presence → ಇಲ್ಲ
     elif ttype == "aarambhika":
         q = template.format(word=word)
         a = clusters[0]
@@ -394,7 +381,7 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         c = random.choice(clusters)
         count = sum(1 for x in clusters if x == c)
         q = template.format(word=word, char=c)
-        a = "ಹೌದು" if count > 1 else "ಅಲ್ಲ"
+        a = "ಹೌದು" if count > 1 else "ಇಲ್ಲ"
     else:
         q, a = None, None
 

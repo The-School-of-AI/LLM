@@ -42,7 +42,7 @@ HARD_WORDS = _exclude_numbers(HARD_WORDS_UNIQUE) * 70
 TEMPLATES_SPELLING = [
     '"{word}" ಪದವನ್ನು ಅಕ್ಷರಶಃ ಬಿಡಿಸಿ ಬರೆಯಿರಿ?',
     '"{word}" ಪದದ ಸರಿಯಾದ ಕಾಗುಣಿತ ಯಾವುದು?',
-    '"{word}" ಎಂಬ ಶಬ್ದದ ಅಕ್ಷರಗಳ ಜೋಡಣೆ ತಿಳಿಸಿ?',
+    '"{word}" ಎಂಬ ಪದದ ಅಕ್ಷರಗಳ ಜೋಡಣೆ ತಿಳಿಸಿ?',
     '"{word}" ಪದದ ಸ್ಪೆಲ್ಲಿಂಗ್ ಅನ್ನು ಅಕ್ಷರ ಬಿಡದೆ ಹೇಳಿ?',
     '"{word}" ಪದದ ಅಕ್ಷರಗಳನ್ನು ಪ್ರತ್ಯೇಕಿಸಿ?',
     '"{word}" ಪದವನ್ನು ದೋಷವಿಲ್ಲದೆ ಬರೆಯುವುದು ಹೇಗೆ?',
@@ -82,7 +82,7 @@ TEMPLATES_VARNAVICHCHEDA = [
     '"{word}" ಪದವನ್ನು ವರ್ಣವಿಚ್ಛೇದದಲ್ಲಿ ಬಿಡಿಸಿ?',
     '"{word}" ಪದದ ವರ್ಣವಿಚ್ಛೇದ ಪಟ್ಟಿ ನೀಡಿ?',
     '"{word}" ಪದದ ವರ್ಣವಿಚ್ಛೇದ ಯಾವುದು?',
-    '"{word}" ಪದದ ವರ್ಣವಿಚ್ಛೇದದಲ್ಲಿ ಯಾವ ಯಾವ ಅಕ್ಷರಗಳಿವೆ?',
+    '"{word}" ಪದದ ವರ್ಣವಿಚ್ಛೇದ ಹೇಳಿ?',
     '"{word}" ಪದದ ವರ್ಣವಿಚ್ಛೇದನೆ ಮಾಡಿ ಹೇಳಿ?',
     '"{word}" ಪದವನ್ನು ವರ್ಣಗಳಾಗಿ ಬಿಡಿಸಿ ತಿಳಿಸಿ?',
 ]
@@ -164,6 +164,9 @@ def get_varnavichcheda_str(word: str) -> str:
                 if i < len(chars) and chars[i] in VOWEL_SIGN_TO_SWARA:
                     varnas.append(VOWEL_SIGN_TO_SWARA[chars[i]])
                     i += 1
+                elif i < len(chars) and chars[i] == "\u0C82":  # Anusvara after consonant → ಅಂ
+                    varnas.append("ಅಂ")
+                    i += 1
                 else:
                     varnas.append("ಅ")
         elif 0x0C85 <= ord(c) <= 0x0C94:  # Independent vowel
@@ -172,7 +175,11 @@ def get_varnavichcheda_str(word: str) -> str:
         elif c in VOWEL_SIGN_TO_SWARA:
             varnas.append(VOWEL_SIGN_TO_SWARA[c])
             i += 1
-        elif c in ("\u0C82", "\u0C83"):
+        elif c == "\u0C82":  # Anusvara after vowel (e.g. ಅಂ in ಅಂಚು) → ಅಂ
+            varnas.append("ಅಂ")
+            i += 1
+        elif c == "\u0C83":  # Visarga (ಃ) - include in ವರ್ಣವಿಚ್ಛೇದ
+            varnas.append("ಃ")
             i += 1
         else:
             i += 1

@@ -1519,9 +1519,41 @@ VARGAS = {
     # Other categories can be added as needed
 }
 
-# Rhyming Word Pairs - built from vocabulary only (both words must exist)
-# Replaces artificially constructed pairs (e.g. ಮನೆ->ಕನೆ) with real word pairs
-# that share the same last grapheme cluster. See build_real_rhyming_pairs() below.
+# Rhyming Word Pairs - built from vocabulary; curated ಪ್ರಾಸ pairs take priority.
+
+# Curated ಪ್ರಾಸ ಪದಗಳು (expert-validated Kannada prosody) - defined early for ALL_WORDS
+_PRASA_CURATED_PAIRS = [
+    ("ಬಲ", "ನಲ"), ("ಜಲ", "ಫಲ"), ("ಕಲ", "ಹಲ"), ("ತರ", "ಸರ"), ("ಮರ", "ಪುರ"),
+    ("ನರ", "ಸ್ವರ"), ("ಭಯ", "ಜಯ"), ("ಲವ", "ನವ"), ("ಕದ", "ಮದ"), ("ಪದ", "ಸಿದ"),
+    ("ಮಾತಾ", "ದಾತ"), ("ಶಾಲಾ", "ಮಾಲಾ"), ("ಬಾಲಾ", "ಕಾಲಾ"), ("ಕಲಾ", "ಲೀಲಾ"),
+    ("ರೇಖಾ", "ಶಿಖಾ"), ("ಆಶಾ", "ಭಾಷಾ"), ("ತಾರಾ", "ಧಾರಾ"), ("ರಾಮಾ", "ಶ್ಯಾಮಾ"),
+    ("ಪೂಜಾ", "ಧ್ವಜಾ"), ("ದಾನಾ", "ಗಾನಾ"),
+    ("ಗಿರಿ", "ಸಿರಿ"), ("ಪರಿ", "ಮರಿ"), ("ಹರಿ", "ಅರಿ"), ("ಲಿಪಿ", "ಕಪಿ"), ("ಮತಿ", "ಗತಿ"),
+    ("ಶುದ್ಧಿ", "ಬುದ್ಧಿ"), ("ಪ್ರೀತಿ", "ನೀತಿ"), ("ಭಕ್ತಿ", "ಶಕ್ತಿ"), ("ಧ್ವನಿ", "ಮನಿ"),
+    ("ನದಿ", "ಯದಿ"),
+    ("ಗುರು", "ತರು"), ("ಹುಟ್ಟು", "ಮೆಟ್ಟು"), ("ಕಟ್ಟು", "ಪಟ್ಟು"), ("ತುಂಬು", "ನಂಬು"),
+    ("ಕೊಂಡು", "ನೋಡು"), ("ಚೆಲ್ಲು", "ಹಲ್ಲು"), ("ಸುತ್ತು", "ಮುತ್ತು"), ("ಕೆಲವು", "ಹಲವು"),
+    ("ಬಾಳು", "ಗೋಳು"), ("ಉಪ್ಪು", "ತಪ್ಪು"),
+    ("ಮನೆ", "ನನೆ"), ("ಧರೆ", "ಹೊರೆ"), ("ತೆರೆ", "ಕೆರೆ"), ("ಕೊಳ", "ಬಳ"), ("ನೋವ", "ದೇವ"),
+    ("ಕೋಳಿ", "ಗಾಳಿ"), ("ಮಾಲಿ", "ಜಾಲಿ"), ("ಮೇಲೆ", "ಶಾಲೆ"), ("ಸೋಲು", "ಪಾಲು"),
+    ("ದೋಣಿ", "ವೇಣಿ"),
+    ("ಅಣ್ಣ", "ಬಣ್ಣ"), ("ಸಕ್ಕರೆ", "ಅಕ್ಕರೆ"), ("ಹೊಟ್ಟೆ", "ಬಟ್ಟೆ"), ("ಅಪ್ಪ", "ತಪ್ಪ"),
+    ("ಅಮ್ಮ", "ನಮ್ಮ"), ("ಗಿಡ", "ಬಿಡ"), ("ರಥ", "ಪಥ"), ("ರೋಗ", "ಭೋಗ"), ("ಭಾಗ", "ತ್ಯಾಗ"),
+    ("ಕೀರ್ತಿ", "ಮೂರ್ತಿ"),
+    ("ಹೂವು", "ನೋವು"), ("ಹಾಲು", "ಕಾಲು"), ("ನೀರು", "ಹೀರು"), ("ಊಟ", "ಆಟ"),
+    ("ಪಾಠ", "ಮಠ"), ("ಗಾಳಿ", "ತಾಳಿ"), ("ಸೂರ್ಯ", "ಕಾರ್ಯ"), ("ಚಂದ್ರ", "ಇಂದ್ರ"),
+    ("ದೇಶ", "ವೇಷ"),
+    ("ಓಡು", "ನೋಡು"), ("ಮಾಡು", "ಹಾಡು"), ("ಬರುವೆ", "ತರುವೆ"), ("ತಿನ್ನು", "ನನ್ನು"),
+    ("ಬರೆ", "ಕರೆ"), ("ನಗು", "ಮಗು"), ("ಚೆನ್ನ", "ಹೊನ್ನ"), ("ದೊಡ್ಡ", "ಅಡ್ಡ"),
+    ("ಸಣ್ಣ", "ಮಣ್ಣ"),
+    ("ವಿಜ್ಞಾನ", "ಅಜ್ಞಾನ"), ("ಸಮಾಜ", "ಜಹಾಜ"), ("ವಿವೇಕ", "ಅನೇಕ"),
+    ("ಪ್ರಾಪ್ತಿ", "ತೃಪ್ತಿ"), ("ಸಮಯ", "ವಿನಯ"), ("ಬಾಲಕ", "ಚಾಲಕ"), ("ಲೇಖಕ", "ಶಿಕ್ಷಕ"),
+    ("ವನಿತಾ", "ಸವಿತಾ"), ("ಆನಂದ", "ಗೋವಿಂದ"), ("ಸುಂದರ", "ಮಂದಿರ"),
+    ("ವೇದ", "ಖೇದ"), ("ಗಾನ", "ಮೌನ"), ("ಶ್ರವಣ", "ಪವಣ"), ("ರಮಣ", "ನಮನ"),
+    ("ಕವಿತೆ", "ಸವಿತೆ"), ("ಚಂದನ", "ವಂದನ"), ("ಜೀವನ", "ಪಾವನ"), ("ಬಂಧನ", "ಕ್ರಂದನ"),
+    ("ಅಭಯ", "ಉಭಯ"), ("ಲೀಲೆ", "ಮಾಲೆ"),
+]
+PRASA_RHYME_VOCAB = sorted(set(a for a, _ in _PRASA_CURATED_PAIRS) | set(b for _, b in _PRASA_CURATED_PAIRS))
 
 # Import expanded vocabulary for ~200k Q&A support
 from group1_kannada.kannada_expanded_vocabulary import (
@@ -1583,6 +1615,20 @@ CLASS_VEHICLES = [
     "ಟ್ರಾಮ್", "ಮೆಟ್ರೋ", "ಟ್ಯಾಕ್ಸಿ", "ವಾಹನ", "ಯಾನ", "ಪ್ರವಾಸ",
 ]
 
+# ಆಹಾರ (food) - pulses, grains, prepared foods - for S6 only.
+# These are food items that are neither ಹಣ್ಣು nor ತರಕಾರಿ.
+# Used so we can ask "ಆಹಾರ ಅಥವಾ ಹಣ್ಣು?" instead of "ವಾಹನ ಅಥವಾ ವಸ್ತು?" for food words.
+CLASS_AHAARA = [
+    "ಬೇಳೆ", "ಬಿಸಿಬೇಳೆ", "ತೊಗರಿಬೇಳೆ", "ಕಡಲೆಬೇಳೆ", "ರೊಟ್ಟಿ", "ಅನ್ನ", "ದಾಲ್",
+    "ಹಿಟ್ಟು", "ಪಾಯಸ", "ಹಪ್ಪಳ", "ಉಪ್ಪಿಟ್ಟು", "ಹೋಳಿಗೆ", "ಬಿರಿಯಾಣಿ", "ಚೌಳು",
+    "ಮಜ್ಜಿಗೆ", "ತೆಂಗಿನಹಾಲು", "ಕ್ಷೀರ", "ಮಧು", "ಅಕ್ಕಿ", "ರಾಗಿ", "ಜೋಳ", "ಸಜ್ಜೆ",
+    "ನೆಲಗಡಲೆ", "ಬೆಲ್ಲ", "ಅಕ್ಕಿಹಿಟ್ಟು", "ಪಂಚಾಮೃತ",
+]
+
+# Words excluded from S6 classification - they don't fit cleanly into
+# ವಾಹನ/ವಸ್ತು/ವ್ಯಕ್ತಿ binary choices (e.g. ಗುಂಪು = collective noun, ಸಮೂಹ)
+CLASSIFICATION_EXCLUDE = frozenset(["ಗುಂಪು"])
+
 # Classification categories - order matters (first match wins)
 # ವಸ್ತು = general objects (household, tools, etc.) - catch-all last
 CLASSIFICATION_CATEGORIES = {
@@ -1606,6 +1652,32 @@ CLASSIFICATION_CATEGORIES = {
         + MEDIUM_VEHICLES
         + EXPANDED_NATURE
     ),
+}
+
+# S6 Classification vocabulary: (word_list, option_pairs).
+# Only words from these lists are used for S6. Each category has tailored options.
+# Option pairs: (opt1, opt2) where the correct answer is one of them.
+def _s6_vastu_words():
+    """Household objects only - exclude food, collective nouns."""
+    obj = EASY_OBJECTS + MEDIUM_OBJECTS + MEDIUM_HOUSEHOLD + EXPANDED_OBJECTS
+    exclude = set(CLASSIFICATION_EXCLUDE) | set(EASY_FOOD + MEDIUM_FOOD + EXPANDED_FOOD) | set(CLASS_AHAARA)
+    return [w for w in obj if w not in exclude]
+
+S6_CLASSIFICATION_VOCABULARY = {
+    "ಹಣ್ಣು": (CLASS_FRUITS, [("ಹಣ್ಣು", "ತರಕಾರಿ"), ("ಹಣ್ಣು", "ಹೂವು")]),
+    "ತರಕಾರಿ": (CLASS_VEGETABLES, [("ತರಕಾರಿ", "ಹಣ್ಣು"), ("ತರಕಾರಿ", "ಆಹಾರ")]),
+    "ಆಹಾರ": (CLASS_AHAARA, [("ಆಹಾರ", "ಹಣ್ಣು"), ("ಆಹಾರ", "ತರಕಾರಿ")]),
+    "ಹೂವು": (CLASS_FLOWERS, [("ಹೂವು", "ಪ್ರಕೃತಿ"), ("ಹೂವು", "ಹಣ್ಣು")]),
+    "ಪ್ರಾಣಿ": (EASY_ANIMALS + MEDIUM_ANIMALS + EXPANDED_ANIMALS, [("ಪ್ರಾಣಿ", "ಪಕ್ಷಿ")]),
+    "ಪಕ್ಷಿ": (EASY_BIRDS + MEDIUM_BIRDS + EXPANDED_BIRDS, [("ಪಕ್ಷಿ", "ಪ್ರಾಣಿ")]),
+    "ವಾಹನ": (CLASS_VEHICLES, [("ವಾಹನ", "ವಸ್ತು"), ("ವಾಹನ", "ಪ್ರಾಣಿ")]),
+    "ಸ್ಥಳ": (CLASS_PLACES, [("ಸ್ಥಳ", "ಪ್ರಕೃತಿ"), ("ಸ್ಥಳ", "ವಸ್ತು")]),
+    "ಪ್ರಕೃತಿ": (CLASS_NATURE, [("ಪ್ರಕೃತಿ", "ಸ್ಥಳ"), ("ಪ್ರಕೃತಿ", "ಹೂವು")]),
+    "ವ್ಯಕ್ತಿ": (
+        EASY_PEOPLE + MEDIUM_PROFESSIONS + EXPANDED_PEOPLE,
+        [("ವ್ಯಕ್ತಿ", "ವಸ್ತು")],
+    ),
+    "ವಸ್ತು": (_s6_vastu_words(), [("ವಾಹನ", "ವಸ್ತು"), ("ವ್ಯಕ್ತಿ", "ವಸ್ತು")]),
 }
 
 # Combined word lists by difficulty
@@ -1639,6 +1711,7 @@ ALL_WORDS = (
     + HARD_WORDS
     + ADDITIONAL_VOCABULARY
     + EXPANDED_VOCABULARY_200K
+    + PRASA_RHYME_VOCAB
 )
 
 
@@ -1666,13 +1739,32 @@ def _get_last_akshara(word: str) -> str:
     return aksharas[-1] if aksharas else ""
 
 
+# Kannada prosody (ಪ್ರಾಸ): these pairs are NOT valid rhymes (second letter / sound don't match).
+BAD_RHYME_PAIRS = frozenset([
+    ("ಸುರ", "ಸಾರ"), ("ಸಾರ", "ಸುರ"),
+    ("ಶೀಲ", "ಹಲ"), ("ಹಲ", "ಶೀಲ"),
+])
+
+# Build PRASA_RHYME_GROUPS_CURATED: word -> [rhyme partners] (uses _PRASA_CURATED_PAIRS above)
+PRASA_RHYME_GROUPS_CURATED = defaultdict(list)
+for a, b in _PRASA_CURATED_PAIRS:
+    PRASA_RHYME_GROUPS_CURATED[a].append(b)
+    PRASA_RHYME_GROUPS_CURATED[b].append(a)
+PRASA_RHYME_GROUPS_CURATED = dict(PRASA_RHYME_GROUPS_CURATED)
+
+# Legacy overrides - kept for backward compat; curated groups supersede
+PRASA_RHYME_OVERRIDES = {
+    "ಸುರ": ["ನರ"], "ಸಾರ": ["ನರ"], "ಶೀಲ": ["ನೀಲ", "ಕಾಲ"], "ಹಲ": ["ಬಲ", "ಕಲ"],
+}
+
+
 def build_real_rhyming_pairs() -> dict:
     """
-    Build rhyming pairs from vocabulary only.
-    Both words in each pair are real Kannada words that share the same
-    last grapheme cluster. Uses cyclic pairing so each word has a unique
-    rhyme partner and no single word is overused as the answer.
+    Build rhyming pairs. Uses PRASA_RHYME_GROUPS_CURATED as primary source;
+    falls back to auto-pairing (same last akshara) for words not in curated list.
+    Excludes BAD_RHYME_PAIRS.
     """
+    vocab_set = set(ALL_WORDS_UNIQUE)
     by_last = defaultdict(list)
     for w in ALL_WORDS_UNIQUE:
         if w:
@@ -1680,17 +1772,97 @@ def build_real_rhyming_pairs() -> dict:
             if last:
                 by_last[last].append(w)
     pairs = {}
+    # 1. Primary: use curated ಪ್ರಾಸ pairs when word is in curated groups
+    for word, curated_partners in PRASA_RHYME_GROUPS_CURATED.items():
+        if word not in vocab_set:
+            continue
+        for p in curated_partners:
+            if p in vocab_set and (word, p) not in BAD_RHYME_PAIRS:
+                pairs[word] = p
+                break
+    # 2. Fallback: auto-pair by last akshara for words not in curated
     for words in by_last.values():
         if len(words) >= 2:
-            # Sort for determinism; cyclic pairing for even distribution
             words = sorted(set(words))
             n = len(words)
             for i, w1 in enumerate(words):
-                pairs[w1] = words[(i + 1) % n]
+                if w1 in pairs:
+                    continue  # already from curated
+                candidate = words[(i + 1) % n]
+                if (w1, candidate) in BAD_RHYME_PAIRS:
+                    for j in range(1, n):
+                        other = words[(i + j) % n]
+                        if (w1, other) not in BAD_RHYME_PAIRS:
+                            candidate = other
+                            break
+                pairs[w1] = candidate
+    # 3. Legacy overrides for any remaining edge cases
+    for word, preferred in PRASA_RHYME_OVERRIDES.items():
+        if word not in vocab_set or word in pairs:
+            continue
+        for p in preferred:
+            if p in vocab_set and (word, p) not in BAD_RHYME_PAIRS:
+                pairs[word] = p
+                break
     return pairs
 
 
+def build_rhyming_groups() -> dict:
+    """
+    Map each word to rhyme partners. Uses PRASA_RHYME_GROUPS_CURATED as primary;
+    falls back to auto-built groups (same last akshara) for words not in curated.
+    """
+    vocab_set = set(ALL_WORDS_UNIQUE)
+    by_last = defaultdict(list)
+    for w in ALL_WORDS_UNIQUE:
+        if w:
+            last = _get_last_akshara(w)
+            if last:
+                by_last[last].append(w)
+    groups = {}
+    # 1. Primary: curated groups (filter to vocab, exclude BAD_RHYME_PAIRS)
+    for word, curated_partners in PRASA_RHYME_GROUPS_CURATED.items():
+        if word not in vocab_set:
+            continue
+        valid = [
+            p for p in curated_partners
+            if p in vocab_set and (word, p) not in BAD_RHYME_PAIRS and (p, word) not in BAD_RHYME_PAIRS
+        ]
+        if valid:
+            groups[word] = valid
+    # 2. Fallback: auto-build from last akshara for words not in curated
+    for words in by_last.values():
+        words = sorted(set(words))
+        if len(words) >= 2:
+            for w in words:
+                if w in groups:
+                    continue
+                lst = [x for x in words if x != w and (w, x) not in BAD_RHYME_PAIRS and (x, w) not in BAD_RHYME_PAIRS]
+                if lst:
+                    groups[w] = lst
+    return groups
+
+
 RHYMING_PAIRS = build_real_rhyming_pairs()
+RHYMING_GROUPS_RAW = build_rhyming_groups()
+# Exclude bad ಪ್ರಾಸ pairs from groups so open-ended rhyme answers are correct
+RHYMING_GROUPS = {
+    w: [x for x in lst if (w, x) not in BAD_RHYME_PAIRS and (x, w) not in BAD_RHYME_PAIRS]
+    for w, lst in RHYMING_GROUPS_RAW.items()
+}
+
+
+def do_rhyme_prasa(w1: str, w2: str) -> bool:
+    """True if w1 and w2 are valid ಪ್ರಾಸ (rhyme) partners. False for BAD_RHYME_PAIRS."""
+    if (w1, w2) in BAD_RHYME_PAIRS or (w2, w1) in BAD_RHYME_PAIRS:
+        return False
+    if w1 in RHYMING_PAIRS and RHYMING_PAIRS[w1] == w2:
+        return True
+    if w2 in RHYMING_PAIRS and RHYMING_PAIRS[w2] == w1:
+        return True
+    if w1 in RHYMING_GROUPS and w2 in RHYMING_GROUPS.get(w1, []):
+        return True
+    return False
 
 if __name__ == "__main__":
     print(f"Easy words (unique): {len(EASY_WORDS_UNIQUE)}")

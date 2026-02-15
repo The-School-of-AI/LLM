@@ -4,6 +4,7 @@ Generate Statement 4: Letter Count (ಅಕ್ಷರ ಗಣನೆ) questions - Ka
 Target: 25,800 pairs (12.9% of 200,000)
 """
 import os
+import re
 import random
 import sys
 
@@ -67,6 +68,15 @@ def _count_yogavaha(word):
 def _count_arka_vattu(word):
     """Count reph (್ರ) in word."""
     return word.count(REPH)
+
+
+def _get_arka_vattu_consonants(word: str) -> list[str]:
+    """
+    Return list of consonants that have arkavattu (ರ್ attaches to them).
+    E.g. ಧರ್ಮ -> [ಮ], ತರ್ಕ -> [ಕ], ಸೂರ್ಯ -> [ಯ].
+    """
+    pattern = REPH + r"([\u0C95-\u0CB9])"
+    return re.findall(pattern, word)
 
 
 # Kannada vowel signs (ಾ ಿ ೀ ು ೂ ೃ ೄ ೆ ೇ ೈ ೊ ೋ ೌ)
@@ -186,10 +196,15 @@ TEMPLATES = [
     ('"{word}" ಪದದಲ್ಲಿ ಒತ್ತಕ್ಷರವಿಲ್ಲದ ಅಕ್ಷರಗಳು ಎಷ್ಟು?', "no_ottakshara_count"),
     ('"{word}" ಪದವು ನಾಲ್ಕು ಅಕ್ಷರಗಳ ಪದವೇ?', "four_letter_yes_no"),
     ('"{word}" ಪದದಲ್ಲಿ ಅರ್ಕಾವತ್ತುಗಳ ಸಂಖ್ಯೆ ಎಷ್ಟು?', "arka_vattu_count"),
+    ('"{word}" ಪದದಲ್ಲಿ ಅರ್ಕಾವತ್ತು ಯಾವ ಅಕ್ಷರಕ್ಕೆ ಸೇರಿದೆ?', "arka_vattu_letter"),
+    ('"{word}" ಪದದಲ್ಲಿ ಅರ್ಕಾವತ್ತು ಯಾವ ವ್ಯಂಜನಕ್ಕೆ ಸೇರಿದೆ?', "arka_vattu_letter"),
+    ('"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು (ರೆಫೆ) ಯಾವ ಅಕ್ಷರಕ್ಕೆ ಸೇರಿದೆ?', "arka_vattu_letter"),
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಗುಣಿತಾಕ್ಷರಗಳನ್ನು ಕಾಣಬಹುದು?', "gunitakshara_count"),
 ]
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
+# Words that have ಅರ್ಕಾವತ್ತು (ರೆಫೆ/ರ್) - used for arkavattu questions so answers are not always 0
+ARKAVATTU_WORDS = [w for w in set(all_words) if _count_arka_vattu(w) > 0]
 samples = []
 target_count = 25800
 unique_combinations = {}
@@ -201,6 +216,9 @@ for word in set(all_words):
         continue
 
     for template_idx, (template, answer_type) in enumerate(TEMPLATES):
+        # arka_vattu_letter only for words that have arkavattu (need consonant to name)
+        if answer_type == "arka_vattu_letter" and _count_arka_vattu(word) == 0:
+            continue
         query = template.format(word=word)
         answer = ""
         if answer_type == "count":
@@ -244,6 +262,12 @@ for word in set(all_words):
         elif answer_type == "arka_vattu_count":
             cnt = _count_arka_vattu(word)
             answer = int_to_kannada(cnt)
+        elif answer_type == "arka_vattu_letter":
+            cons = _get_arka_vattu_consonants(word)
+            if cons:
+                answer = cons[0] if len(cons) == 1 else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
+            else:
+                continue
         elif answer_type == "gunitakshara_count":
             answer = int_to_kannada(cluster_count)
         elif answer_type == "varna_count":
@@ -264,12 +288,20 @@ seen_qa = set((q, a) for q, a in samples)
 no_progress_limit = 50000
 no_progress = 0
 while len(samples) < target_count and no_progress < no_progress_limit:
-    word = random.choice(list(set(all_words)))
+    template, answer_type = random.choice(TEMPLATES)
+    # For arkavattu questions: ~50% from arkavattu words (non-zero), ~50% from all (mix of 0 and non-zero)
+    if answer_type in ("arka_vattu_count", "arka_vattu_letter") and ARKAVATTU_WORDS and random.random() < 0.5:
+        word = random.choice(ARKAVATTU_WORDS)
+    else:
+        word = random.choice(list(set(all_words)))
     clusters = get_kannada_grapheme_clusters(word)
     cluster_count = len(clusters)
     if cluster_count == 0:
+        no_progress += 1
         continue
-    template, answer_type = random.choice(TEMPLATES)
+    if answer_type == "arka_vattu_letter" and _count_arka_vattu(word) == 0:
+        no_progress += 1
+        continue
     query = template.format(word=word)
     answer = ""
     if answer_type == "count":
@@ -310,6 +342,13 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         answer = "ಹೌದು" if cluster_count == 4 else f"ಅಲ್ಲ ({int_to_kannada(cluster_count)} ಅಕ್ಷರ)"
     elif answer_type == "arka_vattu_count":
         answer = int_to_kannada(_count_arka_vattu(word))
+    elif answer_type == "arka_vattu_letter":
+        cons = _get_arka_vattu_consonants(word)
+        if cons:
+            answer = cons[0] if len(cons) == 1 else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
+        else:
+            no_progress += 1
+            continue
     elif answer_type == "gunitakshara_count":
         answer = int_to_kannada(cluster_count)
     elif answer_type == "varna_count":
