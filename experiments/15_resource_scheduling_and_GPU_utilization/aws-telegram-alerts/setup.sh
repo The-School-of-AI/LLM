@@ -73,6 +73,7 @@ log_info "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 #######################################
 log_info "Checking IAM role..."
 
+# hardcoding policy arn as its going to same across all accounts
 POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/T15-CloudWatchAlarms-410"
 
 log_info "Checking if ${LAMBDA_ROLE_NAME} role exists..."
