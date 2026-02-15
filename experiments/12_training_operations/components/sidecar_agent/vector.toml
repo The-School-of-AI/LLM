@@ -5,6 +5,11 @@
 # Requires: Vector >= 0.30
 # ------------------------------------------------------------------------------
 
+# Health API (for training-side health checks)
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
 # SOURCES
 
 [sources.training_logs]

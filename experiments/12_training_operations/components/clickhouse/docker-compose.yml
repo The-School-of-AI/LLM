@@ -13,8 +13,9 @@ services:
     environment:
       CLICKHOUSE_DB: training_observability
     volumes:
-      - clickhouse_data:/var/lib/clickhouse
-      - clickhouse_logs:/var/log/clickhouse-server
+      # EBS gp3 bind-mounts (external volume at /data/clickhouse)
+      - /data/clickhouse/data:/var/lib/clickhouse
+      - /data/clickhouse/logs:/var/log/clickhouse-server
       - ./initdb.d:/docker-entrypoint-initdb.d:ro
       - ./users.d:/etc/clickhouse-server/users.d:ro
       - ./config.d:/etc/clickhouse-server/config.d:ro
@@ -24,7 +25,3 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-
-volumes:
-  clickhouse_data:
-  clickhouse_logs:

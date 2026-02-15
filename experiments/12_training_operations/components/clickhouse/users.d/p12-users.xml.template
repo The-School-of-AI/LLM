@@ -8,11 +8,11 @@
       </networks>
     </default>
 
-    <!-- p12_writer: used by Vector + CheckpointRegistry on the training instance -->
+    <!-- p12_writer: Vector + CheckpointRegistry on training instances -->
     <p12_writer>
       <password_sha256_hex>__WRITER_HASH__</password_sha256_hex>
       <networks>
-        <ip>::/0</ip>
+        <ip>__TRAINING_SUBNET_CIDR__</ip>
       </networks>
       <profile>default</profile>
       <quota>default</quota>
@@ -21,11 +21,11 @@
       </allow_databases>
     </p12_writer>
 
-    <!-- p12_reader: used by dashboards / query tools -->
+    <!-- p12_reader: dashboards / query tools -->
     <p12_reader>
       <password_sha256_hex>__READER_HASH__</password_sha256_hex>
       <networks>
-        <ip>::/0</ip>
+        <ip>__DASHBOARD_SUBNET_CIDR__</ip>
       </networks>
       <profile>readonly</profile>
       <quota>default</quota>
