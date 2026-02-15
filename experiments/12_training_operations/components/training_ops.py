@@ -73,6 +73,9 @@ class TrainingOps:
         How often (seconds) to collect system metrics.
     default_context : dict | None
         Default context fields merged into every log_step call.
+    check_clickhouse_preflight : bool
+        If True, perform direct ClickHouse connectivity preflight. Disabled by
+        default so startup preflight focuses on Vector process health.
     """
 
     def __init__(
@@ -88,6 +91,7 @@ class TrainingOps:
         system_metrics_interval: float = 5.0,
         default_context: dict | None = None,
         skip_vector_check: bool = False,
+        check_clickhouse_preflight: bool = False,
     ):
         self.run_id = run_id
         self.rank = rank
@@ -125,7 +129,8 @@ class TrainingOps:
             print("⚠ Preflight: Vector check skipped (skip_vector_check=True)")
         else:
             self._check_vector()      # fatal
-        self._check_clickhouse()      # warn-only
+        if check_clickhouse_preflight:
+            self._check_clickhouse()  # warn-only
 
         # ---- JSONLogger ----
         self.logger = JSONLogger(

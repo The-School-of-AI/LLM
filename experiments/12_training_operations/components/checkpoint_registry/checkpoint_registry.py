@@ -45,6 +45,7 @@ class CheckpointRegistry:
         user: str | None = None,
         password: str | None = None,
         ca_cert: str | None = None,
+        check_connectivity_on_init: bool = False,
     ):
         self.clickhouse_url = (
             clickhouse_url
@@ -74,12 +75,13 @@ class CheckpointRegistry:
                 self._ssl_ctx.check_hostname = False
                 self._ssl_ctx.verify_mode = ssl.CERT_NONE
 
-        # Quick connectivity check
-        try:
-            self._query("SELECT 1")
-            print(f"✓ CheckpointRegistry connected to {self.clickhouse_url}")
-        except Exception as e:
-            print(f"⚠ CheckpointRegistry: ClickHouse not reachable ({e})")
+        # Optional direct connectivity probe (off by default).
+        if check_connectivity_on_init:
+            try:
+                self._query("SELECT 1")
+                print(f"✓ CheckpointRegistry connected to {self.clickhouse_url}")
+            except Exception as e:
+                print(f"⚠ CheckpointRegistry: ClickHouse not reachable ({e})")
 
     # ------------------------------------------------------------------
     # Low-level ClickHouse HTTP helpers

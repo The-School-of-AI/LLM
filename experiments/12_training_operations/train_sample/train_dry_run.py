@@ -137,6 +137,19 @@ def train(model, loader, device, num_steps=50, ops=None):
                 "step_time_ms": dt,
             })
 
+            # Periodically emit checkpoint events to validate checkpoint pipeline.
+            if step > 0 and step % 25 == 0:
+                ops.log_checkpoint(
+                    step=step,
+                    path=f"/tmp/checkpoints/dry_run_step_{step}.pt",
+                    s3_key=f"s3://dry-run/{ops.run_id}/step_{step}.pt",
+                    loss=float(loss.item()),
+                    tag="temporary",
+                    duration_s=0.0,
+                    size_bytes=0,
+                    metadata={"dry_run": True},
+                )
+
         del logits_ntp, logits_mtp, x, y_ntp, y_mtp, loss
         if step % 10 == 0:
             gc.collect()
