@@ -212,6 +212,15 @@ The IAM role/user running the deployment commands (your operator workstation or 
       ]
     },
     {
+      "Sid": "SSMParameterStore",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:PutParameter",
+        "ssm:GetParameter"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:*:parameter/p12/*"
+    },
+    {
       "Sid": "DLMForSnapshots",
       "Effect": "Allow",
       "Action": [
@@ -313,6 +322,21 @@ aws iam put-role-policy \
         "arn:aws:s3:::p12-training-ops-base-*",
         "arn:aws:s3:::p12-training-ops-base-*/*"
       ]
+    }]
+  }'
+
+aws iam put-role-policy \
+  --role-name p12-clickhouse-db-role \
+  --policy-name p12-db-ssm-params \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": [
+        "ssm:PutParameter",
+        "ssm:GetParameter"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:*:parameter/p12/*"
     }]
   }'
 
