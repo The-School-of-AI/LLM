@@ -8,6 +8,22 @@ data:
   batch_size: 8
   max_length: 128
 
+# Streaming Data Pipeline Configuration (for large-scale training)
+# When enabled, uses shard-aware streaming instead of HuggingFace load_dataset()
+data_pipeline:
+  enabled: false                           # Set to true for large-scale training
+  s3_bucket: null                          # S3 bucket with tokenized shards
+  s3_prefix: "dolmo-tokenized"             # S3 key prefix for shard files
+  s3_region: "us-east-1"
+  local_data_dir: "/data/dolmo"            # NVMe RAID-0 mount point for staging
+  initial_shards: 16                       # Number of shards to pre-stage before training
+  prefetch_shards: 8                       # Background read-ahead window
+  download_workers: 8                      # Parallel S3 download threads
+  seq_length: 4096                         # Tokens per training sequence
+  num_workers: 8                           # DataLoader worker processes
+  prefetch_depth: 2                        # GPU prefetch queue depth
+  pin_memory: true
+
 # Training Configuration
 training:
   num_epochs: 1

@@ -43,9 +43,16 @@ import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
+from src.data_pipeline import (
+    PrefetchDataLoader,
+    S3Stager,
+    StreamingTokenDataset,
+)
+from src.data_pipeline.prefetch_loader import create_prefetch_dataloader
+from src.data_pipeline.streaming_dataset import create_distributed_sampler
 from src.model import get_qwen2_moe_model
 from src.train import evaluate, generate_text, train_epoch
-from src.utils import print_rank_0, set_seed
+from src.utils import is_main_process, print_rank_0, set_seed
 
 
 class Config:
@@ -97,6 +104,21 @@ class Config:
         self.s3_prefix = config_dict["s3"]["prefix"]
         self.s3_region = config_dict["s3"]["region"]
         self.cleanup_after_upload = config_dict["s3"]["cleanup_after_upload"]
+
+        # Data pipeline configuration (streaming / shard-aware)
+        dp = config_dict.get("data_pipeline", {})
+        self.data_pipeline_enabled = dp.get("enabled", False)
+        self.dp_s3_bucket = dp.get("s3_bucket", self.s3_bucket)
+        self.dp_s3_prefix = dp.get("s3_prefix", "dolmo-tokenized")
+        self.dp_s3_region = dp.get("s3_region", self.s3_region)
+        self.dp_local_data_dir = dp.get("local_data_dir", "/data/dolmo")
+        self.dp_initial_shards = dp.get("initial_shards", 16)
+        self.dp_prefetch_shards = dp.get("prefetch_shards", 8)
+        self.dp_download_workers = dp.get("download_workers", 8)
+        self.dp_seq_length = dp.get("seq_length", 4096)
+        self.dp_num_workers = dp.get("num_workers", 8)
+        self.dp_prefetch_depth = dp.get("prefetch_depth", 2)
+        self.dp_pin_memory = dp.get("pin_memory", True)
 
         # Generation configuration
         self.test_generation = config_dict["generation"]["test_generation"]
@@ -188,16 +210,56 @@ def main():
     # ========================================
     print_rank_0("\n[1/5] Loading data...")
     tokenizer = get_tokenizer(args.tokenizer_name)
-    train_loader, eval_loader, test_loader, _ = get_dataloaders(
-        dataset_name=args.dataset_name,
-        dataset_config=args.dataset_config,
-        tokenizer=tokenizer,
-        batch_size=args.batch_size,
-        max_length=args.max_length,
-    )
-    print_rank_0(f"  Train batches: {len(train_loader)}")
-    print_rank_0(f"  Eval batches: {len(eval_loader)}")
-    print_rank_0(f"  Test batches: {len(test_loader)}")
+
+    # --- Branch: streaming data pipeline vs. HuggingFace load_dataset ---
+    stager = None
+    all_shard_keys = None
+    staging_thread = None
+    streaming_dataset = None
+
+    if args.data_pipeline_enabled:
+        # ── Shard-aware streaming pipeline ──
+        print_rank_0("  Using streaming data pipeline (shard-aware)...")
+        print_rank_0(f"  S3: s3://{args.dp_s3_bucket}/{args.dp_s3_prefix}/")
+        print_rank_0(f"  Local staging: {args.dp_local_data_dir}")
+        print_rank_0(f"  Sequence length: {args.dp_seq_length}")
+
+        # Only rank 0 discovers and downloads shards
+        if is_main_process():
+            stager = S3Stager(
+                s3_bucket=args.dp_s3_bucket,
+                s3_prefix=args.dp_s3_prefix,
+                local_data_dir=args.dp_local_data_dir,
+                s3_region=args.dp_s3_region,
+                download_workers=args.dp_download_workers,
+            )
+            all_shard_keys = stager.discover_shards()
+            print_rank_0(f"  Discovered {len(all_shard_keys)} shards in S3")
+
+            # Start initial staging in background (overlaps with model init)
+            resume_shard_idx = 0  # Will be updated after checkpoint load
+            staging_thread = stager.stage_initial_async(
+                shard_keys=all_shard_keys,
+                start_shard_idx=resume_shard_idx,
+                num_shards=args.dp_initial_shards,
+            )
+            print_rank_0(f"  Initial staging started ({args.dp_initial_shards} shards)...")
+
+        # eval/test loaders not used with streaming pipeline
+        eval_loader = None
+        test_loader = None
+    else:
+        # ── Original HuggingFace pipeline ──
+        train_loader, eval_loader, test_loader, _ = get_dataloaders(
+            dataset_name=args.dataset_name,
+            dataset_config=args.dataset_config,
+            tokenizer=tokenizer,
+            batch_size=args.batch_size,
+            max_length=args.max_length,
+        )
+        print_rank_0(f"  Train batches: {len(train_loader)}")
+        print_rank_0(f"  Eval batches: {len(eval_loader)}")
+        print_rank_0(f"  Test batches: {len(test_loader)}")
 
     # ========================================
     # Step 2: Load Model
@@ -240,6 +302,8 @@ def main():
     start_epoch = 0
     start_step = 0
     global_step = 0
+    resume_shard_idx = 0
+    resume_seq_offset = 0
 
     if args.resume_from_checkpoint:
         print_rank_0("\n[3.6/5] Resuming from checkpoint...")
@@ -263,14 +327,78 @@ def main():
                 start_epoch = client_state.get("epoch", 0)
                 start_step = client_state.get("step", 0)
                 global_step = client_state.get("global_step", 0)
+
+                # Restore shard-level progress for streaming pipeline
+                resume_shard_idx = client_state.get("shard_idx", 0)
+                resume_seq_offset = client_state.get("seq_offset", 0)
+
                 print_rank_0(
                     f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}"
                 )
+                if args.data_pipeline_enabled:
+                    print_rank_0(
+                        f"  ✓ Shard progress: shard_idx={resume_shard_idx}, seq_offset={resume_seq_offset}"
+                    )
             else:
                 print_rank_0("  ⚠️  No client state found, starting fresh")
         except Exception as e:
             print_rank_0(f"  ❌ Failed to resume from checkpoint: {e}")
             print_rank_0("  Starting training from scratch...")
+
+    # ========================================
+    # Step 3.7: Finalize Streaming Data Pipeline
+    # ========================================
+    if args.data_pipeline_enabled:
+        print_rank_0("\n[3.7/5] Finalizing streaming data pipeline...")
+
+        # Wait for initial staging to complete (likely already done)
+        if staging_thread is not None:
+            staging_thread.join()
+            print_rank_0("  ✓ Initial shards staged")
+
+        # Barrier: all ranks wait for rank 0 to finish staging
+        S3Stager.barrier_all_ranks()
+
+        # Create the streaming dataset with resume position
+        staged_paths = stager.get_staged_shards() if stager else []
+
+        # If stager is None (non-rank-0), get paths from the local dir
+        if not staged_paths:
+            from src.data_pipeline.instance_store import InstanceStoreManager
+            store_mgr = InstanceStoreManager(data_dir=args.dp_local_data_dir)
+            staged_paths = store_mgr.get_staged_shards()
+
+        streaming_dataset = StreamingTokenDataset(
+            shard_paths=staged_paths,
+            seq_length=args.dp_seq_length,
+            start_shard_idx=resume_shard_idx,
+            start_seq_offset=resume_seq_offset,
+        )
+        print_rank_0(f"  Dataset: {len(streaming_dataset)} sequences across {streaming_dataset.num_shards} shards")
+
+        # Create distributed sampler + prefetch dataloader
+        device = torch.device(f"cuda:{args.local_rank}" if torch.cuda.is_available() else "cpu")
+        sampler = create_distributed_sampler(streaming_dataset, shuffle=False)
+
+        train_loader = create_prefetch_dataloader(
+            dataset=streaming_dataset,
+            device=device,
+            batch_size=args.batch_size,
+            num_workers=args.dp_num_workers,
+            prefetch_depth=args.dp_prefetch_depth,
+            pin_memory=args.dp_pin_memory,
+            sampler=sampler,
+        )
+        print_rank_0(f"  PrefetchDataLoader ready: {len(train_loader)} batches")
+
+        # Start background staging for remaining shards
+        if stager and all_shard_keys:
+            remaining_start = resume_shard_idx + args.dp_initial_shards
+            if remaining_start < len(all_shard_keys):
+                stager.stage_background(all_shard_keys[remaining_start:])
+                print_rank_0(
+                    f"  Background staging started for {len(all_shard_keys) - remaining_start} remaining shards"
+                )
 
     # ========================================
     # Step 4: Training
@@ -322,6 +450,19 @@ def main():
                 "eval_perplexity": eval_perplexity,
             }
 
+            # Save shard-level progress for streaming pipeline
+            if args.data_pipeline_enabled and streaming_dataset is not None:
+                shard_idx, seq_offset = streaming_dataset.get_progress(
+                    train_loader.batches_yielded * args.batch_size
+                    if isinstance(train_loader, PrefetchDataLoader)
+                    else 0
+                )
+                client_state["shard_idx"] = shard_idx
+                client_state["seq_offset"] = seq_offset
+                print_rank_0(
+                    f"  Shard progress saved: shard_idx={shard_idx}, seq_offset={seq_offset}"
+                )
+
             if checkpoint_manager:
                 checkpoint_manager.save_checkpoint(
                     model_engine,
@@ -363,6 +504,16 @@ def main():
             "training_complete": True,
         }
 
+        # Save final shard progress
+        if args.data_pipeline_enabled and streaming_dataset is not None:
+            shard_idx, seq_offset = streaming_dataset.get_progress(
+                train_loader.batches_yielded * args.batch_size
+                if isinstance(train_loader, PrefetchDataLoader)
+                else 0
+            )
+            client_state["shard_idx"] = shard_idx
+            client_state["seq_offset"] = seq_offset
+
         if checkpoint_manager:
             checkpoint_manager.save_checkpoint(
                 model_engine, step=global_step, tag="final", client_state=client_state
@@ -394,6 +545,9 @@ def main():
     print_rank_0("=" * 80)
 
     # Cleanup
+    if args.data_pipeline_enabled and stager is not None:
+        stager.stop_background()
+        print_rank_0("Background staging stopped.")
     torch.cuda.empty_cache()
 
 
