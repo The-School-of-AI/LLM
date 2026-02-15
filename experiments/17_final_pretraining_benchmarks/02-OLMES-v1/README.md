@@ -96,10 +96,10 @@ The pipeline defines specialized stages to match the model's maturity:
 
 | Stage | Focus | Key Coverage |
 | :--- | :--- | :--- |
-| **`ci_breadth`** | **CI Smoke Test** | Fast representative sample (English, Indic, CoT, Code). |
+| **`ci_breadth`** | **CI Smoke Test** | Fast representative sample (English, Indic, CoT, Code Completion). |
 | **`pretrain_1b`** | **Early Signal** | Fast RC/BPB + Indic NLU trends. |
 | **`pretrain_3b`** | **Enhanced Signal** | Pretrain 1B + Core Knowledge & QA. |
-| **`pretrain_8b`** | **Full Milestone** | Full Base Suite (STEM, Math, Code) + MMLU. + Extended Indic.|
+| **`pretrain_8b`** | **Full Milestone** | Full Base Suite (STEM, Math, Code Completion) + MMLU. + Extended Indic.|
 | **`pretrain_70b`** | **Reasoning Ready** | Full Base + `bbh:cot` + Extended Indic. |
 | **`sft`** | **Agency & Chat** | IFEval, AlpacaEval, Factuality (SimpleQA/PopQA). |
 
@@ -112,7 +112,7 @@ Every run creates a unique timestamped directory in `benchmark-results/`.
 ### 1. Human-Readable Reports
 Navigate to `benchmark-results/[stage]/[timestamp]/reports/summary_report.md`.
 - **Executive Summary**: Overall pass rate and completion status.
-- **Capability Mapping**: Benchmarks grouped into logical buckets (Reasoning, Coding, Indic, etc.).
+- **Capability Mapping**: Benchmarks grouped into logical buckets (Reasoning, Code Completion, Indic, etc.).
 - **Granular Details**: Collapsible sections showing every individual sub-task score (e.g., individual MMLU subjects).
 
 ### 2. Machine-Comparable Data
@@ -130,7 +130,6 @@ The following benchmarks have known limitations or are currently under active de
 | Feature / Benchmark | Status / Limitation | Next Steps / Required Setup |
 | :--- | :--- | :--- |
 | **Indic-Bias** | **Gated Access** | Requires access to `ai4bharat/Indic-Bias`. ✅ `HF_TOKEN` injection implemented — see [Environment Setup](#-execution-guide). |
-| **olmo3:base:code** | **Docker Required** | Execution tasks (BCB/MBPP) need Docker. **TODO**: Latency optimization. |
 | **olmo3:adapt** | **Base Model Noise** | Unstable on base models. **TODO**: Validate on first instruction-aligned milestones. |
 | **MMLU-Pro** | **High Resource** | Very slow execution. **TODO**: Integrate into milestones after optimization. |
 | **HELM Safety** | **Network Fragility** | `RealToxicityPrompts` downloads are flaky. Recommendation: Pre-cache datasets locally. |

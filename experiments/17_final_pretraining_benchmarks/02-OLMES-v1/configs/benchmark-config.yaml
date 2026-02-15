@@ -30,7 +30,7 @@ buckets:
             "olmo3:base_easy:qa_rc", "olmo3:base_easy:qa_bpb"]
   indic:   ["indic_glue", "indic_qa", "indic_bias"]
   cot:     ["olmo3:base:math", "olmo3:base_easy:math_bpb", "bbh:cot::olmes"]
-  coding:  ["olmo3:base:code", "olmo3:base:code_fim", "olmo3:base_easy:code_bpb"]
+  coding:  ["olmo3:base:code_fim", "olmo3:base_easy:code_bpb"]
   agentic: ["olmo3:adapt"]
 
 stages:
@@ -120,7 +120,6 @@ stages:
           - "olmo3:base:nonstem_qa_mc"
           - "olmo3:base:gen"
           - "olmo3:base:math"
-          - "olmo3:base:code"
           - "olmo3:base:code_fim"
       - name: "mmlu"
         tasks:
@@ -158,22 +157,12 @@ stages:
           - "olmo3:base:nonstem_qa_mc"
           - "olmo3:base:gen"
           - "olmo3:base:math"
-          - "olmo3:base:code"
           - "olmo3:base:code_fim"
 
       # Reasoning/CoT gate for agentic readiness
       - name: "reasoning_cot_bbh"
         tasks:
           - "bbh:cot::olmes"   # Corrected from bbh::olmes
-
-      # Optional: execution-based coding (run via olmes-docker in a separate job)
-      - name: "coding_exec"
-        executor: "olmes-docker"
-        env_types:
-          - "bcb"      # BigCodeBench
-          - "ds1000"   # DS-1000
-          - "multipl"  # MultiPL-E
-        enabled: false
 
       # Optional: Early Indic signal promoted to a full Indic sweep at large scale
       - name: "indic_full"
@@ -210,7 +199,6 @@ stages:
           - "olmo3:base:stem_qa_mc"
           - "olmo3:base:nonstem_qa_mc"
           - "olmo3:base:math"
-          - "olmo3:base:code"
           - "olmo3:base:code_fim"
 
       # Instruction / agentic-focused suite (may require special setup depending on tasks)

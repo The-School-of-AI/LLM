@@ -32,7 +32,6 @@ stages:
       - name: "multilingual_indic"
         tasks:
           - "indic_glue"
-          - "indic_qa"
 
   # 🥈 Tier 2: 8B Parameters (Standard Milestone)
   # The competitive baseline for most open-weight research.
@@ -49,9 +48,6 @@ stages:
       - name: "mathematical_reasoning"
         tasks:
           - "gsm8k::olmes"
-      - name: "coding_capability"
-        tasks:
-          - "olmo3:base:code"
       - name: "multilingual_indic"
         tasks:
           - "indic_glue"
@@ -77,7 +73,7 @@ stages:
           - "minerva_math::olmes"
       - name: "coding_capability"
         tasks:
-          - "olmo3:base:code"
+          - "olmo3:base:code_fim"
       - name: "multilingual_indic"
         tasks:
           - "indic_glue"
@@ -85,7 +81,7 @@ stages:
       - name: "expert_reasoning"
         tasks:
           - "bbh:cot::olmes"
-          - "gpqa::olmes"
+          - "gpqa:0shot_cot_v1"
 
   # 🏅 Tier 4: SFT / Instruct (Alignment & Utility)
   # Final evaluation for chat-aligned and instruction-following models.

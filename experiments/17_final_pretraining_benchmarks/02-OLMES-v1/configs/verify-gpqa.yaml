@@ -1,0 +1,6 @@
+base_config: "base_benchmarks.yaml"
+benchmarks:
+  - name: "gpqa_mirror_test"
+    olmes_task: '{"task_name": "gpqa:0shot_cot_v1", "dataset_path": "Wanfq/gpqa"}'
+    limit: 1
+    batch_size: 1

@@ -13,7 +13,7 @@ The evaluation strategy transitions from **"Easy/Fast"** tasks in early pretrain
 | **Pretrain 1B** | Frequent Monitoring | `base_easy`, `indic_nlu` | `./benchmark-results/pretrain_1b/` |
 | **Pretrain 3B** | Enhanced Signal | `base_easy`, `indic_standard`, `core_qa` | `./benchmark-results/pretrain_3b/` |
 | **Pretrain 8B** | Full Base Milestone | `olmo3_base`, `mmlu`, `indic_standard` | `./benchmark-results/pretrain_8b/` |
-| **Pretrain 70B** | Reasoning Readiness | `olmo3_base`, `bbh:cot::olmes`, `indic_standard`, `coding_exec` | `./benchmark-results/pretrain_70b/` |
+| **Pretrain 70B** | Reasoning Readiness | `olmo3_base`, `bbh:cot::olmes`, `gpqa:0shot_cot_v1`, `indic_standard`, `code_completion` | `./benchmark-results/pretrain_70b/` |
 | **SFT / Instruct** | Instruction & Agency | `olmo3_adapt`, `indic_instruct`, `regression_guard` | `./benchmark-results/sft/` |
 
 ---
@@ -24,10 +24,10 @@ This table explicitly maps the high-level "Key Suites" to their individual compo
 | Key Suite Name | Individual Sub-tasks / Components | Primary Focus |
 | :--- | :--- | :--- |
 | **`base_easy`** | ARC-Easy, ARC-Challenge, MMLU, CommonsenseQA, HellaSwag, Winogrande, SocialIQA, PIQA, CoQA, DROP, Jeopardy, NaturalQS, SQuAD, SciQ, QASPER, Basic Skills, Lab Bench, Lambada, MedMCQA, MedQA, SciRIFF. | Foundation / RC |
-| **`olmo3_base`** | MMLU (STEM, Humanities, Social Sciences, Other), ARC-MC, MedMCQA, MedQA, SciQ, HellaSwag, Winogrande, Lambada, Basic Skills, DROP, Jeopardy, NaturalQS, SQuAD, CoQA, GSM8K, GSM-Symbolic, Minerva Math, BigCodeBench, HumanEval, LeetCode, DS1000, MBPP, MultiPL-E, HumanEval-FIM. | Scale Milestone |
+| **`olmo3_base`** | MMLU (STEM, Humanities, Social Sciences, Other), ARC-MC, MedMCQA, MedQA, SciQ, HellaSwag, Winogrande, Lambada, Basic Skills, DROP, Jeopardy, NaturalQS, SQuAD, CoQA, GSM8K, GSM-Symbolic, Minerva Math, olmo3:base:code_fim, olmo3:base_easy:code_bpb. | Scale Milestone |
 | **`indic_standard`** | **IndicGLUE**: WNLI (hi, mr, gu, pa, bn), COPA (hi, mr, gu), CSQA (hi, te, ta, kn, as, ml, or), ACTSA (te). <br> **IndicQA**: (hi, bn, ta, te, ml, mr, gu, kn, pa, as). | Multilingual |
 | **`bbh:cot::olmes`** | Boolean Expressions, Causal Judgement, Date Understanding, Disambiguation QA, Dyck Languages, Formal Fallacies, Geometric Shapes, Hyperbaton, Logical Deduction, Movie Recommendation, Multistep Arithmetic, Navigate, Object Counting, Penguins in a Table, Reasoning about Colored Objects, Ruin Names, Snarks, Sports Understanding, Temporal Sequences, Tracking Shuffled Objects, Web of Lies, Word Sorting. | Logic / CoT |
-| **`olmo3:adapt`** | IFEval, AlpacaEval, SimpleQA, PopQA, ZebraLogic, AGIEval (English), GPQA, Minerva Math, GSM8K, Omega, AIME (2024/2025), HumanEval+, MBPP+, LiveCodeBench. | Agency / Chat / Instruct (SFT Only) |
+| **`olmo3:adapt`** | IFEval, AlpacaEval, SimpleQA, PopQA, ZebraLogic, AGIEval (English), gpqa:0shot_cot_v1, Minerva Math, GSM8K, Omega, AIME (2024/2025), Code Completion (FIM). | Agency / Chat / Instruct (SFT Only) |
 
 ---
 
@@ -109,17 +109,14 @@ Evaluating **10 languages** with a generative (RC) paradigm:
 
 ---
 
-## 💻 6. Coding & Mathematics
+---
+
+## 💻 6. Code Completion (Non-Execution)
 
 | Category | Benchmark | Format | Description |
 | :--- | :--- | :--- | :--- |
-| **Math** | **GSM8K** | CoT | Grade School Math word problems. |
-| **Math** | **Minerva** | CoT | High school/College competition math (Algebra to Calculus). |
-| **Math** | **GSM-Symbolic** | CoT | Robustness test for GSM8K with variable numbers. |
-| **Code** | **HumanEval** | Pass@k | Python function completion (standard). |
-| **Code** | **MBPP** | Pass@k | Diverse basic programming problems. |
-| **Code** | **BigCodeBench** | Exec | Instruction-to-code at scale. |
-| **Code** | **LeetCode** | Exec | Competitive programming challenges. |
+| **Code** | **Code BPB** | BPB | Python/Code perplexity (Fast trend signal). |
+| **Code** | **Code FIM** | Likelihood | Fill-in-the-middle code completion accuracy. |
 
 ---
 
