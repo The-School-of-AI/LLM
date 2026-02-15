@@ -73,7 +73,7 @@ log_info "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 #######################################
 log_info "Checking IAM role..."
 
-POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${PREFIX}"
+POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/T15-CloudWatchAlarms-410"
 
 log_info "Checking if ${LAMBDA_ROLE_NAME} role exists..."
 if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" >/dev/null 2>&1; then
