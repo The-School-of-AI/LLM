@@ -207,8 +207,8 @@ The IAM role/user running the deployment commands (your operator workstation or 
         "s3:PutBucketPublicAccessBlock"
       ],
       "Resource": [
-        "arn:aws:s3:::p12-config-*",
-        "arn:aws:s3:::p12-config-*/*"
+        "arn:aws:s3:::p12-training-ops-base-*",
+        "arn:aws:s3:::p12-training-ops-base-*/*"
       ]
     },
     {
@@ -310,8 +310,8 @@ aws iam put-role-policy \
         "s3:GetBucketLocation"
       ],
       "Resource": [
-        "arn:aws:s3:::p12-config-*",
-        "arn:aws:s3:::p12-config-*/*"
+        "arn:aws:s3:::p12-training-ops-base-*",
+        "arn:aws:s3:::p12-training-ops-base-*/*"
       ]
     }]
   }'
