@@ -38,7 +38,7 @@ DEFAULT_CONFIG = {
     },
     "schema": {
         "rename_columns": {"id": "chunk_id"},
-        "drop_columns": ["uuid", "text", "hash", "metadata", "assigned_band"]
+        "drop_columns": ["uuid", "text", "hash", "metadata", "assigned_band", "file_path"]
     }
 }
 
@@ -229,6 +229,9 @@ class SparkDataProcessor:
         for df in df_list[1:]:
             consolidated_df = consolidated_df.unionByName(df, allowMissingColumns=True)
 
+        # Add global source column for tracking (ensures it is in JSON)
+        consolidated_df = consolidated_df.withColumn("source", F.lit(source_name))
+
         # 1. Thin out the data (rename and drop heavy columns before shuffle)
         transformed_df = self._transform_schema(consolidated_df)
 
@@ -253,26 +256,30 @@ class SparkDataProcessor:
             F.sum("token_count_estimate").alias("tokens")
         ).collect()[0]
 
-        # 3. Post-Dedup Logic: Band assignments and scoring
+        # Post-Dedup Logic: Band assignments and scoring
         # Final 'band' is derived from 'assigned_band'
         unique_df = unique_df.withColumn("band", F.col("assigned_band"))
 
-        # Ensure all probability columns exist (B0 to B5)
+        # Ensure all probability columns exist (B0 to B5) and are correctly typed
         for i in range(6):
             col_name = f"band_p_B{i}"
             if col_name not in unique_df.columns:
                 unique_df = unique_df.withColumn(col_name, F.lit(0.0))
+            else:
+                unique_df = unique_df.withColumn(col_name, F.col(col_name).cast("double"))
 
         # Calculate band_score based on the final assigned_band
+        # Use trim and upper to ensure robust string matching
+        unique_df = unique_df.withColumn("_band_match", F.trim(F.upper(F.col("assigned_band"))))
         unique_df = unique_df.withColumn("band_score",
-            F.when(F.col("assigned_band") == "B0", F.col("band_p_B0"))
-             .when(F.col("assigned_band") == "B1", F.col("band_p_B1"))
-             .when(F.col("assigned_band") == "B2", F.col("band_p_B2"))
-             .when(F.col("assigned_band") == "B3", F.col("band_p_B3"))
-             .when(F.col("assigned_band") == "B4", F.col("band_p_B4"))
-             .when(F.col("assigned_band") == "B5", F.col("band_p_B5"))
+            F.when(F.col("_band_match") == "B0", F.col("band_p_B0"))
+             .when(F.col("_band_match") == "B1", F.col("band_p_B1"))
+             .when(F.col("_band_match") == "B2", F.col("band_p_B2"))
+             .when(F.col("_band_match") == "B3", F.col("band_p_B3"))
+             .when(F.col("_band_match") == "B4", F.col("band_p_B4"))
+             .when(F.col("_band_match") == "B5", F.col("band_p_B5"))
              .otherwise(F.lit(0.0))
-        )
+        ).drop("_band_match")
 
         # 4. Final Cleanup: Drop hash and assigned_band as the very last step
         final_drops = ["hash", "assigned_band"]
@@ -316,9 +323,10 @@ class SparkDataProcessor:
         return df
 
     def save_output(self, df: DataFrame, output_path: str, source_name: str):
-        """Saves as JSONL partitioned by source."""
-        logger.info(f"  Saving deduplicated data for {source_name} to {output_path}")
-        df.write.mode("append").partitionBy("source").json(output_path)
+        """Saves as JSONL. We write to source-specific folder explicitly to keep 'source' column inside the JSON."""
+        final_path = f"{output_path}/source={source_name}"
+        logger.info(f"  Saving deduplicated data to {final_path}")
+        df.write.mode("append").json(final_path)
 
 
 # =========================================================================
