@@ -235,9 +235,15 @@ class SparkDataProcessor:
         # 1. Thin out the data (rename and drop heavy columns before shuffle)
         transformed_df = self._transform_schema(consolidated_df)
 
-        # Ensure assigned_band exists (needed for scoring)
+        # Ensure assigned_band exists and is never null (coalesce with the folder-derived band)
         if "assigned_band" not in transformed_df.columns:
             transformed_df = transformed_df.withColumn("assigned_band", F.col("band"))
+        else:
+            transformed_df = transformed_df.withColumn("assigned_band", F.coalesce(F.col("assigned_band"), F.col("band")))
+
+        # Ensure metadata columns are strings and not null
+        transformed_df = transformed_df.withColumn("source_url", F.coalesce(F.col("source_url"), F.lit("")).cast("string"))
+        transformed_df = transformed_df.withColumn("source_doc_id", F.coalesce(F.col("source_doc_id"), F.lit("")).cast("string"))
 
         # --- CALCULATE INPUT STATS (Pre-Dedup) ---
         input_stats = transformed_df.select(
