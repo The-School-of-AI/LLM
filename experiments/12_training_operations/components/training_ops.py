@@ -61,8 +61,8 @@ class TrainingOps:
     metrics_port : int
         Port for the live metrics HTTP server.
     clickhouse_url : str | None
-        ClickHouse HTTP(S) endpoint.  Falls back to CLICKHOUSE_HTTPS_ENDPOINT
-        or CLICKHOUSE_HTTP_ENDPOINT env var.
+        ClickHouse HTTP(S) endpoint. Falls back to CLICKHOUSE_ENDPOINT,
+        CLICKHOUSE_HTTPS_ENDPOINT, then CLICKHOUSE_HTTP_ENDPOINT.
     clickhouse_user : str | None
         ClickHouse user.  Falls back to CLICKHOUSE_USER env var.
     clickhouse_password : str | None
@@ -78,7 +78,7 @@ class TrainingOps:
         Set to ``None`` to use legacy process-based Vector checks.
     check_clickhouse_preflight : bool
         If True, perform direct ClickHouse connectivity preflight. Disabled by
-        default so startup preflight focuses on Vector process health.
+        default so startup preflight focuses on Vector service health.
     """
 
     def __init__(
@@ -303,6 +303,60 @@ class TrainingOps:
         if tps is not None:
             self.metrics_server.update_throughput(tps)
 
+    def log_event(
+        self,
+        step: int,
+        event_type: str,
+        message: str = "",
+        severity: str = "info",
+        payload: dict | None = None,
+        device: int = 65535,
+    ):
+        """
+        Log a typed event for the ``events`` table via the durable Vector path.
+
+        Examples: checkpoint_saved, stage_transition, sample_generated.
+        """
+        event_context = {
+            "event": "event",
+            "event_type": event_type,
+            "severity": severity,
+            "message": message,
+            "device": int(device),
+            "payload": payload or {},
+        }
+        self.logger.log_step(step=step, metrics={}, context=event_context)
+
+    def log_metric_array(
+        self,
+        step: int,
+        metric: str,
+        keys: list[str],
+        values: list[float],
+        unit: str = "",
+        tags: dict | None = None,
+        device: int = 65535,
+    ):
+        """
+        Log structured array metrics for the ``metric_arrays`` table.
+        """
+        if not keys or not values:
+            return
+
+        n = min(len(keys), len(values))
+        array_context = {
+            "event": "metric_array",
+            "metric_array": {
+                "metric": metric,
+                "keys": [str(k) for k in keys[:n]],
+                "values": [float(v) for v in values[:n]],
+                "unit": unit,
+                "tags": tags or {},
+            },
+            "device": int(device),
+        }
+        self.logger.log_step(step=step, metrics={}, context=array_context)
+
     def log_checkpoint(
         self,
         step: int,
@@ -374,6 +428,22 @@ class TrainingOps:
         if metadata:
             ckpt_context["metadata"] = metadata
         self.logger.log_step(step=step, metrics=ckpt_metrics, context=ckpt_context)
+
+        # Also write a typed event for dashboards/alerts.
+        self.log_event(
+            step=step,
+            event_type="checkpoint_saved",
+            message=f"Checkpoint saved: {canonical_path}",
+            severity="info",
+            payload={
+                "path": path,
+                "s3_key": s3_key or "",
+                "canonical_path": canonical_path,
+                "tag": tag,
+                "duration_s": duration_s,
+                "size_bytes": size_bytes,
+            },
+        )
 
         # 2. Fast path (best-effort): direct INSERT for immediate query-ability.
         #    If this fails, the durable JSONL path above guarantees delivery.

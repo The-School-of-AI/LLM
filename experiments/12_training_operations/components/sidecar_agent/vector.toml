@@ -51,6 +51,85 @@ source = '''
   }
 '''
 
+# Step 5: Extract typed events (context.event == "event")
+[transforms.to_events]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  ctx = {}
+  if is_object(.context) {
+    ctx = .context
+  } else {
+    ctx_raw = string(.context) ?? "{}"
+    ctx = parse_json(ctx_raw) ?? {}
+  }
+  evt = string(ctx.event) ?? ""
+  if evt != "event" { abort }
+
+  payload_json = if exists(ctx.payload) { encode_json(ctx.payload) } else { "{}" }
+
+  . = {
+    "run_id":      string!(.run_id),
+    "host":        string!(.host),
+    "rank":        to_int(.rank) ?? 0,
+    "device":      to_int(ctx.device) ?? 65535,
+    "step":        to_int(.step) ?? 0,
+    "event_type":  string(ctx.event_type) ?? "unknown",
+    "severity":    string(ctx.severity) ?? "info",
+    "message":     string(ctx.message) ?? "",
+    "payload_json": payload_json
+  }
+'''
+
+# Step 6: Extract array metrics (context.event == "metric_array")
+[transforms.to_metric_arrays]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  ctx = {}
+  if is_object(.context) {
+    ctx = .context
+  } else {
+    ctx_raw = string(.context) ?? "{}"
+    ctx = parse_json(ctx_raw) ?? {}
+  }
+  evt = string(ctx.event) ?? ""
+  if evt != "metric_array" { abort }
+
+  arr = {}
+  if is_object(ctx.metric_array) {
+    arr = ctx.metric_array
+  } else {
+    arr_raw = string(ctx.metric_array) ?? "{}"
+    arr = parse_json(arr_raw) ?? {}
+  }
+  arr_keys = array(arr.keys) ?? []
+  arr_vals_any = array(arr.values) ?? []
+  arr_vals = []
+
+  for_each(arr_vals_any) -> |_i, v| {
+    f = to_float(v) ?? null
+    if f != null { arr_vals = push(arr_vals, f) }
+  }
+
+  if length(arr_keys) == 0 || length(arr_vals) == 0 { abort }
+
+  tags_json = if exists(arr.tags) { encode_json(arr.tags) } else { "{}" }
+
+  . = {
+    "run_id":    string!(.run_id),
+    "host":      string!(.host),
+    "rank":      to_int(.rank) ?? 0,
+    "device":    to_int(ctx.device) ?? 65535,
+    "step":      to_int(.step) ?? 0,
+    "metric":    string(arr.metric) ?? "",
+    "keys":      arr_keys,
+    "values":    arr_vals,
+    "unit":      string(arr.unit) ?? "",
+    "tags_json": tags_json
+  }
+'''
+
 # Step 3: Explode metrics object into one event per metric key (fan-out)
 #   Assigning an array of objects to . emits multiple events (Vector >= 0.15)
 [transforms.to_metric_points]
@@ -95,7 +174,13 @@ source = '''
 type = "remap"
 inputs = ["parse_json"]
 source = '''
-  ctx = object(.context) ?? {}
+  ctx = {}
+  if is_object(.context) {
+    ctx = .context
+  } else {
+    ctx_raw = string(.context) ?? "{}"
+    ctx = parse_json(ctx_raw) ?? {}
+  }
   evt = string(ctx.event) ?? ""
   if evt != "checkpoint_saved" { abort }
 
@@ -134,6 +219,34 @@ inputs = ["to_raw_logs"]
 endpoint = "${CLICKHOUSE_ENDPOINT}"
 database = "training_observability"
 table = "logs"
+compression = "gzip"
+batch.max_bytes = 10485760
+auth.strategy = "basic"
+auth.user = "${CLICKHOUSE_USER}"
+auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
+
+# 5. Typed events (stage transitions, sample generation, checkpoint lifecycle)
+[sinks.clickhouse_events]
+type = "clickhouse"
+inputs = ["to_events"]
+endpoint = "${CLICKHOUSE_ENDPOINT}"
+database = "training_observability"
+table = "events"
+compression = "gzip"
+batch.max_bytes = 10485760
+auth.strategy = "basic"
+auth.user = "${CLICKHOUSE_USER}"
+auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
+
+# 6. Structured array metrics (histograms/distributions/top-k summaries)
+[sinks.clickhouse_metric_arrays]
+type = "clickhouse"
+inputs = ["to_metric_arrays"]
+endpoint = "${CLICKHOUSE_ENDPOINT}"
+database = "training_observability"
+table = "metric_arrays"
 compression = "gzip"
 batch.max_bytes = 10485760
 auth.strategy = "basic"

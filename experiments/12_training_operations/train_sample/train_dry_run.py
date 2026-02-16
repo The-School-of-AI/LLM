@@ -19,6 +19,7 @@ import gc
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+import psutil
 
 # Ensure components are importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -84,6 +85,7 @@ def train(model, loader, device, num_steps=50, ops=None):
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss()
     data_iter = iter(loader)
+    tokens_processed_total = 0
 
     for step in range(num_steps):
         try:
@@ -112,6 +114,24 @@ def train(model, loader, device, num_steps=50, ops=None):
         loss_mtp = criterion(logits_mtp.reshape(-1, V), y_mtp.reshape(-1)) if logits_mtp is not None else torch.tensor(0.0)
         loss = loss_ntp + 0.3 * loss_mtp + aux_loss
 
+        # Lightweight periodic validation probe on synthetic data.
+        loss_val = None
+        if step % 20 == 0:
+            model.eval()
+            with torch.no_grad():
+                val_tokens = torch.randint(0, V, (x.size(0), x.size(1) + 2), device=device)
+                x_val = val_tokens[:, :-2]
+                y_val = val_tokens[:, 1:-1]
+                logits_val, _, _ = model(
+                    x_val,
+                    next_token_ids=y_val,
+                    return_loss=True,
+                    return_memory=False,
+                    prev_memory_stream=None,
+                )
+                loss_val = criterion(logits_val.reshape(-1, V), y_val.reshape(-1)).item()
+            model.train()
+
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -119,6 +139,9 @@ def train(model, loader, device, num_steps=50, ops=None):
 
         dt = (time.time() - t0) * 1000.0
         tok_sec = x.numel() / max(dt / 1000.0, 1e-9)
+        batch_sec = 1000.0 / max(dt, 1e-9)
+        tokens_processed_total += int(x.numel())
+        cpu_idle_percent = float(getattr(psutil.cpu_times_percent(interval=None), "idle", 0.0))
 
         print(
             f"step {step:3d} | loss {loss.item():.4f} | "
@@ -127,15 +150,62 @@ def train(model, loader, device, num_steps=50, ops=None):
         )
 
         if ops is not None:
-            ops.log_step(step=step, metrics={
+            metrics = {
                 "loss": loss.item(),
-                "loss_ntp": loss_ntp.item(),
-                "loss_mtp": loss_mtp.item(),
-                "aux_loss": aux_loss.item(),
+                "loss/train": loss.item(),
+                "loss/train_t_plus_1": loss_ntp.item(),
+                "loss/train_t_plus_2": loss_mtp.item(),
+                "loss/router_moe": aux_loss.item(),
+                "loss/router_null": 0.0,
                 "lr": optimizer.param_groups[0]["lr"],
-                "tokens_per_second": tok_sec,
+                "throughput/tokens_per_sec": tok_sec,
+                "throughput/batches_per_sec": batch_sec,
+                "tokens/processed_total": float(tokens_processed_total),
+                "router/null_ratio": 0.5,
+                "cpu/idle_percent": cpu_idle_percent,
                 "step_time_ms": dt,
-            })
+            }
+            if loss_val is not None:
+                metrics["loss/val"] = loss_val
+            ops.log_step(step=step, metrics=metrics)
+
+            # Array metrics examples
+            k = min(8, input_ids.size(-1))
+            top_vals, top_idx = torch.topk(torch.bincount(input_ids.reshape(-1), minlength=V).float(), k=k)
+            ops.log_metric_array(
+                step=step,
+                metric="moe/favorite_tokens_topk",
+                keys=[str(int(i.item())) for i in top_idx],
+                values=[float(v.item()) for v in top_vals],
+                unit="count",
+                tags={"source": "synthetic_batch"},
+            )
+
+            # Approximate routing distribution proxy for dry-run observability.
+            n_bins = 8
+            x_norm = torch.softmax(torch.arange(n_bins, device=x.device, dtype=torch.float32), dim=0)
+            ops.log_metric_array(
+                step=step,
+                metric="moe/routing_dist_mean",
+                keys=[f"expert_{i}" for i in range(n_bins)],
+                values=[float(v.item()) for v in x_norm],
+                unit="ratio",
+            )
+
+            fft_src = x[0].float()
+            fft = torch.fft.rfft(fft_src)
+            energy = (fft.real * fft.real + fft.imag * fft.imag)
+            max_buckets = min(8, energy.numel())
+            ops.log_metric_array(
+                step=step,
+                metric="moe/fourier_bucket_energy",
+                keys=[f"bucket_{i}" for i in range(max_buckets)],
+                values=[float(energy[i].item()) for i in range(max_buckets)],
+                unit="energy",
+            )
+
+            # GPU utilization is emitted by SystemMetricsCollector (sys.gpu.*),
+            # so we intentionally avoid duplicate per-step gpu/utilization logs here.
 
             # Periodically emit checkpoint events to validate checkpoint pipeline.
             if step > 0 and step % 25 == 0:
@@ -148,6 +218,26 @@ def train(model, loader, device, num_steps=50, ops=None):
                     duration_s=0.0,
                     size_bytes=0,
                     metadata={"dry_run": True},
+                )
+                ops.log_event(
+                    step=step,
+                    event_type="checkpoint_uploaded",
+                    message=f"Checkpoint uploaded to s3://dry-run/{ops.run_id}/step_{step}.pt",
+                    payload={"step": step},
+                )
+                ops.log_event(
+                    step=step,
+                    event_type="checkpoint_benchmarked",
+                    message=f"Checkpoint benchmark completed for step {step}",
+                    payload={"step": step, "latency_ms": float(dt)},
+                )
+
+            if step % 50 == 0:
+                ops.log_event(
+                    step=step,
+                    event_type="sample_generated",
+                    message=f"Generated synthetic sample at step {step}",
+                    payload={"token_preview": [int(t) for t in input_ids[0, :8].tolist()]},
                 )
 
         del logits_ntp, logits_mtp, x, y_ntp, y_mtp, loss
@@ -191,7 +281,7 @@ def main():
     # Synthetic data (high-util defaults for A10 24GB)
     seq_len = int(os.environ.get("DRYRUN_SEQ_LEN", "256"))
     batch_size = int(os.environ.get("DRYRUN_BATCH_SIZE", "16"))
-    num_steps = int(os.environ.get("DRYRUN_STEPS", "100"))
+    num_steps = int(os.environ.get("DRYRUN_STEPS", "200"))
     dataset = SyntheticTokenDataset(config.vocab_size, seq_len, num_samples=500)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     print(f"Dry-run workload: batch_size={batch_size}, seq_len={seq_len}, steps={num_steps}")
@@ -217,7 +307,20 @@ def main():
         vector_service_name=vector_service_name,
     )
 
+    ops.log_event(
+        step=0,
+        event_type="stage_transition",
+        message="dry_run_started",
+        payload={"stage": "warmup"},
+    )
+
     train(model, loader, device, num_steps=num_steps, ops=ops)
+    ops.log_event(
+        step=num_steps,
+        event_type="stage_transition",
+        message="dry_run_completed",
+        payload={"stage": "done"},
+    )
     ops.shutdown()
 
     print("\n" + "=" * 60)

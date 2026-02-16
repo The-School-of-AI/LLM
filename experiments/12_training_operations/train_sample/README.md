@@ -89,6 +89,65 @@ for step, batch in enumerate(dataloader):
 ops.shutdown()
 ```
 
+### Rich Metrics + Events (recommended)
+
+`TrainingOps` now supports explicit APIs for structured events and array metrics:
+
+```python
+# Typed event -> training_observability.events
+ops.log_event(
+    step=step,
+    event_type="stage_transition",
+    message="entered_train_phase",
+    payload={"stage": "train"},
+)
+
+# Array metric -> training_observability.metric_arrays
+ops.log_metric_array(
+    step=step,
+    metric="moe/routing_dist_mean",
+    keys=["expert_0", "expert_1", "expert_2"],
+    values=[0.41, 0.33, 0.26],
+    unit="ratio",
+)
+```
+
+Suggested scalar metric names (go to `metric_points` via `ops.log_step`):
+
+- `loss/train`
+- `loss/train_t_plus_1`
+- `loss/train_t_plus_2`
+- `loss/val`
+- `loss/router_null`
+- `loss/router_moe`
+- `throughput/tokens_per_sec`
+- `throughput/batches_per_sec`
+- `tokens/processed_total`
+- `router/null_ratio`
+- `cpu/idle_percent`
+
+Suggested array metric names (go to `metric_arrays` via `ops.log_metric_array`):
+
+- `moe/routing_dist_mean`
+- `moe/favorite_tokens_topk`
+- `moe/fourier_bucket_energy`
+- `gpu/utilization` (per device)
+
+Suggested event types (go to `events` via `ops.log_event`):
+
+- `checkpoint_saved`
+- `checkpoint_uploaded`
+- `checkpoint_benchmarked`
+- `stage_transition`
+- `sample_generated`
+
+Table routing summary:
+
+- `ops.log_step(...)` -> `logs`, `metric_points`
+- `ops.log_metric_array(...)` -> `metric_arrays` (+ raw audit copy in `logs`)
+- `ops.log_event(...)` -> `events` (+ raw audit copy in `logs`)
+- `ops.log_checkpoint(...)` -> `checkpoints` (+ `checkpoint_saved` in `events` + audit copy in `logs`)
+
 ### Checkpointing
 
 The existing `save_checkpoint()` in `training.py` now accepts an optional `ops` parameter:
