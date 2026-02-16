@@ -15,6 +15,7 @@ Includes both a Triton JIT kernel and a PyTorch chunked fallback.
 import torch
 import torch.nn.functional as F
 from typing import Optional
+import os
 
 # Check for Triton availability
 try:
@@ -185,6 +186,9 @@ def triton_sparse_attention(
             BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
         )
     except Exception as e:
+        strict = os.environ.get("REQUIRE_LONGCTX_KERNELS", "0") == "1"
+        if strict:
+            raise RuntimeError(f"Triton sparse-attn kernel failed in strict mode: {e}") from e
         import warnings
         warnings.warn(f"Triton sparse-attn kernel failed ({e}); falling back to PyTorch.")
         return pytorch_sparse_attention(q, k, v, indices, mask, scale)

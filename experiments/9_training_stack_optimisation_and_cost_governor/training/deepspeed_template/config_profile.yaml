@@ -7,6 +7,8 @@ data:
   dataset_config: "wikitext-2-raw-v1"
   max_length: 4096  # Restored to original - reversibility fix allows this!
   num_workers: 12  # DataLoader workers per GPU (12 workers × 8 GPUs = 96 total, uses all CPUs)
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
 
 # Training Configuration
 training:
@@ -16,15 +18,18 @@ training:
   log_interval: 1
   seed: 42
   enable_system_metrics: true  # Enable per-step CPU/GPU util & memory logging
+  require_fused_kernels: false
+  metrics_jsonl_path: "./logs/metrics.jsonl"
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-dense-oom-fixed.json"
+  config_path: "deepspeed/zero-2-dense-bf16.json"
   local_rank: -1
 
 # Model Configuration
 model:
   embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
+  require_fused_deltanet_kernel: true
 
 # Checkpoint Configuration
 checkpoint:

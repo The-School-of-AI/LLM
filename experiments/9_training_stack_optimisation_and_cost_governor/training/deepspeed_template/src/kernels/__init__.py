@@ -73,9 +73,16 @@ from .fla_deltanet import (
     fla_gated_delta_rule,
 )
 
+# ── Optional MoE grouped GEMM backend ────────────────────────────────
+from .moe_grouped_gemm import (
+    HAS_MOE_GROUPED_GEMM,
+    moe_grouped_gemm,
+)
+
 __all__ = [
     "HAS_TRITON",
     "HAS_FLA",
+    "HAS_MOE_GROUPED_GEMM",
     "triton_sparse_attention",
     "pytorch_sparse_attention",
     "triton_gated_indexer",
@@ -88,4 +95,5 @@ __all__ = [
     "fla_gated_delta_rule",
     "fused_indexer_topk",
     "streaming_indexer_variance",
+    "moe_grouped_gemm",
 ]

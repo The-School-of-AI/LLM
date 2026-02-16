@@ -6,6 +6,8 @@ data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
   max_length: 64  # Reduced to conserve memory
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
 
 # Training Configuration
 training:
@@ -14,16 +16,19 @@ training:
   max_eval_steps: null   # Set to a number for debugging, null for full evaluation
   log_interval: 10
   seed: 42
+  require_fused_kernels: false
+  metrics_jsonl_path: "./logs/metrics.jsonl"
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-dense-reversible.json"
+  config_path: "deepspeed/zero-2-dense-bf16.json"
   local_rank: -1
 
 # Model Configuration
 model:
   tokenizer_name: "Qwen/Qwen2.5-0.5B"
   embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
+  require_fused_deltanet_kernel: true
 
 # Checkpoint Configuration
 checkpoint:

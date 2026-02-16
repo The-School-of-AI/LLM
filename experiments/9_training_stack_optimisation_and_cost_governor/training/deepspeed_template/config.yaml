@@ -6,6 +6,16 @@ data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
   max_length: 128
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: false
+  block_sizes: [4096]
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
 
 # Training Configuration
 training:
@@ -14,15 +24,19 @@ training:
   max_eval_steps: null   # Set to a number for debugging, null for full evaluation
   log_interval: 10
   seed: 42
+  require_fused_kernels: false
+  metrics_jsonl_path: "./logs/metrics.jsonl"
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-dense.json"
+  config_path: "deepspeed/zero-2-dense-bf16.json"
   local_rank: -1
 
 # Model Configuration
 model:
   tokenizer_name: "Qwen/Qwen2.5-0.5B"  # or "distilgpt2"
+  embedding_type: "kronecker"
+  require_fused_deltanet_kernel: true
   # model_name: "distilgpt2"  # Uncomment if using different model
 
 # Checkpoint Configuration

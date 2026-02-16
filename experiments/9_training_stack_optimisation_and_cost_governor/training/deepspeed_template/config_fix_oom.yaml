@@ -8,6 +8,8 @@ data:
   batch_size: 1  # DEPRECATED: Batch size is now read from DeepSpeed config (train_micro_batch_size_per_gpu)
                  # This field is kept for backwards compatibility but is NOT used
   max_length: 512  # Start conservative, then scale up
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
 
 # Training Configuration
 training:
@@ -17,16 +19,19 @@ training:
   log_interval: 10
   seed: 42
   enable_system_metrics: true  # Monitor GPU memory
+  require_fused_kernels: false
+  metrics_jsonl_path: "./logs/metrics.jsonl"
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-dense-oom-fixed.json"
+  config_path: "deepspeed/zero-2-dense-bf16.json"
   local_rank: -1
 
 # Model Configuration
 model:
   tokenizer_name: "Qwen/Qwen2.5-0.5B"
   embedding_type: "kronecker"
+  require_fused_deltanet_kernel: true
 
 # Checkpoint Configuration
 checkpoint:

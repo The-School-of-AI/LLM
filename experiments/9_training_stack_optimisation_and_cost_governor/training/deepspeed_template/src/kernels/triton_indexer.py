@@ -19,6 +19,7 @@ Based on the GSA paper implementation (arXiv:2601.15305v1).
 
 import torch
 from typing import Optional
+import os
 
 # Check for Triton availability
 try:
@@ -198,6 +199,9 @@ def triton_gated_indexer(
         # Cast back to original dtype
         out = out.to(orig_dtype)
     except Exception as e:
+        strict = os.environ.get("REQUIRE_LONGCTX_KERNELS", "0") == "1"
+        if strict:
+            raise RuntimeError(f"Triton indexer kernel failed in strict mode: {e}") from e
         import warnings
         warnings.warn(f"Triton indexer kernel failed with: {e}. Falling back to PyTorch.")
         out = pytorch_gated_indexer(q, k, w, b, scale, causal, q_offset)

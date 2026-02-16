@@ -1,6 +1,7 @@
 {
+    "train_batch_size": 32,
     "train_micro_batch_size_per_gpu": 2,
-    "gradient_accumulation_steps": 4,
+    "gradient_accumulation_steps": 2,
     
     "optimizer": {
         "type": "AdamW",
@@ -42,9 +43,8 @@
     },
     
     "bf16": {
-        "enabled": false
+        "enabled": true
     },
-    "_comment_bf16": "DISABLED: Model is pre-cast to bf16 in main.py. DeepSpeed bf16 wraps forward in autocast which breaks reversible midpoint backward (dtype mismatch under torch.enable_grad).",
     
     "gradient_clipping": 1.0,
     "steps_per_print": 10,

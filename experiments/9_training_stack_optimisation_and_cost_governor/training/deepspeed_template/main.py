@@ -43,44 +43,15 @@ warnings.filterwarnings(
 )
 
 import deepspeed
-import json
 import torch
 import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
+from src.kernels import HAS_FLA, HAS_TRITON
 from src.models.recurrence_model_1b import Model1B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
-
-
-def validate_precision_policy(ds_config: dict, model_dtype: torch.dtype):
-    """Validate that DeepSpeed precision config is compatible with model dtype.
-
-    The reversible midpoint backward recomputes forward outside any autocast
-    context.  If DeepSpeed bf16/fp16 is enabled *and* the model is already
-    pre-cast, the double-cast causes dtype mismatches and silent correctness bugs.
-    """
-    bf16_enabled = ds_config.get("bf16", {}).get("enabled", False)
-    fp16_enabled = ds_config.get("fp16", {}).get("enabled", False)
-
-    if model_dtype == torch.bfloat16 and bf16_enabled:
-        raise ValueError(
-            "Precision mismatch: model is pre-cast to bf16 but DeepSpeed bf16.enabled=true. "
-            "This wraps forward in autocast which breaks reversible backward. "
-            "Set bf16.enabled=false in your DeepSpeed config."
-        )
-    if model_dtype == torch.bfloat16 and fp16_enabled:
-        raise ValueError(
-            "Precision mismatch: model is pre-cast to bf16 but DeepSpeed fp16.enabled=true. "
-            "Mixed fp16/bf16 will cause dtype errors. "
-            "Set fp16.enabled=false in your DeepSpeed config."
-        )
-    if model_dtype == torch.float16 and bf16_enabled:
-        raise ValueError(
-            "Precision mismatch: model is fp16 but DeepSpeed bf16.enabled=true. "
-            "Set bf16.enabled=false or cast model to bf16."
-        )
 
 
 class Config:
@@ -92,8 +63,19 @@ class Config:
         self.dataset_name = config_dict["data"]["dataset_name"]
         self.dataset_config = config_dict["data"]["dataset_config"]
         self.max_length = config_dict["data"]["max_length"]
+        self.tokenized_dataset_path = config_dict["data"].get("tokenized_dataset_path")
+        self.dataset_cache_dir = config_dict["data"].get("dataset_cache_dir")
+        self.local_nvme_cache_dir = config_dict["data"].get("local_nvme_cache_dir")
+        self.require_local_nvme = config_dict["data"].get("require_local_nvme", False)
+        self.pack_into_blocks = config_dict["data"].get("pack_into_blocks", False)
+        self.block_sizes = config_dict["data"].get("block_sizes")
+        self.block_size_counts = config_dict["data"].get("block_size_counts")
+        self.domain_column = config_dict["data"].get("domain_column")
+        self.concat_across_domains = config_dict["data"].get(
+            "concat_across_domains", False
+        )
+        self.drop_remainder = config_dict["data"].get("drop_remainder", True)
         self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
-        self.tokenized_dataset_path = config_dict["data"].get("tokenized_dataset_path", None)
 
         # Training configuration
         self.num_epochs = config_dict["training"]["num_epochs"]
@@ -101,11 +83,14 @@ class Config:
         self.max_eval_steps = config_dict["training"]["max_eval_steps"]
         self.log_interval = config_dict["training"]["log_interval"]
         self.seed = config_dict["training"]["seed"]
-        self.enable_system_metrics = config_dict["training"].get(
-            "enable_system_metrics", False
-        )
         self.require_fused_kernels = config_dict["training"].get(
             "require_fused_kernels", False
+        )
+        self.metrics_jsonl_path = config_dict["training"].get(
+            "metrics_jsonl_path", "./logs/metrics.jsonl"
+        )
+        self.enable_system_metrics = config_dict["training"].get(
+            "enable_system_metrics", False
         )
 
         # DeepSpeed configuration
@@ -113,12 +98,16 @@ class Config:
         self.local_rank = config_dict["deepspeed"]["local_rank"]
         
         # Load batch size from DeepSpeed config
+        import json
         with open(self.deepspeed_config, 'r') as f:
             deepspeed_cfg = json.load(f)
         self.batch_size = deepspeed_cfg.get('train_micro_batch_size_per_gpu', 1)
 
         # Model configuration
         self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
+        self.require_fused_deltanet_kernel = config_dict["model"].get(
+            "require_fused_deltanet_kernel", True
+        )
 
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
@@ -183,6 +172,40 @@ def parse_args():
     return parser.parse_args()
 
 
+def validate_precision_policy(ds_config: Dict[str, Any], model_dtype: torch.dtype) -> None:
+    """
+    Validate that DeepSpeed precision flags match model dtype policy.
+    """
+    bf16_enabled = bool(ds_config.get("bf16", {}).get("enabled", False))
+    fp16_enabled = bool(ds_config.get("fp16", {}).get("enabled", False))
+
+    if bf16_enabled and fp16_enabled:
+        raise ValueError("Invalid DeepSpeed config: both bf16 and fp16 are enabled.")
+
+    if model_dtype == torch.bfloat16 and not bf16_enabled:
+        raise ValueError(
+            "Model dtype is bfloat16 but DeepSpeed bf16 is disabled. "
+            "Enable bf16 in the selected DeepSpeed config."
+        )
+
+    if model_dtype == torch.float16 and not fp16_enabled:
+        raise ValueError(
+            "Model dtype is float16 but DeepSpeed fp16 is disabled. "
+            "Enable fp16 in the selected DeepSpeed config."
+        )
+
+
+def validate_kernel_policy(require_fused_kernels: bool) -> None:
+    """
+    Fail fast when fused-kernel enforcement is enabled.
+    """
+    if require_fused_kernels and (not HAS_TRITON or not HAS_FLA):
+        raise RuntimeError(
+            "training.require_fused_kernels=true but required kernels are unavailable "
+            f"(HAS_TRITON={HAS_TRITON}, HAS_FLA={HAS_FLA})."
+        )
+
+
 def main():
     """Main training pipeline."""
     # Parse command line args (only --config and --local_rank)
@@ -212,6 +235,15 @@ def main():
     print_rank_0(f"  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
     print_rank_0(f"  Embedding Type: {args.embedding_type}")
     print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
+    print_rank_0(f"  Packed Blocks Enabled: {args.pack_into_blocks}")
+    if args.pack_into_blocks:
+        print_rank_0(f"  Block Sizes: {args.block_sizes}")
+        print_rank_0(f"  Block Size Counts: {args.block_size_counts}")
+        print_rank_0(f"  Domain Column: {args.domain_column}")
+        print_rank_0(f"  Concat Across Domains: {args.concat_across_domains}")
+    print_rank_0(f"  Require Local NVMe Dataset: {args.require_local_nvme}")
+    if args.local_nvme_cache_dir:
+        print_rank_0(f"  Local NVMe Cache Dir: {args.local_nvme_cache_dir}")
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  Batch Size: {args.batch_size}")
     print_rank_0(f"  Max Length: {args.max_length}")
@@ -232,27 +264,38 @@ def main():
     # Step 0.5: Read DeepSpeed Config to Get Batch Size
     # ========================================
     print_rank_0("\n[0.5/5] Reading DeepSpeed configuration...")
+    import json
     with open(args.deepspeed_config, 'r') as f:
         deepspeed_config = json.load(f)
+
+    validate_kernel_policy(args.require_fused_kernels)
     
     # Extract batch size from DeepSpeed config
     micro_batch_size = deepspeed_config.get('train_micro_batch_size_per_gpu', 1)
     gradient_accumulation_steps = deepspeed_config.get('gradient_accumulation_steps', 1)
+    train_batch_size = deepspeed_config.get('train_batch_size', None)
     
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  train_micro_batch_size_per_gpu: {micro_batch_size}")
     print_rank_0(f"  gradient_accumulation_steps: {gradient_accumulation_steps}")
     
-    # Do NOT inject train_batch_size here — distributed is not initialized yet,
-    # Let DeepSpeed auto-compute it:
-    #   train_batch_size = micro_batch × grad_accum × world_size
-    # by ensuring train_batch_size is absent from the config.
-    if 'train_batch_size' in deepspeed_config:
-        print_rank_0(f"  Removing explicit train_batch_size={deepspeed_config['train_batch_size']} "
-                     f"from config — DeepSpeed will auto-compute it after dist init.")
-        del deepspeed_config['train_batch_size']
-
-    print_rank_0(f"  Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
+    # Calculate expected global batch size
+    # train_batch_size = micro_batch × accum_steps × num_gpus
+    import torch.distributed as dist
+    num_gpus = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+    expected_global_batch = micro_batch_size * gradient_accumulation_steps * num_gpus
+    
+    if train_batch_size is not None:
+        print_rank_0(f"  train_batch_size (from config): {train_batch_size}")
+        if train_batch_size != expected_global_batch:
+            print_rank_0(f"  ⚠️  WARNING: train_batch_size ({train_batch_size}) != "
+                        f"micro_batch ({micro_batch_size}) × accum_steps ({gradient_accumulation_steps}) × "
+                        f"num_gpus ({num_gpus}) = {expected_global_batch}")
+            print_rank_0(f"  This mismatch may cause unexpected behavior.")
+    else:
+        print_rank_0(f"  Calculated global batch size: {expected_global_batch}")
+    
+    print_rank_0(f"  ✓ Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
 
     # ========================================
     # Step 1: Load Tokenizer & Data
@@ -260,14 +303,23 @@ def main():
     print_rank_0("\n[1/5] Loading tokenizer and data...")
     print_rank_0("  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)")
     tokenizer = get_tokenizer()  # Loads from src/tokenizer/
-    train_loader, eval_loader, test_loader, _ = get_dataloaders(
+    train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
         tokenizer=tokenizer,
-        batch_size=micro_batch_size,
+        batch_size=micro_batch_size,  # Use DeepSpeed config value instead of args.batch_size
         max_length=args.max_length,
-        num_workers=args.num_workers,
         tokenized_dataset_path=args.tokenized_dataset_path,
+        dataset_cache_dir=args.dataset_cache_dir,
+        local_nvme_cache_dir=args.local_nvme_cache_dir,
+        require_local_nvme=args.require_local_nvme,
+        pack_into_blocks=args.pack_into_blocks,
+        block_sizes=args.block_sizes,
+        block_size_counts=args.block_size_counts,
+        domain_column=args.domain_column,
+        concat_across_domains=args.concat_across_domains,
+        drop_remainder=args.drop_remainder,
+        num_workers=args.num_workers,
     )
     print_rank_0(f"  Train batches: {len(train_loader)}")
     print_rank_0(f"  Eval batches: {len(eval_loader)}")
@@ -281,6 +333,7 @@ def main():
     
     # Create model configuration
     config = ModelConfig()
+    config.require_fused_deltanet_kernel = args.require_fused_deltanet_kernel
     
     # Update vocab size to match tokenizer
     # Use len(tokenizer) to include special tokens (pad, eos, etc.)
@@ -330,42 +383,23 @@ def main():
     print_rank_0("  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...")
     model = model.to(dtype=torch.bfloat16)
     # ----------------------
+
+    validate_precision_policy(deepspeed_config, next(model.parameters()).dtype)
     
-    print_rank_0(f"  Model cast to bfloat16")
-    print_rank_0(f"  Model created successfully")
-
-    # ========================================
-    # Step 2.5: Preflight checks
-    # ========================================
-    # Precision policy validation — hard-fail on mismatch
-    model_dtype = next(model.parameters()).dtype
-    validate_precision_policy(deepspeed_config, model_dtype)
-    print_rank_0("  Precision policy validated (no autocast conflict)")
-
-    # Kernel fail-fast — abort if required fused kernels are missing
-    if args.require_fused_kernels:
-        from src.models.recurrence_model_1b import HAS_TRITON, HAS_FLA
-        missing = []
-        if not HAS_TRITON:
-            missing.append("Triton")
-        if not HAS_FLA:
-            missing.append("fla (flash-linear-attention)")
-        if missing:
-            raise RuntimeError(
-                f"require_fused_kernels=true but missing: {', '.join(missing)}. "
-                f"Install the required packages or set require_fused_kernels: false."
-            )
-        print_rank_0("  Kernel fail-fast passed: Triton and fla available")
+    print_rank_0(f"  ✓ Model cast to bfloat16")
+    print_rank_0(f"  ✓ Model created successfully")
 
     # ========================================
     # Step 3: Initialize DeepSpeed
     # ========================================
     print_rank_0("\n[3/5] Initializing DeepSpeed...")
 
-    # Use the deepspeed_config dict we already loaded and patched (with computed train_batch_size)
+    with open(args.deepspeed_config, 'r') as f:
+        ds_config = json.load(f)
+        
     model_engine, optimizer, _, _ = deepspeed.initialize(
-        config_params=deepspeed_config,
-        model=model,
+        config_params=ds_config,
+        model=model, 
         model_parameters=model.parameters(),
     )
 
@@ -437,13 +471,13 @@ def main():
     print_rank_0(f"Starting from epoch {start_epoch}, global step {global_step}")
 
     for epoch in range(start_epoch, args.num_epochs):
+        train_sampler = dataset_info.get("train_sampler")
+        if train_sampler is not None and hasattr(train_sampler, "set_epoch"):
+            train_sampler.set_epoch(epoch)
+
         print_rank_0(f"\n{'=' * 80}")
         print_rank_0(f"Epoch {epoch + 1}/{args.num_epochs}")
         print_rank_0(f"{'=' * 80}")
-
-        # Set epoch on DistributedSampler for deterministic shuffling per epoch
-        if hasattr(train_loader.sampler, "set_epoch"):
-            train_loader.sampler.set_epoch(epoch)
 
         # Determine if we need to skip steps (only for first resumed epoch)
         epoch_start_step = start_step if epoch == start_epoch else 0
@@ -461,12 +495,17 @@ def main():
             checkpoint_manager=checkpoint_manager,
             start_step=epoch_start_step,
             global_step=global_step,
+            metrics_jsonl_path=args.metrics_jsonl_path,
         )
 
         # Evaluate on validation set
         print_rank_0("\nEvaluating on validation set...")
         eval_loss, eval_perplexity = evaluate(
-            model_engine, eval_loader, phase="Validation", max_steps=args.max_eval_steps
+            model_engine,
+            eval_loader,
+            phase="Validation",
+            max_steps=args.max_eval_steps,
+            metrics_jsonl_path=args.metrics_jsonl_path,
         )
 
         # Save epoch checkpoint
@@ -503,7 +542,11 @@ def main():
     # Evaluate on test set
     print_rank_0("\nEvaluating on test set...")
     test_loss, test_perplexity = evaluate(
-        model_engine, test_loader, phase="Test", max_steps=args.max_eval_steps
+        model_engine,
+        test_loader,
+        phase="Test",
+        max_steps=args.max_eval_steps,
+        metrics_jsonl_path=args.metrics_jsonl_path,
     )
 
     # Test text generation

@@ -1,14 +1,15 @@
 {
-    "train_micro_batch_size_per_gpu": 2,
+    "train_batch_size": 16,
+    "train_micro_batch_size_per_gpu": 1,
     "gradient_accumulation_steps": 4,
 
     "optimizer": {
         "type": "AdamW",
         "params": {
-            "lr": 1e-4,
+            "lr": 3e-4,
             "betas": [0.9, 0.95],
             "eps": 1e-8,
-            "weight_decay": 0.0
+            "weight_decay": 0.1
         }
     },
 
@@ -17,21 +18,23 @@
         "params": {
             "warmup_min_lr": 0,
             "warmup_max_lr": 3e-4,
-            "warmup_num_steps": 500,
-            "total_num_steps": 10000
+            "warmup_num_steps": 100,
+            "total_num_steps": 1000
         }
     },
 
     "zero_optimization": {
         "stage": 2,
-
+        "offload_optimizer": {
+            "device": "cpu",
+            "pin_memory": true
+        },
         "contiguous_gradients": true,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 2e8,
+        "reduce_bucket_size": 5e7,
         "allgather_partitions": true,
-        "allgather_bucket_size": 2e8,
-        "round_robin_gradients": true
+        "allgather_bucket_size": 5e7
     },
 
     "activation_checkpointing": {
@@ -42,9 +45,8 @@
     },
 
     "bf16": {
-        "enabled": false
+        "enabled": true
     },
-    "_comment_bf16": "DISABLED: Model is pre-cast to bf16 in main.py. DeepSpeed bf16 wraps forward in autocast which breaks reversible midpoint backward (dtype mismatch under torch.enable_grad).",
 
     "gradient_clipping": 1.0,
     "steps_per_print": 10,

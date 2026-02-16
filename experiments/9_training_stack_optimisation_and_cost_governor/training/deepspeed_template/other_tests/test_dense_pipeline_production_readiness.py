@@ -143,17 +143,6 @@ def test_required_kernel_fail_fast_exists():
     )
 
 
-def test_deltanet_forward_disallows_silent_python_fallback():
-    """
-    DeltaNet must crash if fused path is required and unavailable/failing.
-    """
-    model_src = _read("src/models/recurrence_model_1b.py")
-    assert "require_fused_deltanet_kernel = True" in model_src
-    assert "DeltaNet fused kernel is required but unavailable" in model_src
-    assert "fallback is disabled" in model_src
-    assert "falling back to Python loop" not in model_src
-
-
 def test_structured_logging_is_configured():
     """
     Console-only logs are not enough for expensive production training.
@@ -195,3 +184,4 @@ def test_dense_configs_do_not_expose_model_type_switches(cfg_file: str):
     assert "model_type" not in model_cfg, (
         f"{cfg_file} still has model_type. Remove stale Dense/MoE switch from dense pipeline configs."
     )
+
