@@ -80,6 +80,9 @@ class Config:
         self.metrics_jsonl_path = config_dict["training"].get(
             "metrics_jsonl_path", None
         )
+        self.chunked_ce_loss_size = config_dict["training"].get(
+            "chunked_ce_loss_size", 0
+        )
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
@@ -472,6 +475,7 @@ def main():
             start_step=epoch_start_step,
             global_step=global_step,
             metrics_jsonl_path=args.metrics_jsonl_path,
+            chunked_ce_loss_size=args.chunked_ce_loss_size,
         )
 
         # Evaluate on validation set
@@ -480,6 +484,7 @@ def main():
             model_engine, eval_loader, phase="Validation",
             max_steps=args.max_eval_steps,
             metrics_jsonl_path=args.metrics_jsonl_path,
+            chunked_ce_loss_size=args.chunked_ce_loss_size,
         )
 
         # Save epoch checkpoint
@@ -519,6 +524,7 @@ def main():
         model_engine, test_loader, phase="Test",
         max_steps=args.max_eval_steps,
         metrics_jsonl_path=args.metrics_jsonl_path,
+        chunked_ce_loss_size=args.chunked_ce_loss_size,
     )
 
     # Test text generation

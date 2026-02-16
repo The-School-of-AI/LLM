@@ -33,6 +33,45 @@ def _append_jsonl(path, record):
     with open(path, "a") as f:
         f.write(json.dumps(record) + "\n")
 
+
+def chunked_cross_entropy(logits_bf16, targets, chunk_size=0):
+    """
+    Compute cross-entropy loss, optionally in chunks to reduce peak memory.
+
+    With a 131K vocab, F.cross_entropy internally materializes a full
+    (N, 131072) float32 softmax tensor.  Chunking processes `chunk_size`
+    tokens at a time so only a (chunk_size, 131072) softmax is ever live.
+
+    Args:
+        logits_bf16: (N, V) logits tensor (typically bf16 from model)
+        targets:     (N,) integer targets
+        chunk_size:  0 or None → full CE (original behaviour)
+                     >0        → process this many tokens per chunk
+
+    Returns:
+        Scalar loss (mean-reduced, identical to F.cross_entropy default).
+    """
+    N, V = logits_bf16.shape
+    flat_targets = targets.reshape(-1)
+
+    if not chunk_size or chunk_size <= 0 or chunk_size >= N:
+        return torch.nn.functional.cross_entropy(
+            logits_bf16.float().reshape(-1, V), flat_targets
+        )
+
+    # Weighted sum so unevenly-sized last chunk is handled correctly
+    total_loss = torch.tensor(0.0, device=logits_bf16.device)
+    for start in range(0, N, chunk_size):
+        end = min(start + chunk_size, N)
+        chunk_logits = logits_bf16[start:end].float()  # cast only this chunk
+        chunk_loss = torch.nn.functional.cross_entropy(
+            chunk_logits, flat_targets[start:end], reduction="sum"
+        )
+        total_loss = total_loss + chunk_loss
+        del chunk_logits  # free fp32 chunk immediately
+
+    return total_loss / N
+
 def train_epoch(
     model_engine,
     train_loader,
@@ -46,6 +85,7 @@ def train_epoch(
     start_step=0,
     global_step=0,
     metrics_jsonl_path=None,
+    chunked_ce_loss_size=0,
 ):
     """
     Train the model for one epoch.
@@ -150,15 +190,15 @@ def train_epoch(
 
             vocab_size = logits_ntp.size(-1)
 
-            loss_ntp = torch.nn.functional.cross_entropy(
-                logits_ntp.float().view(-1, vocab_size),
-                y_ntp.view(-1)
+            loss_ntp = chunked_cross_entropy(
+                logits_ntp.view(-1, vocab_size), y_ntp.view(-1),
+                chunk_size=chunked_ce_loss_size
             )
             del logits_ntp
 
-            loss_mtp = torch.nn.functional.cross_entropy(
-                logits_mtp.float().view(-1, vocab_size),
-                y_mtp.view(-1)
+            loss_mtp = chunked_cross_entropy(
+                logits_mtp.view(-1, vocab_size), y_mtp.view(-1),
+                chunk_size=chunked_ce_loss_size
             )
             del logits_mtp
 
@@ -353,7 +393,8 @@ def train_epoch(
     return avg_loss, global_step
 
 
-def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None, metrics_jsonl_path=None):
+def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None,
+             metrics_jsonl_path=None, chunked_ce_loss_size=0):
     """
     Evaluate the model on a dataset.
 
@@ -402,15 +443,15 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None, metr
                 )
 
                 vocab_size = logits_ntp.size(-1)
-                loss_ntp = torch.nn.functional.cross_entropy(
-                    logits_ntp.float().view(-1, vocab_size),
-                    y_ntp.view(-1)
+                loss_ntp = chunked_cross_entropy(
+                    logits_ntp.view(-1, vocab_size), y_ntp.view(-1),
+                    chunk_size=chunked_ce_loss_size
                 )
                 del logits_ntp
 
-                loss_mtp = torch.nn.functional.cross_entropy(
-                    logits_mtp.float().view(-1, vocab_size),
-                    y_mtp.view(-1)
+                loss_mtp = chunked_cross_entropy(
+                    logits_mtp.view(-1, vocab_size), y_mtp.view(-1),
+                    chunk_size=chunked_ce_loss_size
                 )
                 del logits_mtp
 

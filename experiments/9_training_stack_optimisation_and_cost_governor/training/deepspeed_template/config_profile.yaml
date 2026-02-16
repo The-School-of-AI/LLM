@@ -18,6 +18,7 @@ training:
   enable_system_metrics: true  # Enable per-step CPU/GPU util & memory logging
   require_fused_kernels: false  # Set true to fail-fast if Triton/FLA kernels are missing
   metrics_jsonl_path: "./logs/metrics.jsonl"  # Structured metrics output (null to disable)
+  chunked_ce_loss_size: 0  # 0=off, >0=chunk size for memory-efficient CE (e.g. 1024)
 
 # DeepSpeed Configuration
 deepspeed:

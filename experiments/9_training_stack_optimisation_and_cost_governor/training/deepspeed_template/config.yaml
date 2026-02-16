@@ -16,6 +16,7 @@ training:
   seed: 42
   require_fused_kernels: false  # Set true to fail-fast if Triton/FLA fused kernels are missing
   metrics_jsonl_path: "./logs/metrics.jsonl"  # Structured metrics output (null to disable)
+  chunked_ce_loss_size: 0  # 0=off, >0=chunk size for memory-efficient CE (e.g. 1024)
 
 # DeepSpeed Configuration
 deepspeed:
