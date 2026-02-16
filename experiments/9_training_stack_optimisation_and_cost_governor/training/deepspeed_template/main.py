@@ -238,29 +238,19 @@ def main():
     # Extract batch size from DeepSpeed config
     micro_batch_size = deepspeed_config.get('train_micro_batch_size_per_gpu', 1)
     gradient_accumulation_steps = deepspeed_config.get('gradient_accumulation_steps', 1)
-    train_batch_size = deepspeed_config.get('train_batch_size', None)
     
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  train_micro_batch_size_per_gpu: {micro_batch_size}")
     print_rank_0(f"  gradient_accumulation_steps: {gradient_accumulation_steps}")
     
-    # Calculate expected global batch size
-    # train_batch_size = micro_batch × accum_steps × num_gpus
-    import torch.distributed as dist
-    num_gpus = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
-    expected_global_batch = micro_batch_size * gradient_accumulation_steps * num_gpus
-    
-    # Inject computed train_batch_size into config so DeepSpeed doesn't complain
-    # train_batch_size = micro_batch × accum_steps × num_gpus
-    if train_batch_size is None or train_batch_size <= 0:
-        deepspeed_config['train_batch_size'] = expected_global_batch
-        print_rank_0(f"  train_batch_size: {expected_global_batch} (auto = {micro_batch_size} x {gradient_accumulation_steps} x {num_gpus} GPUs)")
-    else:
-        print_rank_0(f"  train_batch_size (from config): {train_batch_size}")
-        if train_batch_size != expected_global_batch:
-            print_rank_0(f"  WARNING: train_batch_size ({train_batch_size}) != "
-                        f"micro_batch ({micro_batch_size}) x accum_steps ({gradient_accumulation_steps}) x "
-                        f"num_gpus ({num_gpus}) = {expected_global_batch}")
+    # Do NOT inject train_batch_size here — distributed is not initialized yet,
+    # Let DeepSpeed auto-compute it:
+    #   train_batch_size = micro_batch × grad_accum × world_size
+    # by ensuring train_batch_size is absent from the config.
+    if 'train_batch_size' in deepspeed_config:
+        print_rank_0(f"  Removing explicit train_batch_size={deepspeed_config['train_batch_size']} "
+                     f"from config — DeepSpeed will auto-compute it after dist init.")
+        del deepspeed_config['train_batch_size']
 
     print_rank_0(f"  Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
 
