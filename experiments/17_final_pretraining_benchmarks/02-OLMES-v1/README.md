@@ -35,9 +35,15 @@ For a deeper dive into the exact academic targets (Meta, Alibaba, AI2) and SOTA 
 ## 🚀 Execution Guide
 
 ### 1. Environment Setup
-The pipeline automatically detects and uses a local `.venv` if present. Ensure you have the dependencies installed:
+The pipeline requires a stable Python environment (**Python 3.12 recommended**). Avoid experimental versions like 3.14 for now.
+
 ```bash
-pip install -r 02-OLMES-v1/requirements.txt
+# Recommended: Create a virtual environment
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies using the venv's python
+./.venv/bin/python3 -m pip install -r 02-OLMES-v1/requirements.txt
 ```
 
 ### Gated Datasets (Indic-Bias, etc.)

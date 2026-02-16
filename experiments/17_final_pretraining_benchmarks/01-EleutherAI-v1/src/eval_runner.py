@@ -443,9 +443,20 @@ def run_custom_benchmark(
     # Resolve script path
     resolved_script = script
     if script and not os.path.isabs(script):
-        # Try relative to CWD first, then relative to config_dir
-        if not os.path.exists(resolved_script) and config_dir:
-            resolved_script = os.path.join(config_dir, script)
+        # Try relative to CWD first, then relative to config_dir, then relative to experiment root
+        # Structure: <experiment_root>/01-EleutherAI-v1/src/eval_runner.py
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        possible_paths = [
+            script,
+            os.path.join(config_dir, script) if config_dir else None,
+            os.path.join(root_dir, script)
+        ]
+        
+        for p in possible_paths:
+            if p and os.path.exists(p):
+                resolved_script = p
+                break
 
     if not resolved_script or not os.path.exists(resolved_script):
         logger.warning(
@@ -472,6 +483,19 @@ def run_custom_benchmark(
             py_exec = cwd_venv
 
         cmd = [py_exec, resolved_script, "--model_args", model_args]
+        
+        # Inject context length for NIAH tasks
+        if "niah_" in name:
+            try:
+                # Handle group:task format (e.g. context_window:niah_8k) or standalone
+                task_part = name.split(":")[-1] if ":" in name else name
+                if "niah_" in task_part:
+                    length_str = task_part.split("niah_")[1] # "8k" or "16k"
+                    length = int(length_str.replace("k", "")) * 1024
+                    cmd += ["--context_length", str(length)]
+            except Exception as e:
+                logger.warning(f"  [Warning] Failed to parse context length for {name}: {e}")
+
         if limit:
             cmd += ["--limit", str(limit)]
         if device:

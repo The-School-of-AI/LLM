@@ -129,8 +129,10 @@ def main():
         }))
 
     except Exception as e:
+        # Use full length if defined, else fallback
+        name_reported = f"niah_{args.context_length}" if args.context_length > 1000 else f"niah_{args.context_length}k"
         print(json.dumps({
-            "name": f"niah_{args.context_length//1024}k",
+            "name": name_reported,
             "status": "failed",
             "error": str(e)
         }))
