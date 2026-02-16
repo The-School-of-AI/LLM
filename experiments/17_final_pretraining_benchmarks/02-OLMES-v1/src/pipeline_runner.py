@@ -43,8 +43,17 @@ def resolve_task_type(task_name):
     harness_tasks = [
         "mmlu", "gsm8k", "bbh", "arc_challenge", "blimp", 
         "truthfulqa", "hellaswag", "winogrande", "piqa", 
-        "lambada", "realtoxicityprompts"
     ]
+    
+    # RULER & LongBench (Native Harness Tasks)
+    # These contain 'niah_' but are part of the RULER suite in lm-eval
+    if "ruler_" in task_name or "niah_multikey" in task_name or "niah_single" in task_name or "niah_multiquery" in task_name or "niah_multivalue" in task_name or "longbench_" in task_name:
+        return "harness"
+
+    # Custom Context Length Benchmarks (niah_4k, niah_8k, etc.)
+    if "niah_" in task_name:
+         return ("custom", "../01-EleutherAI-v1/src/custom-scripts/needle_in_haystack.py")
+         
     if task_name in harness_tasks or "mmlu" in task_name:
         return "harness"
     
@@ -124,7 +133,7 @@ def main():
                 "baseline": group.get("baseline"),
                 "subjects": group.get("subjects"),
                 "subset": group.get("subset"),
-                "tasks": group.get("tasks_refined") or group.get("tasks") 
+                "tasks": group.get("tasks_refined") 
             }
             
             if t_type == "olmes":

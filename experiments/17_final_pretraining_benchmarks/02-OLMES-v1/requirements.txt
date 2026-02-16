@@ -1,4 +1,4 @@
-lm-eval==0.4.3
+lm-eval>=0.4.3
 torch==2.5.1
 torchvision==0.20.1
 transformers==4.47.1
@@ -12,6 +12,12 @@ immutabledict
 human-eval
 sentencepiece
 protobuf
+tiktoken
+wonderwords
+nltk>=3.9.1
+jieba
+fuzzywuzzy
+rouge
 # OLMES (oe-eval) is handled automatically by the eval_runner.py
 # If it's your first time, the runner will clone and install it.
 # -e ./02-OLMES-v1/vendor/olmes

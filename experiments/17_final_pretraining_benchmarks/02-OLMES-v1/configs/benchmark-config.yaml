@@ -57,6 +57,9 @@ stages:
       - name: "indic_nlu"
         tasks:
           - "indic_glue"
+      - name: "context_window"
+        tasks:
+          - "niah_4k" # Boundary check only
     gating:
       enabled: true
       compare_mode: "best_baseline"   # or "fixed_baseline"
@@ -92,6 +95,9 @@ stages:
       - name: "core_qa_knowledge"
         tasks:
           - "core_9mcqa::olmes"
+      - name: "context_window"
+        tasks:
+          - "niah_8k"
     gating:
       enabled: true
       compare_mode: "best_baseline"
@@ -128,6 +134,9 @@ stages:
         tasks:
           - "indic_glue"
           - "indic_qa"
+      - name: "context_window"
+        tasks:
+          - "niah_16k" # Boundary check only
     gating:
       enabled: true
       compare_mode: "best_baseline"
@@ -170,6 +179,13 @@ stages:
           - "indic_glue"
           - "indic_qa"
         enabled: true
+      - name: "context_window"
+        tasks:
+          # Sparse sweep for fast feedback
+          - "niah_32k"
+          - "niah_128k"
+          # Single RULER task for robustness signal
+          - "niah_multikey_1"
 
     gating:
       enabled: true

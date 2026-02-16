@@ -17,6 +17,44 @@ from infra_utils import (
 )
 
 
+def get_intermediate_group(subtask_name):
+    """
+    Heuristic to group subtasks into intermediate task families.
+    """
+    # Clean up olmes suffix
+    name = subtask_name.replace("::olmes", "").replace(":olmes", "")
+    
+    # OLMES/Harness prefixes
+    prefixes = [
+        "arc_challenge", "arc_easy", "mmlu_", "bbh_", 
+        "codex_humanevalfim", "minerva_math", "gsm8k",
+        "boolq", "csqa", "hellaswag", "piqa", "socialiqa", "winogrande",
+        "openbookqa", "triviaqa"
+    ]
+    
+    # Check for explicit prefixes first
+    for p in prefixes:
+        if name.startswith(p):
+            # Special case for MMLU subjects: group by subject name
+            if p == "mmlu_" or p == "bbh_":
+                return name.split(":")[0]
+            return p
+            
+    # Handle OLMES segments (task:segment)
+    if ":" in name:
+        return name.split(":")[0]
+        
+    # Handle Harness segments (task_segment)
+    if "_" in name:
+        # Avoid splitting common task names that use underscores but aren't subject-based
+        if not any(name.startswith(p) for p in prefixes):
+             # If it's a known task followed by an underscore, it's likely a harness subject
+             # But we need to be careful not to over-split.
+             # For now, if it's not in our explicit prefixes, we split by first understore.
+             return name.split("_")[0]
+
+    return name
+
 def generate_summary_report(results, run_dir, capability_map=None, baselines=None):
     report_dir = os.path.join(run_dir, "reports")
     if not os.path.exists(report_dir):
@@ -108,12 +146,31 @@ def generate_summary_report(results, run_dir, capability_map=None, baselines=Non
                 engine = b.get("type", "N/A")
                 status_icon = "✅" if b["status"] == "success" else "❌"
                 
-                # Details (Subtasks)
+                # Details (Subtasks with Intermediate Grouping)
                 subtasks = b.get("subtasks", [])
                 details = f"{len(subtasks)} subtasks" if subtasks else "-"
                 if subtasks:
-                    sub_items = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" for st in sorted(subtasks, key=lambda x: x['task'])])
-                    details = f"<details><summary>{len(subtasks)} subtasks</summary><ul>{sub_items}</ul></details>"
+                    # Group subtasks
+                    groups = {}
+                    for st in subtasks:
+                        g_name = get_intermediate_group(st["task"])
+                        if g_name not in groups:
+                            groups[g_name] = []
+                        groups[g_name].append(st)
+                    
+                    sub_items = []
+                    for g_name in sorted(groups.keys()):
+                        g_subtasks = groups[g_name]
+                        if len(g_subtasks) > 1:
+                            # Aggregate score for the group
+                            g_score = sum(st["score"] for st in g_subtasks if isinstance(st["score"], (int, float))) / len(g_subtasks)
+                            g_details = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" for st in sorted(g_subtasks, key=lambda x: x['task'])])
+                            sub_items.append(f"<li><b>{g_name}</b>: {g_score:.4f} <details><summary>{len(g_subtasks)} variants</summary><ul>{g_details}</ul></details></li>")
+                        else:
+                            st = g_subtasks[0]
+                            sub_items.append(f"<li>{st['task']}: {st.get('score', 'N/A')}</li>")
+                    
+                    details = f"<details><summary>{len(subtasks)} subtasks in {len(groups)} groups</summary><ul>{''.join(sub_items)}</ul></details>"
 
                 f.write(f"| {b['name']} | {engine} | {status_icon} {b['status']} | {score_str} | {details} |\n")
             f.write("\n")
@@ -129,8 +186,26 @@ def generate_summary_report(results, run_dir, capability_map=None, baselines=Non
                 subtasks = b.get("subtasks", [])
                 details = f"{len(subtasks)} subtasks" if subtasks else "-"
                 if subtasks:
-                    sub_items = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" for st in sorted(subtasks, key=lambda x: x['task'])])
-                    details = f"<details><summary>{len(subtasks)} subtasks</summary><ul>{sub_items}</ul></details>"
+                    # Group subtasks
+                    groups = {}
+                    for st in subtasks:
+                        g_name = get_intermediate_group(st["task"])
+                        if g_name not in groups:
+                            groups[g_name] = []
+                        groups[g_name].append(st)
+                    
+                    sub_items = []
+                    for g_name in sorted(groups.keys()):
+                        g_subtasks = groups[g_name]
+                        if len(g_subtasks) > 1:
+                            g_score = sum(st["score"] for st in g_subtasks if isinstance(st["score"], (int, float))) / len(g_subtasks)
+                            g_details = "".join([f"<li>{st['task']}: {st.get('score', 'N/A')}</li>" for st in sorted(g_subtasks, key=lambda x: x['task'])])
+                            sub_items.append(f"<li><b>{g_name}</b>: {g_score:.4f} <details><summary>{len(g_subtasks)} variants</summary><ul>{g_details}</ul></details></li>")
+                        else:
+                            st = g_subtasks[0]
+                            sub_items.append(f"<li>{st['task']}: {st.get('score', 'N/A')}</li>")
+                            
+                    details = f"<details><summary>{len(subtasks)} subtasks in {len(groups)} groups</summary><ul>{''.join(sub_items)}</ul></details>"
                 f.write(f"| {b['name']} | {b.get('type', 'N/A')} | {b['status']} | {score_str} | {details} |\n")
             f.write("\n")
 
@@ -471,6 +546,18 @@ def run_custom_benchmark(
             py_exec = cwd_venv
 
         cmd = [py_exec, resolved_script, "--model_args", model_args]
+        
+        # Inject context length for NIAH tasks
+        if "niah_" in name:
+            try:
+                # Handle group:task format (e.g. context_window:niah_8k) or standalone
+                task_part = name.split(":")[-1] if ":" in name else name
+                if "niah_" in task_part:
+                    length_str = task_part.split("niah_")[1] # "8k" or "16k"
+                    length = int(length_str.replace("k", "")) * 1024
+                    cmd += ["--context_length", str(length)]
+            except Exception as e:
+                logger.warning(f"  [Warning] Failed to parse context length for {name}: {e}")
 
         if limit:
             cmd += ["--limit", str(limit)]

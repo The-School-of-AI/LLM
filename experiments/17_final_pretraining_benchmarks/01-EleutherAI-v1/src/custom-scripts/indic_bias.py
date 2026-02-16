@@ -8,6 +8,12 @@ from tqdm import tqdm
 def parse_model_args(args_str):
     args = {}
     if not args_str: return args
+    
+    # Check if it's a key-value string or just a model name
+    if '=' not in args_str:
+        args["pretrained"] = args_str.strip()
+        return args
+
     for part in args_str.split(','):
         if '=' in part:
             k, v = part.split('=', 1)
