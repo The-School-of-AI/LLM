@@ -32,6 +32,16 @@ TEMPLATES_SHORTER = [
 
 # Pre-compute word lengths (OPTIMIZATION - cache expensive operation)
 unique_words = list(set(ALL_WORDS))
+
+# Exclude adjectives that are used in comparison queries to avoid confusion
+EXCLUDED_COMPARISON_WORDS = {
+    "बड़ा", "छोटा", "लंबा", "नाटा", "ऊंचा", "नीचा", "मोटा", "पतला",
+    "भारी", "हल्का", "तेज", "धीमा"
+}
+
+# Filter out excluded words
+unique_words = [w for w in unique_words if w not in EXCLUDED_COMPARISON_WORDS]
+
 word_lengths = {}
 for word in unique_words:
     clusters = get_hindi_grapheme_clusters(word)
@@ -97,41 +107,19 @@ for i, word1 in enumerate(word_list):
 
         pairs_generated += 1
 
-# Sample with replacement to reach target
-while len(samples) < target_count:
-    word1 = random.choice(word_list)
-    word2 = random.choice([w for w in word_list if w != word1])
+# Only use unique combinations - NO sampling with replacement
+unique_count = len(samples)
 
-    len1 = get_word_length(word1)
-    len2 = get_word_length(word2)
-
-    # Skip equal-length pairs - can't compare when lengths are equal
-    if len1 == len2:
-        continue
-
-    if len1 > len2:
-        longer_word = word1
-        shorter_word = word2
-    else:
-        longer_word = word2
-        shorter_word = word1
-
-    if random.random() < 0.5:
-        template = random.choice(TEMPLATES_LONGER)
-        answer = longer_word
-    else:
-        template = random.choice(TEMPLATES_SHORTER)
-        answer = shorter_word
-
-    query = template.format(word1=word1, word2=word2)
-    samples.append((query, answer))
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
+else:
+    samples = samples[:target_count]
 
 random.shuffle(samples)
-samples = samples[:target_count]
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s10.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S10 Word Comparison: Generated {len(samples)} samples")
+print(f"S10 Word Comparison: Generated {len(samples)} unique samples (target: {target_count})")

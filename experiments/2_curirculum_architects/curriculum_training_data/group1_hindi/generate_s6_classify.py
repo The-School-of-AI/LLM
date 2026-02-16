@@ -18,6 +18,13 @@ TEMPLATES = [
     '"{word}" शब्द किस श्रेणी में आता है, व्यक्ति, जानवर या वस्तु?',
     '"{word}" को किस श्रेणी में रखा जा सकता है, व्यक्ति, जानवर या वस्तु?',
     '"{word}" किस प्रकार की चीज़ है, व्यक्ति, जानवर या वस्तु?',
+    'बताइए "{word}" किस वर्ग का है, व्यक्ति, जानवर या वस्तु?',
+    '"{word}" किस श्रेणी में आता है, व्यक्ति, जानवर या वस्तु?',
+    '"{word}" को कैसे वर्गीकृत करें, व्यक्ति, जानवर या वस्तु?',
+    '"{word}" का वर्गीकरण क्या है, व्यक्ति, जानवर या वस्तु?',
+    '"{word}" किस वर्ग से संबंधित है, व्यक्ति, जानवर या वस्तु?',
+    '"{word}" शब्द को वर्गीकृत करें, व्यक्ति, जानवर या वस्तु?',
+    '"{word}" किस प्रकार है, व्यक्ति, जानवर या वस्तु?',
 ]
 
 
@@ -50,15 +57,17 @@ for word in set(all_words):
         if key not in unique_combinations:
             unique_combinations[key] = (query, answer)
 
-# Use unique combinations, then sample with replacement to reach target
+# Generate unique samples only - NO sampling with replacement
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
-    word = random.choice(list(set(all_words)))
-    category = classify_word(word)
-    template = random.choice(TEMPLATES)
-    query = template.format(word=word)
-    answer = category
-    samples.append((query, answer))
+unique_count = len(samples)
+
+# If we have fewer unique combinations than target, generate warning
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations possible (target: {target_count})")
+    print(f"  Consider adding more words or templates to reach target")
+else:
+    # If we have more than target, take only what we need
+    samples = samples[:target_count]
 
 random.shuffle(samples)
 
@@ -67,4 +76,4 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S6 Classification: Generated {len(samples)} samples")
+print(f"S6 Classification: Generated {len(samples)} unique samples (target: {target_count})")

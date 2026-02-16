@@ -94,19 +94,14 @@ for word in set(all_words):  # Use unique words
         answer = generate_spelling_answer(word)
         unique_combinations[(word, template_idx)] = (query, answer)
 
-# If we have enough unique combinations, use them
-if len(unique_combinations) >= target_count:
-    samples = list(unique_combinations.values())[:target_count]
+# Only use unique combinations - NO sampling with replacement
+samples = list(unique_combinations.values())
+unique_count = len(samples)
+
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
 else:
-    # Use all unique combinations, then randomly sample with replacement to reach target
-    samples = list(unique_combinations.values())
-    while len(samples) < target_count:
-        word = random.choice(list(set(all_words)))
-        template_idx = random.randint(0, len(TEMPLATES) - 1)
-        template = TEMPLATES[template_idx]
-        query = template.format(word=word)
-        answer = generate_spelling_answer(word)
-        samples.append((query, answer))
+    samples = samples[:target_count]
 
 # Shuffle for randomness
 random.shuffle(samples)
@@ -116,4 +111,4 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S1 Spelling: Generated {len(samples)} samples")
+print(f"S1 Spelling: Generated {len(samples)} unique samples (target: {target_count})")

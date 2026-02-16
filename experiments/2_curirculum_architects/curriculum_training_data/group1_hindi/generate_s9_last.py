@@ -29,6 +29,10 @@ TEMPLATES = [
     '"{word}" का आखिरी अक्षर क्या है?',
     '"{word}" किस अक्षर पर खत्म होता है?',
     '"{word}" का अंत में कौन सा अक्षर है?',
+    'बताइए "{word}" का आखिरी अक्षर क्या है?',
+    '"{word}" शब्द किस अक्षर पर समाप्त होता है?',
+    '"{word}" में अंतिम अक्षर कौन सा है?',
+    '"{word}" का अंत किस अक्षर से होता है?',
 ]
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
@@ -50,19 +54,14 @@ for word in set(all_words):
         if key not in unique_combinations:
             unique_combinations[key] = (query, answer)
 
-# Use unique combinations, then sample with replacement to reach target
+# Only use unique combinations - NO sampling with replacement
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
-    word = random.choice(list(set(all_words)))
-    clusters = get_hindi_grapheme_clusters(word)
-    if len(clusters) == 0:
-        continue
+unique_count = len(samples)
 
-    last_cluster = clusters[-1]
-    template = random.choice(TEMPLATES)
-    query = template.format(word=word)
-    answer = last_cluster
-    samples.append((query, answer))
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
+else:
+    samples = samples[:target_count]
 
 random.shuffle(samples)
 
@@ -71,4 +70,4 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S9 Last Letter: Generated {len(samples)} samples")
+print(f"S9 Last Letter: Generated {len(samples)} unique samples (target: {target_count})")

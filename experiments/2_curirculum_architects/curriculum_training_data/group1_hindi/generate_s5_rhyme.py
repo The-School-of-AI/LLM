@@ -21,6 +21,13 @@ TEMPLATES = [
     'कौन सा शब्द "{word}" से तुकबंदी करता है, "{rhyme}" या "{non_rhyme}"?',
     '"{word}" के साथ तुकबंदी करने वाला शब्द "{rhyme}" और "{non_rhyme}" में से कौन सा है?',
     '"{word}" से राइम करने वाला शब्द कौन सा है, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" से मेल खाने वाला शब्द बताइए, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" के साथ कौन सा शब्द मिलता है, "{rhyme}" या "{non_rhyme}"?',
+    'बताइए "{word}" से कौन सा शब्द तुकबंदी करता है, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" शब्द से मेल खाता है कौन सा, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" के साथ राइम करता है कौन, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" से तुकबंदी कौन करता है, "{rhyme}" या "{non_rhyme}"?',
+    'कौन सा शब्द "{word}" के साथ राइम करता है, "{rhyme}" या "{non_rhyme}"?',
 ]
 
 # Pre-compute unique words list (OPTIMIZATION)
@@ -63,37 +70,19 @@ for rhyme_word, word in RHYMING_PAIRS.items():
             unique_combinations.add(key)
             samples.append((query, answer))
 
-# Sample with replacement to reach target (OPTIMIZED)
-while len(samples) < target_count:
-    # Randomly pick a word that has a rhyme or create a pair
-    if RHYMING_PAIRS and random.random() < 0.7:
-        word = random.choice(list(RHYMING_PAIRS.keys()))
-        rhyme_word = RHYMING_PAIRS[word]
-    else:
-        # Use any word and try to find a rhyme-like word
-        word = random.choice(unique_words)
-        if word in RHYMING_PAIRS:
-            rhyme_word = RHYMING_PAIRS[word]
-        else:
-            # Pick a random word as "rhyme"
-            rhyme_word = random.choice([w for w in unique_words if w != word])
+# Only use unique combinations - NO sampling with replacement
+unique_count = len(samples)
 
-    non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
-    if not non_rhyming_words:
-        continue
-
-    template = random.choice(TEMPLATES)
-    non_rhyme = random.choice(non_rhyming_words)
-    query = template.format(word=word, rhyme=rhyme_word, non_rhyme=non_rhyme)
-    answer = rhyme_word
-    samples.append((query, answer))
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
+else:
+    samples = samples[:target_count]
 
 random.shuffle(samples)
-samples = samples[:target_count]
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s5.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S5 Rhyming: Generated {len(samples)} samples")
+print(f"S5 Rhyming: Generated {len(samples)} unique samples (target: {target_count})")

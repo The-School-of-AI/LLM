@@ -97,6 +97,18 @@ def main():
             f"Warning: Only {total_loaded} pairs loaded, less than target {TOTAL_TARGET}"
         )
 
+    # DEDUPLICATE Q&A pairs before shuffling
+    print(f"\nDeduplicating Q&A pairs...")
+    initial_count = len(all_qa_pairs)
+    # Convert to set of tuples for deduplication, then back to list
+    unique_qa_pairs = list(set(all_qa_pairs))
+    duplicates_removed = initial_count - len(unique_qa_pairs)
+    print(f"  Initial pairs: {initial_count:,}")
+    print(f"  Unique pairs: {len(unique_qa_pairs):,}")
+    print(f"  Duplicates removed: {duplicates_removed:,} ({duplicates_removed/initial_count*100:.1f}%)")
+    
+    all_qa_pairs = unique_qa_pairs
+
     # Shuffle all pairs
     random.shuffle(all_qa_pairs)
 
@@ -133,7 +145,8 @@ def main():
     print("\n✓ Dataset generation complete!")
     print(f"  Output file: {output_file}")
     print(f"  Total data points: {len(combined_samples)}")
-    print(f"  Total Q&A pairs: {total_loaded}")
+    print(f"  Unique Q&A pairs used: {len(all_qa_pairs):,}")
+    print(f"  Duplicates removed: {duplicates_removed:,}")
     print("=" * 80)
 
 

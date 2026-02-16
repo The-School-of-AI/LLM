@@ -42,6 +42,11 @@ TEMPLATES = [
     '"{word}" शब्द का {position} अक्षर क्या है?',
     '"{word}" में {position} स्थान पर कौन सा अक्षर है?',
     '"{word}" का {position} अक्षर बताइए?',
+    'बताइए "{word}" का {position} अक्षर क्या है?',
+    '"{word}" में {position} अक्षर कौन सा है?',
+    '"{word}" का {position} अक्षर क्या होगा?',
+    '"{word}" शब्द में {position} अक्षर बताइए?',
+    '"{word}" में {position} स्थान का अक्षर क्या है?',
 ]
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
@@ -64,19 +69,14 @@ for word in set(all_words):
                 if key not in unique_combinations:
                     unique_combinations[key] = (query, answer)
 
-# Use unique combinations, then sample with replacement to reach target
+# Only use unique combinations - NO sampling with replacement
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
-    word = random.choice(list(set(all_words)))
-    clusters = get_hindi_grapheme_clusters(word)
-    if len(clusters) == 0:
-        continue
-    template = random.choice(TEMPLATES)
-    pos_name, pos_num = random.choice(POSITIONS)
-    if pos_num <= len(clusters):
-        query = template.format(word=word, position=pos_name)
-        answer = clusters[pos_num - 1]
-        samples.append((query, answer))
+unique_count = len(samples)
+
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
+else:
+    samples = samples[:target_count]
 
 random.shuffle(samples)
 
@@ -85,4 +85,4 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S2 Letter Position: Generated {len(samples)} samples")
+print(f"S2 Letter Position: Generated {len(samples)} unique samples (target: {target_count})")
