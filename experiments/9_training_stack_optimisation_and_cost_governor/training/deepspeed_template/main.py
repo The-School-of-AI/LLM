@@ -43,6 +43,7 @@ warnings.filterwarnings(
 )
 
 import deepspeed
+import json
 import torch
 import yaml
 from aws.config import S3Config
@@ -51,6 +52,35 @@ from src.data import get_dataloaders, get_tokenizer
 from src.models.recurrence_model_1b import Model1B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
+
+
+def validate_precision_policy(ds_config: dict, model_dtype: torch.dtype):
+    """Validate that DeepSpeed precision config is compatible with model dtype.
+
+    The reversible midpoint backward recomputes forward outside any autocast
+    context.  If DeepSpeed bf16/fp16 is enabled *and* the model is already
+    pre-cast, the double-cast causes dtype mismatches and silent correctness bugs.
+    """
+    bf16_enabled = ds_config.get("bf16", {}).get("enabled", False)
+    fp16_enabled = ds_config.get("fp16", {}).get("enabled", False)
+
+    if model_dtype == torch.bfloat16 and bf16_enabled:
+        raise ValueError(
+            "Precision mismatch: model is pre-cast to bf16 but DeepSpeed bf16.enabled=true. "
+            "This wraps forward in autocast which breaks reversible backward. "
+            "Set bf16.enabled=false in your DeepSpeed config."
+        )
+    if model_dtype == torch.bfloat16 and fp16_enabled:
+        raise ValueError(
+            "Precision mismatch: model is pre-cast to bf16 but DeepSpeed fp16.enabled=true. "
+            "Mixed fp16/bf16 will cause dtype errors. "
+            "Set fp16.enabled=false in your DeepSpeed config."
+        )
+    if model_dtype == torch.float16 and bf16_enabled:
+        raise ValueError(
+            "Precision mismatch: model is fp16 but DeepSpeed bf16.enabled=true. "
+            "Set bf16.enabled=false or cast model to bf16."
+        )
 
 
 class Config:
@@ -63,6 +93,7 @@ class Config:
         self.dataset_config = config_dict["data"]["dataset_config"]
         self.max_length = config_dict["data"]["max_length"]
         self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
+        self.tokenized_dataset_path = config_dict["data"].get("tokenized_dataset_path", None)
 
         # Training configuration
         self.num_epochs = config_dict["training"]["num_epochs"]
@@ -73,13 +104,15 @@ class Config:
         self.enable_system_metrics = config_dict["training"].get(
             "enable_system_metrics", False
         )
+        self.require_fused_kernels = config_dict["training"].get(
+            "require_fused_kernels", False
+        )
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
         self.local_rank = config_dict["deepspeed"]["local_rank"]
         
         # Load batch size from DeepSpeed config
-        import json
         with open(self.deepspeed_config, 'r') as f:
             deepspeed_cfg = json.load(f)
         self.batch_size = deepspeed_cfg.get('train_micro_batch_size_per_gpu', 1)
@@ -199,7 +232,6 @@ def main():
     # Step 0.5: Read DeepSpeed Config to Get Batch Size
     # ========================================
     print_rank_0("\n[0.5/5] Reading DeepSpeed configuration...")
-    import json
     with open(args.deepspeed_config, 'r') as f:
         deepspeed_config = json.load(f)
     
@@ -242,9 +274,10 @@ def main():
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
         tokenizer=tokenizer,
-        batch_size=micro_batch_size,  # Use DeepSpeed config value instead of args.batch_size
+        batch_size=micro_batch_size,
         max_length=args.max_length,
         num_workers=args.num_workers,
+        tokenized_dataset_path=args.tokenized_dataset_path,
     )
     print_rank_0(f"  Train batches: {len(train_loader)}")
     print_rank_0(f"  Eval batches: {len(eval_loader)}")
@@ -308,8 +341,31 @@ def main():
     model = model.to(dtype=torch.bfloat16)
     # ----------------------
     
-    print_rank_0(f"  ✓ Model cast to bfloat16")
-    print_rank_0(f"  ✓ Model created successfully")
+    print_rank_0(f"  Model cast to bfloat16")
+    print_rank_0(f"  Model created successfully")
+
+    # ========================================
+    # Step 2.5: Preflight checks
+    # ========================================
+    # Precision policy validation — hard-fail on mismatch
+    model_dtype = next(model.parameters()).dtype
+    validate_precision_policy(deepspeed_config, model_dtype)
+    print_rank_0("  Precision policy validated (no autocast conflict)")
+
+    # Kernel fail-fast — abort if required fused kernels are missing
+    if args.require_fused_kernels:
+        from src.models.recurrence_model_1b import HAS_TRITON, HAS_FLA
+        missing = []
+        if not HAS_TRITON:
+            missing.append("Triton")
+        if not HAS_FLA:
+            missing.append("fla (flash-linear-attention)")
+        if missing:
+            raise RuntimeError(
+                f"require_fused_kernels=true but missing: {', '.join(missing)}. "
+                f"Install the required packages or set require_fused_kernels: false."
+            )
+        print_rank_0("  Kernel fail-fast passed: Triton and fla available")
 
     # ========================================
     # Step 3: Initialize DeepSpeed
@@ -394,6 +450,10 @@ def main():
         print_rank_0(f"\n{'=' * 80}")
         print_rank_0(f"Epoch {epoch + 1}/{args.num_epochs}")
         print_rank_0(f"{'=' * 80}")
+
+        # Set epoch on DistributedSampler for deterministic shuffling per epoch
+        if hasattr(train_loader.sampler, "set_epoch"):
+            train_loader.sampler.set_epoch(epoch)
 
         # Determine if we need to skip steps (only for first resumed epoch)
         epoch_start_step = start_step if epoch == start_epoch else 0

@@ -19,12 +19,11 @@ training:
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-moe-oom-fixed.json"
+  config_path: "deepspeed/zero-2-dense-oom-fixed.json"
   local_rank: -1
 
 # Model Configuration
 model:
-  model_type: "reversible"  # Use "reversible", "qwen2_moe", or "standard"
   embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
 
 # Checkpoint Configuration

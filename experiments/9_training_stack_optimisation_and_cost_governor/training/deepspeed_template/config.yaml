@@ -17,7 +17,7 @@ training:
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-moe.json"
+  config_path: "deepspeed/zero-2-dense.json"
   local_rank: -1
 
 # Model Configuration

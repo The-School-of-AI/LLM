@@ -17,12 +17,11 @@ training:
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-moe-reversibile.json"
+  config_path: "deepspeed/zero-2-dense-reversible.json"
   local_rank: -1
 
 # Model Configuration
 model:
-  model_type: "reversible"  # Use "reversible", "qwen2_moe", or "standard"
   tokenizer_name: "Qwen/Qwen2.5-0.5B"
   embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
 
