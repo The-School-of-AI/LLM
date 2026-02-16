@@ -48,6 +48,7 @@ import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
+from src.kernels import HAS_FLA, HAS_TRITON
 from src.models.recurrence_model_1b import Model1B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
@@ -73,6 +74,12 @@ class Config:
         self.enable_system_metrics = config_dict["training"].get(
             "enable_system_metrics", False
         )
+        self.require_fused_kernels = config_dict["training"].get(
+            "require_fused_kernels", False
+        )
+        self.metrics_jsonl_path = config_dict["training"].get(
+            "metrics_jsonl_path", None
+        )
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
@@ -86,6 +93,9 @@ class Config:
 
         # Model configuration
         self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
+        self.require_fused_deltanet_kernel = config_dict["model"].get(
+            "require_fused_deltanet_kernel", True
+        )
 
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
@@ -150,6 +160,56 @@ def parse_args():
     return parser.parse_args()
 
 
+def validate_kernel_policy(require_fused_kernels: bool) -> None:
+    """
+    Fail fast when fused-kernel enforcement is enabled.
+    Prevents accidentally running training with slow Python fallback kernels.
+    """
+    if require_fused_kernels and (not HAS_TRITON or not HAS_FLA):
+        raise RuntimeError(
+            "training.require_fused_kernels=true but required kernels are unavailable "
+            f"(HAS_TRITON={HAS_TRITON}, HAS_FLA={HAS_FLA}). "
+            "Install triton and fla, or set require_fused_kernels=false."
+        )
+
+
+def validate_precision_policy(deepspeed_config: dict, model_dtype: torch.dtype) -> None:
+    """
+    Validate DeepSpeed precision config matches model dtype.
+    
+    For reversible models pre-cast to bf16:
+      - DS bf16.enabled should be False (autocast breaks reversible backward)
+      - DS fp16.enabled should be False (we don't use fp16)
+    
+    For standard bf16 training:
+      - DS bf16.enabled should be True
+    
+    Mismatches cause silent dtype bugs that show up as NaN losses hundreds of steps in.
+    """
+    ds_bf16 = deepspeed_config.get("bf16", {}).get("enabled", False)
+    ds_fp16 = deepspeed_config.get("fp16", {}).get("enabled", False)
+    
+    if ds_bf16 and ds_fp16:
+        raise RuntimeError(
+            "DeepSpeed config has both bf16 and fp16 enabled — pick one."
+        )
+    
+    if model_dtype == torch.bfloat16 and ds_fp16:
+        raise RuntimeError(
+            f"Model dtype is {model_dtype} but DeepSpeed fp16 is enabled. "
+            "This will cause dtype mismatches. Use bf16 or disable fp16."
+        )
+    
+    if model_dtype == torch.float16 and ds_bf16:
+        raise RuntimeError(
+            f"Model dtype is {model_dtype} but DeepSpeed bf16 is enabled. "
+            "This will cause dtype mismatches."
+        )
+    
+    print_rank_0(f"  Precision policy: model_dtype={model_dtype}, "
+                 f"DS bf16={ds_bf16}, DS fp16={ds_fp16} ✓")
+
+
 def main():
     """Main training pipeline."""
     # Parse command line args (only --config and --local_rank)
@@ -194,6 +254,11 @@ def main():
     if args.resume_from_checkpoint:
         print_rank_0(f"  Resume From: {args.resume_from_checkpoint}")
     print_rank_0("=" * 80)
+
+    validate_kernel_policy(args.require_fused_kernels)
+    print_rank_0(f"  Kernel policy: require_fused_kernels={args.require_fused_kernels} "
+                 f"(HAS_TRITON={HAS_TRITON}, HAS_FLA={HAS_FLA})")
+    print_rank_0(f"  DeltaNet kernel: require_fused={args.require_fused_deltanet_kernel}")
 
     # ========================================
     # Step 0.5: Read DeepSpeed Config to Get Batch Size
@@ -253,6 +318,7 @@ def main():
     # Use len(tokenizer) to include special tokens (pad, eos, etc.)
     vocab_size = len(tokenizer)
     config.vocab_size = vocab_size
+    config.require_fused_deltanet_kernel = args.require_fused_deltanet_kernel
     print_rank_0(f"  Updated model vocab_size to match tokenizer: {vocab_size:,}")
     print_rank_0(f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})")
     
@@ -299,6 +365,10 @@ def main():
     # ----------------------
     
     print_rank_0(f"  ✓ Model cast to bfloat16")
+    
+    # Validate that DeepSpeed precision config matches model dtype
+    validate_precision_policy(deepspeed_config, torch.bfloat16)
+    
     print_rank_0(f"  ✓ Model created successfully")
 
     # ========================================
@@ -401,12 +471,15 @@ def main():
             checkpoint_manager=checkpoint_manager,
             start_step=epoch_start_step,
             global_step=global_step,
+            metrics_jsonl_path=args.metrics_jsonl_path,
         )
 
         # Evaluate on validation set
         print_rank_0("\nEvaluating on validation set...")
         eval_loss, eval_perplexity = evaluate(
-            model_engine, eval_loader, phase="Validation", max_steps=args.max_eval_steps
+            model_engine, eval_loader, phase="Validation",
+            max_steps=args.max_eval_steps,
+            metrics_jsonl_path=args.metrics_jsonl_path,
         )
 
         # Save epoch checkpoint
@@ -443,7 +516,9 @@ def main():
     # Evaluate on test set
     print_rank_0("\nEvaluating on test set...")
     test_loss, test_perplexity = evaluate(
-        model_engine, test_loader, phase="Test", max_steps=args.max_eval_steps
+        model_engine, test_loader, phase="Test",
+        max_steps=args.max_eval_steps,
+        metrics_jsonl_path=args.metrics_jsonl_path,
     )
 
     # Test text generation

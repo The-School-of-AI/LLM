@@ -16,6 +16,8 @@ training:
   log_interval: 1
   seed: 42
   enable_system_metrics: true  # Enable per-step CPU/GPU util & memory logging
+  require_fused_kernels: false  # Set true to fail-fast if Triton/FLA kernels are missing
+  metrics_jsonl_path: "./logs/metrics.jsonl"  # Structured metrics output (null to disable)
 
 # DeepSpeed Configuration
 deepspeed:
@@ -26,6 +28,7 @@ deepspeed:
 model:
   model_type: "reversible"  # Use "reversible", "qwen2_moe", or "standard"
   embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
+  require_fused_deltanet_kernel: true  # Crash if DeltaNet fused kernel is unavailable
 
 # Checkpoint Configuration
 checkpoint:

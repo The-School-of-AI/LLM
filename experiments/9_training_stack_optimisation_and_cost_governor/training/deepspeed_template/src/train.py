@@ -5,6 +5,8 @@ This module contains training, evaluation, and inference functions
 for training language models with DeepSpeed optimization.
 """
 
+import json
+import os
 import torch
 from tqdm import tqdm
 import time
@@ -22,6 +24,15 @@ try:
 except Exception:
     _NVML_AVAILABLE = False
 
+
+def _append_jsonl(path, record):
+    """Append a single JSON record to a JSONL file (rank-0 only, creates dirs)."""
+    if not is_main_process() or path is None:
+        return
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(record) + "\n")
+
 def train_epoch(
     model_engine,
     train_loader,
@@ -34,6 +45,7 @@ def train_epoch(
     checkpoint_manager=None,
     start_step=0,
     global_step=0,
+    metrics_jsonl_path=None,
 ):
     """
     Train the model for one epoch.
@@ -102,9 +114,9 @@ def train_epoch(
             prof.start_profile()
 
         # Move batch to device
-        input_ids = batch["input_ids"].to(model_engine.device)
-        attention_mask = batch["attention_mask"].to(model_engine.device)
-        labels = batch["labels"].to(model_engine.device)
+        input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
+        attention_mask = batch["attention_mask"].to(model_engine.device, non_blocking=True)
+        labels = batch["labels"].to(model_engine.device, non_blocking=True)
 
         # Memory profiling on very first micro-batch
         if i == 0 or (i == skip_micro_batches and skip_micro_batches > 0):
@@ -288,6 +300,16 @@ def train_epoch(
                         )
                 print_rank_0(msg)
 
+                # Write structured metrics to JSONL
+                _append_jsonl(metrics_jsonl_path, {
+                    "phase": "train",
+                    "epoch": epoch,
+                    "global_step": global_step,
+                    "loss": avg_step_loss,
+                    "tokens_per_sec": tokens_per_sec,
+                    "tokens": int(total_step_tokens),
+                })
+
                 if enable_system_metrics and is_main_process() and gpu_table:
                     print_rank_0("\nGPU Utilization / Memory (all devices):")
                     print_rank_0(gpu_table)
@@ -331,7 +353,7 @@ def train_epoch(
     return avg_loss, global_step
 
 
-def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
+def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None, metrics_jsonl_path=None):
     """
     Evaluate the model on a dataset.
 
@@ -355,9 +377,9 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     with torch.no_grad():
         for i, batch in enumerate(progress_bar):
             # Move batch to device
-            input_ids = batch["input_ids"].to(model_engine.device)
-            attention_mask = batch["attention_mask"].to(model_engine.device)
-            labels = batch["labels"].to(model_engine.device)
+            input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
+            attention_mask = batch["attention_mask"].to(model_engine.device, non_blocking=True)
+            labels = batch["labels"].to(model_engine.device, non_blocking=True)
 
             # Forward pass
             # Check if this is a reversible model
@@ -421,6 +443,13 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
         f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}"
     )
 
+    _append_jsonl(metrics_jsonl_path, {
+        "phase": phase.lower(),
+        "avg_loss": float(avg_loss),
+        "avg_perplexity": float(avg_perplexity),
+        "steps": int(steps),
+    })
+
     return avg_loss, avg_perplexity
 
 
@@ -454,8 +483,8 @@ def generate_text(
 
     # Tokenize prompt
     inputs = tokenizer(prompt, return_tensors="pt")
-    input_ids = inputs["input_ids"].to(model_engine.device)
-    attention_mask = inputs["attention_mask"].to(model_engine.device)
+    input_ids = inputs["input_ids"].to(model_engine.device, non_blocking=True)
+    attention_mask = inputs["attention_mask"].to(model_engine.device, non_blocking=True)
 
     print_rank_0(f"Input tokens: {input_ids.shape[1]}")
 

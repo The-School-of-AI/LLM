@@ -14,6 +14,8 @@ training:
   max_eval_steps: null   # Set to a number for debugging, null for full evaluation
   log_interval: 10
   seed: 42
+  require_fused_kernels: false  # Set true to fail-fast if Triton/FLA fused kernels are missing
+  metrics_jsonl_path: "./logs/metrics.jsonl"  # Structured metrics output (null to disable)
 
 # DeepSpeed Configuration
 deepspeed:
@@ -23,6 +25,8 @@ deepspeed:
 # Model Configuration
 model:
   tokenizer_name: "Qwen/Qwen2.5-0.5B"  # or "distilgpt2"
+  embedding_type: "kronecker"           # "kronecker" or "standard"
+  require_fused_deltanet_kernel: true   # Crash if DeltaNet fused kernel is unavailable
   # model_name: "distilgpt2"  # Uncomment if using different model
 
 # Checkpoint Configuration

@@ -456,6 +456,9 @@ class ModelConfig:
     # Training
     dropout = 0.0  # Required for reversible integration
 
+    # Safety: never silently fall back to Python DeltaNet recurrence in production.
+    require_fused_deltanet_kernel = True
+
 
 # ============================================================================
 # Embedding Layer (Kronecker Product)
@@ -726,13 +729,15 @@ class GatedDeltaNet(nn.Module):
     def __init__(self, hidden_size, num_heads, head_dim,
                  max_seq_len=262144, rope_base=10000,
                  rope_original_max=8192, rope_scaling_factor=32.0,
-                 conv_size=4, use_output_norm=True):
+                 conv_size=4, use_output_norm=True,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.max_seq_len = max_seq_len
         self.use_output_norm = use_output_norm
+        self.require_fused_kernel = require_fused_kernel
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
@@ -909,7 +914,17 @@ class GatedDeltaNet(nn.Module):
         # - fla path: Fused Triton kernel via flash-linear-attention library (500-2000x faster)
         # - Python path: Explicit for-loop fallback (always correct, slow at long context)
 
-        if HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda:
+        fla_available = HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda
+        if self.require_fused_kernel and not fla_available:
+            raise RuntimeError(
+                "DeltaNet fused kernel is required but unavailable. "
+                "Training is configured to disallow Python fallback. "
+                f"HAS_FLA={HAS_FLA}, fla_gated_delta_rule={fla_gated_delta_rule is not None}, "
+                f"q.is_cuda={q.is_cuda}. "
+                "Set model.require_fused_deltanet_kernel=false in config to allow fallback."
+            )
+
+        if fla_available:
             # ── fla fused kernel path ──────────────────────────────────────
             # fla expects (B, T, H, d) layout — q/k/v are already in this shape.
             # D residual (D * (q·k) * v) is computed inside fla_gated_delta_rule.
@@ -924,6 +939,10 @@ class GatedDeltaNet(nn.Module):
                     num_heads=self.num_heads,
                 )
             except Exception as e:
+                if self.require_fused_kernel:
+                    raise RuntimeError(
+                        "DeltaNet fused kernel execution failed and fallback is disabled."
+                    ) from e
                 import warnings
                 warnings.warn(f"fla DeltaNet kernel failed ({e}); falling back to Python loop.")
                 o = self._delta_rule_python(q, k, v, alpha, beta, B, T, device, x.dtype)
@@ -1578,7 +1597,8 @@ class LightningDecoderLayer(nn.Module):
                 rope_original_max=config.rope_original_max_position,
                 rope_scaling_factor=config.rope_scaling_factor,
                 conv_size=4,
-                use_output_norm=True
+                use_output_norm=True,
+                require_fused_kernel=config.require_fused_deltanet_kernel,
             )
         elif layer_type == "gsa":
             attn = GatedSparseAttention(
