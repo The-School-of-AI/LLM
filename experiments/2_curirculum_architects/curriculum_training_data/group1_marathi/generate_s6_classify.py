@@ -19,6 +19,16 @@ TEMPLATES = [
     '"{word}" शब्द कोणत्या श्रेणीत येतो, व्यक्ती, प्राणी किंवा वस्तू?',
     '"{word}" कोणत्या श्रेणीत ठेवता येईल, व्यक्ती, प्राणी किंवा वस्तू?',
     '"{word}" कोणत्या प्रकारची गोष्ट आहे, व्यक्ती, प्राणी किंवा वस्तू?',
+    'दिलेल्या पर्यायांपैकी "{word}" काय आहे: व्यक्ती, प्राणी किंवा वस्तू?',
+    '"{word}" या शब्दाचे वर्गीकरण करा: व्यक्ती, प्राणी किंवा वस्तू?',
+    'खालीलपैकी "{word}" कशात मोडते: व्यक्ती, प्राणी किंवा वस्तू?',
+    '"{word}" ही संज्ञा कशासाठी वापरली जाते: व्यक्ती, प्राणी किंवा वस्तू?',
+    '"{word}" कोणत्या वर्गात विभागता येईल: व्यक्ती, प्राणी किंवा वस्तू?',
+    '"{word}" साठी योग्य वर्ग निवडा: व्यक्ती, प्राणी किंवा वस्तू?',
+    '"{word}" हे व्यक्ती, प्राणी किंवा वस्तू यांपैकी काय आहे?',
+    '"{word}" चा संबंध कशाशी आहे: व्यक्ती, प्राणी किंवा वस्तू?',
+    '"{word}" कशाचे उदाहरण आहे: व्यक्ती, प्राणी किंवा वस्तू?',
+    '"{word}" कोणत्या गटात येते: व्यक्ती, प्राणी किंवा वस्तू?',
 ]
 
 
@@ -33,33 +43,32 @@ def classify_word(word: str) -> str:
 
 samples = []
 target_count = 20000
-all_words = []
+all_words_set = set()
 for word_list in CLASSIFICATION_CATEGORIES.values():
-    all_words.extend(word_list)
+    all_words_set.update(word_list)
 
-# Expand word list
-all_words = all_words * 20
-unique_combinations = {}
+unique_combinations = []
 
-# Generate samples
-for word in set(all_words):
+# Generate all possible unique combinations
+all_words_list = list(all_words_set)
+random.shuffle(all_words_list)
+
+for word in all_words_list:
     category = classify_word(word)
-    for template_idx, template in enumerate(TEMPLATES):
+    # Shuffle templates for each word to spread them out
+    current_templates = list(enumerate(TEMPLATES))
+    random.shuffle(current_templates)
+
+    for template_idx, template in current_templates:
         query = template.format(word=word)
         answer = category
-        key = (word, template_idx)
-        if key not in unique_combinations:
-            unique_combinations[key] = (query, answer)
+        unique_combinations.append((query, answer))
+        if len(unique_combinations) >= target_count:
+            break
+    if len(unique_combinations) >= target_count:
+        break
 
-# Use unique combinations, then sample with replacement to reach target
-samples = list(unique_combinations.values())
-while len(samples) < target_count:
-    word = random.choice(list(set(all_words)))
-    category = classify_word(word)
-    template = random.choice(TEMPLATES)
-    query = template.format(word=word)
-    answer = category
-    samples.append((query, answer))
+samples = unique_combinations
 
 random.shuffle(samples)
 

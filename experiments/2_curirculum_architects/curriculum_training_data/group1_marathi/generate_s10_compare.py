@@ -9,11 +9,11 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_marathi.generate_s1_spelling import (  # noqa: E402
+from group1_marathi.marathi_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
+from prompt_utils import (  # noqa: E402
+    format_qa_pair_marathi,
     get_marathi_grapheme_clusters,
 )
-from group1_marathi.marathi_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
-from prompt_utils import format_qa_pair_marathi  # noqa: E402
 
 # Expand word list
 ALL_WORDS = ALL_WORDS_UNIQUE * 30

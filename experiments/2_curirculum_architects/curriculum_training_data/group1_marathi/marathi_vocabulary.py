@@ -6,6 +6,28 @@ Translated from Hindi vocabulary.
 """
 
 # Easy Words (2-4 characters)
+import os
+import sys
+
+# Add parent directory to path to import from prompt_utils
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from group1_marathi.marathi_expanded_vocabulary import (  # noqa: E402
+    EXPANDED_ANIMALS,
+    EXPANDED_BIRDS,
+    EXPANDED_BODY_PARTS,
+    EXPANDED_CLOTHES,
+    EXPANDED_EDUCATION,
+    EXPANDED_FOOD,
+    EXPANDED_MISC,
+    EXPANDED_NATURE,
+    EXPANDED_OBJECTS,
+    EXPANDED_PEOPLE,
+    EXPANDED_VEGETABLES_FRUITS,
+    EXPANDED_VOCABULARY_LIST,
+    EXPANDED_VOCABULARY_WIKTIONARY,
+)
+from prompt_utils import get_marathi_grapheme_clusters  # noqa: E402
+
 EASY_ANIMALS = [
     "कुत्रा",
     "मांजर",
@@ -709,9 +731,23 @@ RHYMING_PAIRS = {
 
 # Classification categories
 CLASSIFICATION_CATEGORIES = {
-    "प्राणी": EASY_ANIMALS + MEDIUM_ANIMALS,
-    "व्यक्ती": EASY_PEOPLE + MEDIUM_PROFESSIONS,
-    "वस्तू": EASY_OBJECTS + MEDIUM_OBJECTS + MEDIUM_HOUSEHOLD + MEDIUM_VEHICLES,
+    "प्राणी": EASY_ANIMALS + MEDIUM_ANIMALS + EXPANDED_ANIMALS + EXPANDED_BIRDS,
+    "व्यक्ती": EASY_PEOPLE + MEDIUM_PROFESSIONS + EXPANDED_PEOPLE,
+    "वस्तू": (
+        EASY_OBJECTS
+        + MEDIUM_OBJECTS
+        + MEDIUM_HOUSEHOLD
+        + MEDIUM_VEHICLES
+        + EXPANDED_OBJECTS
+        + EXPANDED_CLOTHES
+        + EXPANDED_FOOD
+        + EXPANDED_VEGETABLES_FRUITS
+        + EXPANDED_BODY_PARTS
+        + EXPANDED_EDUCATION
+        + EXPANDED_MISC
+        + EXPANDED_NATURE
+        + EXPANDED_VOCABULARY_WIKTIONARY
+    ),
 }
 
 # Combined word lists by difficulty
@@ -749,6 +785,28 @@ def get_unique_words(word_list):
             seen.add(word)
             unique.append(word)
     return unique
+
+
+# Classify expanded vocabulary by length (grapheme count)
+expanded_easy = []
+expanded_medium = []
+expanded_hard = []
+
+for word in EXPANDED_VOCABULARY_LIST:
+    graphemes = get_marathi_grapheme_clusters(word)
+    length = len(graphemes)
+    if length <= 4:
+        expanded_easy.append(word)
+    elif length <= 6:
+        expanded_medium.append(word)
+    else:
+        expanded_hard.append(word)
+
+# Extend original lists with expanded vocabulary
+EASY_WORDS = EASY_WORDS + expanded_easy
+MEDIUM_WORDS = MEDIUM_WORDS + expanded_medium
+HARD_WORDS = HARD_WORDS + expanded_hard
+ALL_WORDS = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
 
 
 # Get unique word lists
