@@ -518,9 +518,20 @@ def run_custom_benchmark(
     # Resolve script path
     resolved_script = script
     if script and not os.path.isabs(script):
-        # Try relative to CWD first, then relative to config_dir
-        if not os.path.exists(resolved_script) and config_dir:
-            resolved_script = os.path.join(config_dir, script)
+        # Try relative to CWD first, then relative to config_dir, then relative to experiment root
+        # Structure: <experiment_root>/02-OLMES-v1/src/eval_runner.py
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        possible_paths = [
+            script,
+            os.path.join(config_dir, script) if config_dir else None,
+            os.path.join(root_dir, script)
+        ]
+        
+        for p in possible_paths:
+            if p and os.path.exists(p):
+                resolved_script = p
+                break
 
     if not resolved_script or not os.path.exists(resolved_script):
         logger.warning(

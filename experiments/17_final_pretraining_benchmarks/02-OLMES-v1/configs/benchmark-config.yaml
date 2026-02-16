@@ -253,4 +253,5 @@ stages:
           - "indic_glue"               # Multilingual
           - "bbh:cot::olmes"               # Reasoning
           - "olmo3:base_easy:code_bpb" # Coding
+          - "niah_4k"                  # Context Length (Custom)
           #- "olmo3:adapt"          # Agentic

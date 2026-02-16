@@ -3,6 +3,7 @@ import yaml
 import os
 import sys
 import logging
+import torch
 import json
 import time
 from datetime import datetime
@@ -52,7 +53,7 @@ def resolve_task_type(task_name):
 
     # Custom Context Length Benchmarks (niah_4k, niah_8k, etc.)
     if "niah_" in task_name:
-         return ("custom", "../01-EleutherAI-v1/src/custom-scripts/needle_in_haystack.py")
+         return ("custom", "01-EleutherAI-v1/src/custom-scripts/needle_in_haystack.py")
          
     if task_name in harness_tasks or "mmlu" in task_name:
         return "harness"
@@ -67,7 +68,14 @@ def main():
     parser.add_argument("--model_args", type=str, required=True, help="HF model args (pretrained=...)")
     parser.add_argument("--limit", type=int, default=None, help="Global limit override")
     parser.add_argument("--sample", action="store_true", help="Run in sample mode: limit all tasks to 2 examples")
-    parser.add_argument("--device", type=str, default="cuda", help="Execution device")
+    # Detect best available device
+    default_device = "cpu"
+    if torch.cuda.is_available():
+        default_device = "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        default_device = "mps"
+
+    parser.add_argument("--device", type=str, default=default_device, help=f"Execution device (default: {default_device})")
     parser.add_argument("--batch_size", type=str, default="1", help="Execution batch size")
     
     args = parser.parse_args()
@@ -133,7 +141,7 @@ def main():
                 "baseline": group.get("baseline"),
                 "subjects": group.get("subjects"),
                 "subset": group.get("subset"),
-                "tasks": group.get("tasks_refined") 
+                "tasks": group.get("tasks_refined") or group.get("tasks") 
             }
             
             if t_type == "olmes":

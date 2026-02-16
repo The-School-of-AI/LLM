@@ -191,26 +191,22 @@ def ensure_olmes_vendor(logger):
 
         # Proactive Auto-Heal Check
         if not check_torchvision_nms(logger):
-            logger.info("  [Auto-Heal] Triggering torchvision recovery...")
-            venv_python = os.path.join(root_dir, ".venv", "bin", "python3")
-            py_exec = venv_python if os.path.exists(venv_python) else sys.executable
+            logger.info("  [Auto-Heal] Detected torchvision/torch sync issue.")
+            # On macOS, automatic upgrades often break the environment further.
+            # We skip the automatic fix and inject a shim or recommend manual install.
+            logger.info("  [Auto-Heal] Skipping automatic upgrade on this platform. Injecting 'Fake NMS' shim...")
             try:
-                subprocess.run([py_exec, "-m", "pip", "install", "--upgrade", "torchvision"], check=True)
+                import torch
+                import torchvision
+                if not hasattr(torchvision, 'ops'):
+                    class FakeOps:
+                        @staticmethod
+                        def nms(*args, **kwargs): return None
+                    torchvision.ops = FakeOps
                 if check_torchvision_nms(logger):
-                    logger.info("  [Auto-Heal] recovery successful.")
-                else:
-                    logger.warning("  [Auto-Heal] recovery failed. Injecting 'Fake NMS' shim...")
-                    import torch
-                    try:
-                        import torchvision
-                        if not hasattr(torchvision, 'ops'):
-                            class FakeOps:
-                                @staticmethod
-                                def nms(*args, **kwargs): return None
-                            torchvision.ops = FakeOps
-                    except Exception: pass
+                    logger.info("  [Auto-Heal] Shim injection successful.")
             except Exception as e:
-                logger.warning(f"  [Auto-Heal] recovery script failed: {str(e)}")
+                logger.warning(f"  [Auto-Heal] Shim injection failed: {str(e)}")
 
     except Exception as e:
         logger.error(f"  [Error] Failed to setup OLMES vendor: {str(e)}")
