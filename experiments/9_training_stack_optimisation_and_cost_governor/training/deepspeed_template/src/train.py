@@ -139,13 +139,17 @@ def train_epoch(
             y_ntp = input_ids[:, 1:-1].contiguous()
             y_mtp = input_ids[:, 2:].contiguous()
 
-            logits_ntp, logits_mtp, aux_loss = model_engine(
+            # Pass targets directly — model uses chunked cross-entropy internally
+            # to avoid materializing [B, T, 131072] logit tensors (saves ~4+ GB).
+            loss_ntp, loss_mtp, aux_loss = model_engine(
                 x_input,
                 next_token_ids=y_ntp,
                 attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
                 return_loss=True,
                 return_memory=False,
-                prev_memory_stream=None
+                prev_memory_stream=None,
+                ntp_targets=y_ntp,
+                mtp_targets=y_mtp,
             )
 
             # Memory profiling after first forward
@@ -155,20 +159,7 @@ def train_epoch(
                 print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
                 print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
 
-            vocab_size = logits_ntp.size(-1)
-
-            loss_ntp = torch.nn.functional.cross_entropy(
-                logits_ntp.float().view(-1, vocab_size),
-                y_ntp.view(-1)
-            )
-            del logits_ntp
-
-            loss_mtp = torch.nn.functional.cross_entropy(
-                logits_mtp.float().view(-1, vocab_size),
-                y_mtp.view(-1)
-            )
-            del logits_mtp
-
+            # loss_ntp and loss_mtp are already scalar losses (chunked CE computed in model)
             if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
                 with torch.no_grad():
                     print_rank_0(f"\nNaN detected at epoch {epoch}, micro-batch {i}!")

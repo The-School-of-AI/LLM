@@ -1930,8 +1930,33 @@ class Model1B(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
+    @staticmethod
+    def _chunked_cross_entropy(hidden, lm_head, targets, chunk_size=256):
+        """Compute cross-entropy without materializing the full [B, T, vocab] logit tensor.
+
+        Processes ``chunk_size`` tokens at a time so peak memory is
+        ``B * chunk_size * vocab * 4`` (float32 for CE) instead of
+        ``B * T * vocab * 4``.  For B=2, T=4094, vocab=131072 this
+        reduces peak from ~4 GB to ~130 MB.
+        """
+        B, T, D = hidden.shape
+        total_loss = torch.tensor(0.0, device=hidden.device, dtype=torch.float32)
+        n_tokens = B * T
+        for start in range(0, T, chunk_size):
+            end = min(start + chunk_size, T)
+            chunk_logits = lm_head(hidden[:, start:end, :])        # [B, chunk, vocab]
+            chunk_loss = torch.nn.functional.cross_entropy(
+                chunk_logits.float().reshape(-1, chunk_logits.size(-1)),
+                targets[:, start:end].reshape(-1),
+                reduction="sum",
+            )
+            total_loss = total_loss + chunk_loss
+            del chunk_logits
+        return total_loss / n_tokens
+
     def forward(self, input_ids, next_token_ids=None, attention_mask=None,
-                prev_memory_stream=None, return_memory=True, return_loss=False):
+                prev_memory_stream=None, return_memory=True, return_loss=False,
+                ntp_targets=None, mtp_targets=None):
         """
         Forward pass with Multi-Token Prediction.
 
@@ -1942,12 +1967,19 @@ class Model1B(nn.Module):
             prev_memory_stream: [B, D] - Memory from previous chunk (None for first chunk)
             return_memory: Whether to return memory stream for next chunk
             return_loss: Whether to return auxiliary loss
+            ntp_targets: [B, T] - NTP target IDs.  When provided the model
+                returns a scalar ``loss_ntp`` instead of the full logit tensor,
+                using chunked cross-entropy to avoid materializing [B, T, vocab].
+            mtp_targets: [B, T] - MTP target IDs (same semantics as ntp_targets).
 
         Returns:
-            - logits_ntp: [B, T, vocab_size] - Next Token Prediction
-            - logits_mtp: [B, T, vocab_size] or None - Multi-Token Prediction
-            - memory_stream: [B, D] (if return_memory=True) - Memory for next chunk
-            - aux_loss: Scalar tensor (if return_loss=True)
+            When ``ntp_targets`` is None (inference / eval):
+                - logits_ntp: [B, T, vocab_size]
+                - logits_mtp: [B, T, vocab_size] or None
+            When ``ntp_targets`` is provided (training):
+                - loss_ntp: scalar
+                - loss_mtp: scalar or None
+            Plus optionally aux_loss and memory_stream.
         """
         batch_size, seq_len = input_ids.size()
 
@@ -2029,7 +2061,12 @@ class Model1B(nn.Module):
         h_main = self.norm(h_main)
 
         # NTP Prediction
-        logits_ntp = self.lm_head(h_main)
+        # When ntp_targets are provided, use chunked cross-entropy to avoid
+        # materializing the full [B, T, vocab] logit tensor (saves ~4 GB).
+        if ntp_targets is not None:
+            logits_ntp = self._chunked_cross_entropy(h_main, self.lm_head, ntp_targets)
+        else:
+            logits_ntp = self.lm_head(h_main)
 
         # MTP Prediction
         logits_mtp = None
@@ -2046,7 +2083,11 @@ class Model1B(nn.Module):
                 next_emb = self.token_embed(next_ids_use)
 
             h_mtp = self.mtp_block(h_use, next_emb, attention_mask=None)
-            logits_mtp = self.lm_head(self.norm(h_mtp))
+            h_mtp_normed = self.norm(h_mtp)
+            if mtp_targets is not None:
+                logits_mtp = self._chunked_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
+            else:
+                logits_mtp = self.lm_head(h_mtp_normed)
 
         # FIX #41: Clear RoPE forward-pass cache to prevent accumulation (CRITICAL PATH FIX)
         # Correct path: layer.attn_block.sublayer.rotary_emb (not layer.attn)
