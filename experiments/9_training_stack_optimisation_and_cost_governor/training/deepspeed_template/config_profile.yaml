@@ -5,7 +5,7 @@
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  max_length: 4096  # Restored to original - reversibility fix allows this!
+  max_length: 16384  # Restored to original - reversibility fix allows this!
   num_workers: 12  # DataLoader workers per GPU (12 workers × 8 GPUs = 96 total, uses all CPUs)
 
 # Training Configuration
