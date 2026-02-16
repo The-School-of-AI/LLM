@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 import hashlib
 
-from ..core.types import DifficultyBand, BandDistribution, DomainDistribution
+from ..core.types import DifficultyBand, BandDistribution, DomainDistribution, difficulty_band_order
 
 
 @dataclass
@@ -284,6 +284,7 @@ class CurriculumLoader:
                     B3=band_ratios_dict.get("B3", 0.0),
                     B4=band_ratios_dict.get("B4", 0.0),
                     B5=band_ratios_dict.get("B5", 0.0),
+                    B6=band_ratios_dict.get("B6", 0.0),
                 )
                 
                 self.stages[stage_name] = StageSpec(
@@ -449,6 +450,7 @@ class CurriculumLoader:
                     B3=band_weights.get("B3", 0.0),
                     B4=band_weights.get("B4", 0.0),
                     B5=band_weights.get("B5", 0.0),
+                    B6=band_weights.get("B6", 0.0),
                 )
                 
                 self.stages[stage_name] = StageSpec(
@@ -522,7 +524,7 @@ class CurriculumLoader:
         expected = self.stages[stage_name].band_ratios
         tolerance = 0.01  # 1% tolerance
         
-        for band_name in ["B0", "B1", "B2", "B3", "B4", "B5"]:
+        for band_name in difficulty_band_order():
             expected_val = getattr(expected, band_name)
             actual_val = getattr(actual, band_name)
             

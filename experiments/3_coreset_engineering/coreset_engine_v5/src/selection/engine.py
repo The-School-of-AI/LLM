@@ -14,7 +14,7 @@ from ..core.types import (
     DifficultyBand, StageName, ChunkMetadata, CoresetManifest, CoresetComposition,
     BandDistribution, DomainDistribution, LanguageDistribution, 
     ProtectedSlicesPreserved, DeduplicationStats, CoverageAudit, SelectionStatistics,
-    ProtectedSliceRule
+    ProtectedSliceRule, difficulty_band_order
 )
 from ..core.config import PipelineConfig
 from ..curriculum.loader import CurriculumLoader
@@ -620,9 +620,11 @@ class SelectionEngine:
         
         total_added = 0
         
+        band_names = set(difficulty_band_order())
+
         # For band-based rules: add chunks up to curriculum target
         for rule in protected_slices:
-            if rule.band_or_domain in ['B0', 'B1', 'B2', 'B3', 'B4', 'B5']:
+            if rule.band_or_domain in band_names:
                 band_name = rule.band_or_domain
                 target_share = band_targets.get(band_name, 0.0)
                 target_tokens_for_band = int(target_share * target_tokens)
@@ -690,7 +692,7 @@ class SelectionEngine:
         
         # For domain-based rules: add chunks within allowed bands, up to curriculum target
         for rule in protected_slices:
-            if rule.band_or_domain not in ['B0', 'B1', 'B2', 'B3', 'B4', 'B5']:
+            if rule.band_or_domain not in band_names:
                 domain_name = rule.band_or_domain
                 current_tokens_in_domain = domain_tokens[domain_name]
                 
@@ -910,6 +912,7 @@ class SelectionEngine:
             B3=band_counts.get("B3", 0) / total_tokens if total_tokens > 0 else 0.0,
             B4=band_counts.get("B4", 0) / total_tokens if total_tokens > 0 else 0.0,
             B5=band_counts.get("B5", 0) / total_tokens if total_tokens > 0 else 0.0,
+            B6=band_counts.get("B6", 0) / total_tokens if total_tokens > 0 else 0.0,
         )
         
         from ..core.types import DomainDistributionV2

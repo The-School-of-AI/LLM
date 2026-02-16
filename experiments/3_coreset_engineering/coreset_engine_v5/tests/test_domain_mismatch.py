@@ -1,53 +1,45 @@
-# Test what happens with domain filtering
-from src.core.types import DifficultyBand
+"""Domain mismatch analysis.
+
+This file started as an exploratory script and is kept as a test so it can be
+run in CI when the optional sample dataset is available.
+"""
+
+from __future__ import annotations
+
+import json
+from collections import defaultdict
+from pathlib import Path
+
+import pytest
+
+from src.core.types import DifficultyBand, difficulty_band_order
 from src.curriculum.loader import CurriculumLoader
 
-loader = CurriculumLoader('config/curriculum.yaml')
-ok, errors = loader.load()
 
-# Check B3 allowed domains from curriculum
-b3_band = loader.bands.get(DifficultyBand.B3)
-print(f'B3 allowed_domains from curriculum: {b3_band.allowed_domains}')
+_CHUNKS_FILE = Path("data/datasets/large_sample_chunks.jsonl")
 
-# Check what domains exist in data
-import json
-from pathlib import Path
-from collections import defaultdict
+if not _CHUNKS_FILE.exists():
+    pytest.skip(
+        f"Optional sample dataset not found: {_CHUNKS_FILE}. Skipping domain mismatch check.",
+        allow_module_level=True,
+    )
 
-chunks_file = Path('data/datasets/large_sample_chunks.jsonl')
-domains_by_band = defaultdict(set)
 
-with open(chunks_file) as f:
-    for line in f:
-        chunk = json.loads(line)
-        band = chunk.get('band')
-        domain = chunk.get('domain')
-        domains_by_band[band].add(domain)
+def test_domain_mismatch_smoke():
+    loader = CurriculumLoader("config/curriculum.yaml")
+    ok, errors = loader.load()
+    assert ok, f"Curriculum failed to load: {errors}"
 
-print(f'B3 domains in data: {sorted(domains_by_band["B3"])}')
+    domains_by_band = defaultdict(set)
+    with open(_CHUNKS_FILE, encoding="utf-8") as f:
+        for line in f:
+            chunk = json.loads(line)
+            band = chunk.get("band")
+            domain = chunk.get("domain")
+            domains_by_band[band].add(domain)
 
-# Now simulate what the bucket creation does
-allowed_b3_domains = set(b3_band.allowed_domains)
-actual_b3_domains = domains_by_band.get('B3', set())
-overlap = allowed_b3_domains & actual_b3_domains
-missing = allowed_b3_domains - actual_b3_domains
-
-print(f'\nOverlap (bucket creation will use these): {overlap}')
-print(f'Missing from data (will be skipped): {missing}')
-
-# Check all bands
-print("\n=== Domain Mismatch Across All Bands ===")
-for band_name in ['B0', 'B1', 'B2', 'B3', 'B4', 'B5']:
-    band = DifficultyBand(band_name)
-    band_def = loader.bands.get(band)
-    if band_def:
-        allowed = set(band_def.allowed_domains)
-        actual = domains_by_band.get(band_name, set())
-        overlap = allowed & actual
-        missing = allowed - actual
-        print(f"\n{band_name}:")
-        print(f"  Curriculum allows: {sorted(allowed)}")
-        print(f"  Data has: {sorted(actual)}")
-        print(f"  Usable overlap: {sorted(overlap)}")
-        if missing:
-            print(f"  Missing from data: {sorted(missing)}")
+    # Minimal sanity: each band defined in curriculum should have allowed_domains.
+    for band_name in difficulty_band_order():
+        band_def = loader.bands.get(DifficultyBand(band_name))
+        if band_def:
+            assert isinstance(band_def.allowed_domains, list)
