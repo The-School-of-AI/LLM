@@ -30,11 +30,17 @@ from typing import Iterable, List, Optional, Sequence
 DEFAULT_COLUMNS: List[str] = [
     "chunk_id",
     "dataset_id",
-    "token_count_estimate",
+    "token_count",
     "band",
     "domain",
     "language",
+    "byte_length",
+    "source_doc_id",
+    "source_url",
+    "source",
 ]
+
+LEGACY_TOKEN_COLUMN = "token_count_estimate"
 
 
 @dataclass(frozen=True)
@@ -126,6 +132,13 @@ def merge_stage_parts(
         raise FileExistsError(f"Refusing to overwrite existing {output_path} (use --overwrite)")
 
     use_columns = list(columns) if columns is not None else None
+    if use_columns is None:
+        # Auto-detect which token column exists to stay compatible with older outputs.
+        pf = pq.ParquetFile(str(part_files[0]))
+        available = set(pf.schema.names)
+        use_columns = [c for c in DEFAULT_COLUMNS if c in available]
+        if ("token_count" not in available) and (LEGACY_TOKEN_COLUMN in available) and (LEGACY_TOKEN_COLUMN not in use_columns):
+            use_columns.append(LEGACY_TOKEN_COLUMN)
 
     first = pq.read_table(part_files[0], columns=use_columns)
     schema = first.schema

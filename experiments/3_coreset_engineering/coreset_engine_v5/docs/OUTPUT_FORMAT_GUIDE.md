@@ -48,7 +48,33 @@ index_path = writer.save_selected_indices(
 )
 ```
 
-## Output Formats Explained
+## Selected Indices Output Formats
+
+## Output Layouts (Legacy vs Streaming/Sharded)
+
+The engine can run in two broad modes, which affect *which files* you will see on disk:
+
+### Legacy / Single-worker (in-memory builder)
+
+Per stage directory (example `1B`):
+
+- `output/coresets/1B/selected_indices.{parquet|jsonl|csv}`
+- `output/coresets/1B/manifest.json`
+
+### Streaming / Batched (optionally sharded)
+
+Per stage directory (example `1B`):
+
+- `output/coresets/1B/selected_indices_part_shard###_batch######.parquet`
+  - May fall back to `.jsonl` parts if parquet writing is unavailable.
+- `output/coresets/1B/manifest_shard###.json`
+- Optional (after running the merge utility): `output/coresets/1B/selected_indices.parquet`
+
+The per-batch `selected_indices_part_...` files use the **same schema** as `selected_indices.{parquet|jsonl|csv}` (field set depends on what the builder wrote). For analytics, you can merge parquet parts into a single `selected_indices.parquet` using `tools/merge_selected_indices.py`.
+
+Notes:
+- In sharded runs, each shard writes its own `manifest_shard###.json` and part files.
+- If you generate reports in sharded runs, they are written per-shard to avoid concurrent overwrite.
 
 ### Parquet Format (Default)
 **File:** `output/coresets/{stage}/selected_indices.parquet`
@@ -66,14 +92,12 @@ df = pd.read_parquet("output/coresets/1B/selected_indices.parquet")
 print(df.head())
 ```
 
-**Sample Output:**
-```
-chunk_id | dataset_id | token_count | domain | language | band
----------|------------|-------------|--------|----------|------
-ch_001   | ds_1       | 2048        | code   | en       | B2
-ch_002   | ds_1       | 1024        | math   | en       | B3
-...
-```
+**Sample Columns (typical):**
+
+- `chunk_id`, `dataset_id`, `token_count`, `domain`, `language`, `band`
+- `byte_length`, `source_doc_id`, `source_url`
+- `source` (when available)
+
 
 ### JSONL Format (Human-Readable)
 **File:** `output/coresets/{stage}/selected_indices.jsonl`
@@ -93,10 +117,10 @@ with open("output/coresets/1B/selected_indices.jsonl") as f:
         print(chunk['chunk_id'], chunk['token_count'])
 ```
 
-**Sample Output:**
+**Sample Output (schema-aligned):**
+
 ```json
-{"chunk_id":"ch_001","dataset_id":"ds_1","token_count":2048,"domain":"code","language":"en","band":"B2"}
-{"chunk_id":"ch_002","dataset_id":"ds_1","token_count":1024,"domain":"math","language":"en","band":"B3"}
+{"chunk_id":"ch_001","dataset_id":"books","source":"books","token_count":2048,"byte_length":6463,"domain":"literature","language":"en","band":"B0","source_doc_id":"part-00000-...parquet","source_url":"s3://..."}
 ```
 
 ### CSV Format
@@ -113,11 +137,11 @@ import pandas as pd
 df = pd.read_csv("output/coresets/1B/selected_indices.csv")
 ```
 
-**Sample Output:**
+**Sample Output (schema-aligned):**
+
 ```csv
-chunk_id,dataset_id,token_count,domain,language,band
-ch_001,ds_1,2048,code,en,B2
-ch_002,ds_1,1024,math,en,B3
+chunk_id,dataset_id,source,token_count,byte_length,domain,language,band,source_doc_id,source_url
+ch_001,books,books,2048,2048,6463,literature,en,B0,part-00000-...parquet,s3://...
 ```
 
 ## Configuration Examples
@@ -170,15 +194,18 @@ for fmt in ["parquet", "jsonl", "csv"]:
 ## What Gets Included in Output
 
 Each row/object contains:
-- **chunk_id**: Unique identifier for the chunk
-- **dataset_id**: Source dataset
-- **token_count**: Number of tokens in chunk
+- **chunk_id**: Unique identifier -> maps to record id in source dataset file 
+- **dataset_id**: Source dataset (to be removed-DONOTUSE)
+- **token_count**: Number of tokens in chunk (canonical)
 - **byte_length**: Byte size of chunk
 - **domain**: Domain classification (code, math, etc.)
 - **language**: Language code (en, hi, zh, etc.)
 - **band**: Difficulty band (B0-B5)
-- **source_doc_id**: Document source
+- **source**: Original dataset source label when provided (often same as dataset_id)
+- **source_doc_id**: Document source file name
 - **source_url**: URL if available
+
+* source_url+source_doc_id -->  Leads to the source dataset file and then use chunk_id to pull the exact record data (Raw dataset)
 
 ## Performance Comparison
 
@@ -237,20 +264,41 @@ class ExtendedCoresetWriter(CoresetWriter):
 
 ## Manifest Output (Always JSON)
 
-The manifest file is **always saved as JSON** regardless of index format:
+The manifest file is **always saved as JSON** regardless of index format. The exact filename depends on mode:
+
+- Legacy / single-worker: `output/coresets/{stage}/manifest.json`
+- Streaming sharded: `output/coresets/{stage}/manifest_shard###.json`
+
+**Sample Manifest (schema-aligned):**
 
 ```json
 {
-  "stage": "1B",
-  "curriculum_version": "0.0.1",
-  "total_selected": 1000000,
-  "selected_tokens": 2000000000,
+  "stage_name": "1B",
+  "coreset_id": "<sha256>",
+  "target_tokens": 1000000000,
+  "target_tokens_global": 1000000000,
+  "target_tokens_shard": 250000000,
+  "actual_tokens": 123456789,
+  "selected_chunks_count": 987654,
+  "selected_chunks_file": "output/coresets/1B/",
+  "created_at": "2026-02-13T12:34:56.789012",
+  "pipeline_version": "1.0.0",
+  "curriculum_version": "0.6.0",
+  "seed": 42,
+  "config_hash": "<hash>",
+  "shard_id": 0,
+  "num_shards": 4,
+  "stage_target_scale": 1.0,
   "composition": {
-    "band_distribution": {...},
-    "domain_distribution": {...}
+    "band_distribution": {"B0": 0.49, "B1": 0.21, "B2": 0.15, "B3": 0.10, "B4": 0.03, "B5": 0.02},
+    "domain_distribution": {
+      "total": {"web": 0.50, "literature": 0.25, "math": 0.25},
+      "by_band": {"B0": {"web": 1.0}}
+    },
+    "language_distribution": {"en": 0.92, "hi": 0.04, "bn": 0.02, "ta": 0.02}
   },
-  "selected_chunks_file": "output/coresets/1B/selected_indices.parquet",
-  "statistics": {...}
+  "rolling_window_stats": {"window_tokens": 2000000, "max_band_delta": 0.03},
+  "availability_stats": {"eligible_unused_tokens_total": 1234567890}
 }
 ```
 

@@ -30,7 +30,7 @@ class TestBatchProcessing:
                 chunk_dict = {
                     'chunk_id': f'chunk_{i:05d}',
                     'dataset_id': 'test_ds',
-                    'token_count': random.randint(64, 256),
+                    'token_count_estimate': random.randint(64, 256),
                     'band': random.choice(['B0', 'B1', 'B2', 'B3', 'B4', 'B5']),
                     'domain': random.choice(['code', 'math', 'reasoning', 'agentic', 'indic', 'clean_web']),
                     'language': 'en',
@@ -62,7 +62,7 @@ class TestBatchProcessing:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
             for i in range(125):
                 import json
-                f.write(json.dumps({'chunk_id': f'chunk_{i}', 'token_count': 100}) + '\n')
+                f.write(json.dumps({'chunk_id': f'chunk_{i}', 'token_count_estimate': 100}) + '\n')
             temp_path = f.name
         
         try:
@@ -87,7 +87,7 @@ class TestBatchProcessing:
             for i in range(10000):
                 chunks_loaded[0] += 1
                 max_chunks_loaded[0] = max(max_chunks_loaded[0], chunks_loaded[0])
-                yield (f'chunk_{i}', {'token_count': 100})
+                yield (f'chunk_{i}', {'token_count_estimate': 100})
                 chunks_loaded[0] -= 1
         
         # In real use, this would stream from file
@@ -326,7 +326,7 @@ class TestMemoryBounds:
                 import json
                 chunk = {
                     'chunk_id': f'chunk_{i:06d}',
-                    'token_count': 256,
+                    'token_count_estimate': 256,
                     'band': 'B2',
                     'domain': 'code',
                 }

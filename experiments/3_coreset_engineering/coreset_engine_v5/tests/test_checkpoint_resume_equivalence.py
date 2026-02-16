@@ -167,7 +167,7 @@ def test_clean_vs_resume_equivalence_tiny_dataset(tmp_path: Path) -> None:
                 "chunk_id": f"c{i:03d}",
                 "dataset_id": "ds",
                 "token_count_estimate": 1,
-                "domain": "general_web_clean",
+                "domain": "web",
                 "language": "hi" if is_indic else "en",
                 "band": "B0",
                 "band_score": 0.0 if is_indic else 1.0,

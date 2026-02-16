@@ -110,10 +110,19 @@ class ChunkLoader:
         
         for _, row in df.iterrows():
             try:
+                token_val = None
+                try:
+                    if 'token_count' in row.index and row['token_count'] is not None:
+                        token_val = row['token_count']
+                except Exception:
+                    token_val = None
+                if token_val is None:
+                    token_val = row.get('token_count_estimate')
+
                 metadata = ChunkMetadata(
                     chunk_id=row['chunk_id'],
                     dataset_id=row['dataset_id'],
-                    token_count=int(row['token_count_estimate']),
+                    token_count=int(token_val or 0),
                     byte_length=int(row['byte_length']),
                     domain=row['domain'],
                     language=row['language'],
@@ -257,7 +266,9 @@ class AblationReporter:
     
     @staticmethod
     def generate_report(stages_results: Dict[str, Dict[str, Any]],
-                       output_path: str) -> str:
+                       output_path: str,
+                       *,
+                       report_filename: str = "ablation_validation_report.md") -> str:
         """
         Generate comprehensive ablation report with:
         - Methods evaluated (ablation variants)
@@ -312,6 +323,32 @@ class AblationReporter:
         else:
             report.append(f"| **Chunk Reduction** | **N/A** | **N/A** |\n\n")
         
+        def _flatten_domain_distribution(dom: Any) -> Dict[str, Any]:
+            """Return a flat {domain: ratio_or_obj} mapping.
+
+            Supports:
+            - DomainDistributionV2 (expects .to_dict() with {total, by_band})
+            - Legacy DomainDistribution (flat mapping)
+            - Plain dicts (flat or {total, by_band})
+            """
+
+            if dom is None:
+                return {}
+            if isinstance(dom, dict):
+                if isinstance(dom.get("total"), dict):
+                    return dom.get("total") or {}
+                return dom
+            if hasattr(dom, "to_dict"):
+                try:
+                    d = dom.to_dict()  # type: ignore[attr-defined]
+                except Exception:
+                    return {}
+                if isinstance(d, dict) and isinstance(d.get("total"), dict):
+                    return d.get("total") or {}
+                if isinstance(d, dict):
+                    return d
+            return {}
+
         # ===== STAGE-WISE BREAKDOWN =====
         report.append("## Stage-wise Breakdown\n\n")
         for stage_name, results in sorted(stages_results.items()):
@@ -348,13 +385,8 @@ class AblationReporter:
                 report.append("**Domain Distribution** (Content Diversity):\n\n")
                 report.append("| Domain | Ratio | Tokens |\n")
                 report.append("|--------|-------|--------|\n")
-                # support both dicts and DomainDistribution objects
-                if isinstance(domain_dist, dict):
-                    items = sorted(domain_dist.items())
-                else:
-                    items = sorted(domain_dist.to_dict().items())
-
-                for domain, ratio in items:
+                flat_domain = _flatten_domain_distribution(domain_dist)
+                for domain, ratio in sorted(flat_domain.items()):
                     ratio_value = ratio
                     domain_tokens = None
                     if isinstance(ratio, dict):
@@ -436,19 +468,15 @@ class AblationReporter:
                                  if getattr(band_dist, b, 0.0) > 0])
             if 'domain_distribution' in results:
                 dom = results['domain_distribution']
-                # support both dicts and DomainDistribution objects
-                if isinstance(dom, dict):
-                    all_domains.update(dom.keys())
-                else:
-                    for k, v in dom.to_dict().items():
-                        ratio_value = v
-                        if isinstance(v, dict):
-                            ratio_value = v.get('ratio', v.get('share', v.get('fraction', 0.0)))
-                        try:
-                            if float(ratio_value or 0.0) > 0:
-                                all_domains.add(k)
-                        except Exception:
-                            continue
+                for k, v in _flatten_domain_distribution(dom).items():
+                    ratio_value = v
+                    if isinstance(v, dict):
+                        ratio_value = v.get('ratio', v.get('share', v.get('fraction', 0.0)))
+                    try:
+                        if float(ratio_value or 0.0) > 0:
+                            all_domains.add(k)
+                    except Exception:
+                        continue
             if 'language_distribution' in results:
                 lang = results['language_distribution']
                 if isinstance(lang, dict):
@@ -577,7 +605,7 @@ class AblationReporter:
         report_text = "".join(report)
         
         # Write to file
-        output_file = Path(output_path) / "ablation_validation_report.md"
+        output_file = Path(output_path) / str(report_filename)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         
         with open(output_file, 'w', encoding='utf-8') as f:

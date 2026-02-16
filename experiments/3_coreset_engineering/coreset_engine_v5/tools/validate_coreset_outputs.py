@@ -302,7 +302,7 @@ class CoresetValidator:
         if indices:
             # Check first index has required fields
             first_index = indices[0]
-            required_fields = ["chunk_id", "band", "domain", "token_count_estimate"]
+            required_fields = ["chunk_id", "band", "domain"]
             for field_name in required_fields:
                 field_exists = field_name in first_index
                 report.add_check(ValidationCheck(
@@ -316,6 +316,20 @@ class CoresetValidator:
                     message=f"Field '{field_name}' present in indices",
                     details=f"Sample: {first_index}"
                 ))
+
+            # Token count field: accept either the new canonical name or legacy name.
+            token_field_exists = ("token_count" in first_index) or ("token_count_estimate" in first_index)
+            report.add_check(ValidationCheck(
+                check_id="INDICES_FIELD_TOKEN_COUNT",
+                category="indices_format",
+                name="Index entries have token count field",
+                expected=True,
+                actual=token_field_exists,
+                passed=token_field_exists,
+                severity="high" if not token_field_exists else "low",
+                message="Field 'token_count' or 'token_count_estimate' present in indices",
+                details=f"Sample: {first_index}",
+            ))
 
     def _validate_band_distribution(self, report: ValidationReport, manifest: Dict):
         """Validate band distribution matches curriculum"""

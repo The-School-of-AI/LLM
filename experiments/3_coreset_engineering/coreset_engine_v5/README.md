@@ -187,6 +187,60 @@ python coreset_builder.py --config config/pipeline.yaml --curriculum config/curr
 
 Note: for single-file inputs, all shards will read the same file. For best throughput at very large scale, consider pre-splitting the JSONL into multiple files so file-level sharding can distribute I/O.
 
+### Optional: Band Inference for Curriculum Eligibility
+
+Some datasets provide a `band` label that makes large portions of the data curriculum-ineligible for early stages (e.g., many rows labeled `B0` but with domains only allowed in higher bands). In streaming mode, this can lead to unexpectedly low selection volume and skewed language/domain composition.
+
+To address this, the streaming builder supports optional band inference using a configurable score source.
+
+Band inference has two knobs:
+- `--band-inference`: when to infer (none / infer_if_missing / infer_if_ineligible / force)
+- `--band-score-source`: which field to use as the signal for inference
+
+- `--band-inference none` (default): do not modify input bands.
+- `--band-inference infer_if_ineligible`: only re-band rows when the current `(band, domain)` is not eligible under the curriculum.
+- `--band-inference infer_if_missing`: only infer when `band` is missing/invalid.
+- `--band-inference force`: always infer a band when a score exists.
+
+**Band score source (`--band-score-source`)**
+
+- `auto` (default): `band_score → difficulty_score → band_p_max`
+- `band_score`: use `band_score` only
+- `difficulty_score`: use `difficulty_score` only
+- `band_p_max`: use `max(band_p_B0..band_p_B5)` as a continuous score (0..1)
+- `band_p_argmax`: infer the *discrete* band as `argmax(band_p_B0..band_p_B5)` when band inference triggers
+- `band_p_Bx`: pin to a single probability column (e.g., `band_p_B5`)
+
+Notes:
+- `band_p_argmax` is the right choice when `band_p_B0..B5` represent a classifier distribution over bands.
+- `band_p_max` treats the maximum probability as a continuous “difficulty-like” score; this can behave differently than argmax.
+
+Recommended setting for datasets with suspicious band/domain mismatches:
+
+```bash
+python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
+  --input-path data/cdset --input-format jsonl \
+  --stages 1B 3B 8B 70B \
+  --band-inference infer_if_ineligible \
+  --band-score-source auto
+```
+
+If your input provides `band_p_B0..band_p_B5`, you can infer directly from the argmax:
+
+```bash
+python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
+  --input-path data/cdset --input-format parquet \
+  --stages 1B 3B 8B 70B \
+  --band-inference infer_if_ineligible \
+  --band-score-source band_p_argmax
+```
+
+For sharded runs via `shard.sh`, you can pass the same option:
+
+```bash
+bash shard.sh --input-path "data/cdset" --band-inference infer_if_ineligible --band-score-source band_p_argmax
+```
+
 ### S3 Inputs (Streaming)
 
 Streaming runs can read input data directly from S3 via `s3://...` paths.

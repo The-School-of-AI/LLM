@@ -12,13 +12,13 @@ def test_merge_stage_parts_writes_output(tmp_path: Path):
 
     df1 = pd.DataFrame(
         [
-            {"chunk_id": "a", "dataset_id": "ds", "token_count": 10, "band": "B0", "domain": "clean_web", "language": "en"},
-            {"chunk_id": "b", "dataset_id": "ds", "token_count": 20, "band": "B1", "domain": "code", "language": "en"},
+                {"chunk_id": "a", "dataset_id": "ds", "token_count": 10, "token_count_estimate": 10, "band": "B0", "domain": "clean_web", "language": "en"},
+                {"chunk_id": "b", "dataset_id": "ds", "token_count": 20, "token_count_estimate": 20, "band": "B1", "domain": "code", "language": "en"},
         ]
     )
     df2 = pd.DataFrame(
         [
-            {"chunk_id": "c", "dataset_id": "ds2", "token_count": 30, "band": "B2", "domain": "math", "language": "hi"},
+                {"chunk_id": "c", "dataset_id": "ds2", "token_count": 30, "token_count_estimate": 30, "band": "B2", "domain": "math", "language": "hi"},
         ]
     )
 
