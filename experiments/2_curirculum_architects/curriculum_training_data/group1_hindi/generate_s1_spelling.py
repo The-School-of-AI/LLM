@@ -39,6 +39,17 @@ TEMPLATES = [
     '"{word}" का वर्तनी क्या है?',
     '"{word}" शब्द की वर्तनी बताइए?',
     '"{word}" को कैसे लिखा जाता है?',
+    # Additional 10 templates for 200K
+    '"{word}" की स्पेलिंग क्या है?',
+    '"{word}" को किस तरह लिखते हैं?',
+    '"{word}" में कौन कौन से अक्षर हैं?',
+    '"{word}" का सही तरीके से वर्तनी बताइए?',
+    '"{word}" शब्द को लिखने का तरीका क्या है?',
+    '"{word}" की वर्तनी बताओ?',
+    '"{word}" कैसे लिखा जाता है?',
+    '"{word}" का स्पेलिंग बताइए?',
+    '"{word}" को वर्तनी करो?',
+    '"{word}" शब्द की स्पेलिंग क्या है?',
 ]
 
 
@@ -84,7 +95,7 @@ def generate_spelling_answer(word: str) -> str:
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
 samples = []
-target_count = 28600
+target_count = 35000  # Increased from 28600 for 200K push
 
 # Generate all unique combinations first
 unique_combinations = {}

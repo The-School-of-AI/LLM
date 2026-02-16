@@ -28,6 +28,17 @@ TEMPLATES = [
     '"{word}" के साथ राइम करता है कौन, "{rhyme}" या "{non_rhyme}"?',
     '"{word}" से तुकबंदी कौन करता है, "{rhyme}" या "{non_rhyme}"?',
     'कौन सा शब्द "{word}" के साथ राइम करता है, "{rhyme}" या "{non_rhyme}"?',
+    # Additional 10 templates
+    '"{word}" के साथ कौन मिलता है, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" से तुक मिलाता है कौन, "{rhyme}" या "{non_rhyme}"?',
+    'बताओ "{word}" से कौन तुकबंदी करता है, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" के साथ तुक मिलाने वाला कौन है, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" शब्द से कौन तुक मिलता है, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" से मिलने वाला शब्द कौन है, "{rhyme}" या "{non_rhyme}"?',
+    'कौन "{word}" के साथ मेल खाता है, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" के साथ तुकबंदी होती है किस से, "{rhyme}" या "{non_rhyme}"?',
+    '"{word}" से कौन राइम बनाता है, "{rhyme}" या "{non_rhyme}"?',
+    'बताइए "{word}" के साथ कौन मिलता है, "{rhyme}" या "{non_rhyme}"?',
 ]
 
 # Pre-compute unique words list (OPTIMIZATION)

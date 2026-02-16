@@ -27,6 +27,17 @@ TEMPLATES = [
     'कौन "{word1}" या "{word2}" "/{sound}/" से शुरू होता है?',
     '"/{sound}/" ध्वनि से कौन सा शब्द आरंभ होता है, "{word1}" या "{word2}"?',
     'बताइए "{word1}" या "{word2}" में से कौन "/{sound}/" से शुरू होता है?',
+    # Additional 10 templates
+    '"/{sound}/" अक्षर से कौन शुरू होता है, "{word1}" या "{word2}"?',
+    '"{word1}" और "{word2}" में से "/{sound}/" से कौन शुरू होता है?',
+    '"/{sound}/" ध्वनि से शुरू होने वाला है कौन, "{word1}" या "{word2}"?',
+    'कौन सा "/{sound}/" से आरंभ होता है, "{word1}" या "{word2}"?',
+    '"/{sound}/" अक्षर से शुरू होता है, "{word1}" या "{word2}"?',
+    'बताओ "/{sound}/" से कौन शुरू होता है, "{word1}" या "{word2}"?',
+    '"/{sound}/" ध्वनि से कौन शब्द शुरू होता है, "{word1}" या "{word2}"?',
+    '"{word1}" या "{word2}" में से "/{sound}/" से कौन है?',
+    '"/{sound}/" के साथ शुरू होने वाला कौन है, "{word1}" या "{word2}"?',
+    'कौन सा शब्द "/{sound}/" अक्षर से है, "{word1}" या "{word2}"?',
 ]
 
 
@@ -51,7 +62,7 @@ for word in unique_words:
 all_sounds = list(words_by_sound.keys())
 
 samples = []
-target_count = 20000
+target_count = 25000  # Increased from 20000 for 200K push
 unique_combinations = set()
 
 # Generate samples efficiently

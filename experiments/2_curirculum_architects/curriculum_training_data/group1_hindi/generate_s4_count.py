@@ -33,11 +33,22 @@ TEMPLATES = [
     'बताइए "{word}" में कितने अक्षर हैं?',
     '"{word}" शब्द में अक्षरों की संख्या बताइए?',
     '"{word}" में अक्षरों की गणना करें?',
+    # Additional 10 templates
+    '"{word}" के कितने अक्षर हैं?',
+    '"{word}" में अक्षर कितने हैं?',
+    'बताओ "{word}" में कितने अक्षर हैं?',
+    '"{word}" शब्द के अक्षरों की संख्या क्या है?',
+    '"{word}" में अक्षरों की संख्या बताओ?',
+    '"{word}" के कुल अक्षर कितने हैं?',
+    '"{word}" शब्द में कितने अक्षर गिने जाते हैं?',
+    '"{word}" का अक्षर गणना क्या है?',
+    '"{word}" में कितने वर्ण हैं?',
+    '"{word}" शब्द के वर्णों की संख्या क्या है?',
 ]
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
 samples = []
-target_count = 25800
+target_count = 30000  # Increased from 25800 for 200K push
 
 # Generate samples
 unique_combinations = {}
