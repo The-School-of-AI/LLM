@@ -5,7 +5,7 @@
 # Requires: Vector >= 0.30
 # ------------------------------------------------------------------------------
 
- data_dir = "/tmp/vector-data"
+ data_dir = "/var/lib/vector"
 
 # SOURCES
 
@@ -139,6 +139,7 @@ batch.max_bytes = 10485760
 auth.strategy = "basic"
 auth.user = "${CLICKHOUSE_USER}"
 auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 
 # 3. Typed scalar metrics (one row per metric per step — dashboard-friendly)
 [sinks.clickhouse_metric_points]
@@ -152,6 +153,7 @@ batch.max_bytes = 10485760
 auth.strategy = "basic"
 auth.user = "${CLICKHOUSE_USER}"
 auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 
 # 4. Checkpoint registry (governance — durable path via Vector)
 [sinks.clickhouse_checkpoints]
@@ -165,3 +167,4 @@ batch.max_bytes = 10485760
 auth.strategy = "basic"
 auth.user = "${CLICKHOUSE_USER}"
 auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"

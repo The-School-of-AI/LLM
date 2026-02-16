@@ -23,7 +23,7 @@ Behind the scenes this starts and manages:
     - CheckpointRegistry  (ClickHouse-backed checkpoint governance)
 
 Preflight checks:
-    - Vector process running  → FATAL if missing
+    - Vector service active   → FATAL if missing/inactive
     - ClickHouse reachable    → WARN if down (Vector buffers until recovery)
 """
 
@@ -73,6 +73,9 @@ class TrainingOps:
         How often (seconds) to collect system metrics.
     default_context : dict | None
         Default context fields merged into every log_step call.
+    vector_service_name : str | None
+        systemd unit name to validate in preflight (default: ``p12-vector.service``).
+        Set to ``None`` to use legacy process-based Vector checks.
     check_clickhouse_preflight : bool
         If True, perform direct ClickHouse connectivity preflight. Disabled by
         default so startup preflight focuses on Vector process health.
@@ -91,6 +94,7 @@ class TrainingOps:
         system_metrics_interval: float = 5.0,
         default_context: dict | None = None,
         skip_vector_check: bool = False,
+        vector_service_name: str | None = "p12-vector.service",
         check_clickhouse_preflight: bool = False,
     ):
         self.run_id = run_id
@@ -105,6 +109,7 @@ class TrainingOps:
         self._ch_user = clickhouse_user or os.environ.get("CLICKHOUSE_USER", "")
         self._ch_password = clickhouse_password or os.environ.get("CLICKHOUSE_PASSWORD", "")
         self._ch_ca_cert = clickhouse_ca_cert if clickhouse_ca_cert is not None else os.environ.get("CLICKHOUSE_CA_CERT", "")
+        self._vector_service_name = vector_service_name
 
         # Build auth header + TLS context for preflight check
         self._auth_header = ""
@@ -171,6 +176,39 @@ class TrainingOps:
 
     def _check_vector(self):
         """Verify Vector is running. FATAL if not."""
+        if self._vector_service_name:
+            systemctl_bin = shutil.which("systemctl")
+            if systemctl_bin is None:
+                print("=" * 60)
+                print("  FATAL: systemctl not found; cannot verify Vector service health.")
+                print()
+                print(f"  Expected active service: {self._vector_service_name}")
+                print("=" * 60)
+                sys.exit(1)
+
+            try:
+                result = subprocess.run(
+                    ["systemctl", "is-active", "--quiet", self._vector_service_name],
+                    capture_output=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    print(f"✓ Preflight: Vector service '{self._vector_service_name}' is active")
+                    return
+            except Exception:
+                pass
+
+            print("=" * 60)
+            print("  FATAL: Vector service is not active!")
+            print()
+            print(f"  Expected service: {self._vector_service_name}")
+            print("  Check service status:")
+            print(f"    systemctl --no-pager --full status {self._vector_service_name}")
+            print("  Inspect logs:")
+            print(f"    journalctl -u {self._vector_service_name} -n 200 --no-pager")
+            print("=" * 60)
+            sys.exit(1)
+
         # Check for vector binary first
         vector_bin = shutil.which("vector")
         if vector_bin is None:

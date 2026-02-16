@@ -110,6 +110,54 @@ curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y --pr
 vector --config /path/to/vector.toml
 ```
 
+### 4b. Vector as a systemd service (recommended for production)
+
+For consistent startup across reboots and long-running training jobs, run Vector as a service.
+
+1. Put credentials at `/home/ubuntu/.p12.env` (the service reads this file):
+
+```bash
+cp /path/to/training-instance.env /home/ubuntu/.p12.env
+chmod 600 /home/ubuntu/.p12.env
+```
+
+2. Install service unit at `/etc/systemd/system/p12-vector.service`:
+
+```ini
+[Unit]
+Description=P12 Vector Sidecar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+EnvironmentFile=/home/ubuntu/.p12.env
+ExecStartPre=/usr/bin/mkdir -p /var/lib/vector
+ExecStartPre=/usr/bin/chown ubuntu:ubuntu /var/lib/vector
+ExecStart=/usr/local/bin/vector --config /home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+3. Enable/start service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now p12-vector.service
+```
+
+4. Check health/logs:
+
+```bash
+systemctl --no-pager --full status p12-vector.service
+journalctl -u p12-vector.service -f
+```
+
 ---
 
 ## train.py Integration

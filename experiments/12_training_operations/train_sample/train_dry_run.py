@@ -203,14 +203,18 @@ def main():
         or os.environ.get("CLICKHOUSE_HTTPS_ENDPOINT")
         or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT")
     )
+    vector_service_name = os.environ.get("VECTOR_SERVICE_NAME", "p12-vector.service").strip() or None
     if clickhouse_url is not None:
         print(f"ClickHouse endpoint: {clickhouse_url}")
+    if vector_service_name is not None:
+        print(f"Vector service preflight: {vector_service_name}")
     ops = TrainingOps(
         run_id=run_id,
         rank=int(os.environ.get("RANK", 0)),
         clickhouse_url=clickhouse_url,
         default_context={"model": "mini_70b_arch", "test": "dry_run"},
         skip_vector_check=False,
+        vector_service_name=vector_service_name,
     )
 
     train(model, loader, device, num_steps=num_steps, ops=ops)
