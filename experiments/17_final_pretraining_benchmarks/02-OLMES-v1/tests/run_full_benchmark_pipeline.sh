@@ -86,7 +86,7 @@ for STAGE in "${STAGES[@]}"; do
         --config "$CONFIG" \
         --stage "$STAGE" \
         --model_args "pretrained=$MODEL" \
-        --sample
+        --batch_size 256
     
     if [ $? -ne 0 ]; then
         echo "❌ Stage $STAGE failed!"
