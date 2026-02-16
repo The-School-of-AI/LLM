@@ -76,11 +76,18 @@ This template has been tested and verified on AWS g4dn.12xlarge instances (4x Te
 
 ### Data & Monitoring
 - **Progress Tracking**: Built-in progress bars and logging
+- **JSONL Structured Metrics**: Machine-readable training/eval metrics for dashboards
 - **Text Generation**: Test your model with custom prompts
 - **Flexible Configuration**: Easy to switch between different DeepSpeed configurations
 - **Reproducibility**: Configurable random seed for reproducible experiments
 - **Data Loading**: Pre-built tokenization and data loading utilities
 - **Comprehensive Testing**: CPU and GPU test suites for validation
+
+### Production Hardening
+- **Non-blocking H2D Copies**: Overlapped CPU→GPU tensor transfers for free throughput
+- **Kernel Fail-Fast**: Hard-fail if fused Triton/FLA kernels are missing (prevents silent ~500x slowdowns)
+- **Precision Validation**: Catches bf16/fp16 misconfiguration between DeepSpeed and model at startup
+- **Chunked Cross-Entropy**: Memory-efficient loss computation for large vocabularies (131K+)
 
 ## 📋 Requirements
 
@@ -299,7 +306,13 @@ training:
   max_eval_steps: null               # Max eval steps (null for full evaluation)
   log_interval: 10                   # Log every N steps
   seed: 42                           # Random seed for reproducibility
+  enable_system_metrics: false       # Enable per-step CPU/GPU util & memory logging
+  require_fused_kernels: false       # Fail-fast if Triton/FLA kernels unavailable
+  metrics_jsonl_path: null           # Path for JSONL metrics log (null to disable)
+  chunked_ce_loss_size: 0            # 0=off, >0=chunk size for memory-efficient CE
 ```
+
+> **`chunked_ce_loss_size`**: With a 131K vocab, cross-entropy internally creates a massive softmax tensor (~2GB at T=4096). Setting this to e.g. `1024` processes the loss in chunks, reducing peak memory by 4-16x. The result is mathematically identical. Recommended values: `512`, `1024`, `2048`.
 
 ### DeepSpeed Configuration
 ```yaml
@@ -311,9 +324,12 @@ deepspeed:
 ### Model Configuration
 ```yaml
 model:
-  tokenizer_name: "Qwen/Qwen2.5-0.5B"  # Tokenizer from HuggingFace
-  # model_name: "distilgpt2"           # Uncomment for different model
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"         # Tokenizer from HuggingFace
+  embedding_type: "kronecker"                  # "kronecker" or "standard"
+  require_fused_deltanet_kernel: true           # Crash if DeltaNet fused kernel unavailable
 ```
+
+> **`require_fused_deltanet_kernel`**: The DeltaNet Python fallback loop is ~500x slower than the fused Triton kernel. When `true`, training will hard-fail instead of silently running at 0.1% speed. Set to `false` only for local CPU debugging.
 
 ### Checkpoint Configuration
 ```yaml
@@ -594,11 +610,13 @@ Data loading and tokenization utilities:
 ### `src/train.py`
 
 Training and inference logic:
+- `chunked_cross_entropy()`: Memory-efficient CE loss for large vocabularies
 - `train_epoch()`: Trains model for one epoch with progress tracking
 - `evaluate()`: Evaluates model and computes loss and perplexity
 - `generate_text()`: Generates text from prompts with configurable sampling
 - `save_checkpoint()`: Saves model checkpoints using DeepSpeed
 - `load_checkpoint()`: Loads model checkpoints
+- `_append_jsonl()`: Structured metrics logging to JSONL file
 
 ### `src/utils.py`
 
@@ -611,6 +629,8 @@ General utility functions:
 Main orchestration script that handles:
 - Configuration loading from YAML file
 - Random seed initialization for reproducibility
+- **Kernel policy validation** (fail-fast if fused kernels missing)
+- **Precision policy validation** (bf16/fp16 mismatch detection)
 - Data loading with HuggingFace datasets
 - Tokenizer initialization
 - Model loading from HuggingFace Hub
