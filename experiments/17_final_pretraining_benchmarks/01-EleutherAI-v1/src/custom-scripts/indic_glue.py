@@ -49,7 +49,7 @@ def main():
 
     # Representative subsets covering all 11 languages and diverse tasks
     subsets = [
-        "wnli.hi", "wnli.mr", "wnli.gu", "wnli.pa", "wnli.bn", # NLI
+        "wnli.hi", "wnli.mr", "wnli.gu",                      # NLI
         "copa.hi", "copa.mr", "copa.gu",                      # Causality
         "csqa.hi", "csqa.te", "csqa.ta", "csqa.kn", "csqa.as", # QA
         "csqa.ml", "csqa.or",                                 # QA
@@ -66,7 +66,7 @@ def main():
             dataset = load_dataset("ai4bharat/indic_glue", subset, split="validation", trust_remote_code=True)
         except:
             try:
-                dataset = load_dataset("ai4bharat/indic_glue", subset, split="train", trust_remote_code=True)
+                dataset = load_dataset("ai4bharat/indic_glue", subset, split="test", trust_remote_code=True)
             except Exception as e:
                 print(f"  [Warning] Failed to load subset {subset}: {e}", file=sys.stderr)
                 continue
