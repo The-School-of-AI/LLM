@@ -47,7 +47,12 @@ def test_spdl_bin_idx_dataloader(token_folder=None):
 if __name__ == "__main__":
     import subprocess
     import sys
+    import os
     token_folder = sys.argv[1] if len(sys.argv) > 1 else "Test_data"
+    config_path = "configuration_P5.yaml"
+    # Set SPDL_CONFIG to configuration_P5.yaml
+    env = os.environ.copy()
+    env["SPDL_CONFIG"] = config_path
     # Call dataloader.py with test arguments
     subprocess.run([
         sys.executable,
@@ -55,4 +60,4 @@ if __name__ == "__main__":
         "--token-folder", token_folder,
         "--batches", "10",
         "--log-level", "INFO"
-    ], check=True)
+    ], check=True, env=env)

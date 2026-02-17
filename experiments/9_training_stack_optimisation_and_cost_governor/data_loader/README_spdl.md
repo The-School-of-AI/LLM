@@ -182,8 +182,8 @@ The dataloader achieves high throughput for large-scale data processing:
 
 The dataloader is fully parameterized using YAML configuration files. Two example configs are provided:
 
-- `configuration_P4.yaml`: Optimized for NVIDIA Tesla P4 (8GB VRAM)
-- `configuration_P5.yaml`: Optimized for NVIDIA A100/P5 (40GB+ VRAM)
+- `configuration_P4.yaml`: Optimized for NVIDIA Tesla P4 (8GB VRAM, dtype: uint32)
+- `configuration_P5.yaml`: Optimized for NVIDIA A100/P5 (40GB+ VRAM, dtype: uint32)
 
 You can create your own config file or modify these to match your hardware. Key parameters:
 
@@ -191,7 +191,7 @@ You can create your own config file or modify these to match your hardware. Key 
 - `num_threads`: Number of processing threads
 - `prefetch_buffer`: Number of batches to prefetch
 - `sequence_length`: Number of tokens per sequence
-- `dtype`: Token dtype (e.g., uint16, int32)
+- `dtype`: Token dtype (e.g., uint32, int32)
 
 The config file is loaded automatically via the `SPDL_CONFIG` environment variable, or defaults to `configuration_P4.yaml`.
 

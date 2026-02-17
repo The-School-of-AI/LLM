@@ -14,7 +14,7 @@ BATCH_SIZE = _config.get("batch_size", 1024)
 NUM_THREADS = _config.get("num_threads", os.cpu_count())
 PREFETCH_BUFFER = _config.get("prefetch_buffer", 8)
 SEQUENCE_LENGTH = _config.get("sequence_length", 4096)
-DTYPE = _config.get("dtype", "uint16")
+DTYPE = _config.get("dtype", "uint32")
 
 # Data Column Names
 TOKENS_COLUMN = "tokens"
