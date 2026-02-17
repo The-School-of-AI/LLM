@@ -113,54 +113,60 @@ Activate the environment:
 source .venv/bin/activate
 ```
 
-Run the dataloader, passing one or more Parquet file paths as arguments:
+Run the dataloader using the unified CLI:
 ```bash
-python data_loader_main.py /path/to/shard1.parquet /path/to/shard2.parquet
+python dataloader.py --token-folder /path/to/token_folder --batches 10 --log-level INFO
 ```
+This will process .bin/.idx token shards in the specified folder, using parameters from your YAML config.
 
 ## Testing
 
 ### Quick Test Run
-Run the test script to generate sample data and verify functionality:
+Run the test script to verify dataloader functionality:
 ```bash
-python test_spdl_dataloader.py
+python test_spdl_bin_idx_dataloader.py --token-folder /path/to/token_folder
 ```
+This will process 10 batches and log progress, assertions, and metrics.
 
 ### Automated Test Runner
-Use the provided test runner script for a complete test with system information:
+Use the provided test runner script for a complete test with hardware info:
 ```bash
 ./run_test.sh
 ```
-
 This script will:
 - Activate the virtual environment
 - Display system information (hardware, CUDA availability, etc.)
 - Run the full test suite with performance benchmarking
-- Clean up generated test data
+- Log results and metrics
 
 **Note:** Make sure the script is executable: `chmod +x run_test.sh`
 
 Expected output (example):
 ```
 ==========================================
-System Information
+SPDL Production Run
 ==========================================
-CUDA available: False
-Platform: macOS-26.2-arm64-arm-64bit
-CPU cores: 10
-Memory: 16 GB
-Python version: 3.11.14
-PyTorch version: 2.10.0
+Date: 17 February 2026 12:34:56
+Test File: test_spdl_bin_idx_dataloader.py
+SPDL Version: 0.2.0
 
-==========================================
-Running SPDL DataLoader Test
-==========================================
-Data generation time: 13.86 seconds
-Processing time: 39.23 seconds
-Batches processed: 1
-Total records: 1000000
-Throughput: 25490.44 records/second
-Test completed successfully.
+Hardware Configuration
+Platform: macOS-26.2-arm64-arm-64bit
+CPU Cores: 10
+Memory: 16 GB
+CUDA Available: False
+Python Version: 3.11.14
+PyTorch Version: 2.10.0
+
+Running SPDL pipeline with config: configuration_P4.yaml and token folder: /path/to/token_folder
+
+Test Results
+Completed: 10 batches, 41943040 tokens processed.
+Processing Performance
+Processing Time: 39 seconds
+Batches Processed: 10
+Throughput: 1075447.69 tokens/second
+Device: CPU (CUDA not available)
 ```
 
 ## Performance
@@ -172,6 +178,7 @@ The dataloader achieves high throughput for large-scale data processing:
 
 
 ## Configuration
+
 
 The dataloader is fully parameterized using YAML configuration files. Two example configs are provided:
 
@@ -190,6 +197,7 @@ The config file is loaded automatically via the `SPDL_CONFIG` environment variab
 
 
 ## Production Usage
+
 
 The main entry point for all dataloader runs is `dataloader.py`, which supports argument parsing and logging.
 
@@ -220,3 +228,25 @@ All pipeline parameters (batch size, threads, buffer, sequence length, dtype) ar
 ## Logging
 
 Logs and audit trails are stored in `/data/dolma/logs`.
+
+## Test Results
+
+See `test_result.md` for full details and metrics. Example:
+
+```
+SPDL DataLoader Test Results
+
+Hardware Configuration
+- CUDA available: False
+- Platform: macOS-26.2-arm64-arm-64bit
+- CPU cores: 10
+- Memory: 16 GB
+- Python version: 3.11.14
+- PyTorch version: 2.10.0
+
+Test Results
+- Batches processed: 10
+- Tokens processed: 41,943,040
+- Batch size: 1024, Sequence length: 4096
+- All assertions passed, loader robust to edge cases
+```
