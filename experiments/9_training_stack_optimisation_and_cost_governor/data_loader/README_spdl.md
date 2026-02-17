@@ -188,7 +188,10 @@ You can create your own config file or modify these to match your hardware. Key 
 
 The config file is loaded automatically via the `SPDL_CONFIG` environment variable, or defaults to `configuration_P4.yaml`.
 
+
 ## Production Usage
+
+The main entry point for all dataloader runs is `dataloader.py`, which supports argument parsing and logging.
 
 To run the dataloader in production mode with a specific config and token folder:
 
@@ -201,10 +204,16 @@ Example:
 ./run_spdl_production.sh configuration_P5.yaml /path/to/token_folder
 ```
 
-This will:
+This script will:
 - Activate the virtual environment
-- Set the config for the run
-- Run the pipeline on the specified token folder
+- Set the config for the run (via SPDL_CONFIG)
+- Call `dataloader.py` with the token folder and batch count
+- Log progress and results using the logging framework
+
+You can also run the dataloader directly:
+```bash
+python dataloader.py --token-folder /path/to/token_folder --batches 10 --log-level INFO
+```
 
 All pipeline parameters (batch size, threads, buffer, sequence length, dtype) are set from the config file.
 

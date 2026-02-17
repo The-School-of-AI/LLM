@@ -63,7 +63,7 @@ print("Python Version:", platform.python_version())
 start_time=$(date +%s)
 echo ""
 echo "Running SPDL pipeline with config: $CONFIG_FILE and token folder: $TOKEN_FOLDER"
-output=$(python test_spdl_bin_idx_dataloader.py "$TOKEN_FOLDER")
+output=$(python dataloader.py --token-folder "$TOKEN_FOLDER" --batches 10 --log-level INFO)
 end_time=$(date +%s)
 duration=$((end_time - start_time))
 

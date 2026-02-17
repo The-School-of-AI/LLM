@@ -1,9 +1,13 @@
+
 import os
 import torch
+import logging
 from spdl_dataloader import build_pipeline, DummyModel
 
 
 def test_spdl_bin_idx_dataloader(token_folder=None):
+    logger = logging.getLogger("spdl.test")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     import sys
     # Allow token folder override from command line
     if token_folder is None and len(sys.argv) > 1:
@@ -20,7 +24,7 @@ def test_spdl_bin_idx_dataloader(token_folder=None):
     model = DummyModel()
 
     pipeline = build_pipeline(token_folder, seq_len=seq_len, dtype=dtype)
-    print(f"Testing SPDL bin/idx dataloader in: {token_folder}")
+    logger.info(f"Testing SPDL bin/idx dataloader in: {token_folder}")
     with pipeline.auto_stop():
         for step, batch in enumerate(pipeline):
             # batch is a list of tensors, stack to get [batch_size, seq_len]
@@ -33,14 +37,22 @@ def test_spdl_bin_idx_dataloader(token_folder=None):
             batch_count += 1
             total_tokens += batch.numel()
             if step < 3:
-                print(f"Step {step}: batch shape {batch.shape}, output shape {outputs.shape}")
+                logger.info(f"Step {step}: batch shape {batch.shape}, output shape {outputs.shape}")
             if step >= 9:
                 break  # Only test 10 batches for speed
-    print(f"Test completed: {batch_count} batches, {total_tokens} tokens processed.")
+    logger.info(f"Test completed: {batch_count} batches, {total_tokens} tokens processed.")
     assert batch_count > 0, "No batches processed!"
-    print("SPDL bin/idx dataloader test PASSED.")
+    logger.info("SPDL bin/idx dataloader test PASSED.")
 
 if __name__ == "__main__":
+    import subprocess
     import sys
-    token_folder = sys.argv[1] if len(sys.argv) > 1 else None
-    test_spdl_bin_idx_dataloader(token_folder)
+    token_folder = sys.argv[1] if len(sys.argv) > 1 else "Test_data"
+    # Call dataloader.py with test arguments
+    subprocess.run([
+        sys.executable,
+        "dataloader.py",
+        "--token-folder", token_folder,
+        "--batches", "10",
+        "--log-level", "INFO"
+    ], check=True)
