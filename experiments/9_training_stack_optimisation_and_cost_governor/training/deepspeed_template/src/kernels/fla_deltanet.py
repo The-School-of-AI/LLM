@@ -39,6 +39,7 @@ def fla_gated_delta_rule(
     beta: torch.Tensor,    # [B, T, H, 1]  (sigmoid output in [0,1])
     D: torch.Tensor,       # [H]  (per-head residual weight)
     num_heads: int,
+    chunk_size: int = 256,
 ) -> torch.Tensor:
     """
     Fused DeltaNet recurrence via fla's chunk_gated_delta_rule kernel.
@@ -92,6 +93,7 @@ def fla_gated_delta_rule(
         q_f32, k_f32, v_f32, g, beta_fla,
         scale=1.0,
         output_final_state=False,
+        chunk_size=chunk_size,
     )
 
     # Add D residual: D * (q . k) * v  (in original dtype to save memory)

@@ -916,6 +916,21 @@ class GatedDeltaNet(nn.Module):
             # ── fla fused kernel path ──────────────────────────────────────
             # fla expects (B, T, H, d) layout — q/k/v are already in this shape.
             # D residual (D * (q·k) * v) is computed inside fla_gated_delta_rule.
+
+            # Dynamic chunk_size policy based on sequence length:
+            #   T <  16k  →  64
+            #   16k–32k   → 128
+            #   32k–64k   → 256
+            #   >= 64k    → 512
+            if T < 16_384:
+                _chunk_size = 64
+            elif T < 32_768:
+                _chunk_size = 128
+            elif T < 65_536:
+                _chunk_size = 256
+            else:
+                _chunk_size = 512
+
             try:
                 o = fla_gated_delta_rule(
                     q=q,        # (B, T, num_heads, head_dim)
@@ -925,6 +940,7 @@ class GatedDeltaNet(nn.Module):
                     beta=beta,    # (B, T, num_heads, 1)
                     D=self.D,     # (num_heads,)
                     num_heads=self.num_heads,
+                    chunk_size=_chunk_size,
                 )
             except Exception as e:
                 import warnings
