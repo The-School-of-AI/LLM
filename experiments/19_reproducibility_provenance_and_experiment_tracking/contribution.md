@@ -1,5 +1,5 @@
 # Follow these rules when contributing to the repo
-  
+
 ## How to create a pull request
 
 1. **Start from an issue**
@@ -62,11 +62,119 @@
 - When working with files and paths (for example, in notebooks or scripts), avoid hard‑coded absolute paths that are specific to one machine or OS.
 - Prefer repo‑relative paths and `pathlib.Path` so code runs unchanged on Windows, macOS, and Linux.
 
-```bash
+```python
 from pathlib import Path
 
 file_path = Path("experiments/tokenizer/selection/ds_tokenizer.json")
 ```
+
+## Things to Note & Warnings
+
+> [!IMPORTANT]
+> **Disclaimer**: This repository follows a monorepo structure using `uv` workspaces. The environment is provided "AS-IS". By contributing, you acknowledge that shared configurations (like the root `uv.lock`) affect the entire project.
+
+### Risks and Responsibilities
+
+- **Horizontal Syncing**: Updates to any team's `pyproject.toml` modify the shared root `uv.lock`. Simultaneous changes may cause merge conflicts in the lockfile.
+- **Strict Versioning**: All projects must use compatible versions of shared libraries. You cannot have conflicting versions of the same package across different teams.
+- **Environment Discipline**: Always ensure you are working within your project-specific virtual environment to avoid polluting the root or other teams' environments.
+
+## Dependency Management (Multi-OS)
+
+Every team manages their own `pyproject.toml` within their project directory (e.g., `experiments/3_coreset_engineering/`).
+
+### 1. Environment Creation
+
+Navigate to your project folder and run:
+
+**Mac / Linux / Ubuntu / WSL / Windows:**
+
+```bash
+uv venv .venv
+```
+
+### 2. Isolated Synchronization
+
+To sync dependencies into your local `.venv` while matching the root lockfile:
+
+**Mac / Linux / Ubuntu / WSL (Bash/Zsh):**
+
+```bash
+export UV_PROJECT_ENVIRONMENT=.venv
+uv sync
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$env:UV_PROJECT_ENVIRONMENT = ".venv"
+uv sync
+```
+
+**Windows (Command Prompt / CMD):**
+
+```cmd
+set UV_PROJECT_ENVIRONMENT=.venv
+uv sync
+```
+
+### Dependency Isolation & Recovery
+
+- **Isolation**: Work only within your team folder. Use `export UV_PROJECT_ENVIRONMENT=.venv` to ensure your shell uses your local environment.
+- **Rollback**: If you break the root `uv.lock`, you MUST revert your changes to both `pyproject.toml` and `uv.lock` immediately to unblock others.
+- **Complexity Management**: For managing experimental versions (e.g., `v4` vs `v5`) or handling breaking library upgrades, follow the [Complexity Management Guide](./complexity_management.md).
+- **Recovery**: If your `.venv` is corrupted, delete it and recreate:
+
+**Mac / Linux / Ubuntu / WSL:**
+
+```bash
+rm -rf .venv
+uv venv .venv
+export UV_PROJECT_ENVIRONMENT=.venv
+uv sync
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item -Recurse -Force .venv
+uv venv .venv
+$env:UV_PROJECT_ENVIRONMENT = ".venv"
+uv sync
+```
+
+**Windows (Command Prompt / CMD):**
+
+```cmd
+rmdir /s /q .venv
+uv venv .venv
+set UV_PROJECT_ENVIRONMENT=.venv
+uv sync
+```
+
+### 4. Rollback Process (Branch Level)
+
+If a dependency update breaks your branch, revert **ONLY** the configuration files to keep your code changes:
+
+```bash
+# Revert project config and shared lockfile
+git checkout HEAD^ path/to/your/pyproject.toml
+git checkout HEAD^ uv.lock
+
+# Re-sync using your OS-specific command from Section 2
+```
+
+### 5. Global Sync (Admins Only)
+
+Only Admins should run this from the repository root to verify the global health of the entire workspace:
+
+```bash
+# Validates and syncs all workspace members (Default)
+uv sync --all-packages
+```
+
+> [NOTE]
+> If any teams are using **Dependency Groups** (Option 1) for their experiments, admins may need to run extended synchronization to validate those groups. See the [Complexity Management Guide](./complexity_management.md) for details.
 
 ## References
 

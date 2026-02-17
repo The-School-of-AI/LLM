@@ -1,3 +1,7 @@
+# ==============================================================================
+# Python Standard
+# ==============================================================================
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -51,48 +55,16 @@ coverage.xml
 .pytest_cache/
 cover/
 
-# Translations
-*.mo
-*.pot
+# Mypy / Type Checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-.pdm.toml
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
+# ==============================================================================
+# Environments & Tools
+# ==============================================================================
 
 # Environments
 .env
@@ -102,39 +74,84 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+env.json
 
-# Spyder project settings
+# Jupyter Notebook / IPython
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# PDM / PEP 582
+.pdm.toml
+__pypackages__/
+
+# Editors / IDEs
 .spyderproject
 .spyproject
-
-# Rope project settings
 .ropeproject
 
-# mkdocs documentation
+# ==============================================================================
+# Frameworks & Libraries
+# ==============================================================================
+
+# Django
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Sphinx / Documentation
+docs/_build/
 /site
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# PyBuilder
+.pybuilder/
+target/
 
-# Pyre type checker
-.pyre/
+# Celery
+celerybeat-schedule
+celerybeat.pid
 
-# pytype static type analyzer
-.pytype/
+# SageMath
+*.sage.py
 
-# Cython debug symbols
+# Cython
 cython_debug/
 
+# ==============================================================================
+# OS Specific
+# ==============================================================================
 
+*.DS_Store
+Thumbs.db
+
+# ==============================================================================
+# Project Specific (Data, Logs, Models)
+# ==============================================================================
+
+# Directories
+/data/
+/outputs/
+/logs/
 logs/
-/data
-/outputs
-/logs
+stats/
+*.log
 
-*.pt 
+# Model Checkpoints / Weights
+*.pt
 *.pth
 
-# macOS specific files
-*.DS_Store
+# Large Data & Partitioned Files
+part-*
+notebooks/data/
+experiments/3_coreset_engineering/notebooks/data/
+
+# Translations
+*.mo
+*.pot
