@@ -38,12 +38,13 @@ For a deeper dive into the exact academic targets (Meta, Alibaba, AI2) and SOTA 
 The pipeline requires a stable Python environment (**Python 3.12 recommended**). Avoid experimental versions like 3.14 for now.
 
 ```bash
+cd 02-OLMES-v1/
 # Recommended: Create a virtual environment
 python3.12 -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies using the venv's python
-./.venv/bin/python3 -m pip install -r 02-OLMES-v1/requirements.txt
+./.venv/bin/python3 -m pip install -r requirements.txt
 ```
 
 ### Gated Datasets (Indic-Bias, etc.)
@@ -55,11 +56,10 @@ export HF_TOKEN="hf_your_token_here"
 ```
 The pipeline will confirm detection at startup with a `🔑 HF_TOKEN detected` message.
 
-### 2. Running a Training Stage
-To evaluate a model checkpoint against a specific stage (e.g., `pretrain_1b` or `pretrain_70b`):
+# To evaluate a model checkpoint against a specific stage (e.g., pretrain_1b or pretrain_70b):
 ```bash
-python3 02-OLMES-v1/src/pipeline_runner.py \
-    --config 02-OLMES-v1/configs/benchmark-config.yaml \
+python3 src/pipeline_runner.py \
+    --config configs/benchmark-config.yaml \
     --stage pretrain_1b \
     --model_args "pretrained=HuggingFaceTB/SmolLM2-135M" \
     --device "cpu"
@@ -80,7 +80,7 @@ tests/run_smoke_tests.sh \
 
 # Full customization
 tests/run_smoke_tests.sh \
-    --config 02-OLMES-v1/configs/benchmark-config.yaml \
+    --config configs/benchmark-config.yaml \
     --model "your-org/your-model" \
     --stages "pretrain_1b,ci_breadth" \
     --device "cuda"
@@ -88,7 +88,7 @@ tests/run_smoke_tests.sh \
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
-| `-c, --config` | `02-OLMES-v1/configs/benchmark-config.yaml` | Path to benchmark config YAML |
+| `-c, --config` | `configs/benchmark-config.yaml` | Path to benchmark config YAML |
 | `-m, --model` | `HuggingFaceTB/SmolLM2-135M` | HuggingFace model name |
 | `-s, --stages` | `pretrain_1b,pretrain_3b,...,ci_breadth` | Comma-separated list of stages |
 | `-d, --device` | `cpu` | Execution device (`cpu`, `cuda`, `mps`) |
