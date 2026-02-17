@@ -9,6 +9,7 @@
 The Coreset Selection Engine is a production-grade pipeline that compresses 2 trillion tokens to ~400 billion tokens for efficient 70B parameter LLM pre-training. The engine uses curriculum-aware stratified sampling, deduplication, and diversity optimization to create high-quality training datasets across multiple stages.
 
 **Key Features**:
+
 - ✅ **Deterministic & Reproducible**: Fully seeded, version-controlled pipeline
 - ✅ **Curriculum-Compliant**: Strict adherence to frozen curriculum specifications
 - ✅ **Scalable (2T-ready)**: Streaming/batched selection with checkpoint/resume and optional sharding
@@ -118,6 +119,7 @@ Use the printed `total_tokens` value as `--total-input-tokens-estimate`.
 ### Sharding (Multi-Worker) and Non-Overlap (Streaming)
 
 Streaming runs support multi-worker sharding with:
+
 - `--num-shards N`: total number of workers
 - `--shard-id K`: this worker’s index, `0..N-1`
 
@@ -148,6 +150,7 @@ Checkpoint filenames are keyed by stage and batch number. If multiple shards sha
 Important: if you change `--num-shards`, `--shard-id`, or `--stage-target-scale`, you must use a fresh `--checkpoint-dir` (or delete old checkpoints). Checkpoints are only safely resumable when these run parameters are unchanged.
 
 Recommended pattern:
+
 - `--checkpoint-dir output/checkpoints_1B/shard000`
 - `--checkpoint-dir output/checkpoints_1B/shard001`
 - …
@@ -160,6 +163,7 @@ Streaming enforces cross-stage non-overlap via a disk-backed used-chunk membersh
 - After each batch, selected ids are added to the store.
 
 Operational rules:
+
 - Keep the same `--num-shards` and shard-id mapping across all stages.
 - Do not delete `output/coresets/.used_chunks/` between stages if you want strict non-overlap.
 - Do not run multiple processes with the same `--shard-id` writing to the same output path concurrently.
@@ -194,6 +198,7 @@ Some datasets provide a `band` label that makes large portions of the data curri
 To address this, the streaming builder supports optional band inference using a configurable score source.
 
 Band inference has two knobs:
+
 - `--band-inference`: when to infer (none / infer_if_missing / infer_if_ineligible / force)
 - `--band-score-source`: which field to use as the signal for inference
 
@@ -212,6 +217,7 @@ Band inference has two knobs:
 - `band_p_Bx`: pin to a single probability column (e.g., `band_p_B5`)
 
 Notes:
+
 - `band_p_argmax` is the right choice when `band_p_B0..B5` represent a classifier distribution over bands.
 - `band_p_max` treats the maximum probability as a continuous “difficulty-like” score; this can behave differently than argmax.
 
@@ -241,6 +247,95 @@ For sharded runs via `shard.sh`, you can pass the same option:
 bash shard.sh --input-path "data/cdset" --band-inference infer_if_ineligible --band-score-source band_p_argmax
 ```
 
+### Deployment with `commands.sh`
+
+`commands.sh` is a wrapper script that automates the full setup and execution of the coreset pipeline. It handles system dependencies, repository cloning, virtual environment setup, and launches `shard.sh` with the correct parameters.
+
+#### Execution Modes
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| **Manual EC2** | `./commands.sh` | Full setup on a fresh EC2 instance (clones repo, installs deps, runs pipeline in background via `nohup`) |
+| **Dry Run** | `./commands.sh --dry-run` | Validates setup steps without launching the pipeline — useful for debugging |
+| **CI (self-hosted)** | `./commands.sh --foreground --skip-repo-setup` | For GitHub Actions self-hosted runners where `actions/checkout` already cloned the repo |
+| **CI (SSH)** | `./commands.sh --foreground` | For GitHub Actions SSH deployment — clones repo on the remote EC2 instance |
+
+#### Flags
+
+| Flag | Effect |
+|------|--------|
+| `--foreground` | Runs `shard.sh` in the foreground (no `nohup`). Required for CI so the job waits for completion. |
+| `--skip-repo-setup` | Skips `git clone` and uses the current directory as the repo root. Includes safety checks: verifies `.git` exists, remote URL matches, and critical files are present. |
+| `--dry-run` | Prints what each step would do without executing. No pipeline is launched. |
+
+#### Environment Variables
+
+All parameters are configured via environment variables (with defaults):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `S3_BUCKET` | *(required)* | S3 bucket name for input data |
+| `S3_INPUT_PATH` | `s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/source=ncert/` | S3 prefix containing input JSONL/Parquet files |
+| `NUM_SHARDS` | `8` | Number of parallel shards |
+| `STAGES` | `1B` | Space-separated stage list (e.g., `"1B 3B 8B 70B"`) |
+| `TOTAL_TOKENS` | `4523096944` | Total token count of the input dataset (must match `S3_INPUT_PATH`) |
+| `RESUME` | `false` | Set to `true` to resume from last checkpoint (skips output cleanup) |
+| `BRANCH_NAME` | `p3/feat/stage-wise-coreset-selection_v2` | Git branch to clone (only used when repo setup is not skipped) |
+
+> **Important**: `TOTAL_TOKENS` must match the actual token count of the data at `S3_INPUT_PATH`. If you change the input path to point at a different source or multiple sources, recompute this value. See [How to Pick `--total-input-tokens-estimate`](#how-to-pick---total-input-tokens-estimate-and---stage-target-scale) for details.
+
+#### Usage Examples
+
+**Run against ncert on EC2 (from a local machine or CI):**
+
+```bash
+S3_BUCKET=t2-datacurriculum-353 \
+NUM_SHARDS=8 \
+STAGES="1B" \
+TOTAL_TOKENS=4523096944 \
+S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
+RESUME=false \
+bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
+```
+
+**Run all stages with resume:**
+
+```bash
+S3_BUCKET=t2-datacurriculum-353 \
+NUM_SHARDS=16 \
+STAGES="1B 3B 8B 70B" \
+TOTAL_TOKENS=4523096944 \
+S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
+RESUME=true \
+bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
+```
+
+**Dry run to verify configuration:**
+
+```bash
+S3_BUCKET=t2-datacurriculum-353 \
+bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --dry-run
+```
+
+**Manual deployment on a fresh EC2 instance (runs in background):**
+
+```bash
+export S3_BUCKET=t2-datacurriculum-353
+export NUM_SHARDS=8
+export STAGES="1B 3B 8B 70B"
+export TOTAL_TOKENS=4523096944
+./commands.sh
+# Pipeline runs in background via nohup. Check output/logs for progress.
+```
+
+#### What `commands.sh` Does (Step by Step)
+
+1. **System Setup** — Installs Python 3.12, git, pip (Linux only; skips on macOS)
+2. **Install `uv`** — Installs the `uv` package manager if not present
+3. **Repository Setup** — Clones the repo and checks out the branch (skipped with `--skip-repo-setup`)
+4. **Virtual Environment** — Creates `.venv` (if needed) and runs `uv sync` to install dependencies
+5. **Launch Pipeline** — Runs `shard.sh` with all parameters, either in foreground or background
+
 ### S3 Inputs (Streaming)
 
 Streaming runs can read input data directly from S3 via `s3://...` paths.
@@ -250,6 +345,7 @@ Streaming runs can read input data directly from S3 via `s3://...` paths.
 The pipeline relies on the standard AWS credential resolution chain (environment variables, shared config/credentials files, or instance/role credentials).
 
 Common environment variables:
+
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_SESSION_TOKEN` (only for temporary credentials)
@@ -281,6 +377,7 @@ Note: JSONL S3 streaming requires `boto3`.
 **Parquet on S3**
 
 Parquet streaming uses `pyarrow.dataset` and can read from:
+
 - a single `s3://.../*.parquet` object path, or
 - an `s3://.../prefix/` containing many parquet objects (recommended).
 
@@ -327,6 +424,7 @@ python tools/summarize_selected_indices.py \
 ```
 
 Notes:
+
 - For very large outputs, duplicate detection defaults to `--duplicate-mode sqlite` (disk-backed) to avoid high RAM usage.
 - If your identifier column is not `chunk_id`, override `--id-fields` (first non-empty wins), e.g. `--id-fields chunk_id,uid,guid,id`.
 
@@ -343,6 +441,7 @@ python tools/validate_coreset_outputs.py \
 ### Generate Verification Artifacts (One-Stop)
 
 Generates a single Markdown report with:
+
 - Per-stage validator summary
 - Selected id counts
 - Cross-stage overlap check (non-overlap)
@@ -435,6 +534,7 @@ The Python module `src/core/config.py` implements the schema/loader/validation f
 ### Main Config (`config/pipeline.yaml`)
 
 Key sections:
+
 - **dedup**: Exact and near-duplicate detection settings
 - **diversity**: Token rarity boosting and coverage weighting
 - **selection**: Strategy (stratified, density-aware), protected slices
@@ -442,6 +542,7 @@ Key sections:
 - **stages**: Per-stage configurations (1B, 3B, 8B, 70B, SFT, ALIGNMENT)
 
 Example customization:
+
 ```yaml
 # Disable near-dedup for faster processing
 dedup:
@@ -456,6 +557,7 @@ diversity:
 ### Curriculum Config (`config/curriculum.yaml`)
 
 **FROZEN** curriculum defining:
+
 - Band definitions (B0-B5 with allowed domains)
 - Stage-wise band ratios (1B: 45% B0 / 30% B1 / ..., etc.)
 - Language constraints (92% English, 8% Hindi)
@@ -587,6 +689,7 @@ selected_chunks, stats = engine.select_for_stage(
 ### Coverage Validation
 
 After selection, check:
+
 ```python
 from src.core.types import BandDistribution
 
@@ -610,23 +713,27 @@ assert preserved.code_preservation_ratio >= 0.90, "Code not preserved!"
 
 ### Issue: "Curriculum not frozen"
 
-**Error**: 
+**Error**:
+
 ```
 Curriculum validation failed: Curriculum is not frozen
 ```
 
-**Solution**: 
+**Solution**:
+
 - Ensure curriculum status is "FROZEN" in `config/curriculum.yaml`
 - Contact curriculum team if status is "DRAFT"
 
 ### Issue: "Rolling window violation"
 
 **Error**:
+
 ```
 HARD_REJECT: Rolling window constraint violated
 ```
 
 **Solution**:
+
 - Reduce `diversity.rare_token_boost` or `tail_token_boost`
 - Add `smooth_selection_via_rolling_window()` post-processing
 - Increase `rolling_window.window_tokens` to allow more variance
@@ -634,11 +741,13 @@ HARD_REJECT: Rolling window constraint violated
 ### Issue: "Protected slices under-preserved"
 
 **Error**:
+
 ```
 B5 preservation ratio: 0.85 < 0.95 (minimum required)
 ```
 
 **Solution**:
+
 1. Increase `selection.protected_preservation_override["B5"]` to be reachable
 2. Run selection without other constraints (debug mode)
 3. Check if enough B5 chunks exist in source data
@@ -646,6 +755,7 @@ B5 preservation ratio: 0.85 < 0.95 (minimum required)
 ### Issue: Memory exhaustion on large datasets
 
 **Solution**:
+
 ```yaml
 # Reduce parallel loaders
 io:
@@ -716,6 +826,7 @@ If you see `--input-path is required unless --legacy is set`, you are running th
 ### Reproducibility Guarantee
 
 Every coreset output includes:
+
 ```json
 {
   "deterministic": true,
@@ -728,6 +839,7 @@ Every coreset output includes:
 ```
 
 To reproduce exactly:
+
 ```bash
 python coreset_builder.py \
   --config config/pipeline.yaml \
@@ -754,12 +866,14 @@ Same outputs will be produced (bit-for-bit identical indices, same seed).
 ## Support & Issues
 
 **Bug Reports**: Create issue with:
+
 - Config file (sanitized)
 - Curriculum file
 - Error logs
 - Hardware specs (CPU/GPU, RAM)
 
-**Feature Requests**: 
+**Feature Requests**:
+
 - Propose as issue with use case
 - Include performance requirements
 - Discuss in team meeting before implementation
