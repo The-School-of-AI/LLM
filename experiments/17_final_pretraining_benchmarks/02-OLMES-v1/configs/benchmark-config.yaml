@@ -88,13 +88,13 @@ stages:
           - "olmo3:base_easy:qa_bpb"
           - "olmo3:base_easy:math_bpb"
           - "olmo3:base_easy:code_bpb"
+      - name: "core_qa_knowledge"
+        tasks:
+          - "core_9mcqa::olmes"
       - name: "indic_standard"
         tasks:
           - "indic_glue"
           - "indic_qa"
-      - name: "core_qa_knowledge"
-        tasks:
-          - "core_9mcqa::olmes"
       - name: "context_window"
         tasks:
           - "niah_8k"
@@ -249,9 +249,9 @@ stages:
       - name: "breadth_sample"
         limit: 2
         tasks:
-          - "olmo3:base_easy:qa_rc"    # English / RC
-          - "indic_glue"               # Multilingual
-          - "bbh:cot::olmes"               # Reasoning
-          - "olmo3:base_easy:code_bpb" # Coding
+          - "olmo3:base_easy:qa_rc"    # English / RC (OLMES)
+          - "bbh:cot::olmes"           # Reasoning (OLMES)
+          - "olmo3:base_easy:code_bpb" # Coding (OLMES)
+          - "indic_glue"               # Multilingual (Custom)
           - "niah_4k"                  # Context Length (Custom)
           #- "olmo3:adapt"          # Agentic

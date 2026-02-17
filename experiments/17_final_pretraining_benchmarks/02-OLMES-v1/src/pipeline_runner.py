@@ -58,6 +58,10 @@ def resolve_task_type(task_name):
     if task_name in harness_tasks or "mmlu" in task_name:
         return "harness"
     
+    # Detect JSON-formatted tasks (usually Harness overrides)
+    if (isinstance(task_name, str) and task_name.strip().startswith("{")) or isinstance(task_name, dict):
+        return "harness"
+
     # Fallback to OLMES as it's the primary engine for this config
     return "olmes"
 

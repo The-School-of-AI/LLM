@@ -18,8 +18,8 @@
 CONFIG="configs/benchmark-config.yaml"
 MODEL="HuggingFaceTB/SmolLM2-135M"
 STAGES_STR="pretrain_1b,pretrain_3b,pretrain_8b,pretrain_70b,sft,ci_breadth"
-DEVICE="cpu"
-BATCH_SIZE="2"
+DEVICE="gpus"
+BATCH_SIZE="256"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -90,14 +90,12 @@ echo "=========================================="
 for STAGE in "${STAGES[@]}"; do
     echo ""
     echo "--- Scaling to Stage: $STAGE ---"
-
     .venv/bin/python3 src/pipeline_runner.py \
         --config "$CONFIG" \
         --stage "$STAGE" \
         --model_args "pretrained=$MODEL" \
         --device "$DEVICE" \
         --batch_size "$BATCH_SIZE" \
-        --sample
     
     if [ $? -ne 0 ]; then
         echo "❌ Stage $STAGE failed!"

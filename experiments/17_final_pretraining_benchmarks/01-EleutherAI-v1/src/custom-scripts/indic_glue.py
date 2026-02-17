@@ -39,6 +39,7 @@ def main():
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer.padding_side = "left" # Required for batched generation
         if tokenizer.pad_token is None: tokenizer.pad_token = tokenizer.eos_token
         dtype = torch.float16 if device != "cpu" else torch.float32
         model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype).to(device)
