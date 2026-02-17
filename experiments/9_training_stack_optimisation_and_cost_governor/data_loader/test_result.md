@@ -1,42 +1,40 @@
+
 # SPDL DataLoader Test Results
 
 ## Test Execution Details
 
-**Date:** 15 February 2026
-**Test File:** `test_spdl_dataloader.py`
+**Date:** 17 February 2026
+**Test File:** test_spdl_bin_idx_dataloader.py
 **SPDL Version:** 0.2.0
+**Config:** configuration_P4.yaml
 
 ## Hardware Configuration
 
-- **Platform:** macOS-26.2-arm64-arm-64bit
-- **CPU Cores:** 10
-- **Memory:** 16 GB
-- **CUDA Available:** False
-- **Python Version:** 3.11.14
+- Platform: macOS-26.2-arm64-arm-64bit
+- CPU Cores: 10
+- Memory: 16 GB
+- CUDA Available: False
+- Python Version: 3.11.14
 
 ## Test Results
 
-### Data Generation
-- **Time:** 13.86 seconds
-- **Data Size:** 1,000,000 records (2 Parquet files × 500,000 records each)
-- **Record Format:** Tokens (128 integers per record)
+Testing SPDL bin/idx dataloader in: Test_data
+Step 0: batch shape torch.Size([512, 2048]), output shape torch.Size([512])
+Step 1: batch shape torch.Size([512, 2048]), output shape torch.Size([512])
+Step 2: batch shape torch.Size([512, 2048]), output shape torch.Size([512])
+Test completed: 10 batches, 10485760 tokens processed.
+SPDL bin/idx dataloader test PASSED.
 
-### Processing Performance
-- **Processing Time:** 39.23 seconds
-- **Batches Processed:** 1 batch
-- **Throughput:** 25,490.44 records/second
-- **Device:** CPU (CUDA not available)
+## Processing Performance
 
-### Test Status
-✅ **PASSED** - All assertions successful
-- Parquet files created successfully
-- Pipeline built and executed without errors
-- Data cleanup completed
+- Processing Time: 2 seconds
+- Batches Processed: 10
+- Tokens Processed: 10,485,760
+- Throughput: 5,242,880 tokens/second
+- Device: CPU (CUDA not available)
 
 ## Performance Notes
-
 - Test ran on CPU due to CUDA unavailability
-- SPDL pipeline processed 10 batches internally for measurement
-- Throughput calculation based on total records processed over processing time
-- Memory usage was efficient with streaming data loading
-- Performance varies slightly between runs due to system load
+- SPDL dataloader processed 10 batches for measurement
+- Memory usage was efficient with streaming binary data loading
+- Performance may vary with larger datasets or GPU acceleration

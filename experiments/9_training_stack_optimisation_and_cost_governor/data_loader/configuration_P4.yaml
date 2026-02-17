@@ -1,0 +1,9 @@
+# Configuration for NVIDIA Tesla P4 GPU
+batch_size: 512
+num_threads: 8
+prefetch_buffer: 8
+sequence_length: 2048
+dtype: uint16
+notes: |
+  Optimized for Tesla P4 (8GB VRAM, lower memory, moderate throughput).
+  Use smaller batch and sequence length to avoid OOM.
