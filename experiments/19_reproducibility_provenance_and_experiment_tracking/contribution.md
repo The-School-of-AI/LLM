@@ -173,7 +173,7 @@ Only Admins should run this from the repository root to verify the global health
 uv sync --all-packages
 ```
 
-> [NOTE]
+> [!NOTE]
 > If any teams are using **Dependency Groups** (Option 1) for their experiments, admins may need to run extended synchronization to validate those groups. See the [Complexity Management Guide](./complexity_management.md) for details.
 
 ## References
