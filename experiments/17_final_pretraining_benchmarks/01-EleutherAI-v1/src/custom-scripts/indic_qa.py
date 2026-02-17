@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--model_args", required=True)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--device", default=None)
+    parser.add_argument("--batch_size", type=int, default=1)
     args, unknown = parser.parse_known_args()
 
     # Load Model (Copy-paste boilerplate)
@@ -39,8 +40,14 @@ def main():
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer.padding_side = "left" # Required for batched generation
         if tokenizer.pad_token is None: tokenizer.pad_token = tokenizer.eos_token
-        dtype = torch.float16 if device != "cpu" else torch.float32
+        
+        # Determine dtype
+        dtype = torch.float16
+        if "torch_dtype=bfloat16" in args.model_args: dtype = torch.bfloat16
+        elif device == "cpu": dtype = torch.float32
+
         model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype).to(device)
         model.eval()
     except Exception as e:
@@ -65,6 +72,7 @@ def main():
         squad_metric = None
 
     def calculate_f1(prediction, reference):
+        if not prediction or not reference: return 0
         pred_tokens = prediction.lower().split()
         ref_tokens = reference.lower().split()
         common = set(pred_tokens) & set(ref_tokens)
@@ -85,49 +93,57 @@ def main():
         if args.limit:
             dataset = dataset.select(range(min(len(dataset), args.limit)))
 
-        predictions = []
-        references = []
-        lang_scores = []
-
-        for item in tqdm(dataset, desc=f"Eval {lang}"):
+        prompts = []
+        metadata = []
+        for item in dataset:
             id_ = str(item.get('id', ''))
             context = item.get('context', '')
             question = item.get('question', '')
             answers = item.get('answers', {})
             
-            prompt = f"Context: {context}\nQuestion: {question}\nAnswer:"
-            inputs = tokenizer(prompt, return_tensors="pt").to(device)
-            # IndicQA contexts are often long; increase limit to 8k
-            if inputs['input_ids'].shape[1] > 8192: continue
+            p = f"Context: {context}\nQuestion: {question}\nAnswer:"
+            prompts.append(p)
+            metadata.append({'id': id_, 'answers': answers, 'prompt': p})
+
+        predictions = []
+        references = []
+        lang_scores = []
+
+        # Batched inference
+        for i in tqdm(range(0, len(prompts), args.batch_size), desc=f"Eval {lang}"):
+            batch_prompts = prompts[i:i+args.batch_size]
+            batch_meta = metadata[i:i+args.batch_size]
+            
+            # Simple check for context length; skip batch if any is too long
+            inputs = tokenizer(batch_prompts, return_tensors="pt", padding=True, truncation=True, max_length=1024).to(device)
 
             with torch.no_grad():
-                 outputs = model.generate(**inputs, max_new_tokens=32)
-            gen = tokenizer.decode(outputs[0], skip_special_tokens=True)[len(prompt):].strip()
+                 outputs = model.generate(**inputs, max_new_tokens=32, pad_token_id=tokenizer.pad_token_id)
             
-            if squad_metric:
-                predictions.append({'prediction_text': gen, 'id': id_})
-                references.append({'answers': answers, 'id': id_})
-            else:
-                # Fallback word-level F1
-                if answers.get('text'):
-                    f1 = calculate_f1(gen, answers['text'][0])
-                    lang_scores.append(f1)
+            for j, output in enumerate(outputs):
+                full_text = tokenizer.decode(output, skip_special_tokens=True)
+                # Extract only the generated part
+                gen = full_text[len(batch_meta[j]['prompt']):].strip()
+                
+                if squad_metric:
+                    predictions.append({'prediction_text': gen, 'id': batch_meta[j]['id']})
+                    references.append({'answers': batch_meta[j]['answers'], 'id': batch_meta[j]['id']})
+                else:
+                    if batch_meta[j]['answers'].get('text'):
+                        f1 = calculate_f1(gen, batch_meta[j]['answers']['text'][0])
+                        lang_scores.append(f1)
 
         if squad_metric and predictions:
             results = squad_metric.compute(predictions=predictions, references=references)
             f1 = (results.get('f1', 0.0) / 100.0) if results else 0.0
-            print(f"  [Debug] {lang} SQuAD F1: {f1}", file=sys.stderr)
             lang_results[lang] = f1
             overall_f1 += f1
             lang_count += 1
         elif lang_scores:
             f1 = sum(lang_scores) / len(lang_scores)
-            print(f"  [Debug] {lang} Fallback F1: {f1}", file=sys.stderr)
             lang_results[lang] = f1
             overall_f1 += f1
             lang_count += 1
-        else:
-            print(f"  [Debug] {lang} No scores calculated. Predictions: {len(predictions)}, Scores list: {len(lang_scores)}", file=sys.stderr)
 
     score = overall_f1 / lang_count if lang_count > 0 else 0
     

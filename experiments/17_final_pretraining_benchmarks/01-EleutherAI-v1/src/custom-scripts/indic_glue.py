@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--model_args", required=True)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--device", default=None)
+    parser.add_argument("--batch_size", type=int, default=1)
     args, unknown = parser.parse_known_args()
 
     # Load Model (Copy-paste boilerplate)
@@ -41,7 +42,12 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         tokenizer.padding_side = "left" # Required for batched generation
         if tokenizer.pad_token is None: tokenizer.pad_token = tokenizer.eos_token
-        dtype = torch.float16 if device != "cpu" else torch.float32
+        
+        # Determine dtype
+        dtype = torch.float16
+        if "torch_dtype=bfloat16" in args.model_args: dtype = torch.bfloat16
+        elif device == "cpu": dtype = torch.float32
+
         model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype).to(device)
         model.eval()
     except Exception as e:
@@ -75,41 +81,54 @@ def main():
         if args.limit:
             dataset = dataset.select(range(min(len(dataset), args.limit)))
 
-        correct = 0
-        total = 0
-        
-        for item in tqdm(dataset, desc=f"Eval {subset}"):
+        # Prepare prompts
+        prompts = []
+        labels = []
+        for item in dataset:
             if "wnli" in subset or "rte" in subset or "mrpc" in subset:
                 text1 = item.get('premise') or item.get('sentence1', '')
                 text2 = item.get('hypothesis') or item.get('sentence2', '')
-                prompt = f"Text 1: {text1}\nText 2: {text2}\nIs there a relationship? (Yes/No):"
+                p = f"Text 1: {text1}\nText 2: {text2}\nIs there a relationship? (Yes/No):"
             elif "sst" in subset or "actsa" in subset:
                 text = item.get('sentence', '')
-                prompt = f"Text: {text}\nIs this positive? (Yes/No):"
+                p = f"Text: {text}\nIs this positive? (Yes/No):"
             elif "copa" in subset or "csqa" in subset:
                 premise = item.get('premise') or item.get('question', '')
                 choice1 = item.get('choice1', '')
                 choice2 = item.get('choice2', '')
-                prompt = f"Context: {premise}\nChoice 1: {choice1}\nChoice 2: {choice2}\nWhich is more likely? (1/2):"
+                p = f"Context: {premise}\nChoice 1: {choice1}\nChoice 2: {choice2}\nWhich is more likely? (1/2):"
             else:
                 continue
+            
+            prompts.append(p)
+            labels.append(item.get('label'))
 
-            label = item.get('label')
-            inputs = tokenizer(prompt, return_tensors="pt").to(device)
+        correct = 0
+        total = 0
+        
+        # Batched inference
+        for i in tqdm(range(0, len(prompts), args.batch_size), desc=f"Eval {subset}"):
+            batch_prompts = prompts[i:i+args.batch_size]
+            batch_labels = labels[i:i+args.batch_size]
+            
+            inputs = tokenizer(batch_prompts, return_tensors="pt", padding=True).to(device)
             
             with torch.no_grad():
-                outputs = model.generate(**inputs, max_new_tokens=5)
+                outputs = model.generate(**inputs, max_new_tokens=5, pad_token_id=tokenizer.pad_token_id)
             
-            gen = tokenizer.decode(outputs[0], skip_special_tokens=True)[len(prompt):].lower()
-            
-            if "copa" in subset:
-                pred = 0 if "1" in gen else 1
-            else:
-                pred = 1 if "yes" in gen else 0
+            for j, output in enumerate(outputs):
+                full_text = tokenizer.decode(output, skip_special_tokens=True)
+                # Extract only the generated part after the prompt
+                gen = full_text[len(batch_prompts[j]):].lower().strip()
                 
-            if pred == label:
-                correct += 1
-            total += 1
+                if "copa" in subset:
+                    pred = 0 if "1" in gen else 1
+                else:
+                    pred = 1 if "yes" in gen else 0
+                    
+                if pred == batch_labels[j]:
+                    correct += 1
+                total += 1
 
         if total > 0:
             subset_score = correct / total

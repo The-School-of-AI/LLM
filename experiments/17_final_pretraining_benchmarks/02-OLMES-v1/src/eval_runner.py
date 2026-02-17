@@ -577,36 +577,52 @@ def run_custom_benchmark(
         if batch_size:
             cmd += ["--batch_size", str(batch_size)]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        
-        # Save raw logs
-        with open(os.path.join(custom_raw_dir, "stdout.log"), "w") as f:
-            f.write(result.stdout)
-        if result.stderr:
-            with open(os.path.join(custom_raw_dir, "stderr.log"), "w") as f:
-                f.write(result.stderr)
-            logger.info(f"  [Custom] Stderr output preserved in {custom_raw_dir}/stderr.log")
+        env = os.environ.copy()
+        python_dir = os.path.dirname(py_exec)
+        env["PATH"] = f"{python_dir}{os.pathsep}{env.get('PATH', '')}"
 
-        # Check return code after saving logs
-        if result.returncode != 0:
-             logger.error(f"  [Custom] Script failed with exit code {result.returncode}")
+        stdout_path = os.path.join(custom_raw_dir, "stdout.log")
+        stderr_path = os.path.join(custom_raw_dir, "stderr.log")
+
+        with open(stdout_path, "w") as f_out, open(stderr_path, "w") as f_err:
+            process = subprocess.Popen(
+                cmd, 
+                stdout=f_out, 
+                stderr=f_err, 
+                text=True, 
+                env=env,
+                cwd=root_dir
+            )
+            process.wait()
+
+        # Check return code
+        if process.returncode != 0:
+             logger.error(f"  [Custom] Script failed with exit code {process.returncode}")
              return {
                  "name": name, 
                  "type": "custom", 
                  "status": "failed", 
-                 "error": f"Script failed (exit {result.returncode}). Check logs in {custom_raw_dir}"
+                 "error": f"Script failed (exit {process.returncode}). Check logs in {custom_raw_dir}"
              }
 
-        # Attempt to parse JSON from stdout (might be the last line if script logs to stdout)
-        try:
-            return json.loads(result.stdout)
-        except json.JSONDecodeError:
-            # Fallback: try last non-empty line
-            lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
-            if lines:
-                return json.loads(lines[-1])
-            raise Exception("No JSON output found in stdout")
-            
+        # Read stdout to parse JSON result
+        with open(stdout_path, "r") as f:
+            stdout_content = f.read()
+
+        # Attempt to parse JSON from stdout
+        res_data = {}
+        for line in stdout_content.splitlines():
+            if line.strip().startswith("{") and line.strip().endswith("}"):
+                try:
+                    res_data = json.loads(line)
+                except:
+                    continue
+        
+        if not res_data:
+             return {"name": name, "type": "custom", "status": "failed", "error": "No JSON output found in custom script stdout"}
+
+        return res_data
+
     except Exception as e:
         logger.error(f"  [Error] {str(e)}")
         return {"name": name, "type": "custom", "status": "failed", "error": str(e)}

@@ -241,7 +241,7 @@ def main():
             elif b.get("custom_script"):
                 res = eval_runner.run_custom_benchmark(
                     b, args.model_args, eval_logger, run_dir, 
-                    limit=current_limit, device=args.device
+                    limit=current_limit, device=args.device, batch_size=args.batch_size
                 )
             else:
                 # Fallback
