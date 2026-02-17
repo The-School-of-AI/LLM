@@ -10,7 +10,7 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_assamese.assamese_vocabulary import SYNONYMS, ANTONYMS
+from group1_assamese.assamese_vocabulary import ANTONYMS, SYNONYMS
 from prompt_utils import format_qa_pair_hindi
 
 TEMPLATES_SYNONYM = [

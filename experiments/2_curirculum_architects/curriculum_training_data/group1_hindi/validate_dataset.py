@@ -5,17 +5,16 @@ Checks both uniqueness and correctness of each statement type
 """
 
 import os
-import sys
 import re
+import sys
+
 import regex
-from collections import Counter
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_hindi.hindi_vocabulary import (
-    RHYMING_PAIRS,
+from group1_hindi.hindi_vocabulary import (  # noqa: E402
     CLASSIFICATION_CATEGORIES,
-    NUMBERS,
-)  # noqa: E402
+    RHYMING_PAIRS,
+)
 
 
 def get_hindi_grapheme_clusters(word: str) -> list[str]:
@@ -183,6 +182,7 @@ def validate_s5_rhyming(pairs: list[tuple[str, str]]) -> dict:
     """Validate S5: Rhyming questions"""
     errors = []
     rhyme_quality = []
+    pair_set = set(RHYMING_PAIRS)
 
     for query, answer in pairs:
         # Extract words from query
@@ -197,12 +197,11 @@ def validate_s5_rhyming(pairs: list[tuple[str, str]]) -> dict:
         if not check_rhyming(target_word, answer):
             errors.append(f"Target: {target_word}, Answer: {answer} - doesn't rhyme")
 
-        # Check if answer is from RHYMING_PAIRS
-        is_valid_pair = False
-        if target_word in RHYMING_PAIRS and RHYMING_PAIRS[target_word] == answer:
-            is_valid_pair = True
-        elif answer in RHYMING_PAIRS and RHYMING_PAIRS[answer] == target_word:
-            is_valid_pair = True
+        # Check if answer exists in known rhyming data.
+        is_valid_pair = (target_word, answer) in pair_set or (
+            answer,
+            target_word,
+        ) in pair_set
 
         rhyme_quality.append(is_valid_pair)
 
@@ -252,7 +251,6 @@ def validate_s7_position(pairs: list[tuple[str, str]]) -> dict:
     """Validate S7: Position of Letter questions"""
     errors = []
     for query, answer in pairs:
-        word_match = re.search(r'"(.+?)"', query)
         char_matches = re.findall(r'"(.+?)"', query)
 
         if len(char_matches) < 2:
@@ -395,7 +393,7 @@ def main():
 
         if result["errors"] > 0:
             all_valid = False
-            print(f"   Sample errors:")
+            print("   Sample errors:")
             for error in result["sample_errors"]:
                 print(f"     • {error}")
 

@@ -8,8 +8,6 @@ import os
 import random
 import sys
 
-import regex  # noqa: E402
-
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
@@ -210,7 +208,6 @@ def generate_spelling_answer(word: str) -> str:
 def generate_listing_answer(word: str, template: str) -> str:
     """Generate listing answer based on specific template rules."""
     clusters = get_kannada_aksharas(word)
-    characters = get_kannada_characters(word)  # For character-level details if needed
 
     if (
         "ಕ್ರಮಾನುಗತವಾಗಿ ನೀಡಿ" in template

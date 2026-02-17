@@ -7,7 +7,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from group1_telugu.telugu_grammar import get_telugu_aksharas, _ends_with_virama
+from group1_telugu.telugu_grammar import _ends_with_virama, get_telugu_aksharas
 
 # ── Virama detection ──
 

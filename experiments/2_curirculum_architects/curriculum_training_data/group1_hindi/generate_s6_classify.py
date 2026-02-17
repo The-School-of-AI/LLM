@@ -78,7 +78,7 @@ if unique_count < target_count:
     print(
         f"Warning: Only {unique_count} unique combinations possible (target: {target_count})"
     )
-    print(f"  Consider adding more words or templates to reach target")
+    print("  Consider adding more words or templates to reach target")
 else:
     # If we have more than target, take only what we need
     samples = samples[:target_count]

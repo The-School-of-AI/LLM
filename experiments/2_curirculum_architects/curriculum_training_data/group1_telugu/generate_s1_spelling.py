@@ -9,17 +9,17 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.telugu_grammar import (
+from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
+from group1_telugu.telugu_grammar import (  # noqa: E402
     get_telugu_aksharas,
     get_telugu_aksharas_with_roots,
-)  # noqa: E402
+)
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 
 # Expand word lists to reach target count
 EASY_WORDS = EASY_WORDS_UNIQUE * 50

@@ -8,13 +8,11 @@ Focus: Identify letter at index X, and Index of letter X.
 import os
 import random
 import sys
+
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_assamese.assamese_vocabulary import (
-    ALL_WORDS_UNIQUE,
-    ORDINALS,
-)
+from group1_assamese.assamese_vocabulary import ALL_WORDS_UNIQUE, ORDINALS
 from prompt_utils import format_qa_pair_hindi
 
 # Expand word list to ensure enough samples
@@ -81,7 +79,6 @@ def main():
 
             # Using ordinal string for answer
             ans_indices = []
-            valid = True
             for i in indices:
                 if (i - 1) < len(ORDINALS):
                     ans_indices.append(ORDINALS[i - 1])

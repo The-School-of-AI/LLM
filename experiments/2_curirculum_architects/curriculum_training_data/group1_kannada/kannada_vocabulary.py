@@ -5,7 +5,6 @@ Organized by difficulty (character count) and category.
 All words in Kannada script; categories aligned with Hindi implementation.
 """
 
-import regex
 from collections import defaultdict
 
 from group1_kannada.kannada_grammar import get_kannada_aksharas
@@ -1628,12 +1627,12 @@ PRASA_RHYME_VOCAB = sorted(
 )
 
 # Import expanded vocabulary for ~200k Q&A support
-from group1_kannada.kannada_expanded_vocabulary import (
+from group1_kannada.kannada_expanded_vocabulary import (  # noqa: E402
     EXPANDED_ANIMALS,
     EXPANDED_BIRDS,
-    EXPANDED_OBJECTS,
     EXPANDED_FOOD,
     EXPANDED_NATURE,
+    EXPANDED_OBJECTS,
     EXPANDED_PEOPLE,
     EXPANDED_VOCABULARY_200K,
 )

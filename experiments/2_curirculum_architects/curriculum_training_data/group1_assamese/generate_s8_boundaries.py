@@ -8,6 +8,7 @@ Focus: First letter, Last letter, Prefix identification.
 import os
 import random
 import sys
+
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))

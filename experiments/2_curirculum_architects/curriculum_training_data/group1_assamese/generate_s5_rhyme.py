@@ -12,8 +12,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_assamese.assamese_vocabulary import (
     ALL_WORDS_UNIQUE,
-    RHYMING_PAIRS,
     RHYMING_GROUPS,
+    RHYMING_PAIRS,
 )
 from prompt_utils import format_qa_pair_hindi
 

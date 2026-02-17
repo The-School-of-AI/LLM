@@ -10,19 +10,19 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import (
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
     get_kannada_grapheme_clusters,
-)  # noqa: E402
+)
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import (
+from prompt_utils import (  # noqa: E402
     format_qa_pair_kannada,
     int_to_kannada,
     int_to_kannada_word,
-)  # noqa: E402
+)
 
 HALANT = "\u0ccd"  # Virama for ottakshara check
 # Mahaprana (aspirated) consonants: ಖ, ಛ, ಠ, ಥ, ಫ, ಘ, ಝ, ಢ, ಧ, ಭ
@@ -186,9 +186,7 @@ for word in unique_words:
         elif ttype == "at_end":
             for c in clusters:
                 q = template.format(word=word, char=c)
-                a = (
-                    "ಹೌದು" if clusters[-1] == c else "ಇಲ್ಲ"
-                )  # ಕೊನೆಯಲ್ಲಿದೆಯೇ? → presence → ಇಲ್ಲ
+                a = "ಹೌದು" if clusters[-1] == c else "ಇಲ್ಲ"  # ಕೊನೆಯಲ್ಲಿದೆಯೇ? → presence → ಇಲ್ಲ
                 key = (word, "at_end", c, template)
                 if key not in seen:
                     seen.add(key)

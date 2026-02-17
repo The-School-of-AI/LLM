@@ -5,14 +5,14 @@ Target: 25,800 pairs (12.9% of 200,000)
 """
 
 import os
-import re
 import random
+import re
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import (
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
     get_kannada_grapheme_clusters,
-)  # noqa: E402
+)
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
@@ -390,9 +390,7 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         cons = _get_arka_vattu_consonants(word)
         if cons:
             answer = (
-                cons[0]
-                if len(cons) == 1
-                else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
+                cons[0] if len(cons) == 1 else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
             )
         else:
             no_progress += 1

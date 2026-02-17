@@ -4,15 +4,13 @@
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from group1_telugu.prompt_utils_telugu import (
+    combine_qa_pairs_to_reach_min_tokens_telugu,
     count_tokens_telugu,
     ensure_answer_period,
     ensure_query_punctuation,
     format_qa_pair_telugu,
-    combine_qa_pairs_to_reach_min_tokens_telugu,
 )
 
 # ── Token counting ──

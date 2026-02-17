@@ -10,10 +10,7 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_assamese.assamese_vocabulary import (
-    ALL_WORDS_UNIQUE,
-    ASSAMESE_SPECIFIC_PHONETIC,
-)
+from group1_assamese.assamese_vocabulary import ALL_WORDS_UNIQUE
 from prompt_utils import format_qa_pair_hindi
 
 TEMPLATES_CONTAINS = [
@@ -31,10 +28,6 @@ TEMPLATES_STARTS_WITH = [
 def main():
     samples = []
     target_count = 15000
-
-    # Words specifically chosen for phonetic nuances
-    phonetic_words = ASSAMESE_SPECIFIC_PHONETIC
-    other_words = [w for w in ALL_WORDS_UNIQUE if w not in phonetic_words]
 
     # Target characters for phonetic questions
     targets = ["শ", "ষ", "স", "ৱ", "ব"]

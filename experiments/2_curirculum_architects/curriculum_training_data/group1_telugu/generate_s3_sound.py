@@ -9,16 +9,16 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.generate_s1_spelling import (
+from group1_telugu.generate_s1_spelling import (  # noqa: E402
     get_telugu_grapheme_clusters,
-)  # noqa: E402
+)
+from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     CLASSIFICATION_CATEGORIES,
     RHYMING_PAIRS,
     VARGAS,
 )
-from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 
 ALL_WORDS = ALL_WORDS_UNIQUE * 30
 unique_words = list(set(ALL_WORDS))

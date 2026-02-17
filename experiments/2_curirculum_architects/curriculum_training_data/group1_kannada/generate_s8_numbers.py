@@ -10,12 +10,12 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import (
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
     get_kannada_grapheme_clusters,
     get_varnavichcheda_str,
-)  # noqa: E402
-from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
+)
 from group1_kannada.kannada_grammar import get_genitive_suffix  # noqa: E402
+from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
 from group1_kannada.kannada_vocabulary import NUMBERS  # noqa: E402
 from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 

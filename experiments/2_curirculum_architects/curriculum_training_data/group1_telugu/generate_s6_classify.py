@@ -21,8 +21,8 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.telugu_vocabulary import CLASSIFICATION_CATEGORIES  # noqa: E402
 from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
+from group1_telugu.telugu_vocabulary import CLASSIFICATION_CATEGORIES  # noqa: E402
 
 # All category names
 ALL_CATEGORY_NAMES = list(CLASSIFICATION_CATEGORIES.keys())

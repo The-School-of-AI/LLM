@@ -50,7 +50,7 @@ target_count = 20000
 unique_combinations = set()
 
 # Generate samples using rhyming pairs
-for word, rhyme_word in RHYMING_PAIRS.items():
+for word, rhyme_word in RHYMING_PAIRS:
     # Find non-rhyming words (OPTIMIZED - use pre-computed list)
     non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
 
@@ -67,7 +67,7 @@ for word, rhyme_word in RHYMING_PAIRS.items():
             samples.append((query, answer))
 
 # Also generate reverse (rhyme_word -> word)
-for rhyme_word, word in RHYMING_PAIRS.items():
+for rhyme_word, word in RHYMING_PAIRS:
     non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
 
     if not non_rhyming_words:

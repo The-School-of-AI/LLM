@@ -11,10 +11,10 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_assamese.assamese_vocabulary import (
-    VERBS,
     EASY_OBJECTS,
     EASY_PEOPLE,
     SUFFIXES,
+    VERBS,
 )
 from prompt_utils import format_qa_pair_hindi
 

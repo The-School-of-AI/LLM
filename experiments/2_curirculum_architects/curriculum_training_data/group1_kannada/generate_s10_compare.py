@@ -9,9 +9,9 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import (
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
     get_kannada_grapheme_clusters,
-)  # noqa: E402
+)
 from group1_kannada.kannada_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
 from prompt_utils import format_qa_pair_kannada  # noqa: E402
 

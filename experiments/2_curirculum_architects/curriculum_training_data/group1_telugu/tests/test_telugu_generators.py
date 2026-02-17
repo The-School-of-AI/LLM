@@ -203,7 +203,7 @@ class TestS11Gunintalu:
             pytest.skip("S11 not found")
         lines = _read_lines(filepath)
         # Look for gunintam chart pattern (comma-separated aksharas)
-        chart_lines = [l for l in lines if "గుణింతాలు" in l]
+        chart_lines = [line for line in lines if "గుణింతాలు" in line]
         assert len(chart_lines) > 0, "No gunintam chart entries found in S11"
 
     def test_ottulu_present(self):
@@ -212,7 +212,9 @@ class TestS11Gunintalu:
         if not os.path.exists(filepath):
             pytest.skip("S11 not found")
         lines = _read_lines(filepath)
-        ottulu_lines = [l for l in lines if "ఒత్తు" in l or "సంయుక్తాక్షరం" in l]
+        ottulu_lines = [
+            line for line in lines if "ఒత్తు" in line or "సంయుక్తాక్షరం" in line
+        ]
         assert len(ottulu_lines) > 0, "No ottulu entries found in S11"
 
     def test_classification_present(self):
@@ -221,7 +223,7 @@ class TestS11Gunintalu:
         if not os.path.exists(filepath):
             pytest.skip("S11 not found")
         lines = _read_lines(filepath)
-        classify_lines = [l for l in lines if "స్వరమా" in l or "వ్యంజనమా" in l]
+        classify_lines = [line for line in lines if "స్వరమా" in line or "వ్యంజనమా" in line]
         assert len(classify_lines) > 0, "No classification entries found in S11"
 
     def test_ka_gunintam_correctness(self):
@@ -230,7 +232,9 @@ class TestS11Gunintalu:
         if not os.path.exists(filepath):
             pytest.skip("S11 not found")
         lines = _read_lines(filepath)
-        ka_charts = [l for l in lines if "గుణింతాలు" in l and l.startswith('"క"')]
+        ka_charts = [
+            line for line in lines if "గుణింతాలు" in line and line.startswith('"క"')
+        ]
         if ka_charts:
             # Answer should contain: క, కా, కి, కీ, కు, కూ, ...
             answer = ka_charts[0].split("?", 1)[1] if "?" in ka_charts[0] else ""

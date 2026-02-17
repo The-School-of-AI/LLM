@@ -106,7 +106,7 @@ def main():
         )
 
     # DEDUPLICATE Q&A pairs before shuffling
-    print(f"\nDeduplicating Q&A pairs...")
+    print("\nDeduplicating Q&A pairs...")
     initial_count = len(all_qa_pairs)
     # Convert to set of tuples for deduplication, then back to list
     unique_qa_pairs = list(set(all_qa_pairs))

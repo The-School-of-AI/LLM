@@ -5,16 +5,13 @@ Extends assamese_vocabulary.py with ~1200 additional words for S4 (Character Cou
 S1 (Spelling), and S9 (Morphology) training.
 """
 
-import sys
-import os
-
 # Add parent directory to path to allow importing from group1_assamese package if needed
 # But since we are in the package, we can try direct import or relative
 try:
-    from group1_assamese.assamese_vocabulary import *
+    from group1_assamese.assamese_vocabulary import *  # noqa: F403
 except ImportError:
     # If running as script in the same directory
-    from assamese_vocabulary import *
+    from assamese_vocabulary import *  # noqa: F403
 
 # ==========================================
 # 1. ADDITIONAL YUKTAKSHARS (Complex Conjuncts)
@@ -1261,11 +1258,11 @@ EXTRA_WORDS_UNIQUE = get_unique_words_extended(EXTRA_WORDS)
 # Note: We cannot modify the original 'assamese_vocabulary.py' variables in-place globally
 # effectively, but we can provide new variable names that generators can import.
 
-ALL_WORDS_EXPANDED = ALL_WORDS_UNIQUE + EXTRA_WORDS_UNIQUE
+ALL_WORDS_EXPANDED = ALL_WORDS_UNIQUE + EXTRA_WORDS_UNIQUE  # noqa: F405
 ALL_WORDS_EXPANDED_UNIQUE = get_unique_words_extended(ALL_WORDS_EXPANDED)
 
 if __name__ == "__main__":
-    print(f"Original Unique Words: {len(ALL_WORDS_UNIQUE)}")
+    print(f"Original Unique Words: {len(ALL_WORDS_UNIQUE)}")  # noqa: F405
     print(f"Added Extra Words: {len(EXTRA_WORDS_UNIQUE)}")
     print(f"Total Expanded Unique Words: {len(ALL_WORDS_EXPANDED_UNIQUE)}")
 

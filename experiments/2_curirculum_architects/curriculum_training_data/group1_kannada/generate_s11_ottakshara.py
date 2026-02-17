@@ -8,15 +8,16 @@ Answers for "ಒತ್ತಕ್ಷರವನ್ನು ಹೆಸರಿಸಿ" list
 import os
 import random
 import sys
+
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
-from group1_kannada.generate_s1_spelling import (
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
     get_kannada_grapheme_clusters,
-)  # noqa: E402
+)
 from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
 from group1_kannada.kannada_vocabulary import ALL_WORDS_UNIQUE, VARGAS  # noqa: E402
+from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 
 # Halant and vowel signs that make an akshara a conjunct (ottakshara)
 HALANT = "\u0ccd"
@@ -166,9 +167,7 @@ def generate_varga_questions() -> list[tuple[str, str]]:
         for idx, letter in enumerate(letters):
             ordinal = ORDINALS[idx + 1]
             qs.append((f'"{varga_name}" ವರ್ಗದ {ordinal} ಅಕ್ಷರ ಯಾವುದು?', letter))
-            qs.append(
-                (f'"{letter}" ಅಕ್ಷರವು ಯಾವ ವರ್ಗಕ್ಕೆ ಸೇರಿದೆ?', f'"{varga_name}" ವರ್ಗ')
-            )
+            qs.append((f'"{letter}" ಅಕ್ಷರವು ಯಾವ ವರ್ಗಕ್ಕೆ ಸೇರಿದೆ?', f'"{varga_name}" ವರ್ಗ'))
             if idx == 4:
                 qs.append((f'"{varga_name}" ವರ್ಗದ ಅನುನಾಸಿಕ ಅಕ್ಷರ ಯಾವುದು?', letter))
     return qs

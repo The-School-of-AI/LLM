@@ -7,9 +7,11 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from group1_telugu.telugu_grammar import get_telugu_aksharas
 from group1_telugu.telugu_vocabulary import (
     ALL_WORDS_UNIQUE,
     CLASSIFICATION_CATEGORIES,
+    DAYS_OF_WEEK,
     EASY_ANIMALS,
     EASY_BODY_PARTS,
     EASY_COLORS,
@@ -33,9 +35,7 @@ from group1_telugu.telugu_vocabulary import (
     NUMBERS,
     RHYMING_PAIRS,
     VARGAS,
-    DAYS_OF_WEEK,
 )
-from group1_telugu.telugu_grammar import get_telugu_aksharas
 
 # ── Word count thresholds ──
 
