@@ -26,7 +26,7 @@ CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
 BAND_SCORE_SOURCE="auto"
 TOTAL_TOKENS=""
-RESUME=0
+RESUME=false
 
 # --------------- PARSE ARGS ---------------
 usage() {
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
     --band-inference)   BAND_INFERENCE="$2";   shift 2 ;;
     --band-score-source) BAND_SCORE_SOURCE="$2"; shift 2 ;;
     --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
-    --resume)           RESUME=1;              shift 1 ;;
+    --resume)           RESUME=true;           shift 1 ;;
     -h|--help)          usage ;;
     *)                  echo "Unknown option: $1"; usage ;;
   esac
@@ -152,7 +152,7 @@ fi
 echo "  Python       : ${PYTHON_CMD[*]}"
 
 # Clean old outputs
-if [[ $RESUME -eq 0 ]]; then
+if [[ "$RESUME" != "true" ]]; then
   echo "[*] Cleaning previous outputs..."
   rm -rf "$CHECKPOINT_BASE" output/coresets output/manifests 2>/dev/null || true
 else
