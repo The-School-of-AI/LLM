@@ -72,12 +72,12 @@ fi
 df -h /data/clickhouse
 echo "✓ EBS volume mounted"
 
-# ---- 2. Pull the clickhouse/ directory from git ----
-echo "[2/5] Pulling clickhouse config from git..."
+# ---- 2. Pull components from git ----
+echo "[2/5] Pulling components from git..."
 
 REPO_URL="https://github.com/<org>/<repo>.git"
 REPO_TMP="/tmp/p12-repo"
-REPO_SRC="$REPO_TMP/experiments/12_training_operations/components/clickhouse"
+COMPONENTS_SRC="$REPO_TMP/experiments/12_training_operations/components"
 
 if [ -d "$REPO_TMP/.git" ]; then
   if ! git -C "$REPO_TMP" pull --ff-only 2>/dev/null; then
@@ -93,46 +93,18 @@ else
   echo "✓ Repo cloned"
 fi
 
-# Generated artifacts that must survive code updates
-GENERATED_FILES=(
-  "tls/ca"
-  "tls/server.crt"
-  "tls/server.key"
-  "users.d/p12-users.xml"
-  "training-instance.env"
-  "dashboard.env"
-)
+# Copy repo code, preserving any generated artifacts already on disk
+# rsync --ignore-existing leaves TLS certs, users.xml, .env files untouched
+rsync -a --ignore-existing "$COMPONENTS_SRC/clickhouse/" ~/clickhouse/
+rsync -a --ignore-existing "$COMPONENTS_SRC/sidecar_agent/" ~/sidecar_agent/
 
-if [ -d ~/clickhouse ]; then
-  # Preserve generated artifacts, then replace repo code
-  BACKUP="/tmp/p12-generated-backup"
-  rm -rf "$BACKUP" && mkdir -p "$BACKUP"
+# Overwrite repo-tracked files (scripts, configs, schemas) with latest
+rsync -a --exclude='tls/' --exclude='users.d/p12-users.xml' \
+  --exclude='training-instance.env' --exclude='dashboard.env' \
+  "$COMPONENTS_SRC/clickhouse/" ~/clickhouse/
+rsync -a "$COMPONENTS_SRC/sidecar_agent/" ~/sidecar_agent/
 
-  for f in "${GENERATED_FILES[@]}"; do
-    if [ -e ~/clickhouse/"$f" ]; then
-      mkdir -p "$BACKUP/$(dirname "$f")"
-      cp -r ~/clickhouse/"$f" "$BACKUP/$f"
-    fi
-  done
-
-  rm -rf ~/clickhouse
-  cp -r "$REPO_SRC" ~/clickhouse
-
-  # Restore generated artifacts over fresh code
-  for f in "${GENERATED_FILES[@]}"; do
-    if [ -e "$BACKUP/$f" ]; then
-      TARGET=~/clickhouse/"$f"
-      rm -rf "$TARGET"
-      mkdir -p "$(dirname "$TARGET")"
-      cp -r "$BACKUP/$f" "$TARGET"
-    fi
-  done
-  rm -rf "$BACKUP"
-  echo "✓ clickhouse/ updated (generated artifacts preserved)"
-else
-  cp -r "$REPO_SRC" ~/clickhouse
-  echo "✓ clickhouse/ directory ready at ~/clickhouse"
-fi
+echo "✓ ~/clickhouse and ~/sidecar_agent ready"
 
 # ---- 3. Run setup-auth.sh ----
 echo "[3/5] Running auth setup..."
