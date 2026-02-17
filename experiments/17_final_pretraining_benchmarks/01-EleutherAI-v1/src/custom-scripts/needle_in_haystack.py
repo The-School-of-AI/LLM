@@ -63,6 +63,7 @@ def main():
     parser.add_argument("--context_length", type=int, default=4096)
     parser.add_argument("--device", default=None)
     parser.add_argument("--limit", type=int, default=None) # Ignored, but kept for compatibility
+    parser.add_argument("--batch_size", type=int, default=1) # Ignored, but kept for compatibility
     args = parser.parse_args()
 
     # Configuration

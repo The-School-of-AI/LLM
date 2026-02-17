@@ -10,6 +10,7 @@
 #   -m, --model     HuggingFace model name          (default: HuggingFaceTB/SmolLM2-135M)
 #   -s, --stages    Comma-separated list of stages  (default: pretrain_1b,pretrain_3b,pretrain_8b,pretrain_70b,sft,ci_breadth)
 #   -d, --device    Execution device                (default: cpu)
+#   -b, --batch-size Batch size for benchmarks       (default: 2)
 #   -t, --hf-token  HuggingFace API token            (for gated datasets; can also use env var HF_TOKEN)
 #   -h, --help      Show this help message
 
@@ -17,7 +18,8 @@
 CONFIG="configs/benchmark-config.yaml"
 MODEL="HuggingFaceTB/SmolLM2-135M"
 STAGES_STR="pretrain_1b,pretrain_3b,pretrain_8b,pretrain_70b,sft,ci_breadth"
-DEVICE="cpu"
+DEVICE="gpus"
+BATCH_SIZE="256"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -38,6 +40,10 @@ while [[ $# -gt 0 ]]; do
             DEVICE="$2"
             shift 2
             ;;
+        -b|--batch-size)
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
         -t|--hf-token)
             export HF_TOKEN="$2"
             shift 2
@@ -50,6 +56,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -m, --model     HuggingFace model name          (default: HuggingFaceTB/SmolLM2-135M)"
             echo "  -s, --stages    Comma-separated list of stages  (default: pretrain_1b,pretrain_3b,...,ci_breadth)"
             echo "  -d, --device    Execution device                (default: cpu)"
+            echo "  -b, --batch-size Batch size                      (default: 2)"
             echo "  -t, --hf-token  HuggingFace API token            (for gated datasets)"
             echo "  -h, --help      Show this help message"
             exit 0
@@ -70,6 +77,7 @@ echo "🚀 Starting OLMES Smoke Test Suite"
 echo "Config: $CONFIG"
 echo "Model:  $MODEL"
 echo "Device: $DEVICE"
+echo "Batch Size: $BATCH_SIZE"
 echo "Stages: ${STAGES[*]}"
 echo "Limit:  2 samples per task"
 if [ -n "$HF_TOKEN" ]; then
@@ -86,7 +94,8 @@ for STAGE in "${STAGES[@]}"; do
         --config "$CONFIG" \
         --stage "$STAGE" \
         --model_args "pretrained=$MODEL" \
-        --batch_size 256
+        --device "$DEVICE" \
+        --batch_size "$BATCH_SIZE" \
     
     if [ $? -ne 0 ]; then
         echo "❌ Stage $STAGE failed!"

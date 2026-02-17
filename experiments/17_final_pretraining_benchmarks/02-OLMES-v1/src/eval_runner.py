@@ -499,7 +499,7 @@ def run_harness_benchmark(
 
 
 def run_custom_benchmark(
-    benchmark_info, model_args, logger, run_dir, config_dir=None, limit=None, device=None
+    benchmark_info, model_args, logger, run_dir, config_dir=None, limit=None, device=None, batch_size=None
 ):
     """
     Executes a custom benchmark not covered by lm-evaluation-harness.
@@ -574,6 +574,8 @@ def run_custom_benchmark(
             cmd += ["--limit", str(limit)]
         if device:
             cmd += ["--device", device]
+        if batch_size:
+            cmd += ["--batch_size", str(batch_size)]
 
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         
@@ -668,7 +670,13 @@ def run_olmes_benchmark(
         task,
         "--output-dir",
         task_raw_dir,
+        "--batch-size",
+        str(batch_size),
     ]
+
+    # Pass GPU count when running on CUDA
+    if device and "cuda" in str(device):
+        cmd += ["--gpus", "1"]
 
     if limit:
         cmd += ["--limit", str(limit)]
@@ -917,6 +925,7 @@ def main():
                 config_dir=os.path.dirname(args.config),
                 limit=current_limit,
                 device=args.device,
+                batch_size=args.batch_size,
             )
         else:
             res = {
