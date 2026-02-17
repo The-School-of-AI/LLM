@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **Unified Execution**: This benchmarking suite is now orchestrated from the `02-OLMES-v1` directory. All commands should be run from that location to ensure correct path resolution and dependency management.
+
 # Pre-training & SFT Benchmarking Suite
 
 This module provides a robust, configurable framework to run specific benchmarks based on the model training stage (1B, 3B, 8B, 70B) and phase (Pre-training/SFT). It leverages the `lm-evaluation-harness` for standard tasks and supports custom scripts for advanced evaluations.
@@ -10,14 +13,15 @@ The evaluator automatically detects and uses a local `.venv` if present.
 # Recommended: create and setup venv
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r 01-EleutherAI-v1/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Run a Trial (Quick Verification)
 Run a limited execution (5 samples per task) to ensure weights and metrics load correctly:
 ```bash
-python3 01-EleutherAI-v1/src/eval_runner.py \
-    --config 01-EleutherAI-v1/configs/stage_1b.yaml \
+# Must be run from inside 02-OLMES-v1/
+python3 src/eval_runner.py \
+    --config configs/stage_1b.yaml \
     --phase pretraining \
     --model_args "pretrained=HuggingFaceTB/SmolLM2-135M" \
     --device "cpu" \
@@ -27,8 +31,9 @@ python3 01-EleutherAI-v1/src/eval_runner.py \
 ### 3. Full Execution (Production)
 Run the full benchmarking suite on your checkpoint:
 ```bash
-python3 01-EleutherAI-v1/src/eval_runner.py \
-    --config 01-EleutherAI-v1/configs/stage_1b.yaml \
+# Must be run from inside 02-OLMES-v1/
+python3 src/eval_runner.py \
+    --config configs/stage_1b.yaml \
     --phase pretraining \
     --model_args "pretrained=path/to/checkpoint" \
     --device "cuda:0" \
