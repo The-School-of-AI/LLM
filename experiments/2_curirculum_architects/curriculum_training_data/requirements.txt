@@ -1,21 +1,18 @@
 # Curriculum Training Data - Python Dependencies
-# 
-# All scripts use Python standard library only.
-# No external dependencies required.
 #
-# Python Version: 3.8 or higher
+# Python Version: 3.12
+#
+# Required for grapheme cluster handling (Unicode UAX#29 \X pattern)
+# in Hindi, Punjabi, Marathi, Kannada, Telugu, Assamese generators
+# and prompt_utils token counting.
+regex>=2023.0.0
 
-# Standard library modules used:
-# - json (JSON encoding/decoding)
-# - random (Random sampling and shuffling)
-# - typing (Type hints: Dict, List, Tuple, Set)
-# - collections (defaultdict for categorization)
-# - operator (for Group 2 mathematical operations)
+# Standard library modules also used:
+# - json, os, random, re, sys
+# - typing (Dict, List, Tuple, Set, Iterable)
+# - collections (defaultdict)
+# - operator (Group 2 mathematical operations)
+# - itertools (combinations)
 
-# If you want to ensure Python version compatibility:
-# python_requires>=3.8
-
-# Optional: For development and testing
-# pytest>=7.0.0  # For running tests (if added)
-# black>=22.0.0   # For code formatting (if desired)
-# mypy>=0.950     # For type checking (if desired)
+# Optional: For running tests (group1_telugu/tests/)
+# pytest>=7.0.0
