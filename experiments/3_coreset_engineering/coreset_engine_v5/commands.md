@@ -1,6 +1,6 @@
 # EC2 Coreset Pipeline Commands
 
-This document contains the steps and commands required to run the coresets pipeline on an EC2 instance.
+This document contains the steps and commands required to manually run the coresets pipeline on an EC2 instance.
 
 ## 1. Setup and Prerequisites
 
@@ -27,8 +27,11 @@ python3 --version # use python 3.12
 
 ```bash
 sudo apt update
-sudo apt install -y python3.12 python3.12-venv git python3-pip
-sudo apt install unzip
+sudo apt install -y python3.12 python3.12-venv git python3-pip unzip
+
+# Install uv (Astral)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.cargo/env
 ```
 
 ---
@@ -75,7 +78,7 @@ You will be prompted to enter:
 
 ### Git Configuration
 
-Required to run only when new EC2 machine.
+Required to run only when new EC2 machine. **Note**: You can clone the repository without this step; it is only required to identify yourself when making `git commit`.
 
 ```bash
 git config --global user.name "[YOUR_USERNAME]"
@@ -114,20 +117,18 @@ git pull origin p3/feat/stage-wise-coreset-selection_v2
 
 ## 4. Environment Setup
 
-### Create virtual environment and install dependencies
+### Create virtual environment and sync dependencies
 
 ```bash
-python3 --version
-python3.12 -m venv venv
-source venv/bin/activate
-pip install -U pip setuptools wheel
-pip install pyyaml numpy xxhash scipy pandas boto3 awscli pyarrow
-```
+# Move to the experiment folder
+cd experiments/3_coreset_engineering/
 
-### Install project dependencies
+# Create isolated venv
+uv venv .venv
+export UV_PROJECT_ENVIRONMENT=.venv
 
-```bash
-pip install -r experiments/3_coreset_engineering/coreset_engine_v5/requirements.txt
+# Sync all dependencies from the root uv.lock
+uv sync
 ```
 
 ---
@@ -140,7 +141,8 @@ You can use `tmux` to run the process in the background.
 
 ```bash
 tmux new -s coreset
-source venv/bin/activate
+cd experiments/3_coreset_engineering/
+export UV_PROJECT_ENVIRONMENT=.venv
 python --version
 ```
 
@@ -196,7 +198,34 @@ aws s3 cp experiments/3_coreset_engineering/coreset_engine_v5/coreset_errors.log
 
 ---
 
-## 7. Alternative Data Transfer (Local Machine)
+## 7. Automated Execution Script
+
+The setup and pipeline steps are fully automated in the `commands.sh` script.
+
+> [!IMPORTANT]
+> **Configuration**: Before running, open `commands.sh` and update the variables in the **"Configuration"** section (S3 Bucket, Branch Name, etc.).
+
+### How to run the automated script on EC2
+
+1. **Make the script executable**:
+
+   ```bash
+   chmod +x experiments/3_coreset_engineering/coreset_engine_v5/commands.sh
+   ```
+
+2. **Run the script**:
+
+   ```bash
+   ./experiments/3_coreset_engineering/coreset_engine_v5/commands.sh
+   ```
+
+The script will automatically detect if it is inside the repository, install `uv`, sync dependencies, and launch the pipeline in the background.
+
+---
+
+---
+
+## 8. Alternative Data Transfer (Local Machine)
 
 If you need to copy outputs directly to your local machine (though S3 sync is preferred):
 
