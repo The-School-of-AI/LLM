@@ -3,6 +3,7 @@
 Generate Statement 6: Classification (वर्गीकरण) questions
 Target: 20,000 pairs (10% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -74,7 +75,9 @@ unique_count = len(samples)
 
 # If we have fewer unique combinations than target, generate warning
 if unique_count < target_count:
-    print(f"Warning: Only {unique_count} unique combinations possible (target: {target_count})")
+    print(
+        f"Warning: Only {unique_count} unique combinations possible (target: {target_count})"
+    )
     print(f"  Consider adding more words or templates to reach target")
 else:
     # If we have more than target, take only what we need
@@ -87,4 +90,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S6 Classification: Generated {len(samples)} unique samples (target: {target_count})")
+print(
+    f"S6 Classification: Generated {len(samples)} unique samples (target: {target_count})"
+)

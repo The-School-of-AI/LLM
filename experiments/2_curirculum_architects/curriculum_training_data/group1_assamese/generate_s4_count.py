@@ -4,6 +4,7 @@ Generate Statement 4: Character/Akshara Count
 Target: 15,000 pairs
 Focus: Counting grapheme clusters (visual units).
 """
+
 import os
 import random
 import sys
@@ -11,7 +12,9 @@ import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 try:
-    from group1_assamese.assamese_vocabulary_expanded import ALL_WORDS_EXPANDED_UNIQUE as ALL_WORDS_UNIQUE
+    from group1_assamese.assamese_vocabulary_expanded import (
+        ALL_WORDS_EXPANDED_UNIQUE as ALL_WORDS_UNIQUE,
+    )
 except ImportError:
     from group1_assamese.assamese_vocabulary import ALL_WORDS_UNIQUE
 from prompt_utils import format_qa_pair_hindi
@@ -33,39 +36,53 @@ TEMPLATES = [
     '"{word}" শব্দটোত মুঠতে কেইটা আখৰ থাকে?',
 ]
 
-ASSAMESE_NUMERAL = {"0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪", "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯"}
+ASSAMESE_NUMERAL = {
+    "0": "০",
+    "1": "১",
+    "2": "২",
+    "3": "৩",
+    "4": "৪",
+    "5": "৫",
+    "6": "৬",
+    "7": "৭",
+    "8": "৮",
+    "9": "৯",
+}
+
 
 def to_assamese_numeral(n: int) -> str:
     """Convert integer to Bengali-Assamese numeral string."""
     return "".join(ASSAMESE_NUMERAL.get(c, c) for c in str(n))
 
+
 def get_assamese_grapheme_clusters(word: str) -> list[str]:
     """Get grapheme clusters using \\X pattern."""
     return regex.findall(r"\X", word)
 
+
 def main():
     samples = []
     target_count = 15000
-    
+
     unique_combinations = set()
     max_attempts = target_count * 10
     attempts = 0
-    
+
     while len(samples) < target_count and attempts < max_attempts:
         attempts += 1
         word = random.choice(WORDS)
         clusters = get_assamese_grapheme_clusters(word)
         count = len(clusters)
-        
+
         template = random.choice(TEMPLATES)
         query = template.format(word=word)
         # Answer format: Assamese numeral
         answer = to_assamese_numeral(count)
-        
+
         if (query, answer) not in unique_combinations:
             unique_combinations.add((query, answer))
             samples.append((query, answer))
-            
+
     random.shuffle(samples)
     samples = samples[:target_count]
 
@@ -75,6 +92,7 @@ def main():
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
     print(f"S4 Count: Generated {len(samples)} samples")
+
 
 if __name__ == "__main__":
     main()

@@ -3,6 +3,7 @@
 Generate Statement 3: Sound Matching (ध्वनि मिलान) questions
 Target: 20,000 pairs (10% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -110,4 +111,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S3 Sound Matching: Generated {len(samples)} unique samples (target: {target_count})")
+print(
+    f"S3 Sound Matching: Generated {len(samples)} unique samples (target: {target_count})"
+)

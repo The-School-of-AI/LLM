@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for Telugu akshara segmentation (telugu_grammar.py)."""
+
 import os
 import sys
 
@@ -7,7 +8,6 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from group1_telugu.telugu_grammar import get_telugu_aksharas, _ends_with_virama
-
 
 # ── Virama detection ──
 
@@ -23,7 +23,7 @@ class TestEndsWithVirama:
         assert _ends_with_virama("") is False
 
     def test_virama_only(self):
-        assert _ends_with_virama("\u0C4D") is True
+        assert _ends_with_virama("\u0c4d") is True
 
 
 # ── Core akshara segmentation ──
@@ -97,6 +97,6 @@ class TestAksharaSegmentation:
         ]
         for word, expected_count in cases:
             result = get_telugu_aksharas(word)
-            assert len(result) == expected_count, (
-                f"{word}: got {len(result)} aksharas, expected {expected_count}"
-            )
+            assert (
+                len(result) == expected_count
+            ), f"{word}: got {len(result)} aksharas, expected {expected_count}"

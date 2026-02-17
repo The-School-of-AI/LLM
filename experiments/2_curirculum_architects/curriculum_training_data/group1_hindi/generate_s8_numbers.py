@@ -3,6 +3,7 @@
 Generate Statement 8: Number Spelling (संख्या वर्तनी) questions
 Target: 10,000 pairs (5% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -76,4 +77,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S8 Number Spelling: Generated {len(samples)} unique samples (target: {target_count})")
+print(
+    f"S8 Number Spelling: Generated {len(samples)} unique samples (target: {target_count})"
+)

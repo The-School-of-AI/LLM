@@ -15,6 +15,7 @@ Includes positive AND negative examples:
 
 Only words with a known category are used — no fallback/guessing.
 """
+
 import os
 import random
 import sys
@@ -78,9 +79,7 @@ def generate_pair(word, category, qtype):
     """Generate a (question, answer) pair for the given type."""
     if qtype == "mcq_positive":
         template = random.choice(MCQ_TEMPLATES)
-        distractors = random.sample(
-            [c for c in ALL_CATEGORY_NAMES if c != category], 2
-        )
+        distractors = random.sample([c for c in ALL_CATEGORY_NAMES if c != category], 2)
         options = [category] + distractors
         random.shuffle(options)
         q = template.format(
@@ -105,9 +104,7 @@ def generate_pair(word, category, qtype):
 
     elif qtype == "yesno_negative":
         template = random.choice(YES_NO_TEMPLATES)
-        wrong_cat = random.choice(
-            [c for c in ALL_CATEGORY_NAMES if c != category]
-        )
+        wrong_cat = random.choice([c for c in ALL_CATEGORY_NAMES if c != category])
         q = template.format(word=word, category=wrong_cat)
         a = "కాదు"
 
@@ -175,8 +172,11 @@ samples = samples[:target_count]
 
 # Count type distribution for reporting
 type_counts = {
-    "mcq_positive": 0, "mcq_negative": 0,
-    "yesno_positive": 0, "yesno_negative": 0, "open": 0,
+    "mcq_positive": 0,
+    "mcq_negative": 0,
+    "yesno_positive": 0,
+    "yesno_negative": 0,
+    "open": 0,
 }
 for q, a in samples:
     if a == "అవును":
@@ -199,5 +199,7 @@ print(f"S6 Classification (Telugu): Generated {len(samples)} samples")
 print(f"  Classified words: {len(classified_words)}")
 print(f"  Categories: {len(ALL_CATEGORY_NAMES)} ({', '.join(ALL_CATEGORY_NAMES)})")
 print(f"  Type distribution: {type_counts}")
-neg_pct = (type_counts["mcq_negative"] + type_counts["yesno_negative"]) / len(samples) * 100
+neg_pct = (
+    (type_counts["mcq_negative"] + type_counts["yesno_negative"]) / len(samples) * 100
+)
 print(f"  Negative examples: {neg_pct:.1f}%")

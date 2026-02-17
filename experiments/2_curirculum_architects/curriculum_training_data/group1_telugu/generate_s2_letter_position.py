@@ -3,12 +3,15 @@
 Generate Statement 2: Letter Position (అక్షర స్థానం) questions - Telugu
 Target: 26,000 pairs (13% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
+from group1_telugu.generate_s1_spelling import (
+    get_telugu_grapheme_clusters,
+)  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
@@ -173,9 +176,13 @@ for word in unique_words:
         elif ttype == "first_vowel_or_consonant":
             first_char = clusters[0]
             q = template.format(word=word)
-            if first_char in VOWELS or (len(first_char) > 0 and first_char[0] in VOWELS):
+            if first_char in VOWELS or (
+                len(first_char) > 0 and first_char[0] in VOWELS
+            ):
                 a = "స్వరం"
-            elif first_char in CONSONANTS or (len(first_char) > 0 and first_char[0] in CONSONANTS):
+            elif first_char in CONSONANTS or (
+                len(first_char) > 0 and first_char[0] in CONSONANTS
+            ):
                 a = "వ్యంజనం"
             else:
                 continue
@@ -234,7 +241,11 @@ while len(samples) < target_count and fill_attempts < max_attempts:
         c = random.choice(clusters)
         pos_1 = next(i + 1 for i, x in enumerate(clusters) if x == c)
         q = template.format(word=word, char=c)
-        a = f"{get_position_name(pos_1)} అక్షరం" if "ఎంతవ అక్షరం?" in template else get_position_name(pos_1)
+        a = (
+            f"{get_position_name(pos_1)} అక్షరం"
+            if "ఎంతవ అక్షరం?" in template
+            else get_position_name(pos_1)
+        )
     elif ttype == "at_end":
         c = random.choice(clusters)
         q = template.format(word=word, char=c)
@@ -253,7 +264,9 @@ while len(samples) < target_count and fill_attempts < max_attempts:
         q = template.format(word=word)
         if first_char in VOWELS or (len(first_char) > 0 and first_char[0] in VOWELS):
             a = "స్వరం"
-        elif first_char in CONSONANTS or (len(first_char) > 0 and first_char[0] in CONSONANTS):
+        elif first_char in CONSONANTS or (
+            len(first_char) > 0 and first_char[0] in CONSONANTS
+        ):
             a = "వ్యంజనం"
         else:
             q, a = None, None

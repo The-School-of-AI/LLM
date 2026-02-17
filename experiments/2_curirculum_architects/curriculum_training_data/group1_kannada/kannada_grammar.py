@@ -5,10 +5,11 @@ Genitive (ಷಷ್ಠಿ) suffix: ನ, ಯ, or ದ depends on the word ending.
 Numerals take ರ (e.g. 72 ರ, 17 ರ).
 Akshara segmentation: syllabic units per Kannada linguistics (Ottakshara, Anusvara).
 """
+
 import regex
 
 # Virama (halant): consonant+್ forms half-form; next consonant attaches (conjunct)
-_KANNADA_VIRAMA = "\u0CCD"
+_KANNADA_VIRAMA = "\u0ccd"
 
 
 def _ends_with_virama(s: str) -> bool:
@@ -38,6 +39,7 @@ def get_kannada_aksharas(word: str) -> list[str]:
         i += 1
     return aksharas
 
+
 # Vowel signs that take ಯ (nouns ending in i, ī, e, ē)
 _SUFFIX_Y = ("ಿ", "ೀ", "ೆ", "ೇ")  # i, ī, e, ē
 
@@ -48,12 +50,12 @@ _SUFFIX_N = ("ು", "ೂ", "ೈ", "ೊ", "ೋ", "ೌ", "ೃ")
 _SUFFIX_D_VOWELS = ("ಅ", "ಆ", "ಾ")
 
 # Halant/virama (್): words ending in ್ take ನ (e.g. ಫೋನ್ ನ, ಬಸ್ ನ)
-_KANNADA_HALANT = "\u0CCD"
+_KANNADA_HALANT = "\u0ccd"
 
 # Kannada consonant range (U+0C95 to U+0CB9). Consonant ಯ (Ya) takes ನ (e.g. ಉಪಾಧ್ಯಾಯ ನಲ್ಲಿ).
-_KANNADA_CONSONANT_YA = "\u0CAF"
-_KANNADA_CONSONANT_FIRST = "\u0C95"
-_KANNADA_CONSONANT_LAST = "\u0CB9"
+_KANNADA_CONSONANT_YA = "\u0caf"
+_KANNADA_CONSONANT_FIRST = "\u0c95"
+_KANNADA_CONSONANT_LAST = "\u0cb9"
 
 
 def get_genitive_suffix(word: str) -> str:

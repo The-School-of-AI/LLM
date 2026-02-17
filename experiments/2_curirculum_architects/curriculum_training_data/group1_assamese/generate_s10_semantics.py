@@ -4,15 +4,13 @@ Generate Statement 10: Synonyms & Antonyms
 Target: 30,000 pairs
 Focus: Semantic relationship mapping.
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_assamese.assamese_vocabulary import (
-    SYNONYMS,
-    ANTONYMS
-)
+from group1_assamese.assamese_vocabulary import SYNONYMS, ANTONYMS
 from prompt_utils import format_qa_pair_hindi
 
 TEMPLATES_SYNONYM = [
@@ -32,25 +30,25 @@ TEMPLATES_ANTONYM = [
     '"{word}"ৰ ওলোটা অৰ্থ কি?',
     '"{word}"ৰ ওলোটা শব্দটো কি হ’ব?',
     '"{word}"ৰ বিপৰীতে কি বহিব?',
-    
     # Simple
     '"{word}"ৰ বিপৰীতটো কি?',
 ]
 
+
 def main():
     samples = []
     target_count = 30000
-    
+
     syn_keys = list(SYNONYMS.keys())
     ant_keys = list(ANTONYMS.keys())
-    
+
     while len(samples) < target_count:
         if random.random() < 0.6:
             # Synonyms
             word = random.choice(syn_keys)
             syn_list = SYNONYMS[word]
             syn = random.choice(syn_list)
-            
+
             if random.random() < 0.7:
                 # Ask for synonym
                 template = random.choice(TEMPLATES_SYNONYM[:3])
@@ -60,15 +58,15 @@ def main():
                 # Verification
                 template = TEMPLATES_SYNONYM[3]
                 query = template.format(word=word, syn=syn)
-                answer = "হয়" # Yes
-            
+                answer = "হয়"  # Yes
+
             samples.append((query, answer))
-            
+
         else:
             # Antonyms
             word = random.choice(ant_keys)
             ant = ANTONYMS[word]
-            
+
             template = random.choice(TEMPLATES_ANTONYM)
             query = template.format(word=word)
             answer = ant
@@ -83,6 +81,7 @@ def main():
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
     print(f"S10 Semantics: Generated {len(samples)} samples")
+
 
 if __name__ == "__main__":
     main()

@@ -4,6 +4,7 @@ Generate Statement 8: Word Boundaries
 Target: 15,000 pairs
 Focus: First letter, Last letter, Prefix identification.
 """
+
 import os
 import random
 import sys
@@ -27,18 +28,21 @@ TEMPLATES_LAST = [
     '"{word}"ৰ অন্তিম বৰ্ণটো কি?',
 ]
 
+
 def get_assamese_grapheme_clusters(word: str) -> list[str]:
     return regex.findall(r"\X", word)
+
 
 def main():
     samples = []
     target_count = 15000
-    
+
     while len(samples) < target_count:
         word = random.choice(WORDS)
         clusters = get_assamese_grapheme_clusters(word)
-        if not clusters: continue
-        
+        if not clusters:
+            continue
+
         if random.random() < 0.5:
             # First letter
             template = random.choice(TEMPLATES_FIRST)
@@ -49,7 +53,7 @@ def main():
             template = random.choice(TEMPLATES_LAST)
             query = template.format(word=word)
             answer = clusters[-1]
-            
+
         samples.append((query, answer))
 
     random.shuffle(samples)
@@ -61,6 +65,7 @@ def main():
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
     print(f"S8 Boundaries: Generated {len(samples)} samples")
+
 
 if __name__ == "__main__":
     main()

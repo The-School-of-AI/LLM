@@ -3,6 +3,7 @@
 Generate Statement 2: Letter at Position (अक्षर स्थिति) questions
 Target: 25,800 pairs (12.9% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -85,4 +86,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S2 Letter Position: Generated {len(samples)} unique samples (target: {target_count})")
+print(
+    f"S2 Letter Position: Generated {len(samples)} unique samples (target: {target_count})"
+)

@@ -16,7 +16,6 @@ import random
 from typing import Iterable, List
 import regex
 
-
 # Pre-compile regexes for performance
 _RE_COMMA_SEPARATED_LETTERS = re.compile(r"\b[a-z](?:,\s*[a-z])+\b", re.IGNORECASE)
 _RE_JSONISH_KEY_VALUE = re.compile(r'"\s*[^"]+\s*"\s*:\s*"', re.IGNORECASE)

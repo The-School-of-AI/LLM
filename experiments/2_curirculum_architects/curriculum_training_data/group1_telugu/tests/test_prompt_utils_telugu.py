@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for Telugu prompt utilities (prompt_utils_telugu.py)."""
+
 import os
 import sys
 
@@ -13,7 +14,6 @@ from group1_telugu.prompt_utils_telugu import (
     format_qa_pair_telugu,
     combine_qa_pairs_to_reach_min_tokens_telugu,
 )
-
 
 # ── Token counting ──
 

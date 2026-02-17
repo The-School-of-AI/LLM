@@ -4,10 +4,11 @@ Telugu grammar helpers for dataset generation.
 Akshara segmentation: syllabic units per Telugu linguistics (conjuncts, anusvara, visarga).
 No genitive suffix logic needed — Telugu uses invariant postpositions (లో, యొక్క).
 """
+
 import regex
 
 # Virama (halant): consonant + ్ forms half-form; next consonant attaches (conjunct)
-TELUGU_VIRAMA = "\u0C4D"  # ్
+TELUGU_VIRAMA = "\u0c4d"  # ్
 
 
 def _ends_with_virama(s: str) -> bool:
@@ -37,6 +38,7 @@ def get_telugu_aksharas(word: str) -> list[str]:
         i += 1
     return aksharas
 
+
 # Function to extract Telugu letters (ignoring vowel signs if desired)
 def get_telugu_aksharas_with_roots(word, ignore_vowels=False):
     """
@@ -47,7 +49,11 @@ def get_telugu_aksharas_with_roots(word, ignore_vowels=False):
     for ch in word:
         code = ord(ch)
         # Telugu consonants range
-        if 0x0C15 <= code <= 0x0C39 or 0x0C05 <= code <= 0x0C14 or 0x0C02 <= code <= 0x0C03:
+        if (
+            0x0C15 <= code <= 0x0C39
+            or 0x0C05 <= code <= 0x0C14
+            or 0x0C02 <= code <= 0x0C03
+        ):
             letters.append(ch)
         # Include vowel signs only if not ignoring
         elif not ignore_vowels and 0x0C3E <= code <= 0x0C4C:

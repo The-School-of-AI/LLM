@@ -4,18 +4,22 @@ Generate Statement 8: Number Spelling (ಸಂಖ್ಯೆ ಕಾಗುಣಿತ)
 Target: 10,000 pairs (5% of 200,000)
 ಕಾಗುಣಿತ = spelling; ಅಕ್ಷರ = letter.
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters, get_varnavichcheda_str  # noqa: E402
+from group1_kannada.generate_s1_spelling import (
+    get_kannada_grapheme_clusters,
+    get_varnavichcheda_str,
+)  # noqa: E402
 from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
 from group1_kannada.kannada_grammar import get_genitive_suffix  # noqa: E402
 from group1_kannada.kannada_vocabulary import NUMBERS  # noqa: E402
 from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 
-HALANT = "\u0CCD"  # Virama (ottakshara check)
+HALANT = "\u0ccd"  # Virama (ottakshara check)
 
 # Question templates - number to name (ಹೆಸರು). Use {num} for digit, {num_k} for Kannada digit.
 TEMPLATES_NAME = [

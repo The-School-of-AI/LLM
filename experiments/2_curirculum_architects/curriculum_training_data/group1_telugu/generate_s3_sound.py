@@ -3,12 +3,15 @@
 Generate Statement 3: Sound Matching (ధ్వని) questions - Telugu
 Target: 20,000 pairs (10% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
+from group1_telugu.generate_s1_spelling import (
+    get_telugu_grapheme_clusters,
+)  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     CLASSIFICATION_CATEGORIES,
@@ -21,7 +24,9 @@ ALL_WORDS = ALL_WORDS_UNIQUE * 30
 unique_words = list(set(ALL_WORDS))
 
 # Pre-filter: words with >= 2 aksharas (avoids trivial self-answers)
-multi_akshara_words = [w for w in unique_words if len(get_telugu_grapheme_clusters(w)) >= 2]
+multi_akshara_words = [
+    w for w in unique_words if len(get_telugu_grapheme_clusters(w)) >= 2
+]
 
 # Indices for sound questions
 words_by_first = {}
@@ -77,16 +82,69 @@ def do_rhyme(w1: str, w2: str) -> bool:
 
 # Curated Telugu verbs (క్రియాపదాలు)
 VERBS = [
-    "అడుగు", "అమ్ము", "ఆడు", "ఆపు", "ఆలోచించు", "ఇచ్చు", "ఈదు",
-    "ఉండు", "ఉడుకు", "ఊదు", "ఎగురు", "ఎక్కు", "ఏడ్చు",
-    "కడుగు", "కట్టు", "కలుపు", "కాల్చు", "కుట్టు", "కొట్టు", "కొను",
-    "కోయు", "కురియు", "గెలుచు", "చదువు", "చూడు", "చెప్పు", "చేయు",
-    "తిను", "తాగు", "తిరుగు", "తీయు", "తెచ్చు", "తెరచు", "తరుగు",
-    "తడుపు", "దిగు", "దూకు", "నడుచు", "నడుపు", "నరుకు", "నవ్వు",
-    "నేయు", "పడు", "పండు", "పంపు", "పాడు", "పెట్టు", "పెంచు",
-    "బోధించు", "మాట్లాడు", "మార్చు", "మరచు", "మూయు", "ముగించు",
-    "లేచు", "వచ్చు", "వండు", "వెళ్ళు", "విను", "విప్పు", "వ్రాయు",
-    "సాధించు", "హరించు",
+    "అడుగు",
+    "అమ్ము",
+    "ఆడు",
+    "ఆపు",
+    "ఆలోచించు",
+    "ఇచ్చు",
+    "ఈదు",
+    "ఉండు",
+    "ఉడుకు",
+    "ఊదు",
+    "ఎగురు",
+    "ఎక్కు",
+    "ఏడ్చు",
+    "కడుగు",
+    "కట్టు",
+    "కలుపు",
+    "కాల్చు",
+    "కుట్టు",
+    "కొట్టు",
+    "కొను",
+    "కోయు",
+    "కురియు",
+    "గెలుచు",
+    "చదువు",
+    "చూడు",
+    "చెప్పు",
+    "చేయు",
+    "తిను",
+    "తాగు",
+    "తిరుగు",
+    "తీయు",
+    "తెచ్చు",
+    "తెరచు",
+    "తరుగు",
+    "తడుపు",
+    "దిగు",
+    "దూకు",
+    "నడుచు",
+    "నడుపు",
+    "నరుకు",
+    "నవ్వు",
+    "నేయు",
+    "పడు",
+    "పండు",
+    "పంపు",
+    "పాడు",
+    "పెట్టు",
+    "పెంచు",
+    "బోధించు",
+    "మాట్లాడు",
+    "మార్చు",
+    "మరచు",
+    "మూయు",
+    "ముగించు",
+    "లేచు",
+    "వచ్చు",
+    "వండు",
+    "వెళ్ళు",
+    "విను",
+    "విప్పు",
+    "వ్రాయు",
+    "సాధించు",
+    "హరించు",
 ]
 
 VERBS_BY_FIRST = {}
@@ -96,11 +154,31 @@ for v in VERBS:
 
 # Fruits list for fruit_starting
 TELUGU_FRUITS = [
-    "మామిడి", "అరటి", "బత్తాయి", "ద్రాక్ష", "దానిమ్మ",
-    "పనస", "జామ", "సపోట", "కమల", "నారింజ",
-    "బొప్పాయి", "పుచ్చకాయ", "కర్బూజ", "సీతాఫలం", "రామాఫలం",
-    "చెర్రీ", "నేరేడు", "ఖర్జూరం", "కొబ్బరి", "నిమ్మ",
-    "బేడ", "జీడి", "ఆపిల్", "పీచు", "అంజీర్",
+    "మామిడి",
+    "అరటి",
+    "బత్తాయి",
+    "ద్రాక్ష",
+    "దానిమ్మ",
+    "పనస",
+    "జామ",
+    "సపోట",
+    "కమల",
+    "నారింజ",
+    "బొప్పాయి",
+    "పుచ్చకాయ",
+    "కర్బూజ",
+    "సీతాఫలం",
+    "రామాఫలం",
+    "చెర్రీ",
+    "నేరేడు",
+    "ఖర్జూరం",
+    "కొబ్బరి",
+    "నిమ్మ",
+    "బేడ",
+    "జీడి",
+    "ఆపిల్",
+    "పీచు",
+    "అంజీర్",
 ]
 
 FRUITS_STARTING = {}
@@ -141,7 +219,10 @@ TEMPLATES = [
     ('"{word}" పదానికి సమానమైన ధ్వని ఉన్న పదం ఏది?', "similar_sound"),
     ('"{letter}" ధ్వనితో అంతమయ్యే పదాన్ని చెప్పండి?', "word_ending"),
     ('"{l1}" మరియు "{l2}" ఉచ్చారణలో సమానత ఉందా?', "same_pronunciation"),
-    ('"{letter}" అక్షరం యొక్క ధ్వని ఉన్న రెండు పదాలు చెప్పండి?', "two_words_with_sound"),
+    (
+        '"{letter}" అక్షరం యొక్క ధ్వని ఉన్న రెండు పదాలు చెప్పండి?',
+        "two_words_with_sound",
+    ),
     ('"{letter}" అక్షరంతో ప్రారంభమయ్యే క్రియాపదం ఏది?', "verb_starting"),
     ('"{word}" పదంలో మొదటి శబ్దం ఏమిటి?', "first_sound"),
     ('"{word}" పదం యొక్క ధ్వనికి దగ్గరగా ఉన్న పదం చెప్పండి?', "similar_sound"),
@@ -189,7 +270,9 @@ for _ in range(100):
         q = TEMPLATES[2][0].format(word1=word1, word2=word2)
         a = "అవును"
     else:
-        non_rhyming_words = [w for w in unique_words if w != word1 and not do_rhyme(word1, w)]
+        non_rhyming_words = [
+            w for w in unique_words if w != word1 and not do_rhyme(word1, w)
+        ]
         if not non_rhyming_words:
             continue
         word2 = random.choice(non_rhyming_words)
@@ -208,7 +291,9 @@ for _ in range(100):
         q = TEMPLATES[11][0].format(word1=word1, word2=word2)
         a = "అవును"
     else:
-        non_rhyming_words = [w for w in unique_words if w != word1 and not do_rhyme(word1, w)]
+        non_rhyming_words = [
+            w for w in unique_words if w != word1 and not do_rhyme(word1, w)
+        ]
         if not non_rhyming_words:
             continue
         word2 = random.choice(non_rhyming_words)
@@ -434,7 +519,11 @@ while len(samples) < target_count and fill_attempts < max_attempts:
             q, a = None, None
     elif ttype == "word_ending" and words_by_last:
         letter = random.choice(list(words_by_last.keys()))
-        multi = [w for w in words_by_last[letter] if len(get_telugu_grapheme_clusters(w)) >= 2]
+        multi = [
+            w
+            for w in words_by_last[letter]
+            if len(get_telugu_grapheme_clusters(w)) >= 2
+        ]
         if not multi:
             q, a = None, None
         else:

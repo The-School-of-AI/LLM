@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for Telugu vocabulary (telugu_vocabulary.py)."""
+
 import os
 import sys
 
@@ -36,15 +37,14 @@ from group1_telugu.telugu_vocabulary import (
 )
 from group1_telugu.telugu_grammar import get_telugu_aksharas
 
-
 # ── Word count thresholds ──
 
 
 class TestWordCounts:
     def test_total_unique_words_at_least_950(self):
-        assert len(ALL_WORDS_UNIQUE) >= 950, (
-            f"Need >= 950 unique words, got {len(ALL_WORDS_UNIQUE)}"
-        )
+        assert (
+            len(ALL_WORDS_UNIQUE) >= 950
+        ), f"Need >= 950 unique words, got {len(ALL_WORDS_UNIQUE)}"
 
     def test_easy_words_nonempty(self):
         assert len(EASY_WORDS_UNIQUE) > 0
@@ -88,9 +88,9 @@ class TestCategoryLists:
         ],
     )
     def test_category_min_count(self, category, min_count):
-        assert len(category) >= min_count, (
-            f"Category has {len(category)} words, need >= {min_count}"
-        )
+        assert (
+            len(category) >= min_count
+        ), f"Category has {len(category)} words, need >= {min_count}"
 
 
 # ── Telugu script validation ──
@@ -98,7 +98,7 @@ class TestCategoryLists:
 
 class TestTeluguScript:
     def _is_telugu_char(self, ch):
-        return "\u0C00" <= ch <= "\u0C7F"
+        return "\u0c00" <= ch <= "\u0c7f"
 
     def test_all_words_contain_telugu(self):
         """Every word must contain at least one Telugu character."""
@@ -110,17 +110,17 @@ class TestTeluguScript:
         """No word should contain Kannada characters."""
         for word in ALL_WORDS_UNIQUE:
             for ch in word:
-                assert not ("\u0C80" <= ch <= "\u0CFF"), (
-                    f"Word '{word}' contains Kannada character: {ch}"
-                )
+                assert not (
+                    "\u0c80" <= ch <= "\u0cff"
+                ), f"Word '{word}' contains Kannada character: {ch}"
 
     def test_no_devanagari_chars(self):
         """No word should contain Devanagari characters."""
         for word in ALL_WORDS_UNIQUE:
             for ch in word:
-                assert not ("\u0900" <= ch <= "\u097F"), (
-                    f"Word '{word}' contains Devanagari character: {ch}"
-                )
+                assert not (
+                    "\u0900" <= ch <= "\u097f"
+                ), f"Word '{word}' contains Devanagari character: {ch}"
 
     def test_no_empty_words(self):
         """No word should be empty or whitespace-only."""
@@ -151,7 +151,7 @@ class TestNumbers:
 
     def test_all_numbers_have_telugu(self):
         for i, word in enumerate(NUMBERS):
-            has_telugu = any("\u0C00" <= ch <= "\u0C7F" for ch in word)
+            has_telugu = any("\u0c00" <= ch <= "\u0c7f" for ch in word)
             assert has_telugu, f"Number {i+1} ('{word}') has no Telugu chars"
 
     def test_all_numbers_nonempty(self):
@@ -226,9 +226,9 @@ class TestClassification:
 
 class TestRhymingPairs:
     def test_at_least_100_pairs(self):
-        assert len(RHYMING_PAIRS) >= 100, (
-            f"Only {len(RHYMING_PAIRS)} rhyming pairs, need >= 100"
-        )
+        assert (
+            len(RHYMING_PAIRS) >= 100
+        ), f"Only {len(RHYMING_PAIRS)} rhyming pairs, need >= 100"
 
     def test_pairs_are_different_words(self):
         for word, rhyme in RHYMING_PAIRS.items():

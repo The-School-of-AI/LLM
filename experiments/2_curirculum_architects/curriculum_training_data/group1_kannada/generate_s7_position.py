@@ -3,12 +3,15 @@
 Generate Statement 7: Position of Letter (ಅಕ್ಷರದ ಸ್ಥಿತಿ) questions - Kannada
 Target: 17,200 pairs (8.6% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
+from group1_kannada.generate_s1_spelling import (
+    get_kannada_grapheme_clusters,
+)  # noqa: E402
 from group1_kannada.kannada_grammar import get_genitive_suffix  # noqa: E402
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,

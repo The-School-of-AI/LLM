@@ -3,12 +3,16 @@
 Generate Statement 1: Spelling (అక్షరక్రమం) questions - Telugu
 Target: 30,000 pairs (15% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.telugu_grammar import get_telugu_aksharas, get_telugu_aksharas_with_roots  # noqa: E402
+from group1_telugu.telugu_grammar import (
+    get_telugu_aksharas,
+    get_telugu_aksharas_with_roots,
+)  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,

@@ -4,6 +4,7 @@ Tests for Telugu dataset generators (S1-S11).
 Validates that generated output files exist, have correct line counts,
 and follow the expected Q? A. format.
 """
+
 import os
 import sys
 
@@ -44,9 +45,7 @@ def _read_lines(filepath):
 
 
 class TestFilesExist:
-    @pytest.mark.parametrize(
-        "filename, expected_count, description", STATEMENT_SPECS
-    )
+    @pytest.mark.parametrize("filename, expected_count, description", STATEMENT_SPECS)
     def test_statement_file_exists(self, filename, expected_count, description):
         filepath = os.path.join(DATA_DIR, filename)
         assert os.path.exists(filepath), f"{description}: {filename} not found"
@@ -60,17 +59,15 @@ class TestFilesExist:
 
 
 class TestLineCounts:
-    @pytest.mark.parametrize(
-        "filename, expected_count, description", STATEMENT_SPECS
-    )
+    @pytest.mark.parametrize("filename, expected_count, description", STATEMENT_SPECS)
     def test_statement_line_count(self, filename, expected_count, description):
         filepath = os.path.join(DATA_DIR, filename)
         if not os.path.exists(filepath):
             pytest.skip(f"{filename} not found")
         lines = _read_lines(filepath)
-        assert len(lines) == expected_count, (
-            f"{description}: expected {expected_count} lines, got {len(lines)}"
-        )
+        assert (
+            len(lines) == expected_count
+        ), f"{description}: expected {expected_count} lines, got {len(lines)}"
 
     def test_total_pairs_208000(self):
         total = 0
@@ -85,9 +82,7 @@ class TestLineCounts:
 
 
 class TestOutputFormat:
-    @pytest.mark.parametrize(
-        "filename, expected_count, description", STATEMENT_SPECS
-    )
+    @pytest.mark.parametrize("filename, expected_count, description", STATEMENT_SPECS)
     def test_all_lines_have_question_mark(self, filename, expected_count, description):
         filepath = os.path.join(DATA_DIR, filename)
         if not os.path.exists(filepath):
@@ -95,26 +90,22 @@ class TestOutputFormat:
         lines = _read_lines(filepath)
         # Check first 100 lines for efficiency
         for i, line in enumerate(lines[:100]):
-            assert "?" in line, (
-                f"{description} line {i+1}: no '?' found in: {line[:80]}"
-            )
+            assert (
+                "?" in line
+            ), f"{description} line {i+1}: no '?' found in: {line[:80]}"
 
-    @pytest.mark.parametrize(
-        "filename, expected_count, description", STATEMENT_SPECS
-    )
+    @pytest.mark.parametrize("filename, expected_count, description", STATEMENT_SPECS)
     def test_all_lines_end_with_period(self, filename, expected_count, description):
         filepath = os.path.join(DATA_DIR, filename)
         if not os.path.exists(filepath):
             pytest.skip(f"{filename} not found")
         lines = _read_lines(filepath)
         for i, line in enumerate(lines[:100]):
-            assert line.endswith("."), (
-                f"{description} line {i+1}: doesn't end with '.': {line[-20:]}"
-            )
+            assert line.endswith(
+                "."
+            ), f"{description} line {i+1}: doesn't end with '.': {line[-20:]}"
 
-    @pytest.mark.parametrize(
-        "filename, expected_count, description", STATEMENT_SPECS
-    )
+    @pytest.mark.parametrize("filename, expected_count, description", STATEMENT_SPECS)
     def test_no_danda_in_output(self, filename, expected_count, description):
         """Telugu uses period (.), NOT danda (।)."""
         filepath = os.path.join(DATA_DIR, filename)
@@ -122,9 +113,9 @@ class TestOutputFormat:
             pytest.skip(f"{filename} not found")
         lines = _read_lines(filepath)
         for i, line in enumerate(lines[:100]):
-            assert "।" not in line, (
-                f"{description} line {i+1}: contains danda (।): {line[:80]}"
-            )
+            assert (
+                "।" not in line
+            ), f"{description} line {i+1}: contains danda (।): {line[:80]}"
 
 
 # ── Cross-script leakage ──
@@ -135,33 +126,27 @@ class TestNoScriptLeakage:
         """Check a file for Kannada or Hindi characters."""
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
-        kannada = [ch for ch in content if "\u0C80" <= ch <= "\u0CFF"]
-        hindi = [ch for ch in content if "\u0900" <= ch <= "\u097F"]
+        kannada = [ch for ch in content if "\u0c80" <= ch <= "\u0cff"]
+        hindi = [ch for ch in content if "\u0900" <= ch <= "\u097f"]
         return kannada, hindi
 
-    @pytest.mark.parametrize(
-        "filename, expected_count, description", STATEMENT_SPECS
-    )
+    @pytest.mark.parametrize("filename, expected_count, description", STATEMENT_SPECS)
     def test_no_kannada_in_statement_files(self, filename, expected_count, description):
         filepath = os.path.join(DATA_DIR, filename)
         if not os.path.exists(filepath):
             pytest.skip(f"{filename} not found")
         kannada, _ = self._check_file_for_leakage(filepath)
-        assert len(kannada) == 0, (
-            f"{description}: found {len(kannada)} Kannada chars"
-        )
+        assert len(kannada) == 0, f"{description}: found {len(kannada)} Kannada chars"
 
-    @pytest.mark.parametrize(
-        "filename, expected_count, description", STATEMENT_SPECS
-    )
+    @pytest.mark.parametrize("filename, expected_count, description", STATEMENT_SPECS)
     def test_no_hindi_in_statement_files(self, filename, expected_count, description):
         filepath = os.path.join(DATA_DIR, filename)
         if not os.path.exists(filepath):
             pytest.skip(f"{filename} not found")
         _, hindi = self._check_file_for_leakage(filepath)
-        assert len(hindi) == 0, (
-            f"{description}: found {len(hindi)} Hindi/Devanagari chars"
-        )
+        assert (
+            len(hindi) == 0
+        ), f"{description}: found {len(hindi)} Hindi/Devanagari chars"
 
     def test_no_leakage_in_final_output(self):
         filepath = os.path.join(OUTPUT_DIR, "group1_telugu.txt")
@@ -245,9 +230,7 @@ class TestS11Gunintalu:
         if not os.path.exists(filepath):
             pytest.skip("S11 not found")
         lines = _read_lines(filepath)
-        ka_charts = [
-            l for l in lines if "గుణింతాలు" in l and l.startswith('"క"')
-        ]
+        ka_charts = [l for l in lines if "గుణింతాలు" in l and l.startswith('"క"')]
         if ka_charts:
             # Answer should contain: క, కా, కి, కీ, కు, కూ, ...
             answer = ka_charts[0].split("?", 1)[1] if "?" in ka_charts[0] else ""

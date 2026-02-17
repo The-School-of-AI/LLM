@@ -3,13 +3,16 @@
 Generate Statement 4: Letter Count (ಅಕ್ಷರ ಗಣನೆ) questions - Kannada
 Target: 25,800 pairs (12.9% of 200,000)
 """
+
 import os
 import re
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
+from group1_kannada.generate_s1_spelling import (
+    get_kannada_grapheme_clusters,
+)  # noqa: E402
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
@@ -17,7 +20,7 @@ from group1_kannada.kannada_vocabulary import (  # noqa: E402
 )
 from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 
-HALANT = "\u0CCD"
+HALANT = "\u0ccd"
 # Dirgha (long) vowels: ಆ ಈ ಊ ಏ ಐ ಓ ಔ
 DIRGHA_SVARAS = set("ಆಈಊಏಐಓಔ")
 # Hrasva (short) vowels: ಅ ಇ ಉ ಋ ಎ ಒ
@@ -25,7 +28,7 @@ HRASVA_SVARAS = set("ಅಇಉಋಎಒ")
 # Mahaprana (aspirated) consonants
 MAHAPRANA = set("ಖಛಠಥಫಘಝಢಧಭ")
 # Yogavaha: anusvara ಂ, visarga ಃ
-ANUSVARA, VISARGA = "\u0C82", "\u0C83"
+ANUSVARA, VISARGA = "\u0c82", "\u0c83"
 
 # Expand word lists
 EASY_WORDS = EASY_WORDS_UNIQUE * 50
@@ -33,8 +36,8 @@ MEDIUM_WORDS = MEDIUM_WORDS_UNIQUE * 60
 HARD_WORDS = HARD_WORDS_UNIQUE * 70
 
 VOWELS = set([chr(c) for c in range(0x0C85, 0x0C91) if c not in [0x0C8C, 0x0C8E]])
-CONSONANTS = set([chr(c) for c in range(0x0C95, 0x0CB9) if chr(c) not in ['ಱ', 'ೞ']])
-REPH = "\u0CB0\u0CCD"  # ರ್ (ra + virama) - reph/arka-vattu
+CONSONANTS = set([chr(c) for c in range(0x0C95, 0x0CB9) if chr(c) not in ["ಱ", "ೞ"]])
+REPH = "\u0cb0\u0ccd"  # ರ್ (ra + virama) - reph/arka-vattu
 
 
 def _count_sajatiya(clusters):
@@ -43,7 +46,12 @@ def _count_sajatiya(clusters):
     for c in clusters:
         if HALANT in c:
             parts = c.split(HALANT)
-            if len(parts) >= 2 and parts[0] and parts[1] and parts[0][-1] == parts[1][0]:
+            if (
+                len(parts) >= 2
+                and parts[0]
+                and parts[1]
+                and parts[0][-1] == parts[1][0]
+            ):
                 count += 1
     return count
 
@@ -80,7 +88,9 @@ def _get_arka_vattu_consonants(word: str) -> list[str]:
 
 
 # Kannada vowel signs (ಾ ಿ ೀ ು ೂ ೃ ೄ ೆ ೇ ೈ ೊ ೋ ೌ)
-VOWEL_SIGNS = set("\u0CBE\u0CBF\u0CC0\u0CC1\u0CC2\u0CC3\u0CC4\u0CC6\u0CC7\u0CC8\u0CCA\u0CCB\u0CCC")
+VOWEL_SIGNS = set(
+    "\u0cbe\u0cbf\u0cc0\u0cc1\u0cc2\u0cc3\u0cc4\u0cc6\u0cc7\u0cc8\u0cca\u0ccb\u0ccc"
+)
 
 
 def _count_varnas(word: str) -> int:
@@ -148,7 +158,9 @@ def _count_vyanjanas(word: str) -> int:
     while i < len(chars):
         c = chars[i]
         if 0x0C95 <= ord(c) <= 0x0CB9:  # Consonant
-            count += 1  # Each consonant = 1 vyanjana (consonant+halant in decomposition)
+            count += (
+                1  # Each consonant = 1 vyanjana (consonant+halant in decomposition)
+            )
             if i + 1 < len(chars) and chars[i + 1] == HALANT:
                 i += 2  # Skip halant
             else:
@@ -169,7 +181,10 @@ TEMPLATES = [
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಅಕ್ಷರಗಳಿವೆ?', "count"),
     ('"{word}" ಪದದ ಒಟ್ಟು ಅಕ್ಷರಗಳ ಸಂಖ್ಯೆ ಎಷ್ಟು?', "count"),
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಅಕ್ಷರಗಳನ್ನು ಕಾಣಬಹುದು?', "count"),
-    ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ವರ್ಣಗಳಿವೆ?', "varna_count"),  # ವರ್ಣ = phoneme; ಅಕ್ಷರ = syllabic
+    (
+        '"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ವರ್ಣಗಳಿವೆ?',
+        "varna_count",
+    ),  # ವರ್ಣ = phoneme; ಅಕ್ಷರ = syllabic
     ('"{word}" ಪದವು ಎರಡು ಅಕ್ಷರದ ಪದವೇ?', "two_letter_yes_no"),
     ('"{word}" ಪದದ ಅಕ್ಷರಗಳನ್ನು ಎಣಿಸಿ?', "count"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ಅಕ್ಷರಗಳೆಷ್ಟು?', "count"),
@@ -198,7 +213,10 @@ TEMPLATES = [
     ('"{word}" ಪದದಲ್ಲಿ ಅರ್ಕಾವತ್ತುಗಳ ಸಂಖ್ಯೆ ಎಷ್ಟು?', "arka_vattu_count"),
     ('"{word}" ಪದದಲ್ಲಿ ಅರ್ಕಾವತ್ತು ಯಾವ ಅಕ್ಷರಕ್ಕೆ ಸೇರಿದೆ?', "arka_vattu_letter"),
     ('"{word}" ಪದದಲ್ಲಿ ಅರ್ಕಾವತ್ತು ಯಾವ ವ್ಯಂಜನಕ್ಕೆ ಸೇರಿದೆ?', "arka_vattu_letter"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು (ರೆಫೆ) ಯಾವ ಅಕ್ಷರಕ್ಕೆ ಸೇರಿದೆ?', "arka_vattu_letter"),
+    (
+        '"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು (ರೆಫೆ) ಯಾವ ಅಕ್ಷರಕ್ಕೆ ಸೇರಿದೆ?',
+        "arka_vattu_letter",
+    ),
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಗುಣಿತಾಕ್ಷರಗಳನ್ನು ಕಾಣಬಹುದು?', "gunitakshara_count"),
 ]
 
@@ -246,7 +264,13 @@ for word in set(all_words):
             answer = f"{ans} (ಅನುಸ್ವಾರ)" if cnt > 0 else ans
         elif answer_type == "mahaprana_count":
             cnt = len([c for c in clusters if c[0] in MAHAPRANA])
-            ex = clusters[next((i for i, x in enumerate(clusters) if x[0] in MAHAPRANA), 0)] if cnt > 0 else ""
+            ex = (
+                clusters[
+                    next((i for i, x in enumerate(clusters) if x[0] in MAHAPRANA), 0)
+                ]
+                if cnt > 0
+                else ""
+            )
             answer = f"{int_to_kannada(cnt)} ({ex})" if ex else int_to_kannada(cnt)
         elif answer_type == "dirgha_svara_count":
             cnt = len([c for c in clusters if any(ch in DIRGHA_SVARAS for ch in c)])
@@ -258,14 +282,22 @@ for word in set(all_words):
             cnt = len([c for c in clusters if HALANT not in c])
             answer = int_to_kannada(cnt)
         elif answer_type == "four_letter_yes_no":
-            answer = "ಹೌದು" if cluster_count == 4 else f"ಅಲ್ಲ ({int_to_kannada(cluster_count)} ಅಕ್ಷರ)"
+            answer = (
+                "ಹೌದು"
+                if cluster_count == 4
+                else f"ಅಲ್ಲ ({int_to_kannada(cluster_count)} ಅಕ್ಷರ)"
+            )
         elif answer_type == "arka_vattu_count":
             cnt = _count_arka_vattu(word)
             answer = int_to_kannada(cnt)
         elif answer_type == "arka_vattu_letter":
             cons = _get_arka_vattu_consonants(word)
             if cons:
-                answer = cons[0] if len(cons) == 1 else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
+                answer = (
+                    cons[0]
+                    if len(cons) == 1
+                    else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
+                )
             else:
                 continue
         elif answer_type == "gunitakshara_count":
@@ -290,7 +322,11 @@ no_progress = 0
 while len(samples) < target_count and no_progress < no_progress_limit:
     template, answer_type = random.choice(TEMPLATES)
     # For arkavattu questions: ~50% from arkavattu words (non-zero), ~50% from all (mix of 0 and non-zero)
-    if answer_type in ("arka_vattu_count", "arka_vattu_letter") and ARKAVATTU_WORDS and random.random() < 0.5:
+    if (
+        answer_type in ("arka_vattu_count", "arka_vattu_letter")
+        and ARKAVATTU_WORDS
+        and random.random() < 0.5
+    ):
         word = random.choice(ARKAVATTU_WORDS)
     else:
         word = random.choice(list(set(all_words)))
@@ -327,7 +363,11 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         answer = f"{ans} (ಅನುಸ್ವಾರ)" if cnt > 0 else ans
     elif answer_type == "mahaprana_count":
         cnt = len([c for c in clusters if c[0] in MAHAPRANA])
-        ex = clusters[next((i for i, x in enumerate(clusters) if x[0] in MAHAPRANA), 0)] if cnt > 0 else ""
+        ex = (
+            clusters[next((i for i, x in enumerate(clusters) if x[0] in MAHAPRANA), 0)]
+            if cnt > 0
+            else ""
+        )
         answer = f"{int_to_kannada(cnt)} ({ex})" if ex else int_to_kannada(cnt)
     elif answer_type == "dirgha_svara_count":
         cnt = len([c for c in clusters if any(ch in DIRGHA_SVARAS for ch in c)])
@@ -339,13 +379,21 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         cnt = len([c for c in clusters if HALANT not in c])
         answer = int_to_kannada(cnt)
     elif answer_type == "four_letter_yes_no":
-        answer = "ಹೌದು" if cluster_count == 4 else f"ಅಲ್ಲ ({int_to_kannada(cluster_count)} ಅಕ್ಷರ)"
+        answer = (
+            "ಹೌದು"
+            if cluster_count == 4
+            else f"ಅಲ್ಲ ({int_to_kannada(cluster_count)} ಅಕ್ಷರ)"
+        )
     elif answer_type == "arka_vattu_count":
         answer = int_to_kannada(_count_arka_vattu(word))
     elif answer_type == "arka_vattu_letter":
         cons = _get_arka_vattu_consonants(word)
         if cons:
-            answer = cons[0] if len(cons) == 1 else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
+            answer = (
+                cons[0]
+                if len(cons) == 1
+                else f"{', '.join(cons[:-1])} ಮತ್ತು {cons[-1]}"
+            )
         else:
             no_progress += 1
             continue

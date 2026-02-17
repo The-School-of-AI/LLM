@@ -4,6 +4,7 @@ Generate Statement 3: Phonetic Matching (Sibilants/Wa)
 Target: 15,000 pairs
 Focus: Identifying words with specific sounds (Sibilants: শ, ষ, স -> 'x' sound; Wa/Ba distinction).
 """
+
 import os
 import random
 import sys
@@ -26,47 +27,48 @@ TEMPLATES_STARTS_WITH = [
     '"{sound_char}" আখৰেৰে আৰম্ভ হোৱা শব্দটো কি? "{word1}" নে "{word2}"?',
 ]
 
+
 def main():
     samples = []
     target_count = 15000
-    
+
     # Words specifically chosen for phonetic nuances
     phonetic_words = ASSAMESE_SPECIFIC_PHONETIC
     other_words = [w for w in ALL_WORDS_UNIQUE if w not in phonetic_words]
-    
+
     # Target characters for phonetic questions
     targets = ["শ", "ষ", "স", "ৱ", "ব"]
-    
+
     while len(samples) < target_count:
         target_char = random.choice(targets)
-        
+
         # Find a correct word (contains the char)
         correct_candidates = [w for w in ALL_WORDS_UNIQUE if target_char in w]
         if not correct_candidates:
             continue
         correct_word = random.choice(correct_candidates)
-        
+
         # Find a distractor (does NOT contain the char)
         distractor_candidates = [w for w in ALL_WORDS_UNIQUE if target_char not in w]
         if not distractor_candidates:
             continue
         distractor_word = random.choice(distractor_candidates)
-        
+
         # Randomize order
         words = [correct_word, distractor_word]
         random.shuffle(words)
         w1, w2 = words
-        
+
         # Choose template type
         # Check if correct word STARTS with char for "Starts With" templates
         if correct_word.startswith(target_char):
             template = random.choice(TEMPLATES_CONTAINS + TEMPLATES_STARTS_WITH)
         else:
             template = random.choice(TEMPLATES_CONTAINS)
-            
+
         query = template.format(sound_char=target_char, word1=w1, word2=w2)
         answer = correct_word
-        
+
         samples.append((query, answer))
 
     random.shuffle(samples)
@@ -78,6 +80,7 @@ def main():
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
     print(f"S3 Phonetic: Generated {len(samples)} samples")
+
 
 if __name__ == "__main__":
     main()

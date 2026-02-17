@@ -3,12 +3,16 @@
 Generate Statement 5: Rhyming (ప్రాస) questions - Telugu
 Target: 20,000 pairs (10% of 200,000). ప్రాస = rhyme.
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.telugu_vocabulary import ALL_WORDS_UNIQUE, RHYMING_PAIRS  # noqa: E402
+from group1_telugu.telugu_vocabulary import (
+    ALL_WORDS_UNIQUE,
+    RHYMING_PAIRS,
+)  # noqa: E402
 from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 
 # Expand word list

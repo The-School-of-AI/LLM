@@ -3,6 +3,7 @@
 Generate Statement 10: Word Comparison (शब्द तुलना) questions
 Target: 11,000 pairs (5.5% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -35,8 +36,18 @@ unique_words = list(set(ALL_WORDS))
 
 # Exclude adjectives that are used in comparison queries to avoid confusion
 EXCLUDED_COMPARISON_WORDS = {
-    "बड़ा", "छोटा", "लंबा", "नाटा", "ऊंचा", "नीचा", "मोटा", "पतला",
-    "भारी", "हल्का", "तेज", "धीमा"
+    "बड़ा",
+    "छोटा",
+    "लंबा",
+    "नाटा",
+    "ऊंचा",
+    "नीचा",
+    "मोटा",
+    "पतला",
+    "भारी",
+    "हल्का",
+    "तेज",
+    "धीमा",
 }
 
 # Filter out excluded words
@@ -122,4 +133,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S10 Word Comparison: Generated {len(samples)} unique samples (target: {target_count})")
+print(
+    f"S10 Word Comparison: Generated {len(samples)} unique samples (target: {target_count})"
+)

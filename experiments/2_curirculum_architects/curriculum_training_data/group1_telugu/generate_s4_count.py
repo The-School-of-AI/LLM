@@ -3,12 +3,15 @@
 Generate Statement 4: Letter Count (అక్షర గణన) questions - Telugu
 Target: 26,000 pairs (13% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
+from group1_telugu.generate_s1_spelling import (
+    get_telugu_grapheme_clusters,
+)  # noqa: E402
 from group1_telugu.telugu_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     EASY_WORDS_UNIQUE,
