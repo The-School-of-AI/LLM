@@ -160,10 +160,12 @@ def train_epoch(
                 print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
 
             # loss_ntp and loss_mtp are already scalar losses (chunked CE computed in model)
+            # FAIL-FAST: Raise immediately on NaN to prevent parameter corruption
             if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
-                with torch.no_grad():
-                    print_rank_0(f"\nNaN detected at epoch {epoch}, micro-batch {i}!")
-                    print_rank_0(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}")
+                raise FloatingPointError(
+                    f"NaN loss detected at epoch {epoch}, micro-batch {i}!\n"
+                    f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}, aux_loss={aux_loss.item() if aux_loss is not None else None}"
+                )
 
             loss = loss_ntp + 0.3 * loss_mtp
             if aux_loss is not None and aux_loss.numel() > 0:
@@ -196,6 +198,15 @@ def train_epoch(
 
         # Check if we just completed an optimizer step
         if model_engine.is_gradient_accumulation_boundary():
+            # FAIL-FAST: Check all parameters are finite after optimizer step
+            with torch.no_grad():
+                for name, param in model_engine.module.named_parameters():
+                    if param is not None and not torch.isfinite(param).all():
+                        raise FloatingPointError(
+                            f"Non-finite parameter detected after optimizer step at epoch {epoch}, "
+                            f"micro-batch {i}, global_step {global_step + 1}: {name}"
+                        )
+            
             step_time = time.time() - step_start_time
             global_step += 1
             optimizer_steps += 1

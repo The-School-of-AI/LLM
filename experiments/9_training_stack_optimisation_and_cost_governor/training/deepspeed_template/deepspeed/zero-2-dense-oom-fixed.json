@@ -5,9 +5,9 @@
     "optimizer": {
         "type": "AdamW",
         "params": {
-            "lr": 1e-4,
-            "betas": [0.9, 0.95],
-            "eps": 1e-8,
+            "lr": 5e-5,
+            "betas": [0.9, 0.999],
+            "eps": 1e-10,
             "weight_decay": 0.0
         }
     },
@@ -16,9 +16,9 @@
         "type": "WarmupDecayLR",
         "params": {
             "warmup_min_lr": 0,
-            "warmup_max_lr": 3e-4,
-            "warmup_num_steps": 500,
-            "total_num_steps": 10000
+            "warmup_max_lr": 5e-5,
+            "warmup_num_steps": 100,
+            "total_num_steps": 2000
         }
     },
 
@@ -26,7 +26,7 @@
         "stage": 2,
 
         "contiguous_gradients": true,
-        "overlap_comm": true,
+        "overlap_comm": false,
         "reduce_scatter": true,
         "reduce_bucket_size": 2e8,
         "allgather_partitions": true,
@@ -46,7 +46,7 @@
     },
     "_comment_bf16": "DISABLED: Model is pre-cast to bf16 in main.py. DeepSpeed bf16 wraps forward in autocast which breaks reversible midpoint backward (dtype mismatch under torch.enable_grad).",
 
-    "gradient_clipping": 1.0,
+    "gradient_clipping": 0.5,
     "steps_per_print": 10,
     "wall_clock_breakdown": false,
     "dump_state": false

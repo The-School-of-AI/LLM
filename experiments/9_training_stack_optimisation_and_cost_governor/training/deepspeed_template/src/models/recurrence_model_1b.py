@@ -541,11 +541,14 @@ class RMSNorm(nn.Module):
             except Exception:
                 pass  # Fall through to PyTorch path
 
-        # PyTorch fallback (FIX #43: fp32 variance for stability)
+        # PyTorch fallback: Full fp32 normalization for numerical stability
+        # Critical fix from mentor: do ALL normalization math in fp32, cast back only at end
+        in_dtype = x.dtype
         x_f = x.float()
         norm = x_f.pow(2).mean(dim=-1, keepdim=True)
-        x = x * torch.rsqrt(norm.to(x.dtype) + self.eps)
-        return self.weight * x
+        x_norm = x_f * torch.rsqrt(norm + self.eps)
+        out = x_norm * self.weight.float()
+        return out.to(dtype=in_dtype)
 
 
 class RotaryEmbedding(nn.Module):
