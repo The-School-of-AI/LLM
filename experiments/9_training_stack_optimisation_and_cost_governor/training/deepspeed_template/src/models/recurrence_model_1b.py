@@ -28,9 +28,10 @@ Status: Architectural fixes complete, ready for testing phase before kernel opti
 CHANGELOG - Critical Bug Fixes and Optimizations:
 =================================================
 1. FIXED: Duplicate RMSNorm class definition removed (was overriding first definition)
-2. FIXED: YARN beta_fast/beta_slow inversion corrected (was 32/1, now 1/32)
-   - This critical bug was destroying DeltaNet's ability to distinguish local token order
-   - High frequencies now preserved (scale ~1.0), low frequencies interpolated (scale ~32.0)
+2. REPLACED: YARN RoPE replaced with standard RoPE (Su et al. 2021)
+   - Removed NTK scaling, mscale frequency-band interpolation, beta_fast/beta_slow params
+   - Standard inv_freq = 1 / (base ** (2i/dim)); clean on-the-fly cos/sin computation
+   - rope_original_max_position and rope_scaling_factor removed from ModelConfig
 3. FIXED: MTP block now uses GatedSparseAttention instead of GatedDeltaNet
    - MTP runs once per step, so full attention cost is negligible but gradient quality is critical
 4. FIXED: Removed dead memory injection code from MTPTransformerBlock.forward()
@@ -104,26 +105,7 @@ Before deploying this model at 256k context, the following MUST be addressed:
    Status: Optional for testing, REQUIRED for production tuning
    Est. Effort: 2-3 days (benchmarking + analysis)
 
-5. 🔍 TODO: Verify YARN mscale Frequency Band Logic
-   ───────────────────────────────────────────────────
-   Location: RotaryEmbedding.__init__() (lines 410-417)
-   Current: mscale uses original 'base', inv_freq uses 'scaled_base'
-
-   Rationale (YARN Paper Section 2.1):
-   - Frequency band classification should be relative to ORIGINAL bands
-   - mscale determines which frequencies get interpolated (0-1 ramp)
-   - This is APPLIED to the NTK-scaled frequencies (inv_freq)
-
-   Action:
-   - Validate against YARN paper equations (specifically Section 2.1, Eq 3-5)
-   - Confirm: wavelen = 2π / freq should use original base for classification
-   - If matches paper → mark verified
-   - If deviation → document intentional change or fix
-
-   Status: Logic appears correct per paper, needs formal verification
-   Est. Effort: 4-6 hours (paper cross-reference + validation)
-
-6. 📈 TODO: Production Monitoring Hooks
+5. 📈 TODO: Production Monitoring Hooks
    ─────────────────────────────────────
    Implement logging for:
    - aux_loss / main_loss ratio (alert if > 0.1) - NOTE: 1B is dense, aux_loss minimal
@@ -447,11 +429,9 @@ class ModelConfig:
     n_streams = 4
     sinkhorn_iters = 20  # PROBABLE FIX #26: Reduced from 20 (major compute savings at long context)
 
-    # Context and RoPE (YARN Scaling)
+    # Context and RoPE
     max_seq_len = 262144  # 256k context
     rope_base = 10000
-    rope_original_max_position = 8192  # Original training context
-    rope_scaling_factor = 32.0  # 256k / 8k = 32x extension
 
     # Training
     dropout = 0.0  # Required for reversible integration
@@ -553,98 +533,51 @@ class RMSNorm(nn.Module):
 
 class RotaryEmbedding(nn.Module):
     """
-    YARN (Yet Another RoPE extensioN) Rotary Positional Embedding.
+    Standard Rotary Positional Embedding (RoPE).
 
-    Extends RoPE to 256k context using:
-    - NTK-aware interpolation for scaling base frequency
-    - Temperature-based frequency band interpolation
-    - Attention sink preservation for initial tokens
+    Applies position-dependent rotation to query and key vectors using the
+    original RoPE formulation (Su et al., 2021: https://arxiv.org/abs/2104.09864).
 
-    Reference: https://arxiv.org/abs/2309.00071
+    inv_freq[i] = 1 / (base ** (2i / dim)),  i = 0 .. dim/2 - 1
 
     MEMORY OPTIMIZATION:
     Computes cos/sin on-the-fly instead of caching to save VRAM.
-
-    Caching approach would use: 262,144 × 128 × 2 = 268MB per layer × 8 layers = 2.1GB VRAM.
-    On-the-fly computation: ~0MB cache, only 5-10% slower (negligible with modern GPUs).
-
-    For 256k context training, we need every GB of VRAM for activations and optimizer states.
-    Trading 5-10% RoPE compute time for 2.1GB free memory is an excellent trade-off.
+    Caching would use: 262,144 × 128 × 2 = 268 MB per layer × 8 layers = 2.1 GB.
+    On-the-fly is ~5-10% slower but saves 2.1 GB — a good trade at 256k context.
     """
-    def __init__(self, dim: int, max_position_embeddings: int = 8192, base: int = 10000,
-                 original_max_position_embeddings: int = 8192, scaling_factor: float = 32.0):
+    def __init__(self, dim: int, max_position_embeddings: int = 262144, base: int = 10000):
         super().__init__()
         self.dim = dim
         self.base = base
-        self.original_max_position_embeddings = original_max_position_embeddings
         self.max_position_embeddings = max_position_embeddings
-        self.scaling_factor = scaling_factor
 
-        # YARN: NTK-aware interpolation
-        # Scale the base frequency to accommodate longer context
-        if max_position_embeddings > original_max_position_embeddings:
-            # NTK-by-parts: scale base exponentially based on extension ratio
-            ext_ratio = max_position_embeddings / original_max_position_embeddings
-            # Use a gentler scaling exponent for YARN (typically around 1.0)
-            scaled_base = base * (ext_ratio ** (dim / (dim - 2)))
-            print(f"   🧶 YARN RoPE: Scaling base {base} -> {scaled_base:.0f} for {max_position_embeddings:,} context")
-        else:
-            scaled_base = base
-
-        # Compute inverse frequencies with scaled base
-        inv_freq = 1.0 / (scaled_base ** (torch.arange(0, dim, 2).float() / dim))
+        # Standard RoPE inverse frequencies: 1 / (base ** (2i / dim))
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer("inv_freq", inv_freq)
-
-        # YARN: Frequency band interpolation parameters
-        # Interpolate low frequencies, extrapolate high frequencies
-        # beta_fast: controls high-freq behavior (preserve local distinctions)
-        # beta_slow: controls low-freq behavior (interpolate for global context)
-        # CRITICAL: High freq (small wavelength) should NOT be scaled, low freq should be scaled
-        self.beta_fast = 1   # High frequencies (preserve - do not scale below this)
-        self.beta_slow = 32  # Low frequencies (interpolate - fully scale above this)
-
-        # Compute interpolation weights (mscale) for each frequency
-        # IMPORTANT: mscale uses ORIGINAL 'base', NOT 'scaled_base'
-        # Rationale (YARN Paper Section 2.1):
-        # - Frequency band classification (high vs low) should be relative to ORIGINAL bands
-        # - mscale determines the 0-1 ramp for interpolation strength
-        # - This ramp is APPLIED to the NTK-scaled frequencies (inv_freq above)
-        # - Using scaled_base here would misclassify which bands need interpolation
-        freq_extra = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))  # ORIGINAL base intentional
-        # Determine which frequencies to interpolate vs extrapolate
-        # High frequencies (small wavelengths) get less interpolation
-        wavelen = 2 * math.pi / freq_extra
-        # Ramp function: 0 at beta_fast (preserve), 1 at beta_slow (interpolate fully)
-        ramp = torch.clamp((wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1)
-        self.register_buffer("mscale", ramp)  # Interpolation weight per frequency
 
     def _compute_cos_sin(self, seq_len: int, device, dtype=None):
         """
-        Compute cos/sin on-the-fly for given sequence length.
-        FIX #30: Uses forward-pass cache if available (set by model.forward())
-        FIX #39: Include dtype in cache key for mixed-precision safety
-        FIX #42: Cast output to requested dtype (prevents float32/bf16 mismatches)
-        Saves 2.1GB VRAM compared to persistent caching (268MB × 8 layers).
+        Compute cos/sin on-the-fly for a given sequence length.
+
+        Uses a per-forward-pass cache (set by Model1B.forward()) so all layers
+        share one computation per step.
+
+        Cache key includes dtype for mixed-precision safety (FIX #39).
+        Output is cast to the requested dtype to prevent bf16/fp32 mismatches (FIX #42).
         """
-        # FIX #30: Check if cache exists (set at model forward start)
-        # FIX #39: Include dtype in cache key (default to None for backward compatibility)
         cache_key = (seq_len, device, dtype)
         if hasattr(self, '_forward_cache') and cache_key in self._forward_cache:
             return self._forward_cache[cache_key]
 
-        t = torch.arange(seq_len, device=device).float()
+        # Position indices in fp32 for numerical stability
+        t = torch.arange(seq_len, device=device, dtype=torch.float32)
 
-        # YARN: Apply frequency-dependent interpolation
-        # t_scaled = t / (1 + (scaling_factor - 1) * ramp)
-        # This interpolates low frequencies more, extrapolates high frequencies
-        scale_factor_per_freq = 1.0 + (self.scaling_factor - 1.0) * self.mscale
-        t_scaled = t.unsqueeze(-1) / scale_factor_per_freq.unsqueeze(0)
+        # Outer product: [T] x [dim/2] -> [T, dim/2]
+        freqs = torch.outer(t, self.inv_freq)  # (T, dim/2)
 
-        freqs = t_scaled * self.inv_freq.unsqueeze(0)
-        emb = torch.cat((freqs, freqs), dim=-1)
+        # Duplicate for full rotation: [T, dim]
+        emb = torch.cat((freqs, freqs), dim=-1)  # (T, dim)
 
-        # FIX #42: Cast to requested dtype to match query/key precision
-        # Prevents implicit upcasts and memory/bandwidth issues at 256k context
         cos_out = emb.cos()
         sin_out = emb.sin()
         if dtype is not None:
@@ -655,6 +588,7 @@ class RotaryEmbedding(nn.Module):
 
     @staticmethod
     def _apply_rotary(x, cos, sin):
+        """Apply rotary embedding to tensor x using interleaved even/odd rotation."""
         x1, x2 = x[..., ::2], x[..., 1::2]
         return torch.cat(
             (x1 * cos[..., ::2] - x2 * sin[..., ::2],
@@ -728,7 +662,6 @@ class GatedDeltaNet(nn.Module):
     """
     def __init__(self, hidden_size, num_heads, head_dim,
                  max_seq_len=262144, rope_base=10000,
-                 rope_original_max=8192, rope_scaling_factor=32.0,
                  conv_size=4, use_output_norm=True):
         super().__init__()
         self.hidden_size = hidden_size
@@ -770,13 +703,11 @@ class GatedDeltaNet(nn.Module):
         dt_bias = torch.rand(num_heads) * 2 * dt_init_std - dt_init_std
         self.dt_bias = nn.Parameter(dt_bias)
 
-        # Rotary embeddings for Q/K with YARN scaling
+        # Rotary embeddings for Q/K (standard RoPE)
         self.rotary_emb = RotaryEmbedding(
             head_dim,
             max_position_embeddings=max_seq_len,
             base=rope_base,
-            original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
         )
 
         # Output normalization with gating
@@ -991,8 +922,7 @@ class GatedSparseAttention(nn.Module):
     - Adaptive sparsity budget k_t from variance-based heuristic
     """
     def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
-                 k_base=512, k_min=32, k_max=1024, indexer_heads=4,
-                 rope_original_max=8192, rope_scaling_factor=32.0):
+                 k_base=512, k_min=32, k_max=1024, indexer_heads=4):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -1032,13 +962,11 @@ class GatedSparseAttention(nn.Module):
         self.W_gv = nn.Linear(hidden_size, hidden_size, bias=False)
         self.W_go = nn.Linear(hidden_size, hidden_size, bias=False)
 
-        # Rotary embeddings with YARN scaling
+        # Rotary embeddings (standard RoPE)
         self.rotary_emb = RotaryEmbedding(
             self.head_dim,
             max_position_embeddings=max_seq_len,
             base=rope_base,
-            original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
         )
 
         self._init_weights()
@@ -1594,8 +1522,6 @@ class LightningDecoderLayer(nn.Module):
                 head_dim=config.delta_head_dim,
                 max_seq_len=config.max_seq_len,
                 rope_base=config.rope_base,
-                rope_original_max=config.rope_original_max_position,
-                rope_scaling_factor=config.rope_scaling_factor,
                 conv_size=4,
                 use_output_norm=True
             )
@@ -1609,8 +1535,6 @@ class LightningDecoderLayer(nn.Module):
                 k_min=config.gsa_k_min,
                 k_max=config.gsa_k_max,
                 indexer_heads=config.gsa_indexer_heads,
-                rope_original_max=config.rope_original_max_position,
-                rope_scaling_factor=config.rope_scaling_factor
             )
         else:
             raise ValueError(f"Unknown layer type: {layer_type}")
@@ -1703,8 +1627,6 @@ class MTPTransformerBlock(nn.Module):
             k_min=config.gsa_k_min,
             k_max=config.gsa_k_max,
             indexer_heads=config.gsa_indexer_heads,
-            rope_original_max=config.rope_original_max_position,
-            rope_scaling_factor=config.rope_scaling_factor
         )
 
         self.mlp = LightningMLP(
@@ -1920,7 +1842,7 @@ class Model1B(nn.Module):
         print(f"\n   Total Layers: {config.num_layers}")
         print(f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention")
         print(f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse")
-        print(f"\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
+        print(f"\n   Context Target: {config.max_seq_len:,} tokens (standard RoPE)")
         print(f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots")
         print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
         print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
