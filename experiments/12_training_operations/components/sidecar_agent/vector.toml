@@ -5,7 +5,12 @@
 # Requires: Vector >= 0.30
 # ------------------------------------------------------------------------------
 
- data_dir = "/var/lib/vector"
+# Health API (for training-side health checks)
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
+data_dir = "/var/lib/vector"
 
 # SOURCES
 
