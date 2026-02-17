@@ -613,7 +613,7 @@ def run_custom_benchmark(
 
 
 def run_olmes_benchmark(
-    benchmark_info, model_args, logger, run_dir, limit=None, device=None, batch_size="1", use_vllm=False, num_workers=1
+    benchmark_info, model_args, logger, run_dir, limit=None, device=None, batch_size="1", num_workers=1
 ):
     """
     Executes a benchmark using the OLMES (oe-eval) engine.
@@ -673,8 +673,6 @@ def run_olmes_benchmark(
     # Pass GPU count when running on CUDA
     if device and "cuda" in str(device):
         cmd += ["--gpus", "1"]
-    if use_vllm:
-        cmd += ["--vllm"]
 
     cmd += ["--num-workers", str(num_workers)]
 

@@ -81,7 +81,6 @@ def main():
 
     parser.add_argument("--device", type=str, default=default_device, help=f"Execution device (default: {default_device})")
     parser.add_argument("--batch_size", type=str, default="1", help="Execution batch size")
-    parser.add_argument("--vllm", action="store_true", help="Use vLLM engine for OLMES (GPU only)")
     parser.add_argument("--num_workers", type=int, default=1, help="Number of parallel workers for OLMES (default 1 for Mac stability)")
     
     args = parser.parse_args()
@@ -208,16 +207,11 @@ def main():
             logger.info(f"\n⏱  Starting OLMES Batch ({len(batch)} tasks): {batch_names}")
             bench_start = time.time()
             
-            # Determine if we should use vLLM (Auto-detect GPU)
-            use_vllm_engine = args.vllm or (torch.cuda.is_available() and args.device != "cpu")
-            if use_vllm_engine and not args.vllm:
-                logger.info("  [Auto-Speed] CUDA detected—automatically enabling vLLM engine for OLMES.")
-
             # Execute batch
             batch_results = eval_runner.run_olmes_benchmark(
                 batch, args.model_args, eval_logger, run_dir, 
                 limit=current_limit, device=args.device, batch_size=args.batch_size,
-                use_vllm=use_vllm_engine, num_workers=args.num_workers
+                num_workers=args.num_workers
             )
             
             bench_elapsed = time.time() - bench_start
