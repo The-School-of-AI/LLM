@@ -105,22 +105,42 @@ Aggregated distribution stats are also written to S3 in CSV format at:
 ## Usage
 
 ### Run on EMR Serverless
+
+Use the following AWS CLI command to submit the job. This command includes the monitoring configuration to save your `INFO` logs to S3.
+
 ```bash
 aws emr-serverless start-job-run \
   --application-id <APP_ID> \
   --execution-role-arn <ROLE_ARN> \
   --job-driver '{
     "sparkSubmit": {
-      "entryPoint": "s3://<BUCKET>/scripts/T3_final_emr_serverless_stats.py",
+      "entryPoint": "s3://t2-datacurriculum-353/scripts/T3_final_emr_serverless_stats.py",
       "entryPointArguments": [
         "--BUCKET", "t2-datacurriculum-353",
         "--BASE_PREFIX", "processed_dataset/curriculum_data",
         "--OUTPUT_PREFIX", "processed_dataset/curriculum_pyspark_output"
       ],
-      "sparkSubmitParameters": "--conf spark.sql.shuffle.partitions=200"
+      "sparkSubmitParameters": "--conf spark.executor.cores=4 --conf spark.executor.memory=16g --conf spark.driver.cores=4 --conf spark.driver.memory=16g --conf spark.sql.shuffle.partitions=200"
+    }
+  }' \
+  --configuration-overrides '{
+    "monitoringConfiguration": {
+      "s3MonitoringConfiguration": {
+        "logUri": "s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/logs/"
+      }
     }
   }'
 ```
+
+---
+
+## Output Locations
+
+All results are centralized under the `OUTPUT_PREFIX`:
+
+1.  **Processed Data**: `s3://<BUCKET>/processed_dataset/curriculum_pyspark_output/source=<SOURCE>/` (JSONL format)
+2.  **Distribution Stats**: `s3://<BUCKET>/processed_dataset/curriculum_pyspark_output/stats/<SOURCE>/` (CSV format)
+3.  **Job Logs**: `s3://<BUCKET>/processed_dataset/curriculum_pyspark_output/logs/` (Spark stdout/stderr)
 
 ### Script Arguments
 - `--BUCKET`: The S3 bucket name.
