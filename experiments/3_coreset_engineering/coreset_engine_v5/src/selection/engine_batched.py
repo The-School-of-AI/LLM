@@ -11,7 +11,7 @@ import random
 
 import numpy as np
 
-from ..core.types import ChunkMetadata, DifficultyBand
+from ..core.types import ChunkMetadata, DifficultyBand, difficulty_band_order
 from .engine import SelectionEngine
 
 
@@ -607,13 +607,14 @@ class BatchedSelectionEngine(SelectionEngine):
         """Initialize remaining band token budgets for a stage based on curriculum ratios."""
         stage_config = self.curriculum.get_stage_config(stage_name)
         if not stage_config:
-            return {b: 0 for b in ["B0", "B1", "B2", "B3", "B4", "B5"]}
+            return {b: 0 for b in difficulty_band_order()}
 
         band_ratios = stage_config.band_ratios
-        # Deterministic rounding: floor each band then give remainder to B5.
+        # Deterministic rounding: floor each band then give remainder to the highest band.
         remaining: Dict[str, int] = {}
         total = 0
-        for band_name in ["B0", "B1", "B2", "B3", "B4", "B5"]:
+        ordered_bands = difficulty_band_order()
+        for band_name in ordered_bands:
             ratio = float(getattr(band_ratios, band_name, 0.0) or 0.0)
             tokens = int(stage_target_tokens * ratio)
             remaining[band_name] = max(0, tokens)
@@ -621,7 +622,9 @@ class BatchedSelectionEngine(SelectionEngine):
 
         # Ensure sums match stage_target_tokens (within integer rounding).
         if total != int(stage_target_tokens):
-            remaining["B5"] = max(0, int(remaining.get("B5", 0)) + int(stage_target_tokens) - int(total))
+            if ordered_bands:
+                highest = ordered_bands[-1]
+                remaining[highest] = max(0, int(remaining.get(highest, 0)) + int(stage_target_tokens) - int(total))
         return remaining
 
     def _cap_bucket_targets_by_remaining(self, *, stage_name: str, batch_target_tokens: int) -> None:
@@ -680,7 +683,7 @@ class BatchedSelectionEngine(SelectionEngine):
         protected_domains = {
             _key(r.band_or_domain)
             for r in protected_slices
-            if _key(r.band_or_domain) not in {"B0", "B1", "B2", "B3", "B4", "B5"}
+            if _key(r.band_or_domain) not in set(difficulty_band_order())
         }
         if not protected_domains:
             return {}
@@ -689,7 +692,9 @@ class BatchedSelectionEngine(SelectionEngine):
         if not stage_spec:
             return {d: 0 for d in sorted(protected_domains)}
 
-        band_targets: Dict[str, float] = {b: float(getattr(stage_spec.band_ratios, b, 0.0) or 0.0) for b in ["B0","B1","B2","B3","B4","B5"]}
+        band_targets: Dict[str, float] = {
+            b: float(getattr(stage_spec.band_ratios, b, 0.0) or 0.0) for b in difficulty_band_order()
+        }
         inferred: Dict[str, float] = defaultdict(float)
         for band_enum, band_def in self.curriculum.bands.items():
             band_name = band_enum.value

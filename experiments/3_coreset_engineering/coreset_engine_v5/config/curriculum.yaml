@@ -110,7 +110,7 @@ difficulty_system:
       name: "Nursery"
       intent: "Surface language acquisition"
       allowed_modalities: ["general_text"]
-      allowed_domains: ["web", "social", "qa", "education", "instruction"]
+      allowed_domains: ["web", "social", "qa"]
       constraints:
         tokenizer:
           avg_max: 5000
@@ -126,7 +126,7 @@ difficulty_system:
       name: "Primary"
       intent: "Fluent everyday language"
       allowed_modalities: ["general_text", "clean_exposition"]
-      allowed_domains: ["web", "encyclopedia", "news", "social", "qa", "education", "instruction"]
+      allowed_domains: ["web", "encyclopedia", "news", "social", "qa"]
       constraints:
         tokenizer:
           avg_max: 10000
@@ -384,8 +384,8 @@ domains:
     - id: "education"
 
   band_domain_policy:
-    B0: ["web", "social", "qa", "education", "instruction"]
-    B1: ["web", "encyclopedia", "news", "social", "qa", "education", "instruction"]
+    B0: ["web", "social", "qa"]
+    B1: ["web", "encyclopedia", "news", "social", "qa"]
     B2: ["encyclopedia", "news", "education", "literature", "web", "qa"]
     B3: ["science", "math", "education", "code", "literature"]
     B4: ["science", "math", "code", "instruction"]

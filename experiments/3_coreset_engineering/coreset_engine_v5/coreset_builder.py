@@ -369,6 +369,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
             "band_p_b3",
             "band_p_b4",
             "band_p_b5",
+            "band_p_b6",
         }
         if self.band_score_source not in valid_sources:
             raise ValueError(
@@ -401,9 +402,9 @@ class StreamingCoresetBuilder(CoresetBuilder):
             centroids = dict(getattr(self.curriculum.difficulty_system, "difficulty_centroids", {}) or {})
 
         if not centroids:
-            centroids = {"B0": 0.10, "B1": 0.22, "B2": 0.40, "B3": 0.60, "B4": 0.78, "B5": 0.92}
+            centroids = {"B0": 0.10, "B1": 0.22, "B2": 0.40, "B3": 0.60, "B4": 0.78, "B5": 0.92, "B6": 0.97}
 
-        order = ["B0", "B1", "B2", "B3", "B4", "B5"]
+        order = ["B0", "B1", "B2", "B3", "B4", "B5", "B6"]
         best = "B0"
         best_dist = float("inf")
         for b in order:
@@ -481,7 +482,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 if v is not None:
                     return v
 
-            order = ["B0", "B1", "B2", "B3", "B4", "B5"]
+            order = ["B0", "B1", "B2", "B3", "B4", "B5", "B6"]
             best_val = None
             for b in order:
                 pv = _band_p_value(b)
@@ -495,9 +496,9 @@ class StreamingCoresetBuilder(CoresetBuilder):
         return None
 
     def _extract_band_from_band_p(self, row: Dict[str, Any], meta_dict: Dict[str, Any]) -> Optional[DifficultyBand]:
-        """Infer the discrete band label as argmax over band_p_B0..band_p_B5.
+        """Infer the discrete band label as argmax over band_p_B0..band_p_B6.
 
-        Deterministic tie-break: prefers lower bands first (B0..B5 order).
+        Deterministic tie-break: prefers lower bands first (B0..B6 order).
         """
 
         def _to_float(val) -> Optional[float]:
@@ -521,7 +522,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                     v = meta_dict.get(key.lower())
             return _to_float(v)
 
-        order = ["B0", "B1", "B2", "B3", "B4", "B5"]
+        order = ["B0", "B1", "B2", "B3", "B4", "B5", "B6"]
         best_band = None
         best_val = None
         for b in order:
@@ -621,6 +622,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 "band_p_B3",
                 "band_p_B4",
                 "band_p_B5",
+                "band_p_B6",
             ]
 
             batch_idx = 0
@@ -1098,6 +1100,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 B3=float(band_tokens.get("B3", 0)) / float(selected_tokens),
                 B4=float(band_tokens.get("B4", 0)) / float(selected_tokens),
                 B5=float(band_tokens.get("B5", 0)) / float(selected_tokens),
+                B6=float(band_tokens.get("B6", 0)) / float(selected_tokens),
             )
             domain_total = {k: float(v) / float(selected_tokens) for k, v in dict(domain_tokens).items()}
             by_band = {}
@@ -1304,12 +1307,13 @@ def main():
             "band_p_B3",
             "band_p_B4",
             "band_p_B5",
+            "band_p_B6",
         ],
         help=(
             "Select which field to use as the continuous band score for --band-inference. "
             "auto=band_score->difficulty_score->band_p_max. "
-            "band_p_max picks the max of band_p_B0..band_p_B5. "
-            "band_p_argmax infers the discrete band as argmax(band_p_B0..band_p_B5) when band inference triggers. "
+            "band_p_max picks the max of band_p_B0..band_p_B6. "
+            "band_p_argmax infers the discrete band as argmax(band_p_B0..band_p_B6) when band inference triggers. "
             "You can also pin a single probability via band_p_Bx."
         ),
     )

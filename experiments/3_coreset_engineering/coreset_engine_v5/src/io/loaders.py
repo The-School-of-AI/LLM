@@ -11,7 +11,7 @@ from dataclasses import asdict
 import concurrent.futures
 import pandas as pd
 
-from ..core.types import ChunkMetadata, CoresetManifest, DifficultyBand
+from ..core.types import ChunkMetadata, CoresetManifest, DifficultyBand, difficulty_band_order
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +373,7 @@ class AblationReporter:
                 report.append("**Band Distribution** (Difficulty Mix):\n\n")
                 report.append("| Band | Ratio | Tokens | Coverage |\n")
                 report.append("|------|-------|--------|----------|\n")
-                for band_name in ['B0', 'B1', 'B2', 'B3', 'B4', 'B5']:
+                for band_name in difficulty_band_order():
                     ratio = getattr(band_dist, band_name, 0.0)
                     band_tokens = int(stage_selected * ratio)
                     report.append(f"| {band_name} | {ratio:.2%} | {band_tokens:,} | {'✓' if ratio > 0 else '-'} |\n")

@@ -44,8 +44,15 @@ class TestCoresetValidator:
 
     def test_bands_available(self, validator):
         """Test bands are available from curriculum"""
-        assert len(validator.curriculum.bands) == 6
-        from src.core.types import DifficultyBand
+        assert len(validator.curriculum.bands) >= 6
+        from src.core.types import DifficultyBand, difficulty_band_order
+
+        # Curriculum may add additional bands (e.g., B6). All must be valid DifficultyBand values.
+        valid_band_names = set(difficulty_band_order())
+        for band_enum in validator.curriculum.bands.keys():
+            assert band_enum.value in valid_band_names
+
+        # Base curricula are expected to define at least B0..B5.
         for band_str in ["B0", "B1", "B2", "B3", "B4", "B5"]:
             band = DifficultyBand(band_str)
             assert band in validator.curriculum.bands

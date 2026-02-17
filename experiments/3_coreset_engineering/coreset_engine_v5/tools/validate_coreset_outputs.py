@@ -15,7 +15,7 @@ import os
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.curriculum.loader import CurriculumLoader
-from src.core.types import DifficultyBand, BandDistribution
+from src.core.types import DifficultyBand, BandDistribution, difficulty_band_order
 from src.core.config import PipelineConfig
 
 
@@ -362,7 +362,7 @@ class CoresetValidator:
 
         selected_total_tokens = self._get_selected_tokens_from_manifest(manifest)
 
-        for band_name in ["B0", "B1", "B2", "B3", "B4", "B5"]:
+        for band_name in difficulty_band_order():
             expected = getattr(expected_ratios, band_name, 0.0)
             actual = band_dist.get(band_name, 0.0)
             
@@ -457,7 +457,7 @@ class CoresetValidator:
         if isinstance(domain_dist, dict) and domain_dist:
             used_bands = []
             if stage_config and getattr(stage_config, "band_ratios", None):
-                for band_name in ["B0", "B1", "B2", "B3", "B4", "B5"]:
+                for band_name in difficulty_band_order():
                     if getattr(stage_config.band_ratios, band_name, 0.0) > 0:
                         used_bands.append(band_name)
             for domain_name in domain_dist.keys():

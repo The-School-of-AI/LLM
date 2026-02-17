@@ -25,6 +25,12 @@ class DifficultyBand(str, Enum):
     B3 = "B3"  # Undergraduate
     B4 = "B4"  # Graduate
     B5 = "B5"  # PhD
+    B6 = "B6"  # Post-PhD / Frontier
+
+
+def difficulty_band_order() -> List[str]:
+    """Canonical ordered list of band names (e.g., ["B0", "B1", ...])."""
+    return [b.value for b in DifficultyBand]
 
 
 class StageName(str, Enum):
@@ -88,6 +94,7 @@ class BandDistribution:
     B3: float = 0.0
     B4: float = 0.0
     B5: float = 0.0
+    B6: float = 0.0
     
     def to_dict(self) -> Dict[str, float]:
         return {
@@ -97,6 +104,7 @@ class BandDistribution:
             "B3": self.B3,
             "B4": self.B4,
             "B5": self.B5,
+            "B6": self.B6,
         }
     
     @classmethod
@@ -105,7 +113,7 @@ class BandDistribution:
     
     def validate(self) -> bool:
         """Verify distribution sums to ~1.0"""
-        total = sum([self.B0, self.B1, self.B2, self.B3, self.B4, self.B5])
+        total = sum([self.B0, self.B1, self.B2, self.B3, self.B4, self.B5, self.B6])
         return 0.99 <= total <= 1.01
 
 

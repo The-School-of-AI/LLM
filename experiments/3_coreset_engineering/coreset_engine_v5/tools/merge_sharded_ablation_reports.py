@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from src.core.types import difficulty_band_order
+
 
 _UTC = _dt.timezone.utc
 
@@ -310,7 +312,7 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
         report.append("**Band Distribution** (Difficulty Mix):\n\n")
         report.append("| Band | Ratio | Tokens | Coverage |\n")
         report.append("|------|-------|--------|----------|\n")
-        for band in ["B0", "B1", "B2", "B3", "B4", "B5"]:
+        for band in difficulty_band_order():
             tok = st.band_tokens.get(band, 0)
             r = _ratio(tok, stage_sel)
             report.append(f"| {band} | {_fmt_pct(r)} | {_fmt_int(tok)} | {'✓' if tok > 0 else '-'} |\n")
@@ -352,12 +354,19 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
     report.append("## Coverage Diagnostics\n\n")
     report.append("### Curriculum Adherence\n\n")
     report.append("The selection maintains target distributions for:\n")
-    report.append("- **Difficulty Bands (B0-B5)**: Ensures learning progression from easy to hard examples\n")
+    bands = difficulty_band_order()
+    if bands:
+        report.append(f"- **Difficulty Bands ({bands[0]}-{bands[-1]})**: Ensures learning progression from easy to hard examples\n")
+    else:
+        report.append("- **Difficulty Bands**: Ensures learning progression from easy to hard examples\n")
     report.append(f"- **Domains**: Provides diverse content ({', '.join(sorted(all_domains)) if all_domains else 'None'})\n")
     report.append(f"- **Languages**: Covers target languages ({', '.join(sorted(all_langs)) if all_langs else 'None'})\n\n")
 
     report.append("### Coverage Achievement\n\n")
-    report.append(f"- **Difficulty Bands Covered**: {len(all_bands)}/6 bands ({', '.join(sorted(all_bands)) if all_bands else 'None'})\n")
+    report.append(
+        f"- **Difficulty Bands Covered**: {len(all_bands)}/{len(bands)} bands ("
+        f"{', '.join(sorted(all_bands)) if all_bands else 'None'})\n"
+    )
     report.append(f"- **Domains Covered**: {len(all_domains)} domains ({', '.join(sorted(all_domains)) if all_domains else 'None'})\n")
     report.append(f"- **Languages Covered**: {len(all_langs)} languages ({', '.join(sorted(all_langs)) if all_langs else 'None'})\n\n")
 
