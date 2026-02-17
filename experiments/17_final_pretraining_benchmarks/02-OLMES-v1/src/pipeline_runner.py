@@ -77,6 +77,8 @@ def main():
 
     parser.add_argument("--device", type=str, default=default_device, help=f"Execution device (default: {default_device})")
     parser.add_argument("--batch_size", type=str, default="1", help="Execution batch size")
+    parser.add_argument("--vllm", action="store_true", help="Use vLLM engine for OLMES (GPU only)")
+    parser.add_argument("--num_workers", type=int, default=1, help="Number of parallel workers for OLMES (default 1 for Mac stability)")
     
     args = parser.parse_args()
     
@@ -141,6 +143,7 @@ def main():
                 "baseline": group.get("baseline"),
                 "subjects": group.get("subjects"),
                 "subset": group.get("subset"),
+                "limit": group.get("limit"),
                 "tasks": group.get("tasks_refined") or group.get("tasks") 
             }
             
@@ -172,52 +175,89 @@ def main():
     benchmark_timings = []  # List of (name, duration_seconds)
     benchmarks_start = time.time()
     
-    for b in benchmarks_to_run:
+    # NEW: Grouping logic for OLMES tasks
+    processed_indices = set()
+    for i, b in enumerate(benchmarks_to_run):
+        if i in processed_indices:
+            continue
+            
         current_limit = args.limit if args.limit is not None else b.get("limit")
-        bench_name = b.get("olmes_task") or b.get("harness_task") or b.get("custom_script") or b["name"]
         
-        logger.info(f"\n⏱  Starting benchmark: {bench_name}")
-        bench_start = time.time()
-        
+        # Determine if this is a candidate for OLMES batching
         if b.get("olmes_task"):
-            res = eval_runner.run_olmes_benchmark(
-                b, args.model_args, eval_logger, run_dir, 
-                limit=current_limit, device=args.device, batch_size=args.batch_size
-            )
-        elif b.get("harness_task"):
-            res = eval_runner.run_harness_benchmark(
-                b, args.model_args, eval_logger, run_dir, 
-                limit=current_limit, device=args.device, batch_size=args.batch_size
-            )
-        elif b.get("custom_script"):
-            res = eval_runner.run_custom_benchmark(
-                b, args.model_args, eval_logger, run_dir, 
-                limit=current_limit, device=args.device
-            )
-        
-        bench_elapsed = time.time() - bench_start
-        benchmark_timings.append((bench_name, bench_elapsed))
-        logger.info(f"⏱  Finished benchmark: {bench_name} in {bench_elapsed:.1f}s ({bench_elapsed/60:.1f}m)")
-        
-        if res.get("status") == "success" and not res.get("subtasks"):
-            # Enrichment: OLMES tasks might not return subtasks if eval_runner is kept vanilla
-            if b.get("olmes_task"):
-                task_safe = b["olmes_task"].replace("/", "_").replace(":", "_")
-                metrics_path = os.path.join(run_dir, "olmes_raw", task_safe, "metrics.json")
-                if os.path.exists(metrics_path):
-                    try:
-                        with open(metrics_path, "r") as mf:
-                            res_data = json.load(mf)
-                            if "tasks" in res_data and isinstance(res_data["tasks"], list):
-                                res["subtasks"] = sorted([
-                                    {"task": t.get("alias", "unknown"), "score": t.get("metrics", {}).get("primary_score", 0.0)}
-                                    for t in res_data["tasks"]
-                                ], key=lambda x: x["task"])
-                    except Exception: pass
+            batch = [b]
+            processed_indices.add(i)
+            
+            # Look ahead for more OLMES tasks with same limit
+            for j in range(i + 1, len(benchmarks_to_run)):
+                next_b = benchmarks_to_run[j]
+                next_limit = args.limit if args.limit is not None else next_b.get("limit")
+                
+                if next_b.get("olmes_task") and next_limit == current_limit:
+                    batch.append(next_b)
+                    processed_indices.add(j)
+                else:
+                    # Break run on first non-matching task
+                    break
+            
+            batch_names = ", ".join([batch_item.get("olmes_task") for batch_item in batch])
+            logger.info(f"\n⏱  Starting OLMES Batch ({len(batch)} tasks): {batch_names}")
+            bench_start = time.time()
+            
+            # Determine if we should use vLLM (Auto-detect GPU)
+            use_vllm_engine = args.vllm or (torch.cuda.is_available() and args.device != "cpu")
+            if use_vllm_engine and not args.vllm:
+                logger.info("  [Auto-Speed] CUDA detected—automatically enabling vLLM engine for OLMES.")
 
-        # Store timing in the result too
-        res["duration_seconds"] = round(bench_elapsed, 2)
-        results["benchmarks"].append(res)
+            # Execute batch
+            batch_results = eval_runner.run_olmes_benchmark(
+                batch, args.model_args, eval_logger, run_dir, 
+                limit=current_limit, device=args.device, batch_size=args.batch_size,
+                use_vllm=use_vllm_engine, num_workers=args.num_workers
+            )
+            
+            bench_elapsed = time.time() - bench_start
+            
+            # Handle results (could be a list if run_olmes_benchmark returned a list)
+            if not isinstance(batch_results, list):
+                batch_results = [batch_results]
+                
+            for res in batch_results:
+                res["duration_seconds"] = round(bench_elapsed / len(batch), 2)
+                results["benchmarks"].append(res)
+                benchmark_timings.append((res["name"], res["duration_seconds"]))
+            
+            logger.info(f"⏱  Finished OLMES Batch in {bench_elapsed:.1f}s")
+            
+        else:
+            # Standard single-task run (Harness or Custom)
+            bench_name = b.get("harness_task") or b.get("custom_script") or b["name"]
+            logger.info(f"\n⏱  Starting benchmark: {bench_name}")
+            bench_start = time.time()
+            
+            if b.get("harness_task"):
+                res = eval_runner.run_harness_benchmark(
+                    b, args.model_args, eval_logger, run_dir, 
+                    limit=current_limit, device=args.device, batch_size=args.batch_size
+                )
+            elif b.get("custom_script"):
+                res = eval_runner.run_custom_benchmark(
+                    b, args.model_args, eval_logger, run_dir, 
+                    limit=current_limit, device=args.device
+                )
+            else:
+                # Fallback
+                res = {"name": bench_name, "status": "skipped", "reason": "Unknown task type"}
+                
+            bench_elapsed = time.time() - bench_start
+            benchmark_timings.append((bench_name, bench_elapsed))
+            logger.info(f"⏱  Finished benchmark: {bench_name} in {bench_elapsed:.1f}s")
+            
+            res["duration_seconds"] = round(bench_elapsed, 2)
+            results["benchmarks"].append(res)
+            processed_indices.add(i)
+
+        # Periodic save
         with open(output_json_path, "w") as f:
             json.dump(results, f, indent=4)
     

@@ -611,179 +611,135 @@ def run_custom_benchmark(
 
 
 def run_olmes_benchmark(
-    benchmark_info, model_args, logger, run_dir, limit=None, device=None, batch_size="1"
+    benchmark_info, model_args, logger, run_dir, limit=None, device=None, batch_size="1", use_vllm=False, num_workers=1
 ):
     """
     Executes a benchmark using the OLMES (oe-eval) engine.
+    Supports single task or batch of tasks.
     """
-    task = benchmark_info.get("olmes_task")
-    
-    # Setup OLMES raw status folder - Isolate by task to avoid collision/overwriting metrics.json
-    task_safe = task.replace("/", "_").replace(":", "_")
-    task_raw_dir = os.path.join(run_dir, "olmes_raw", task_safe)
+    is_batch = isinstance(benchmark_info, list)
+    if is_batch:
+        tasks = [b.get("olmes_task") for b in benchmark_info]
+        bench_names = [b["name"] for b in benchmark_info]
+        primary_name = f"Batch:{len(tasks)}_tasks"
+    else:
+        tasks = [benchmark_info.get("olmes_task")]
+        bench_names = [benchmark_info["name"]]
+        primary_name = benchmark_info["name"]
+
+    # Setup OLMES raw status folder
+    # For batches, we use a generic name or the first task's name
+    folder_name = tasks[0].replace("/", "_").replace(":", "_") if not is_batch else "batch_" + datetime.now().strftime("%H%M%S")
+    task_raw_dir = os.path.join(run_dir, "olmes_raw", folder_name)
     if not os.path.exists(task_raw_dir):
         os.makedirs(task_raw_dir)
 
-    task_output_path = os.path.join(task_raw_dir, "metrics.json")
-
-    # Determine python executable (prefer local .venv in the experiment dir)
+    # Determine python executable
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     local_venv = os.path.join(root_dir, ".venv", "bin", "python3")
-    cwd_venv = os.path.join(os.getcwd(), ".venv", "bin", "python3")
-    
-    py_exec = sys.executable
-    if os.path.exists(local_venv):
-        py_exec = local_venv
-    elif os.path.exists(cwd_venv):
-        py_exec = cwd_venv
+    py_exec = local_venv if os.path.exists(local_venv) else sys.executable
 
-    # Extract model path from model_args
+    # Extract model path
     model_path = ""
     if "pretrained=" in model_args:
         model_path = model_args.split("pretrained=")[1].split(",")[0]
     else:
-        model_path = model_args # Fallback
+        model_path = model_args
 
-    # Determine olmes executable path robustly
     import shutil
     olmes_executable = shutil.which("olmes")
-    
-    # If not in PATH, check relative to py_exec
     if not olmes_executable:
         olmes_relative = os.path.join(os.path.dirname(py_exec), "olmes")
         if os.path.exists(olmes_relative):
             olmes_executable = olmes_relative
 
-    if olmes_executable:
-        cmd = [olmes_executable]
-    else:
-        # Fallback to module if script not found
-        logger.warning("  [OLMES] 'olmes' executable not found in PATH or near python. Falling back to 'python -m oe_eval'.")
-        cmd = [py_exec, "-m", "oe_eval"]
-
-    cmd += [
-        "--model",
-        model_path,
-        "--task",
-        task,
-        "--output-dir",
-        task_raw_dir,
-    ]
+    cmd = [olmes_executable] if olmes_executable else [py_exec, "-m", "oe_eval"]
+    
+    cmd += ["--model", model_path]
+    
+    # Add all tasks
+    for t in tasks:
+        cmd += ["--task", t]
+        
+    cmd += ["--output-dir", task_raw_dir]
 
     if limit:
         cmd += ["--limit", str(limit)]
+    if batch_size:
+        cmd += ["--batch-size", str(batch_size)]
+    if use_vllm:
+        cmd += ["--vllm"]
 
-    logger.info(f"  [OLMES] Running: {task} (BS={batch_size}, limit={limit})...")
+    cmd += ["--num-workers", str(num_workers)]
+
+    logger.info(f"  [OLMES] Running {len(tasks)} tasks (limit={limit}, batch_size={batch_size})...")
     
     try:
-        # PATH Shim: OLMES internal launcher expects a 'python' command.
-        # We create a temporary directory with a 'python' symlink pointing to the current interpreter.
         with tempfile.TemporaryDirectory() as tmp_dir:
             python_shim = os.path.join(tmp_dir, "python")
-            try:
-                # Create a shell script wrapper for the 'python' shim
-                # This is more robust than a symlink for virtual environments
-                with open(python_shim, "w") as f:
-                    f.write(f"#!/bin/sh\nexec '{py_exec}' \"$@\"\n")
-                os.chmod(python_shim, 0o755)
-            except Exception as e:
-                # Fallback for systems where this might fail
-                import shutil
-                shutil.copy2(py_exec, python_shim)
+            with open(python_shim, "w") as f:
+                f.write(f"#!/bin/sh\nexec '{py_exec}' \"$@\"\n")
+            os.chmod(python_shim, 0o755)
 
-            # Update environment PATH
             env = os.environ.copy()
             env["PATH"] = f"{tmp_dir}{os.pathsep}{env.get('PATH', '')}"
 
-            # Run OLMES with the PATH shim
-            result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
-                check=True,
-                env=env
-            )
-            
-            # Save raw logs for isolation
-            with open(os.path.join(task_raw_dir, "stdout.log"), "w") as f:
-                f.write(result.stdout)
-            if result.stderr:
-                with open(os.path.join(task_raw_dir, "stderr.log"), "w") as f:
-                    f.write(result.stderr)
-            
-            if result.stdout:
-                logger.info(result.stdout)
+            subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
 
-        # OLMES saves aggregate results in metrics.json in the output-dir
-        actual_path = os.path.join(task_raw_dir, "metrics.json")
+        metrics_path = os.path.join(task_raw_dir, "metrics.json")
+        if not os.path.exists(metrics_path):
+             return {"name": primary_name, "type": "olmes", "status": "failed", "error": "metrics.json missing"}
 
-        if not os.path.exists(actual_path):
-             # Fallback: search for any json containing the task metrics
-             for root, dirs, files in os.walk(task_raw_dir):
-                 for file in files:
-                     if file.endswith("metrics.json"):
-                         actual_path = os.path.join(root, file)
-                         break
-                 if actual_path: break
-
-        if not actual_path or not os.path.exists(actual_path):
-             return {
-                "name": benchmark_info["name"],
-                "type": "olmes",
-                "status": "failed",
-                "error": f"Result JSON not found after OLMES run at {task_raw_dir}",
-            }
-
-        with open(actual_path, "r") as f:
+        with open(metrics_path, "r") as f:
             res_data = json.load(f)
             
-            # OLMES metrics.json can have a 'tasks' list or a structure.
-            # Usually it's: {"tasks": [{"alias": "task_name", "metrics": {"primary_score": X}, ...}]}
+        # Parse results for each task
+        task_results = []
+        parsed_tasks = res_data.get("tasks", [])
+        
+        # OLMES might return more tasks than requested due to subtasks. 
+        # We try to map them back.
+        for i, original_task in enumerate(tasks):
+            # Find matching result
+            matching_result = None
+            for pt in parsed_tasks:
+                # check alias or task_name
+                alias = pt.get("alias", "")
+                if original_task in alias or alias in original_task:
+                    matching_result = pt
+                    break
+            
             score = 0.0
-            found_task = False
-            
-            if "tasks" in res_data and isinstance(res_data["tasks"], list):
-                for t_entry in res_data["tasks"]:
-                    # Match by alias or task_name
-                    if t_entry.get("alias") == task or task in t_entry.get("alias", ""):
-                        score = t_entry.get("metrics", {}).get("primary_score", 0.0)
-                        found_task = True
-                        break
-                
-                # If still not found, take the first one if there's only one
-                if not found_task and len(res_data["tasks"]) == 1:
-                    score = res_data["tasks"][0].get("metrics", {}).get("primary_score", 0.0)
-                    found_task = True
-            
-            # Fallback for different OLMES versions/shards
-            if not found_task:
-                score = res_data.get("results", {}).get(task, {}).get("primary_metric", 0.0)
+            subtasks = []
+            if matching_result:
+                score = matching_result.get("metrics", {}).get("primary_score", 0.0)
+                # If there are sub-metrics, collect them
+                for m_name, m_val in matching_result.get("metrics", {}).items():
+                    if m_name != "primary_score":
+                        subtasks.append({"task": m_name, "score": m_val})
 
-            return {
-                "name": benchmark_info["name"],
+            task_results.append({
+                "name": bench_names[i],
                 "type": "olmes",
-                "task": task,
-                "score": score,
                 "status": "success",
-            }
+                "score": score,
+                "subtasks": subtasks,
+                "raw_dir": task_raw_dir
+            })
+            
+        return task_results if is_batch else task_results[0]
 
     except subprocess.CalledProcessError as e:
-        error_msg = f"Command {e.cmd} failed with exit status {e.returncode}.\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}"
-        logger.error(f"  [Error] {error_msg}")
-        return {
-            "name": benchmark_info["name"],
-            "type": "olmes",
-            "status": "failed",
-            "error": error_msg,
-        }
+        logger.error(f"  [OLMES] Execution failed: {e.stderr}")
+        err_msg = e.stderr or str(e)
+        if is_batch:
+            return [{"name": n, "type": "olmes", "status": "failed", "error": err_msg} for n in bench_names]
+        return {"name": primary_name, "type": "olmes", "status": "failed", "error": err_msg}
     except Exception as e:
-        logger.error(f"  [Error] {str(e)}")
-        return {
-            "name": benchmark_info["name"],
-            "type": "olmes",
-            "status": "failed",
-            "error": str(e),
-        }
+        logger.error(f"  [OLMES] Unexpected error: {str(e)}")
+        if is_batch:
+            return [{"name": n, "type": "olmes", "status": "failed", "error": str(e)} for n in bench_names]
+        return {"name": primary_name, "type": "olmes", "status": "failed", "error": str(e)}
 
 
 def main():

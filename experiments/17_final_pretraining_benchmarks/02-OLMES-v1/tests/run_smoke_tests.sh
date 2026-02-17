@@ -82,7 +82,6 @@ echo "=========================================="
 for STAGE in "${STAGES[@]}"; do
     echo ""
     echo "--- Scaling to Stage: $STAGE ---"
-    02-OLMES-v1/.venv/bin/python3 02-OLMES-v1/src/pipeline_runner.py \
         --config "$CONFIG" \
         --stage "$STAGE" \
         --model_args "pretrained=$MODEL" \
