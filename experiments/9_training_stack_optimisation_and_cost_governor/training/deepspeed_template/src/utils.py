@@ -37,6 +37,18 @@ def is_main_process() -> bool:
         return True
     return torch.distributed.get_rank() == 0
 
+def get_rank() -> int:
+    """
+    Get the rank of the current process.
+
+    Returns:
+        The rank of the current process
+    """
+    if not torch.distributed.is_available():
+        return 0
+    if not torch.distributed.is_initialized():
+        return 0
+    return torch.distributed.get_rank()
 
 def print_rank_0(*args, **kwargs):
     """

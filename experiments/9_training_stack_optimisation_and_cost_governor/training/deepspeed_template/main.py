@@ -32,7 +32,10 @@ Configuration:
 
 import argparse
 import os
+import sys
+import time
 import warnings
+from pathlib import Path
 from typing import Any, Dict
 
 # Suppress deprecated pynvml FutureWarning emitted inside torch.cuda
@@ -372,6 +375,56 @@ def main():
     print_rank_0(f"ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
     # ========================================
+    # Step 3.1: Initialize run metrics tracker (TrainingOps)
+    # ========================================
+    run_tracker = None
+    try:
+        # Prefer an explicit components root if provided, so this works no matter
+        # where the training script lives.
+        components_root_str = os.environ.get("TRAINING_COMPONENTS_ROOT")
+        if components_root_str:
+            components_root = Path(components_root_str).expanduser().resolve()
+
+        if components_root.exists() and str(components_root) not in sys.path:
+            sys.path.append(str(components_root))
+
+        from components.training_ops import TrainingOps  # type: ignore
+
+        tracker_log_dir = os.path.join(args.output_dir, "run_logs")
+        run_id = os.environ.get("RUN_ID") or f"ds1b_{int(time.time())}"
+
+        # On macOS / non-systemd dev environments, skip strict Vector service checks.
+        skip_vector_check = sys.platform != "linux"
+        vector_service_name = os.environ.get("VECTOR_SERVICE_NAME", "p12-vector.service").strip() or None
+
+        run_tracker = TrainingOps(
+            run_id=run_id,
+            rank=int(getattr(model_engine, "local_rank", 0)),
+            log_dir=tracker_log_dir,
+            skip_vector_check=skip_vector_check,
+            vector_service_name=vector_service_name,
+            default_context={
+                "model": "1b_recurrence",
+                "embedding_type": args.embedding_type,
+                "dataset": f"{args.dataset_name}/{args.dataset_config}",
+                "deepspeed_config": args.deepspeed_config,
+            },
+        )
+
+        run_tracker.log_event(
+            step=0,
+            event_type="stage_transition",
+            message="training_run_started",
+            payload={
+                "config_file": cmd_args.config,
+                "output_dir": args.output_dir,
+            },
+        )
+    except Exception as e:
+        print_rank_0(f"Run tracker initialization failed; continuing without it. Error: {e}")
+        run_tracker = None
+
+    # ========================================
     # Step 3.5: Initialize Checkpoint Manager
     # ========================================
     checkpoint_manager = None
@@ -461,6 +514,7 @@ def main():
             checkpoint_manager=checkpoint_manager,
             start_step=epoch_start_step,
             global_step=global_step,
+            tracker=run_tracker,
         )
 
         # Evaluate on validation set
@@ -468,6 +522,18 @@ def main():
         eval_loss, eval_perplexity = evaluate(
             model_engine, eval_loader, phase="Validation", max_steps=args.max_eval_steps
         )
+        if run_tracker is not None:
+            try:
+                run_tracker.log_step(
+                    step=global_step,
+                    metrics={
+                        "loss/val": float(eval_loss),
+                        "perplexity/val": float(eval_perplexity),
+                    },
+                    context={"epoch": int(epoch), "phase": "validation"},
+                )
+            except Exception:
+                pass
 
         # Save epoch checkpoint
         if checkpoint_manager or args.save_checkpoint:
@@ -505,6 +571,18 @@ def main():
     test_loss, test_perplexity = evaluate(
         model_engine, test_loader, phase="Test", max_steps=args.max_eval_steps
     )
+    if run_tracker is not None:
+        try:
+            run_tracker.log_step(
+                step=global_step,
+                metrics={
+                    "loss/test": float(test_loss),
+                    "perplexity/test": float(test_perplexity),
+                },
+                context={"phase": "test"},
+            )
+        except Exception:
+            pass
 
     # Test text generation
     if args.test_generation:
@@ -556,6 +634,22 @@ def main():
 
     # Cleanup
     torch.cuda.empty_cache()
+
+    # Run tracker shutdown (if enabled)
+    if run_tracker is not None:
+        try:
+            run_tracker.log_event(
+                step=global_step,
+                event_type="stage_transition",
+                message="training_run_completed",
+                payload={"global_step": int(global_step), "epochs": int(args.num_epochs)},
+            )
+        except Exception:
+            pass
+        try:
+            run_tracker.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

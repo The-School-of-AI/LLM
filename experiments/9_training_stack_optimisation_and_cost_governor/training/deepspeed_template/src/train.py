@@ -50,6 +50,7 @@ def train_epoch(
     checkpoint_manager=None,
     start_step=0,
     global_step=0,
+    tracker=None,
 ):
     """
     Train the model for one epoch.
@@ -88,6 +89,29 @@ def train_epoch(
 
     # Structured JSONL logger (writes to output_dir/metrics.jsonl on rank 0)
     jsonl_log = _jsonl_logger(output_dir or "./logs")
+
+    # Cache any model-internal telemetry sources (best-effort; avoids per-step traversal)
+    gate_modules = None
+    if tracker is not None and is_main_process():
+        try:
+            cached = getattr(model_engine.module, "_telemetry_gate_modules", None)
+            if cached is None:
+                cached = [m for m in model_engine.module.modules() if hasattr(m, "last_stats")]
+                setattr(model_engine.module, "_telemetry_gate_modules", cached)
+            gate_modules = cached
+        except Exception:
+            gate_modules = None
+
+    if tracker is not None and is_main_process():
+        try:
+            tracker.log_event(
+                step=global_step,
+                event_type="epoch_start",
+                message=f"epoch={epoch} start",
+                payload={"epoch": int(epoch)},
+            )
+        except Exception:
+            pass
 
     # Accumulators for averaging loss/tokens across micro-batches within one
     # optimizer step (matches reference script pattern)
@@ -133,6 +157,7 @@ def train_epoch(
 
         # Forward pass
         is_reversible = hasattr(model_engine.module, 'stack') and hasattr(model_engine.module.stack, 'bootstrap_layer')
+        loss_ntp_val = loss_mtp_val = aux_loss_val = None
 
         if is_reversible:
             x_input = input_ids[:, :-2].contiguous()
@@ -164,10 +189,33 @@ def train_epoch(
                 with torch.no_grad():
                     print_rank_0(f"\nNaN detected at epoch {epoch}, micro-batch {i}!")
                     print_rank_0(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}")
+                if tracker is not None and is_main_process():
+                    try:
+                        tracker.log_event(
+                            step=global_step,
+                            event_type="nan_detected",
+                            severity="error",
+                            message="NaN detected in reversible losses",
+                            payload={
+                                "epoch": int(epoch),
+                                "micro_batch": int(i),
+                                "loss_ntp": float(loss_ntp.item()),
+                                "loss_mtp": float(loss_mtp.item()),
+                            },
+                        )
+                    except Exception:
+                        pass
 
             loss = loss_ntp + 0.3 * loss_mtp
             if aux_loss is not None and aux_loss.numel() > 0:
                 loss += aux_loss
+
+            try:
+                loss_ntp_val = float(loss_ntp.item())
+                loss_mtp_val = float(loss_mtp.item())
+                aux_loss_val = float(aux_loss.item()) if aux_loss is not None and aux_loss.numel() > 0 else 0.0
+            except Exception:
+                pass
 
             # Free intermediate tensors
             del x_input, y_ntp, y_mtp
@@ -217,6 +265,7 @@ def train_epoch(
             gpu_util = gpu_mem_used = gpu_mem_total = None
             cpu_util = cpu_mem_used = cpu_mem_total = None
             gpu_table = None
+            gpu_rows = None
             if enable_system_metrics:
                 vm = psutil.virtual_memory()
                 cpu_util = psutil.cpu_percent(interval=None)
@@ -303,19 +352,100 @@ def train_epoch(
                     print_rank_0(gpu_table)
 
             # Structured JSONL metrics (every optimizer step, rank 0 only)
+            lr = model_engine.get_lr()[0] if hasattr(model_engine, "get_lr") else None
             jsonl_log({
                 "epoch": epoch,
                 "global_step": global_step,
                 "loss": avg_step_loss,
+                "loss_ntp": loss_ntp_val,
+                "loss_mtp": loss_mtp_val,
+                "aux_loss": aux_loss_val,
                 "tokens_per_sec": tokens_per_sec,
                 "tokens": int(total_step_tokens),
                 "step_time_s": step_time,
                 "gpu_util_pct": gpu_util,
                 "gpu_mem_gb": gpu_mem_used,
                 "cpu_util_pct": cpu_util,
-                "lr": model_engine.get_lr()[0] if hasattr(model_engine, "get_lr") else None,
+                "lr": lr,
                 "timestamp": time.time(),
             })
+
+            # Telemetry integration (optional): durable local + optional direct DB writes.
+            if tracker is not None and is_main_process():
+                try:
+                    grad_norm = None
+                    if hasattr(model_engine, "get_global_grad_norm"):
+                        grad_norm = model_engine.get_global_grad_norm()
+                    elif hasattr(model_engine, "gradient_norm"):
+                        grad_norm = model_engine.gradient_norm
+                    metrics = {
+                        "loss/train": float(avg_step_loss),
+                        "loss/train_t_plus_1": loss_ntp_val,
+                        "loss/train_t_plus_2": loss_mtp_val,
+                        "loss/aux": aux_loss_val,
+                        "throughput/tokens_per_sec": float(tokens_per_sec),
+                        "tokens/processed_step": int(total_step_tokens),
+                        "time/step_s": float(step_time),
+                        "lr": lr,
+                        "grad/norm": float(grad_norm) if grad_norm is not None else None,
+                        "cpu/util_percent": float(cpu_util) if cpu_util is not None else None,
+                        "cpu/mem_used_gb": float(cpu_mem_used) if cpu_mem_used is not None else None,
+                        "cpu/mem_total_gb": float(cpu_mem_total) if cpu_mem_total is not None else None,
+                        "gpu/util_percent": float(gpu_util) if gpu_util is not None else None,
+                        "gpu/mem_used_gb": float(gpu_mem_used) if gpu_mem_used is not None else None,
+                        "gpu/mem_total_gb": float(gpu_mem_total) if gpu_mem_total is not None else None,
+                    }
+                    metrics = {k: v for k, v in metrics.items() if v is not None}
+                    tracker.log_metrics(step=global_step, metrics=metrics, context={"epoch": int(epoch), "phase": "train"})
+
+                    # Model-internal router diagnostics (if present)
+                    if gate_modules:
+                        null_rates = []
+                        aux_losses = []
+                        for gi, g in enumerate(gate_modules):
+                            try:
+                                st = getattr(g, "last_stats", None) or {}
+                                if st.get("is_dense"):
+                                    continue
+                                if "null_rate" in st:
+                                    null_rates.append((gi, float(st["null_rate"])))
+                                if "aux_loss" in st:
+                                    aux_losses.append((gi, float(st["aux_loss"])))
+                            except Exception:
+                                continue
+                        if null_rates:
+                            tracker.log_metric_array(
+                                step=global_step,
+                                metric="router/null_ratio",
+                                keys=[f"gate_{gi}" for gi, _ in null_rates],
+                                values=[v for _, v in null_rates],
+                                unit="ratio",
+                            )
+                        if aux_losses:
+                            tracker.log_metric_array(
+                                step=global_step,
+                                metric="loss/router_moe",
+                                keys=[f"gate_{gi}" for gi, _ in aux_losses],
+                                values=[v for _, v in aux_losses],
+                            )
+
+                    if gpu_rows:
+                        tracker.log_metric_array(
+                            step=global_step,
+                            metric="gpu/utilization",
+                            keys=[f"gpu_{idx}" for idx, _, _, _ in gpu_rows],
+                            values=[float(util) for _, util, _, _ in gpu_rows],
+                            unit="percent",
+                        )
+                        tracker.log_metric_array(
+                            step=global_step,
+                            metric="gpu/memory_used_gb",
+                            keys=[f"gpu_{idx}" for idx, _, _, _ in gpu_rows],
+                            values=[float(used_gb) for _, _, used_gb, _ in gpu_rows],
+                            unit="gb",
+                        )
+                except Exception:
+                    pass
 
             # Save checkpoint at optimizer-step granularity
             if checkpoint_interval is not None and global_step % checkpoint_interval == 0:
@@ -323,6 +453,17 @@ def train_epoch(
                 print_rank_0(
                     f"\nSaving checkpoint at epoch {epoch}, global_step {global_step}..."
                 )
+                if tracker is not None and is_main_process():
+                    try:
+                        tracker.log_event(
+                            step=global_step,
+                            event_type="checkpoint_start",
+                            message=f"checkpoint_tag={checkpoint_tag}",
+                            payload={"tag": checkpoint_tag, "epoch": int(epoch)},
+                        )
+                    except Exception:
+                        pass
+                t0_ckpt = time.time()
                 client_state = {
                     "epoch": epoch,
                     "step": optimizer_steps,
@@ -339,6 +480,31 @@ def train_epoch(
                     )
                 elif output_dir:
                     save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
+                if tracker is not None and is_main_process():
+                    try:
+                        duration_s = time.time() - t0_ckpt
+                        checkpoint_ref = checkpoint_tag
+                        if output_dir:
+                            checkpoint_ref = os.path.join(output_dir, checkpoint_tag)
+                        loss_for_ckpt = float(avg_step_loss) if avg_step_loss is not None else 0.0
+                        if hasattr(tracker, "log_checkpoint"):
+                            tracker.log_checkpoint(
+                                step=global_step,
+                                checkpoint_ref=checkpoint_ref,
+                                loss=loss_for_ckpt,
+                                tag="temporary",
+                                duration_s=duration_s,
+                                metadata={"epoch": int(epoch)},
+                            )
+                        else:
+                            tracker.log_event(
+                                step=global_step,
+                                event_type="checkpoint_saved",
+                                message=f"checkpoint_tag={checkpoint_tag}",
+                                payload={"tag": checkpoint_tag, "epoch": int(epoch), "duration_s": duration_s},
+                            )
+                    except Exception:
+                        pass
 
             # Reset accumulators for next optimizer step
             accum_loss = 0.0
@@ -352,6 +518,22 @@ def train_epoch(
 
     avg_loss = total_loss / optimizer_steps if optimizer_steps > 0 else 0
     print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
+
+    if tracker is not None and is_main_process():
+        try:
+            tracker.log_metrics(
+                step=global_step,
+                metrics={"loss/train_epoch_avg": float(avg_loss)},
+                context={"epoch": int(epoch), "phase": "train"},
+            )
+            tracker.log_event(
+                step=global_step,
+                event_type="epoch_end",
+                message=f"epoch={epoch} end",
+                payload={"epoch": int(epoch), "avg_loss": float(avg_loss)},
+            )
+        except Exception:
+            pass
 
     return avg_loss, global_step
 
