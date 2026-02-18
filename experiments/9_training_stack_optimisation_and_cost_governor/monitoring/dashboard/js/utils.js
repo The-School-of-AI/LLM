@@ -3,6 +3,7 @@
  */
 
 import { RUN_COLORS } from './constants.js';
+import { state } from './state.js';
 
 /** Format a numeric value for display. */
 export function fmt(v) {
@@ -27,9 +28,15 @@ export function stats(data) {
     return { min, max, mean: v.reduce((a, b) => a + b, 0) / v.length, latest: v[v.length - 1], count: v.length };
 }
 
-/** Get the color for a run by index. */
+/** Get the color for a run by its stable index (position-based, for things like pie slices). */
 export function getRunColor(runIdx) {
     return RUN_COLORS[runIdx % RUN_COLORS.length];
+}
+
+/** Get the stable color for a run by its run_id. Uses runColorMap in state. */
+export function getRunColorById(runId) {
+    const idx = state.runColorMap.get(runId) ?? 0;
+    return RUN_COLORS[idx % RUN_COLORS.length];
 }
 
 /** Map a 0-1 normalized value to a cool-blue → hot-red color. */

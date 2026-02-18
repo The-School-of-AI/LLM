@@ -3,7 +3,7 @@
  */
 
 import { state } from './state.js';
-import { getRunColor, showToast } from './utils.js';
+import { getRunColorById, showToast } from './utils.js';
 import { fetchRuns } from './api.js';
 import { discoverMetrics } from './metrics.js';
 import { generateCharts } from './charts.js';
@@ -92,13 +92,21 @@ export function toggleRunSel(runId) {
         state.selectedRuns.splice(idx, 1);
     } else {
         const run = state.allRuns.find(r => r.run_id === runId);
-        if (run) state.selectedRuns.push(run);
+        if (run) {
+            // Assign a stable color index that has never been used by another run
+            if (!state.runColorMap.has(run.run_id)) {
+                const usedIndices = new Set(state.runColorMap.values());
+                let colorIdx = 0;
+                while (usedIndices.has(colorIdx)) colorIdx++;
+                state.runColorMap.set(run.run_id, colorIdx);
+            }
+            state.selectedRuns.push(run);
+        }
     }
 
     renderRunDropdown();
     renderRunChips();
 
-    const newFirst = state.selectedRuns[0]?.run_id;
     if (state.selectedRuns.length && (wasFirst || idx < 0 && state.selectedRuns.length === 1)) {
         discoverMetrics();
     } else {
@@ -133,8 +141,8 @@ export function removeRun(runId) {
 function renderRunChips() {
     const el = document.getElementById('runChips');
     if (!state.selectedRuns.length) { el.innerHTML = ''; return; }
-    el.innerHTML = state.selectedRuns.map((r, i) => {
-        const col = getRunColor(i);
+    el.innerHTML = state.selectedRuns.map((r) => {
+        const col = getRunColorById(r.run_id);
         return `<div class="run-chip" style="color:${col};border-color:${col}40;background:${col}10">
             <span class="run-chip-label">${r.run_id.substring(0, 22)}</span>
             <button class="run-chip-x" style="color:${col}" data-run-id="${r.run_id}">&times;</button>

@@ -32,8 +32,7 @@ function setAutoRefresh() {
 async function autoRefresh() {
     if (!state.selectedRuns.length) return;
     await loadRuns();
-    const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
-    if (sel.length) await generateCharts();
+    if (state.selectedMetrics.size) await generateCharts();
     if (document.getElementById('panel-events').classList.contains('active')) await loadEvents();
     if (document.getElementById('panel-summary').classList.contains('active')) await loadSummary();
     showToast('\u21ba refreshed');
@@ -41,10 +40,7 @@ async function autoRefresh() {
 
 function manualRefresh() {
     loadRuns();
-    if (state.selectedRuns.length) {
-        const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
-        if (sel.length) generateCharts();
-    }
+    if (state.selectedRuns.length && state.selectedMetrics.size) generateCharts();
     showToast('\u21ba refreshed');
 }
 

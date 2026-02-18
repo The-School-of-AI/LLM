@@ -49,8 +49,8 @@ export function renderMetricSelector(metrics, filter = '') {
             const name = typeof m === 'object' ? m.name : m;
             const kind = typeof m === 'object' ? m.kind : 'scalar';
             const id = `m-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
-            const prev = document.getElementById(id);
-            const chk = prev?.checked ? 'checked' : '';
+            // Use state.selectedMetrics as source of truth — survives spinner clears & refreshes
+            const chk = state.selectedMetrics.has(name) ? 'checked' : '';
             html += `<div class="metric-item">
                 <input type="checkbox" id="${id}" value="${name}" data-cat="${cat}" ${chk}>
                 <label for="${id}">${name}</label>
@@ -64,7 +64,11 @@ export function renderMetricSelector(metrics, filter = '') {
 
     // Attach event handlers
     el.querySelectorAll('.metric-item input').forEach(cb => {
-        cb.addEventListener('change', () => generateCharts());
+        cb.addEventListener('change', () => {
+            if (cb.checked) state.selectedMetrics.add(cb.value);
+            else state.selectedMetrics.delete(cb.value);
+            generateCharts();
+        });
     });
     el.querySelectorAll('.cat-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -81,7 +85,10 @@ export function filterMetrics() {
 // ─── Select all / none in a category ───
 function selCat(cat, on) {
     document.querySelectorAll(`[data-cat="${cat}"]`).forEach(cb => {
-        if (cb.type === 'checkbox') cb.checked = on;
+        if (cb.type !== 'checkbox') return;
+        cb.checked = on;
+        if (on) state.selectedMetrics.add(cb.value);
+        else state.selectedMetrics.delete(cb.value);
     });
     generateCharts();
 }

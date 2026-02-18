@@ -4,17 +4,12 @@
 
 import { state } from './state.js';
 import { ICON } from './constants.js';
-import { fmt, stats, getRunColor, showToast } from './utils.js';
+import { fmt, stats, getRunColorById, showToast } from './utils.js';
 import { fetchData } from './api.js';
-
-// ─── Get list of currently checked metric names ───
-function getSelectedMetricNames() {
-    return Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
-}
 
 // ─── Main entry: rebuild all charts ───
 export async function generateCharts() {
-    const sel = getSelectedMetricNames();
+    const sel = Array.from(state.selectedMetrics);
     const el = document.getElementById('chartsContent');
 
     // Destroy existing charts
@@ -61,8 +56,8 @@ function createChart(container, metric, runDataMap, idx) {
     // Legend for multi-run
     let legendHtml = '';
     if (multiRun && !isHist) {
-        legendHtml = '<div class="chart-legend">' + state.selectedRuns.map((r, ri) => {
-            const col = getRunColor(ri);
+        legendHtml = '<div class="chart-legend">' + state.selectedRuns.map((r) => {
+            const col = getRunColorById(r.run_id);
             return `<div class="leg"><div class="leg-line" style="background:${col}"></div>${r.run_id.substring(0, 18)}</div>`;
         }).join('') + '</div>';
     }
@@ -85,7 +80,7 @@ function createChart(container, metric, runDataMap, idx) {
             ${toolbarHtml}
         </div>
         <div class="chart-stats-row">
-            <div class="cstat"><span class="cstat-label">current</span><span class="cstat-value" style="color:${getRunColor(0)}">${ps ? fmt(ps.latest) : '\u2014'}</span></div>
+            <div class="cstat"><span class="cstat-label">current</span><span class="cstat-value" style="color:${getRunColorById(state.selectedRuns[0].run_id)}">${ps ? fmt(ps.latest) : '\u2014'}</span></div>
             <div class="cstat"><span class="cstat-label">min</span><span class="cstat-value">${ps ? fmt(ps.min) : '\u2014'}</span></div>
             <div class="cstat"><span class="cstat-label">max</span><span class="cstat-value">${ps ? fmt(ps.max) : '\u2014'}</span></div>
             <div class="cstat"><span class="cstat-label">mean</span><span class="cstat-value">${ps ? fmt(ps.mean) : '\u2014'}</span></div>
@@ -115,7 +110,7 @@ function createChart(container, metric, runDataMap, idx) {
         if (isHist) {
             buildHistogramChart(ctx, cvId, metric, runDataMap, multiRun);
         } else {
-            buildLineChart(ctx, cvId, metric, runDataMap, multiRun);
+            buildLineChart(ctx, cvId, metric, runDataMap);
         }
     } catch (e) {
         console.error('Chart render error for', metric, e);
@@ -124,11 +119,11 @@ function createChart(container, metric, runDataMap, idx) {
 
 // ─── Histogram (bar) chart ───
 function buildHistogramChart(ctx, cvId, metric, runDataMap, multiRun) {
-    const datasets = state.selectedRuns.map((r, ri) => {
+    const datasets = state.selectedRuns.map((r) => {
         const d = runDataMap[r.run_id]?.[metric] || [];
         const last = d[d.length - 1] || {};
         const v = last.value || [];
-        const col = getRunColor(ri);
+        const col = getRunColorById(r.run_id);
         return { label: r.run_id.substring(0, 18), data: v, backgroundColor: col + '99', borderColor: col, borderWidth: 1 };
     }).filter(ds => ds.data.length > 0);
 
@@ -165,10 +160,11 @@ function buildHistogramChart(ctx, cvId, metric, runDataMap, multiRun) {
 }
 
 // ─── Line chart ───
-function buildLineChart(ctx, cvId, metric, runDataMap, multiRun) {
-    const datasets = state.selectedRuns.map((r, ri) => {
+function buildLineChart(ctx, cvId, metric, runDataMap) {
+    const primaryId = state.selectedRuns[0].run_id;
+    const datasets = state.selectedRuns.map((r) => {
         const d = runDataMap[r.run_id]?.[metric] || [];
-        const col = getRunColor(ri);
+        const col = getRunColorById(r.run_id);
         return {
             label: r.run_id.substring(0, 18),
             data: d.map(p => ({ x: Number(p.x), y: Number(p.y) })),
@@ -179,7 +175,7 @@ function buildLineChart(ctx, cvId, metric, runDataMap, multiRun) {
             pointRadius: 0,
             pointHoverRadius: 4,
             fill: state.selectedRuns.length === 1,
-            borderDash: ri === 0 ? [] : [5, 3],
+            borderDash: r.run_id === primaryId ? [] : [5, 3],
         };
     }).filter(ds => ds.data.length > 0);
 

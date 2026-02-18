@@ -11,6 +11,10 @@ export const state = {
     summaryCharts: {},      // canvasId -> Chart instance (summary tab)
     refreshTimer: null,
     dropdownOpen: false,
-    expandedMetrics: new Set(),  // track which metrics are expanded across refreshes
-    zoomMode: {},           // per-chart: 'box' | 'pan' | null
+    expandedMetrics: new Set(),  // metric names currently expanded (persists across refreshes)
+    zoomMode: {},           // per-chart: 'box' | null
+    // Stable color assignment: run_id -> color index. Never re-assigned after first add.
+    runColorMap: new Map(),
+    // Source-of-truth for checked metrics — persists across discoverMetrics / refresh cycles.
+    selectedMetrics: new Set(),
 };

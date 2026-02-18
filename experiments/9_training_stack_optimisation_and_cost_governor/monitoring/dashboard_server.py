@@ -9,6 +9,16 @@ import clickhouse_connect
 from pathlib import Path
 from collections import defaultdict
 import os
+import threading
+
+# Load .env file if it exists (no extra packages needed)
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
 
 # -----------------------------------------------------------------------------
 # CONFIGURATION — set these as environment variables, never hardcode them
@@ -29,15 +39,20 @@ DASHBOARD_DIR = Path("dashboard")
 app = Flask(__name__)
 CORS(app)
 
-ch_client = clickhouse_connect.get_client(
-    host=CLICKHOUSE_HOST,
-    port=CLICKHOUSE_PORT,
-    username=CLICKHOUSE_USER,
-    password=CLICKHOUSE_PASSWORD,
-    database=CLICKHOUSE_DB,
-    secure=True,
-    verify=False,  # keep only if TLS cert validation fails
-)
+_thread_local = threading.local()
+
+def ch_client():
+    if not hasattr(_thread_local, "client"):
+        _thread_local.client = clickhouse_connect.get_client(
+            host=CLICKHOUSE_HOST,
+            port=CLICKHOUSE_PORT,
+            username=CLICKHOUSE_USER,
+            password=CLICKHOUSE_PASSWORD,
+            database=CLICKHOUSE_DB,
+            secure=True,
+            verify=False,
+        )
+    return _thread_local.client
 
 
 # -----------------------------------------------------------------------------
@@ -57,7 +72,7 @@ ch_client = clickhouse_connect.get_client(
 TABLE_REGISTRY = {}
 
 def discover_tables():
-    result = ch_client.query("""
+    result = ch_client().query("""
         SELECT table, name, type
         FROM system.columns
         WHERE database = %(db)s
@@ -157,7 +172,7 @@ def get_runs():
             ORDER BY {order}
             LIMIT 200
         """
-        result = ch_client.query(query)
+        result = ch_client().query(query)
 
         runs = []
         for row in result.result_rows:
@@ -180,7 +195,7 @@ def get_runs():
     for table, info in TABLE_REGISTRY.items():
         if info["role"] in ("scalar", "array", "events", "generic"):
             try:
-                rows = ch_client.query(f"""
+                rows = ch_client().query(f"""
                     SELECT DISTINCT run_id FROM {table}
                     WHERE run_id != '' LIMIT 200
                 """).result_rows
@@ -206,7 +221,7 @@ def discover_metrics(run_id):
         if "metric" not in info["columns"]:
             continue
         try:
-            rows = ch_client.query(f"""
+            rows = ch_client().query(f"""
                 SELECT DISTINCT metric FROM {table}
                 WHERE run_id = %(run_id)s
                 ORDER BY metric
@@ -241,7 +256,7 @@ def get_metric_data(run_id, metric_names, max_points=1000):
         if "metric" not in info["columns"]:
             continue
         try:
-            rows = ch_client.query(f"""
+            rows = ch_client().query(f"""
                 SELECT DISTINCT metric FROM {table}
                 WHERE run_id = %(run_id)s
             """, {"run_id": run_id}).result_rows
@@ -267,7 +282,7 @@ def get_metric_data(run_id, metric_names, max_points=1000):
                 val_col = arr_cols[0] if arr_cols else "values"
 
                 if has_keys:
-                    rows = ch_client.query(f"""
+                    rows = ch_client().query(f"""
                         SELECT step, keys, {val_col} FROM {table}
                         WHERE run_id = %(run_id)s AND metric = %(metric)s
                         ORDER BY step
@@ -278,7 +293,7 @@ def get_metric_data(run_id, metric_names, max_points=1000):
                             for r in rows
                         ]
                 else:
-                    rows = ch_client.query(f"""
+                    rows = ch_client().query(f"""
                         SELECT step, {val_col} FROM {table}
                         WHERE run_id = %(run_id)s AND metric = %(metric)s
                         ORDER BY step
@@ -292,7 +307,7 @@ def get_metric_data(run_id, metric_names, max_points=1000):
                 print(f"⚠ Array query failed for {metric} in {table}: {e}")
         else:
             try:
-                rows = ch_client.query(f"""
+                rows = ch_client().query(f"""
                     SELECT step, avg(value) AS value
                     FROM {table}
                     WHERE run_id = %(run_id)s AND metric = %(metric)s
@@ -327,7 +342,7 @@ def get_run_events(run_id, limit=200):
                 "host"       if "host"       in cols else "'' AS host",
                 "rank"       if "rank"       in cols else "0 AS rank",
             ]
-            rows = ch_client.query(f"""
+            rows = ch_client().query(f"""
                 SELECT {', '.join(select_parts)}
                 FROM {table}
                 WHERE run_id = %(run_id)s
@@ -355,7 +370,7 @@ def get_current_metrics(run_id):
         if "metric" not in info["columns"]:
             continue
         try:
-            rows = ch_client.query(f"""
+            rows = ch_client().query(f"""
                 SELECT metric, argMax(value, step)
                 FROM {table}
                 WHERE run_id = %(run_id)s
@@ -423,7 +438,7 @@ def api_refresh_tables():
 @app.route("/api/health")
 def api_health():
     try:
-        ch_client.query("SELECT 1")
+        ch_client().query("SELECT 1")
         return jsonify({
             "status": "ok",
             "clickhouse": "connected",
