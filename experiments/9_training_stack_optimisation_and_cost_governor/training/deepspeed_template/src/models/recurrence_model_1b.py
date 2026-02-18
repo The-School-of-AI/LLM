@@ -1131,9 +1131,9 @@ class GatedSparseAttention(nn.Module):
         scale_attn = 1.0 / math.sqrt(self.head_dim)
 
         # q, k_attn, v are already [B, T, H, D] — kernel's expected layout
-        # Training must use differentiable PyTorch path: the Triton sparse-attn
-        # wrapper is forward-only and is not wired into autograd.
-        if (not self.training) and HAS_TRITON and triton_sparse_attention is not None and q.is_cuda:
+        # IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
+        # autograd, which breaks the reversible midpoint backward recompute.
+        if (not torch.is_grad_enabled()) and HAS_TRITON and triton_sparse_attention is not None and q.is_cuda:
             o_sparse = triton_sparse_attention(
                 q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
             )
