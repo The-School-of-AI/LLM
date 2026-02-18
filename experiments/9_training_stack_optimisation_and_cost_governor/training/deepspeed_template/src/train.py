@@ -92,6 +92,9 @@ def train_epoch(
     # Accumulators for averaging loss/tokens across micro-batches within one
     # optimizer step (matches reference script pattern)
     accum_loss = 0.0
+    accum_loss_ntp = 0.0
+    accum_loss_mtp = 0.0
+    accum_loss_aux = 0.0
     accum_tokens = 0
     step_start_time = time.time()
 
@@ -187,6 +190,10 @@ def train_epoch(
 
         # Accumulate metrics for this micro-batch
         accum_loss += loss.item()
+        if is_reversible:
+            accum_loss_ntp += loss_ntp.item()
+            accum_loss_mtp += loss_mtp.item()
+            accum_loss_aux += aux_loss.item() if (aux_loss is not None and aux_loss.numel() > 0) else 0.0
         with torch.no_grad():
             tokens = attention_mask.sum().item()
             accum_tokens += int(tokens)
@@ -213,6 +220,9 @@ def train_epoch(
 
             # Average loss across micro-batches in this optimizer step
             avg_step_loss = accum_loss / grad_accum_steps
+            avg_ntp = accum_loss_ntp / grad_accum_steps
+            avg_mtp = accum_loss_mtp / grad_accum_steps
+            avg_aux = accum_loss_aux / grad_accum_steps
 
             # tok/s = total tokens across ALL micro-batches in this step / wall time
             # Also aggregate across ranks for multi-GPU
@@ -278,6 +288,9 @@ def train_epoch(
             # Update progress bar
             postfix = {
                 "loss": f"{avg_step_loss:.4f}",
+                "NTP": f"{avg_ntp:.4f}",
+                "MTP": f"{avg_mtp:.4f}",
+                "Aux": f"{avg_aux:.4f}",
                 "global_step": global_step,
                 "toks/s": f"{tokens_per_sec:.1f}",
             }
@@ -293,7 +306,8 @@ def train_epoch(
             if optimizer_steps % log_interval == 0:
                 msg = (
                     f"Epoch {epoch}, Global Step {global_step}, "
-                    f"Loss: {avg_step_loss:.4f}, Tokens/s: {tokens_per_sec:.1f}, "
+                    f"Loss: {avg_step_loss:.4f} (NTP: {avg_ntp:.4f}, MTP: {avg_mtp:.4f}, Aux: {avg_aux:.4f}), "
+                    f"Tokens/s: {tokens_per_sec:.1f}, "
                     f"Tokens: {int(total_step_tokens)}"
                 )
                 if enable_system_metrics:
@@ -318,6 +332,9 @@ def train_epoch(
                 "epoch": epoch,
                 "global_step": global_step,
                 "loss": avg_step_loss,
+                "loss_ntp": avg_ntp,
+                "loss_mtp": avg_mtp,
+                "loss_aux": avg_aux,
                 "tokens_per_sec": tokens_per_sec,
                 "tokens": int(total_step_tokens),
                 "step_time_s": step_time,
@@ -353,6 +370,9 @@ def train_epoch(
 
             # Reset accumulators for next optimizer step
             accum_loss = 0.0
+            accum_loss_ntp = 0.0
+            accum_loss_mtp = 0.0
+            accum_loss_aux = 0.0
             accum_tokens = 0
             step_start_time = time.time()
             micro_batch_idx = 0
