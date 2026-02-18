@@ -17,6 +17,7 @@ Usage:
 
     # Run specific test
     pytest test_training_gpu.py::test_zero_stage2_config -v
+    
 Note: Most tests use @pytest.mark.skipif to automatically skip when CUDA is unavailable.
 For CPU-only testing, use test_training_cpu.py instead.
 """
