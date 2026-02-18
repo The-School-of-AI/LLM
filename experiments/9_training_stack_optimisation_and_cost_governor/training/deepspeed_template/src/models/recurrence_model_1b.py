@@ -144,7 +144,7 @@ import torch.nn.functional as F
 import logging
 import math
 import numpy as np
-from typing import List, Optional, Dict
+from typing import List, Optional
 from dataclasses import dataclass
 
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
@@ -821,7 +821,7 @@ class GatedDeltaNet(nn.Module):
 
         outputs = torch.empty(B, self.num_heads, T, self.head_dim, device=device, dtype=torch.float32)
 
-        I = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
+        eye = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
 
         for t in range(T):
             q_t = q_h[:, :, t, :].float()
@@ -840,7 +840,7 @@ class GatedDeltaNet(nn.Module):
             alpha_t = alpha_t.view(B, self.num_heads, 1, 1)
             beta_t = beta_t.view(B, self.num_heads, 1, 1)
 
-            orthogonal_proj = I - beta_t * k_outer
+            orthogonal_proj = eye - beta_t * k_outer
             S = alpha_t * torch.einsum('bhde,bhef->bhdf', S, orthogonal_proj) + beta_t * v_outer
 
         return outputs.to(original_dtype).transpose(1, 2)
@@ -1047,7 +1047,6 @@ class GatedSparseAttention(nn.Module):
         # from micro-batch B would overwrite micro-batch A's indices before A's backward pass.
         # The fused_indexer_topk kernel is O(N) and adds <1% overhead vs O(N·K) attention.
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = self.training and torch.is_grad_enabled()
 
         # REVERSIBILITY FIX: During the forward pass (no_grad), snapshot the
         # current variance_ema BEFORE computing indices, then update the live
@@ -1891,12 +1890,12 @@ class Model1B(nn.Module):
             embedding_params = self.vocab_size * config.hidden_size / 1e6
             embedding_buffer = 0
 
-        print(f"\n🤖 MODEL-1B (DENSE) INITIALIZED:")
+        print("\n🤖 MODEL-1B (DENSE) INITIALIZED:")
         print(f"   Vocabulary: {self.vocab_size:,}")
         print(f"   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
-            print(f"\n   📐 Kronecker Embeddings:")
-            print(f"      POS_DIM=32 x CHAR_DIM=256 = D=8192")
+            print("\n   📐 Kronecker Embeddings:")
+            print("      POS_DIM=32 x CHAR_DIM=256 = D=8192")
             print(f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)")
             print(f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})")
             print(f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})")
@@ -1908,7 +1907,7 @@ class Model1B(nn.Module):
         print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
         print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
-        print(f"   Active Parameters: ~1.513B (100% active, no MoE sparsity)")
+        print("   Active Parameters: ~1.513B (100% active, no MoE sparsity)")
 
     def _init_weights(self, module):
         # FIX #38: Skip initialization for kronecker_embeddings and all its submodules
@@ -2184,15 +2183,15 @@ if __name__ == "__main__":
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
-    print(f"\nAttention Mix:")
+    print("\nAttention Mix:")
     print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context")
     print(f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality")
-    print(f"\nModel Type:")
+    print("\nModel Type:")
     if num_experts == 0:
-        print(f"  DENSE MODEL (No MoE)")
+        print("  DENSE MODEL (No MoE)")
         print(f"  Dense FFN intermediate: {config.shared_expert_intermediate_size}")
     else:
-        print(f"  MoE MODEL")
+        print("  MoE MODEL")
         print(f"  Real Experts: {num_experts}")
         print(f"  Null Experts: {num_experts} (ρ={config.data_sparsity})")
         print(f"  Total slots: {config.total_expert_slots}")
