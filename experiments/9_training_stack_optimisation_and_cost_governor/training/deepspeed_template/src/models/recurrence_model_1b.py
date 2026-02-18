@@ -138,25 +138,31 @@ Before deploying this model at 256k context, the following MUST be addressed:
 ═══════════════════════════════════════════════════════════════════════════════
 """
 
+import logging
+import math
+from dataclasses import dataclass
+from typing import List, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
-import math
-import numpy as np
-from typing import List, Optional
-from dataclasses import dataclass
 
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
 # All kernels have automatic PyTorch fallbacks when Triton/fla unavailable.
 try:
     from ..kernels import (
-        HAS_TRITON, HAS_FLA,
-        triton_sparse_attention, pytorch_sparse_attention,
-        triton_sinkhorn_knopp, pytorch_sinkhorn_knopp,
-        triton_rmsnorm, pytorch_rmsnorm, TritonRMSNorm,
+        HAS_FLA,
+        HAS_TRITON,
+        TritonRMSNorm,
         fla_gated_delta_rule,
         fused_indexer_topk,
+        pytorch_rmsnorm,
+        pytorch_sinkhorn_knopp,
+        pytorch_sparse_attention,
+        triton_rmsnorm,
+        triton_sinkhorn_knopp,
+        triton_sparse_attention,
     )
 except ImportError:
     HAS_TRITON = False
@@ -2137,7 +2143,7 @@ def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
 
 if __name__ == "__main__":
     # Calculate actual metrics from weight_calculator.py
-    from weight_calculator import LightningConfig, LightningCalculator
+    from weight_calculator import LightningCalculator, LightningConfig
 
     config_calc = LightningConfig(
         vocab_size=131072,
