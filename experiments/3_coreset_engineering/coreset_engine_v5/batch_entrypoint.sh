@@ -12,7 +12,7 @@
 #   NUM_SHARDS         - Must equal the AWS Batch arrayProperties.size
 #
 # Optional (with defaults):
-#   S3_BUCKET          - S3 bucket name (default: abhi-t2-datacurriculum-353)
+#   S3_BUCKET          - S3 bucket name (default: t2-datacurriculum-353)
 #   S3_INPUT_PATH      - Full S3 prefix for input data
 #                        (default: s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/source=books/)
 #
@@ -48,7 +48,7 @@ NUM_SHARDS="${NUM_SHARDS:-8}"
 # ---------------------------------------------------------------------------
 # S3 configuration (with sensible defaults)
 # ---------------------------------------------------------------------------
-S3_BUCKET="${S3_BUCKET:-abhi-t2-datacurriculum-353}"
+S3_BUCKET="${S3_BUCKET:-t2-datacurriculum-353}"
 S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/source=books/}"
 
 # ---------------------------------------------------------------------------

@@ -36,7 +36,7 @@ fi
 # --- Configuration (UPDATE THESE) ---------------------------------------------
 # These can be overridden by environment variables (e.g. for CI/CD)
 BRANCH_NAME="${BRANCH_NAME:-p3/feat/stage-wise-coreset-selection_v2}"
-S3_BUCKET="${S3_BUCKET:-abhi-t2-datacurriculum-353}"
+S3_BUCKET="${S3_BUCKET:-t2-datacurriculum-353}"
 S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/source=books/}"
 NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"

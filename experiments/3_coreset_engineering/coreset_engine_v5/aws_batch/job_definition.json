@@ -31,11 +31,11 @@
     "environment": [
       {
         "name": "S3_BUCKET",
-        "value": "abhi-t2-datacurriculum-353"
+        "value": "t2-datacurriculum-353"
       },
       {
         "name": "S3_INPUT_PATH",
-        "value": "s3://abhi-t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=books/"
+        "value": "s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=books/"
       },
       {
         "name": "TOTAL_TOKENS",
