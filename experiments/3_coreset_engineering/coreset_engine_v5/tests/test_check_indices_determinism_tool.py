@@ -21,7 +21,9 @@ def test_check_indices_determinism_smoke(tmp_path: Path, ext: str) -> None:
     pyarrow = pytest.importorskip("pyarrow")  # noqa: F841
     import pandas as pd
 
-    tool = Path(__file__).resolve().parents[1] / "tools" / "check_indices_determinism.py"
+    tool = (
+        Path(__file__).resolve().parents[1] / "tools" / "check_indices_determinism.py"
+    )
 
     out_a = tmp_path / "output_a" / "coresets" / "1B"
     out_b = tmp_path / "output_b" / "coresets" / "1B"
@@ -41,8 +43,14 @@ def test_check_indices_determinism_smoke(tmp_path: Path, ext: str) -> None:
     )
 
     if ext == "jsonl":
-        file_a.write_text("\n".join(df.to_json(orient="records", lines=True).splitlines()) + "\n", encoding="utf-8")
-        file_b.write_text("\n".join(df.to_json(orient="records", lines=True).splitlines()) + "\n", encoding="utf-8")
+        file_a.write_text(
+            "\n".join(df.to_json(orient="records", lines=True).splitlines()) + "\n",
+            encoding="utf-8",
+        )
+        file_b.write_text(
+            "\n".join(df.to_json(orient="records", lines=True).splitlines()) + "\n",
+            encoding="utf-8",
+        )
     else:
         df.to_parquet(file_a, index=False)
         df.to_parquet(file_b, index=False)
@@ -55,11 +63,20 @@ def test_check_indices_determinism_smoke(tmp_path: Path, ext: str) -> None:
     df2.loc[1, "band"] = "B5"
 
     if ext == "jsonl":
-        file_b.write_text("\n".join(df2.to_json(orient="records", lines=True).splitlines()) + "\n", encoding="utf-8")
+        file_b.write_text(
+            "\n".join(df2.to_json(orient="records", lines=True).splitlines()) + "\n",
+            encoding="utf-8",
+        )
     else:
         df2.to_parquet(file_b, index=False)
 
-    bad = _run(tool, "--output-dirs", str(out_a.parents[1]), str(out_b.parents[1]), "--show-first-diff")
+    bad = _run(
+        tool,
+        "--output-dirs",
+        str(out_a.parents[1]),
+        str(out_b.parents[1]),
+        "--show-first-diff",
+    )
     assert bad.returncode == 2
     assert "mismatch" in (bad.stdout + bad.stderr).lower()
 
@@ -69,7 +86,9 @@ def test_check_indices_determinism_ignores_row_order(tmp_path: Path, ext: str) -
     pyarrow = pytest.importorskip("pyarrow")  # noqa: F841
     import pandas as pd
 
-    tool = Path(__file__).resolve().parents[1] / "tools" / "check_indices_determinism.py"
+    tool = (
+        Path(__file__).resolve().parents[1] / "tools" / "check_indices_determinism.py"
+    )
 
     out_a = tmp_path / "output_a" / "coresets" / "1B"
     out_b = tmp_path / "output_b" / "coresets" / "1B"
@@ -91,9 +110,13 @@ def test_check_indices_determinism_ignores_row_order(tmp_path: Path, ext: str) -
     df_shuffled = df.iloc[::-1].reset_index(drop=True)
 
     if ext == "jsonl":
-        file_a.write_text("\n".join(df.to_json(orient="records", lines=True).splitlines()) + "\n", encoding="utf-8")
+        file_a.write_text(
+            "\n".join(df.to_json(orient="records", lines=True).splitlines()) + "\n",
+            encoding="utf-8",
+        )
         file_b.write_text(
-            "\n".join(df_shuffled.to_json(orient="records", lines=True).splitlines()) + "\n",
+            "\n".join(df_shuffled.to_json(orient="records", lines=True).splitlines())
+            + "\n",
             encoding="utf-8",
         )
     else:

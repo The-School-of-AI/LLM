@@ -11,10 +11,8 @@ from collections import defaultdict
 from pathlib import Path
 
 import pytest
-
 from src.core.types import DifficultyBand, difficulty_band_order
 from src.curriculum.loader import CurriculumLoader
-
 
 _CHUNKS_FILE = Path("data/datasets/large_sample_chunks.jsonl")
 

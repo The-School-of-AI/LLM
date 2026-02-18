@@ -57,7 +57,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
-
 _MISSING = "__MISSING__"
 
 
@@ -119,7 +118,9 @@ def _iter_stage_dirs(coreset_root: Path, stages: Optional[Sequence[str]]) -> Lis
     return out
 
 
-def _collect_index_files(coreset_root: Path, stages: Optional[Sequence[str]]) -> Dict[str, Path]:
+def _collect_index_files(
+    coreset_root: Path, stages: Optional[Sequence[str]]
+) -> Dict[str, Path]:
     files: Dict[str, Path] = {}
     for stage_dir in _iter_stage_dirs(coreset_root, stages):
         if not stage_dir.exists() or not stage_dir.is_dir():
@@ -309,7 +310,9 @@ def _compute_stats(relpath: str, path: Path) -> FileStats:
     )
 
 
-def _try_show_first_diff(baseline_path: Path, other_path: Path, *, max_rows: int = 200_000) -> Optional[str]:
+def _try_show_first_diff(
+    baseline_path: Path, other_path: Path, *, max_rows: int = 200_000
+) -> Optional[str]:
     """Attempt to find a concrete first differing cell for small-ish files."""
 
     ext = baseline_path.suffix.lower()
@@ -379,14 +382,20 @@ def _iter_stage_index_paths(stage_dir: Path) -> List[Path]:
         return part_paths
 
     merged: List[Path] = []
-    for name in ("selected_indices.parquet", "selected_indices.jsonl", "selected_indices.csv"):
+    for name in (
+        "selected_indices.parquet",
+        "selected_indices.jsonl",
+        "selected_indices.csv",
+    ):
         p = stage_dir / name
         if p.exists() and p.is_file():
             merged.append(p)
     return merged
 
 
-def _iter_chunk_band_pairs_from_parquet(path: Path, *, batch_rows: int = 65_536) -> Iterator[Tuple[str, str]]:
+def _iter_chunk_band_pairs_from_parquet(
+    path: Path, *, batch_rows: int = 65_536
+) -> Iterator[Tuple[str, str]]:
     try:
         import pyarrow as pa  # type: ignore
         import pyarrow.parquet as pq  # type: ignore
@@ -420,7 +429,9 @@ def _iter_chunk_band_pairs_from_jsonl(path: Path) -> Iterator[Tuple[str, str]]:
         yield (str(chunk_id), str(band) if band is not None else "__NO_BAND__")
 
 
-def _iter_chunk_band_pairs_from_csv(path: Path, *, chunksize: int = 100_000) -> Iterator[Tuple[str, str]]:
+def _iter_chunk_band_pairs_from_csv(
+    path: Path, *, chunksize: int = 100_000
+) -> Iterator[Tuple[str, str]]:
     pd = _pd()
     # Prefer reading only needed columns.
     usecols = ["chunk_id", "band"]
@@ -435,15 +446,21 @@ def _iter_chunk_band_pairs_from_csv(path: Path, *, chunksize: int = 100_000) -> 
         if "chunk_id" not in chunk.columns:
             continue
         if has_band and "band" in chunk.columns:
-            for chunk_id, band in zip(chunk["chunk_id"].astype(object), chunk["band"].astype(object)):
-                if chunk_id is None or (isinstance(chunk_id, float) and pd.isna(chunk_id)):
+            for chunk_id, band in zip(
+                chunk["chunk_id"].astype(object), chunk["band"].astype(object)
+            ):
+                if chunk_id is None or (
+                    isinstance(chunk_id, float) and pd.isna(chunk_id)
+                ):
                     continue
                 if band is None or (isinstance(band, float) and pd.isna(band)):
                     band = "__NO_BAND__"
                 yield (str(chunk_id), str(band))
         else:
             for chunk_id in chunk["chunk_id"].astype(object):
-                if chunk_id is None or (isinstance(chunk_id, float) and pd.isna(chunk_id)):
+                if chunk_id is None or (
+                    isinstance(chunk_id, float) and pd.isna(chunk_id)
+                ):
                     continue
                 yield (str(chunk_id), "__NO_BAND__")
 
@@ -462,7 +479,9 @@ def _iter_chunk_band_pairs(path: Path) -> Iterator[Tuple[str, str]]:
     raise ValueError(f"Unsupported indices file extension: {path}")
 
 
-def _collect_chunk_ids_by_stage_band(coreset_root: Path, stages: Optional[Sequence[str]]) -> Dict[Tuple[str, str], set[str]]:
+def _collect_chunk_ids_by_stage_band(
+    coreset_root: Path, stages: Optional[Sequence[str]]
+) -> Dict[Tuple[str, str], set[str]]:
     out: Dict[Tuple[str, str], set[str]] = {}
     for stage_dir in _iter_stage_dirs(coreset_root, stages):
         if not stage_dir.exists() or not stage_dir.is_dir():
@@ -517,10 +536,14 @@ def _run_strict_file_comparison(
                 print(f"  + {p}")
 
     common_relpaths = sorted(
-        set.intersection(*[set(file_maps[d].keys()) for d in out_dirs]) if out_dirs else set()
+        set.intersection(*[set(file_maps[d].keys()) for d in out_dirs])
+        if out_dirs
+        else set()
     )
 
-    print(f"[INFO] Comparing {len(common_relpaths)} common files across {len(out_dirs)} runs...")
+    print(
+        f"[INFO] Comparing {len(common_relpaths)} common files across {len(out_dirs)} runs..."
+    )
 
     baseline_stats: Dict[str, FileStats] = {}
     for rel in common_relpaths:
@@ -551,7 +574,9 @@ def _run_strict_file_comparison(
 
             if b.rows != o.rows:
                 mismatches += 1
-                print(f"[FAIL] {rel}: row count differs baseline={b.rows} other={o.rows}")
+                print(
+                    f"[FAIL] {rel}: row count differs baseline={b.rows} other={o.rows}"
+                )
                 if show_first_diff:
                     print(f"       diff: {_try_show_first_diff(b_path, o_path)}")
                 continue
@@ -571,8 +596,14 @@ def _run_strict_file_comparison(
 
             if b.file_digest != o.file_digest:
                 mismatches += 1
-                diff_cols = [c for c in b.columns if b.column_digests.get(c) != o.column_digests.get(c)]
-                print(f"[FAIL] {rel}: value digests differ (columns changed: {len(diff_cols)})")
+                diff_cols = [
+                    c
+                    for c in b.columns
+                    if b.column_digests.get(c) != o.column_digests.get(c)
+                ]
+                print(
+                    f"[FAIL] {rel}: value digests differ (columns changed: {len(diff_cols)})"
+                )
                 if diff_cols:
                     print(f"       columns (first 20): {diff_cols[:20]}")
                 if show_first_diff:
@@ -627,7 +658,9 @@ def _run_chunk_id_by_stage_band_comparison(
         extra_keys = other_keys - base_keys
         if missing_keys:
             mismatches += 1
-            print(f"[FAIL] Missing (stage, band) groups: {len(missing_keys)} (first 10):")
+            print(
+                f"[FAIL] Missing (stage, band) groups: {len(missing_keys)} (first 10):"
+            )
             for k in sorted(list(missing_keys))[:10]:
                 print(f"  - {k[0]}/{k[1]}")
         if extra_keys:
@@ -650,15 +683,21 @@ def _run_chunk_id_by_stage_band_comparison(
                 f"[FAIL] {stage}/{band}: chunk_id set differs (baseline={len(bset)} other={len(oset)} missing={len(missing)} extra={len(extra)})"
             )
             if missing:
-                print(f"       missing chunk_id (first 10): {_sample_set_items(missing)}")
+                print(
+                    f"       missing chunk_id (first 10): {_sample_set_items(missing)}"
+                )
             if extra:
                 print(f"       extra   chunk_id (first 10): {_sample_set_items(extra)}")
 
     if mismatches == 0:
-        print("\n[OK] chunk_id-by-stage-band check passed: all compared stages/bands match.")
+        print(
+            "\n[OK] chunk_id-by-stage-band check passed: all compared stages/bands match."
+        )
         return 0
 
-    print(f"\n[FAIL] chunk_id-by-stage-band check failed: {mismatches} mismatches found.")
+    print(
+        f"\n[FAIL] chunk_id-by-stage-band check failed: {mismatches} mismatches found."
+    )
     return 2
 
 

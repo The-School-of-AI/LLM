@@ -10,10 +10,10 @@ Implementation: SQLite with a primary-key table of chunk_id.
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Set
-import sqlite3
 
 
 @dataclass
@@ -46,7 +46,9 @@ class UsedChunksStore:
         if not ids:
             return 0
         with self._connect() as conn:
-            conn.executemany("INSERT OR IGNORE INTO used_chunks(chunk_id) VALUES (?);", ids)
+            conn.executemany(
+                "INSERT OR IGNORE INTO used_chunks(chunk_id) VALUES (?);", ids
+            )
             # sqlite3 doesn't reliably expose inserted count with OR IGNORE;
             # return input count as an upper bound.
         return len(ids)
@@ -61,7 +63,10 @@ class UsedChunksStore:
         with self._connect() as conn:
             conn.execute("DROP TABLE IF EXISTS tmp_ids;")
             conn.execute("CREATE TEMP TABLE tmp_ids (chunk_id TEXT PRIMARY KEY);")
-            conn.executemany("INSERT OR IGNORE INTO tmp_ids(chunk_id) VALUES (?);", [(cid,) for cid in ids_list])
+            conn.executemany(
+                "INSERT OR IGNORE INTO tmp_ids(chunk_id) VALUES (?);",
+                [(cid,) for cid in ids_list],
+            )
 
             cur = conn.execute(
                 """
