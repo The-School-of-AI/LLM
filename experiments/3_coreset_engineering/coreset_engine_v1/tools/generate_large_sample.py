@@ -1,7 +1,7 @@
+import argparse
 import json
 import random
 from pathlib import Path
-import argparse
 
 BANDS = ["B0", "B1", "B2", "B3", "B4", "B5"]
 DOMAINS = ["code", "math", "reasoning", "agentic", "indic", "clean_web"]

@@ -1,0 +1,27 @@
+s3:
+  bucket: "t2-datacurriculum-353"
+  base_prefix: "processed_dataset/curriculum_data"
+  output_prefix: "processed_dataset/curriculum_pyspark_output"
+  checkpoint_path: "processed_dataset/checkpoints/curriculum_pyspark"
+
+processing:
+  parallelism: 200      # Optimized number of partitions for Spark shuffles
+  batch_size: 1000
+  default_bands: ["B0", "B1", "B2", "B3", "B4", "B5"]
+  
+# AWS Glue Job Parameters (Reference for Experts)
+glue_config:
+  worker_type: "G.1X"   # Recommended for basic processing
+  num_workers: 10       # Initial scale (Adjust based on data volume)
+  max_retries: 0
+  timeout: 2880         # 48 hours
+
+schema:
+  rename_columns:
+    uuid: "chunk_id"
+  drop_columns:
+    - "id"
+    - "text"
+    - "hash"
+    - "metadata"
+    - "assigned_band"

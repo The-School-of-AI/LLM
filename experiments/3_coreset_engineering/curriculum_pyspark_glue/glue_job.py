@@ -1,18 +1,18 @@
+import os
 import sys
+
+from awsglue.context import GlueContext
+from awsglue.job import Job
 from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
-from awsglue.context import GlueContext
-from awsglue.job import Job
-
+from src.processor import SparkDataProcessor
 from src.utils import (
-    setup_glue_logger,
-    load_config,
     CheckpointManager,
     discover_sources_from_s3,
+    load_config,
+    setup_glue_logger,
 )
-from src.processor import SparkDataProcessor
-import os
 
 
 def main():

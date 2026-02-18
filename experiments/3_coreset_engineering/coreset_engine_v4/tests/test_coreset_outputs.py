@@ -3,11 +3,11 @@ Test suite for coreset output validation
 Tests the CoresetValidator against generated coreset outputs
 """
 
-import pytest
 import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
+import pytest
 from tools.validate_coreset_outputs import CoresetValidator, ValidationCheck
 
 

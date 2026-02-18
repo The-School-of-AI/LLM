@@ -1,5 +1,5 @@
-import json
 import glob
+import json
 from collections import defaultdict
 
 base = "output/coresets"

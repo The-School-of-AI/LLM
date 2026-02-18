@@ -1,6 +1,7 @@
-import boto3
 import logging
-from typing import List, Dict, Set
+from typing import Dict, List, Set
+
+import boto3
 from pyarrow.fs import S3FileSystem
 
 logger = logging.getLogger("data_pipeline")

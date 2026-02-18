@@ -3,10 +3,10 @@ Diversity metrics and scoring for coreset selection.
 Ensures coverage across rare tokens, tail phenomena, and diverse domains.
 """
 
-from typing import Dict, Set, List, Tuple, Optional
-from collections import defaultdict, Counter
-from collections import OrderedDict
 from bisect import bisect_right
+from collections import Counter, OrderedDict, defaultdict
+from typing import Dict, List, Optional, Set, Tuple
+
 import numpy as np
 from scipy.stats import entropy as scipy_entropy
 

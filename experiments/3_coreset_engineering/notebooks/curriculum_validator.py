@@ -4,9 +4,10 @@ Curriculum Data Validator for Coreset Building
 Validates curriculum data from the curriculum team before coreset selection.
 """
 
-import pandas as pd
-import matplotlib.pyplot as plt
 from typing import Dict, List, Optional, Tuple
+
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 class CurriculumValidator:

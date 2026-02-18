@@ -3,13 +3,13 @@ Error handling and recovery system for production coreset selection.
 Provides retry logic, graceful degradation, and detailed error reporting.
 """
 
-import logging
 import functools
+import logging
 import time
 import traceback
-from typing import Callable, Any, Optional, List, Dict, Type
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Type
 
 logger = logging.getLogger(__name__)
 

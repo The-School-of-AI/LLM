@@ -3,11 +3,11 @@ Core data structures and type definitions for the coreset selection engine.
 Provides type-safe interfaces for all pipeline components.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Set, Optional, Any, Tuple
-from enum import Enum
 import json
+from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 class ProcessingStatus(str, Enum):

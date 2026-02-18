@@ -3,10 +3,10 @@ Enhanced selection engine with batch processing support for 2T+ token scale.
 Extends SelectionEngine with streaming deduplication and checkpoint-aware selection.
 """
 
-from typing import Dict, List, Set, Optional, Tuple, Any, Generator, Iterable, Deque
 import logging
-from collections import defaultdict, deque, Counter
 import time
+from collections import Counter, defaultdict, deque
+from typing import Any, Deque, Dict, Generator, Iterable, List, Optional, Set, Tuple
 
 from ..core.types import ChunkMetadata, DifficultyBand
 from .engine import SelectionEngine

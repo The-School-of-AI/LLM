@@ -23,12 +23,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 from dataclasses import dataclass
 from math import ceil
 from pathlib import Path
 from typing import Dict, List, Tuple
-
-import random
 
 import yaml
 

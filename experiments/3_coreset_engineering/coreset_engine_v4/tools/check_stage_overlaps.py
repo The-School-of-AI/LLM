@@ -5,7 +5,7 @@ Usage: run from repo root or from coreset_engine; script locates `coreset_engine
 
 import json
 import os
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 
 ROOT = os.path.join(
     os.path.dirname(__file__), "..", "coreset_engine", "output", "coresets"

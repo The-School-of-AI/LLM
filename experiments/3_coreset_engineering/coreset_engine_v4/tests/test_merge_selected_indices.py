@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from tools.merge_selected_indices import merge_stage_parts
 
 

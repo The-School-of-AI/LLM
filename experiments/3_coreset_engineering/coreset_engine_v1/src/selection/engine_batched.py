@@ -3,9 +3,9 @@ Enhanced selection engine with batch processing support for 2T+ token scale.
 Extends SelectionEngine with streaming deduplication and checkpoint-aware selection.
 """
 
-from typing import Dict, List, Set, Optional, Tuple, Any, Generator
 import logging
 from collections import defaultdict
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
 from ..core.types import ChunkMetadata
 from .engine import SelectionEngine

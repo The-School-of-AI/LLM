@@ -11,8 +11,8 @@ print(f"B3 allowed_domains from curriculum: {b3_band.allowed_domains}")
 
 # Check what domains exist in data
 import json
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 chunks_file = Path("data/datasets/large_sample_chunks.jsonl")
 domains_by_band = defaultdict(set)

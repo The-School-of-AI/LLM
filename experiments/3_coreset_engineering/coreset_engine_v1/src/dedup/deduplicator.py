@@ -3,12 +3,13 @@ Deduplication module for coreset selection.
 Supports exact and near-duplicate detection via hashing and similarity.
 """
 
-from typing import Dict, Set, List, Tuple, Optional
-import xxhash
 import hashlib
-from dataclasses import dataclass
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Set, Tuple
+
 import numpy as np
+import xxhash
 
 
 @dataclass

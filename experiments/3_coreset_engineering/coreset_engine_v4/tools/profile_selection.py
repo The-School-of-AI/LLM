@@ -8,10 +8,11 @@ import json
 import random
 import time
 from pathlib import Path
-from src.selection.engine import SelectionEngine
+
 from src.core.config import PipelineConfig
-from src.curriculum.loader import CurriculumLoader
 from src.core.types import ChunkMetadata, DifficultyBand
+from src.curriculum.loader import CurriculumLoader
+from src.selection.engine import SelectionEngine
 
 
 def profile_selection_at_scale(k: int):

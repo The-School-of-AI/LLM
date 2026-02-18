@@ -5,18 +5,18 @@ Generates checklists and verification reports for manifest and selected indices
 
 import json
 import logging
-from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
-from dataclasses import dataclass, field
-import sys
 import os
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.curriculum.loader import CurriculumLoader
-from src.core.types import DifficultyBand, BandDistribution
 from src.core.config import PipelineConfig
+from src.core.types import BandDistribution, DifficultyBand
+from src.curriculum.loader import CurriculumLoader
 
 
 @dataclass

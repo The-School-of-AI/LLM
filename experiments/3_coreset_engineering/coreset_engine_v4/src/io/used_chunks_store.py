@@ -10,10 +10,10 @@ Implementation: SQLite with a primary-key table of chunk_id.
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Set
-import sqlite3
 
 
 @dataclass
@@ -33,11 +33,13 @@ class UsedChunksStore:
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS used_chunks (
                     chunk_id TEXT PRIMARY KEY
                 );
-                """)
+                """
+            )
 
     def add_many(self, chunk_ids: Iterable[str]) -> int:
         ids = [(str(cid),) for cid in chunk_ids]
@@ -66,11 +68,13 @@ class UsedChunksStore:
                 [(cid,) for cid in ids_list],
             )
 
-            cur = conn.execute("""
+            cur = conn.execute(
+                """
                 SELECT t.chunk_id
                 FROM tmp_ids t
                 LEFT JOIN used_chunks u ON u.chunk_id = t.chunk_id
                 WHERE u.chunk_id IS NULL;
-                """)
+                """
+            )
             rows = cur.fetchall()
             return {r[0] for r in rows}

@@ -14,22 +14,21 @@ Author: Glue Migration
 Date: 2026-02-12
 """
 
+import logging
 import sys
-from awsglue.transforms import *
+from datetime import datetime
+from typing import Any, Dict, List
+from urllib.parse import urlparse
+
+import boto3
+import yaml
 from awsglue.context import GlueContext
 from awsglue.job import Job
+from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
-
 from pyspark.context import SparkContext
-from pyspark.sql import SparkSession, DataFrame, Window
+from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
-
-import logging
-import yaml
-import boto3
-from typing import Dict, Any, List
-from urllib.parse import urlparse
-from datetime import datetime
 
 # =========================================================================
 # CONFIGURATION & CONSTANTS

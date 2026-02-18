@@ -1,7 +1,8 @@
 import json
+from pathlib import Path
+
 from src.core.types import ChunkMetadata
 from src.curriculum.loader import CurriculumLoader
-from pathlib import Path
 
 # Load curriculum
 loader = CurriculumLoader("config/curriculum.yaml")

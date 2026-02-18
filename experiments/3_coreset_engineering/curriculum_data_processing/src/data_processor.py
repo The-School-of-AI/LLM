@@ -1,11 +1,12 @@
+import concurrent.futures
 import json
 import logging
 import os
-import pyarrow.dataset as ds
-from typing import Set, Dict, List, Any, Optional
 from collections import defaultdict
+from typing import Any, Dict, List, Optional, Set
+
+import pyarrow.dataset as ds
 from tqdm import tqdm
-import concurrent.futures
 
 logger = logging.getLogger("data_pipeline")
 

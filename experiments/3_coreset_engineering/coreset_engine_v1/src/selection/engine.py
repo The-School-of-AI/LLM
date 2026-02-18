@@ -3,41 +3,42 @@ Core selection engine - main orchestrator for coreset selection.
 Implements stratified, density-aware selection with curriculum compliance.
 """
 
-from typing import Dict, List, Set, Optional, Tuple, Any
-from collections import defaultdict
-import numpy as np
-from dataclasses import dataclass, field
-import random
 import logging
+import random
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Set, Tuple
 
+import numpy as np
+
+from ..core.config import PipelineConfig
 from ..core.types import (
-    DifficultyBand,
-    StageName,
-    ChunkMetadata,
-    CoresetManifest,
-    CoresetComposition,
     BandDistribution,
+    ChunkMetadata,
+    CoresetComposition,
+    CoresetManifest,
+    CoverageAudit,
+    DeduplicationStats,
+    DifficultyBand,
     DomainDistribution,
     LanguageDistribution,
-    ProtectedSlicesPreserved,
-    DeduplicationStats,
-    CoverageAudit,
-    SelectionStatistics,
     ProtectedSliceRule,
+    ProtectedSlicesPreserved,
+    SelectionStatistics,
+    StageName,
 )
-from ..core.config import PipelineConfig
 from ..curriculum.loader import CurriculumLoader
 from ..dedup.deduplicator import (
+    DuplicateRemovalStrategy,
     ExactDeduplicator,
     NearDeduplicator,
-    DuplicateRemovalStrategy,
 )
 from ..diversity.scorer import (
-    TokenFrequencyAnalyzer,
     DiversityScorer,
     DomainDiversityMatrix,
     LanguageDiversityMatrix,
     ProtectedSliceManager,
+    TokenFrequencyAnalyzer,
 )
 
 logger = logging.getLogger(__name__)

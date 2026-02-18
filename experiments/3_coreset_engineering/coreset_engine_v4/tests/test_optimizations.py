@@ -3,20 +3,20 @@ Integration tests for 2T token scale optimizations.
 Tests batch processing, checkpointing, error handling, and resumption.
 """
 
-import pytest
-import tempfile
-import shutil
 import os
-from pathlib import Path
 import random
-from typing import List, Tuple, Dict
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Dict, List, Tuple
 
-from src.core.types import ChunkMetadata, DifficultyBand
+import pytest
 from src.core.config import PipelineConfig
+from src.core.types import ChunkMetadata, DifficultyBand
 from src.curriculum.loader import CurriculumLoader
+from src.error_handling import ErrorRecoveryManager, ErrorSeverity, RetryableError
 from src.io.batch_processor import BatchProcessor, CheckpointMetadata
 from src.selection.engine_batched import BatchedSelectionEngine
-from src.error_handling import ErrorRecoveryManager, ErrorSeverity, RetryableError
 
 
 class TestBatchProcessing:

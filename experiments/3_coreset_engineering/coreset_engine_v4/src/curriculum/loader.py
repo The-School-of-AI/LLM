@@ -3,14 +3,15 @@ Curriculum validation and loading module.
 Ensures strict compliance with curriculum YAML specifications.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple, Any
-import yaml
-from pathlib import Path
-from datetime import datetime
 import hashlib
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from ..core.types import DifficultyBand, BandDistribution, DomainDistribution
+import yaml
+
+from ..core.types import BandDistribution, DifficultyBand, DomainDistribution
 
 
 @dataclass

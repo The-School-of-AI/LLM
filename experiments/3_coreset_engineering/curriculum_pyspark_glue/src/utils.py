@@ -1,9 +1,10 @@
-import yaml
 import logging
 import sys
-import boto3
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 from urllib.parse import urlparse
+
+import boto3
+import yaml
 
 
 def setup_glue_logger():
