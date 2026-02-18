@@ -11,55 +11,21 @@ echo "=========================================="
 echo "Date: $(date)"
 echo ""
 
-
-# Check if we're in the right directory
-if [ ! -f "test_spdl_bin_idx_dataloader.py" ]; then
-    echo "Error: test_spdl_bin_idx_dataloader.py not found in current directory"
-    echo "Please run this script from the data_loader directory"
-    exit 1
-fi
-
-# Check if virtual environment exists
-if [ ! -d ".venv" ]; then
-    echo "Error: .venv directory not found"
-    echo "Please create the virtual environment first: python3.11 -m venv .venv"
-    exit 1
-fi
-
-echo "Activating virtual environment..."
-source .venv/bin/activate
-
-echo ""
-
-echo "=========================================="
-echo "System Information"
-echo "=========================================="
-sysinfo=$(python -c '
-import torch
-import platform
-import os
-import subprocess
-print("CUDA available:", torch.cuda.is_available())
-print("Platform:", platform.platform())
-print("CPU cores:", os.cpu_count())
-try:
-    mem = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True)
-    memory_gb = int(mem.stdout.strip()) // (1024**3)
-    print("Memory:", memory_gb, "GB")
-except Exception as e:
-    print("Memory: Unable to determine")
-print("Python version:", platform.python_version())
-print("PyTorch version:", torch.__version__)
-')
-echo "$sysinfo"
-echo "$sysinfo"
-
 echo ""
 
 echo "=========================================="
 echo "Running SPDL bin/idx DataLoader Test"
 echo "=========================================="
-test_output=$(python test_spdl_bin_idx_dataloader.py)
+# Print Python interpreter diagnostics
+echo "Using Python interpreter: $(which python)"
+python --version
+
+# Ensure uv-based venv and dependencies
+source setup_venv.sh
+
+echo "=========================================="
+# Run dataloader.py directly for test and capture output
+test_output=$(python dataloader.py --token-folder Test_data --batches 10 --log-level INFO)
 test_status=$?
 echo "$test_output"
 
@@ -72,7 +38,11 @@ else
 fi
 echo "=========================================="
 
-# Update test_result.md with latest results
+
+# Extract throughput from test output
+throughput=$(echo "$test_output" | grep -Eo 'Throughput: [0-9.]+ tokens/sec' | head -1)
+
+# Update test_result.md with latest results and throughput
 result_file="test_result.md"
 {
     echo "# SPDL DataLoader Test Results"
@@ -96,6 +66,9 @@ result_file="test_result.md"
     echo "- SPDL dataloader processed 10 batches for measurement"
     echo "- Memory usage was efficient with streaming binary data loading"
     echo "- Performance may vary with larger datasets or GPU acceleration"
+    if [ -n "$throughput" ]; then
+        echo "- $throughput"
+    fi
 } > "$result_file"
 
 # Deactivate virtual environment

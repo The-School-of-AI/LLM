@@ -1,3 +1,31 @@
+# SPDL DataLoader
+
+## Environment & Dependency Setup (Recommended)
+
+This project uses [uv](https://github.com/astral-sh/uv) for fast, reproducible Python dependency management and virtual environments.
+
+**Quickstart:**
+
+1. Install uv (if not already):
+   ```sh
+   pip install uv
+   # or
+   brew install uv
+   ```
+2. From the data_loader directory, run:
+   ```sh
+   source setup_venv.sh
+   ```
+   This will create and activate a .venv, and install all dependencies from requirements.uv.txt.
+
+3. Run tests or production scripts as usual:
+   ```sh
+   bash run_test.sh
+   # or
+   bash run_spdl_production.sh <CONFIG_FILE> <TOKEN_FOLDER>
+   ```
+
+See DEPLOYMENT.md for more details.
 
 # SPDL Dataloader
 
@@ -250,3 +278,32 @@ Test Results
 - Batch size: 1024, Sequence length: 4096
 - All assertions passed, loader robust to edge cases
 ```
+
+## Tokenization Technical Contract
+
+| Feature           | Recommendation         | Rationale                                                                                   |
+|-------------------|-----------------------|---------------------------------------------------------------------------------------------|
+| File size         | 512MB                 | Larger files reduce OS file handle churn, critical for 100+ threads in SPDL/Ray             |
+| Tokens per File   | ~150M–250M            | 512MB (uint16) ≈ 150M tokens                                                               |
+| Data Type         | uint32                | No negative values                                                                         |
+| Alignment         | Sequence-Aligned      | File tokens must be divisible by sequence length (e.g., 4096) to avoid partial sequences    |
+| .idx              | Binary format         | Use binary .idx (not JSON) to avoid CPU parsing overhead                                   |
+
+### Directory Layout
+
+- Storage location: S3 bucket or local mount
+- Per dataset, use a folder structure as below:
+
+```
+/mnt/nvme_raid/dolma_c4/
+├── shard_00001.bin
+├── shard_00001.idx
+├── shard_00002.bin
+├── shard_00002.idx
+└── dataset_manifest.json  # Contains total token count and shard metadata
+```
+
+### The .idx File Format
+- Header: 8 bytes for versioning/dtype
+- Offsets: List of uint64 values, each is the byte-offset of the start of a document in the .bin file
+- Enables the dataloader to jump to document boundaries without reading the .bin file

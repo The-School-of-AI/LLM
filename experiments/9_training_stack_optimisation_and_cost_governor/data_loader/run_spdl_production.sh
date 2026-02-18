@@ -21,6 +21,9 @@ if [ ! -d "$TOKEN_FOLDER" ]; then
   exit 3
 fi
 
+# Ensure uv-based venv and dependencies
+source setup_venv.sh
+
 # Activate virtual environment
 if [ ! -d ".venv" ]; then
   echo "Error: .venv directory not found. Please set up the environment."

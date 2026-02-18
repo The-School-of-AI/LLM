@@ -1,0 +1,17 @@
+# This file specifies Python dependencies for the SPDL DataLoader project using uv (https://github.com/astral-sh/uv)
+
+# Core dependencies
+spdl==0.2.0
+spdl_core==0.2.0
+spdl_io==0.2.0
+spdl-dataloader==0.1.0
+
+pyarrow
+numpy
+torch
+typing_extensions
+pyyaml
+
+# (Optional) Add any other dependencies below
+# pyyaml
+# rich
