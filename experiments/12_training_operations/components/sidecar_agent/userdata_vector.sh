@@ -63,7 +63,7 @@
 #         "Statement": [{
 #           "Effect": "Allow",
 #           "Principal": {
-#             "AWS": "arn:aws:iam::<TRAINING_ACCOUNT_ID>:role/<TRAINING_INSTANCE_ROLE_NAME>"
+#             "AWS": "arn:aws:iam::<TRAINING_ACCOUNT_ID>:role/t12-traininginstance-239-role"
 #           },
 #           "Action": "sts:AssumeRole"
 #         }]
@@ -76,9 +76,21 @@
 #       # (use the PermissionsPolicy object from that file)
 #
 #   Step 2 — Training Account (Account A): add AssumeRole + CloudWatch to instance role
+#   aws iam create-role \
+#  --role-name t12-traininginstance-239-role \
+#  --assume-role-policy-document '{
+#    "Version": "2012-10-17",
+#    "Statement": [{
+#      "Effect": "Allow",
+#      "Principal": {
+#        "Service": "ec2.amazonaws.com"
+#      },
+#      "Action": "sts:AssumeRole"
+#    }]
+#  }'
 #
 #     aws iam put-role-policy \
-#       --role-name <TRAINING_INSTANCE_ROLE_NAME> \
+#       --role-name t12-traininginstance-239-role \
 #       --policy-name t12-cross-account-ssm \
 #       --policy-document file://training-instance-iam-policy.json
 #
