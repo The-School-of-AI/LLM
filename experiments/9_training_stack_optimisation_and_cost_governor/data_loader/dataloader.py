@@ -1,9 +1,10 @@
 import argparse
 import logging
 from spdl_dataloader import build_pipeline, DummyModel
-from common import SEQUENCE_LENGTH, DTYPE
+from common import SEQUENCE_LENGTH, DTYPE, LOG_FILE_SIZE, LOG_BACKUP_COUNT
 import torch
 import numpy as np
+from logging.handlers import RotatingFileHandler
 
 
 
@@ -24,7 +25,7 @@ def parse_args():
 # --- Logger Setup ---
 def setup_logger(log_level):
     """
-    Set up and return a logger for the dataloader script.
+    Set up and return a logger for the dataloader script with file rotation.
     Args:
         log_level (str): Logging level (e.g., 'INFO', 'DEBUG').
     Returns:
@@ -38,7 +39,8 @@ def setup_logger(log_level):
     ch = logging.StreamHandler()
     ch.setFormatter(logging.Formatter(log_format))
     logger.addHandler(ch)
-    fh = logging.FileHandler("run.log", mode="a")
+    # Rotating file handler: 100MB per file, 20 backups
+    fh = RotatingFileHandler("dataloader.log", maxBytes=LOG_FILE_SIZE, backupCount=LOG_BACKUP_COUNT)
     fh.setFormatter(logging.Formatter(log_format))
     logger.addHandler(fh)
     return logger

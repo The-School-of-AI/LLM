@@ -16,5 +16,6 @@ PREFETCH_BUFFER = _config.get("prefetch_buffer", 8)
 SEQUENCE_LENGTH = _config.get("sequence_length", 4096)
 DTYPE = _config.get("dtype", "uint32")
 
-# Data Column Names
-TOKENS_COLUMN = "tokens"
+LOG_BACKUP_COUNT = 20
+
+LOG_FILE_SIZE = 100*1024*1024
