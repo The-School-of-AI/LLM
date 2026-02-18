@@ -27,6 +27,7 @@ Configuration:
 
 import argparse
 import os
+<<<<<<< HEAD
 import sys
 import warnings
 from typing import Any, Dict
@@ -36,6 +37,11 @@ _EXPERIMENT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 if _EXPERIMENT_ROOT not in sys.path:
     sys.path.insert(0, _EXPERIMENT_ROOT)
 
+=======
+import warnings
+from typing import Any, Dict
+
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 # Suppress deprecated pynvml FutureWarning emitted inside torch.cuda
 warnings.filterwarnings(
     "ignore",
@@ -45,6 +51,7 @@ warnings.filterwarnings(
 
 import deepspeed
 import torch
+<<<<<<< HEAD
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import yaml
@@ -56,12 +63,21 @@ from data_loader import (
     S3Stager,
     StreamingTokenDataset,
 )
+=======
+import yaml
+from aws.config import S3Config
+from src.checkpoint import S3CheckpointManager
+from src.data import get_dataloaders, get_tokenizer
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 from src.model import get_qwen2_moe_model
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 class Config:
     """Configuration object that mimics argparse Namespace for compatibility."""
 
@@ -116,6 +132,7 @@ class Config:
         self.test_generation = config_dict["generation"]["test_generation"]
         self.generation_prompt = config_dict["generation"]["generation_prompt"]
 
+<<<<<<< HEAD
         # Data pipeline configuration
         dp = config_dict.get("data_pipeline", {})
         self.dp_s3_data_prefix = dp.get("s3_data_prefix", "dolmo-tokenized/")
@@ -128,6 +145,8 @@ class Config:
         self.dp_prefetch_factor = dp.get("prefetch_factor", 3)
         self.dp_pin_memory = dp.get("pin_memory", True)
 
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 
 def load_config(config_path: str = "config.yaml") -> Config:
     """
@@ -213,6 +232,7 @@ def main():
     # Step 1: Load Data
     # ========================================
     print_rank_0("\n[1/5] Loading data...")
+<<<<<<< HEAD
 
     # Streaming data pipeline: S3 → NVMe → mmap → GPU prefetch
     if not args.s3_bucket:
@@ -245,6 +265,19 @@ def main():
 
     # Tokenizer still needed for vocab_size (model config)
     tokenizer = get_tokenizer(args.tokenizer_name)
+=======
+    tokenizer = get_tokenizer(args.tokenizer_name)
+    train_loader, eval_loader, test_loader, _ = get_dataloaders(
+        dataset_name=args.dataset_name,
+        dataset_config=args.dataset_config,
+        tokenizer=tokenizer,
+        batch_size=args.batch_size,
+        max_length=args.max_length,
+    )
+    print_rank_0(f"  Train batches: {len(train_loader)}")
+    print_rank_0(f"  Eval batches: {len(eval_loader)}")
+    print_rank_0(f"  Test batches: {len(test_loader)}")
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 
     # ========================================
     # Step 2: Load Model
@@ -313,6 +346,7 @@ def main():
                 print_rank_0(
                     f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}"
                 )
+<<<<<<< HEAD
                 # Restore data pipeline resume position
                 total_samples_consumed = client_state.get(
                     "total_samples_consumed", 0
@@ -320,6 +354,8 @@ def main():
                 print_rank_0(
                     f"  ✓ Data pipeline: resuming after {total_samples_consumed} samples consumed"
                 )
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
             else:
                 print_rank_0("  ⚠️  No client state found, starting fresh")
         except Exception as e:
@@ -333,6 +369,7 @@ def main():
     print_rank_0(f"Checkpoint interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"Starting from epoch {start_epoch}, global step {global_step}")
 
+<<<<<<< HEAD
     # Finalize streaming data pipeline (after checkpoint resume position is known)
 
     # Wait for initial staging to complete (likely already done during model init)
@@ -380,6 +417,8 @@ def main():
             f"  Background staging: {len(all_shard_keys) - start_bg_idx} remaining shards"
         )
 
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
     for epoch in range(start_epoch, args.num_epochs):
         print_rank_0(f"\n{'=' * 80}")
         print_rank_0(f"Epoch {epoch + 1}/{args.num_epochs}")
@@ -423,6 +462,7 @@ def main():
                 "eval_perplexity": eval_perplexity,
             }
 
+<<<<<<< HEAD
             # Save data pipeline progress for GPU-count-agnostic resume
             world_size = (
                 torch.distributed.get_world_size()
@@ -433,6 +473,8 @@ def main():
                 global_step * args.batch_size * world_size
             )
 
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
             if checkpoint_manager:
                 checkpoint_manager.save_checkpoint(
                     model_engine,
@@ -474,6 +516,7 @@ def main():
             "training_complete": True,
         }
 
+<<<<<<< HEAD
         # Save data pipeline progress for GPU-count-agnostic resume
         world_size = (
             torch.distributed.get_world_size()
@@ -484,6 +527,8 @@ def main():
             global_step * args.batch_size * world_size
         )
 
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         if checkpoint_manager:
             checkpoint_manager.save_checkpoint(
                 model_engine, step=global_step, tag="final", client_state=client_state

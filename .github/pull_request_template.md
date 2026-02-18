@@ -13,6 +13,6 @@ Please include a summary of the changes and the related issue. Highlight any key
 ## Reviewers
 
 - [ ] **Reviewer 1**: A member from your own team.
-- [ ] **Reviewer 2**: A member from the repo owners team (@The-School-of-AI/llm-repo-owners).
+- [ ] **Reviewer 2**: A member from the repo owners team (@The-School-of-AI/llm-repo-owners). 
 
 > **Note**: Every pull request requires atleast 2 reviewers/approvers before it can be merged.

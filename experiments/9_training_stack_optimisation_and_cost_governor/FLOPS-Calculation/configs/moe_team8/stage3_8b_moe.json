@@ -58,7 +58,10 @@
           "num_deltanet_layers": 15,
           "num_gsa_layers": 5,
           "delta_v_heads": 32,
+<<<<<<< HEAD
           "delta_qk_heads": 16,
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
           "delta_head_dim": 128,
           "delta_gate_dim": 384,
           "gsa_num_heads": 16,
@@ -77,6 +80,10 @@
         "moe_layer_frequency": 1,
         "use_multi_token_prediction": true,
         "mtp_num_predictions": 2,
+<<<<<<< HEAD
+=======
+        "mtp_attention_type": "gsa",
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         "lm_head_multiplier": 1,
         "embedding_type": "kronecker",
         "kronecker_config": {
@@ -85,6 +92,14 @@
           "D": 8192
         },
         "tie_embeddings": false,
+<<<<<<< HEAD
+=======
+        "recurrence": {
+          "enabled": true,
+          "stream_idx": 3
+        },
+        "reversible": true,
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         "precision": {
           "weight_precision": "auto",
           "gradient_precision": "fp32",

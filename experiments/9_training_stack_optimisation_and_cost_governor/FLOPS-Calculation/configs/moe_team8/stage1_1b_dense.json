@@ -1,6 +1,10 @@
 {
   "hardware": {
+<<<<<<< HEAD
     "num_gpus": 8,
+=======
+    "num_gpus": 1,
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
     "price_per_gpu_hour": 4,
     "tflops_per_gpu": {
       "bf16": 989.0,
@@ -14,13 +18,21 @@
       "zero_infinity": 0.25
     },
     "scaling_efficiency": {
+<<<<<<< HEAD
       "base_gpus": 8,
+=======
+      "base_gpus": 1,
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
       "efficiency_at_base": 1.0,
       "efficiency_at_64": 0.90,
       "efficiency_at_256": 0.80,
       "efficiency_at_1024": 0.65
     },
+<<<<<<< HEAD
     "expert_parallel_size": 4,
+=======
+    "expert_parallel_size": 1,
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
     "cpu_offload": false,
     "cpu_offload_config": {
       "system_memory_limit_gb": 1000,
@@ -48,7 +60,11 @@
         "vocab_size": 131072,
         "hidden_size": 4096,
         "intermediate_size": 2048,
+<<<<<<< HEAD
         "moe_intermediate_size": 1024,
+=======
+        "moe_intermediate_size": 0,
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         "num_layers": 8,
         "sequence_length": 8192,
         "num_heads": 32,
@@ -58,7 +74,10 @@
           "num_deltanet_layers": 6,
           "num_gsa_layers": 2,
           "delta_v_heads": 32,
+<<<<<<< HEAD
           "delta_qk_heads": 16,
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
           "delta_head_dim": 128,
           "delta_gate_dim": 384,
           "gsa_num_heads": 16,
@@ -72,11 +91,19 @@
         "num_shared_experts": 1,
         "shared_expert_intermediate_size": 2048,
         "top_k": 0,
+<<<<<<< HEAD
         "data_sparsity": 1.0,
+=======
+        "data_sparsity": 0.0,
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         "n_streams": 4,
         "moe_layer_frequency": 1,
         "use_multi_token_prediction": true,
         "mtp_num_predictions": 2,
+<<<<<<< HEAD
+=======
+        "mtp_attention_type": "gsa",
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         "lm_head_multiplier": 1,
         "embedding_type": "kronecker",
         "kronecker_config": {
@@ -85,6 +112,14 @@
           "D": 8192
         },
         "tie_embeddings": false,
+<<<<<<< HEAD
+=======
+        "recurrence": {
+          "enabled": true,
+          "stream_idx": 3
+        },
+        "reversible": true,
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         "precision": {
           "weight_precision": "auto",
           "gradient_precision": "fp32",

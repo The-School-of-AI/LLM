@@ -104,6 +104,7 @@ generation:
   # - "The future of technology is"
 
 # =============================================================================
+<<<<<<< HEAD
 # Streaming Data Pipeline (for large-scale training on P5en.48xlarge)
 # S3 bucket and region are reused from the "s3" section above.
 # =============================================================================
@@ -129,6 +130,8 @@ data_pipeline:
   #   initial_shards: 32
 
 # =============================================================================
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 # Quick Start Examples
 # =============================================================================
 #

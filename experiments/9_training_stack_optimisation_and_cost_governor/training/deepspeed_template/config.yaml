@@ -49,6 +49,7 @@ s3:
 generation:
   test_generation: false
   generation_prompt: "The history of artificial intelligence begins with"
+<<<<<<< HEAD
 
 # Streaming Data Pipeline Configuration (for large-scale training)
 # S3 bucket/prefix/region are reused from the "s3" section above.
@@ -62,3 +63,5 @@ data_pipeline:
   num_workers: 8                        # DataLoader worker processes
   prefetch_factor: 3                    # GPU prefetch depth (batches ahead)
   pin_memory: true
+=======
+>>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
