@@ -2047,9 +2047,13 @@ class Model1B(nn.Module):
             # Broadcast memory with content-dependent modulation
             memory_broadcast = memory.unsqueeze(1).expand(B, T, D)
 
-            # Apply learnable strength + content-dependent gates
+            # Apply learnable strength + content-dependent gates (out-of-place
+            # to preserve autograd link to lambda_r and memory_gate_proj)
             lambda_r = F.softplus(self.lambda_r_raw)
-            x_stream[:, :, self.recurrence_stream_idx, :] = lambda_r * memory_gates * memory_broadcast
+            mem_val = (lambda_r * memory_gates * memory_broadcast).unsqueeze(2)  # (B, T, 1, D)
+            one_hot = torch.zeros(self.n_streams, device=x.device, dtype=x.dtype)
+            one_hot[self.recurrence_stream_idx] = 1.0
+            x_stream = x_stream + mem_val * one_hot.view(1, 1, self.n_streams, 1)
 
         # Pass through reversible stack
         x_stream, total_aux_loss = self.stack(x_stream)
