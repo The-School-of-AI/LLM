@@ -5,16 +5,17 @@
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  batch_size: 8
+  batch_size: 32
   max_length: 128
 
 # Training Configuration
 training:
   num_epochs: 1
-  max_train_steps: null  # Set to a number for debugging, null for full epoch
-  max_eval_steps: null   # Set to a number for debugging, null for full evaluation
-  log_interval: 10
+  max_train_steps: 20  # Set to a number for debugging, null for full epoch
+  max_eval_steps: 2   # Set to a number for debugging, null for full evaluation
+  log_interval: 1
   seed: 42
+  enable_system_metrics: true  # Enable per-step CPU/GPU util & memory logging
 
 # DeepSpeed Configuration
 deepspeed:
@@ -49,16 +50,3 @@ s3:
 generation:
   test_generation: false
   generation_prompt: "The history of artificial intelligence begins with"
-
-# Streaming Data Pipeline Configuration (for large-scale training)
-# S3 bucket/prefix/region are reused from the "s3" section above.
-data_pipeline:
-  s3_data_prefix: "dolmo-tokenized/"    # S3 prefix for tokenized .npy shards (separate from checkpoint prefix)
-  local_data_dir: "/data/dolmo"         # NVMe RAID-0 mount point
-  initial_shards: 16                    # Shards to pre-stage before training
-  prefetch_shards: 8                    # Background read-ahead window
-  download_workers: 8                   # S3 download threads
-  seq_length: 4096                      # Tokens per sequence
-  num_workers: 8                        # DataLoader worker processes
-  prefetch_factor: 3                    # GPU prefetch depth (batches ahead)
-  pin_memory: true

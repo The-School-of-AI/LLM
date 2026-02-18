@@ -104,6 +104,31 @@ generation:
   # - "The future of technology is"
 
 # =============================================================================
+# Streaming Data Pipeline (for large-scale training on P5en.48xlarge)
+# S3 bucket and region are reused from the "s3" section above.
+# =============================================================================
+data_pipeline:
+  s3_data_prefix: "dolmo-tokenized/"    # S3 prefix for tokenized .npy shards (separate from checkpoint prefix)
+  local_data_dir: "/data/dolmo"         # NVMe RAID-0 mount point for staging
+  initial_shards: 16                    # Shards to pre-stage before training starts
+  prefetch_shards: 8                    # Background download read-ahead window
+  download_workers: 8                   # Concurrent S3 download threads
+  seq_length: 4096                      # Tokens per sequence
+  num_workers: 8                        # DataLoader worker processes
+  prefetch_factor: 3                    # GPU prefetch depth (batches ahead)
+  pin_memory: true                      # Pin DataLoader memory for faster H2D transfer
+
+  # When enabled, this pipeline replaces the HuggingFace load_dataset() path.
+  # Data must be pre-tokenized as .npy files (1-D int arrays of token IDs).
+  # Checkpoint stores total_samples_consumed for GPU-count-agnostic resume.
+  #
+  # Example for Dolmo 5TB:
+  #   enabled: true
+  #   s3_data_prefix: "tokenized/4096/"
+  #   local_data_dir: "/data/dolmo"
+  #   initial_shards: 32
+
+# =============================================================================
 # Quick Start Examples
 # =============================================================================
 #

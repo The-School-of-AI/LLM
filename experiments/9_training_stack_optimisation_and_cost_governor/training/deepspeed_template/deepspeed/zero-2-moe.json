@@ -2,17 +2,18 @@
     "train_batch_size": 32,
     "train_micro_batch_size_per_gpu": 1,
     "gradient_accumulation_steps": 8,
-    
     "optimizer": {
         "type": "AdamW",
         "params": {
             "lr": 3e-4,
-            "betas": [0.9, 0.95],
+            "betas": [
+                0.9,
+                0.95
+            ],
             "eps": 1e-8,
             "weight_decay": 0.1
         }
     },
-    
     "scheduler": {
         "type": "WarmupDecayLR",
         "params": {
@@ -22,7 +23,6 @@
             "total_num_steps": 1000
         }
     },
-    
     "zero_optimization": {
         "stage": 2,
         "offload_optimizer": {
@@ -36,7 +36,6 @@
         "allgather_partitions": true,
         "allgather_bucket_size": 5e7
     },
-    
     "activation_checkpointing": {
         "partition_activations": true,
         "cpu_checkpointing": true,
@@ -44,11 +43,9 @@
         "synchronize_checkpoint_boundary": false,
         "number_checkpoints": null
     },
-    
     "bf16": {
         "enabled": true
     },
-    
     "gradient_clipping": 1.0,
     "steps_per_print": 10,
     "wall_clock_breakdown": true,

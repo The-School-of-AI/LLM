@@ -91,9 +91,7 @@
           "optimizer_precision": "fp32",
           "optimizer_states_count": 2,
           "master_weights": false
-        },
-        "reversible": true,
-        "reversible_activation_reduction": 0.5
+        }
       }
     }
   ]

@@ -27,17 +27,39 @@ Configuration:
 
 import argparse
 import os
+import sys
+import warnings
 from typing import Any, Dict
+
+# Add experiment root so that `data_loader` package can be imported
+_EXPERIMENT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _EXPERIMENT_ROOT not in sys.path:
+    sys.path.insert(0, _EXPERIMENT_ROOT)
+
+# Suppress deprecated pynvml FutureWarning emitted inside torch.cuda
+warnings.filterwarnings(
+    "ignore",
+    message=".*pynvml package is deprecated.*",
+    category=FutureWarning,
+)
 
 import deepspeed
 import torch
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
-from src.data import get_dataloaders, get_tokenizer
+from src.data import get_tokenizer
+from data_loader import (
+    PrefetchDataLoader,
+    S3Stager,
+    StreamingTokenDataset,
+)
 from src.model import get_qwen2_moe_model
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
+
 
 
 class Config:
@@ -57,6 +79,9 @@ class Config:
         self.max_eval_steps = config_dict["training"]["max_eval_steps"]
         self.log_interval = config_dict["training"]["log_interval"]
         self.seed = config_dict["training"]["seed"]
+        self.enable_system_metrics = config_dict["training"].get(
+            "enable_system_metrics", False
+        )
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
@@ -90,6 +115,18 @@ class Config:
         # Generation configuration
         self.test_generation = config_dict["generation"]["test_generation"]
         self.generation_prompt = config_dict["generation"]["generation_prompt"]
+
+        # Data pipeline configuration
+        dp = config_dict.get("data_pipeline", {})
+        self.dp_s3_data_prefix = dp.get("s3_data_prefix", "dolmo-tokenized/")
+        self.dp_local_data_dir = dp.get("local_data_dir", "/data/dolmo")
+        self.dp_initial_shards = dp.get("initial_shards", 16)
+        self.dp_prefetch_shards = dp.get("prefetch_shards", 8)
+        self.dp_download_workers = dp.get("download_workers", 8)
+        self.dp_seq_length = dp.get("seq_length", 4096)
+        self.dp_num_workers = dp.get("num_workers", 8)
+        self.dp_prefetch_factor = dp.get("prefetch_factor", 3)
+        self.dp_pin_memory = dp.get("pin_memory", True)
 
 
 def load_config(config_path: str = "config.yaml") -> Config:
@@ -176,17 +213,38 @@ def main():
     # Step 1: Load Data
     # ========================================
     print_rank_0("\n[1/5] Loading data...")
-    tokenizer = get_tokenizer(args.tokenizer_name)
-    train_loader, eval_loader, test_loader, _ = get_dataloaders(
-        dataset_name=args.dataset_name,
-        dataset_config=args.dataset_config,
-        tokenizer=tokenizer,
-        batch_size=args.batch_size,
-        max_length=args.max_length,
+
+    # Streaming data pipeline: S3 → NVMe → mmap → GPU prefetch
+    if not args.s3_bucket:
+        raise ValueError("s3.bucket is required for the data pipeline")
+
+    # Determine resume position (GPU-count-agnostic)
+    total_samples_consumed = 0
+
+    print_rank_0("  Pipeline: S3 → NVMe → mmap → GPU prefetch")
+    print_rank_0(f"  S3 source: s3://{args.s3_bucket}/{args.dp_s3_data_prefix}")
+    print_rank_0(f"  Local dir: {args.dp_local_data_dir}")
+    print_rank_0(f"  Seq length: {args.dp_seq_length}")
+
+    # Discover all shards in S3 (deterministic sorted order)
+    stager = S3Stager(
+        bucket=args.s3_bucket,
+        prefix=args.dp_s3_data_prefix,
+        local_dir=args.dp_local_data_dir,
+        region=args.s3_region,
+        download_workers=args.dp_download_workers,
     )
-    print_rank_0(f"  Train batches: {len(train_loader)}")
-    print_rank_0(f"  Eval batches: {len(eval_loader)}")
-    print_rank_0(f"  Test batches: {len(test_loader)}")
+    all_shard_keys = stager.discover_shards()
+    print_rank_0(f"  Total shards in S3: {len(all_shard_keys)}")
+
+    # Start staging initial shards in background (overlaps with model init)
+    staging_thread = stager.stage_initial_async(
+        all_shard_keys, start_idx=0, num_shards=args.dp_initial_shards
+    )
+    print_rank_0(f"  Staging first {args.dp_initial_shards} shards (async)...")
+
+    # Tokenizer still needed for vocab_size (model config)
+    tokenizer = get_tokenizer(args.tokenizer_name)
 
     # ========================================
     # Step 2: Load Model
@@ -255,6 +313,13 @@ def main():
                 print_rank_0(
                     f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}"
                 )
+                # Restore data pipeline resume position
+                total_samples_consumed = client_state.get(
+                    "total_samples_consumed", 0
+                )
+                print_rank_0(
+                    f"  ✓ Data pipeline: resuming after {total_samples_consumed} samples consumed"
+                )
             else:
                 print_rank_0("  ⚠️  No client state found, starting fresh")
         except Exception as e:
@@ -267,6 +332,53 @@ def main():
     print_rank_0("\n[4/5] Training...")
     print_rank_0(f"Checkpoint interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"Starting from epoch {start_epoch}, global step {global_step}")
+
+    # Finalize streaming data pipeline (after checkpoint resume position is known)
+
+    # Wait for initial staging to complete (likely already done during model init)
+    staging_thread.join()
+    staged_paths = stager.get_staged_shards()
+    print_rank_0(f"  Initial staging complete: {len(staged_paths)} shards")
+
+    # Create streaming dataset with resume skip
+    streaming_dataset = StreamingTokenDataset(
+        shard_paths=staged_paths,
+        seq_length=args.dp_seq_length,
+        skip_samples=total_samples_consumed,
+    )
+    print_rank_0(f"  Dataset: {len(streaming_dataset)} sequences remaining")
+
+    # Distributed sampler for multi-GPU
+    world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+    rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+    sampler = DistributedSampler(
+        streaming_dataset,
+        num_replicas=world_size,
+        rank=rank,
+        shuffle=False,  # Deterministic ordering
+    )
+
+    train_loader = PrefetchDataLoader(
+        DataLoader(
+            streaming_dataset,
+            batch_size=args.batch_size,
+            sampler=sampler,
+            num_workers=args.dp_num_workers,
+            pin_memory=args.dp_pin_memory,
+            drop_last=True,
+        ),
+        device=model_engine.device,
+        prefetch_depth=args.dp_prefetch_factor,
+    )
+    print_rank_0(f"  Train batches per GPU: {len(train_loader)}")
+
+    # Start background staging of remaining shards
+    start_bg_idx = args.dp_initial_shards
+    if len(all_shard_keys) > start_bg_idx:
+        stager.stage_background(all_shard_keys[start_bg_idx:])
+        print_rank_0(
+            f"  Background staging: {len(all_shard_keys) - start_bg_idx} remaining shards"
+        )
 
     for epoch in range(start_epoch, args.num_epochs):
         print_rank_0(f"\n{'=' * 80}")
@@ -283,6 +395,7 @@ def main():
             epoch,
             max_steps=args.max_train_steps,
             log_interval=args.log_interval,
+            enable_system_metrics=args.enable_system_metrics,
             checkpoint_interval=args.checkpoint_interval,
             output_dir=args.output_dir,
             checkpoint_manager=checkpoint_manager,
@@ -309,6 +422,16 @@ def main():
                 "eval_loss": eval_loss,
                 "eval_perplexity": eval_perplexity,
             }
+
+            # Save data pipeline progress for GPU-count-agnostic resume
+            world_size = (
+                torch.distributed.get_world_size()
+                if torch.distributed.is_initialized()
+                else 1
+            )
+            client_state["total_samples_consumed"] = (
+                global_step * args.batch_size * world_size
+            )
 
             if checkpoint_manager:
                 checkpoint_manager.save_checkpoint(
@@ -350,6 +473,16 @@ def main():
             "test_perplexity": test_perplexity,
             "training_complete": True,
         }
+
+        # Save data pipeline progress for GPU-count-agnostic resume
+        world_size = (
+            torch.distributed.get_world_size()
+            if torch.distributed.is_initialized()
+            else 1
+        )
+        client_state["total_samples_consumed"] = (
+            global_step * args.batch_size * world_size
+        )
 
         if checkpoint_manager:
             checkpoint_manager.save_checkpoint(

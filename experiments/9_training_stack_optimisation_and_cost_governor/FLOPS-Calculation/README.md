@@ -854,8 +854,37 @@ Where `S = n_streams` and `d_in = S × hidden`.
 
 **Total mHC params** = `layers × 2 × mhc_per_sublayer` (included in both total and active params).
 
+#### Reversible Training (Midpoint/Leapfrog Method)
 
+Reversible training eliminates the need to store intermediate activations for all layers by using a mathematically invertible recurrence (midpoint/leapfrog integration). During the backward pass, activations are recomputed from the final state rather than retrieved from memory.
 
+**Config:**
+```json
+"architecture": {
+  "reversible": true
+}
+```
+
+**Effects on Calculations:**
+
+| Component | Standard | Reversible |
+|-----------|----------|------------|
+| Activation Memory | `B × S × H × L × 10 × bytes × ckpt` (O(layers)) | `2 × B × S × H × bytes` (O(1)) |
+| FLOPs Multiplier | 1.0× (or 1.33× with checkpointing) | 1.33× (recompute during backward) |
+| Checkpoint Factor | Configurable | Ignored (not needed) |
+
+**Memory Savings:** Activation memory becomes independent of model depth. Only two hidden state tensors (`p_prev`, `p_cur`) are stored regardless of the number of layers. For deep models this can be a **10-20× reduction** in activation memory.
+
+**FLOPs Overhead:** Each layer's forward pass is recomputed once during backward (standard: 6× matmul → reversible: 8× matmul, ratio = 4/3 ≈ 1.33). Override with `reversible_recompute_overhead` in the training config if using partial recomputation.
+
+**Throughput Impact:** The freed memory allows larger `micro_batch_size`, improving GPU utilization. This manifests as higher MFU — adjust `mfu` in the hardware config (e.g., 0.30 → 0.35–0.40) to model this effect.
+
+**Example Impact (1B Dense, BF16):**
+
+| Metric | Standard | Reversible |
+|--------|----------|------------|
+| Mem/GPU | 15.3 GiB | **5.6 GiB** (-63%) |
+| ZFLOPs | 0.26 | 0.34 (+33%) |
 
 #### MoE Upcycling Cost Calculation
 
