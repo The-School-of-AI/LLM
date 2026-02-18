@@ -13,11 +13,11 @@ from collections import defaultdict
 # CONFIGURATION
 # -----------------------------------------------------------------------------
 
-CLICKHOUSE_HOST     = "100.30.191.29"
-CLICKHOUSE_PORT     = 8123
-CLICKHOUSE_USER     = "default"
-CLICKHOUSE_PASSWORD = ""
-CLICKHOUSE_DB       = "training_observability"
+CLICKHOUSE_HOST = "54.174.194.76"
+CLICKHOUSE_PORT = 8443
+CLICKHOUSE_USER = "p12_reader"
+CLICKHOUSE_PASSWORD = "training_ops_reader_pass"
+CLICKHOUSE_DB = "training_observability"
 
 DASHBOARD_DIR = Path("dashboard")
 
@@ -33,8 +33,11 @@ ch_client = clickhouse_connect.get_client(
     port=CLICKHOUSE_PORT,
     username=CLICKHOUSE_USER,
     password=CLICKHOUSE_PASSWORD,
-    database=CLICKHOUSE_DB
+    database=CLICKHOUSE_DB,
+    secure=True,
+    verify=False,  # keep only if TLS cert validation fails
 )
+
 
 # -----------------------------------------------------------------------------
 # TABLE DISCOVERY
@@ -212,7 +215,12 @@ def discover_metrics(run_id):
 
         kind = "array" if info["role"] == "array" else "scalar"
         for (metric,) in rows:
-            category = metric.split("/", 1)[0] if "/" in metric else table
+            if metric.startswith("sys.") or metric.startswith("sys/"):
+                category = "system"
+            elif "/" in metric:
+                category = metric.split("/", 1)[0]
+            else:
+                category = table
             grouped[category].append({"name": metric, "kind": kind, "table": table})
 
     return dict(grouped)
@@ -251,18 +259,36 @@ def get_metric_data(run_id, metric_names, max_points=1000):
 
         if role == "array":
             try:
-                rows = ch_client.query(f"""
-                    SELECT step, keys, values FROM {table}
-                    WHERE run_id = %(run_id)s AND metric = %(metric)s
-                    ORDER BY step
-                """, {"run_id": run_id, "metric": metric}).result_rows
-                if rows:
-                    data[metric] = [
-                        {"step": int(r[0]), "keys": list(r[1]), "value": list(r[2])}
-                        for r in rows
-                    ]
-            except Exception:
-                pass
+                table_cols = TABLE_REGISTRY.get(table, {}).get("columns", {})
+                arr_cols = TABLE_REGISTRY.get(table, {}).get("array_cols", [])
+                # Detect a keys column: any Array(String) column named 'keys'
+                has_keys = "keys" in table_cols and table_cols["keys"].startswith("Array(")
+                val_col = arr_cols[0] if arr_cols else "values"
+
+                if has_keys:
+                    rows = ch_client.query(f"""
+                        SELECT step, keys, {val_col} FROM {table}
+                        WHERE run_id = %(run_id)s AND metric = %(metric)s
+                        ORDER BY step
+                    """, {"run_id": run_id, "metric": metric}).result_rows
+                    if rows:
+                        data[metric] = [
+                            {"step": int(r[0]), "keys": list(r[1]), "value": list(r[2])}
+                            for r in rows
+                        ]
+                else:
+                    rows = ch_client.query(f"""
+                        SELECT step, {val_col} FROM {table}
+                        WHERE run_id = %(run_id)s AND metric = %(metric)s
+                        ORDER BY step
+                    """, {"run_id": run_id, "metric": metric}).result_rows
+                    if rows:
+                        data[metric] = [
+                            {"step": int(r[0]), "keys": [], "value": list(r[1])}
+                            for r in rows
+                        ]
+            except Exception as e:
+                print(f"⚠ Array query failed for {metric} in {table}: {e}")
         else:
             try:
                 rows = ch_client.query(f"""
