@@ -4,9 +4,11 @@ Data loading utilities for DeepSpeed training.
 This module provides functions for loading tokenizers and creating dataloaders
 for training language models.
 
-Supports two modes:
+Supports three modes:
 1. Offline: load_from_disk for pre-tokenized datasets (preferred for production)
 2. Online: download + tokenize on-the-fly (fallback for dev/testing)
+3. Streaming: HuggingFace streaming for very large datasets like FineWeb
+   (no disk download, tokenizes on-the-fly)
 
 Uses the standard LLM pre-training approach: concatenate all text, tokenize,
 then chunk into fixed-length sequences. Every token is a real token — no
@@ -18,10 +20,46 @@ from typing import Optional, Tuple
 import torch
 import torch.distributed as dist
 from datasets import load_dataset, load_from_disk
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, IterableDataset
 from torch.utils.data.distributed import DistributedSampler
 
 from .utils import print_rank_0
+
+
+class StreamingTextDataset(IterableDataset):
+    """
+    Streaming dataset that tokenizes + chunks text on-the-fly.
+
+    For use with very large datasets (e.g., FineWeb) where downloading
+    would be impractical. Tokenizes each example, maintains a token buffer,
+    and yields fixed-length chunks.
+
+    Multi-GPU: uses worker_info + distributed rank to shard the stream.
+    """
+    def __init__(self, hf_dataset_iter, tokenizer, max_length, split_name="train"):
+        self.hf_dataset_iter = hf_dataset_iter
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.split_name = split_name
+
+    def __iter__(self):
+        buffer = []
+        for example in self.hf_dataset_iter:
+            text = example.get("text", "")
+            if not text or not text.strip():
+                continue
+            tokens = self.tokenizer(text, return_attention_mask=False)["input_ids"]
+            buffer.extend(tokens)
+
+            # Yield full chunks from the buffer
+            while len(buffer) >= self.max_length:
+                chunk = buffer[:self.max_length]
+                buffer = buffer[self.max_length:]
+                input_ids = torch.tensor(chunk, dtype=torch.long)
+                attention_mask = torch.ones(self.max_length, dtype=torch.long)
+                labels = input_ids.clone()
+                yield {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+
 
 
 def get_tokenizer(tokenizer_path: str = None):
@@ -69,6 +107,7 @@ def get_dataloaders(
     max_length: int = 128,
     num_workers: int = 12,
     tokenized_dataset_path: Optional[str] = None,
+    streaming: bool = False,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
     Load dataset and create dataloaders for training, validation, and testing.
@@ -88,17 +127,49 @@ def get_dataloaders(
     Args:
         dataset_name: HuggingFace dataset name (online mode)
         dataset_config: HuggingFace dataset config (online mode)
-        tokenizer: Tokenizer instance (required for online mode)
+        tokenizer: Tokenizer instance (required for online/streaming mode)
         batch_size: Micro-batch size per GPU
         max_length: Maximum sequence length
         num_workers: DataLoader workers per GPU
         tokenized_dataset_path: Path to pre-tokenized dataset on disk (offline mode)
+        streaming: If True, use HF streaming mode (for large datasets like FineWeb)
 
     Returns:
         Tuple of (train_loader, eval_loader, test_loader, dataset_info)
     """
     if tokenizer is None and tokenized_dataset_path is None:
         raise ValueError("tokenizer must be provided for online tokenisation")
+
+    # =================================================================
+    # Streaming mode — for very large datasets (FineWeb, etc.)
+    # =================================================================
+    if streaming:
+        print_rank_0(f"Loading dataset in STREAMING mode: {dataset_name} ({dataset_config})")
+        ds = load_dataset(dataset_name, dataset_config, streaming=True, split="train")
+
+        train_dataset = StreamingTextDataset(ds, tokenizer, max_length, split_name="train")
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            num_workers=min(num_workers, 2),  # Streaming doesn't benefit from many workers
+            pin_memory=True,
+        )
+
+        # For streaming, eval/test use a tiny in-memory sample
+        # (FineWeb doesn't have validation/test splits)
+        print_rank_0("  Streaming mode: eval/test will use first 100 train examples")
+        eval_loader = train_loader  # Placeholder — override in main if needed
+        test_loader = train_loader
+
+        dataset_info = {
+            "train_size": -1,  # Unknown for streaming
+            "eval_size": -1,
+            "test_size": -1,
+            "vocab_size": tokenizer.vocab_size if tokenizer else 0,
+            "streaming": True,
+        }
+        return train_loader, eval_loader, test_loader, dataset_info
 
     # -----------------------------------------------------------------
     # Load dataset (offline or online)

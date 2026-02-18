@@ -35,6 +35,11 @@ import os
 import warnings
 from typing import Any, Dict
 
+# Set CUDA allocator to use expandable segments (reduces fragmentation)
+# Must be set before any CUDA operations. Prevents spurious OOM when
+# reserved-but-fragmented VRAM can't satisfy large contiguous allocations.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 # Suppress deprecated pynvml FutureWarning emitted inside torch.cuda
 warnings.filterwarnings(
     "ignore",
@@ -93,6 +98,7 @@ class Config:
         self.dataset_config = config_dict["data"]["dataset_config"]
         self.max_length = config_dict["data"]["max_length"]
         self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
+        self.streaming = config_dict["data"].get("streaming", False)  # Enable HF streaming for large datasets
         self.tokenized_dataset_path = config_dict["data"].get("tokenized_dataset_path", None)
 
         # Training configuration
@@ -119,6 +125,7 @@ class Config:
 
         # Model configuration
         self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
+        self._model_overrides = config_dict.get("model", {})  # Store full model dict for ModelConfig overrides
 
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
@@ -260,7 +267,7 @@ def main():
     print_rank_0("\n[1/5] Loading tokenizer and data...")
     print_rank_0("  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)")
     tokenizer = get_tokenizer()  # Loads from src/tokenizer/
-    train_loader, eval_loader, test_loader, _ = get_dataloaders(
+    train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
         tokenizer=tokenizer,
@@ -268,10 +275,15 @@ def main():
         max_length=args.max_length,
         num_workers=args.num_workers,
         tokenized_dataset_path=args.tokenized_dataset_path,
+        streaming=args.streaming,
     )
-    print_rank_0(f"  Train batches: {len(train_loader)}")
-    print_rank_0(f"  Eval batches: {len(eval_loader)}")
-    print_rank_0(f"  Test batches: {len(test_loader)}")
+    is_streaming = dataset_info.get("streaming", False)
+    if is_streaming:
+        print_rank_0("  Streaming mode: dataset size unknown (infinite iterator)")
+    else:
+        print_rank_0(f"  Train batches: {len(train_loader)}")
+        print_rank_0(f"  Eval batches: {len(eval_loader)}")
+        print_rank_0(f"  Test batches: {len(test_loader)}")
 
     # ========================================
     # Step 2: Load Model (1B Dense Model)
@@ -281,6 +293,19 @@ def main():
     
     # Create model configuration
     config = ModelConfig()
+    
+    # ── Apply YAML model overrides to ModelConfig ─────────────────────────
+    # This lets YAML presets (config_4k_throughput.yaml, etc.) control
+    # model behavior: GSA sparsity budget, sequence length, etc.
+    _model_override_keys = [
+        'max_seq_len', 'gsa_k_base', 'gsa_k_min', 'gsa_k_max',
+    ]
+    for key in _model_override_keys:
+        yaml_val = args._model_overrides.get(key)
+        if yaml_val is not None:
+            old_val = getattr(config, key, None)
+            setattr(config, key, yaml_val)
+            print_rank_0(f"  Model override: {key} = {old_val} → {yaml_val}")
     
     # Update vocab size to match tokenizer
     # Use len(tokenizer) to include special tokens (pad, eos, etc.)
