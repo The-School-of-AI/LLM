@@ -1,0 +1,38 @@
+{
+  "_instructions": "Create this role in the SSM/infra account (Account B). See deployment steps in userdata_vector.sh header.",
+  "RoleName": "t12-ssm-reader",
+  "TrustPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "arn:aws:iam::TRAINING_ACCOUNT_ID:role/TRAINING_INSTANCE_ROLE_NAME"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "PermissionsPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "SSMGetClickHouseCredentials",
+        "Effect": "Allow",
+        "Action": "ssm:GetParameter",
+        "Resource": "arn:aws:ssm:us-east-1:SSM_ACCOUNT_ID:parameter/T12-TrainingOperations-239/*"
+      },
+      {
+        "Sid": "KMSDecryptSSMSecureStrings",
+        "Effect": "Allow",
+        "Action": "kms:Decrypt",
+        "Resource": "*",
+        "Condition": {
+          "StringEquals": {
+            "kms:ViaService": "ssm.us-east-1.amazonaws.com"
+          }
+        }
+      }
+    ]
+  }
+}
