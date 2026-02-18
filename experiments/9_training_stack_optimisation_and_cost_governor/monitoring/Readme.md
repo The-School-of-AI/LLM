@@ -29,6 +29,30 @@ monitoring/
 
 ---
 
+## For Teammates / New Contributors
+
+```bash
+# 1. Clone
+git clone <repo-url>
+cd monitoring
+
+# 2. Install
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Get credentials from a teammate (never shared via git)
+cp .env.example .env
+# Fill in .env with the real values
+
+# 4. Run
+export $(cat .env | xargs)
+python3 dashboard_server.py
+```
+
+Then open `http://localhost:5050`.
+
+---
+
 ## Local Setup
 
 ### 1. Clone / navigate to the directory

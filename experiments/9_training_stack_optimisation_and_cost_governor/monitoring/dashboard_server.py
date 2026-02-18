@@ -8,16 +8,17 @@ from flask_cors import CORS
 import clickhouse_connect
 from pathlib import Path
 from collections import defaultdict
+import os
 
 # -----------------------------------------------------------------------------
-# CONFIGURATION
+# CONFIGURATION — set these as environment variables, never hardcode them
 # -----------------------------------------------------------------------------
 
-CLICKHOUSE_HOST = "54.174.194.76"
-CLICKHOUSE_PORT = 8443
-CLICKHOUSE_USER = "p12_reader"
-CLICKHOUSE_PASSWORD = "training_ops_reader_pass"
-CLICKHOUSE_DB = "training_observability"
+CLICKHOUSE_HOST     = os.environ["CH_HOST"]
+CLICKHOUSE_PORT     = int(os.environ.get("CH_PORT", 8443))
+CLICKHOUSE_USER     = os.environ["CH_USER"]
+CLICKHOUSE_PASSWORD = os.environ["CH_PASSWORD"]
+CLICKHOUSE_DB       = os.environ.get("CH_DB", "training_observability")
 
 DASHBOARD_DIR = Path("dashboard")
 
