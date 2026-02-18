@@ -47,7 +47,7 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Tags
 TAG_TEAM="Team12"
-TAG_TASK_ID="Issue440"
+TAG_TASK_ID="Issue239"
 TAG_WORKLOAD_TYPE="TrainingOperations"
 
 # Create the security group
@@ -113,7 +113,7 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Tags
 TAG_TEAM="Team12"
-TAG_TASK_ID="Issue440"
+TAG_TASK_ID="Issue239"
 TAG_WORKLOAD_TYPE="TrainingOperations"
 
 DB_INSTANCE_ID="i-0b1c2d3e4f5g6h7i8" # REPLACE with your DB instance ID
@@ -191,11 +191,11 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Tags
 TAG_TEAM="Team12"
-TAG_TASK_ID="Issue440"
+TAG_TASK_ID="Issue239"
 TAG_WORKLOAD_TYPE="TrainingOperations"
 
-P12_WRITER_PASSWORD="trtraining_ops_writer_pass"
-P12_READER_PASSWORD="trtraining_ops_reader_pass"
+P12_WRITER_PASSWORD="password"
+P12_READER_PASSWORD="password"
 
 DB_PUBLIC_IP=54.174.194.76
 
@@ -225,6 +225,35 @@ if [ "$SKIP_CREDENTIALS" = "false" ]; then
   echo "✓ Credentials stored in SSM Parameter Store"
 fi
 ```
+
+### Standalone commands for the Vector sidecar parameters
+
+The Vector sidecar on training instances (Account A) reads two of these parameters via cross-account assume-role. If you need to write or update them individually, run these in the **SSM/infra account (Account B)**:
+
+**Writer password** (SecureString — encrypted at rest with default KMS key):
+
+```bash
+aws ssm put-parameter \
+  --name "/T12-TrainingOperations-239/clickhouse/writer-password" \
+  --value "YOUR_WRITER_PASSWORD" \
+  --type SecureString \
+  --overwrite \
+  --region us-east-1
+```
+
+**ClickHouse endpoint** (String — the HTTPS URL including port):
+
+```bash
+aws configure set cli_follow_urlparam false
+aws ssm put-parameter \
+  --name "/T12-TrainingOperations-239/clickhouse/endpoint" \
+  --value "https://CLICKHOUSE_IP:8443" \
+  --type String \
+  --overwrite \
+  --region us-east-1
+```
+
+> **Cross-account access:** Training instances assume the `t12-ssm-reader` role in Account B to read these parameters. See `sidecar_agent/ssm-reader-cross-account-role.json` for the role definition and `sidecar_agent/userdata_vector.sh` step [5/9] for the assume-role flow.
 
 ---
 
@@ -260,7 +289,7 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Tags
 TAG_TEAM="Team12"
-TAG_TASK_ID="Issue440"
+TAG_TASK_ID="Issue239"
 TAG_WORKLOAD_TYPE="TrainingOperations"
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
