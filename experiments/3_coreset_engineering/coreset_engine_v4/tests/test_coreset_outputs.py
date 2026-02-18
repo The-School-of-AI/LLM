@@ -18,8 +18,7 @@ class TestCoresetValidator:
     def validator(self):
         """Create validator instance"""
         return CoresetValidator(
-            curriculum_path="config/curriculum.yaml",
-            output_base_dir="output/coresets"
+            curriculum_path="config/curriculum.yaml", output_base_dir="output/coresets"
         )
 
     def test_validator_initialization(self, validator):
@@ -39,13 +38,14 @@ class TestCoresetValidator:
         """Test bands are available from curriculum"""
         assert len(validator.curriculum.bands) == 6
         from src.core.types import DifficultyBand
+
         for band_str in ["B0", "B1", "B2", "B3", "B4", "B5"]:
             band = DifficultyBand(band_str)
             assert band in validator.curriculum.bands
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="1B coreset outputs not generated"
+        reason="1B coreset outputs not generated",
     )
     def test_validate_1b_stage(self, validator):
         """Test validation of 1B stage"""
@@ -56,7 +56,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Coreset outputs not generated"
+        reason="Coreset outputs not generated",
     )
     def test_manifest_exists_1b(self, validator):
         """Test manifest file exists for 1B"""
@@ -67,7 +67,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/selected_indices.jsonl").exists()),
-        reason="Indices file not generated"
+        reason="Indices file not generated",
     )
     def test_indices_exist_1b(self, validator):
         """Test indices file exists for 1B"""
@@ -78,7 +78,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Manifest not generated"
+        reason="Manifest not generated",
     )
     def test_manifest_structure_1b(self, validator):
         """Test manifest has required fields"""
@@ -92,7 +92,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Manifest not generated"
+        reason="Manifest not generated",
     )
     def test_band_distribution_1b(self, validator):
         """Test band distribution against curriculum"""
@@ -102,12 +102,14 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Outputs not generated"
+        reason="Outputs not generated",
     )
     def test_domain_distribution_valid_1b(self, validator):
         """Test domain distribution is valid"""
         report = validator.validate_stage("1B")
-        domain_checks = [c for c in report.checks if c.category == "domain_distribution"]
+        domain_checks = [
+            c for c in report.checks if c.category == "domain_distribution"
+        ]
         # Should have at least some domain checks
         if domain_checks:
             for check in domain_checks:
@@ -116,7 +118,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Outputs not generated"
+        reason="Outputs not generated",
     )
     def test_language_policy_compliance_1b(self, validator):
         """Test language policy compliance"""
@@ -129,7 +131,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Outputs not generated"
+        reason="Outputs not generated",
     )
     def test_report_generation_1b(self, validator):
         """Test report can be generated"""
@@ -141,7 +143,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Outputs not generated"
+        reason="Outputs not generated",
     )
     def test_checklist_generation_1b(self, validator):
         """Test checklist can be generated"""
@@ -153,7 +155,7 @@ class TestCoresetValidator:
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Outputs not generated"
+        reason="Outputs not generated",
     )
     def test_validation_summary(self, validator):
         """Test validation summary computation"""
@@ -173,35 +175,36 @@ class TestValidationOutput:
     def validator(self):
         """Create validator"""
         return CoresetValidator(
-            curriculum_path="config/curriculum.yaml",
-            output_base_dir="output/coresets"
+            curriculum_path="config/curriculum.yaml", output_base_dir="output/coresets"
         )
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Outputs not generated"
+        reason="Outputs not generated",
     )
     def test_checklist_format(self, validator):
         """Test checklist has proper format"""
         validator.validate_stage("1B")
         checklist = validator.generate_checklist("1B")
-        
+
         # Should have sections
         assert "FILES" in checklist or "files" in checklist.lower()
         # Should have checkmarks or X marks
-        assert ("✓" in checklist or "PASS" in checklist) or ("✗" in checklist or "FAIL" in checklist)
+        assert ("✓" in checklist or "PASS" in checklist) or (
+            "✗" in checklist or "FAIL" in checklist
+        )
         # Should be readable text
         assert len(checklist) > 100
 
     @pytest.mark.skipif(
         not (Path("output/coresets/1B/manifest.json").exists()),
-        reason="Outputs not generated"
+        reason="Outputs not generated",
     )
     def test_report_format(self, validator):
         """Test report has proper structure"""
         validator.validate_stage("1B")
         report = validator.generate_report("1B")
-        
+
         # Should have summary section
         assert "SUMMARY" in report or "Summary" in report
         # Should have findings
@@ -218,8 +221,7 @@ def test_integration_validate_and_report():
         pytest.skip("Coreset outputs not generated")
 
     validator = CoresetValidator(
-        curriculum_path="config/curriculum.yaml",
-        output_base_dir="output/coresets"
+        curriculum_path="config/curriculum.yaml", output_base_dir="output/coresets"
     )
 
     # Validate stage

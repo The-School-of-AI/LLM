@@ -33,7 +33,7 @@ DEFAULT_CONFIG = {
         "bucket": "t2-datacurriculum-353",
         "base_prefix": "processed_dataset/curriculum_data",
         "output_prefix": "processed_dataset/curriculum_pyspark_output",
-        "checkpoint_path": "processed_dataset/checkpoints/curriculum_pyspark"
+        "checkpoint_path": "processed_dataset/checkpoints/curriculum_pyspark",
     },
     "processing": {
         "parallelism": 200,
@@ -41,49 +41,55 @@ DEFAULT_CONFIG = {
     },
     "schema": {
         "rename_columns": {"uuid": "chunk_id"},
-        "drop_columns": ["id", "text", "hash", "metadata", "assigned_band"]
-    }
+        "drop_columns": ["id", "text", "hash", "metadata", "assigned_band"],
+    },
 }
 
 # =========================================================================
 # LOGGING SETUP
 # =========================================================================
 
+
 def setup_logger():
     logger = logging.getLogger("t3_emr_logger")
     logger.setLevel(logging.INFO)
     handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('[%(asctime)s] %(levelname)s [%(name)s] - %(message)s')
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(levelname)s [%(name)s] - %(message)s"
+    )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger
+
 
 logger = setup_logger()
 
 
 def discover_sources_from_s3(bucket: str, base_prefix: str) -> List[str]:
     """Dynamically discovers sources by listing S3 prefixes."""
-    s3 = boto3.client('s3')
-    if not base_prefix.endswith('/'):
-        base_prefix += '/'
+    s3 = boto3.client("s3")
+    if not base_prefix.endswith("/"):
+        base_prefix += "/"
 
     logger.info(f"Discovering sources in s3://{bucket}/{base_prefix}")
 
-    paginator = s3.get_paginator('list_objects_v2')
+    paginator = s3.get_paginator("list_objects_v2")
     sources = []
 
-    for page in paginator.paginate(Bucket=bucket, Prefix=base_prefix, Delimiter='/'):
-        for prefix in page.get('CommonPrefixes', []):
-            folder_name = prefix.get('Prefix').split('/')[-2]
+    for page in paginator.paginate(Bucket=bucket, Prefix=base_prefix, Delimiter="/"):
+        for prefix in page.get("CommonPrefixes", []):
+            folder_name = prefix.get("Prefix").split("/")[-2]
             if folder_name.startswith("source="):
-                source_name = folder_name.split('=')[-1]
+                source_name = folder_name.split("=")[-1]
                 sources.append(source_name)
 
     logger.info(f"Found {len(sources)} sources: {sources}")
     return sources
 
+
 from pyspark.sql import functions as F
 from pyspark.sql.functions import broadcast
+
 
 def generate_distribution_stats(df, stats_output_path):
     """
@@ -99,7 +105,7 @@ def generate_distribution_stats(df, stats_output_path):
         "domain",
         "language",
         "word_count",
-        "token_count_estimate"
+        "token_count_estimate",
     ]
 
     for col in required_cols:
@@ -108,9 +114,9 @@ def generate_distribution_stats(df, stats_output_path):
 
     # Filter null critical fields
     df_stats = df.filter(
-        F.col("band").isNotNull() &
-        F.col("domain").isNotNull() &
-        F.col("language").isNotNull()
+        F.col("band").isNotNull()
+        & F.col("domain").isNotNull()
+        & F.col("language").isNotNull()
     )
 
     # Select minimal columns (CRITICAL for shuffle efficiency)
@@ -120,43 +126,30 @@ def generate_distribution_stats(df, stats_output_path):
         "domain",
         "language",
         F.col("word_count"),
-        F.col("token_count_estimate").alias("token_count")
+        F.col("token_count_estimate").alias("token_count"),
     )
 
     # Aggregate
-    agg_df = (
-        df_stats.groupBy("source", "band", "domain", "language")
-        .agg(
-            F.count("*").alias("doc_count"),
-            F.sum("token_count").alias("total_tokens"),
-            F.sum("word_count").alias("total_words")
-        )
+    agg_df = df_stats.groupBy("source", "band", "domain", "language").agg(
+        F.count("*").alias("doc_count"),
+        F.sum("token_count").alias("total_tokens"),
+        F.sum("word_count").alias("total_words"),
     )
 
     # Derived metrics
-    agg_df = (
-        agg_df
-        .withColumn(
-            "avg_tokens_per_doc",
-            F.col("total_tokens") / F.col("doc_count")
-        )
-        .withColumn(
-            "avg_words_per_doc",
-            F.col("total_words") / F.col("doc_count")
-        )
-    )
+    agg_df = agg_df.withColumn(
+        "avg_tokens_per_doc", F.col("total_tokens") / F.col("doc_count")
+    ).withColumn("avg_words_per_doc", F.col("total_words") / F.col("doc_count"))
 
     # Percent per source
-    source_totals = (
-        agg_df.groupBy("source")
-              .agg(F.sum("total_tokens").alias("source_total_tokens"))
+    source_totals = agg_df.groupBy("source").agg(
+        F.sum("total_tokens").alias("source_total_tokens")
     )
 
     final_stats_df = (
         agg_df.join(broadcast(source_totals), "source")
         .withColumn(
-            "pct_of_source_tokens",
-            F.col("total_tokens") / F.col("source_total_tokens")
+            "pct_of_source_tokens", F.col("total_tokens") / F.col("source_total_tokens")
         )
         .drop("source_total_tokens")
     )
@@ -164,27 +157,27 @@ def generate_distribution_stats(df, stats_output_path):
     print("Writing distribution CSV...")
 
     (
-        final_stats_df
-        .coalesce(1)
-        .write
-        .mode("overwrite")
+        final_stats_df.coalesce(1)
+        .write.mode("overwrite")
         .option("header", "true")
         .csv(stats_output_path)
     )
 
     print("Distribution stats written successfully.")
 
+
 # =========================================================================
 # CHECKPOINT MANAGER (S3-based for EMR Serverless)
 # =========================================================================
+
 
 class CheckpointManager:
     """S3-based checkpoint manager (no Hadoop dependency)."""
 
     def __init__(self, bucket: str, checkpoint_path: str):
         self.bucket = bucket
-        self.base_path = checkpoint_path.rstrip('/')
-        self.s3 = boto3.client('s3')
+        self.base_path = checkpoint_path.rstrip("/")
+        self.s3 = boto3.client("s3")
 
     def is_finished(self, identifier: str) -> bool:
         """Checks if a source has been processed."""
@@ -198,20 +191,27 @@ class CheckpointManager:
     def mark_finished(self, identifier: str):
         """Marks a source as processed by creating a .done file."""
         key = f"{self.base_path}/{identifier}.done"
-        self.s3.put_object(Bucket=self.bucket, Key=key, Body=b"", ContentType='text/plain')
+        self.s3.put_object(
+            Bucket=self.bucket, Key=key, Body=b"", ContentType="text/plain"
+        )
 
 
 # =========================================================================
 # SPARK DATA PROCESSOR
 # =========================================================================
 
+
 class SparkDataProcessor:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
 
-    def process_source_group(self, spark: SparkSession, source_name: str, band_paths: List[str]) -> DataFrame:
+    def process_source_group(
+        self, spark: SparkSession, source_name: str, band_paths: List[str]
+    ) -> DataFrame:
         """Loads all bands for a source, transforms, and deduplicates."""
-        logger.info(f"Processing Source Group: {source_name} (Bands: {len(band_paths)})")
+        logger.info(
+            f"Processing Source Group: {source_name} (Bands: {len(band_paths)})"
+        )
 
         df_list = []
         for path in band_paths:
@@ -239,27 +239,34 @@ class SparkDataProcessor:
 
         # Deduplication - keep hash for partition, drop after
         window_spec = Window.partitionBy("hash").orderBy(F.col("band"))
-        unique_df = transformed_df.withColumn("row_num", F.row_number().over(window_spec)) \
-            .filter(F.col("row_num") == 1) \
+        unique_df = (
+            transformed_df.withColumn("row_num", F.row_number().over(window_spec))
+            .filter(F.col("row_num") == 1)
             .drop("row_num")
+        )
 
         # Drop hash before save (if in drop_columns)
-        if "hash" in unique_df.columns and "hash" in self.config['schema']['drop_columns']:
+        if (
+            "hash" in unique_df.columns
+            and "hash" in self.config["schema"]["drop_columns"]
+        ):
             unique_df = unique_df.drop("hash")
 
-        num_partitions = self.config['processing'].get('parallelism', 200)
+        num_partitions = self.config["processing"].get("parallelism", 200)
         unique_df = unique_df.repartition(num_partitions)
 
         return unique_df
 
     def _transform_schema(self, df: DataFrame) -> DataFrame:
         """Applies renames and column drops."""
-        rename_map = self.config['schema']['rename_columns']
-        drop_cols = self.config['schema']['drop_columns']
+        rename_map = self.config["schema"]["rename_columns"]
+        drop_cols = self.config["schema"]["drop_columns"]
 
         band_p_cols = [c for c in df.columns if c.startswith("band_p_")]
         if band_p_cols:
-            df = df.withColumn("band_score", F.coalesce(*[F.col(c) for c in band_p_cols]))
+            df = df.withColumn(
+                "band_score", F.coalesce(*[F.col(c) for c in band_p_cols])
+            )
 
         for old_name, new_name in rename_map.items():
             if old_name in df.columns:
@@ -281,13 +288,28 @@ class SparkDataProcessor:
 # MAIN
 # =========================================================================
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description='T3 Final Processing - EMR Serverless')
-    parser.add_argument('--BUCKET', default='t2-datacurriculum-353', help='S3 bucket')
-    parser.add_argument('--BASE_PREFIX', default='processed_dataset/curriculum_data', help='Input base prefix')
-    parser.add_argument('--OUTPUT_PREFIX', default='processed_dataset/curriculum_pyspark_output', help='Output prefix')
-    parser.add_argument('--PARALLELISM', type=int, default=200, help='Shuffle/output partitions')
-    parser.add_argument('--SOURCE', default=None, help='Optional: process only this source (e.g. redpajama-arxiv)')
+    parser = argparse.ArgumentParser(description="T3 Final Processing - EMR Serverless")
+    parser.add_argument("--BUCKET", default="t2-datacurriculum-353", help="S3 bucket")
+    parser.add_argument(
+        "--BASE_PREFIX",
+        default="processed_dataset/curriculum_data",
+        help="Input base prefix",
+    )
+    parser.add_argument(
+        "--OUTPUT_PREFIX",
+        default="processed_dataset/curriculum_pyspark_output",
+        help="Output prefix",
+    )
+    parser.add_argument(
+        "--PARALLELISM", type=int, default=200, help="Shuffle/output partitions"
+    )
+    parser.add_argument(
+        "--SOURCE",
+        default=None,
+        help="Optional: process only this source (e.g. redpajama-arxiv)",
+    )
     return parser.parse_args()
 
 
@@ -299,18 +321,18 @@ def main():
             "bucket": args.BUCKET,
             "base_prefix": args.BASE_PREFIX,
             "output_prefix": args.OUTPUT_PREFIX,
-            "checkpoint_path": "processed_dataset/checkpoints/curriculum_pyspark"
+            "checkpoint_path": "processed_dataset/checkpoints/curriculum_pyspark",
         },
         "processing": {
             "parallelism": args.PARALLELISM,
             "default_bands": ["B0", "B1", "B2", "B3", "B4"],
         },
-        "schema": DEFAULT_CONFIG["schema"]
+        "schema": DEFAULT_CONFIG["schema"],
     }
 
-    bucket = config['s3']['bucket']
-    base_prefix = config['s3']['base_prefix']
-    output_prefix = config['s3']['output_prefix']
+    bucket = config["s3"]["bucket"]
+    base_prefix = config["s3"]["base_prefix"]
+    output_prefix = config["s3"]["output_prefix"]
     output_path = f"s3://{bucket}/{output_prefix}"
 
     logger.info("=" * 60)
@@ -320,21 +342,22 @@ def main():
     logger.info(f"Output: {output_path}")
     logger.info("=" * 60)
 
-    spark = SparkSession.builder \
-        .appName("T3_Final_Curriculum_Processing") \
-        .config("spark.sql.adaptive.enabled", "true") \
-        .config("spark.sql.shuffle.partitions", config['processing']['parallelism']) \
+    spark = (
+        SparkSession.builder.appName("T3_Final_Curriculum_Processing")
+        .config("spark.sql.adaptive.enabled", "true")
+        .config("spark.sql.shuffle.partitions", config["processing"]["parallelism"])
         .getOrCreate()
+    )
 
     processor = SparkDataProcessor(config)
-    checkpoint_mgr = CheckpointManager(bucket, config['s3']['checkpoint_path'])
+    checkpoint_mgr = CheckpointManager(bucket, config["s3"]["checkpoint_path"])
 
     if args.SOURCE:
         sources = [args.SOURCE]
         logger.info(f"Processing single source: {args.SOURCE}")
     else:
         sources = discover_sources_from_s3(bucket, base_prefix)
-    target_bands = config['processing']['default_bands']
+    target_bands = config["processing"]["default_bands"]
 
     start_time = datetime.now()
     processed = 0
@@ -352,15 +375,13 @@ def main():
 
             unique_df = processor.process_source_group(spark, source, band_paths)
             processor.save_output(unique_df, output_path, source)
-            
+
             stats_output_path = f"{output_path}/stats/{source}"
             generate_distribution_stats(unique_df, stats_output_path)
-            
+
             checkpoint_mgr.mark_finished(source)
             processed += 1
             logger.info(f"Finished source: {source}")
-
-
 
         except Exception as e:
             logger.error(f"Failed processing source {source}: {e}")

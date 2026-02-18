@@ -2,18 +2,18 @@ import json
 from pathlib import Path
 from collections import defaultdict
 
-chunks_file = Path('data/datasets/large_sample_chunks.jsonl')
-domains_70b = ['reasoning', 'agentic', 'indic']
+chunks_file = Path("data/datasets/large_sample_chunks.jsonl")
+domains_70b = ["reasoning", "agentic", "indic"]
 lang_by_domain = defaultdict(lambda: defaultdict(int))
 lang_tokens_by_domain = defaultdict(lambda: defaultdict(int))
 
 with open(chunks_file) as f:
     for line in f:
         chunk = json.loads(line)
-        domain = chunk.get('domain')
+        domain = chunk.get("domain")
         if domain in domains_70b:
-            lang = chunk.get('language')
-            tokens = chunk.get('token_count')
+            lang = chunk.get("language")
+            tokens = chunk.get("token_count")
             lang_by_domain[domain][lang] += 1
             lang_tokens_by_domain[domain][lang] += tokens
 

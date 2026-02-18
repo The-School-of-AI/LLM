@@ -12,6 +12,7 @@ from datetime import datetime
 
 class ProcessingStatus(str, Enum):
     """Processing status for datasets"""
+
     APPROVED = "APPROVED"
     PENDING = "PENDING"
     REJECTED = "REJECTED"
@@ -19,6 +20,7 @@ class ProcessingStatus(str, Enum):
 
 class DifficultyBand(str, Enum):
     """Difficulty bands (B0-B5)"""
+
     B0 = "B0"  # Nursery
     B1 = "B1"  # Primary
     B2 = "B2"  # HighSchool
@@ -29,6 +31,7 @@ class DifficultyBand(str, Enum):
 
 class StageName(str, Enum):
     """Training stages"""
+
     PRETRAIN_1B = "1B"
     PRETRAIN_3B = "3B"
     PRETRAIN_8B = "8B"
@@ -40,6 +43,7 @@ class StageName(str, Enum):
 @dataclass
 class ChunkMetadata:
     """Metadata for a single chunk"""
+
     chunk_id: str
     dataset_id: str
     token_count: int
@@ -52,7 +56,7 @@ class ChunkMetadata:
     quality_flags: List[str] = field(default_factory=list)
     sensitive_markers: List[str] = field(default_factory=list)
     start_offset: int = 0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -74,6 +78,7 @@ class ChunkMetadata:
 @dataclass
 class ProtectedSliceRule:
     """Rule for protecting certain slices from aggressive downsampling"""
+
     band_or_domain: str
     minimum_preservation_ratio: float  # e.g., 0.95
     reason: str
@@ -82,13 +87,14 @@ class ProtectedSliceRule:
 @dataclass
 class BandDistribution:
     """Distribution across difficulty bands"""
+
     B0: float = 0.0
     B1: float = 0.0
     B2: float = 0.0
     B3: float = 0.0
     B4: float = 0.0
     B5: float = 0.0
-    
+
     def to_dict(self) -> Dict[str, float]:
         return {
             "B0": self.B0,
@@ -98,11 +104,11 @@ class BandDistribution:
             "B4": self.B4,
             "B5": self.B5,
         }
-    
+
     @classmethod
     def from_dict(cls, d: Dict[str, float]) -> "BandDistribution":
         return cls(**d)
-    
+
     def validate(self) -> bool:
         """Verify distribution sums to ~1.0"""
         total = sum([self.B0, self.B1, self.B2, self.B3, self.B4, self.B5])
@@ -112,13 +118,14 @@ class BandDistribution:
 @dataclass
 class DomainDistribution:
     """Distribution across domains"""
+
     code: float = 0.0
     math: float = 0.0
     reasoning: float = 0.0
     agentic: float = 0.0
     indic: float = 0.0
     clean_web: float = 0.0
-    
+
     def to_dict(self) -> Dict[str, float]:
         return {
             "code": self.code,
@@ -128,29 +135,39 @@ class DomainDistribution:
             "indic": self.indic,
             "clean_web": self.clean_web,
         }
-    
+
     @classmethod
     def from_dict(cls, d: Dict[str, float]) -> "DomainDistribution":
         return cls(**d)
-    
+
     def validate(self) -> bool:
         """Verify distribution sums to ~1.0"""
-        total = sum([self.code, self.math, self.reasoning, self.agentic, self.indic, self.clean_web])
+        total = sum(
+            [
+                self.code,
+                self.math,
+                self.reasoning,
+                self.agentic,
+                self.indic,
+                self.clean_web,
+            ]
+        )
         return 0.99 <= total <= 1.01
 
 
 @dataclass
 class LanguageDistribution:
     """Distribution across languages"""
+
     languages: Dict[str, float] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, float]:
         return self.languages
-    
+
     @classmethod
     def from_dict(cls, d: Dict[str, float]) -> "LanguageDistribution":
         return cls(languages=d)
-    
+
     def validate(self) -> bool:
         """Verify distribution sums to ~1.0"""
         total = sum(self.languages.values())
@@ -160,10 +177,11 @@ class LanguageDistribution:
 @dataclass
 class CoresetComposition:
     """Composition of a coreset"""
+
     band_distribution: BandDistribution
     domain_distribution: DomainDistribution
     language_distribution: LanguageDistribution
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "band_distribution": self.band_distribution.to_dict(),
@@ -175,12 +193,13 @@ class CoresetComposition:
 @dataclass
 class ProtectedSlicesPreserved:
     """Preservation ratios for protected slices"""
+
     B4_preservation_ratio: float
     B5_preservation_ratio: float
     code_preservation_ratio: float
     agentic_preservation_ratio: float
     indic_preservation_ratio: float
-    
+
     def to_dict(self) -> Dict[str, float]:
         return {
             "B4_preservation_ratio": self.B4_preservation_ratio,
@@ -189,12 +208,14 @@ class ProtectedSlicesPreserved:
             "agentic_preservation_ratio": self.agentic_preservation_ratio,
             "indic_preservation_ratio": self.indic_preservation_ratio,
         }
-    
-    def validate_preservation(self, rules: List[ProtectedSliceRule]) -> Tuple[bool, List[str]]:
+
+    def validate_preservation(
+        self, rules: List[ProtectedSliceRule]
+    ) -> Tuple[bool, List[str]]:
         """Validate that all protected slices meet preservation thresholds"""
         violations = []
         ratios = self.to_dict()
-        
+
         for rule in rules:
             if rule.band_or_domain in ratios:
                 if ratios[rule.band_or_domain] < rule.minimum_preservation_ratio:
@@ -202,27 +223,30 @@ class ProtectedSlicesPreserved:
                         f"{rule.band_or_domain}: {ratios[rule.band_or_domain]:.2%} "
                         f"< {rule.minimum_preservation_ratio:.2%} ({rule.reason})"
                     )
-        
+
         return len(violations) == 0, violations
 
 
 @dataclass
 class DeduplicationStats:
     """Statistics on deduplication"""
+
     exact_duplicates_removed: int = 0
     near_duplicates_removed: int = 0
     total_chunks_before: int = 0
     total_chunks_after: int = 0
     total_tokens_before: int = 0
     total_tokens_after: int = 0
-    
+
     @property
     def dedup_ratio(self) -> float:
         """Tokens removed / tokens before"""
         if self.total_tokens_before == 0:
             return 0.0
-        return (self.total_tokens_before - self.total_tokens_after) / self.total_tokens_before
-    
+        return (
+            self.total_tokens_before - self.total_tokens_after
+        ) / self.total_tokens_before
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "exact_duplicates_removed": self.exact_duplicates_removed,
@@ -238,12 +262,13 @@ class DeduplicationStats:
 @dataclass
 class CoverageAudit:
     """Coverage audit results"""
+
     passed: bool
     expected_coverage: Dict[str, float]  # domain -> expected ratio
-    actual_coverage: Dict[str, float]    # domain -> actual ratio
+    actual_coverage: Dict[str, float]  # domain -> actual ratio
     tolerance: float
     violations: List[str] = field(default_factory=list)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "passed": self.passed,
@@ -257,6 +282,7 @@ class CoverageAudit:
 @dataclass
 class CoresetManifest:
     """Manifest for a stage-specific coreset"""
+
     stage_name: StageName
     coreset_id: str
     target_tokens: int
@@ -266,10 +292,10 @@ class CoresetManifest:
     curriculum_version: str
     seed: int
     config_hash: str
-    
+
     selected_chunks_count: int
     selected_chunks_file: Optional[str] = None  # reference to external file
-    
+
     composition: Optional[CoresetComposition] = None
     protected_slices_preserved: Optional[ProtectedSlicesPreserved] = None
     dedup_stats: Optional[DeduplicationStats] = None
@@ -282,10 +308,10 @@ class CoresetManifest:
     # When present, validators can downgrade target/ratio failures that are
     # provably unachievable due to insufficient remaining eligible pool.
     availability_stats: Optional[Dict[str, Any]] = None
-    
+
     deterministic: bool = True
     algorithm_version: str = "1.0.0"
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -301,15 +327,21 @@ class CoresetManifest:
             "selected_chunks_count": self.selected_chunks_count,
             "selected_chunks_file": self.selected_chunks_file,
             "composition": self.composition.to_dict() if self.composition else None,
-            "protected_slices_preserved": self.protected_slices_preserved.to_dict() if self.protected_slices_preserved else None,
+            "protected_slices_preserved": (
+                self.protected_slices_preserved.to_dict()
+                if self.protected_slices_preserved
+                else None
+            ),
             "dedup_stats": self.dedup_stats.to_dict() if self.dedup_stats else None,
-            "coverage_audit": self.coverage_audit.to_dict() if self.coverage_audit else None,
+            "coverage_audit": (
+                self.coverage_audit.to_dict() if self.coverage_audit else None
+            ),
             "rolling_window_stats": self.rolling_window_stats,
             "availability_stats": self.availability_stats,
             "deterministic": self.deterministic,
             "algorithm_version": self.algorithm_version,
         }
-    
+
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string"""
         return json.dumps(self.to_dict(), indent=indent)
@@ -318,6 +350,7 @@ class CoresetManifest:
 @dataclass
 class SelectionStatistics:
     """Statistics for a selection run"""
+
     total_input_chunks: int
     total_input_tokens: int
     selected_chunks: int
@@ -326,7 +359,7 @@ class SelectionStatistics:
     stage_name: StageName
     band_distribution: BandDistribution
     domain_distribution: DomainDistribution
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "total_input_chunks": self.total_input_chunks,

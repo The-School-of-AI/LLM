@@ -74,7 +74,9 @@ def _run_builder(
 
     if crash_after_batch is not None:
         env["CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_STAGE"] = "1B"
-        env["CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_BATCH"] = str(int(crash_after_batch))
+        env["CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_BATCH"] = str(
+            int(crash_after_batch)
+        )
     else:
         env.pop("CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_STAGE", None)
         env.pop("CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_BATCH", None)
@@ -112,13 +114,19 @@ def _run_builder(
     )
 
 
-def _read_selected_chunk_ids(output_coreset_path: Path, stage_name: str = "1B") -> set[str]:
+def _read_selected_chunk_ids(
+    output_coreset_path: Path, stage_name: str = "1B"
+) -> set[str]:
     stage_dir = output_coreset_path / stage_name
     parquet_parts = sorted(stage_dir.glob("selected_indices_part_*.parquet"))
     jsonl_parts = sorted(stage_dir.glob("selected_indices_part_*.jsonl"))
     parts = parquet_parts or jsonl_parts
     if not parts:
-        nearby = sorted(p.relative_to(output_coreset_path) for p in output_coreset_path.rglob("*") if p.is_file())
+        nearby = sorted(
+            p.relative_to(output_coreset_path)
+            for p in output_coreset_path.rglob("*")
+            if p.is_file()
+        )
         preview = "\n".join(str(p) for p in nearby[:50])
         raise AssertionError(
             f"No parquet parts found under {stage_dir}. "
@@ -201,9 +209,9 @@ def test_clean_vs_resume_equivalence_tiny_dataset(tmp_path: Path) -> None:
         total_input_tokens_estimate=total_tokens,
         crash_after_batch=None,
     )
-    assert clean_res.returncode == 0, (
-        f"Clean run failed (rc={clean_res.returncode})\nSTDOUT:\n{clean_res.stdout}\nSTDERR:\n{clean_res.stderr}"
-    )
+    assert (
+        clean_res.returncode == 0
+    ), f"Clean run failed (rc={clean_res.returncode})\nSTDOUT:\n{clean_res.stdout}\nSTDERR:\n{clean_res.stderr}"
 
     # Crash after checkpoint batch 1, then resume to completion
     resume_out = tmp_path / "out_resume" / "coresets"
@@ -226,7 +234,9 @@ def test_clean_vs_resume_equivalence_tiny_dataset(tmp_path: Path) -> None:
         total_input_tokens_estimate=total_tokens,
         crash_after_batch=1,
     )
-    assert crash_res.returncode != 0, "Crash simulation did not terminate the process as expected"
+    assert (
+        crash_res.returncode != 0
+    ), "Crash simulation did not terminate the process as expected"
 
     resumed_res = _run_builder(
         config_path=resume_cfg,
@@ -236,9 +246,9 @@ def test_clean_vs_resume_equivalence_tiny_dataset(tmp_path: Path) -> None:
         total_input_tokens_estimate=total_tokens,
         crash_after_batch=None,
     )
-    assert resumed_res.returncode == 0, (
-        f"Resumed run failed (rc={resumed_res.returncode})\nSTDOUT:\n{resumed_res.stdout}\nSTDERR:\n{resumed_res.stderr}"
-    )
+    assert (
+        resumed_res.returncode == 0
+    ), f"Resumed run failed (rc={resumed_res.returncode})\nSTDOUT:\n{resumed_res.stdout}\nSTDERR:\n{resumed_res.stderr}"
 
     clean_ids = _read_selected_chunk_ids(clean_out, "1B")
     resumed_ids = _read_selected_chunk_ids(resume_out, "1B")

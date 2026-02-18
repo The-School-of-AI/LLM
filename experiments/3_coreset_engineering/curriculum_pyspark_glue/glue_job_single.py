@@ -1,7 +1,7 @@
 """
 Curriculum Data Glue Job V1.0
 ===================================================
-AWS Glue job for consolidating, transforming, and deduplicating 
+AWS Glue job for consolidating, transforming, and deduplicating
 curriculum data from multiple sources.
 
 Key Features:
@@ -40,7 +40,7 @@ config = {
         "bucket": "t2-datacurriculum-353",
         "base_prefix": "processed_dataset/curriculum_data",
         "output_prefix": "processed_dataset/curriculum_pyspark_output",
-        "checkpoint_path": "processed_dataset/checkpoints/curriculum_pyspark"
+        "checkpoint_path": "processed_dataset/checkpoints/curriculum_pyspark",
     },
     "processing": {
         "parallelism": 200,
@@ -51,31 +51,24 @@ config = {
             "B2",
             "B3",
             "B4",
-        ]
+        ],
     },
     "glue_config": {
         "worker_type": "G.1X",
         "num_workers": 10,
         "max_retries": 0,
-        "timeout": 2880
+        "timeout": 2880,
     },
     "schema": {
-        "rename_columns": {
-            "uuid": "chunk_id"
-        },
-        "drop_columns": [
-            "id",
-            "text",
-            "hash",
-            "metadata",
-            "assigned_band"
-        ]
-    }
+        "rename_columns": {"uuid": "chunk_id"},
+        "drop_columns": ["id", "text", "hash", "metadata", "assigned_band"],
+    },
 }
 
 # =========================================================================
 # LOGGING SETUP
 # =========================================================================
+
 
 def setup_glue_logger():
     """Sets up a logger that works well with AWS Glue/CloudWatch."""
@@ -83,10 +76,13 @@ def setup_glue_logger():
     logger.setLevel(logging.INFO)
 
     handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('[%(asctime)s] %(levelname)s [%(name)s] - %(message)s')
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(levelname)s [%(name)s] - %(message)s"
+    )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger
+
 
 logger = setup_glue_logger()
 
@@ -96,40 +92,42 @@ def load_config(config_path: str) -> Dict[str, Any]:
     # Handle S3 config paths
     if config_path.startswith("s3://"):
         parsed = urlparse(config_path)
-        s3 = boto3.client('s3')
-        obj = s3.get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip('/'))
-        return yaml.safe_load(obj['Body'].read())
+        s3 = boto3.client("s3")
+        obj = s3.get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
+        return yaml.safe_load(obj["Body"].read())
 
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         return yaml.safe_load(f)
 
 
 def discover_sources_from_s3(bucket: str, base_prefix: str) -> List[str]:
     """Dynamically discovers sources by listing S3 prefixes."""
-    s3 = boto3.client('s3')
+    s3 = boto3.client("s3")
     # Use delimiter to only get the top-level folders under base_prefix
-    if not base_prefix.endswith('/'):
-        base_prefix += '/'
+    if not base_prefix.endswith("/"):
+        base_prefix += "/"
 
     logger.info(f"Discovering sources in s3://{bucket}/{base_prefix}")
 
-    paginator = s3.get_paginator('list_objects_v2')
+    paginator = s3.get_paginator("list_objects_v2")
     sources = []
 
-    for page in paginator.paginate(Bucket=bucket, Prefix=base_prefix, Delimiter='/'):
-        for prefix in page.get('CommonPrefixes', []):
+    for page in paginator.paginate(Bucket=bucket, Prefix=base_prefix, Delimiter="/"):
+        for prefix in page.get("CommonPrefixes", []):
             # Prefix is like 'processed_dataset/curriculum_data/source=arxiv/'
-            folder_name = prefix.get('Prefix').split('/')[-2]
+            folder_name = prefix.get("Prefix").split("/")[-2]
             if folder_name.startswith("source="):
-                source_name = folder_name.split('=')[-1]
+                source_name = folder_name.split("=")[-1]
                 sources.append(source_name)
 
     logger.info(f"Found {len(sources)} sources: {sources}")
     return sources
 
+
 # =========================================================================
 # HADOOP/SPARK UTILS & CHECKPOINTING
 # =========================================================================
+
 
 class CheckpointManager:
     """Simple manager for job checkpoints in S3."""
@@ -154,20 +152,26 @@ class CheckpointManager:
         path = f"{self.checkpoint_path}/{identifier}.done"
         self.spark.range(1).write.mode("overwrite").text(path)
 
+
 # =========================================================================
 # SPARK DATA PROCESSOR
 # =========================================================================
+
 
 class SparkDataProcessor:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
 
-    def process_source_group(self, spark: SparkSession, source_name: str, band_paths: List[str]) -> DataFrame:
+    def process_source_group(
+        self, spark: SparkSession, source_name: str, band_paths: List[str]
+    ) -> DataFrame:
         """
         Loads all bands for a single source, transforms them,
         and performs deduplication across the entire consolidated source data.
         """
-        logger.info(f"🚀 Processing Source Group: {source_name} (Bands: {len(band_paths)})")
+        logger.info(
+            f"🚀 Processing Source Group: {source_name} (Bands: {len(band_paths)})"
+        )
 
         # 1. Load all bands for this source into one DataFrame
         # band_paths is a list of s3://bucket/prefix/source=XYZ/bands/band=B0/ etc.
@@ -201,21 +205,23 @@ class SparkDataProcessor:
         # For example, if a document exists in B0 and B1, we might prefer B0.
         window_spec = Window.partitionBy("hash").orderBy(F.col("band"))
 
-        unique_df = transformed_df.withColumn("row_num", F.row_number().over(window_spec)) \
-            .filter(F.col("row_num") == 1) \
+        unique_df = (
+            transformed_df.withColumn("row_num", F.row_number().over(window_spec))
+            .filter(F.col("row_num") == 1)
             .drop("row_num")
+        )
 
         # Optimize parallelism before save
         # Repartition to target number of files (parallelism config)
-        num_partitions = self.config['processing'].get('parallelism', 10)
+        num_partitions = self.config["processing"].get("parallelism", 10)
         unique_df = unique_df.repartition(num_partitions)
 
         return unique_df
 
     def _transform_schema(self, df: DataFrame) -> DataFrame:
         """Applies renames and column drops defined in config."""
-        rename_map = self.config['schema']['rename_columns']
-        drop_cols = self.config['schema']['drop_columns']
+        rename_map = self.config["schema"]["rename_columns"]
+        drop_cols = self.config["schema"]["drop_columns"]
 
         # 1. Handle dynamic band scores (band_p_<BAND> -> band_score)
         # Note: In PySpark, we can use coalesce to find the first non-null band_p column
@@ -225,7 +231,9 @@ class SparkDataProcessor:
         # Create 'band_score' column dynamically
         band_p_cols = [c for c in df.columns if c.startswith("band_p_")]
         if band_p_cols:
-            df = df.withColumn("band_score", F.coalesce(*[F.col(c) for c in band_p_cols]))
+            df = df.withColumn(
+                "band_score", F.coalesce(*[F.col(c) for c in band_p_cols])
+            )
 
         # 2. Apply renames
         for old_name, new_name in rename_map.items():
@@ -246,33 +254,33 @@ class SparkDataProcessor:
         # We keep 'source' as a column for partitioning in S3
         # This creates a folder structure like: output/source=arxiv/
         # which is much better for downstream querying (Athena/Glue Catalog).
-        df.write.mode("append") \
-            .partitionBy("source") \
-            .json(output_path)
+        df.write.mode("append").partitionBy("source").json(output_path)
+
 
 # =========================================================================
 # MAIN ORCHESTRATION
 # =========================================================================
 
+
 def main():
     # 1. Initialize Glue Context
-    args = getResolvedOptions(sys.argv, ['JOB_NAME', 'config_path'])
+    args = getResolvedOptions(sys.argv, ["JOB_NAME", "config_path"])
     sc = SparkContext()
     glueContext = GlueContext(sc)
     spark = glueContext.spark_session
     job = Job(glueContext)
-    job.init(args['JOB_NAME'], args)
+    job.init(args["JOB_NAME"], args)
 
     logger.info("Initializing PySpark Glue Job for Curriculum Data")
     logger.info(f"Job Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     # 2. Load Config
-    config_path = args['config_path']
+    config_path = args["config_path"]
     global config
 
-    bucket = config['s3']['bucket']
-    base_prefix = config['s3']['base_prefix']
-    output_prefix = config['s3']['output_prefix']
+    bucket = config["s3"]["bucket"]
+    base_prefix = config["s3"]["base_prefix"]
+    output_prefix = config["s3"]["output_prefix"]
     checkpoint_path = f"s3://{bucket}/{config['s3']['checkpoint_path']}"
     output_path = f"s3://{bucket}/{output_prefix}"
 
@@ -281,11 +289,13 @@ def main():
 
     # 3. Discover Structure Dynamically
     sources = discover_sources_from_s3(bucket, base_prefix)
-    target_bands = config['processing']['default_bands']
+    target_bands = config["processing"]["default_bands"]
 
     # Professional Tip: Set shuffle partitions based on parallelism config
     # This prevents the default 200 partitions if data is small/large
-    spark.conf.set("spark.sql.shuffle.partitions", config['processing'].get('parallelism', 200))
+    spark.conf.set(
+        "spark.sql.shuffle.partitions", config["processing"].get("parallelism", 200)
+    )
 
     # 4. Orchestrate Processing
     for source in sources:

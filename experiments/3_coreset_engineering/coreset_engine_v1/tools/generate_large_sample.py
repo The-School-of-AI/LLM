@@ -17,7 +17,8 @@ def generate(out_path: Path, n: int, seed: int = 42):
             band = random.choices(BANDS, weights=[0.1, 0.15, 0.2, 0.25, 0.15, 0.15])[0]
             domain = random.choice(DOMAINS)
             language = random.choices(
-                LANGUAGES, weights=[0.5, 0.1, 0.07, 0.07, 0.07, 0.07, 0.05, 0.03, 0.02, 0.02]
+                LANGUAGES,
+                weights=[0.5, 0.1, 0.07, 0.07, 0.07, 0.07, 0.05, 0.03, 0.02, 0.02],
             )[0]
             token_count = random.randint(64, 256)  # keep smaller to control size
             token_ids = [random.randint(1, 128_000) for _ in range(token_count)]
@@ -40,9 +41,18 @@ def generate(out_path: Path, n: int, seed: int = 42):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate large sample JSONL of chunk metadata")
-    parser.add_argument("--n", type=int, default=5000000, help="Number of rows to generate")
-    parser.add_argument("--out", type=str, default="data/datasets/large_sample_chunks.jsonl", help="Output JSONL path")
+    parser = argparse.ArgumentParser(
+        description="Generate large sample JSONL of chunk metadata"
+    )
+    parser.add_argument(
+        "--n", type=int, default=5000000, help="Number of rows to generate"
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        default="data/datasets/large_sample_chunks.jsonl",
+        help="Output JSONL path",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
     args = parser.parse_args()

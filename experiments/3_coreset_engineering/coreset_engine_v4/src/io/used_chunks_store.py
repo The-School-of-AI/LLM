@@ -33,20 +33,20 @@ class UsedChunksStore:
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS used_chunks (
                     chunk_id TEXT PRIMARY KEY
                 );
-                """
-            )
+                """)
 
     def add_many(self, chunk_ids: Iterable[str]) -> int:
         ids = [(str(cid),) for cid in chunk_ids]
         if not ids:
             return 0
         with self._connect() as conn:
-            conn.executemany("INSERT OR IGNORE INTO used_chunks(chunk_id) VALUES (?);", ids)
+            conn.executemany(
+                "INSERT OR IGNORE INTO used_chunks(chunk_id) VALUES (?);", ids
+            )
             # sqlite3 doesn't reliably expose inserted count with OR IGNORE;
             # return input count as an upper bound.
         return len(ids)
@@ -61,15 +61,16 @@ class UsedChunksStore:
         with self._connect() as conn:
             conn.execute("DROP TABLE IF EXISTS tmp_ids;")
             conn.execute("CREATE TEMP TABLE tmp_ids (chunk_id TEXT PRIMARY KEY);")
-            conn.executemany("INSERT OR IGNORE INTO tmp_ids(chunk_id) VALUES (?);", [(cid,) for cid in ids_list])
+            conn.executemany(
+                "INSERT OR IGNORE INTO tmp_ids(chunk_id) VALUES (?);",
+                [(cid,) for cid in ids_list],
+            )
 
-            cur = conn.execute(
-                """
+            cur = conn.execute("""
                 SELECT t.chunk_id
                 FROM tmp_ids t
                 LEFT JOIN used_chunks u ON u.chunk_id = t.chunk_id
                 WHERE u.chunk_id IS NULL;
-                """
-            )
+                """)
             rows = cur.fetchall()
             return {r[0] for r in rows}

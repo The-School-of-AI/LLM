@@ -36,6 +36,7 @@ MANIFEST
 *.manifest
 *.spec
 
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
@@ -75,6 +76,7 @@ ENV/
 env.bak/
 venv.bak/
 env.json
+.idea
 
 # Jupyter Notebook / IPython
 .ipynb_checkpoints

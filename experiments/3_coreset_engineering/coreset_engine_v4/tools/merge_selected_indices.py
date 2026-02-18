@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence
 
-
 DEFAULT_COLUMNS: List[str] = [
     "chunk_id",
     "dataset_id",
@@ -74,7 +73,9 @@ def merge_stage_parts(
 
     output_path = stage_dir / output_name
     if output_path.exists() and not overwrite:
-        raise FileExistsError(f"Refusing to overwrite existing {output_path} (use --overwrite)")
+        raise FileExistsError(
+            f"Refusing to overwrite existing {output_path} (use --overwrite)"
+        )
 
     use_columns = list(columns) if columns is not None else None
 
@@ -130,7 +131,9 @@ def merge_coreset_root(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Merge selected_indices Parquet part files per stage")
+    parser = argparse.ArgumentParser(
+        description="Merge selected_indices Parquet part files per stage"
+    )
     parser.add_argument(
         "--coreset-root",
         type=str,
@@ -140,7 +143,9 @@ def main() -> int:
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--stage", type=str, help="Single stage to merge (e.g., 1B)")
-    group.add_argument("--stages", type=str, nargs="+", help="Stages to merge (e.g., 1B 3B 8B 70B)")
+    group.add_argument(
+        "--stages", type=str, nargs="+", help="Stages to merge (e.g., 1B 3B 8B 70B)"
+    )
 
     parser.add_argument(
         "--output-name",
@@ -182,7 +187,9 @@ def main() -> int:
     )
 
     for r in results:
-        print(f"{r.stage}: merged {r.part_files} parts -> {r.rows_written} rows at {r.output_path}")
+        print(
+            f"{r.stage}: merged {r.part_files} parts -> {r.rows_written} rows at {r.output_path}"
+        )
 
     return 0
 

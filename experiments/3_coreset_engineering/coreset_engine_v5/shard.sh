@@ -18,7 +18,8 @@ set -euo pipefail
 # --------------- DEFAULTS ---------------
 NUM_SHARDS=4
 STAGES="1B 3B 8B 70B"
-INPUT_PATH="data/books/bands/"
+S3_BUCKET="${S3_BUCKET:-abhi-t2-datacurriculum-353}"
+INPUT_PATH="${INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/source=books/}"
 INPUT_FORMAT="jsonl"
 CONFIG="config/pipeline.yaml"
 CURRICULUM="config/curriculum.yaml"

@@ -7,49 +7,40 @@ Lists all deliverables with descriptions
 PROJECT_STRUCTURE = {
     "coreset_engine": {
         "description": "Root directory for coreset selection engine",
-        
         "Core Pipeline": {
             "coreset_builder.py": "Main entry point - orchestrates full pipeline",
             "requirements.txt": "Python dependencies",
         },
-        
         "Source Code": {
             "src/": {
                 "__init__.py": "Package marker",
-                
                 "core/": {
                     "types.py": "Type system - DifficultyBand, ChunkMetadata, CoresetManifest, etc.",
                     "config.py": "Configuration management - PipelineConfig with validation",
                     "__init__.py": "Package marker",
                 },
-                
                 "curriculum/": {
                     "loader.py": "Curriculum loading and validation - CurriculumLoader class",
                     "__init__.py": "Package marker",
                 },
-                
                 "dedup/": {
                     "deduplicator.py": "Deduplication engines - ExactDeduplicator, SimHasher, MinHasher, NearDeduplicator",
                     "__init__.py": "Package marker",
                 },
-                
                 "diversity/": {
                     "scorer.py": "Diversity metrics - TokenFrequencyAnalyzer, DiversityScorer, DomainDiversityMatrix",
                     "__init__.py": "Package marker",
                 },
-                
                 "selection/": {
                     "engine.py": "Main selection engine - SelectionEngine class with stratified sampling",
                     "__init__.py": "Package marker",
                 },
-                
                 "io/": {
                     "loaders.py": "I/O utilities - ChunkLoader, CoresetWriter, AblationReporter",
                     "__init__.py": "Package marker",
                 },
             }
         },
-        
         "Configuration": {
             "config/": {
                 "pipeline.yaml": "Production configuration (default)",
@@ -59,19 +50,16 @@ PROJECT_STRUCTURE = {
                 "ablation_high_compression.yaml": "Ablation study - extreme compression (50% target)",
             }
         },
-        
         "Integration Schemas": {
             "schemas/": {
                 "integration_schema.json": "Formal handshake contracts with upstream/downstream teams",
             }
         },
-        
         "Tests": {
             "tests/": {
                 "test_pipeline.py": "Unit + integration tests (12+ test cases)",
             }
         },
-        
         "Documentation": {
             "docs/": {
                 "DESIGN_AND_RECOMMENDATIONS.md": "Comprehensive design guide (100+ pages) with research references and recommendations",
@@ -79,14 +67,13 @@ PROJECT_STRUCTURE = {
             "README.md": "Quick start guide, architecture, usage examples, troubleshooting",
             "DELIVERABLES.md": "This file - summary of all deliverables and status",
         },
-        
         "Logs & Output": {
             "coreset_selection.log": "Pipeline execution log (generated at runtime)",
             "output/": {
                 "coresets/": "Generated coresets per stage",
                 "manifests/": "Generated reports and diagnostics",
-            }
-        }
+            },
+        },
     }
 }
 

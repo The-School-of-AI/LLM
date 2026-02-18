@@ -1,0 +1,107 @@
+{
+  "_comment": [
+    "AWS Batch Job Definition for Coreset Selection Engine.",
+    "Register with: aws batch register-job-definition --cli-input-json file://aws_batch/job_definition.json",
+    "Replace <ECR_IMAGE_URI> with your actual ECR image URI before registering.",
+    "Replace <BATCH_EXECUTION_ROLE_ARN> with an IAM role that has:",
+    "  - AmazonECSTaskExecutionRolePolicy (for ECS/Batch to pull ECR image)",
+    "  - S3 read/write on your data bucket",
+    "  - CloudWatch Logs write access"
+  ],
+  "jobDefinitionName": "coreset-engine",
+  "type": "container",
+  "platformCapabilities": ["FARGATE"],
+  "containerProperties": {
+    "image": "537907620791.dkr.ecr.ap-south-1.amazonaws.com/coreset-engine:v5.3",
+    "networkConfiguration": {
+      "assignPublicIp": "ENABLED"
+    },
+    "resourceRequirements": [
+      {
+        "value": "4",
+        "type": "VCPU"
+      },
+      {
+        "value": "16384",
+        "type": "MEMORY"
+      }
+    ],
+    "jobRoleArn": "arn:aws:iam::537907620791:role/coreset-engine-batch-role",
+    "executionRoleArn": "arn:aws:iam::537907620791:role/coreset-engine-batch-role",
+    "environment": [
+      {
+        "name": "S3_BUCKET",
+        "value": "abhi-t2-datacurriculum-353"
+      },
+      {
+        "name": "S3_INPUT_PATH",
+        "value": "s3://abhi-t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=books/"
+      },
+      {
+        "name": "TOTAL_TOKENS",
+        "value": "4523096944"
+      },
+      {
+        "name": "NUM_SHARDS",
+        "value": "8"
+      },
+      {
+        "name": "STAGES",
+        "value": "1B 3B 8B 70B"
+      },
+      {
+        "name": "INPUT_FORMAT",
+        "value": "jsonl"
+      },
+      {
+        "name": "BATCH_SIZE",
+        "value": "10000"
+      },
+      {
+        "name": "BAND_INFERENCE",
+        "value": "none"
+      },
+      {
+        "name": "BAND_SCORE_SOURCE",
+        "value": "auto"
+      },
+      {
+        "name": "STAGE_TARGET_SCALE",
+        "value": "1.0"
+      },
+      {
+        "name": "RESUME",
+        "value": "false"
+      }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/aws/batch/coreset-engine",
+        "awslogs-region": "ap-south-1",
+        "awslogs-stream-prefix": "shard"
+      }
+    },
+    "mountPoints": [],
+    "volumes": [],
+    "runtimePlatform": {
+      "cpuArchitecture": "ARM64",
+      "operatingSystemFamily": "LINUX"
+    },
+    "fargatePlatformConfiguration": {
+      "platformVersion": "LATEST"
+    },
+    "readonlyRootFilesystem": false,
+    "privileged": false
+  },
+  "retryStrategy": {
+    "attempts": 2
+  },
+  "timeout": {
+    "attemptDurationSeconds": 86400
+  },
+  "tags": {
+    "Project": "coreset-engine",
+    "Version": "v5"
+  }
+}
