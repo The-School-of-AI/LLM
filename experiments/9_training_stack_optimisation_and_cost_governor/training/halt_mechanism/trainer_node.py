@@ -35,6 +35,11 @@ CKPT_FILE = "/tmp/checkpoint.pt"
 
 METRIC_INTERVAL = 30
 
+# Skip divergence detection for this many steps. During 70B warmup the loss
+# can legitimately swing by large multiples before settling, so firing on the
+# first few steps would produce false halts.
+WARMUP_STEPS = 100
+
 s3 = boto3.client("s3")
 
 HALT = False
@@ -143,6 +148,7 @@ while True:
     if not math.isfinite(loss):
         write_metrics(loss, nan=True)
         save_checkpoint(model, optimizer, step)
+        # NOTE for distributed use: see divergence detection comment below.
         os._exit(1)
 
     ################################
@@ -150,12 +156,18 @@ while True:
     ################################
     loss_window.append(loss)
 
-    if len(loss_window) == loss_window.maxlen:
+    # Skip divergence check during warmup: loss swings are expected and large
+    # during the first WARMUP_STEPS before the LR schedule stabilises.
+    if step >= WARMUP_STEPS and len(loss_window) == loss_window.maxlen:
         mean_loss = sum(loss_window) / len(loss_window)
 
         if loss > mean_loss * 5:
             write_metrics(loss, diverged=True)
             save_checkpoint(model, optimizer, step)
+            # NOTE for distributed use: os._exit() on one rank will leave all
+            # other ranks hanging on the next NCCL collective. In the real
+            # DeepSpeed pipeline (train.py), exit is handled via a distributed-
+            # safe break + sys.exit(). This prototype is single-process only.
             os._exit(1)
 
     ################################
@@ -168,7 +180,7 @@ while True:
     ################################
     # Metrics
     ################################
-    tokens_accum += 320
+    tokens_accum += x.numel()  # batch_size * seq_len; was hardcoded 320
     now = time.time()
 
     if now - last_metric_time > METRIC_INTERVAL:

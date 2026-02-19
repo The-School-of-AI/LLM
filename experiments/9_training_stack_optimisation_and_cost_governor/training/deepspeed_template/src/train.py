@@ -124,8 +124,17 @@ def train_epoch(
             now = time.time()
             if is_main_process() and (now - last_metrics_time) >= metrics_interval:
                 tps = tokens_accum / (now - last_metrics_time)
+                # Gradient norm is a leading indicator of instability — it
+                # spikes before loss diverges, giving the controller earlier
+                # warning. DeepSpeed exposes this after model_engine.step().
+                grad_norm = None
+                try:
+                    grad_norm = model_engine.get_global_grad_norm()
+                except Exception:
+                    pass
                 write_metrics(
-                    loss.item(), path=metrics_file, tokens_per_sec=tps
+                    loss.item(), path=metrics_file, tokens_per_sec=tps,
+                    grad_norm=grad_norm,
                 )
                 tokens_accum = 0
                 last_metrics_time = now
