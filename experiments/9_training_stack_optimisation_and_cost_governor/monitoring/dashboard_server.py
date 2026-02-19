@@ -468,4 +468,4 @@ if __name__ == "__main__":
     print(f"   Host:     {CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}")
     print(f"   Database: {CLICKHOUSE_DB}")
     print(f"   Tables:   {len([t for t in TABLE_REGISTRY if TABLE_REGISTRY[t]['role'] != 'ignored'])} active\n")
-    app.run(host="0.0.0.0", port=5050, debug=True)
+    app.run(host="0.0.0.0", port=5050, debug=False)

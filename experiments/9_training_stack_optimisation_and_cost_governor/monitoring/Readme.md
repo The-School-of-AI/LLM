@@ -44,9 +44,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # Fill in .env with the real values
 
-# 4. Run
-export $(cat .env | xargs)
-python3 dashboard_server.py
+# 4. Run (local dev)
+./start.sh
 ```
 
 Then open `http://localhost:5050`.
@@ -104,7 +103,7 @@ export $(cat .env | xargs)
 ### 5. Start the server
 
 ```bash
-python3 dashboard_server.py
+./start.sh
 ```
 
 Expected output:
@@ -133,53 +132,140 @@ http://localhost:5050
 
 ---
 
-## Deploying on EC2 (Free Tier)
+## Deploying on EC2 (Production)
 
-### Instance setup
+Runs as a systemd service with gunicorn — survives crashes, reboots, and handles concurrent traffic automatically.
 
-1. Launch a **t2.micro** — Ubuntu 24.04 LTS, free tier eligible (750 hrs/month for 12 months)
-2. In the Security Group, open inbound rules:
+### 1. Launch the instance
 
-   | Type | Port | Source |
-   |------|------|--------|
-   | SSH | 22 | Your IP |
-   | Custom TCP | 5050 | 0.0.0.0/0 |
+- AMI: **Ubuntu 24.04 LTS ARM64** — t4g instances are Graviton2 (ARM), so pick the ARM64 image in the AMI selector, not the default x86
+- Type: **t4g.small** (2 vCPU, 2 GB RAM)
+- Security Group inbound rules:
 
-3. SSH in:
+  | Type | Port | Source |
+  |------|------|--------|
+  | SSH | 22 | Your IP |
+  | HTTP | 80 | 0.0.0.0/0 |
+
+  > Port 5050 does NOT need to be open — gunicorn only listens on localhost, Nginx is the public entry point.
+
+### 2. SSH in
 
 ```bash
 ssh -i your-key.pem ubuntu@<ec2-public-ip>
 ```
 
-### Install and run
+### 3. Install system dependencies
 
 ```bash
-# Install Python
 sudo apt update && sudo apt install -y python3-pip python3-venv git
-
-# Clone your repo
-git clone <your-repo-url>
-cd monitoring
-
-# Set up environment
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# Set credentials
-export CH_HOST=...
-export CH_PASSWORD=...
-
-# Run persistently with screen
-screen -S dashboard
-python3 dashboard_server.py
-# Detach: Ctrl+A then D
-# Reattach later: screen -r dashboard
 ```
 
-### Access it
+### 4. Clone the repo
+
+```bash
+git clone <your-repo-url> /home/ubuntu/monitoring
+cd /home/ubuntu/monitoring
+```
+
+### 5. Set up Python environment
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+### 6. Configure credentials
+
+```bash
+cp .env.example .env
+nano .env   # fill in CH_HOST, CH_USER, CH_PASSWORD, etc.
+```
+
+### 7. Add swap (safety net for memory spikes)
+
+```bash
+sudo fallocate -l 1G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+### 8. Install and configure Nginx
+
+```bash
+sudo apt install -y nginx
+
+# Copy the site config
+sudo cp monitoring_nginx.conf /etc/nginx/sites-available/monitoring
+
+# Enable it and disable the default site
+sudo ln -s /etc/nginx/sites-available/monitoring /etc/nginx/sites-enabled/monitoring
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Test config and reload
+sudo nginx -t
+sudo systemctl enable nginx
+sudo systemctl start nginx
+```
+
+### 9. Install and start the systemd service
+
+```bash
+# Copy the service file
+sudo cp monitoring.service /etc/systemd/system/
+
+# Reload systemd and enable the service (starts on every boot)
+sudo systemctl daemon-reload
+sudo systemctl enable monitoring
+
+# Start it now
+sudo systemctl start monitoring
+
+# Confirm it's running
+sudo systemctl status monitoring
+```
+
+Expected output:
+```
+● monitoring.service - Training Dashboard Server
+     Loaded: loaded (/etc/systemd/system/monitoring.service; enabled)
+     Active: active (running) since ...
+```
+
+### 10. Access the dashboard
 
 ```
-http://<ec2-public-ip>:5050
+http://<ec2-public-ip>
+```
+
+No port needed — Nginx listens on port 80 (standard HTTP).
+
+---
+
+### Everyday commands
+
+```bash
+# Live logs
+journalctl -u monitoring -f
+
+# Restart (e.g. after pulling new code)
+sudo systemctl restart monitoring
+
+# Stop
+sudo systemctl stop monitoring
+
+# Check status
+sudo systemctl status monitoring
+```
+
+### Deploying updates
+
+```bash
+cd /home/ubuntu/monitoring
+git pull
+sudo systemctl restart monitoring
 ```
 
 ---

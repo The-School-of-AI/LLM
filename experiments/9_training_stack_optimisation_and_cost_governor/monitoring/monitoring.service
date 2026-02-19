@@ -1,0 +1,29 @@
+[Unit]
+Description=Training Dashboard Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+
+# ── Paths — update these after cloning on EC2 ─────────────────────────────────
+WorkingDirectory=/home/ubuntu/monitoring
+EnvironmentFile=/home/ubuntu/monitoring/.env
+ExecStart=/home/ubuntu/monitoring/.venv/bin/gunicorn \
+    -c /home/ubuntu/monitoring/gunicorn.conf.py \
+    dashboard_server:app
+
+# ── Restart policy — always restart unless manually stopped ───────────────────
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=0   # never give up restarting
+
+# ── Logging — view with: journalctl -u monitoring -f ─────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=monitoring
+
+[Install]
+WantedBy=multi-user.target
