@@ -137,9 +137,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import logging
 import math
+import importlib
+import sys
 import numpy as np
 from typing import List, Optional, Dict
 from dataclasses import dataclass
+from pathlib import Path
 
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
 # All kernels have automatic PyTorch fallbacks when Triton/fla unavailable.
@@ -184,6 +187,27 @@ _kernel_log.info(f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and fla_gated_d
 if not _cuda_available:
     _kernel_log.info("  NOTE: All Triton/fla kernels require CUDA. Running on MPS/CPU uses PyTorch fallbacks.")
 _kernel_log.info("=" * 60)
+
+# ── Vendored Liger Ops ──────────────────────────────────────────────────────
+# Self-contained import so this model does not rely on external liger wheels.
+def _import_liger_ops_module():
+    try:
+        from . import liger_ops as liger_module
+        return liger_module
+    except Exception:
+        pass
+
+    src_root = Path(__file__).resolve().parents[1]
+    src_root_str = str(src_root)
+    if src_root_str not in sys.path:
+        sys.path.insert(0, src_root_str)
+    return importlib.import_module("models.liger_ops")
+
+
+_liger_module = _import_liger_ops_module()
+LigerFusedLinearCrossEntropyLoss = _liger_module.LigerFusedLinearCrossEntropyLoss
+liger_rotary_pos_emb = _liger_module.liger_rotary_pos_emb
+liger_silu_mul = _liger_module.liger_silu_mul
 
 # Note: Importing for backwards compatibility - we define KroneckerEmbeddings inline
 # from kronecker_se_decoder import PFConfig, PFCodec
@@ -600,13 +624,8 @@ class RotaryEmbedding(nn.Module):
 
     @staticmethod
     def _apply_rotary(x, cos, sin):
-        """Apply rotary embedding to tensor x using interleaved even/odd rotation."""
-        x1, x2 = x[..., ::2], x[..., 1::2]
-        return torch.cat(
-            (x1 * cos[..., ::2] - x2 * sin[..., ::2],
-             x1 * sin[..., ::2] + x2 * cos[..., ::2]),
-            dim=-1
-        )
+        # Liger integration: use vendored rotary application helper.
+        return liger_rotary_pos_emb(x, cos, sin)
 
 
 # ============================================================================
@@ -1318,7 +1337,8 @@ class MoEFFN(nn.Module):
         device, dtype = x.device, x.dtype
 
         # Shared expert
-        shared_h = F.silu(self.shared_gate(x)) * self.shared_up(x)
+        # Liger integration: use vendored SiLU-mul op for SwiGLU path.
+        shared_h = liger_silu_mul(self.shared_gate(x), self.shared_up(x))
         if self.training and self.dropout > 0:
             shared_h = F.dropout(shared_h, p=self.dropout)
         shared_out = self.shared_down(shared_h)
@@ -1355,7 +1375,7 @@ class MoEFFN(nn.Module):
             end = offsets[e].item()
             if end > start:
                 chunk_x = sorted_x[start:end]
-                h = F.silu(chunk_x @ self.W_gate[e]) * (chunk_x @ self.W_up[e])
+                h = liger_silu_mul(chunk_x @ self.W_gate[e], chunk_x @ self.W_up[e])
                 if self.training and self.dropout > 0:
                     h = F.dropout(h, p=self.dropout)
                 sorted_out[start:end] = h @ self.W_down[e]
@@ -1801,6 +1821,8 @@ class Model8B(nn.Module):
 
         # Output projection
         self.lm_head = nn.Linear(config.hidden_size, self.vocab_size, bias=False)
+        # Liger integration: fused linear + CE (chunked to avoid [B, T, V] allocation).
+        self.liger_fused_ce = LigerFusedLinearCrossEntropyLoss(chunk_size=256)
 
         # Initialize
         self.apply(self._init_weights)
@@ -1866,8 +1888,18 @@ class Model8B(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
+    def _fused_linear_cross_entropy(self, hidden, lm_head, targets):
+        """Liger fused linear+CE entrypoint (vendored implementation)."""
+        return self.liger_fused_ce(
+            hidden,
+            lm_head.weight,
+            targets,
+            bias=lm_head.bias,
+        )
+
     def forward(self, input_ids, next_token_ids=None, attention_mask=None,
-                prev_memory_stream=None, return_memory=True, return_loss=False):
+                prev_memory_stream=None, return_memory=True, return_loss=False,
+                ntp_targets=None, mtp_targets=None):
         """
         Forward pass with Multi-Token Prediction.
 
@@ -1969,7 +2001,11 @@ class Model8B(nn.Module):
         h_main = self.norm(h_main)
 
         # NTP Prediction
-        logits_ntp = self.lm_head(h_main)
+        # Liger integration: fused linear+CE path avoids [B, T, vocab] allocation.
+        if ntp_targets is not None:
+            logits_ntp = self._fused_linear_cross_entropy(h_main, self.lm_head, ntp_targets)
+        else:
+            logits_ntp = self.lm_head(h_main)
 
         # MTP Prediction
         logits_mtp = None
@@ -1986,7 +2022,11 @@ class Model8B(nn.Module):
                 next_emb = self.token_embed(next_ids_use)
 
             h_mtp = self.mtp_block(h_use, next_emb, attention_mask=None)
-            logits_mtp = self.lm_head(self.norm(h_mtp))
+            h_mtp_normed = self.norm(h_mtp)
+            if mtp_targets is not None:
+                logits_mtp = self._fused_linear_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
+            else:
+                logits_mtp = self.lm_head(h_mtp_normed)
 
         # FIX #41: Clear RoPE forward-pass cache to prevent accumulation (CRITICAL PATH FIX)
         # Correct path: layer.attn_block.sublayer.rotary_emb (not layer.attn)

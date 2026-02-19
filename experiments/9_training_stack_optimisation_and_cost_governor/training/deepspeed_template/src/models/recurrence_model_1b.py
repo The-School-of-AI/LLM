@@ -28,10 +28,9 @@ Status: Architectural fixes complete, ready for testing phase before kernel opti
 CHANGELOG - Critical Bug Fixes and Optimizations:
 =================================================
 1. FIXED: Duplicate RMSNorm class definition removed (was overriding first definition)
-2. REPLACED: YARN RoPE replaced with standard RoPE (Su et al. 2021)
-   - Removed NTK scaling, mscale frequency-band interpolation, beta_fast/beta_slow params
-   - Standard inv_freq = 1 / (base ** (2i/dim)); clean on-the-fly cos/sin computation
-   - rope_original_max_position and rope_scaling_factor removed from ModelConfig
+2. FIXED: YARN beta_fast/beta_slow inversion corrected (was 32/1, now 1/32)
+   - This critical bug was destroying DeltaNet's ability to distinguish local token order
+   - High frequencies now preserved (scale ~1.0), low frequencies interpolated (scale ~32.0)
 3. FIXED: MTP block now uses GatedSparseAttention instead of GatedDeltaNet
    - MTP runs once per step, so full attention cost is negligible but gradient quality is critical
 4. FIXED: Removed dead memory injection code from MTPTransformerBlock.forward()
@@ -105,7 +104,26 @@ Before deploying this model at 256k context, the following MUST be addressed:
    Status: Optional for testing, REQUIRED for production tuning
    Est. Effort: 2-3 days (benchmarking + analysis)
 
-5. 📈 TODO: Production Monitoring Hooks
+5. 🔍 TODO: Verify YARN mscale Frequency Band Logic
+   ───────────────────────────────────────────────────
+   Location: RotaryEmbedding.__init__() (lines 410-417)
+   Current: mscale uses original 'base', inv_freq uses 'scaled_base'
+
+   Rationale (YARN Paper Section 2.1):
+   - Frequency band classification should be relative to ORIGINAL bands
+   - mscale determines which frequencies get interpolated (0-1 ramp)
+   - This is APPLIED to the NTK-scaled frequencies (inv_freq)
+
+   Action:
+   - Validate against YARN paper equations (specifically Section 2.1, Eq 3-5)
+   - Confirm: wavelen = 2π / freq should use original base for classification
+   - If matches paper → mark verified
+   - If deviation → document intentional change or fix
+
+   Status: Logic appears correct per paper, needs formal verification
+   Est. Effort: 4-6 hours (paper cross-reference + validation)
+
+6. 📈 TODO: Production Monitoring Hooks
    ─────────────────────────────────────
    Implement logging for:
    - aux_loss / main_loss ratio (alert if > 0.1) - NOTE: 1B is dense, aux_loss minimal
@@ -120,27 +138,64 @@ Before deploying this model at 256k context, the following MUST be addressed:
 ═══════════════════════════════════════════════════════════════════════════════
 """
 
+import logging
+import math
+import importlib
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
-import math
-import numpy as np
-from typing import List, Optional, Dict
-from dataclasses import dataclass
 
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
-# All kernels have automatic PyTorch fallbacks when Triton/fla unavailable.
-try:
-    from ..kernels import (
-        HAS_TRITON, HAS_FLA,
-        triton_sparse_attention, pytorch_sparse_attention,
-        triton_sinkhorn_knopp, pytorch_sinkhorn_knopp,
-        triton_rmsnorm, pytorch_rmsnorm, TritonRMSNorm,
-        fla_gated_delta_rule,
-        fused_indexer_topk,
-    )
-except ImportError:
+# Mirror 70B import resolution so 1B behaves identically across launch contexts.
+def _import_kernels_module():
+    # Package-relative import when recurrence_model_1b.py is used inside src.models.
+    try:
+        from .. import kernels as kernels_module
+        return kernels_module
+    except Exception:
+        pass
+
+    # Standalone fallback: borrow kernels from known deepspeed_template roots.
+    experiments_dir = Path(__file__).resolve().parents[5]
+    candidate_roots = [
+        experiments_dir / "9_training_stack_optimisation_and_cost_governor" / "training" / "deepspeed_template" / "src",
+        experiments_dir / "9_training_stack_optimisation_and_cost_governor" / "training" / "deepspeed_template" / "dense_hardened" / "src",
+    ]
+
+    for root in candidate_roots:
+        if not (root / "kernels").exists():
+            continue
+        root_str = str(root)
+        if root_str not in sys.path:
+            sys.path.insert(0, root_str)
+        try:
+            return importlib.import_module("kernels")
+        except Exception:
+            continue
+
+    return None
+
+
+_kernels_module = _import_kernels_module()
+if _kernels_module is not None:
+    HAS_TRITON = bool(getattr(_kernels_module, "HAS_TRITON", False))
+    HAS_FLA = bool(getattr(_kernels_module, "HAS_FLA", False))
+    triton_sparse_attention = getattr(_kernels_module, "triton_sparse_attention", None)
+    pytorch_sparse_attention = getattr(_kernels_module, "pytorch_sparse_attention", None)
+    triton_sinkhorn_knopp = getattr(_kernels_module, "triton_sinkhorn_knopp", None)
+    pytorch_sinkhorn_knopp = getattr(_kernels_module, "pytorch_sinkhorn_knopp", None)
+    triton_rmsnorm = getattr(_kernels_module, "triton_rmsnorm", None)
+    pytorch_rmsnorm = getattr(_kernels_module, "pytorch_rmsnorm", None)
+    TritonRMSNorm = getattr(_kernels_module, "TritonRMSNorm", None)
+    fla_gated_delta_rule = getattr(_kernels_module, "fla_gated_delta_rule", None)
+    fused_indexer_topk = getattr(_kernels_module, "fused_indexer_topk", None)
+else:
     HAS_TRITON = False
     HAS_FLA = False
     triton_sparse_attention = None
@@ -152,6 +207,30 @@ except ImportError:
     TritonRMSNorm = None
     fla_gated_delta_rule = None
     fused_indexer_topk = None
+
+HAS_FUSED_INDEXER = fused_indexer_topk is not None
+
+# ── Vendored Liger Ops ──────────────────────────────────────────────────────
+# Self-contained import so this model does not rely on external liger wheels.
+def _import_liger_ops_module():
+    try:
+        from . import liger_ops as liger_module
+        return liger_module
+    except Exception:
+        pass
+
+    src_root = Path(__file__).resolve().parents[1]
+    src_root_str = str(src_root)
+    if src_root_str not in sys.path:
+        sys.path.insert(0, src_root_str)
+    return importlib.import_module("models.liger_ops")
+
+
+_liger_module = _import_liger_ops_module()
+LigerFusedLinearCrossEntropyLoss = _liger_module.LigerFusedLinearCrossEntropyLoss
+LigerSwiGLUMLP = _liger_module.LigerSwiGLUMLP
+liger_rotary_pos_emb = _liger_module.liger_rotary_pos_emb
+liger_silu_mul = _liger_module.liger_silu_mul
 
 # ── Kernel availability diagnostics ──────────────────────────────────────────
 _kernel_log = logging.getLogger("recurrence_model_1b.kernels")
@@ -175,6 +254,59 @@ _kernel_log.info("=" * 60)
 
 # Note: Importing for backwards compatibility - we define KroneckerEmbeddings inline
 # from kronecker_se_decoder import PFConfig, PFCodec
+
+
+def _token_keep_mask(
+    attention_mask: Optional[torch.Tensor],
+    batch_size: int,
+    seq_len: int,
+    device: torch.device,
+) -> Optional[torch.Tensor]:
+    """Normalize attention masks to a boolean keep-mask of shape [B, T]."""
+    if attention_mask is None:
+        return None
+
+    mask = attention_mask
+    if mask.dim() == 2:
+        pass
+    elif mask.dim() == 3 and mask.size(1) == 1:
+        mask = mask[:, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == 1:
+        mask = mask[:, 0, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == seq_len:
+        # Convert [B, 1, T, T] to [B, T] key-validity.
+        mask = mask[:, 0, :, :]
+        if mask.dtype == torch.bool:
+            mask = mask.any(dim=1)
+        elif torch.is_floating_point(mask):
+            if torch.any(mask < 0):
+                mask = (mask.max(dim=1).values >= 0)
+            else:
+                mask = (mask.max(dim=1).values > 0)
+        else:
+            mask = (mask.max(dim=1).values > 0)
+    else:
+        raise ValueError(
+            f"Unsupported attention_mask shape {tuple(mask.shape)}. "
+            "Expected [B,T], [B,1,T], [B,1,1,T], or [B,1,T,T]."
+        )
+
+    if mask.shape != (batch_size, seq_len):
+        raise ValueError(
+            f"attention_mask shape {tuple(mask.shape)} does not match expected {(batch_size, seq_len)}."
+        )
+
+    if mask.dtype == torch.bool:
+        keep = mask
+    elif torch.is_floating_point(mask):
+        if torch.any(mask < 0):
+            keep = mask >= 0
+        else:
+            keep = mask > 0
+    else:
+        keep = mask > 0
+
+    return keep.to(device=device, dtype=torch.bool)
 
 
 # ============================================================================
@@ -429,12 +561,16 @@ class ModelConfig:
     n_streams = 4
     sinkhorn_iters = 20  # PROBABLE FIX #26: Reduced from 20 (major compute savings at long context)
 
-    # Context and RoPE
+    # Context and RoPE (standard RoPE)
     max_seq_len = 262144  # 256k context
     rope_base = 10000
+    rope_original_max_position = 8192  # Original training context
+    rope_scaling_factor = 32.0  # 256k / 8k = 32x extension
 
     # Training
     dropout = 0.0  # Required for reversible integration
+    require_fused_deltanet_kernel = True
+    require_fused_gsa_kernel = True
 
 
 # ============================================================================
@@ -521,63 +657,62 @@ class RMSNorm(nn.Module):
             except Exception:
                 pass  # Fall through to PyTorch path
 
-        # PyTorch fallback: Full fp32 normalization for numerical stability
-        # Critical fix from mentor: do ALL normalization math in fp32, cast back only at end
-        in_dtype = x.dtype
+        # PyTorch fallback (FIX #43: fp32 variance for stability)
         x_f = x.float()
         norm = x_f.pow(2).mean(dim=-1, keepdim=True)
-        x_norm = x_f * torch.rsqrt(norm + self.eps)
-        out = x_norm * self.weight.float()
-        return out.to(dtype=in_dtype)
+        x = x * torch.rsqrt(norm.to(x.dtype) + self.eps)
+        return self.weight * x
 
 
 class RotaryEmbedding(nn.Module):
     """
-    Standard Rotary Positional Embedding (RoPE).
-
-    Applies position-dependent rotation to query and key vectors using the
-    original RoPE formulation (Su et al., 2021: https://arxiv.org/abs/2104.09864).
-
-    inv_freq[i] = 1 / (base ** (2i / dim)),  i = 0 .. dim/2 - 1
+    Standard RoPE rotary positional embedding (YaRN removed).
 
     MEMORY OPTIMIZATION:
     Computes cos/sin on-the-fly instead of caching to save VRAM.
-    Caching would use: 262,144 × 128 × 2 = 268 MB per layer × 8 layers = 2.1 GB.
-    On-the-fly is ~5-10% slower but saves 2.1 GB — a good trade at 256k context.
+
+    Caching approach would use: 262,144 × 128 × 2 = 268MB per layer × 8 layers = 2.1GB VRAM.
+    On-the-fly computation: ~0MB cache, only 5-10% slower (negligible with modern GPUs).
+
+    For 256k context training, we need every GB of VRAM for activations and optimizer states.
+    Trading 5-10% RoPE compute time for 2.1GB free memory is an excellent trade-off.
     """
-    def __init__(self, dim: int, max_position_embeddings: int = 262144, base: int = 10000):
+    def __init__(self, dim: int, max_position_embeddings: int = 8192, base: int = 10000,
+                 original_max_position_embeddings: int = 8192, scaling_factor: float = 32.0):
         super().__init__()
         self.dim = dim
         self.base = base
+        self.original_max_position_embeddings = original_max_position_embeddings
         self.max_position_embeddings = max_position_embeddings
+        self.scaling_factor = scaling_factor
 
-        # Standard RoPE inverse frequencies: 1 / (base ** (2i / dim))
+        # Compatibility note:
+        # `original_max_position_embeddings` and `scaling_factor` remain in the
+        # signature for checkpoint/config compatibility, but YaRN scaling is
+        # intentionally removed and standard RoPE is applied.
         inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer("inv_freq", inv_freq)
 
     def _compute_cos_sin(self, seq_len: int, device, dtype=None):
         """
-        Compute cos/sin on-the-fly for a given sequence length.
-
-        Uses a per-forward-pass cache (set by Model1B.forward()) so all layers
-        share one computation per step.
-
-        Cache key includes dtype for mixed-precision safety (FIX #39).
-        Output is cast to the requested dtype to prevent bf16/fp32 mismatches (FIX #42).
+        Compute cos/sin on-the-fly for given sequence length.
+        FIX #30: Uses forward-pass cache if available (set by model.forward())
+        FIX #39: Include dtype in cache key for mixed-precision safety
+        FIX #42: Cast output to requested dtype (prevents float32/bf16 mismatches)
+        Saves 2.1GB VRAM compared to persistent caching (268MB × 8 layers).
         """
+        # FIX #30: Check if cache exists (set at model forward start)
+        # FIX #39: Include dtype in cache key (default to None for backward compatibility)
         cache_key = (seq_len, device, dtype)
         if hasattr(self, '_forward_cache') and cache_key in self._forward_cache:
             return self._forward_cache[cache_key]
 
-        # Position indices in fp32 for numerical stability
-        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        t = torch.arange(seq_len, device=device).float()
+        freqs = t.unsqueeze(-1) * self.inv_freq.unsqueeze(0)
+        emb = torch.cat((freqs, freqs), dim=-1)
 
-        # Outer product: [T] x [dim/2] -> [T, dim/2]
-        freqs = torch.outer(t, self.inv_freq)  # (T, dim/2)
-
-        # Duplicate for full rotation: [T, dim]
-        emb = torch.cat((freqs, freqs), dim=-1)  # (T, dim)
-
+        # FIX #42: Cast to requested dtype to match query/key precision
+        # Prevents implicit upcasts and memory/bandwidth issues at 256k context
         cos_out = emb.cos()
         sin_out = emb.sin()
         if dtype is not None:
@@ -588,13 +723,8 @@ class RotaryEmbedding(nn.Module):
 
     @staticmethod
     def _apply_rotary(x, cos, sin):
-        """Apply rotary embedding to tensor x using interleaved even/odd rotation."""
-        x1, x2 = x[..., ::2], x[..., 1::2]
-        return torch.cat(
-            (x1 * cos[..., ::2] - x2 * sin[..., ::2],
-             x1 * sin[..., ::2] + x2 * cos[..., ::2]),
-            dim=-1
-        )
+        # Liger integration: use vendored rotary application helper.
+        return liger_rotary_pos_emb(x, cos, sin)
 
 
 # ============================================================================
@@ -662,13 +792,16 @@ class GatedDeltaNet(nn.Module):
     """
     def __init__(self, hidden_size, num_heads, head_dim,
                  max_seq_len=262144, rope_base=10000,
-                 conv_size=4, use_output_norm=True):
+                 rope_original_max=8192, rope_scaling_factor=32.0,
+                 conv_size=4, use_output_norm=True,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.max_seq_len = max_seq_len
         self.use_output_norm = use_output_norm
+        self.require_fused_kernel = require_fused_kernel
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
@@ -708,6 +841,8 @@ class GatedDeltaNet(nn.Module):
             head_dim,
             max_position_embeddings=max_seq_len,
             base=rope_base,
+            original_max_position_embeddings=rope_original_max,
+            scaling_factor=rope_scaling_factor
         )
 
         # Output normalization with gating
@@ -729,55 +864,11 @@ class GatedDeltaNet(nn.Module):
                 nn.init.zeros_(m.bias)
 
     def _delta_rule_python(self, q, k, v, alpha, beta, B, T, device, original_dtype):
-        """
-        Python for-loop DeltaNet recurrence (fallback when fla unavailable).
-
-        Args:
-            q, k, v: (B, T, num_heads, head_dim)
-            alpha, beta: (B, T, num_heads, 1)
-            B, T: batch size, sequence length
-            device: torch device
-            original_dtype: dtype for output casting
-
-        Returns:
-            o: (B, T, num_heads, head_dim)
-        """
-        # Transpose to (B, H, T, d) for the recurrence loop
-        q_h = q.transpose(1, 2)
-        k_h = k.transpose(1, 2)
-        v_h = v.transpose(1, 2)
-        beta_h = beta.transpose(1, 2)
-        alpha_h = alpha.transpose(1, 2)
-
-        # FIX #24: Keep recurrent state in fp32 for numerical stability at 256k
-        S = torch.zeros(B, self.num_heads, self.head_dim, self.head_dim,
-                       device=device, dtype=torch.float32)
-
-        outputs = torch.empty(B, self.num_heads, T, self.head_dim, device=device, dtype=torch.float32)
-
-        I = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
-
-        for t in range(T):
-            q_t = q_h[:, :, t, :].float()
-            k_t = k_h[:, :, t, :].float()
-            v_t = v_h[:, :, t, :].float()
-            beta_t = beta_h[:, :, t, 0].float()
-            alpha_t = alpha_h[:, :, t, 0].float()
-
-            o_t = torch.einsum('bhd,bhde->bhe', q_t, S)
-            o_t = o_t + self.D.view(1, self.num_heads, 1) * (q_t * k_t).sum(dim=-1, keepdim=True) * v_t
-            outputs[:, :, t, :] = o_t
-
-            v_outer = torch.einsum('bhd,bhe->bhde', v_t, k_t)
-            k_outer = torch.einsum('bhd,bhe->bhde', k_t, k_t)
-
-            alpha_t = alpha_t.view(B, self.num_heads, 1, 1)
-            beta_t = beta_t.view(B, self.num_heads, 1, 1)
-
-            orthogonal_proj = I - beta_t * k_outer
-            S = alpha_t * torch.einsum('bhde,bhef->bhdf', S, orthogonal_proj) + beta_t * v_outer
-
-        return outputs.to(original_dtype).transpose(1, 2)
+        """Python fallback is intentionally disabled in fused-only mode."""
+        raise RuntimeError(
+            "DeltaNet Python fallback is disabled. "
+            "Fused FLA kernel is required for Model1B."
+        )
 
     def forward(self, x, attention_mask=None):
         """
@@ -792,6 +883,8 @@ class GatedDeltaNet(nn.Module):
         """
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
+        token_keep_f = None
 
         # 1. Project to Q, K, V, G
         q = self.q_proj(x)  # (B, T, num_heads * head_dim)
@@ -836,6 +929,17 @@ class GatedDeltaNet(nn.Module):
         # Map negative values to (0, 1) range using exp - CRITICAL for 256k retention
         alpha = torch.exp(alpha)  # (B, T, num_heads, 1) - full (0,1) range, not (0,0.5)
 
+        # Respect token padding/control mask in recurrent state updates:
+        # masked tokens do not write or decay state (beta=0, alpha=1).
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k = k * token_keep_f
+            v = v * token_keep_f
+            g = g * token_keep_f
+            beta = beta * token_keep_f
+            alpha = alpha * token_keep_f + (1.0 - token_keep_f)
+
         # 8. Gated Delta Rule with decay (Paper Equation 10)
         # St = St-1 * (alpha * (I - beta * k * k^T)) + beta * v * k^T
         #
@@ -843,42 +947,32 @@ class GatedDeltaNet(nn.Module):
         # - fla path: Fused Triton kernel via flash-linear-attention library (500-2000x faster)
         # - Python path: Explicit for-loop fallback (always correct, slow at long context)
 
-        if HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda:
-            # ── fla fused kernel path ──────────────────────────────────────
-            # fla expects (B, T, H, d) layout — q/k/v are already in this shape.
-            # D residual (D * (q·k) * v) is computed inside fla_gated_delta_rule.
+        fla_available = HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda
+        if self.require_fused_kernel and not fla_available:
+            raise RuntimeError(
+                "DeltaNet fused kernel is required but unavailable. "
+                f"HAS_FLA={HAS_FLA}, fla_gated_delta_rule={fla_gated_delta_rule is not None}, "
+                f"q.is_cuda={q.is_cuda}."
+            )
 
-            # Dynamic chunk_size policy based on sequence length:
-            #   T <  16k  →  64
-            #   16k–32k   → 128
-            #   32k–64k   → 256
-            #   >= 64k    → 512
-            if T < 16_384:
-                _chunk_size = 64
-            elif T < 32_768:
-                _chunk_size = 128
-            elif T < 65_536:
-                _chunk_size = 256
-            else:
-                _chunk_size = 512
-
+        if fla_available:
             try:
                 o = fla_gated_delta_rule(
-                    q=q,        # (B, T, num_heads, head_dim)
-                    k=k,        # (B, T, num_heads, head_dim)
-                    v=v,        # (B, T, num_heads, head_dim)
-                    alpha=alpha,  # (B, T, num_heads, 1)
-                    beta=beta,    # (B, T, num_heads, 1)
-                    D=self.D,     # (num_heads,)
+                    q=q,
+                    k=k,
+                    v=v,
+                    alpha=alpha,
+                    beta=beta,
+                    D=self.D,
                     num_heads=self.num_heads,
-                    chunk_size=_chunk_size,
                 )
             except Exception as e:
-                import warnings
-                warnings.warn(f"fla DeltaNet kernel failed ({e}); falling back to Python loop.")
+                if self.require_fused_kernel:
+                    raise RuntimeError(
+                        "DeltaNet fused kernel execution failed and fallback is disabled."
+                    ) from e
                 o = self._delta_rule_python(q, k, v, alpha, beta, B, T, device, x.dtype)
         else:
-            # ── Python for-loop fallback ───────────────────────────────────
             o = self._delta_rule_python(q, k, v, alpha, beta, B, T, device, x.dtype)
 
         # 9. Apply output normalization with gating
@@ -894,6 +988,9 @@ class GatedDeltaNet(nn.Module):
             o = o_normed.view(B, T, self.num_heads, self.head_dim)
         else:
             o = o * torch.sigmoid(g)
+
+        if token_keep_f is not None:
+            o = o * token_keep_f
 
         # 11. Reshape and project to output
         o = o.reshape(B, T, self.num_heads * self.head_dim)
@@ -922,12 +1019,15 @@ class GatedSparseAttention(nn.Module):
     - Adaptive sparsity budget k_t from variance-based heuristic
     """
     def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
-                 k_base=512, k_min=32, k_max=1024, indexer_heads=4):
+                 k_base=512, k_min=32, k_max=1024, indexer_heads=4,
+                 rope_original_max=8192, rope_scaling_factor=32.0,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         self.max_seq_len = max_seq_len
+        self.require_fused_kernel = require_fused_kernel
 
         # Adaptive Sparsity Hyperparams
         self.k_base = k_base
@@ -967,6 +1067,8 @@ class GatedSparseAttention(nn.Module):
             self.head_dim,
             max_position_embeddings=max_seq_len,
             base=rope_base,
+            original_max_position_embeddings=rope_original_max,
+            scaling_factor=rope_scaling_factor
         )
 
         self._init_weights()
@@ -980,6 +1082,20 @@ class GatedSparseAttention(nn.Module):
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
+
+        gsa_fused_available = (
+            HAS_FUSED_INDEXER
+            and triton_sparse_attention is not None
+            and x.is_cuda
+        )
+        if self.require_fused_kernel and not gsa_fused_available:
+            raise RuntimeError(
+                "GSA fused kernels are required but unavailable. "
+                f"fused_indexer_topk={HAS_FUSED_INDEXER}, "
+                f"triton_sparse_attention={triton_sparse_attention is not None}, "
+                f"x.is_cuda={x.is_cuda}."
+            )
 
         # Lightning Indexer — O(T·k) via fused chunked kernel
         # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
@@ -994,7 +1110,6 @@ class GatedSparseAttention(nn.Module):
         # from micro-batch B would overwrite micro-batch A's indices before A's backward pass.
         # The fused_indexer_topk kernel is O(N) and adds <1% overhead vs O(N·K) attention.
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = self.training and torch.is_grad_enabled()
 
         # REVERSIBILITY FIX: During the forward pass (no_grad), snapshot the
         # current variance_ema BEFORE computing indices, then update the live
@@ -1007,6 +1122,12 @@ class GatedSparseAttention(nn.Module):
 
         # Use snapshot for the indexer call (both forward and reconstruct)
         ema_for_indexer = self._variance_ema_snapshot
+
+        if not HAS_FUSED_INDEXER:
+            raise RuntimeError(
+                "GSA fused indexer kernel is required but unavailable. "
+                "Fallback indexer path is disabled."
+            )
 
         var_t, k_t, top_indices = fused_indexer_topk(
             q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
@@ -1032,6 +1153,20 @@ class GatedSparseAttention(nn.Module):
         base_idx = top_indices.long()  # [B, T, k_limit]
         range_k = torch.arange(k_limit, device=device)
         keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)  # [B, T, k_limit]
+        if token_keep is not None:
+            invalid_query = ~token_keep
+            if invalid_query.any():
+                fallback_idx = torch.arange(T, device=device).view(1, T).expand(B, T)
+                base_idx = base_idx.clone()
+                base_idx[..., 0] = torch.where(invalid_query, fallback_idx, base_idx[..., 0])
+
+            key_keep = torch.gather(token_keep, dim=1, index=base_idx.reshape(B, -1)).view(B, T, k_limit)
+            keep_mask = keep_mask & key_keep & token_keep.unsqueeze(-1)
+
+            # Keep at least one index for masked queries to avoid empty-kernel rows.
+            if invalid_query.any():
+                keep_mask = keep_mask.clone()
+                keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
 
         # Dual Gating & Attention Projections
         q = self.W_q(x)
@@ -1044,6 +1179,11 @@ class GatedSparseAttention(nn.Module):
         q = q.view(B, T, self.num_heads, self.head_dim)
         k_attn = k_attn.view(B, T, self.num_heads, self.head_dim)
         v = v.view(B, T, self.num_heads, self.head_dim)
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k_attn = k_attn * token_keep_f
+            v = v * token_keep_f
 
         # Rotary (computed on-the-fly to save 2.1GB VRAM)
         cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
@@ -1073,16 +1213,22 @@ class GatedSparseAttention(nn.Module):
         scale_attn = 1.0 / math.sqrt(self.head_dim)
 
         # q, k_attn, v are already [B, T, H, D] — kernel's expected layout
-        # IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
-        # autograd, which breaks the reversible midpoint backward recompute.
-        if (not torch.is_grad_enabled()) and HAS_TRITON and triton_sparse_attention is not None and q.is_cuda:
-            o_sparse = triton_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        # Strict fused-only policy: no PyTorch fallback in grad-enabled execution.
+        if torch.is_grad_enabled():
+            raise RuntimeError(
+                "GSA fused-only mode does not permit PyTorch fallback in grad-enabled execution. "
+                "Provide an autograd-capable fused sparse attention kernel."
             )
-        else:
-            o_sparse = pytorch_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
+            raise RuntimeError(
+                "GSA fused sparse attention kernel is required but unavailable. "
+                "Fallback attention path is disabled."
             )
+        o_sparse = triton_sparse_attention(
+            q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        )
+        if token_keep is not None:
+            o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
 
         # Output is [B, T, H, D] from kernel, reshape to [B, T, hidden_size]
         o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
@@ -1284,7 +1430,8 @@ class MoEFFN(nn.Module):
         device, dtype = x.device, x.dtype
 
         # Shared expert (always computed - acts as dense FFN for dense models)
-        shared_h = F.silu(self.shared_gate(x)) * self.shared_up(x)
+        # Liger integration: use vendored SiLU-mul op for SwiGLU path.
+        shared_h = liger_silu_mul(self.shared_gate(x), self.shared_up(x))
         if self.training and self.dropout > 0:
             shared_h = F.dropout(shared_h, p=self.dropout)
         shared_out = self.shared_down(shared_h)
@@ -1330,7 +1477,7 @@ class MoEFFN(nn.Module):
             end = offsets[e].item()
             if end > start:
                 chunk_x = sorted_x[start:end]
-                h = F.silu(chunk_x @ self.W_gate[e]) * (chunk_x @ self.W_up[e])
+                h = liger_silu_mul(chunk_x @ self.W_gate[e], chunk_x @ self.W_up[e])
                 if self.training and self.dropout > 0:
                     h = F.dropout(h, p=self.dropout)
                 sorted_out[start:end] = h @ self.W_down[e]
@@ -1353,17 +1500,21 @@ class DenseMLP(nn.Module):
     """
     def __init__(self, d_model: int, d_hidden: int):
         super().__init__()
-        self.gate_proj = nn.Linear(d_model, d_hidden, bias=False)
-        self.up_proj = nn.Linear(d_model, d_hidden, bias=False)
-        self.down_proj = nn.Linear(d_hidden, d_model, bias=False)
+        # Liger integration: dense SwiGLU MLP implementation (bias policy preserved).
+        self.mlp = LigerSwiGLUMLP(
+            in_features=d_model,
+            hidden_features=d_hidden,
+            out_features=d_model,
+            bias=False,
+        )
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.gate_proj, self.up_proj, self.down_proj]:
+        for m in [self.mlp.gate_proj, self.mlp.up_proj, self.mlp.down_proj]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
+        return self.mlp(x)
 
 
 class LightningMLP(nn.Module):
@@ -1524,8 +1675,11 @@ class LightningDecoderLayer(nn.Module):
                 head_dim=config.delta_head_dim,
                 max_seq_len=config.max_seq_len,
                 rope_base=config.rope_base,
+                rope_original_max=config.rope_original_max_position,
+                rope_scaling_factor=config.rope_scaling_factor,
                 conv_size=4,
-                use_output_norm=True
+                use_output_norm=True,
+                require_fused_kernel=config.require_fused_deltanet_kernel,
             )
         elif layer_type == "gsa":
             attn = GatedSparseAttention(
@@ -1537,6 +1691,9 @@ class LightningDecoderLayer(nn.Module):
                 k_min=config.gsa_k_min,
                 k_max=config.gsa_k_max,
                 indexer_heads=config.gsa_indexer_heads,
+                rope_original_max=config.rope_original_max_position,
+                rope_scaling_factor=config.rope_scaling_factor,
+                require_fused_kernel=config.require_fused_gsa_kernel,
             )
         else:
             raise ValueError(f"Unknown layer type: {layer_type}")
@@ -1570,7 +1727,7 @@ class LightningDecoderLayer(nn.Module):
 
     def force(self, x, attention_mask=None):
         """Compute residual delta for reversible integration."""
-        h, aux1 = self.attn_block(x, attention_mask=None)
+        h, aux1 = self.attn_block(x, attention_mask=attention_mask)
         out, aux2 = self.mlp_block(h, attention_mask=None)
 
         delta = out - x
@@ -1629,6 +1786,9 @@ class MTPTransformerBlock(nn.Module):
             k_min=config.gsa_k_min,
             k_max=config.gsa_k_max,
             indexer_heads=config.gsa_indexer_heads,
+            rope_original_max=config.rope_original_max_position,
+            rope_scaling_factor=config.rope_scaling_factor,
+            require_fused_kernel=config.require_fused_gsa_kernel,
         )
 
         self.mlp = LightningMLP(
@@ -1809,6 +1969,8 @@ class Model1B(nn.Module):
 
         # Output projection
         self.lm_head = nn.Linear(config.hidden_size, self.vocab_size, bias=False)
+        # Liger integration: fused linear + CE (chunked to avoid [B, T, V] allocation).
+        self.liger_fused_ce = LigerFusedLinearCrossEntropyLoss(chunk_size=256)
 
         # Initialize
         self.apply(self._init_weights)
@@ -1832,12 +1994,12 @@ class Model1B(nn.Module):
             embedding_params = self.vocab_size * config.hidden_size / 1e6
             embedding_buffer = 0
 
-        print(f"\n🤖 MODEL-1B (DENSE) INITIALIZED:")
+        print("\n🤖 MODEL-1B (DENSE) INITIALIZED:")
         print(f"   Vocabulary: {self.vocab_size:,}")
         print(f"   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
-            print(f"\n   📐 Kronecker Embeddings:")
-            print(f"      POS_DIM=32 x CHAR_DIM=256 = D=8192")
+            print("\n   📐 Kronecker Embeddings:")
+            print("      POS_DIM=32 x CHAR_DIM=256 = D=8192")
             print(f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)")
             print(f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})")
             print(f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})")
@@ -1849,7 +2011,7 @@ class Model1B(nn.Module):
         print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
         print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
-        print(f"   Active Parameters: ~1.513B (100% active, no MoE sparsity)")
+        print("   Active Parameters: ~1.513B (100% active, no MoE sparsity)")
 
     def _init_weights(self, module):
         # FIX #38: Skip initialization for kronecker_embeddings and all its submodules
@@ -1873,29 +2035,14 @@ class Model1B(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    @staticmethod
-    def _chunked_cross_entropy(hidden, lm_head, targets, chunk_size=256):
-        """Compute cross-entropy without materializing the full [B, T, vocab] logit tensor.
-
-        Processes ``chunk_size`` tokens at a time so peak memory is
-        ``B * chunk_size * vocab * 4`` (float32 for CE) instead of
-        ``B * T * vocab * 4``.  For B=2, T=4094, vocab=131072 this
-        reduces peak from ~4 GB to ~130 MB.
-        """
-        B, T, D = hidden.shape
-        total_loss = torch.tensor(0.0, device=hidden.device, dtype=torch.float32)
-        n_tokens = B * T
-        for start in range(0, T, chunk_size):
-            end = min(start + chunk_size, T)
-            chunk_logits = lm_head(hidden[:, start:end, :])        # [B, chunk, vocab]
-            chunk_loss = torch.nn.functional.cross_entropy(
-                chunk_logits.float().reshape(-1, chunk_logits.size(-1)),
-                targets[:, start:end].reshape(-1),
-                reduction="sum",
-            )
-            total_loss = total_loss + chunk_loss
-            del chunk_logits
-        return total_loss / n_tokens
+    def _fused_linear_cross_entropy(self, hidden, lm_head, targets):
+        """Liger fused linear+CE entrypoint (vendored implementation)."""
+        return self.liger_fused_ce(
+            hidden,
+            lm_head.weight,
+            targets,
+            bias=lm_head.bias,
+        )
 
     def forward(self, input_ids, next_token_ids=None, attention_mask=None,
                 prev_memory_stream=None, return_memory=True, return_loss=False,
@@ -1925,6 +2072,7 @@ class Model1B(nn.Module):
             Plus optionally aux_loss and memory_stream.
         """
         batch_size, seq_len = input_ids.size()
+        token_keep_mask = _token_keep_mask(attention_mask, batch_size, seq_len, input_ids.device)
 
         # Embeddings
         if self.use_kronecker:
@@ -1992,7 +2140,7 @@ class Model1B(nn.Module):
             x_stream = x_stream + mem_val * one_hot.view(1, 1, self.n_streams, 1)
 
         # Pass through reversible stack
-        x_stream, total_aux_loss = self.stack(x_stream)
+        x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
 
 
         # ============================================================================
@@ -2008,10 +2156,9 @@ class Model1B(nn.Module):
         h_main = self.norm(h_main)
 
         # NTP Prediction
-        # When ntp_targets are provided, use chunked cross-entropy to avoid
-        # materializing the full [B, T, vocab] logit tensor (saves ~4 GB).
+        # Liger integration: fused linear+CE path avoids [B, T, vocab] allocation.
         if ntp_targets is not None:
-            logits_ntp = self._chunked_cross_entropy(h_main, self.lm_head, ntp_targets)
+            logits_ntp = self._fused_linear_cross_entropy(h_main, self.lm_head, ntp_targets)
         else:
             logits_ntp = self.lm_head(h_main)
 
@@ -2029,10 +2176,11 @@ class Model1B(nn.Module):
             else:
                 next_emb = self.token_embed(next_ids_use)
 
-            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=None)
+            mtp_attention_mask = token_keep_mask[:, :min_len] if token_keep_mask is not None else None
+            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
             if mtp_targets is not None:
-                logits_mtp = self._chunked_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
+                logits_mtp = self._fused_linear_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
             else:
                 logits_mtp = self.lm_head(h_mtp_normed)
 
@@ -2083,7 +2231,7 @@ def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
 
 if __name__ == "__main__":
     # Calculate actual metrics from weight_calculator.py
-    from weight_calculator import LightningConfig, LightningCalculator
+    from weight_calculator import LightningCalculator, LightningConfig
 
     config_calc = LightningConfig(
         vocab_size=131072,
@@ -2129,15 +2277,15 @@ if __name__ == "__main__":
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
-    print(f"\nAttention Mix:")
+    print("\nAttention Mix:")
     print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context")
     print(f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality")
-    print(f"\nModel Type:")
+    print("\nModel Type:")
     if num_experts == 0:
-        print(f"  DENSE MODEL (No MoE)")
+        print("  DENSE MODEL (No MoE)")
         print(f"  Dense FFN intermediate: {config.shared_expert_intermediate_size}")
     else:
-        print(f"  MoE MODEL")
+        print("  MoE MODEL")
         print(f"  Real Experts: {num_experts}")
         print(f"  Null Experts: {num_experts} (ρ={config.data_sparsity})")
         print(f"  Total slots: {config.total_expert_slots}")

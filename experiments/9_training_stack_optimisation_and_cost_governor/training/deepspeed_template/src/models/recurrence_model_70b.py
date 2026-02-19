@@ -196,6 +196,27 @@ else:
 
 HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
+# ── Vendored Liger Ops ──────────────────────────────────────────────────────
+# Self-contained import so this model does not rely on external liger wheels.
+def _import_liger_ops_module():
+    try:
+        from . import liger_ops as liger_module
+        return liger_module
+    except Exception:
+        pass
+
+    src_root = Path(__file__).resolve().parents[1]
+    src_root_str = str(src_root)
+    if src_root_str not in sys.path:
+        sys.path.insert(0, src_root_str)
+    return importlib.import_module("models.liger_ops")
+
+
+_liger_module = _import_liger_ops_module()
+LigerFusedLinearCrossEntropyLoss = _liger_module.LigerFusedLinearCrossEntropyLoss
+liger_rotary_pos_emb = _liger_module.liger_rotary_pos_emb
+liger_silu_mul = _liger_module.liger_silu_mul
+
 
 def _pytorch_fused_indexer_topk_fallback(
     q: torch.Tensor,
@@ -610,7 +631,7 @@ class ModelConfig:
     n_streams = 4
     sinkhorn_iters = 20  # Keep at 20 (matches original paper settings)
 
-    # Context and RoPE (YARN Scaling)
+    # Context and RoPE (standard RoPE)
     max_seq_len = 262144  # 256k context
     rope_base = 10000
     rope_original_max_position = 8192  # Original training context
@@ -718,14 +739,7 @@ class RMSNorm(nn.Module):
 
 class RotaryEmbedding(nn.Module):
     """
-    YARN (Yet Another RoPE extensioN) Rotary Positional Embedding.
-
-    Extends RoPE to 256k context using:
-    - NTK-aware interpolation for scaling base frequency
-    - Temperature-based frequency band interpolation
-    - Attention sink preservation for initial tokens
-
-    Reference: https://arxiv.org/abs/2309.00071
+    Standard RoPE rotary positional embedding (YaRN removed).
 
     MEMORY OPTIMIZATION:
     Computes cos/sin on-the-fly instead of caching to save VRAM.
@@ -745,43 +759,12 @@ class RotaryEmbedding(nn.Module):
         self.max_position_embeddings = max_position_embeddings
         self.scaling_factor = scaling_factor
 
-        # YARN: NTK-aware interpolation
-        # Scale the base frequency to accommodate longer context
-        if max_position_embeddings > original_max_position_embeddings:
-            # NTK-by-parts: scale base exponentially based on extension ratio
-            ext_ratio = max_position_embeddings / original_max_position_embeddings
-            # Use a gentler scaling exponent for YARN (typically around 1.0)
-            scaled_base = base * (ext_ratio ** (dim / (dim - 2)))
-            print(f"   🧶 YARN RoPE: Scaling base {base} -> {scaled_base:.0f} for {max_position_embeddings:,} context")
-        else:
-            scaled_base = base
-
-        # Compute inverse frequencies with scaled base
-        inv_freq = 1.0 / (scaled_base ** (torch.arange(0, dim, 2).float() / dim))
+        # Compatibility note:
+        # `original_max_position_embeddings` and `scaling_factor` remain in the
+        # signature for checkpoint/config compatibility, but YaRN scaling is
+        # intentionally removed and standard RoPE is applied.
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer("inv_freq", inv_freq)
-
-        # YARN: Frequency band interpolation parameters
-        # Interpolate low frequencies, extrapolate high frequencies
-        # beta_fast: controls high-freq behavior (preserve local distinctions)
-        # beta_slow: controls low-freq behavior (interpolate for global context)
-        # CRITICAL: High freq (small wavelength) should NOT be scaled, low freq should be scaled
-        self.beta_fast = 1   # High frequencies (preserve - do not scale below this)
-        self.beta_slow = 32  # Low frequencies (interpolate - fully scale above this)
-
-        # Compute interpolation weights (mscale) for each frequency
-        # IMPORTANT: mscale uses ORIGINAL 'base', NOT 'scaled_base'
-        # Rationale (YARN Paper Section 2.1):
-        # - Frequency band classification (high vs low) should be relative to ORIGINAL bands
-        # - mscale determines the 0-1 ramp for interpolation strength
-        # - This ramp is APPLIED to the NTK-scaled frequencies (inv_freq above)
-        # - Using scaled_base here would misclassify which bands need interpolation
-        freq_extra = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))  # ORIGINAL base intentional
-        # Determine which frequencies to interpolate vs extrapolate
-        # High frequencies (small wavelengths) get less interpolation
-        wavelen = 2 * math.pi / freq_extra
-        # Ramp function: 0 at beta_fast (preserve), 1 at beta_slow (interpolate fully)
-        ramp = torch.clamp((wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1)
-        self.register_buffer("mscale", ramp)  # Interpolation weight per frequency
 
     def _compute_cos_sin(self, seq_len: int, device, dtype=None):
         """
@@ -798,14 +781,7 @@ class RotaryEmbedding(nn.Module):
             return self._forward_cache[cache_key]
 
         t = torch.arange(seq_len, device=device).float()
-
-        # YARN: Apply frequency-dependent interpolation
-        # t_scaled = t / (1 + (scaling_factor - 1) * ramp)
-        # This interpolates low frequencies more, extrapolates high frequencies
-        scale_factor_per_freq = 1.0 + (self.scaling_factor - 1.0) * self.mscale
-        t_scaled = t.unsqueeze(-1) / scale_factor_per_freq.unsqueeze(0)
-
-        freqs = t_scaled * self.inv_freq.unsqueeze(0)
+        freqs = t.unsqueeze(-1) * self.inv_freq.unsqueeze(0)
         emb = torch.cat((freqs, freqs), dim=-1)
 
         # FIX #42: Cast to requested dtype to match query/key precision
@@ -820,12 +796,8 @@ class RotaryEmbedding(nn.Module):
 
     @staticmethod
     def _apply_rotary(x, cos, sin):
-        x1, x2 = x[..., ::2], x[..., 1::2]
-        return torch.cat(
-            (x1 * cos[..., ::2] - x2 * sin[..., ::2],
-             x1 * sin[..., ::2] + x2 * cos[..., ::2]),
-            dim=-1
-        )
+        # Liger integration: use vendored rotary application helper.
+        return liger_rotary_pos_emb(x, cos, sin)
 
 
 # ============================================================================
@@ -937,7 +909,7 @@ class GatedDeltaNet(nn.Module):
         dt_bias = torch.rand(num_heads) * 2 * dt_init_std - dt_init_std
         self.dt_bias = nn.Parameter(dt_bias)
 
-        # Rotary embeddings for Q/K with YARN scaling
+        # Rotary embeddings for Q/K (standard RoPE)
         self.rotary_emb = RotaryEmbedding(
             head_dim,
             max_position_embeddings=max_seq_len,
@@ -1156,7 +1128,7 @@ class GatedSparseAttention(nn.Module):
         self.W_gv = nn.Linear(hidden_size, hidden_size, bias=False)
         self.W_go = nn.Linear(hidden_size, hidden_size, bias=False)
 
-        # Rotary embeddings with YARN scaling
+        # Rotary embeddings (standard RoPE)
         self.rotary_emb = RotaryEmbedding(
             self.head_dim,
             max_position_embeddings=max_seq_len,
@@ -1495,7 +1467,7 @@ class MoEFFN(nn.Module):
         x_expanded = sorted_x.unsqueeze(1)  # [M, 1, D]
         gate_out = torch.bmm(x_expanded, W_gate_sel).squeeze(1)  # [M, H]
         up_out = torch.bmm(x_expanded, W_up_sel).squeeze(1)      # [M, H]
-        h = F.silu(gate_out) * up_out
+        h = liger_silu_mul(gate_out, up_out)
         if self.training and self.dropout > 0:
             h = F.dropout(h, p=self.dropout)
         return torch.bmm(h.unsqueeze(1), W_down_sel).squeeze(1)  # [M, D]
@@ -1506,7 +1478,7 @@ class MoEFFN(nn.Module):
         ).to(dtype=torch.int32)
         gate_out = moe_grouped_gemm(sorted_x, self.W_gate, expert_counts)
         up_out = moe_grouped_gemm(sorted_x, self.W_up, expert_counts)
-        h = F.silu(gate_out) * up_out
+        h = liger_silu_mul(gate_out, up_out)
         if self.training and self.dropout > 0:
             h = F.dropout(h, p=self.dropout)
         return moe_grouped_gemm(h, self.W_down, expert_counts)
@@ -1518,7 +1490,8 @@ class MoEFFN(nn.Module):
         device, dtype = x.device, x.dtype
 
         # Shared expert
-        shared_h = F.silu(self.shared_gate(x)) * self.shared_up(x)
+        # Liger integration: use vendored SiLU-mul op for SwiGLU path.
+        shared_h = liger_silu_mul(self.shared_gate(x), self.shared_up(x))
         if self.training and self.dropout > 0:
             shared_h = F.dropout(shared_h, p=self.dropout)
         shared_out = self.shared_down(shared_h)
@@ -2007,6 +1980,8 @@ class Model70B(nn.Module):
 
         # Output projection
         self.lm_head = nn.Linear(config.hidden_size, self.vocab_size, bias=False)
+        # Liger integration: fused linear + CE (chunked to avoid [B, T, V] allocation).
+        self.liger_fused_ce = LigerFusedLinearCrossEntropyLoss(chunk_size=256)
 
         # Initialize
         self.apply(self._init_weights)
@@ -2043,7 +2018,7 @@ class Model70B(nn.Module):
         print(f"\n   Total Layers: {config.num_layers}")
         print(f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention")
         print(f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse")
-        print(f"\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
+        print(f"\n   Context Target: {config.max_seq_len:,} tokens (standard RoPE)")
         print(f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots")
         print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
         print(f"   MoE backend: {config.moe_backend} (require_fused={config.require_fused_moe_kernel})")
@@ -2073,23 +2048,14 @@ class Model70B(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    @staticmethod
-    def _chunked_cross_entropy(hidden, lm_head, targets, chunk_size=256):
-        """Compute cross-entropy without materializing full [B, T, vocab] logits."""
-        B, T, _ = hidden.shape
-        total_loss = torch.tensor(0.0, device=hidden.device, dtype=torch.float32)
-        n_tokens = B * T
-        for start in range(0, T, chunk_size):
-            end = min(start + chunk_size, T)
-            chunk_logits = lm_head(hidden[:, start:end, :])  # [B, chunk, vocab]
-            chunk_loss = torch.nn.functional.cross_entropy(
-                chunk_logits.float().reshape(-1, chunk_logits.size(-1)),
-                targets[:, start:end].reshape(-1),
-                reduction="sum",
-            )
-            total_loss = total_loss + chunk_loss
-            del chunk_logits
-        return total_loss / n_tokens
+    def _fused_linear_cross_entropy(self, hidden, lm_head, targets):
+        """Liger fused linear+CE entrypoint (vendored implementation)."""
+        return self.liger_fused_ce(
+            hidden,
+            lm_head.weight,
+            targets,
+            bias=lm_head.bias,
+        )
 
     def forward(self, input_ids, next_token_ids=None, attention_mask=None,
                 prev_memory_stream=None, return_memory=True, return_loss=False,
@@ -2205,7 +2171,7 @@ class Model70B(nn.Module):
 
         # NTP Prediction
         if ntp_targets is not None:
-            logits_ntp = self._chunked_cross_entropy(h_main, self.lm_head, ntp_targets)
+            logits_ntp = self._fused_linear_cross_entropy(h_main, self.lm_head, ntp_targets)
         else:
             logits_ntp = self.lm_head(h_main)
 
@@ -2227,7 +2193,7 @@ class Model70B(nn.Module):
             h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
             if mtp_targets is not None:
-                logits_mtp = self._chunked_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
+                logits_mtp = self._fused_linear_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
             else:
                 logits_mtp = self.lm_head(h_mtp_normed)
 
