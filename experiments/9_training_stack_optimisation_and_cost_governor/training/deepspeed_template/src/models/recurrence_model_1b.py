@@ -140,7 +140,10 @@ Before deploying this model at 256k context, the following MUST be addressed:
 
 import logging
 import math
+import importlib
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
@@ -149,22 +152,50 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
-# All kernels have automatic PyTorch fallbacks when Triton/fla unavailable.
-try:
-    from ..kernels import (
-        HAS_FLA,
-        HAS_TRITON,
-        TritonRMSNorm,
-        fla_gated_delta_rule,
-        fused_indexer_topk,
-        pytorch_rmsnorm,
-        pytorch_sinkhorn_knopp,
-        pytorch_sparse_attention,
-        triton_rmsnorm,
-        triton_sinkhorn_knopp,
-        triton_sparse_attention,
-    )
-except ImportError:
+# Mirror 70B import resolution so 1B behaves identically across launch contexts.
+def _import_kernels_module():
+    # Package-relative import when recurrence_model_1b.py is used inside src.models.
+    try:
+        from .. import kernels as kernels_module
+        return kernels_module
+    except Exception:
+        pass
+
+    # Standalone fallback: borrow kernels from known deepspeed_template roots.
+    experiments_dir = Path(__file__).resolve().parents[5]
+    candidate_roots = [
+        experiments_dir / "9_training_stack_optimisation_and_cost_governor" / "training" / "deepspeed_template" / "src",
+        experiments_dir / "9_training_stack_optimisation_and_cost_governor" / "training" / "deepspeed_template" / "dense_hardened" / "src",
+    ]
+
+    for root in candidate_roots:
+        if not (root / "kernels").exists():
+            continue
+        root_str = str(root)
+        if root_str not in sys.path:
+            sys.path.insert(0, root_str)
+        try:
+            return importlib.import_module("kernels")
+        except Exception:
+            continue
+
+    return None
+
+
+_kernels_module = _import_kernels_module()
+if _kernels_module is not None:
+    HAS_TRITON = bool(getattr(_kernels_module, "HAS_TRITON", False))
+    HAS_FLA = bool(getattr(_kernels_module, "HAS_FLA", False))
+    triton_sparse_attention = getattr(_kernels_module, "triton_sparse_attention", None)
+    pytorch_sparse_attention = getattr(_kernels_module, "pytorch_sparse_attention", None)
+    triton_sinkhorn_knopp = getattr(_kernels_module, "triton_sinkhorn_knopp", None)
+    pytorch_sinkhorn_knopp = getattr(_kernels_module, "pytorch_sinkhorn_knopp", None)
+    triton_rmsnorm = getattr(_kernels_module, "triton_rmsnorm", None)
+    pytorch_rmsnorm = getattr(_kernels_module, "pytorch_rmsnorm", None)
+    TritonRMSNorm = getattr(_kernels_module, "TritonRMSNorm", None)
+    fla_gated_delta_rule = getattr(_kernels_module, "fla_gated_delta_rule", None)
+    fused_indexer_topk = getattr(_kernels_module, "fused_indexer_topk", None)
+else:
     HAS_TRITON = False
     HAS_FLA = False
     triton_sparse_attention = None
@@ -176,6 +207,8 @@ except ImportError:
     TritonRMSNorm = None
     fla_gated_delta_rule = None
     fused_indexer_topk = None
+
+HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
 # ── Kernel availability diagnostics ──────────────────────────────────────────
 _kernel_log = logging.getLogger("recurrence_model_1b.kernels")
@@ -461,6 +494,8 @@ class ModelConfig:
 
     # Training
     dropout = 0.0  # Required for reversible integration
+    require_fused_deltanet_kernel = True
+    require_fused_gsa_kernel = True
 
 
 # ============================================================================
@@ -732,13 +767,15 @@ class GatedDeltaNet(nn.Module):
     def __init__(self, hidden_size, num_heads, head_dim,
                  max_seq_len=262144, rope_base=10000,
                  rope_original_max=8192, rope_scaling_factor=32.0,
-                 conv_size=4, use_output_norm=True):
+                 conv_size=4, use_output_norm=True,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.max_seq_len = max_seq_len
         self.use_output_norm = use_output_norm
+        self.require_fused_kernel = require_fused_kernel
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
@@ -801,55 +838,11 @@ class GatedDeltaNet(nn.Module):
                 nn.init.zeros_(m.bias)
 
     def _delta_rule_python(self, q, k, v, alpha, beta, B, T, device, original_dtype):
-        """
-        Python for-loop DeltaNet recurrence (fallback when fla unavailable).
-
-        Args:
-            q, k, v: (B, T, num_heads, head_dim)
-            alpha, beta: (B, T, num_heads, 1)
-            B, T: batch size, sequence length
-            device: torch device
-            original_dtype: dtype for output casting
-
-        Returns:
-            o: (B, T, num_heads, head_dim)
-        """
-        # Transpose to (B, H, T, d) for the recurrence loop
-        q_h = q.transpose(1, 2)
-        k_h = k.transpose(1, 2)
-        v_h = v.transpose(1, 2)
-        beta_h = beta.transpose(1, 2)
-        alpha_h = alpha.transpose(1, 2)
-
-        # FIX #24: Keep recurrent state in fp32 for numerical stability at 256k
-        S = torch.zeros(B, self.num_heads, self.head_dim, self.head_dim,
-                       device=device, dtype=torch.float32)
-
-        outputs = torch.empty(B, self.num_heads, T, self.head_dim, device=device, dtype=torch.float32)
-
-        eye = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
-
-        for t in range(T):
-            q_t = q_h[:, :, t, :].float()
-            k_t = k_h[:, :, t, :].float()
-            v_t = v_h[:, :, t, :].float()
-            beta_t = beta_h[:, :, t, 0].float()
-            alpha_t = alpha_h[:, :, t, 0].float()
-
-            o_t = torch.einsum('bhd,bhde->bhe', q_t, S)
-            o_t = o_t + self.D.view(1, self.num_heads, 1) * (q_t * k_t).sum(dim=-1, keepdim=True) * v_t
-            outputs[:, :, t, :] = o_t
-
-            v_outer = torch.einsum('bhd,bhe->bhde', v_t, k_t)
-            k_outer = torch.einsum('bhd,bhe->bhde', k_t, k_t)
-
-            alpha_t = alpha_t.view(B, self.num_heads, 1, 1)
-            beta_t = beta_t.view(B, self.num_heads, 1, 1)
-
-            orthogonal_proj = eye - beta_t * k_outer
-            S = alpha_t * torch.einsum('bhde,bhef->bhdf', S, orthogonal_proj) + beta_t * v_outer
-
-        return outputs.to(original_dtype).transpose(1, 2)
+        """Python fallback is intentionally disabled in fused-only mode."""
+        raise RuntimeError(
+            "DeltaNet Python fallback is disabled. "
+            "Fused FLA kernel is required for Model1B."
+        )
 
     def forward(self, x, attention_mask=None):
         """
@@ -915,26 +908,32 @@ class GatedDeltaNet(nn.Module):
         # - fla path: Fused Triton kernel via flash-linear-attention library (500-2000x faster)
         # - Python path: Explicit for-loop fallback (always correct, slow at long context)
 
-        if HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda:
-            # ── fla fused kernel path ──────────────────────────────────────
-            # fla expects (B, T, H, d) layout — q/k/v are already in this shape.
-            # D residual (D * (q·k) * v) is computed inside fla_gated_delta_rule.
+        fla_available = HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda
+        if self.require_fused_kernel and not fla_available:
+            raise RuntimeError(
+                "DeltaNet fused kernel is required but unavailable. "
+                f"HAS_FLA={HAS_FLA}, fla_gated_delta_rule={fla_gated_delta_rule is not None}, "
+                f"q.is_cuda={q.is_cuda}."
+            )
+
+        if fla_available:
             try:
                 o = fla_gated_delta_rule(
-                    q=q,        # (B, T, num_heads, head_dim)
-                    k=k,        # (B, T, num_heads, head_dim)
-                    v=v,        # (B, T, num_heads, head_dim)
-                    alpha=alpha,  # (B, T, num_heads, 1)
-                    beta=beta,    # (B, T, num_heads, 1)
-                    D=self.D,     # (num_heads,)
+                    q=q,
+                    k=k,
+                    v=v,
+                    alpha=alpha,
+                    beta=beta,
+                    D=self.D,
                     num_heads=self.num_heads,
                 )
             except Exception as e:
-                import warnings
-                warnings.warn(f"fla DeltaNet kernel failed ({e}); falling back to Python loop.")
+                if self.require_fused_kernel:
+                    raise RuntimeError(
+                        "DeltaNet fused kernel execution failed and fallback is disabled."
+                    ) from e
                 o = self._delta_rule_python(q, k, v, alpha, beta, B, T, device, x.dtype)
         else:
-            # ── Python for-loop fallback ───────────────────────────────────
             o = self._delta_rule_python(q, k, v, alpha, beta, B, T, device, x.dtype)
 
         # 9. Apply output normalization with gating
@@ -979,12 +978,14 @@ class GatedSparseAttention(nn.Module):
     """
     def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
                  k_base=512, k_min=32, k_max=1024, indexer_heads=4,
-                 rope_original_max=8192, rope_scaling_factor=32.0):
+                 rope_original_max=8192, rope_scaling_factor=32.0,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         self.max_seq_len = max_seq_len
+        self.require_fused_kernel = require_fused_kernel
 
         # Adaptive Sparsity Hyperparams
         self.k_base = k_base
@@ -1040,6 +1041,19 @@ class GatedSparseAttention(nn.Module):
         B, T, C = x.shape
         device = x.device
 
+        gsa_fused_available = (
+            HAS_FUSED_INDEXER
+            and triton_sparse_attention is not None
+            and x.is_cuda
+        )
+        if self.require_fused_kernel and not gsa_fused_available:
+            raise RuntimeError(
+                "GSA fused kernels are required but unavailable. "
+                f"fused_indexer_topk={HAS_FUSED_INDEXER}, "
+                f"triton_sparse_attention={triton_sparse_attention is not None}, "
+                f"x.is_cuda={x.is_cuda}."
+            )
+
         # Lightning Indexer — O(T·k) via fused chunked kernel
         # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
         # Processes in [B, C, T] chunks where C is auto-tuned to fit in ~512MB.
@@ -1065,6 +1079,12 @@ class GatedSparseAttention(nn.Module):
 
         # Use snapshot for the indexer call (both forward and reconstruct)
         ema_for_indexer = self._variance_ema_snapshot
+
+        if not HAS_FUSED_INDEXER:
+            raise RuntimeError(
+                "GSA fused indexer kernel is required but unavailable. "
+                "Fallback indexer path is disabled."
+            )
 
         var_t, k_t, top_indices = fused_indexer_topk(
             q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
@@ -1131,16 +1151,20 @@ class GatedSparseAttention(nn.Module):
         scale_attn = 1.0 / math.sqrt(self.head_dim)
 
         # q, k_attn, v are already [B, T, H, D] — kernel's expected layout
-        # IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
-        # autograd, which breaks the reversible midpoint backward recompute.
-        if (not torch.is_grad_enabled()) and HAS_TRITON and triton_sparse_attention is not None and q.is_cuda:
-            o_sparse = triton_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        # Strict fused-only policy: no PyTorch fallback in grad-enabled execution.
+        if torch.is_grad_enabled():
+            raise RuntimeError(
+                "GSA fused-only mode does not permit PyTorch fallback in grad-enabled execution. "
+                "Provide an autograd-capable fused sparse attention kernel."
             )
-        else:
-            o_sparse = pytorch_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
+            raise RuntimeError(
+                "GSA fused sparse attention kernel is required but unavailable. "
+                "Fallback attention path is disabled."
             )
+        o_sparse = triton_sparse_attention(
+            q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        )
 
         # Output is [B, T, H, D] from kernel, reshape to [B, T, hidden_size]
         o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
@@ -1585,7 +1609,8 @@ class LightningDecoderLayer(nn.Module):
                 rope_original_max=config.rope_original_max_position,
                 rope_scaling_factor=config.rope_scaling_factor,
                 conv_size=4,
-                use_output_norm=True
+                use_output_norm=True,
+                require_fused_kernel=config.require_fused_deltanet_kernel,
             )
         elif layer_type == "gsa":
             attn = GatedSparseAttention(
@@ -1598,7 +1623,8 @@ class LightningDecoderLayer(nn.Module):
                 k_max=config.gsa_k_max,
                 indexer_heads=config.gsa_indexer_heads,
                 rope_original_max=config.rope_original_max_position,
-                rope_scaling_factor=config.rope_scaling_factor
+                rope_scaling_factor=config.rope_scaling_factor,
+                require_fused_kernel=config.require_fused_gsa_kernel,
             )
         else:
             raise ValueError(f"Unknown layer type: {layer_type}")
@@ -1692,7 +1718,8 @@ class MTPTransformerBlock(nn.Module):
             k_max=config.gsa_k_max,
             indexer_heads=config.gsa_indexer_heads,
             rope_original_max=config.rope_original_max_position,
-            rope_scaling_factor=config.rope_scaling_factor
+            rope_scaling_factor=config.rope_scaling_factor,
+            require_fused_kernel=config.require_fused_gsa_kernel,
         )
 
         self.mlp = LightningMLP(
