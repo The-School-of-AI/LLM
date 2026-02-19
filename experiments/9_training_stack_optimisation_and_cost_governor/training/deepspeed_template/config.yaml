@@ -6,6 +6,9 @@ data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
   max_length: 4096
+  # SPDL Dataloader Settings
+  use_dataloader: false          # If true, use SPDL pipeline reading .bin/.idx shards
+  shard_dir: null                # Required if use_dataloader=true
 
 # Training Configuration
 training:

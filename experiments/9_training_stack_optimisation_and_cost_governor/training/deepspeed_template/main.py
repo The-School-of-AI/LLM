@@ -100,6 +100,10 @@ class Config:
         self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
         self.streaming = config_dict["data"].get("streaming", False)  # Enable HF streaming for large datasets
         self.tokenized_dataset_path = config_dict["data"].get("tokenized_dataset_path", None)
+        
+        # SPDL Configuration
+        self.use_dataloader = config_dict["data"].get("use_dataloader", False)
+        self.shard_dir = config_dict["data"].get("shard_dir", None)
 
         # Training configuration
         self.num_epochs = config_dict["training"]["num_epochs"]
@@ -276,6 +280,9 @@ def main():
         num_workers=args.num_workers,
         tokenized_dataset_path=args.tokenized_dataset_path,
         streaming=args.streaming,
+        # New SPDL args
+        use_dataloader=args.use_dataloader,
+        shard_dir=args.shard_dir,
     )
     is_streaming = dataset_info.get("streaming", False)
     if is_streaming:

@@ -22,4 +22,7 @@ dependencies = [
     "transformers>=5.0.0",
     "triton>=3.6.0",
     "flash-linear-attention>=0.4.1",
+    "pyarrow>=10.0.0",
+    "spdl>=0.2.0",
+    "numpy>=1.21.0",
 ]

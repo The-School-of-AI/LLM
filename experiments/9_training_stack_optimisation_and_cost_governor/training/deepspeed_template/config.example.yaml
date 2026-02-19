@@ -13,6 +13,9 @@ data:
   tokenized_dataset_path: null          # Path to pre-tokenized dataset on disk (offline mode)
                                         # When set, skips runtime tokenization entirely
                                         # Use datasets.save_to_disk() to prepare offline datasets
+  # SPDL Dataloader (Alternative to HuggingFace)
+  use_dataloader: false                 # Set to true to use SPDL pipeline with .bin/.idx shards
+  shard_dir: null                       # Path to directory containing .bin/.idx files (required if above is true)
 
 # =============================================================================
 # Training Configuration

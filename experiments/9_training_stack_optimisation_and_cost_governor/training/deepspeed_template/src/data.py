@@ -22,7 +22,8 @@ import torch.distributed as dist
 from datasets import load_dataset, load_from_disk
 from torch.utils.data import DataLoader, TensorDataset, IterableDataset
 from torch.utils.data.distributed import DistributedSampler
-
+import numpy as np
+import logging
 from .utils import print_rank_0
 
 
@@ -98,6 +99,117 @@ def get_tokenizer(tokenizer_path: str = None):
 
     return tokenizer
 
+# =================================================================
+# SPDL Helper Functions
+# =================================================================
+def read_idx(idx_path):
+    """Read the .idx file and return an array of offsets."""
+    import numpy as np
+    with open(idx_path, "rb") as f:
+        _ = f.read(8)  # Skip header
+        offsets = np.frombuffer(f.read(), dtype=np.uint64)
+    return offsets
+
+def _should_skip_region(bin_path, i, start, end, itemsize, seq_len):
+    """Helper to check if a region in the bin/idx file should be skipped."""
+    num_bytes = end - start
+    if num_bytes <= 0:
+        return True
+    num_tokens = num_bytes // itemsize
+    if num_tokens == 0:
+        return True
+    num_full = num_tokens // seq_len
+    if num_full == 0:
+        return True
+    return False
+
+def load_tokens_from_bin_idx(bin_path, idx_path, dtype, seq_len):
+    """Yield token sequences from a .bin file using .idx offsets."""
+    itemsize = dtype.itemsize
+    offsets = read_idx(idx_path)
+    
+    with open(bin_path, "rb") as f:
+        for i in range(len(offsets) - 1):
+            start = int(offsets[i])
+            end = int(offsets[i + 1])
+            if _should_skip_region(bin_path, i, start, end, itemsize, seq_len):
+                continue
+            
+            num_bytes = end - start
+            num_tokens = num_bytes // itemsize
+            num_full = num_tokens // seq_len
+            read_tokens = num_full * seq_len
+            
+            f.seek(start)
+            tokens = np.frombuffer(f.read(read_tokens * itemsize), dtype=dtype)
+            
+            if tokens.size != read_tokens:
+                continue
+                
+            for j in range(0, len(tokens), seq_len):
+                yield torch.from_numpy(tokens[j:j+seq_len].astype(np.int64))
+
+def bin_idx_source(shard_dir, seq_len, dtype, rank=0, world_size=1):
+    """
+    Generator yielding token sequences from .bin/.idx shards in directory.
+    Handles Distributed Sharding: splits files across ranks.
+    """
+    files = sorted(f for f in os.listdir(shard_dir) if f.endswith(".bin"))
+    
+    # Shard files across ranks
+    if world_size > 1:
+        files = files[rank::world_size]
+        print_rank_0(f"SPDL: Rank {rank} processing {len(files)} shards (shard stride {world_size})")
+    
+    for bin_file in files:
+        bin_path = os.path.join(shard_dir, bin_file)
+        idx_path = bin_path.replace(".bin", ".idx")
+        yield from load_tokens_from_bin_idx(bin_path, idx_path, dtype, seq_len)
+
+def build_pipeline(shard_dir, seq_len, dtype, batch_size, rank=0, world_size=1):
+    """Build SPDL pipeline yielding batches of {input_ids, attention_mask, labels}."""
+    from spdl.pipeline import PipelineBuilder
+    
+    # Define source generator
+    source = bin_idx_source(shard_dir, seq_len, dtype, rank, world_size)
+    
+    # Transform function to match training batch format
+    # SPDL aggregation yields a list/tensor of token sequences [B, L]
+    # We need to wrap it into the dict expected by train_epoch
+    
+    def transform_to_batch(batch_tokens):
+        # batch_tokens is a list of tensors [L], or valid tensor [B, L] depending on SPDL version
+        # Assuming aggregation yields list of tensors
+        if isinstance(batch_tokens, list):
+            input_ids = torch.stack(batch_tokens)
+        else:
+            input_ids = batch_tokens
+            
+        # Create masks/labels
+        B, L = input_ids.shape
+        attention_mask = torch.ones((B, L), dtype=torch.long)
+        labels = input_ids.clone()
+        
+        return {
+            "input_ids": input_ids.long(), # Ensure long for embeddings
+            "attention_mask": attention_mask,
+            "labels": labels
+        }
+
+    # Pipeline
+    # Note: SPDL aggregation happens BEFORE transform usually, or we use map. 
+    # Let's use Source -> Aggregate -> Map
+    
+    pipeline = (
+        PipelineBuilder()
+        .add_source(source)
+        .aggregate(batch_size)
+        .transform(transform_to_batch)
+        .add_sink(4) # buffer size
+        .build(num_threads=2) # hardcoded small threads per GPU to avoid contention
+    )
+    return pipeline
+
 
 def get_dataloaders(
     dataset_name: str = "wikitext",
@@ -108,21 +220,17 @@ def get_dataloaders(
     num_workers: int = 12,
     tokenized_dataset_path: Optional[str] = None,
     streaming: bool = False,
+    # --- New Arguments ---
+    use_dataloader: bool = False,
+    shard_dir: Optional[str] = None,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
     Load dataset and create dataloaders for training, validation, and testing.
 
-    Supports two modes:
-    - Offline (preferred): Pass ``tokenized_dataset_path`` pointing to a
-      datasets.save_to_disk() directory.  Skips tokenisation entirely.
-    - Online (fallback): Downloads from HuggingFace Hub and tokenises on the fly.
-
-    Uses the standard LLM pre-training approach:
-    1. Concatenate all text with EOS separators
-    2. Tokenize the entire concatenation at once
-    3. Chunk into fixed-length sequences of max_length
-
-    Every token in every batch is a real token.  No padding.
+    Supports three modes:
+    1. SPDL Mode (New): Reads .bin/.idx shards from shard_dir (use_dataloader=True)
+    2. Offline (preferred): Pass tokenized_dataset_path
+    3. Online (fallback): HuggingFace load_dataset
 
     Args:
         dataset_name: HuggingFace dataset name (online mode)
@@ -132,13 +240,67 @@ def get_dataloaders(
         max_length: Maximum sequence length
         num_workers: DataLoader workers per GPU
         tokenized_dataset_path: Path to pre-tokenized dataset on disk (offline mode)
-        streaming: If True, use HF streaming mode (for large datasets like FineWeb)
+        streaming: If True, use HF streaming mode
+        use_dataloader: If True, use SPDL pipeline (reads .bin/.idx shards)
+        shard_dir: Path to directory containing .bin/.idx files (required if use_dataloader=True)
 
     Returns:
         Tuple of (train_loader, eval_loader, test_loader, dataset_info)
     """
-    if tokenizer is None and tokenized_dataset_path is None:
+    if tokenizer is None and tokenized_dataset_path is None and not use_dataloader:
         raise ValueError("tokenizer must be provided for online tokenisation")
+
+    # =================================================================
+    # SPDL Pipeline Mode (New)
+    # =================================================================
+    if use_dataloader:
+        if not shard_dir:
+            raise ValueError("shard_dir must be provided when use_dataloader=True")
+
+        print_rank_0(f"Loading dataset via SPDL pipeline from: {shard_dir}")
+        try:
+            import spdl.pipeline
+        except ImportError:
+            raise ImportError("spdl not installed. Please install spdl to use use_dataloader=True")
+
+        # Config constants for SPDL
+        # DTYPE is usually uint16 or uint32 depending on vocab size. 
+        # We'll default to uint32 to be safe, or user can change code if needed.
+        # Ideally this should be in config, but for now we hardcode or infer.
+        dtype = np.uint32 
+        
+        # Distributed info
+        if dist.is_available() and dist.is_initialized():
+            rank = dist.get_rank()
+            world_size = dist.get_world_size()
+        else:
+            rank = 0
+            world_size = 1
+            
+        print_rank_0(f"  SPDL: Rank {rank}/{world_size}, Batch Size {batch_size}, Seq Len {max_length}")
+
+        # Build pipelines
+        # Train
+        train_loader = build_pipeline(
+            shard_dir, 
+            seq_len=max_length, 
+            dtype=dtype, 
+            batch_size=batch_size, 
+            rank=rank, 
+            world_size=world_size
+        )
+        
+        eval_loader = train_loader
+        test_loader = train_loader
+
+        dataset_info = {
+            "train_size": -1, # Unknown/Huge
+            "eval_size": -1,
+            "test_size": -1,
+            "vocab_size": tokenizer.vocab_size if tokenizer else 0,
+            "streaming": True, # Behaves like streaming
+        }
+        return train_loader, eval_loader, test_loader, dataset_info
 
     # =================================================================
     # Streaming mode — for very large datasets (FineWeb, etc.)
