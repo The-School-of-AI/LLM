@@ -1,6 +1,6 @@
 # Post-ClickHouse Installation Setup
 
-Scripts for configuring the ClickHouse DB environment after the initial install. Covers security group creation, EBS volume provisioning, credential storage in SSM Parameter Store, automated snapshots, and a healthcheck cron.
+Scripts for configuring the ClickHouse DB environment after the initial install. Covers security group creation, EBS volume provisioning, credential storage in Secrets Manager, cross-account IAM for the Vector sidecar, automated snapshots, and a healthcheck cron.
 
 **Prerequisites:**
 - AWS CLI installed and configured with appropriate permissions
@@ -9,7 +9,24 @@ Scripts for configuring the ClickHouse DB environment after the initial install.
 
 ---
 
+## Setup Checklist
+
+Run these steps in order. Steps 1–4 are required for the Vector sidecar to function; steps 5–6 are operational extras.
+
+| # | Step | Run in | Required? |
+|---|------|--------|-----------|
+| 1 | [Create the ClickHouse Security Group](#1-create-the-clickhouse-security-group) | Account B (infra) | **Required** — unless 8443 access is already configured |
+| 2 | [Create and Attach an EBS Data Volume](#2-create-and-attach-an-ebs-data-volume) | Account B (infra) | **Recommended** — skip only if ClickHouse data already lives on a separate volume |
+| 3 | [Store Credentials in Secrets Manager](#3-store-credentials-in-secrets-manager) | Account B (infra) | **Required** — `userdata_vector.sh` will fail without this secret |
+| 4 | [Set Up Cross-Account IAM for the Vector Sidecar](#4-set-up-cross-account-iam-for-the-vector-sidecar) | Accounts A and B | **Required** — training instances need this role to read the secret |
+| 5 | [Set Up Automated EBS Snapshots (DLM)](#5-set-up-automated-ebs-snapshots-dlm) | Account B (infra) | **Optional** — recommended for production; not needed for core functionality |
+| 6 | [Install the Healthcheck Cron](#6-install-the-healthcheck-cron) | ClickHouse instance | **Optional** — adds CloudWatch visibility into ClickHouse availability |
+
+---
+
 ## 1. Create the ClickHouse Security Group
+
+> **Required** — Without this, nothing can reach ClickHouse on port 8443. Skip if the instance already has a security group that permits TCP 8443 from the training and dashboard subnets.
 
 Creates a dedicated security group for the ClickHouse instance and opens port **8443** (ClickHouse HTTPS) to the training and dashboard subnets only.
 
@@ -52,8 +69,8 @@ TAG_WORKLOAD_TYPE="TrainingOperations"
 
 # Create the security group
 DB_SG_ID=$(aws ec2 create-security-group \
-  --group-name p12-clickhouse-sg \
-  --description "P12 ClickHouse DB - restricted access" \
+  --group-name t12-clickhouse-sg \
+  --description "T12 ClickHouse DB - restricted access" \
   --vpc-id "$VPC_ID" \
   --query 'GroupId' --output text)
 
@@ -78,7 +95,9 @@ aws ec2 authorize-security-group-ingress \
 
 ## 2. Create and Attach an EBS Data Volume
 
-Provisions a **gp3** EBS volume and attaches it to the ClickHouse DB instance. The volume is tagged `Name=p12-clickhouse-data`, which the DLM snapshot policy in [Section 4](#4-set-up-automated-ebs-snapshots-dlm) uses to identify it.
+> **Recommended** — Keeps ClickHouse data on a volume independent of the root disk, so the instance can be replaced without data loss. Skip only if ClickHouse is already configured to write to a separately managed volume. The DLM snapshot policy in [Section 5](#5-set-up-automated-ebs-snapshots-dlm) targets this volume by tag.
+
+Provisions a **gp3** EBS volume and attaches it to the ClickHouse DB instance. The volume is tagged `Name=t12-clickhouse-data`.
 
 > The EBS volume must be in the same Availability Zone as the instance. The script looks up the instance's AZ automatically.
 
@@ -96,7 +115,6 @@ Provisions a **gp3** EBS volume and attaches it to the ClickHouse DB instance. T
         "ec2:DescribeVolumes",
         "ec2:CreateVolume",
         "ec2:AttachVolume",
-        "ec2:Waiter",
         "ec2:CreateTags"
       ],
       "Resource": "*"
@@ -133,7 +151,7 @@ VOLUME_ID=$(aws ec2 create-volume \
   --iops 3000 \
   --throughput 125 \
   --availability-zone "$AZ" \
-  --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=p12-clickhouse-data},{Key=Project,Value=p12},{Key=Team,Value=${TAG_TEAM}},{Key=TaskId,Value=${TAG_TASK_ID}},{Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE}}]" \
+  --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=t12-clickhouse-data},{Key=Project,Value=p12},{Key=Team,Value=${TAG_TEAM}},{Key=TaskId,Value=${TAG_TASK_ID}},{Key=WorkloadType,Value=${TAG_WORKLOAD_TYPE}}]" \
   --query 'VolumeId' --output text \
   --region "$AWS_REGION")
 
@@ -154,9 +172,11 @@ echo "Volume $VOLUME_ID attached to $DB_INSTANCE_ID as /dev/xvdf"
 
 ---
 
-## 3. Store Credentials in SSM Parameter Store
+## 3. Store Credentials in Secrets Manager
 
-Writes the ClickHouse writer password, reader password, and HTTPS endpoint into AWS Systems Manager Parameter Store. Passwords are stored as `SecureString` (encrypted with the default KMS key).
+> **Required** — `userdata_vector.sh` reads this secret at boot to configure the Vector sidecar. The bootstrap will fail at step 6 if the secret does not exist. Training instances access it via cross-account assume-role (see [Section 4](#4-set-up-cross-account-iam-for-the-vector-sidecar)).
+
+Writes the ClickHouse writer password and HTTPS endpoint into AWS Secrets Manager as a single JSON secret. Run in the **infra account (Account B)**. The secret is encrypted with the default KMS key.
 
 **IAM policy required:**
 
@@ -165,19 +185,15 @@ Writes the ClickHouse writer password, reader password, and HTTPS endpoint into 
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "SSMParameterStore",
+      "Sid": "SecretsManagerClickHouse",
       "Effect": "Allow",
       "Action": [
-        "ssm:GetParameter",
-        "ssm:GetParameters",
-        "ssm:PutParameter",
-        "ssm:DescribeParameters",
-        "ssm:StartSession"
+        "secretsmanager:CreateSecret",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
       ],
-      "Resource": [
-        "arn:aws:ssm:*:*:parameter/T12-TrainingOperations-239/*",
-        "arn:aws:ssm:*:*:session/*"
-      ]
+      "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:t12/clickhouse*"
     }
   ]
 }
@@ -186,7 +202,6 @@ Writes the ClickHouse writer password, reader password, and HTTPS endpoint into 
 **Script:**
 
 ```bash
-PREFIX="T12-TrainingOperations-239" # REPLACE with your unique prefix for resource naming
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Tags
@@ -195,71 +210,147 @@ TAG_TASK_ID="Issue239"
 TAG_WORKLOAD_TYPE="TrainingOperations"
 
 P12_WRITER_PASSWORD="password"
-P12_READER_PASSWORD="password"
 
 DB_PUBLIC_IP=54.174.194.76
 
-SKIP_CREDENTIALS=false
-if [ "$SKIP_CREDENTIALS" = "false" ]; then
-  aws ssm put-parameter \
-    --name "/$PREFIX/clickhouse/writer-password" \
-    --value "$P12_WRITER_PASSWORD" \
-    --type SecureString \
-    --overwrite \
-    --region "$AWS_REGION" >/dev/null
+aws secretsmanager create-secret \
+  --name "t12/clickhouse" \
+  --description "ClickHouse credentials for T12 Vector sidecar" \
+  --secret-string "{\"writer-password\":\"${P12_WRITER_PASSWORD}\",\"endpoint\":\"https://${DB_PUBLIC_IP}:8443\"}" \
+  --tags "[{\"Key\":\"Team\",\"Value\":\"${TAG_TEAM}\"},{\"Key\":\"TaskId\",\"Value\":\"${TAG_TASK_ID}\"},{\"Key\":\"WorkloadType\",\"Value\":\"${TAG_WORKLOAD_TYPE}\"}]" \
+  --region "$AWS_REGION"
 
-  aws ssm put-parameter \
-    --name "/$PREFIX/clickhouse/reader-password" \
-    --value "$P12_READER_PASSWORD" \
-    --type SecureString \
-    --overwrite \
-    --region "$AWS_REGION" >/dev/null
-
-  aws ssm put-parameter --region "$AWS_REGION" --cli-input-json "{
-    \"Name\": \"/$PREFIX/clickhouse/endpoint\",
-    \"Value\": \"https://${DB_PUBLIC_IP}:8443\",
-    \"Type\": \"String\",
-    \"Overwrite\": true
-  }" >/dev/null
-
-  echo "✓ Credentials stored in SSM Parameter Store"
-fi
+echo "✓ Credentials stored in Secrets Manager"
 ```
 
-### Standalone commands for the Vector sidecar parameters
-
-The Vector sidecar on training instances (Account A) reads two of these parameters via cross-account assume-role. If you need to write or update them individually, run these in the **SSM/infra account (Account B)**:
-
-**Writer password** (SecureString — encrypted at rest with default KMS key):
+To update the secret later (password or endpoint changed):
 
 ```bash
-aws ssm put-parameter \
-  --name "/T12-TrainingOperations-239/clickhouse/writer-password" \
-  --value "YOUR_WRITER_PASSWORD" \
-  --type SecureString \
-  --overwrite \
-  --region us-east-1
+aws secretsmanager put-secret-value \
+  --secret-id "t12/clickhouse" \
+  --secret-string "{\"writer-password\":\"${P12_WRITER_PASSWORD}\",\"endpoint\":\"https://${DB_PUBLIC_IP}:8443\"}" \
+  --region "$AWS_REGION"
 ```
-
-**ClickHouse endpoint** (String — the HTTPS URL including port):
-
-```bash
-aws configure set cli_follow_urlparam false
-aws ssm put-parameter \
-  --name "/T12-TrainingOperations-239/clickhouse/endpoint" \
-  --value "https://CLICKHOUSE_IP:8443" \
-  --type String \
-  --overwrite \
-  --region us-east-1
-```
-
-> **Cross-account access:** Training instances assume the `t12-ssm-reader` role in Account B to read these parameters. See `sidecar_agent/ssm-reader-cross-account-role.json` for the role definition and `sidecar_agent/userdata_vector.sh` step [5/9] for the assume-role flow.
 
 ---
 
-## 4. Set Up Automated EBS Snapshots (DLM)
+## 4. Set Up Cross-Account IAM for the Vector Sidecar
 
-Creates a Data Lifecycle Manager policy that takes **daily snapshots** of the ClickHouse data volume and retains the last **7 snapshots**. The policy targets volumes tagged `Name=p12-clickhouse-data` (applied in [Section 2](#2-create-and-attach-an-ebs-data-volume)).
+> **Required** — Training instances must assume a role in Account B to read the `t12/clickhouse` secret. Without this, the Vector sidecar bootstrap fails with an access-denied error at step 5.
+
+The Vector sidecar (`userdata_vector.sh`) runs on training instances in **Account A** and reads the `t12/clickhouse` secret from **Account B** (this infra account) via cross-account assume-role. Two setup scripts handle this — one per account.
+
+```
+Account A (training)                    Account B (infra)
+──────────────────────────────────      ──────────────────────────────────────
+EC2 instance profile role               t12-secrets-reader role
+  └─ sts:AssumeRole ──────────────────▶   └─ secretsmanager:GetSecretValue
+  └─ cloudwatch:PutMetricData                └─ kms:Decrypt (via Secrets Manager)
+```
+
+### Step 1 — Run in Account A (training): create the instance role
+
+Creates the EC2 instance role and instance profile that training instances use. **Run this first** — the infra script needs the training account ID (though not the role itself, with the current trust policy design).
+
+The script is idempotent — if the role already exists, it only updates the inline policy.
+
+```bash
+bash sidecar_agent/setup-training-account.sh \
+  --infra-account-id <INFRA_AWS_ACCOUNT_ID> \
+  --role-name        t12-traininginstance-239-role \
+  --region us-east-1
+```
+
+**IAM permissions required in Account A to run this script:**
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "iam:CreateRole", "iam:GetRole", "iam:PutRolePolicy",
+      "iam:CreateInstanceProfile", "iam:GetInstanceProfile", "iam:AddRoleToInstanceProfile"
+    ],
+    "Resource": "*"
+  }]
+}
+```
+
+### Step 2 — Run in Account B (infra): create the reader role
+
+Creates the `t12-secrets-reader` role that training instances will assume to read the secret.
+
+```bash
+bash sidecar_agent/setup-infra-account.sh \
+  --training-account-id <TRAINING_AWS_ACCOUNT_ID> \
+  --training-role-name  t12-traininginstance-239-role \
+  --region us-east-1
+```
+
+**IAM permissions required in Account B to run this script:**
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["iam:CreateRole", "iam:PutRolePolicy", "iam:GetRole"],
+    "Resource": "arn:aws:iam::*:role/t12-secrets-reader"
+  }]
+}
+```
+
+### Step 3 — Attach the instance profile to training EC2 instances
+
+Every training instance that runs `userdata_vector.sh` must have this instance profile attached.
+
+```bash
+# At launch time:
+aws ec2 run-instances \
+  --iam-instance-profile Name=t12-traininginstance-239-role \
+  ...
+
+# Or on a running instance:
+aws ec2 associate-iam-instance-profile \
+  --instance-id <INSTANCE_ID> \
+  --iam-instance-profile Name=t12-traininginstance-239-role
+```
+
+### Verify cross-account access (optional smoke test)
+
+**⚠️ Important:** This test must be run from a training EC2 instance with the `t12-traininginstance-239-role` instance profile attached. The `t12-secrets-reader` role's trust policy only allows the training instance role to assume it, not individual IAM users.
+
+**Steps:**
+1. Launch or connect to a training instance with the instance profile attached
+2. Connect via SSM: `aws ssm start-session --target <instance-id>`
+3. Run the test commands below
+
+```bash
+# Assume the infra role (this works because the instance has t12-traininginstance-239-role)
+CREDS=$(aws sts assume-role \
+  --role-arn arn:aws:iam::205991465724:role/t12-secrets-reader \
+  --role-session-name test-session --output json)
+
+export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r '.Credentials.AccessKeyId')
+export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r '.Credentials.SecretAccessKey')
+export AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')
+
+# Read the secret
+aws secretsmanager get-secret-value --secret-id t12/clickhouse --region us-east-1
+
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+```
+
+**Note:** Testing from your local workstation with IAM user credentials will fail with `AccessDenied` because the trust policy is restricted to the training instance role only.
+
+---
+
+## 5. Set Up Automated EBS Snapshots (DLM)
+
+> **Optional** — Provides automatic daily backups of the ClickHouse data volume. Recommended for any environment where data loss would be disruptive. Requires [Section 2](#2-create-and-attach-an-ebs-data-volume) to have been completed (the DLM policy targets the `Name=p12-clickhouse-data` tag set there). The `AWSDataLifecycleManagerDefaultRole` is created automatically by AWS the first time you create a DLM policy via the console; if running this script in a fresh account, create that role first via the console or create it manually.
+
+Creates a Data Lifecycle Manager policy that takes **daily snapshots** of the ClickHouse data volume and retains the last **7 snapshots**. Run in Account B.
 
 **IAM policy required:**
 
@@ -295,7 +386,7 @@ TAG_WORKLOAD_TYPE="TrainingOperations"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 aws dlm create-lifecycle-policy \
-  --description "Daily snapshot of P12 ClickHouse data volume" \
+  --description "Daily snapshot of T12 ClickHouse data volume" \
   --state ENABLED \
   --execution-role-arn "arn:aws:iam::${ACCOUNT_ID}:role/AWSDataLifecycleManagerDefaultRole" \
   --policy-details '{
@@ -331,14 +422,16 @@ aws ec2 describe-volumes-modifications \
 
 ---
 
-## 5. Install the Healthcheck Cron
+## 6. Install the Healthcheck Cron
 
-Installs a cron job that runs the ClickHouse healthcheck script every minute. The script pushes 6 CloudWatch metrics per run (see [Health Checks](#7-health-checks--monitoring)).
+> **Optional** — Adds a CloudWatch monitoring heartbeat for the ClickHouse DB instance itself (separate from the Vector sidecar healthcheck embedded in `userdata_vector.sh`). Run directly on the ClickHouse EC2 instance. Useful for alerting on DB availability; not required for the Vector sidecar to function.
+
+Installs a cron job that runs the ClickHouse healthcheck script every minute and pushes metrics to CloudWatch under the `T12/ClickHouse` namespace.
 
 ```bash
 sudo cp healthcheck/clickhouse-healthcheck.sh /usr/local/bin/
 sudo chmod +x /usr/local/bin/clickhouse-healthcheck.sh
 
-echo "* * * * * root /usr/local/bin/clickhouse-healthcheck.sh >> /var/log/p12-clickhouse-healthcheck.log 2>&1" \
+echo "* * * * * root /usr/local/bin/clickhouse-healthcheck.sh >> /var/log/t12-clickhouse-healthcheck.log 2>&1" \
   | sudo tee /etc/cron.d/p12-clickhouse-healthcheck
 ```

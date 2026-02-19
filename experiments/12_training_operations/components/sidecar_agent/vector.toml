@@ -5,12 +5,13 @@
 # Requires: Vector >= 0.30
 # ------------------------------------------------------------------------------
 
+# Global data directory for Vector
+data_dir = "/var/lib/vector"
+
 # Health API (for training-side health checks)
 [api]
 enabled = true
 address = "127.0.0.1:8686"
-
-data_dir = "/var/lib/vector"
 
 # SOURCES
 
@@ -221,7 +222,7 @@ encoding.codec = "json"
 [sinks.clickhouse_logs]
 type = "clickhouse"
 inputs = ["to_raw_logs"]
-endpoint = "${CLICKHOUSE_ENDPOINT}"
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
 database = "training_observability"
 table = "logs"
 compression = "gzip"
@@ -235,7 +236,7 @@ tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 [sinks.clickhouse_events]
 type = "clickhouse"
 inputs = ["to_events"]
-endpoint = "${CLICKHOUSE_ENDPOINT}"
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
 database = "training_observability"
 table = "events"
 compression = "gzip"
@@ -249,7 +250,7 @@ tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 [sinks.clickhouse_metric_arrays]
 type = "clickhouse"
 inputs = ["to_metric_arrays"]
-endpoint = "${CLICKHOUSE_ENDPOINT}"
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
 database = "training_observability"
 table = "metric_arrays"
 compression = "gzip"
@@ -263,7 +264,7 @@ tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 [sinks.clickhouse_metric_points]
 type = "clickhouse"
 inputs = ["to_metric_points"]
-endpoint = "${CLICKHOUSE_ENDPOINT}"
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
 database = "training_observability"
 table = "metric_points"
 compression = "gzip"
@@ -277,7 +278,7 @@ tls.ca_file = "${CLICKHOUSE_CA_CERT}"
 [sinks.clickhouse_checkpoints]
 type = "clickhouse"
 inputs = ["to_checkpoints"]
-endpoint = "${CLICKHOUSE_ENDPOINT}"
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
 database = "training_observability"
 table = "checkpoints"
 compression = "gzip"
