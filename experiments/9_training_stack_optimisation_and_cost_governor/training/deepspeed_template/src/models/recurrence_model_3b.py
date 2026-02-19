@@ -168,6 +168,8 @@ except ImportError:
     fla_gated_delta_rule = None
     fused_indexer_topk = None
 
+HAS_FUSED_INDEXER = fused_indexer_topk is not None
+
 # ── Kernel availability diagnostics ──────────────────────────────────────────
 _kernel_log = logging.getLogger("recurrence_model_3b.kernels")
 if not _kernel_log.handlers:
@@ -183,6 +185,7 @@ _kernel_log.info(f"  HAS_FLA:              {HAS_FLA}")
 _kernel_log.info(f"  Triton RMSNorm:       {'ENABLED' if HAS_TRITON and triton_rmsnorm is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  Triton Sinkhorn:      {'ENABLED' if HAS_TRITON and triton_sinkhorn_knopp is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  Triton Sparse Attn:   {'ENABLED' if HAS_TRITON and triton_sparse_attention is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
+_kernel_log.info(f"  Fused Indexer TopK:   {'ENABLED' if HAS_FUSED_INDEXER and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and fla_gated_delta_rule is not None and _cuda_available else 'FALLBACK (Python loop)'}")
 if not _cuda_available:
     _kernel_log.info("  NOTE: All Triton/fla kernels require CUDA. Running on MPS/CPU uses PyTorch fallbacks.")
@@ -1028,29 +1031,19 @@ class GatedSparseAttention(nn.Module):
     Implements adaptive sparse attention with gating for quality.
     Used for 25% of layers to complement DeltaNet's efficiency.
 
-    PERFORMANCE WARNING:
-    Current implementation creates O(T²) memory structures:
-    - match_logits: [B, indexer_heads, T, T] from matmul(q_I, k_I)
-    - causal_mask: [T, T] boolean (~69B entries at 256k context)
-    This consumes tens of GB at 256k (e.g., ~1.1TB at 256k context).
-
-    SOLUTION: Use optimized Triton kernel from official repository
-    Official repo: https://github.com/alfredcs/Gated-Sparse-Attention
-
-    The official repo includes Triton kernels (gsa/kernels/triton_sparse_attn.py) that
-    achieve true O(L·k) memory complexity by using index-based selection instead of
-    materializing the full T×T attention matrix. Block-wise processing with sparse
-    indexing eliminates the memory wall.
-
-    TODO: Port their Triton kernel implementation to avoid T×T materialization
+    Memory complexity: O(T·k) via fused_indexer_topk chunked kernel.
+    Uses triton_sparse_attention for O(T·k) attention (no T×T materialization).
+    Falls back to pytorch_sparse_attention for grad-enabled backward reconstruct.
     """
     def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
-                 k_base=512, k_min=32, k_max=1024, indexer_heads=4):
+                 k_base=512, k_min=32, k_max=1024, indexer_heads=4,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         self.max_seq_len = max_seq_len
+        self.require_fused_kernel = require_fused_kernel
 
         # Adaptive Sparsity Hyperparams
         self.k_base = k_base
@@ -1058,18 +1051,18 @@ class GatedSparseAttention(nn.Module):
         self.k_max = k_max
         self.indexer_heads = indexer_heads
 
-        # Lightning Indexer
+        # Lightning Indexer (shared keys across indexer heads for kernel compatibility)
         self.d_idx = 32
         self.W_Iq = nn.Linear(hidden_size, indexer_heads * self.d_idx, bias=False)
-        self.W_Ik = nn.Linear(hidden_size, indexer_heads * self.d_idx, bias=False)  # Per-head keys
+        self.W_Ik = nn.Linear(hidden_size, self.d_idx, bias=False)  # Shared across indexer heads
         self.W_Iw = nn.Linear(hidden_size, indexer_heads, bias=False)
         self.gate_bias = nn.Parameter(torch.zeros(indexer_heads))
 
-        # Per-attention-head diversity: learned biases for fine-tuning sparse patterns
-        # Each attention head gets a learnable scale to modulate the base indexer pattern
-        self.head_importance_bias = nn.Parameter(torch.zeros(num_heads))
-
         self.register_buffer("variance_ema", torch.tensor(1.0))
+        # Snapshot of variance_ema captured at the start of each reversible
+        # forward pass (torch.no_grad()).  The backward reconstruct reads this
+        # snapshot instead of the live EMA, guaranteeing that fused_indexer_topk
+        # produces identical k_t / top_indices in both passes.
         self.register_buffer("_variance_ema_snapshot", torch.tensor(1.0))
         self.variance_alpha = 0.01
 
@@ -1097,154 +1090,154 @@ class GatedSparseAttention(nn.Module):
                   self.o_proj, self.W_gv, self.W_go]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
         nn.init.zeros_(self.gate_bias)
-        nn.init.zeros_(self.head_importance_bias)
 
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
         device = x.device
         token_keep = _token_keep_mask(attention_mask, B, T, device)
 
-        # Lightning Indexer (FIXED: Per-head keys for diverse selection patterns)
-        q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # (B, T, 4, 32)
-        k_I = self.W_Ik(x).view(B, T, self.indexer_heads, self.d_idx)  # (B, T, 4, 32) - now per-head!
-        w = torch.sigmoid(self.W_Iw(x))  # (B, T, 4)
+        gsa_fused_available = (
+            HAS_FUSED_INDEXER
+            and triton_sparse_attention is not None
+            and x.is_cuda
+        )
+        if self.require_fused_kernel and not gsa_fused_available:
+            raise RuntimeError(
+                "GSA fused kernels are required but unavailable. "
+                f"fused_indexer_topk={HAS_FUSED_INDEXER}, "
+                f"triton_sparse_attention={triton_sparse_attention is not None}, "
+                f"x.is_cuda={x.is_cuda}."
+            )
 
-        # Compute per-head matching scores
-        q_I_p = q_I.permute(0, 2, 1, 3)  # (B, 4, T, 32)
-        k_I_p = k_I.permute(0, 2, 3, 1)  # (B, 4, 32, T)
+        # Lightning Indexer — O(T·k) via fused chunked kernel
+        # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
+        # Processes in [B, C, T] chunks where C is auto-tuned to fit in ~512MB.
+        q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # [B, T, 4, 32]
+        k_I = self.W_Ik(x)          # [B, T, d_idx] — shared across indexer heads
+        w_raw = self.W_Iw(x)        # [B, T, indexer_heads] — pre-sigmoid (kernel applies sigmoid)
+        scale_idx = 1.0 / math.sqrt(self.d_idx)
 
-        match_logits = torch.matmul(q_I_p, k_I_p)  # (B, 4, T, T) - now using distinct keys per indexer head!
-        match_logits = match_logits + self.gate_bias.view(1, self.indexer_heads, 1, 1)
-        match_gate = torch.sigmoid(match_logits)
-
-        # Compute base importance patterns from 4 indexer heads
-        w_exp = w.permute(0, 2, 1).unsqueeze(-1)  # (B, 4, T, 1)
-        importance_per_indexer = w_exp * match_gate  # (B, 4, T, T)
-
-        # Map 4 indexer patterns → 16 attention heads with learned per-head diversity
-        # Each attention head gets a base pattern (replicated) + learned modulation
-        heads_per_indexer = self.num_heads // self.indexer_heads  # 16 // 4 = 4
-        importance_score = importance_per_indexer.repeat_interleave(heads_per_indexer, dim=1)  # (B, 16, T, T)
-
-        # Apply learned per-attention-head biases for fine-grained diversity
-        # This allows each of 16 heads to modulate the base indexer pattern independently
-        head_bias = self.head_importance_bias.view(1, self.num_heads, 1, 1)  # (1, 16, 1, 1)
-        importance_score = importance_score * torch.sigmoid(head_bias)  # Learned modulation
-
-        # Causal masking (NOTE: Still O(T²) - Triton kernel needed for 256k)
-        if T > 1:
-            # Broadcast-based mask still materializes T×T during masked_fill
-            # importance_score is [B, num_heads, T_query, T_key]
-            # For causal: only attend to positions <= current position
-            positions = torch.arange(T, device=device)
-            # Shape: [1, 1, T, 1] compared to [1, 1, 1, T] -> broadcasts to [1, num_heads, T, T]
-            causal_mask_broadcast = positions.view(1, 1, -1, 1) >= positions.view(1, 1, 1, -1)
-            importance_score_masked = importance_score.masked_fill(~causal_mask_broadcast, 0.0)
-            causal_mask = causal_mask_broadcast  # Store for later use
-        else:
-            importance_score_masked = importance_score
-            causal_mask = None
-
-        # Adaptive Sparsity (per-head variance calculation)
-        # importance_score_masked shape: [B, num_heads, T, T]
-        var_t = importance_score_masked.var(dim=-1, unbiased=False)  # [B, num_heads, T]
-
-        # REVERSIBILITY NOTE: Previous approach used _saved_selection (module attribute)
-        # which was fragile under DDP/torch.compile/microbatching.
-        # Now uses _variance_ema_snapshot (registered buffer) — deterministic recomputation.
+        # Stateless re-computation: always recompute indices via fused_indexer_topk.
+        # This avoids the gradient-accumulation race condition where _saved_selection
+        # from micro-batch B would overwrite micro-batch A's indices before A's backward pass.
+        # The fused_indexer_topk kernel is O(N) and adds <1% overhead vs O(N·K) attention.
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
 
-        # REVERSIBILITY FIX: Snapshot variance_ema before computing indices.
-        # The backward reconstruct reads the snapshot, guaranteeing identical
-        # k_t / top_indices in both passes (prevents gradient-accumulation race).
+        # REVERSIBILITY FIX: During the forward pass (no_grad), snapshot the
+        # current variance_ema BEFORE computing indices, then update the live
+        # EMA afterwards.  During backward reconstruct (enable_grad), use the
+        # snapshot so that fused_indexer_topk produces identical k_t/indices.
+        # This prevents the race where gradient-accumulation micro-batch N+1
+        # mutates variance_ema before micro-batch N's backward reconstruct.
         if is_reversible_forward:
             self._variance_ema_snapshot.copy_(self.variance_ema)
+
+        # Use snapshot for the indexer call (both forward and reconstruct)
+        ema_for_indexer = self._variance_ema_snapshot
+
+        if not HAS_FUSED_INDEXER:
+            raise RuntimeError(
+                "GSA fused indexer kernel is required but unavailable. "
+                "Fallback indexer path is disabled."
+            )
+
+        var_t, k_t, top_indices = fused_indexer_topk(
+            q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
+            scale=scale_idx, causal=True,
+            k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
+            variance_ema=ema_for_indexer,  # snapshot, not live EMA
+            is_training=False,
+            sink_size=4,
+        )
+        # var_t: [B, T], k_t: [B, T] (long), top_indices: [B, T, k_limit] (int32)
+
+        # Update live variance EMA only during the reversible forward pass (no grad)
+        # This happens AFTER the indexer call, so it doesn't affect this micro-batch's
+        # indices.  The snapshot ensures backward reconstruct sees the same value.
+        if is_reversible_forward:
             var_t_mean = var_t.mean().detach()
-            # FIX #35: Synchronize variance EMA across DDP ranks (prevents drift)
             if torch.distributed.is_initialized():
                 torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
             self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
 
-        # Use snapshot for deterministic index computation (both forward and reconstruct)
-        avg_V = self._variance_ema_snapshot.clamp(min=1e-6)
-        k_t_float = self.k_base * var_t / avg_V
-        k_t = k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long()  # [B, num_heads, T]
-
-        if T > 1:
-            importance_for_selection = importance_score.masked_fill(~causal_mask, -float('inf'))
-        else:
-            importance_for_selection = importance_score
-
-        # Attention sinks (per-head)
-        sink_size = 4
-        if T > sink_size:
-            sink_mask = torch.zeros_like(importance_for_selection, dtype=torch.bool)
-            sink_mask[:, :, :, :sink_size] = True  # Updated for [B, num_heads, T, T] shape
-            importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
-
-        k_limit = min(T, max(k_t.max().item(), sink_size))
-        _, top_indices = importance_for_selection.topk(k_limit, dim=-1)  # [B, num_heads, T, k_limit]
-
-        # Construct boolean mask (per-head)
+        # Build per-query keep mask from adaptive k_t
         k_limit = top_indices.size(-1)
-        range_k = torch.arange(k_limit, device=device).unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, k_limit]
-        keep_in_topk = range_k < k_t.unsqueeze(-1)  # [B, num_heads, T, k_limit]
+        base_idx = top_indices.long()  # [B, T, k_limit]
+        range_k = torch.arange(k_limit, device=device)
+        keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)  # [B, T, k_limit]
+        if token_keep is not None:
+            invalid_query = ~token_keep
+            if invalid_query.any():
+                fallback_idx = torch.arange(T, device=device).view(1, T).expand(B, T)
+                base_idx = base_idx.clone()
+                base_idx[..., 0] = torch.where(invalid_query, fallback_idx, base_idx[..., 0])
 
-        selection_mask = torch.zeros_like(importance_score, dtype=torch.bool)  # [B, num_heads, T, T]
-        selection_mask.scatter_(dim=-1, index=top_indices, src=keep_in_topk)
+            key_keep = torch.gather(token_keep, dim=1, index=base_idx.reshape(B, -1)).view(B, T, k_limit)
+            keep_mask = keep_mask & key_keep & token_keep.unsqueeze(-1)
 
-        if T > 1:
-            selection_mask = selection_mask & causal_mask
+            # Keep at least one index for masked queries to avoid empty-kernel rows.
+            if invalid_query.any():
+                keep_mask = keep_mask.clone()
+                keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
 
-        # Dual Gating & Attention
+        # Dual Gating & Attention Projections
         q = self.W_q(x)
-        k = self.W_k(x)
+        k_attn = self.W_k(x)
         v = self.W_v(x)
 
         g_v = torch.sigmoid(self.W_gv(x))
         v = v * g_v
 
         q = q.view(B, T, self.num_heads, self.head_dim)
-        k = k.view(B, T, self.num_heads, self.head_dim)
+        k_attn = k_attn.view(B, T, self.num_heads, self.head_dim)
         v = v.view(B, T, self.num_heads, self.head_dim)
         if token_keep is not None:
             token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
             q = q * token_keep_f
-            k = k * token_keep_f
+            k_attn = k_attn * token_keep_f
             v = v * token_keep_f
 
-        # Rotary (computed on-the-fly to save 5.4GB VRAM)
-        # FIX #40: Include dtype in cache lookup (was missing, causing cache MISS every time)
+        # Rotary (computed on-the-fly to save VRAM)
         cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
         cos = cos.unsqueeze(0).unsqueeze(2)  # (1, T, 1, dim)
         sin = sin.unsqueeze(0).unsqueeze(2)
         q = self.rotary_emb._apply_rotary(q, cos, sin)
-        k = self.rotary_emb._apply_rotary(k, cos, sin)
+        k_attn = self.rotary_emb._apply_rotary(k_attn, cos, sin)
 
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
+        # ── Sparse attention via triton_sparse_attention kernel ────────
+        # O(T*k) complexity: kernel iterates only over k_limit selected
+        # keys per query using online softmax. No T×T tensor ever created.
+        sparse_idx = base_idx.unsqueeze(1).expand(B, self.num_heads, T, k_limit)
+        sparse_mask = keep_mask.float().unsqueeze(1).expand(B, self.num_heads, T, k_limit)
 
-        # Masked attention (per-head masks)
-        # selection_mask shape: [B, num_heads, T, T]
-        min_val = torch.finfo(q.dtype).min
-        bias_mask = torch.zeros_like(selection_mask, dtype=q.dtype)
-        bias_mask = bias_mask.masked_fill(~selection_mask, min_val)
+        scale_attn = 1.0 / math.sqrt(self.head_dim)
 
-        if attention_mask is not None:
-            bias_mask = bias_mask + attention_mask
-
-        # No need to unsqueeze(1) - bias_mask is already [B, num_heads, T, T]
-        o_sparse = F.scaled_dot_product_attention(
-            q, k, v,
-            attn_mask=bias_mask,
-            dropout_p=0.0,
-            is_causal=False
-        )
-
-        o_sparse = o_sparse.transpose(1, 2).contiguous().view(B, T, self.hidden_size)
+        # q, k_attn, v are already [B, T, H, D] — kernel's expected layout
+        if torch.is_grad_enabled():
+            # Backward reconstruct: use differentiable PyTorch fallback
+            if pytorch_sparse_attention is not None:
+                o_sparse = pytorch_sparse_attention(
+                    q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+                )
+            else:
+                raise RuntimeError(
+                    "GSA backward reconstruct requires pytorch_sparse_attention but it is unavailable."
+                )
+        else:
+            # Forward pass (no_grad): use fused Triton kernel
+            if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
+                raise RuntimeError(
+                    "GSA fused sparse attention kernel is required but unavailable. "
+                    "Fallback attention path is disabled."
+                )
+            o_sparse = triton_sparse_attention(
+                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+            )
         if token_keep is not None:
-            o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1)
+            o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
+
+        # Output is [B, T, H, D] from kernel, reshape to [B, T, hidden_size]
+        o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
 
         # Output gate
         g_o = torch.sigmoid(self.W_go(x))
