@@ -1,0 +1,9 @@
+# Configuration for NVIDIA A100/P5 GPU
+batch_size: 2048
+num_threads: 16
+prefetch_buffer: 16
+sequence_length: 4096
+dtype: uint32
+notes: |
+  Optimized for A100/P5 (40GB+ VRAM, high throughput).
+  Larger batch and sequence length for maximum GPU utilization.
