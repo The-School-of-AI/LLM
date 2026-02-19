@@ -2,10 +2,9 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+from db import close_client
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from db import close_client
 from poller import poll_loop, runs_meta_loop
 from routes import checkpoints, metrics, runs, stream
 

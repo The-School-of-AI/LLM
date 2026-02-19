@@ -1,8 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Query
-
 from db import get_client
+from fastapi import APIRouter, Query
 
 router = APIRouter()
 
@@ -46,7 +45,11 @@ async def get_metrics(
         "run_id": run_id,
         "metric": metric,
         "points": [
-            [row[0], float(row[1]), row[2].timestamp() if hasattr(row[2], "timestamp") else float(row[2])]
+            [
+                row[0],
+                float(row[1]),
+                row[2].timestamp() if hasattr(row[2], "timestamp") else float(row[2]),
+            ]
             for row in result.result_rows
         ],
     }

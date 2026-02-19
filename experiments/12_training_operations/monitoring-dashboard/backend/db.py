@@ -1,7 +1,6 @@
-import urllib3
 import clickhouse_connect
+import urllib3
 from clickhouse_connect.driver.client import Client
-
 from config import settings
 
 # Suppress SSL verification warnings for self-signed certificates

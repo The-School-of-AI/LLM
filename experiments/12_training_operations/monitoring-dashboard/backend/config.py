@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     ch_host: str
@@ -14,7 +16,9 @@ class Settings(BaseSettings):
 
     # Pydantic settings config
     model_config = {
-        "env_file": Path("/home/ubuntu/monitoring-observability/.env"),  # loads .env from current working directory
+        "env_file": Path(
+            "/home/ubuntu/monitoring-observability/.env"
+        ),  # loads .env from current working directory
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "env_prefix": "",  # no prefix; use exact variable names

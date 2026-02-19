@@ -57,13 +57,15 @@ def _fetch_all_runs_meta() -> list[RunInfo]:
         start_ts = min_et.timestamp() if hasattr(min_et, "timestamp") else float(min_et)
         last_ts = max_et.timestamp() if hasattr(max_et, "timestamp") else float(max_et)
         is_active = (now_ts - last_ts) < 300  # active if data within 5 min
-        runs.append(RunInfo(
-            run_id=run_id,
-            start_time=start_ts,
-            last_event_time=last_ts,
-            latest_step=int(max_step),
-            is_active=is_active,
-        ))
+        runs.append(
+            RunInfo(
+                run_id=run_id,
+                start_time=start_ts,
+                last_event_time=last_ts,
+                latest_step=int(max_step),
+                is_active=is_active,
+            )
+        )
     return runs
 
 
@@ -88,10 +90,16 @@ def _poll_once() -> AllRuns:
             continue
         run_data: dict[str, list[Point]] = {}
         for metric, step, value, event_time in rows:
-            ts = event_time.timestamp() if hasattr(event_time, "timestamp") else float(event_time)
+            ts = (
+                event_time.timestamp()
+                if hasattr(event_time, "timestamp")
+                else float(event_time)
+            )
             if metric not in run_data:
                 run_data[metric] = []
-            run_data[metric].append(Point(step=int(step), value=float(value), timestamp=ts))
+            run_data[metric].append(
+                Point(step=int(step), value=float(value), timestamp=ts)
+            )
         new_points[run_id] = run_data
 
     _last_poll_time = now
