@@ -278,10 +278,7 @@ def _pytorch_sparse_attention_fallback(
     return out.view(B, H, T, D).permute(0, 2, 1, 3).contiguous()  # [B, T, H, D]
 
 
-if fused_indexer_topk is None:
-    fused_indexer_topk = _pytorch_fused_indexer_topk_fallback
-if pytorch_sparse_attention is None:
-    pytorch_sparse_attention = _pytorch_sparse_attention_fallback
+# Strict fused-only policy: do not auto-install PyTorch fallback kernels here.
 
 # ── Kernel availability diagnostics ──────────────────────────────────────────
 _kernel_log = logging.getLogger("recurrence_model_70b.kernels")
@@ -1075,6 +1072,9 @@ class GatedSparseAttention(nn.Module):
         self.gate_bias = nn.Parameter(torch.zeros(indexer_heads))
 
         self.register_buffer("variance_ema", torch.tensor(1.0))
+        # Snapshot consumed by reversible backward reconstruct to ensure
+        # indexer determinism across forward/recompute micro-batches.
+        self.register_buffer("_variance_ema_snapshot", torch.tensor(1.0))
         self.variance_alpha = 0.01
 
         # Attention Projections
@@ -1113,10 +1113,9 @@ class GatedSparseAttention(nn.Module):
             and triton_sparse_attention is not None
             and x.is_cuda
         )
-        if self.require_fused_kernel and not gsa_fused_available:
+        if not gsa_fused_available:
             raise RuntimeError(
-                "GSA fused kernels are required but unavailable. "
-                "Training is configured to disallow non-fused fallback. "
+                "GSA fused-only mode requires fused indexer + sparse attention kernels. "
                 f"fused_indexer_topk={HAS_FUSED_INDEXER}, "
                 f"triton_sparse_attention={triton_sparse_attention is not None}, "
                 f"x.is_cuda={x.is_cuda}."
@@ -1130,6 +1129,17 @@ class GatedSparseAttention(nn.Module):
 
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
 
+        # Keep indexer deterministic between reversible forward/reconstruct.
+        if is_reversible_forward:
+            self._variance_ema_snapshot.copy_(self.variance_ema)
+        ema_for_indexer = self._variance_ema_snapshot
+
+        if not HAS_FUSED_INDEXER:
+            raise RuntimeError(
+                "GSA fused indexer kernel is required but unavailable. "
+                "Fallback indexer path is disabled."
+            )
+
         var_t, k_t, top_indices = fused_indexer_topk(
             q=q_I,
             k=k_I,
@@ -1140,7 +1150,7 @@ class GatedSparseAttention(nn.Module):
             k_base=self.k_base,
             k_min=self.k_min,
             k_max=self.k_max,
-            variance_ema=self.variance_ema,
+            variance_ema=ema_for_indexer,
             is_training=False,
             sink_size=4,
         )
@@ -1179,20 +1189,20 @@ class GatedSparseAttention(nn.Module):
         sparse_mask = keep_mask.float().unsqueeze(1).expand(B, self.num_heads, T, k_limit)
         scale_attn = 1.0 / math.sqrt(self.head_dim)
 
-        # IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
-        # autograd, which breaks the reversible midpoint backward recompute.
-        if (not torch.is_grad_enabled()) and HAS_TRITON and triton_sparse_attention is not None and q.is_cuda:
-            o_sparse = triton_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn
+        # Strict fused-only policy: no autograd fallback through PyTorch sparse path.
+        if torch.is_grad_enabled():
+            raise RuntimeError(
+                "GSA fused-only mode does not permit PyTorch fallback in grad-enabled execution. "
+                "Provide an autograd-capable fused sparse attention kernel."
             )
-        else:
-            if self.require_fused_kernel and not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
-                raise RuntimeError(
-                    "GSA fused sparse attention kernel execution failed and fallback is disabled."
-                )
-            o_sparse = pytorch_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn
+        if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
+            raise RuntimeError(
+                "GSA fused sparse attention kernel is required but unavailable. "
+                "Fallback attention path is disabled."
             )
+        o_sparse = triton_sparse_attention(
+            q, k_attn, v, sparse_idx, sparse_mask, scale_attn
+        )
 
         o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
 
@@ -1878,7 +1888,7 @@ class Model70B(nn.Module):
         self.layer_types = layer_types
 
         # Reversible Midpoint Integration
-        from reversible_ops_midpoint import ReversibleMidpointStack
+        from .reversible_ops_midpoint import ReversibleMidpointStack
         self.stack = ReversibleMidpointStack(
             self.layers,
             step_size=0.25,
