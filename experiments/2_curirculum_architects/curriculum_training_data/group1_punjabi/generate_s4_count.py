@@ -15,7 +15,8 @@ from prompt_utils import format_qa_pair_hindi
 
 
 def get_punjabi_grapheme_clusters(word: str) -> list[str]:
-    return regex.findall(r"\X", word)
+    # Skip spaces in count
+    return [c for c in regex.findall(r"\X", word) if not c.isspace()]
 
 
 TEMPLATES = [

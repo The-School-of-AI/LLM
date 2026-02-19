@@ -621,18 +621,23 @@ RHYMING_PAIRS = {
 # Combine all lists while preserving uniqueness
 ALL_WORDS_UNIQUE = list(
     set(
-        ANIMALS
-        + OBJECTS
-        + BODY_PARTS
-        + COLORS
-        + NATURE
-        + PEOPLE
-        + FOOD
-        + ABSTRACT
-        + DAYS
-        + MONTHS
-        + MONTHS_NANAKSHAHI
-        + list(NUMBERS_1_100.values())
+        [
+            w.strip()
+            for w in (
+                ANIMALS
+                + OBJECTS
+                + BODY_PARTS
+                + COLORS
+                + NATURE
+                + PEOPLE
+                + FOOD
+                + ABSTRACT
+                + DAYS
+                + MONTHS
+                + MONTHS_NANAKSHAHI
+                + list(NUMBERS_1_100.values())
+            )
+        ]
     )
 )
 

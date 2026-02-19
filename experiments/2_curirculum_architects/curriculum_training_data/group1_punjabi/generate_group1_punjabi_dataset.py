@@ -61,6 +61,9 @@ def load_qa_pairs_from_file(filepath: str) -> list[tuple[str, str]]:
                         answer = answer_part.split("।", 1)[0].strip()
                     else:
                         answer = answer_part.strip()
+                    if not answer:
+                        print(f"Warning: Skipping empty answer for query: {query}")
+                        continue
                     qa_pairs.append((query, answer))
 
     return qa_pairs

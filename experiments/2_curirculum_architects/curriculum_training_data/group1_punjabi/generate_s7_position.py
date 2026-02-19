@@ -16,7 +16,8 @@ from prompt_utils import format_qa_pair_hindi
 
 
 def get_punjabi_grapheme_clusters(word: str) -> list[str]:
-    return regex.findall(r"\X", word)
+    # Return clusters, skipping internal spaces
+    return [c for c in regex.findall(r"\X", word) if not c.isspace()]
 
 
 POSITIONS_ANS = [
