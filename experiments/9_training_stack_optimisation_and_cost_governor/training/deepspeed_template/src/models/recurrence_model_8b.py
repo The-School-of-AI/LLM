@@ -1213,26 +1213,20 @@ class GatedSparseAttention(nn.Module):
         scale_attn = 1.0 / math.sqrt(self.head_dim)
 
         # q, k_attn, v are already [B, T, H, D] — kernel's expected layout
+        # Strict fused-only policy: no autograd fallback through PyTorch sparse path.
         if torch.is_grad_enabled():
-            # Backward reconstruct: use differentiable PyTorch fallback
-            if pytorch_sparse_attention is not None:
-                o_sparse = pytorch_sparse_attention(
-                    q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
-                )
-            else:
-                raise RuntimeError(
-                    "GSA backward reconstruct requires pytorch_sparse_attention but it is unavailable."
-                )
-        else:
-            # Forward pass (no_grad): use fused Triton kernel
-            if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
-                raise RuntimeError(
-                    "GSA fused sparse attention kernel is required but unavailable. "
-                    "Fallback attention path is disabled."
-                )
-            o_sparse = triton_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+            raise RuntimeError(
+                "GSA fused-only mode does not permit PyTorch fallback in grad-enabled execution. "
+                "Provide an autograd-capable fused sparse attention kernel."
             )
+        if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
+            raise RuntimeError(
+                "GSA fused sparse attention kernel is required but unavailable. "
+                "Fallback attention path is disabled."
+            )
+        o_sparse = triton_sparse_attention(
+            q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        )
         if token_keep is not None:
             o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
 
