@@ -213,6 +213,59 @@ liger_silu_mul = _liger_module.liger_silu_mul
 # from kronecker_se_decoder import PFConfig, PFCodec
 
 
+def _token_keep_mask(
+    attention_mask: Optional[torch.Tensor],
+    batch_size: int,
+    seq_len: int,
+    device: torch.device,
+) -> Optional[torch.Tensor]:
+    """Normalize attention masks to a boolean keep-mask of shape [B, T]."""
+    if attention_mask is None:
+        return None
+
+    mask = attention_mask
+    if mask.dim() == 2:
+        pass
+    elif mask.dim() == 3 and mask.size(1) == 1:
+        mask = mask[:, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == 1:
+        mask = mask[:, 0, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == seq_len:
+        # Convert [B, 1, T, T] to [B, T] key-validity.
+        mask = mask[:, 0, :, :]
+        if mask.dtype == torch.bool:
+            mask = mask.any(dim=1)
+        elif torch.is_floating_point(mask):
+            if torch.any(mask < 0):
+                mask = (mask.max(dim=1).values >= 0)
+            else:
+                mask = (mask.max(dim=1).values > 0)
+        else:
+            mask = (mask.max(dim=1).values > 0)
+    else:
+        raise ValueError(
+            f"Unsupported attention_mask shape {tuple(mask.shape)}. "
+            "Expected [B,T], [B,1,T], [B,1,1,T], or [B,1,T,T]."
+        )
+
+    if mask.shape != (batch_size, seq_len):
+        raise ValueError(
+            f"attention_mask shape {tuple(mask.shape)} does not match expected {(batch_size, seq_len)}."
+        )
+
+    if mask.dtype == torch.bool:
+        keep = mask
+    elif torch.is_floating_point(mask):
+        if torch.any(mask < 0):
+            keep = mask >= 0
+        else:
+            keep = mask > 0
+    else:
+        keep = mask > 0
+
+    return keep.to(device=device, dtype=torch.bool)
+
+
 # ============================================================================
 # Kronecker Product Embeddings (formerly PFCodec)
 # ============================================================================
@@ -823,6 +876,8 @@ class GatedDeltaNet(nn.Module):
         """
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
+        token_keep_f = None
 
         # 1. Project to Q, K, V, G
         q = self.q_proj(x)  # (B, T, num_heads * head_dim)
@@ -866,6 +921,17 @@ class GatedDeltaNet(nn.Module):
         alpha = -A.view(1, 1, self.num_heads, 1) * F.softplus(gk + self.dt_bias).unsqueeze(-1)
         # Map negative values to (0, 1) range using exp - CRITICAL for 256k retention
         alpha = torch.exp(alpha)  # (B, T, num_heads, 1) - full (0,1) range, not (0,0.5)
+
+        # Respect token padding/control mask in recurrent state updates:
+        # masked tokens do not write or decay state (beta=0, alpha=1).
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k = k * token_keep_f
+            v = v * token_keep_f
+            g = g * token_keep_f
+            beta = beta * token_keep_f
+            alpha = alpha * token_keep_f + (1.0 - token_keep_f)
 
         # 8. Gated Delta Rule with decay (Paper Equation 10)
         # St = St-1 * (alpha * (I - beta * k * k^T)) + beta * v * k^T
@@ -943,6 +1009,9 @@ class GatedDeltaNet(nn.Module):
         else:
             o = o * torch.sigmoid(g)
 
+        if token_keep_f is not None:
+            o = o * token_keep_f
+
         # 11. Reshape and project to output
         o = o.reshape(B, T, self.num_heads * self.head_dim)
         return self.o_proj(o)
@@ -1001,6 +1070,7 @@ class GatedSparseAttention(nn.Module):
         self.head_importance_bias = nn.Parameter(torch.zeros(num_heads))
 
         self.register_buffer("variance_ema", torch.tensor(1.0))
+        self.register_buffer("_variance_ema_snapshot", torch.tensor(1.0))
         self.variance_alpha = 0.01
 
         # Attention Projections
@@ -1032,6 +1102,7 @@ class GatedSparseAttention(nn.Module):
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
 
         # Lightning Indexer (FIXED: Per-head keys for diverse selection patterns)
         q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # (B, T, 4, 32)
@@ -1078,46 +1149,41 @@ class GatedSparseAttention(nn.Module):
         # importance_score_masked shape: [B, num_heads, T, T]
         var_t = importance_score_masked.var(dim=-1, unbiased=False)  # [B, num_heads, T]
 
-        # KNOWN LIMITATION (Fix #31 TODO): Reversible caching via module state
-        # _saved_selection stored on module is fragile under DDP/torch.compile/microbatching
-        # Production refactor: Move to reversible stack bookkeeping keyed by microbatch ID
-        # Current status: Works for single-GPU training, may have issues in complex setups
+        # REVERSIBILITY NOTE: Previous approach used _saved_selection (module attribute)
+        # which was fragile under DDP/torch.compile/microbatching.
+        # Now uses _variance_ema_snapshot (registered buffer) — deterministic recomputation.
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = self.training and torch.is_grad_enabled() and getattr(self, "_saved_selection", None) is not None
 
+        # REVERSIBILITY FIX: Snapshot variance_ema before computing indices.
+        # The backward reconstruct reads the snapshot, guaranteeing identical
+        # k_t / top_indices in both passes (prevents gradient-accumulation race).
         if is_reversible_forward:
+            self._variance_ema_snapshot.copy_(self.variance_ema)
             var_t_mean = var_t.mean().detach()
             # FIX #35: Synchronize variance EMA across DDP ranks (prevents drift)
             if torch.distributed.is_initialized():
                 torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
             self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
 
-        if is_reversible_reconstruct:
-            k_t, top_indices = self._saved_selection
-            self._saved_selection = None
-            avg_V = self.variance_ema.clamp(min=1e-6)
+        # Use snapshot for deterministic index computation (both forward and reconstruct)
+        avg_V = self._variance_ema_snapshot.clamp(min=1e-6)
+        k_t_float = self.k_base * var_t / avg_V
+        k_t = k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long()  # [B, num_heads, T]
+
+        if T > 1:
+            importance_for_selection = importance_score.masked_fill(~causal_mask, -float('inf'))
         else:
-            avg_V = self.variance_ema.clamp(min=1e-6)
-            k_t_float = self.k_base * var_t / avg_V
-            k_t = k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long()  # [B, num_heads, T]
+            importance_for_selection = importance_score
 
-            if T > 1:
-                importance_for_selection = importance_score.masked_fill(~causal_mask, -float('inf'))
-            else:
-                importance_for_selection = importance_score
+        # Attention sinks (per-head)
+        sink_size = 4
+        if T > sink_size:
+            sink_mask = torch.zeros_like(importance_for_selection, dtype=torch.bool)
+            sink_mask[:, :, :, :sink_size] = True  # Updated for [B, num_heads, T, T] shape
+            importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
 
-            # Attention sinks (per-head)
-            sink_size = 4
-            if T > sink_size:
-                sink_mask = torch.zeros_like(importance_for_selection, dtype=torch.bool)
-                sink_mask[:, :, :, :sink_size] = True  # Updated for [B, num_heads, T, T] shape
-                importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
-
-            k_limit = min(T, max(k_t.max().item(), sink_size))
-            _, top_indices = importance_for_selection.topk(k_limit, dim=-1)  # [B, num_heads, T, k_limit]
-
-            if is_reversible_forward:
-                self._saved_selection = (k_t, top_indices)
+        k_limit = min(T, max(k_t.max().item(), sink_size))
+        _, top_indices = importance_for_selection.topk(k_limit, dim=-1)  # [B, num_heads, T, k_limit]
 
         # Construct boolean mask (per-head)
         k_limit = top_indices.size(-1)
@@ -1141,6 +1207,11 @@ class GatedSparseAttention(nn.Module):
         q = q.view(B, T, self.num_heads, self.head_dim)
         k = k.view(B, T, self.num_heads, self.head_dim)
         v = v.view(B, T, self.num_heads, self.head_dim)
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k = k * token_keep_f
+            v = v * token_keep_f
 
         # Rotary (computed on-the-fly to save 5.4GB VRAM)
         # FIX #40: Include dtype in cache lookup (was missing, causing cache MISS every time)
@@ -1172,6 +1243,8 @@ class GatedSparseAttention(nn.Module):
         )
 
         o_sparse = o_sparse.transpose(1, 2).contiguous().view(B, T, self.hidden_size)
+        if token_keep is not None:
+            o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1)
 
         # Output gate
         g_o = torch.sigmoid(self.W_go(x))
@@ -1985,7 +2058,8 @@ class Model8B(nn.Module):
             x_stream = x_stream + mem_val * one_hot.view(1, 1, self.n_streams, 1)
 
         # Pass through reversible stack
-        x_stream, total_aux_loss = self.stack(x_stream)
+        token_keep_mask = _token_keep_mask(attention_mask, batch_size, seq_len, input_ids.device)
+        x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
 
 
         # ============================================================================
@@ -2021,7 +2095,8 @@ class Model8B(nn.Module):
             else:
                 next_emb = self.token_embed(next_ids_use)
 
-            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=None)
+            mtp_attention_mask = token_keep_mask[:, :min_len] if token_keep_mask is not None else None
+            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
             if mtp_targets is not None:
                 logits_mtp = self._fused_linear_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
