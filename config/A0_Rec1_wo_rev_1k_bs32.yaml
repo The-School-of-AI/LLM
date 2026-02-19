@@ -1,0 +1,59 @@
+# A0 lead-aligned non-reversible run (1000 steps), global BS=32, seq 512
+# Model: recurrence_model_1b_wo_rev.py (lead_wo_rev)
+# Run:
+#   deepspeed --num_gpus=8 main.py --config experiments/configs/A0_lead_wo_rev_1k_bs32.yaml
+
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-103-raw-v1"
+  tokenize_num_proc: 8
+  max_length: 512
+  num_workers: 16
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes: [512]
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+
+training:
+  num_epochs: 1
+  max_train_steps: 1000
+  max_eval_steps: null
+  log_interval: 10
+  seed: 42
+  require_fused_kernels: false
+  metrics_jsonl_path: "experiments/runs/A0_lead_wo_rev_1k_bs32/metrics.jsonl"
+
+deepspeed:
+  config_path: "experiments/deepspeed/zero-2-dense-bf16-1000steps-bs32.json"
+  local_rank: -1
+
+model:
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"
+  embedding_type: "standard"
+  model_variant: "lead_wo_rev"
+  require_fused_deltanet_kernel: false
+
+checkpoint:
+  output_dir: "experiments/runs/A0_lead_wo_rev_1k_bs32/checkpoints"
+  save_checkpoint: true
+  checkpoint_interval: 250
+  keep_last_n_checkpoints: 2
+  resume_from_checkpoint: null
+  resume_step: null
+
+s3:
+  enabled: false
+  bucket: null
+  prefix: "training/checkpoints"
+  region: "us-east-1"
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: "The history of artificial intelligence begins with"
