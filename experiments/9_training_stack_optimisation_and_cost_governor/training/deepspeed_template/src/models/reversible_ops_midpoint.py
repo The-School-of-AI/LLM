@@ -13,14 +13,14 @@ class _ForceWrapper(nn.Module):
         super().__init__()
         self.layer = layer
 
-    def forward(self, x):
+    def forward(self, x, attention_mask=None):
         # must return (delta, aux)
-        return self.layer.force(x)
+        return self.layer.force(x, attention_mask=attention_mask)
 
 
 class MidpointFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, p_prev, p_cur, two_h, a, module, param_keys, buffer_keys, *flat_tensors):
+    def forward(ctx, p_prev, p_cur, attention_mask, two_h, a, module, param_keys, buffer_keys, *flat_tensors):
         """
         Implements generalized reversible midpoint:
             p_next = a*p_prev + (1-a)*p_cur + two_h * f(p_cur)
@@ -44,9 +44,10 @@ class MidpointFunction(torch.autograd.Function):
         ctx.param_keys = param_keys
         ctx.buffer_keys = buffer_keys
         ctx.n_params = n_params
+        ctx.attention_mask = attention_mask
 
         with torch.no_grad():
-            delta, aux = functional_call(module, (params, buffers), (p_cur,), tie_weights=True)
+            delta, aux = functional_call(module, (params, buffers), (p_cur, attention_mask), tie_weights=True)
             p_next = (ctx.a * p_prev) + ((1.0 - ctx.a) * p_cur) + (ctx.two_h * delta)
 
         return p_next, aux
@@ -78,7 +79,12 @@ class MidpointFunction(torch.autograd.Function):
             param_req = [t.detach().requires_grad_(True) for t in param_tensors]
             params_req = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_req)}
 
-            delta, aux = functional_call(ctx.module, (params_req, buffers), (p_cur_req,), tie_weights=True)
+            delta, aux = functional_call(
+                ctx.module,
+                (params_req, buffers),
+                (p_cur_req, ctx.attention_mask),
+                tie_weights=True,
+            )
 
             if grad_aux is None:
                 # aux may be scalar or tensor
@@ -113,8 +119,9 @@ class MidpointFunction(torch.autograd.Function):
         grad_params = grads[1:]
         grad_params = [g if g is not None else torch.zeros_like(t) for g, t in zip(grad_params, param_tensors)]
 
-        # Return grads for (p_prev, p_cur, two_h, a, module, param_keys, buffer_keys, *flat_tensors)
+        # Return grads for (p_prev, p_cur, attention_mask, two_h, a, module, param_keys, buffer_keys, *flat_tensors)
         # Non-tensor args -> None
+        grad_attention_mask = None
         grad_two_h = None
         grad_a = None
         grad_module = None
@@ -124,7 +131,18 @@ class MidpointFunction(torch.autograd.Function):
         # buffers are non-diff
         grad_buffers = (None,) * len(ctx.buffer_keys)
 
-        return (grad_p_prev, grad_p_cur, grad_two_h, grad_a, grad_module, grad_param_keys, grad_buffer_keys, *grad_params, *grad_buffers)
+        return (
+            grad_p_prev,
+            grad_p_cur,
+            grad_attention_mask,
+            grad_two_h,
+            grad_a,
+            grad_module,
+            grad_param_keys,
+            grad_buffer_keys,
+            *grad_params,
+            *grad_buffers,
+        )
 
 
 class MidpointBlock(nn.Module):
@@ -141,12 +159,13 @@ class MidpointBlock(nn.Module):
         self.param_keys = list(dict(block.named_parameters()).keys())
         self.buffer_keys = list(dict(block.named_buffers()).keys())
 
-    def forward(self, p_prev, p_cur):
+    def forward(self, p_prev, p_cur, attention_mask=None):
         param_values = [p for p in self.block.parameters()]
         buffer_values = [b for b in self.block.buffers()]
         return MidpointFunction.apply(
             p_prev,
             p_cur,
+            attention_mask,
             self.two_h,
             self.a,
             self.wrapper,
@@ -192,21 +211,31 @@ class ReversibleMidpointStack(nn.Module):
 
         self.step_count = 0
 
-    def forward(self, x):
+    def forward(self, x, attention_mask=None):
         # Bootstrap creates two states (p_prev, p_cur)
         p_prev = x
 
         if self.bootstrap == "no_kick":
             # Baseline-aligned start: p_cur = p_prev (no Euler kick)
             p_cur = p_prev
-            delta0, aux0 = grad_checkpoint(
-                self.bootstrap_layer.force, p_cur, use_reentrant=False
-            )
+            if attention_mask is None:
+                delta0, aux0 = grad_checkpoint(
+                    self.bootstrap_layer.force, p_cur, use_reentrant=False
+                )
+            else:
+                delta0, aux0 = grad_checkpoint(
+                    self.bootstrap_layer.force, p_cur, attention_mask, use_reentrant=False
+                )
         else:
             # HALF-STEP Euler bootstrap (paper-consistent + stable for h=0.25, a=0.5)
-            delta0, aux0 = grad_checkpoint(
-                self.bootstrap_layer.force, p_prev, use_reentrant=False
-            )
+            if attention_mask is None:
+                delta0, aux0 = grad_checkpoint(
+                    self.bootstrap_layer.force, p_prev, use_reentrant=False
+                )
+            else:
+                delta0, aux0 = grad_checkpoint(
+                    self.bootstrap_layer.force, p_prev, attention_mask, use_reentrant=False
+                )
             if self.training and self.noise_eps > 0:
                 delta0 = delta0 + self.noise_eps * torch.randn_like(delta0)
 
@@ -217,7 +246,7 @@ class ReversibleMidpointStack(nn.Module):
 
         # Midpoint / leapfrog recurrence
         for layer in self.mid_layers:
-            p_next, aux = layer(p_prev, p_cur)
+            p_next, aux = layer(p_prev, p_cur, attention_mask=attention_mask)
             if aux is not None:
                 total_aux = total_aux + aux
             p_prev, p_cur = p_cur, p_next

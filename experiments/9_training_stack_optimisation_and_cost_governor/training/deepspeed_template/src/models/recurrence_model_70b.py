@@ -301,6 +301,59 @@ if not _cuda_available:
     _kernel_log.info("  NOTE: All Triton/fla kernels require CUDA. Running on MPS/CPU uses PyTorch fallbacks.")
 _kernel_log.info("=" * 60)
 
+
+def _token_keep_mask(
+    attention_mask: Optional[torch.Tensor],
+    batch_size: int,
+    seq_len: int,
+    device: torch.device,
+) -> Optional[torch.Tensor]:
+    """Normalize attention masks to a boolean keep-mask of shape [B, T]."""
+    if attention_mask is None:
+        return None
+
+    mask = attention_mask
+    if mask.dim() == 2:
+        pass
+    elif mask.dim() == 3 and mask.size(1) == 1:
+        mask = mask[:, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == 1:
+        mask = mask[:, 0, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == seq_len:
+        # Convert [B, 1, T, T] to [B, T] key-validity.
+        mask = mask[:, 0, :, :]
+        if mask.dtype == torch.bool:
+            mask = mask.any(dim=1)
+        elif torch.is_floating_point(mask):
+            if torch.any(mask < 0):
+                mask = (mask.max(dim=1).values >= 0)
+            else:
+                mask = (mask.max(dim=1).values > 0)
+        else:
+            mask = (mask.max(dim=1).values > 0)
+    else:
+        raise ValueError(
+            f"Unsupported attention_mask shape {tuple(mask.shape)}. "
+            "Expected [B,T], [B,1,T], [B,1,1,T], or [B,1,T,T]."
+        )
+
+    if mask.shape != (batch_size, seq_len):
+        raise ValueError(
+            f"attention_mask shape {tuple(mask.shape)} does not match expected {(batch_size, seq_len)}."
+        )
+
+    if mask.dtype == torch.bool:
+        keep = mask
+    elif torch.is_floating_point(mask):
+        if torch.any(mask < 0):
+            keep = mask >= 0
+        else:
+            keep = mask > 0
+    else:
+        keep = mask > 0
+
+    return keep.to(device=device, dtype=torch.bool)
+
 # Note: Importing for backwards compatibility - we define KroneckerEmbeddings inline
 # from kronecker_se_decoder import PFConfig, PFCodec
 
@@ -933,6 +986,8 @@ class GatedDeltaNet(nn.Module):
         """
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
+        token_keep_f = None
 
         # 1. Project to Q, K, V, G
         q = self.q_proj(x)  # (B, T, num_heads * head_dim)
@@ -976,6 +1031,17 @@ class GatedDeltaNet(nn.Module):
         alpha = -A.view(1, 1, self.num_heads, 1) * F.softplus(gk + self.dt_bias).unsqueeze(-1)
         # Map negative values to (0, 1) range using exp - CRITICAL for 256k retention
         alpha = torch.exp(alpha)  # (B, T, num_heads, 1) - full (0,1) range, not (0,0.5)
+
+        # Respect token padding/control mask in recurrent state updates:
+        # masked tokens do not write or decay state (beta=0, alpha=1).
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k = k * token_keep_f
+            v = v * token_keep_f
+            g = g * token_keep_f
+            beta = beta * token_keep_f
+            alpha = alpha * token_keep_f + (1.0 - token_keep_f)
 
         # 8. Gated Delta Rule with decay (Paper Equation 10)
         # St = St-1 * (alpha * (I - beta * k * k^T)) + beta * v * k^T
@@ -1025,6 +1091,9 @@ class GatedDeltaNet(nn.Module):
             o = o_normed.view(B, T, self.num_heads, self.head_dim)
         else:
             o = o * torch.sigmoid(g)
+
+        if token_keep_f is not None:
+            o = o * token_keep_f
 
         # 10. Reshape and project to output
         o = o.reshape(B, T, self.num_heads * self.head_dim)
@@ -1107,6 +1176,7 @@ class GatedSparseAttention(nn.Module):
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
 
         gsa_fused_available = (
             HAS_FUSED_INDEXER
@@ -1166,6 +1236,20 @@ class GatedSparseAttention(nn.Module):
         base_idx = top_indices.long()
         range_k = torch.arange(k_limit, device=device)
         keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)
+        if token_keep is not None:
+            invalid_query = ~token_keep
+            if invalid_query.any():
+                fallback_idx = torch.arange(T, device=device).view(1, T).expand(B, T)
+                base_idx = base_idx.clone()
+                base_idx[..., 0] = torch.where(invalid_query, fallback_idx, base_idx[..., 0])
+
+            key_keep = torch.gather(token_keep, dim=1, index=base_idx.reshape(B, -1)).view(B, T, k_limit)
+            keep_mask = keep_mask & key_keep & token_keep.unsqueeze(-1)
+
+            # Keep at least one index for masked queries to avoid empty-kernel rows.
+            if invalid_query.any():
+                keep_mask = keep_mask.clone()
+                keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
 
         # Dual Gating & Attention Projections
         q = self.W_q(x)
@@ -1178,6 +1262,11 @@ class GatedSparseAttention(nn.Module):
         q = q.view(B, T, self.num_heads, self.head_dim)
         k_attn = k_attn.view(B, T, self.num_heads, self.head_dim)
         v = v.view(B, T, self.num_heads, self.head_dim)
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k_attn = k_attn * token_keep_f
+            v = v * token_keep_f
 
         cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
         cos = cos.unsqueeze(0).unsqueeze(2)
@@ -1203,6 +1292,8 @@ class GatedSparseAttention(nn.Module):
         o_sparse = triton_sparse_attention(
             q, k_attn, v, sparse_idx, sparse_mask, scale_attn
         )
+        if token_keep is not None:
+            o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
 
         o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
 
@@ -1675,9 +1766,9 @@ class LightningDecoderLayer(nn.Module):
             iters=config.sinkhorn_iters,
         )
 
-    def force(self, x):
+    def force(self, x, attention_mask=None):
         """Compute residual delta for reversible integration."""
-        h, aux1 = self.attn_block(x, attention_mask=None)
+        h, aux1 = self.attn_block(x, attention_mask=attention_mask)
         out, aux2 = self.mlp_block(h, attention_mask=None)
 
         delta = out - x
@@ -2029,6 +2120,7 @@ class Model70B(nn.Module):
             - aux_loss: Scalar tensor (if return_loss=True)
         """
         batch_size, seq_len = input_ids.size()
+        token_keep_mask = _token_keep_mask(attention_mask, batch_size, seq_len, input_ids.device)
 
         # Embeddings
         if self.use_kronecker:
@@ -2096,7 +2188,7 @@ class Model70B(nn.Module):
             x_stream = x_stream + mem_val * one_hot.view(1, 1, self.n_streams, 1)
 
         # Pass through reversible stack
-        x_stream, total_aux_loss = self.stack(x_stream)
+        x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
 
 
         # ============================================================================
@@ -2131,7 +2223,8 @@ class Model70B(nn.Module):
             else:
                 next_emb = self.token_embed(next_ids_use)
 
-            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=None)
+            mtp_attention_mask = token_keep_mask[:, :min_len] if token_keep_mask is not None else None
+            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
             if mtp_targets is not None:
                 logits_mtp = self._chunked_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
