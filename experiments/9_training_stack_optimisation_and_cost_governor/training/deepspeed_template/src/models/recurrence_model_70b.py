@@ -1,11 +1,11 @@
 """
-1B Dense Baseline Model with Hybrid Gated DeltaNet + Gated Sparse Attention (GSA)
+70B Full-Scale MoE Model with Hybrid Gated DeltaNet + Gated Sparse Attention (GSA)
 
 Configuration:
-- 1.513B total parameters, 1.513B active parameters (100% dense - no MoE)
+- 69.875B total parameters, 4.079B active parameters (17.1× sparsity)
 - 131,072 vocabulary (2^17)
-- 4096 hidden size, 8 layers (6 DeltaNet + 2 GSA)
-- No experts - Dense FFN with 2048 intermediate size
+- 4096 hidden size, 20 layers (15 DeltaNet + 5 GSA)
+- 254 real experts + 254 null experts = 508 slots, top-k=10 dynamic (avg 5)
 - Multi-Token Prediction (MTP) with 2 predictions
 - Multi-Head Composition (mHC) with 4 streams
 - Reversible Midpoint Integration for memory efficiency
@@ -16,34 +16,34 @@ Architecture based on:
 - Gated DeltaNet: arXiv:2412.06464 (Dec 2024)
 - Gated Sparse Attention: arXiv:2601.15305v1 (Jan 2026)
 - Multi-Token Prediction: DeepSeek-V3 style
+- Null Experts: Data sparsity ρ=0.5
 
-Purpose: Foundation baseline before introducing MoE. All parameters are active.
+Purpose: Maximum capacity with 254 experts and deep architecture for production use.
 
 ⚠️  PRODUCTION STATUS: Research code - Path to production, ready for testing
 =============================================================================
 Current validation: 2k-8k sequence lengths
-256k context requires: Custom Triton kernels (GSA block-sparse + DeltaNet parallel scan)
-Status: Architectural fixes complete, ready for testing phase before kernel optimization
+256k context requires: Long-context benchmarking and production profiling/tuning
+Status: Fused-kernel paths integrated for DeltaNet/GSA; MoE dispatch vectorized
 
 CHANGELOG - Critical Bug Fixes and Optimizations:
 =================================================
 1. FIXED: Duplicate RMSNorm class definition removed (was overriding first definition)
-2. REPLACED: YARN RoPE replaced with standard RoPE (Su et al. 2021)
-   - Removed NTK scaling, mscale frequency-band interpolation, beta_fast/beta_slow params
-   - Standard inv_freq = 1 / (base ** (2i/dim)); clean on-the-fly cos/sin computation
-   - rope_original_max_position and rope_scaling_factor removed from ModelConfig
+2. FIXED: YARN beta_fast/beta_slow inversion corrected (was 32/1, now 1/32)
+   - This critical bug was destroying DeltaNet's ability to distinguish local token order
+   - High frequencies now preserved (scale ~1.0), low frequencies interpolated (scale ~32.0)
 3. FIXED: MTP block now uses GatedSparseAttention instead of GatedDeltaNet
    - MTP runs once per step, so full attention cost is negligible but gradient quality is critical
 4. FIXED: Removed dead memory injection code from MTPTransformerBlock.forward()
    - Was referencing undefined variables (prev_memory_stream, self.memory_ln, etc.)
-   - Memory injection only happens in main Model1B.forward()
+   - Memory injection only happens in main Model70B.forward()
 5. OPTIMIZED: RoPE now computes cos/sin on-the-fly instead of caching
-   - Saves VRAM (268MB per layer × 8 layers = 2.1GB for 1B model)
+   - Saves 5.4GB VRAM (268MB per layer × 20 layers)
    - Only 5-10% slower, critical for 256k context training where VRAM is precious
-6. FIXED: GSA O(T²) memory bomb eliminated via fused_indexer_topk kernel integration
-   - Replaced matmul(q_I_p, k_I_p) → [B, heads, T, T] with chunked O(T·k) kernel
-   - W_Ik changed from per-head to shared keys (matches kernel interface)
-   - head_importance_bias relocated from importance score modulation to attention logit bias
+6. ADDED: Fused-kernel execution paths for production use
+   - DeltaNet uses fla fused kernel path with fail-fast guard (no silent fallback)
+   - GSA uses fused indexer + sparse attention kernel path (O(T·k))
+7. OPTIMIZED: MoE dispatch path vectorized with batched expert GEMMs (no Python expert loop)
 
 See inline comments at each fix location for detailed explanations.
 
@@ -53,44 +53,25 @@ See inline comments at each fix location for detailed explanations.
 
 Before deploying this model at 256k context, the following MUST be addressed:
 
-1. ✅ DONE: Triton Kernels for GSA (fused_indexer_topk)
+1. ✅ DONE: Fused sparse-kernel path for GSA
    ────────────────────────────────────────────────
    Location: GatedSparseAttention class
-   Solution: Integrated fused_indexer_topk from kernels/triton_indexer_streaming.py
-   - Processes importance scores in [B, C, T] chunks (C auto-tuned to ~512MB)
-   - Never materializes [B, T, T] score tensor
-   - Achieves O(T·k) memory complexity
-   - W_Ik changed to shared keys (was per-head, now matches kernel interface)
-   - head_importance_bias relocated to attention logit bias
+   Status: Uses fused indexer (`fused_indexer_topk`) + sparse attention kernel path.
 
-   Status: COMPLETED
-
-2. ⚡ MANDATORY: Implement Triton Kernel for DeltaNet Recurrence
+2. ✅ DONE: Fused kernel path for DeltaNet recurrence
    ────────────────────────────────────────────────────────────────
-   Location: GatedDeltaNet class forward() Python loop (lines 680-709)
-   Problem: Python for-loop over T tokens causes catastrophic kernel launch overhead
-   Impact: At 256k context → 2.6-13 seconds of PURE overhead (500-2000x slower than needed)
+   Location: GatedDeltaNet class
+   Status: Uses fla fused delta-rule kernel with fail-fast guard when unavailable.
 
-   Solution:
-   - Implement fused Triton kernel for parallel associative scan
-   - Fuse: alpha/beta computation + state update + query operations
-   - Use block-wise parallelization across heads and batch
-   - Reference: Gated DeltaNet paper (arXiv:2412.06464) Section 3.4
-
-   Status: BLOCKING for 256k deployment
-   Est. Effort: 2-3 weeks (kernel design + optimization)
-
-3. 🔧 NOTE: 1B Model is DENSE (No MoE Expert Dispatch Issue)
-   ─────────────────────────────────────────────────────────
-   This model uses dense FFN (no MoE in backbone), so the expert dispatch
-   optimization from 70B model is NOT applicable here.
-
-   If future variants add MoE, see 70B model TODO #3 for guidance.
+3. ✅ DONE: Remove Python expert loop in MoE dispatch hot-path
+   ─────────────────────────────────────────────
+   Location: MoEFFN class forward()
+   Status: Vectorized per-assignment batched GEMM path (no Python expert loop).
 
 4. 📊 TODO: Benchmark RAM vs Realtime Tradeoff for RoPE
    ──────────────────────────────────────────────────────
-   Location: RotaryEmbedding class (lines 369-443)
-   Current: On-the-fly computation (saves 2.1GB VRAM, costs 5-10% speed)
+   Location: RotaryEmbedding class (lines 369-444)
+   Current: On-the-fly computation (saves 5.4GB VRAM, costs 5-10% speed)
 
    Decision Needed:
    - For training: On-the-fly likely optimal (VRAM precious for 256k)
@@ -105,10 +86,30 @@ Before deploying this model at 256k context, the following MUST be addressed:
    Status: Optional for testing, REQUIRED for production tuning
    Est. Effort: 2-3 days (benchmarking + analysis)
 
-5. 📈 TODO: Production Monitoring Hooks
+5. 🔍 TODO: Verify YARN mscale Frequency Band Logic
+   ───────────────────────────────────────────────────
+   Location: RotaryEmbedding.__init__() (lines 411-418)
+   Current: mscale uses original 'base', inv_freq uses 'scaled_base'
+
+   Rationale (YARN Paper Section 2.1):
+   - Frequency band classification should be relative to ORIGINAL bands
+   - mscale determines which frequencies get interpolated (0-1 ramp)
+   - This is APPLIED to the NTK-scaled frequencies (inv_freq)
+
+   Action:
+   - Validate against YARN paper equations (specifically Section 2.1, Eq 3-5)
+   - Confirm: wavelen = 2π / freq should use original base for classification
+   - If matches paper → mark verified
+   - If deviation → document intentional change or fix
+
+   Status: Logic appears correct per paper, needs formal verification
+   Est. Effort: 4-6 hours (paper cross-reference + validation)
+
+6. 📈 TODO: Production Monitoring Hooks
    ─────────────────────────────────────
    Implement logging for:
-   - aux_loss / main_loss ratio (alert if > 0.1) - NOTE: 1B is dense, aux_loss minimal
+   - aux_loss / main_loss ratio (alert if > 0.1)
+   - Router metrics (6 KPIs documented in MoEGate docstring, lines 916-946)
    - Memory stream recurrence gradient norms (detect vanishing/explosion)
    - Per-layer activation statistics (detect distribution shift)
 
@@ -116,7 +117,7 @@ Before deploying this model at 256k context, the following MUST be addressed:
    Est. Effort: 1 week (instrumentation + dashboard)
 
 ═══════════════════════════════════════════════════════════════════════════════
-📋 SUMMARY: GSA kernel integrated (#1 done). Ready for 2k-8k testing, 256k needs #2 (DeltaNet kernel)
+📋 SUMMARY: Fused DeltaNet/GSA paths integrated; proceed with 4k-16k benchmarking and 256k validation runs
 ═══════════════════════════════════════════════════════════════════════════════
 """
 
@@ -125,24 +126,63 @@ import torch.nn as nn
 import torch.nn.functional as F
 import logging
 import math
+import importlib
+import sys
 import numpy as np
 from typing import List, Optional, Dict
 from dataclasses import dataclass
+from pathlib import Path
 
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
 # All kernels have automatic PyTorch fallbacks when Triton/fla unavailable.
-try:
-    from ..kernels import (
-        HAS_TRITON, HAS_FLA,
-        triton_sparse_attention, pytorch_sparse_attention,
-        triton_sinkhorn_knopp, pytorch_sinkhorn_knopp,
-        triton_rmsnorm, pytorch_rmsnorm, TritonRMSNorm,
-        fla_gated_delta_rule,
-        fused_indexer_topk,
-    )
-except ImportError:
+def _import_kernels_module():
+    # Package-relative import when recurrence_model_70b.py is used inside src.models.
+    try:
+        from .. import kernels as kernels_module
+        return kernels_module
+    except Exception:
+        pass
+
+    # Standalone train_sample fallback: borrow kernels from the 1B/deepspeed_template tree.
+    experiments_dir = Path(__file__).resolve().parents[2]
+    candidate_roots = [
+        experiments_dir / "9_training_stack_optimisation_and_cost_governor" / "training" / "deepspeed_template" / "src",
+        experiments_dir / "9_training_stack_optimisation_and_cost_governor" / "training" / "deepspeed_template" / "dense_hardened" / "src",
+    ]
+
+    for root in candidate_roots:
+        if not (root / "kernels").exists():
+            continue
+        root_str = str(root)
+        if root_str not in sys.path:
+            sys.path.insert(0, root_str)
+        try:
+            return importlib.import_module("kernels")
+        except Exception:
+            continue
+
+    return None
+
+
+_kernels_module = _import_kernels_module()
+if _kernels_module is not None:
+    HAS_TRITON = bool(getattr(_kernels_module, "HAS_TRITON", False))
+    HAS_FLA = bool(getattr(_kernels_module, "HAS_FLA", False))
+    HAS_MOE_GROUPED_GEMM = bool(getattr(_kernels_module, "HAS_MOE_GROUPED_GEMM", False))
+    triton_sparse_attention = getattr(_kernels_module, "triton_sparse_attention", None)
+    pytorch_sparse_attention = getattr(_kernels_module, "pytorch_sparse_attention", None)
+    triton_sinkhorn_knopp = getattr(_kernels_module, "triton_sinkhorn_knopp", None)
+    pytorch_sinkhorn_knopp = getattr(_kernels_module, "pytorch_sinkhorn_knopp", None)
+    triton_rmsnorm = getattr(_kernels_module, "triton_rmsnorm", None)
+    pytorch_rmsnorm = getattr(_kernels_module, "pytorch_rmsnorm", None)
+    TritonRMSNorm = getattr(_kernels_module, "TritonRMSNorm", None)
+    fla_gated_delta_rule = getattr(_kernels_module, "fla_gated_delta_rule", None)
+    fused_indexer_topk = getattr(_kernels_module, "fused_indexer_topk", None)
+    moe_grouped_gemm = getattr(_kernels_module, "moe_grouped_gemm", None)
+else:
     HAS_TRITON = False
     HAS_FLA = False
+    HAS_MOE_GROUPED_GEMM = False
     triton_sparse_attention = None
     pytorch_sparse_attention = None
     triton_sinkhorn_knopp = None
@@ -152,16 +192,103 @@ except ImportError:
     TritonRMSNorm = None
     fla_gated_delta_rule = None
     fused_indexer_topk = None
+    moe_grouped_gemm = None
+
+HAS_FUSED_INDEXER = fused_indexer_topk is not None
+
+
+def _pytorch_fused_indexer_topk_fallback(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    w: torch.Tensor,
+    b: torch.Tensor,
+    scale: float,
+    causal: bool,
+    k_base: int,
+    k_min: int,
+    k_max: int,
+    variance_ema: torch.Tensor,
+    is_training: bool = False,
+    sink_size: int = 4,
+):
+    # Fallback for environments without the fused indexer kernel.
+    # Expected inputs:
+    # q: [B, T, H_idx, D_idx], k: [B, T, D_idx], w: [B, T, H_idx], b: [H_idx]
+    del is_training  # Kernel API compatibility; fallback path is stateless.
+    with torch.no_grad():
+        B, T, H_idx, D_idx = q.shape
+        q_heads = q.permute(0, 2, 1, 3).contiguous()                  # [B, H_idx, T, D_idx]
+        k_heads = k.unsqueeze(1).expand(B, H_idx, T, D_idx)           # [B, H_idx, T, D_idx]
+        logits = torch.matmul(q_heads, k_heads.transpose(-2, -1)) * scale  # [B, H_idx, T, T]
+
+        logits = logits + w.permute(0, 2, 1).unsqueeze(-1) + b.view(1, H_idx, 1, 1)
+
+        if causal and T > 1:
+            causal_mask = torch.tril(torch.ones(T, T, dtype=torch.bool, device=q.device))
+            logits = logits.masked_fill(~causal_mask.unsqueeze(0).unsqueeze(0), -float("inf"))
+
+        if sink_size > 0 and T > sink_size:
+            logits[:, :, :, :sink_size] = float("inf")
+
+        importance = logits.mean(dim=1)  # [B, T, T]
+        var_t = importance.var(dim=-1, unbiased=False).clamp_min(1e-6)  # [B, T]
+
+        avg_v = variance_ema.clamp(min=1e-6)
+        k_t = (k_base * var_t / avg_v).floor().clamp(min=k_min, max=k_max).long()
+        k_limit = min(T, max(int(k_t.max().item()), sink_size))
+        _, top_indices = importance.topk(k_limit, dim=-1)  # [B, T, k_limit]
+        return var_t, k_t, top_indices
+
+
+def _pytorch_sparse_attention_fallback(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    sparse_idx: torch.Tensor,
+    sparse_mask: torch.Tensor,
+    scale_attn: float,
+) -> torch.Tensor:
+    # Differentiable sparse attention fallback.
+    # q, k, v: [B, T, H, D], sparse_idx/mask: [B, H, T, K]
+    B, T, H, D = q.shape
+    K = sparse_idx.size(-1)
+    BH = B * H
+
+    q_bh = q.permute(0, 2, 1, 3).reshape(BH, T, D)
+    k_bh = k.permute(0, 2, 1, 3).reshape(BH, T, D)
+    v_bh = v.permute(0, 2, 1, 3).reshape(BH, T, D)
+    idx_bh = sparse_idx.reshape(BH, T, K).long()
+    mask_bh = sparse_mask.reshape(BH, T, K) > 0
+
+    selected_k = []
+    selected_v = []
+    for i in range(BH):
+        flat_idx = idx_bh[i].reshape(-1)
+        selected_k.append(k_bh[i].index_select(0, flat_idx).view(T, K, D))
+        selected_v.append(v_bh[i].index_select(0, flat_idx).view(T, K, D))
+    selected_k = torch.stack(selected_k, dim=0)  # [BH, T, K, D]
+    selected_v = torch.stack(selected_v, dim=0)  # [BH, T, K, D]
+
+    scores = (q_bh.unsqueeze(2) * selected_k).sum(dim=-1) * scale_attn  # [BH, T, K]
+    scores = scores.masked_fill(~mask_bh, torch.finfo(scores.dtype).min)
+    attn = torch.softmax(scores, dim=-1) * mask_bh.to(dtype=scores.dtype)
+    attn = attn / attn.sum(dim=-1, keepdim=True).clamp_min(1e-9)
+
+    out = (attn.unsqueeze(-1) * selected_v).sum(dim=2)  # [BH, T, D]
+    return out.view(B, H, T, D).permute(0, 2, 1, 3).contiguous()  # [B, T, H, D]
+
+
+# Strict fused-only policy: do not auto-install PyTorch fallback kernels here.
 
 # ── Kernel availability diagnostics ──────────────────────────────────────────
-_kernel_log = logging.getLogger("recurrence_model_1b.kernels")
+_kernel_log = logging.getLogger("recurrence_model_70b.kernels")
 if not _kernel_log.handlers:
     _kernel_log.addHandler(logging.StreamHandler())
     _kernel_log.setLevel(logging.INFO)
 
 _cuda_available = torch.cuda.is_available()
 _kernel_log.info("=" * 60)
-_kernel_log.info("Kernel Availability Report (1B):")
+_kernel_log.info("Kernel Availability Report (70B):")
 _kernel_log.info(f"  CUDA available:       {_cuda_available}")
 _kernel_log.info(f"  HAS_TRITON:           {HAS_TRITON}")
 _kernel_log.info(f"  HAS_FLA:              {HAS_FLA}")
@@ -169,9 +296,63 @@ _kernel_log.info(f"  Triton RMSNorm:       {'ENABLED' if HAS_TRITON and triton_r
 _kernel_log.info(f"  Triton Sinkhorn:      {'ENABLED' if HAS_TRITON and triton_sinkhorn_knopp is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  Triton Sparse Attn:   {'ENABLED' if HAS_TRITON and triton_sparse_attention is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and fla_gated_delta_rule is not None and _cuda_available else 'FALLBACK (Python loop)'}")
+_kernel_log.info(f"  MoE Grouped GEMM:     {'ENABLED' if HAS_MOE_GROUPED_GEMM and moe_grouped_gemm is not None else 'FALLBACK (vectorized torch)'}")
 if not _cuda_available:
     _kernel_log.info("  NOTE: All Triton/fla kernels require CUDA. Running on MPS/CPU uses PyTorch fallbacks.")
 _kernel_log.info("=" * 60)
+
+
+def _token_keep_mask(
+    attention_mask: Optional[torch.Tensor],
+    batch_size: int,
+    seq_len: int,
+    device: torch.device,
+) -> Optional[torch.Tensor]:
+    """Normalize attention masks to a boolean keep-mask of shape [B, T]."""
+    if attention_mask is None:
+        return None
+
+    mask = attention_mask
+    if mask.dim() == 2:
+        pass
+    elif mask.dim() == 3 and mask.size(1) == 1:
+        mask = mask[:, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == 1:
+        mask = mask[:, 0, 0, :]
+    elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == seq_len:
+        # Convert [B, 1, T, T] to [B, T] key-validity.
+        mask = mask[:, 0, :, :]
+        if mask.dtype == torch.bool:
+            mask = mask.any(dim=1)
+        elif torch.is_floating_point(mask):
+            if torch.any(mask < 0):
+                mask = (mask.max(dim=1).values >= 0)
+            else:
+                mask = (mask.max(dim=1).values > 0)
+        else:
+            mask = (mask.max(dim=1).values > 0)
+    else:
+        raise ValueError(
+            f"Unsupported attention_mask shape {tuple(mask.shape)}. "
+            "Expected [B,T], [B,1,T], [B,1,1,T], or [B,1,T,T]."
+        )
+
+    if mask.shape != (batch_size, seq_len):
+        raise ValueError(
+            f"attention_mask shape {tuple(mask.shape)} does not match expected {(batch_size, seq_len)}."
+        )
+
+    if mask.dtype == torch.bool:
+        keep = mask
+    elif torch.is_floating_point(mask):
+        if torch.any(mask < 0):
+            keep = mask >= 0
+        else:
+            keep = mask > 0
+    else:
+        keep = mask > 0
+
+    return keep.to(device=device, dtype=torch.bool)
 
 # Note: Importing for backwards compatibility - we define KroneckerEmbeddings inline
 # from kronecker_se_decoder import PFConfig, PFCodec
@@ -388,15 +569,15 @@ PFConfig = KroneckerConfig
 # ============================================================================
 
 class ModelConfig:
-    """1B Dense Model Configuration"""
+    """70B Model Configuration"""
     # Architecture
     vocab_size = 131072  # 2^17
     hidden_size = 4096
-    num_layers = 8
+    num_layers = 20
 
     # Attention Mix (75% DeltaNet / 25% GSA)
-    num_deltanet_layers = 6
-    num_gsa_layers = 2
+    num_deltanet_layers = 15  # 75% of 20
+    num_gsa_layers = 5  # 25% of 20 (DDDG repeated 5x)
 
     # DeltaNet Configuration
     delta_v_heads = 32  # hidden_size / delta_head_dim = 4096 / 128
@@ -412,14 +593,14 @@ class ModelConfig:
     gsa_k_max = 1024  # Increased for 256k context
     gsa_indexer_heads = 4
 
-    # MoE Configuration (DENSE MODEL - No MoE)
-    num_real_experts = 0
-    num_null_experts = 0
-    total_expert_slots = 0
-    top_k = 0  # Not used in dense model
-    expert_intermediate_size = 1024  # Not used in dense model
-    shared_expert_intermediate_size = 2048  # Acts as dense FFN
-    data_sparsity = 0.0  # No data sparsity (dense)
+    # MoE Configuration
+    num_real_experts = 254 
+    num_null_experts = 254  # ρ=0.5 data sparsity 
+    total_expert_slots = 508 
+    top_k = 10  # Dynamic 0-10, avg 5 active
+    expert_intermediate_size = 1024
+    shared_expert_intermediate_size = 2048
+    data_sparsity = 0.5
 
     # MTP Configuration
     enable_mtp = True
@@ -427,14 +608,24 @@ class ModelConfig:
 
     # mHC Configuration
     n_streams = 4
-    sinkhorn_iters = 20  # PROBABLE FIX #26: Reduced from 20 (major compute savings at long context)
+    sinkhorn_iters = 20  # Keep at 20 (matches original paper settings)
 
-    # Context and RoPE
+    # Context and RoPE (YARN Scaling)
     max_seq_len = 262144  # 256k context
     rope_base = 10000
+    rope_original_max_position = 8192  # Original training context
+    rope_scaling_factor = 32.0  # 256k / 8k = 32x extension
 
     # Training
     dropout = 0.0  # Required for reversible integration
+    require_fused_deltanet_kernel = True
+    require_fused_gsa_kernel = True
+    # MoE backend policy:
+    # - "auto": prefer grouped_gemm backend when available, else vectorized torch path
+    # - "grouped_gemm": force grouped_gemm backend
+    # - "vectorized": force vectorized torch dispatch/GEMM path
+    moe_backend = "auto"
+    require_fused_moe_kernel = False
 
 
 # ============================================================================
@@ -501,9 +692,6 @@ class RMSNorm(nn.Module):
 
     FIX #43: Computes variance in fp32 for numerical stability at 256k context.
     Critical for preventing rare NaN spikes with bf16/fp16 training.
-
-    Triton acceleration: When available, uses fused Triton kernel that computes
-    variance + rsqrt + weight multiply in a single kernel launch.
     """
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -521,63 +709,107 @@ class RMSNorm(nn.Module):
             except Exception:
                 pass  # Fall through to PyTorch path
 
-        # PyTorch fallback: Full fp32 normalization for numerical stability
-        # Critical fix from mentor: do ALL normalization math in fp32, cast back only at end
-        in_dtype = x.dtype
+        # PyTorch fallback (FIX #43: fp32 variance for stability)
         x_f = x.float()
         norm = x_f.pow(2).mean(dim=-1, keepdim=True)
-        x_norm = x_f * torch.rsqrt(norm + self.eps)
-        out = x_norm * self.weight.float()
-        return out.to(dtype=in_dtype)
+        x = x * torch.rsqrt(norm.to(x.dtype) + self.eps)
+        return self.weight * x
 
 
 class RotaryEmbedding(nn.Module):
     """
-    Standard Rotary Positional Embedding (RoPE).
+    YARN (Yet Another RoPE extensioN) Rotary Positional Embedding.
 
-    Applies position-dependent rotation to query and key vectors using the
-    original RoPE formulation (Su et al., 2021: https://arxiv.org/abs/2104.09864).
+    Extends RoPE to 256k context using:
+    - NTK-aware interpolation for scaling base frequency
+    - Temperature-based frequency band interpolation
+    - Attention sink preservation for initial tokens
 
-    inv_freq[i] = 1 / (base ** (2i / dim)),  i = 0 .. dim/2 - 1
+    Reference: https://arxiv.org/abs/2309.00071
 
     MEMORY OPTIMIZATION:
     Computes cos/sin on-the-fly instead of caching to save VRAM.
-    Caching would use: 262,144 × 128 × 2 = 268 MB per layer × 8 layers = 2.1 GB.
-    On-the-fly is ~5-10% slower but saves 2.1 GB — a good trade at 256k context.
+
+    Caching approach would use: 262,144 × 128 × 2 = 268MB per layer × 20 layers = 5.4GB VRAM.
+    On-the-fly computation: ~0MB cache, only 5-10% slower (negligible with modern GPUs).
+
+    For 256k context training, we need every GB of VRAM for activations and optimizer states.
+    Trading 5-10% RoPE compute time for 5.4GB free memory is an excellent trade-off.
     """
-    def __init__(self, dim: int, max_position_embeddings: int = 262144, base: int = 10000):
+    def __init__(self, dim: int, max_position_embeddings: int = 8192, base: int = 10000,
+                 original_max_position_embeddings: int = 8192, scaling_factor: float = 32.0):
         super().__init__()
         self.dim = dim
         self.base = base
+        self.original_max_position_embeddings = original_max_position_embeddings
         self.max_position_embeddings = max_position_embeddings
+        self.scaling_factor = scaling_factor
 
-        # Standard RoPE inverse frequencies: 1 / (base ** (2i / dim))
-        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+        # YARN: NTK-aware interpolation
+        # Scale the base frequency to accommodate longer context
+        if max_position_embeddings > original_max_position_embeddings:
+            # NTK-by-parts: scale base exponentially based on extension ratio
+            ext_ratio = max_position_embeddings / original_max_position_embeddings
+            # Use a gentler scaling exponent for YARN (typically around 1.0)
+            scaled_base = base * (ext_ratio ** (dim / (dim - 2)))
+            print(f"   🧶 YARN RoPE: Scaling base {base} -> {scaled_base:.0f} for {max_position_embeddings:,} context")
+        else:
+            scaled_base = base
+
+        # Compute inverse frequencies with scaled base
+        inv_freq = 1.0 / (scaled_base ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer("inv_freq", inv_freq)
+
+        # YARN: Frequency band interpolation parameters
+        # Interpolate low frequencies, extrapolate high frequencies
+        # beta_fast: controls high-freq behavior (preserve local distinctions)
+        # beta_slow: controls low-freq behavior (interpolate for global context)
+        # CRITICAL: High freq (small wavelength) should NOT be scaled, low freq should be scaled
+        self.beta_fast = 1   # High frequencies (preserve - do not scale below this)
+        self.beta_slow = 32  # Low frequencies (interpolate - fully scale above this)
+
+        # Compute interpolation weights (mscale) for each frequency
+        # IMPORTANT: mscale uses ORIGINAL 'base', NOT 'scaled_base'
+        # Rationale (YARN Paper Section 2.1):
+        # - Frequency band classification (high vs low) should be relative to ORIGINAL bands
+        # - mscale determines the 0-1 ramp for interpolation strength
+        # - This ramp is APPLIED to the NTK-scaled frequencies (inv_freq above)
+        # - Using scaled_base here would misclassify which bands need interpolation
+        freq_extra = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))  # ORIGINAL base intentional
+        # Determine which frequencies to interpolate vs extrapolate
+        # High frequencies (small wavelengths) get less interpolation
+        wavelen = 2 * math.pi / freq_extra
+        # Ramp function: 0 at beta_fast (preserve), 1 at beta_slow (interpolate fully)
+        ramp = torch.clamp((wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1)
+        self.register_buffer("mscale", ramp)  # Interpolation weight per frequency
 
     def _compute_cos_sin(self, seq_len: int, device, dtype=None):
         """
-        Compute cos/sin on-the-fly for a given sequence length.
-
-        Uses a per-forward-pass cache (set by Model1B.forward()) so all layers
-        share one computation per step.
-
-        Cache key includes dtype for mixed-precision safety (FIX #39).
-        Output is cast to the requested dtype to prevent bf16/fp32 mismatches (FIX #42).
+        Compute cos/sin on-the-fly for given sequence length.
+        FIX #30: Uses forward-pass cache if available (set by model.forward())
+        FIX #39: Include dtype in cache key for mixed-precision safety
+        FIX #42: Cast output to requested dtype (prevents float32/bf16 mismatches)
+        Saves 5.4GB VRAM compared to persistent caching (268MB × 20 layers).
         """
+        # FIX #30: Check if cache exists (set at model forward start)
+        # FIX #39: Include dtype in cache key (default to None for backward compatibility)
         cache_key = (seq_len, device, dtype)
         if hasattr(self, '_forward_cache') and cache_key in self._forward_cache:
             return self._forward_cache[cache_key]
 
-        # Position indices in fp32 for numerical stability
-        t = torch.arange(seq_len, device=device, dtype=torch.float32)
+        t = torch.arange(seq_len, device=device).float()
 
-        # Outer product: [T] x [dim/2] -> [T, dim/2]
-        freqs = torch.outer(t, self.inv_freq)  # (T, dim/2)
+        # YARN: Apply frequency-dependent interpolation
+        # t_scaled = t / (1 + (scaling_factor - 1) * ramp)
+        # This interpolates low frequencies more, extrapolates high frequencies
+        scale_factor_per_freq = 1.0 + (self.scaling_factor - 1.0) * self.mscale
+        t_scaled = t.unsqueeze(-1) / scale_factor_per_freq.unsqueeze(0)
 
-        # Duplicate for full rotation: [T, dim]
-        emb = torch.cat((freqs, freqs), dim=-1)  # (T, dim)
+        freqs = t_scaled * self.inv_freq.unsqueeze(0)
+        emb = torch.cat((freqs, freqs), dim=-1)
 
+        # FIX #42: Cast to requested dtype to match query/key precision
+        # Prevents implicit upcasts and memory/bandwidth issues at 256k context
         cos_out = emb.cos()
         sin_out = emb.sin()
         if dtype is not None:
@@ -588,7 +820,6 @@ class RotaryEmbedding(nn.Module):
 
     @staticmethod
     def _apply_rotary(x, cos, sin):
-        """Apply rotary embedding to tensor x using interleaved even/odd rotation."""
         x1, x2 = x[..., ::2], x[..., 1::2]
         return torch.cat(
             (x1 * cos[..., ::2] - x2 * sin[..., ::2],
@@ -662,13 +893,16 @@ class GatedDeltaNet(nn.Module):
     """
     def __init__(self, hidden_size, num_heads, head_dim,
                  max_seq_len=262144, rope_base=10000,
-                 conv_size=4, use_output_norm=True):
+                 rope_original_max=8192, rope_scaling_factor=32.0,
+                 conv_size=4, use_output_norm=True,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.max_seq_len = max_seq_len
         self.use_output_norm = use_output_norm
+        self.require_fused_kernel = require_fused_kernel
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
@@ -703,11 +937,13 @@ class GatedDeltaNet(nn.Module):
         dt_bias = torch.rand(num_heads) * 2 * dt_init_std - dt_init_std
         self.dt_bias = nn.Parameter(dt_bias)
 
-        # Rotary embeddings for Q/K (standard RoPE)
+        # Rotary embeddings for Q/K with YARN scaling
         self.rotary_emb = RotaryEmbedding(
             head_dim,
             max_position_embeddings=max_seq_len,
             base=rope_base,
+            original_max_position_embeddings=rope_original_max,
+            scaling_factor=rope_scaling_factor
         )
 
         # Output normalization with gating
@@ -730,54 +966,12 @@ class GatedDeltaNet(nn.Module):
 
     def _delta_rule_python(self, q, k, v, alpha, beta, B, T, device, original_dtype):
         """
-        Python for-loop DeltaNet recurrence (fallback when fla unavailable).
-
-        Args:
-            q, k, v: (B, T, num_heads, head_dim)
-            alpha, beta: (B, T, num_heads, 1)
-            B, T: batch size, sequence length
-            device: torch device
-            original_dtype: dtype for output casting
-
-        Returns:
-            o: (B, T, num_heads, head_dim)
+        Disabled fallback for production hardening.
         """
-        # Transpose to (B, H, T, d) for the recurrence loop
-        q_h = q.transpose(1, 2)
-        k_h = k.transpose(1, 2)
-        v_h = v.transpose(1, 2)
-        beta_h = beta.transpose(1, 2)
-        alpha_h = alpha.transpose(1, 2)
-
-        # FIX #24: Keep recurrent state in fp32 for numerical stability at 256k
-        S = torch.zeros(B, self.num_heads, self.head_dim, self.head_dim,
-                       device=device, dtype=torch.float32)
-
-        outputs = torch.empty(B, self.num_heads, T, self.head_dim, device=device, dtype=torch.float32)
-
-        I = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
-
-        for t in range(T):
-            q_t = q_h[:, :, t, :].float()
-            k_t = k_h[:, :, t, :].float()
-            v_t = v_h[:, :, t, :].float()
-            beta_t = beta_h[:, :, t, 0].float()
-            alpha_t = alpha_h[:, :, t, 0].float()
-
-            o_t = torch.einsum('bhd,bhde->bhe', q_t, S)
-            o_t = o_t + self.D.view(1, self.num_heads, 1) * (q_t * k_t).sum(dim=-1, keepdim=True) * v_t
-            outputs[:, :, t, :] = o_t
-
-            v_outer = torch.einsum('bhd,bhe->bhde', v_t, k_t)
-            k_outer = torch.einsum('bhd,bhe->bhde', k_t, k_t)
-
-            alpha_t = alpha_t.view(B, self.num_heads, 1, 1)
-            beta_t = beta_t.view(B, self.num_heads, 1, 1)
-
-            orthogonal_proj = I - beta_t * k_outer
-            S = alpha_t * torch.einsum('bhde,bhef->bhdf', S, orthogonal_proj) + beta_t * v_outer
-
-        return outputs.to(original_dtype).transpose(1, 2)
+        raise RuntimeError(
+            "Python DeltaNet fallback is disabled in hardened 70B model. "
+            "Install/enable fused fla kernel support."
+        )
 
     def forward(self, x, attention_mask=None):
         """
@@ -792,6 +986,8 @@ class GatedDeltaNet(nn.Module):
         """
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
+        token_keep_f = None
 
         # 1. Project to Q, K, V, G
         q = self.q_proj(x)  # (B, T, num_heads * head_dim)
@@ -810,7 +1006,7 @@ class GatedDeltaNet(nn.Module):
         v = v.view(B, T, self.num_heads, self.head_dim)
         g = g.view(B, T, self.num_heads, self.head_dim)
 
-        # 4. Apply RoPE to Q/K (computed on-the-fly to save 2.1GB VRAM)
+        # 4. Apply RoPE to Q/K (computed on-the-fly to save 5.4GB VRAM)
         # FIX #40: Include dtype in cache lookup (was missing, causing cache MISS every time)
         cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
         cos = cos.unsqueeze(0).unsqueeze(2)  # (1, T, 1, dim)
@@ -836,49 +1032,50 @@ class GatedDeltaNet(nn.Module):
         # Map negative values to (0, 1) range using exp - CRITICAL for 256k retention
         alpha = torch.exp(alpha)  # (B, T, num_heads, 1) - full (0,1) range, not (0,0.5)
 
+        # Respect token padding/control mask in recurrent state updates:
+        # masked tokens do not write or decay state (beta=0, alpha=1).
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k = k * token_keep_f
+            v = v * token_keep_f
+            g = g * token_keep_f
+            beta = beta * token_keep_f
+            alpha = alpha * token_keep_f + (1.0 - token_keep_f)
+
         # 8. Gated Delta Rule with decay (Paper Equation 10)
         # St = St-1 * (alpha * (I - beta * k * k^T)) + beta * v * k^T
         #
         # Two paths:
-        # - fla path: Fused Triton kernel via flash-linear-attention library (500-2000x faster)
-        # - Python path: Explicit for-loop fallback (always correct, slow at long context)
+        # - fla path: Fused Triton kernel via flash-linear-attention library
+        # - Python path: explicit fallback (disabled when require_fused_kernel=True)
+        fla_available = HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda
+        if self.require_fused_kernel and not fla_available:
+            raise RuntimeError(
+                "DeltaNet fused kernel is required but unavailable. "
+                "Training is configured to disallow Python fallback. "
+                f"HAS_FLA={HAS_FLA}, fla_gated_delta_rule={fla_gated_delta_rule is not None}, "
+                f"q.is_cuda={q.is_cuda}."
+            )
 
-        if HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda:
-            # ── fla fused kernel path ──────────────────────────────────────
-            # fla expects (B, T, H, d) layout — q/k/v are already in this shape.
-            # D residual (D * (q·k) * v) is computed inside fla_gated_delta_rule.
-
-            # Dynamic chunk_size policy based on sequence length:
-            #   T <  16k  →  64
-            #   16k–32k   → 128
-            #   32k–64k   → 256
-            #   >= 64k    → 512
-            if T < 16_384:
-                _chunk_size = 64
-            elif T < 32_768:
-                _chunk_size = 128
-            elif T < 65_536:
-                _chunk_size = 256
-            else:
-                _chunk_size = 512
-
+        if fla_available:
             try:
                 o = fla_gated_delta_rule(
-                    q=q,        # (B, T, num_heads, head_dim)
-                    k=k,        # (B, T, num_heads, head_dim)
-                    v=v,        # (B, T, num_heads, head_dim)
-                    alpha=alpha,  # (B, T, num_heads, 1)
-                    beta=beta,    # (B, T, num_heads, 1)
-                    D=self.D,     # (num_heads,)
+                    q=q,
+                    k=k,
+                    v=v,
+                    alpha=alpha,
+                    beta=beta,
+                    D=self.D,
                     num_heads=self.num_heads,
-                    chunk_size=_chunk_size,
                 )
             except Exception as e:
-                import warnings
-                warnings.warn(f"fla DeltaNet kernel failed ({e}); falling back to Python loop.")
+                if self.require_fused_kernel:
+                    raise RuntimeError(
+                        "DeltaNet fused kernel execution failed and fallback is disabled."
+                    ) from e
                 o = self._delta_rule_python(q, k, v, alpha, beta, B, T, device, x.dtype)
         else:
-            # ── Python for-loop fallback ───────────────────────────────────
             o = self._delta_rule_python(q, k, v, alpha, beta, B, T, device, x.dtype)
 
         # 9. Apply output normalization with gating
@@ -895,7 +1092,10 @@ class GatedDeltaNet(nn.Module):
         else:
             o = o * torch.sigmoid(g)
 
-        # 11. Reshape and project to output
+        if token_keep_f is not None:
+            o = o * token_keep_f
+
+        # 10. Reshape and project to output
         o = o.reshape(B, T, self.num_heads * self.head_dim)
         return self.o_proj(o)
 
@@ -911,23 +1111,21 @@ class GatedSparseAttention(nn.Module):
     Implements adaptive sparse attention with gating for quality.
     Used for 25% of layers to complement DeltaNet's efficiency.
 
-    Memory complexity: O(T·k) via fused_indexer_topk chunked kernel.
-    The indexer processes importance scores in [B, C, T] chunks (C auto-tuned
-    to ~512MB), never materializing the full [B, T, T] score tensor.
-    Safe for 256k+ context lengths.
-
-    Architecture:
-    - Shared indexer keys (W_Ik → [B, T, d_idx]) across indexer heads
-    - Per-attention-head diversity via head_importance_bias on attention logits
-    - Adaptive sparsity budget k_t from variance-based heuristic
+    Fused implementation:
+    - `fused_indexer_topk` for streaming indexer selection
+    - `triton_sparse_attention` for O(T·k) sparse attention
+    - Optional fail-fast (`require_fused_kernel=True`) to prevent non-fused fallback
     """
     def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
-                 k_base=512, k_min=32, k_max=1024, indexer_heads=4):
+                 k_base=512, k_min=32, k_max=1024, indexer_heads=4,
+                 rope_original_max=8192, rope_scaling_factor=32.0,
+                 require_fused_kernel=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         self.max_seq_len = max_seq_len
+        self.require_fused_kernel = require_fused_kernel
 
         # Adaptive Sparsity Hyperparams
         self.k_base = k_base
@@ -943,12 +1141,8 @@ class GatedSparseAttention(nn.Module):
         self.gate_bias = nn.Parameter(torch.zeros(indexer_heads))
 
         self.register_buffer("variance_ema", torch.tensor(1.0))
-        # Snapshot of variance_ema captured at the start of each reversible
-        # forward pass (torch.no_grad()).  The backward reconstruct (torch.enable_grad())
-        # reads this snapshot instead of the live EMA, guaranteeing that
-        # fused_indexer_topk produces identical k_t / top_indices in both passes.
-        # Without this, gradient-accumulation or async NCCL updates can mutate
-        # variance_ema between forward and reconstruct, breaking reversibility.
+        # Snapshot consumed by reversible backward reconstruct to ensure
+        # indexer determinism across forward/recompute micro-batches.
         self.register_buffer("_variance_ema_snapshot", torch.tensor(1.0))
         self.variance_alpha = 0.01
 
@@ -962,11 +1156,13 @@ class GatedSparseAttention(nn.Module):
         self.W_gv = nn.Linear(hidden_size, hidden_size, bias=False)
         self.W_go = nn.Linear(hidden_size, hidden_size, bias=False)
 
-        # Rotary embeddings (standard RoPE)
+        # Rotary embeddings with YARN scaling
         self.rotary_emb = RotaryEmbedding(
             self.head_dim,
             max_position_embeddings=max_seq_len,
             base=rope_base,
+            original_max_position_embeddings=rope_original_max,
+            scaling_factor=rope_scaling_factor
         )
 
         self._init_weights()
@@ -980,47 +1176,55 @@ class GatedSparseAttention(nn.Module):
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
         device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
+
+        gsa_fused_available = (
+            HAS_FUSED_INDEXER
+            and triton_sparse_attention is not None
+            and x.is_cuda
+        )
+        if not gsa_fused_available:
+            raise RuntimeError(
+                "GSA fused-only mode requires fused indexer + sparse attention kernels. "
+                f"fused_indexer_topk={HAS_FUSED_INDEXER}, "
+                f"triton_sparse_attention={triton_sparse_attention is not None}, "
+                f"x.is_cuda={x.is_cuda}."
+            )
 
         # Lightning Indexer — O(T·k) via fused chunked kernel
-        # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
-        # Processes in [B, C, T] chunks where C is auto-tuned to fit in ~512MB.
-        q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # [B, T, 4, 32]
-        k_I = self.W_Ik(x)          # [B, T, d_idx] — shared across indexer heads
-        w_raw = self.W_Iw(x)        # [B, T, indexer_heads] — pre-sigmoid (kernel applies sigmoid)
+        q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)
+        k_I = self.W_Ik(x)
+        w_raw = self.W_Iw(x)
         scale_idx = 1.0 / math.sqrt(self.d_idx)
 
-        # Stateless re-computation: always recompute indices via fused_indexer_topk.
-        # This avoids the gradient-accumulation race condition where _saved_selection
-        # from micro-batch B would overwrite micro-batch A's indices before A's backward pass.
-        # The fused_indexer_topk kernel is O(N) and adds <1% overhead vs O(N·K) attention.
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = self.training and torch.is_grad_enabled()
 
-        # REVERSIBILITY FIX: During the forward pass (no_grad), snapshot the
-        # current variance_ema BEFORE computing indices, then update the live
-        # EMA afterwards.  During backward reconstruct (enable_grad), use the
-        # snapshot so that fused_indexer_topk produces identical k_t/indices.
-        # This prevents the race where gradient-accumulation micro-batch N+1
-        # mutates variance_ema before micro-batch N's backward reconstruct.
+        # Keep indexer deterministic between reversible forward/reconstruct.
         if is_reversible_forward:
             self._variance_ema_snapshot.copy_(self.variance_ema)
-
-        # Use snapshot for the indexer call (both forward and reconstruct)
         ema_for_indexer = self._variance_ema_snapshot
 
+        if not HAS_FUSED_INDEXER:
+            raise RuntimeError(
+                "GSA fused indexer kernel is required but unavailable. "
+                "Fallback indexer path is disabled."
+            )
+
         var_t, k_t, top_indices = fused_indexer_topk(
-            q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
-            scale=scale_idx, causal=True,
-            k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
-            variance_ema=ema_for_indexer,  # snapshot, not live EMA
+            q=q_I,
+            k=k_I,
+            w=w_raw,
+            b=self.gate_bias,
+            scale=scale_idx,
+            causal=True,
+            k_base=self.k_base,
+            k_min=self.k_min,
+            k_max=self.k_max,
+            variance_ema=ema_for_indexer,
             is_training=False,
             sink_size=4,
         )
-        # var_t: [B, T], k_t: [B, T] (long), top_indices: [B, T, k_limit] (int32)
 
-        # Update live variance EMA only during the reversible forward pass (no grad)
-        # This happens AFTER the indexer call, so it doesn't affect this micro-batch's
-        # indices.  The snapshot ensures backward reconstruct sees the same value.
         if is_reversible_forward:
             var_t_mean = var_t.mean().detach()
             if torch.distributed.is_initialized():
@@ -1029,9 +1233,23 @@ class GatedSparseAttention(nn.Module):
 
         # Build per-query keep mask from adaptive k_t
         k_limit = top_indices.size(-1)
-        base_idx = top_indices.long()  # [B, T, k_limit]
+        base_idx = top_indices.long()
         range_k = torch.arange(k_limit, device=device)
-        keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)  # [B, T, k_limit]
+        keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)
+        if token_keep is not None:
+            invalid_query = ~token_keep
+            if invalid_query.any():
+                fallback_idx = torch.arange(T, device=device).view(1, T).expand(B, T)
+                base_idx = base_idx.clone()
+                base_idx[..., 0] = torch.where(invalid_query, fallback_idx, base_idx[..., 0])
+
+            key_keep = torch.gather(token_keep, dim=1, index=base_idx.reshape(B, -1)).view(B, T, k_limit)
+            keep_mask = keep_mask & key_keep & token_keep.unsqueeze(-1)
+
+            # Keep at least one index for masked queries to avoid empty-kernel rows.
+            if invalid_query.any():
+                keep_mask = keep_mask.clone()
+                keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
 
         # Dual Gating & Attention Projections
         q = self.W_q(x)
@@ -1044,47 +1262,39 @@ class GatedSparseAttention(nn.Module):
         q = q.view(B, T, self.num_heads, self.head_dim)
         k_attn = k_attn.view(B, T, self.num_heads, self.head_dim)
         v = v.view(B, T, self.num_heads, self.head_dim)
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k_attn = k_attn * token_keep_f
+            v = v * token_keep_f
 
-        # Rotary (computed on-the-fly to save 2.1GB VRAM)
         cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-        cos = cos.unsqueeze(0).unsqueeze(2)  # (1, T, 1, dim)
+        cos = cos.unsqueeze(0).unsqueeze(2)
         sin = sin.unsqueeze(0).unsqueeze(2)
         q = self.rotary_emb._apply_rotary(q, cos, sin)
         k_attn = self.rotary_emb._apply_rotary(k_attn, cos, sin)
 
-        # ── Sparse attention via triton_sparse_attention kernel ────────
-        # O(T*k) complexity: kernel iterates only over k_limit selected
-        # keys per query using online softmax. No T×T tensor ever created.
-        # Memory: O(B*H*T*k_limit) for indices/mask, NOT O(T²).
-        #
-        # At T=256k, B=1, k_limit=1024:
-        #   indices: [1, 16, 256k, 1024] int64 = 32GB  (vs 128GB for [B,1,T,T])
-        #   BUT indices are shared across heads → [B, 1, T, k_limit] expanded
-        #   as views, so actual memory = [B, T, k_limit] * 8 bytes = 2GB.
-
-        # Kernel expects indices: [B, H, T, k_sel] int64, mask: [B, H, T, k_sel] float32
-        # base_idx is [B, T, k_limit], keep_mask is [B, T, k_limit] bool
-        # Expand to [B, H, T, k_limit] as views (stride=0 on H dim).
-        # Triton kernel uses stride-based access, so zero-stride broadcast works
-        # without copying. Memory: only [B, T, k_limit] actually allocated.
         sparse_idx = base_idx.unsqueeze(1).expand(B, self.num_heads, T, k_limit)
         sparse_mask = keep_mask.float().unsqueeze(1).expand(B, self.num_heads, T, k_limit)
-
         scale_attn = 1.0 / math.sqrt(self.head_dim)
 
-        # q, k_attn, v are already [B, T, H, D] — kernel's expected layout
-        # IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
-        # autograd, which breaks the reversible midpoint backward recompute.
-        if (not torch.is_grad_enabled()) and HAS_TRITON and triton_sparse_attention is not None and q.is_cuda:
-            o_sparse = triton_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        # Strict fused-only policy: no autograd fallback through PyTorch sparse path.
+        if torch.is_grad_enabled():
+            raise RuntimeError(
+                "GSA fused-only mode does not permit PyTorch fallback in grad-enabled execution. "
+                "Provide an autograd-capable fused sparse attention kernel."
             )
-        else:
-            o_sparse = pytorch_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+        if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
+            raise RuntimeError(
+                "GSA fused sparse attention kernel is required but unavailable. "
+                "Fallback attention path is disabled."
             )
+        o_sparse = triton_sparse_attention(
+            q, k_attn, v, sparse_idx, sparse_mask, scale_attn
+        )
+        if token_keep is not None:
+            o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
 
-        # Output is [B, T, H, D] from kernel, reshape to [B, T, hidden_size]
         o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
 
         # Output gate
@@ -1101,11 +1311,8 @@ class MoEGate(nn.Module):
     """
     Router gate for MoE with null experts.
 
-    NOTE: This 1B model is DENSE (no MoE in backbone), but MoE classes are preserved
-    for compatibility and potential use in MTP or future variants.
-
-    ⚠️  MONITORING RECOMMENDATIONS for Production Training (when MoE is used):
-    ===========================================================================
+    ⚠️  MONITORING RECOMMENDATIONS for Production Training:
+    ========================================================
     Track these metrics per layer and globally to detect sparsity drift:
 
     1. **Average Real Experts per Token**:
@@ -1120,8 +1327,8 @@ class MoEGate(nn.Module):
 
     3. **Load Balance Entropy**:
        - Metric: -sum(P * log(P)) where P is expert selection distribution
-       - Expected: High entropy (near log(num_experts))
-       - Alert if: Entropy drops significantly (indicates expert collapse)
+       - Expected: High entropy (near log(254) ≈ 5.54 for uniform distribution)
+       - Alert if: < 4.0 (indicates expert collapse to subset)
 
     4. **Aux Loss Magnitude vs Main Loss**:
        - Metric: L_bal and L_z from aux_loss
@@ -1129,8 +1336,8 @@ class MoEGate(nn.Module):
        - Alert if: aux_loss/main_loss > 0.1 (aux loss dominating gradients)
 
     5. **Per-Expert Load Distribution**:
-       - Metric: counts / (B*T) for each real expert
-       - Expected: Roughly uniform
+       - Metric: counts / (B*T) for each of 254 real experts
+       - Expected: Roughly uniform (~1/254 ≈ 0.4% each)
        - Alert if: max/min ratio > 10 (load imbalance)
 
     6. **Null Expert Selection Rate**:
@@ -1155,17 +1362,8 @@ class MoEGate(nn.Module):
         self.num_experts = num_experts
         self.top_k = top_k
         self.data_sparsity = data_sparsity
-        # FIX #33: Store target null rate for null-rate regularizer (line 1210)
+        # FIX #33: Store target null rate for null-rate regularizer (line 1216)
         self.rho = data_sparsity
-
-        # Handle dense model case (num_experts = 0)
-        if num_experts == 0 or data_sparsity == 0.0:
-            self.num_null_copies = 0
-            self.total_slots = 0
-            self.gate = None
-            self.logit_bias = None
-            self.null_logit = None
-            return
 
         self.num_null_copies = int(num_experts * (1 - data_sparsity) / data_sparsity)
         self.total_slots = num_experts + self.num_null_copies
@@ -1178,18 +1376,6 @@ class MoEGate(nn.Module):
 
     def forward(self, x: torch.Tensor):
         B, T, D = x.shape
-
-        # Handle dense model case (num_experts = 0)
-        if self.num_experts == 0:
-            # Return dummy values for dense model
-            # Note: topk_idx, topk_weight, is_null don't need gradients (routing only)
-            topk_idx = torch.zeros((B, T, 1), dtype=torch.long, device=x.device)
-            topk_weight = torch.zeros((B, T, 1), device=x.device)
-            is_null = torch.zeros((B, T, 1), dtype=torch.bool, device=x.device)
-            # Create aux_loss as part of computational graph (critical for reversible backprop)
-            # Using x.sum() * 0.0 creates a zero tensor with grad_fn (not a leaf tensor)
-            aux_loss = x.sum() * 0.0
-            return topk_idx, topk_weight, is_null, aux_loss
 
         real_logits = self.gate(x) + self.logit_bias
         null_logits = self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
@@ -1236,69 +1422,108 @@ class MoEGate(nn.Module):
 
 
 class MoEFFN(nn.Module):
-    """MoE FFN with null experts (batched tensor implementation).
-
-    For dense models (num_experts=0), acts as a simple dense FFN using only the shared expert.
-    """
-    def __init__(self, d_model: int, d_hidden: int, d_shared_hidden: Optional[int] = 2048,
-                  num_experts: int = 270, top_k: int = 10,
-                 dropout: float = 0.0, data_sparsity: float = 0.5):
+    """MoE FFN with null experts and pluggable expert GEMM backend."""
+    def __init__(self, d_model: int, d_hidden: int, num_experts: int = 270, top_k: int = 10,
+                 dropout: float = 0.0, data_sparsity: float = 0.5,
+                 moe_backend: str = "auto", require_fused_kernel: bool = False):
         super().__init__()
         self.d_model = d_model
         self.d_hidden = d_hidden
-        self.d_shared_hidden = d_shared_hidden
         self.num_experts = num_experts
         self.top_k = top_k
         self.dropout = dropout
-        self.is_dense = (num_experts == 0 or data_sparsity == 0.0)
+        self.require_fused_kernel = require_fused_kernel
 
-        # Shared Expert (always present - acts as dense FFN for dense models)
-        self.shared_gate = nn.Linear(d_model, d_shared_hidden, bias=False)
-        self.shared_up = nn.Linear(d_model, d_shared_hidden, bias=False)
-        self.shared_down = nn.Linear(d_shared_hidden, d_model, bias=False)
+        self.gate = MoEGate(d_model, num_experts, top_k, data_sparsity=data_sparsity)
+
+        # Expert weights (batched)
+        self.W_gate = nn.Parameter(torch.randn(num_experts, d_model, d_hidden) * 0.02)
+        self.W_up = nn.Parameter(torch.randn(num_experts, d_model, d_hidden) * 0.02)
+        self.W_down = nn.Parameter(torch.randn(num_experts, d_hidden, d_model) * 0.02)
+
+        # Shared Expert
+        self.shared_gate = nn.Linear(d_model, d_hidden, bias=False)
+        self.shared_up = nn.Linear(d_model, d_hidden, bias=False)
+        self.shared_down = nn.Linear(d_hidden, d_model, bias=False)
         self._init_shared_weights()
 
-        # Only create MoE components for sparse models
-        if not self.is_dense:
-            self.gate = MoEGate(d_model, num_experts, top_k, data_sparsity=data_sparsity)
-
-            # Expert weights (batched)
-            self.W_gate = nn.Parameter(torch.randn(num_experts, d_model, d_hidden) * 0.02)
-            self.W_up = nn.Parameter(torch.randn(num_experts, d_model, d_hidden) * 0.02)
-            self.W_down = nn.Parameter(torch.randn(num_experts, d_hidden, d_model) * 0.02)
-        else:
-            self.gate = None
-            self.W_gate = None
-            self.W_up = None
-            self.W_down = None
-
         self.last_indices = None
+        self.active_moe_backend = self._resolve_moe_backend(moe_backend, require_fused_kernel)
 
     def _init_shared_weights(self):
         for module in [self.shared_gate, self.shared_up, self.shared_down]:
             module.weight.data.normal_(mean=0.0, std=0.02)
 
+    def _resolve_moe_backend(self, requested_backend: str, require_fused_kernel: bool) -> str:
+        valid = {"auto", "vectorized", "grouped_gemm"}
+        if requested_backend not in valid:
+            raise ValueError(
+                f"Unknown moe_backend={requested_backend!r}. Valid options: {sorted(valid)}."
+            )
+
+        grouped_available = bool(HAS_MOE_GROUPED_GEMM and moe_grouped_gemm is not None)
+
+        if requested_backend == "vectorized":
+            if require_fused_kernel:
+                raise RuntimeError(
+                    "MoE fused kernel is required but moe_backend='vectorized' was requested."
+                )
+            return "vectorized"
+
+        if requested_backend == "grouped_gemm":
+            if not grouped_available:
+                raise RuntimeError(
+                    "MoE grouped_gemm backend was requested but is unavailable. "
+                    "Install grouped_gemm / Megatron-compatible backend."
+                )
+            return "grouped_gemm"
+
+        # auto
+        if grouped_available:
+            return "grouped_gemm"
+        if require_fused_kernel:
+            raise RuntimeError(
+                "MoE fused kernel is required but no grouped_gemm backend is available."
+            )
+        return "vectorized"
+
+    def _moe_vectorized_bmm(self, sorted_x: torch.Tensor, sorted_expert_indices: torch.Tensor) -> torch.Tensor:
+        W_gate_sel = self.W_gate[sorted_expert_indices]  # [M, D, H]
+        W_up_sel = self.W_up[sorted_expert_indices]      # [M, D, H]
+        W_down_sel = self.W_down[sorted_expert_indices]  # [M, H, D]
+
+        x_expanded = sorted_x.unsqueeze(1)  # [M, 1, D]
+        gate_out = torch.bmm(x_expanded, W_gate_sel).squeeze(1)  # [M, H]
+        up_out = torch.bmm(x_expanded, W_up_sel).squeeze(1)      # [M, H]
+        h = F.silu(gate_out) * up_out
+        if self.training and self.dropout > 0:
+            h = F.dropout(h, p=self.dropout)
+        return torch.bmm(h.unsqueeze(1), W_down_sel).squeeze(1)  # [M, D]
+
+    def _moe_grouped_gemm(self, sorted_x: torch.Tensor, sorted_expert_indices: torch.Tensor) -> torch.Tensor:
+        expert_counts = torch.bincount(
+            sorted_expert_indices, minlength=self.num_experts
+        ).to(dtype=torch.int32)
+        gate_out = moe_grouped_gemm(sorted_x, self.W_gate, expert_counts)
+        up_out = moe_grouped_gemm(sorted_x, self.W_up, expert_counts)
+        h = F.silu(gate_out) * up_out
+        if self.training and self.dropout > 0:
+            h = F.dropout(h, p=self.dropout)
+        return moe_grouped_gemm(h, self.W_down, expert_counts)
+
     def forward(self, x: torch.Tensor):
         B, T, D = x.shape
         N = B * T
+        K = self.top_k
         device, dtype = x.device, x.dtype
 
-        # Shared expert (always computed - acts as dense FFN for dense models)
+        # Shared expert
         shared_h = F.silu(self.shared_gate(x)) * self.shared_up(x)
         if self.training and self.dropout > 0:
             shared_h = F.dropout(shared_h, p=self.dropout)
         shared_out = self.shared_down(shared_h)
 
-        # For dense models, just return shared expert output
-        if self.is_dense:
-            # Create aux_loss as part of computational graph (critical for reversible backprop)
-            # Using x.sum() * 0.0 creates a zero tensor with grad_fn (not a leaf tensor)
-            aux_loss = x.sum() * 0.0
-            return shared_out, aux_loss
-
-        # Routed experts (only for sparse models)
-        K = self.top_k
-        E = self.num_experts
+        # Routed experts
         topk_idx, topk_weight, is_null, aux_loss = self.gate(x)
         self.last_indices = topk_idx.detach().clone()
 
@@ -1316,25 +1541,25 @@ class MoEFFN(nn.Module):
 
         sort_idx = real_expert_indices.argsort()
         sorted_token_indices = real_token_indices[sort_idx]
+        sorted_expert_indices = real_expert_indices[sort_idx]
         sorted_weights = real_weights[sort_idx]
         sorted_x = flat_x[sorted_token_indices]
 
-        expert_counts = torch.bincount(real_expert_indices, minlength=E)
-        offsets = expert_counts.cumsum(0)
-
         num_real_assignments = sorted_token_indices.size(0)
-        sorted_out = torch.empty(num_real_assignments, D, device=device, dtype=dtype)
-
-        start = 0
-        for e in range(E):
-            end = offsets[e].item()
-            if end > start:
-                chunk_x = sorted_x[start:end]
-                h = F.silu(chunk_x @ self.W_gate[e]) * (chunk_x @ self.W_up[e])
-                if self.training and self.dropout > 0:
-                    h = F.dropout(h, p=self.dropout)
-                sorted_out[start:end] = h @ self.W_down[e]
-            start = end
+        if num_real_assignments > 0:
+            if self.active_moe_backend == "grouped_gemm":
+                try:
+                    sorted_out = self._moe_grouped_gemm(sorted_x, sorted_expert_indices)
+                except Exception as e:
+                    if self.require_fused_kernel:
+                        raise RuntimeError(
+                            "MoE grouped_gemm execution failed and fallback is disabled."
+                        ) from e
+                    sorted_out = self._moe_vectorized_bmm(sorted_x, sorted_expert_indices)
+            else:
+                sorted_out = self._moe_vectorized_bmm(sorted_x, sorted_expert_indices)
+        else:
+            sorted_out = torch.empty(0, D, device=device, dtype=dtype)
 
         weighted_out = sorted_out * sorted_weights.unsqueeze(-1)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
@@ -1344,66 +1569,37 @@ class MoEFFN(nn.Module):
         return y, aux_loss
 
 
-class DenseMLP(nn.Module):
-    """Simple SwiGLU FFN for dense (non-MoE) models.
-
-    Replaces the MoEFFN-with-is_dense hack that used `x.sum() * 0.0` to fake
-    an aux_loss.  This is torch.compile-friendly: no dead branches, no ghost
-    MoE graph nodes.  Returns a plain tensor (no aux_loss tuple).
-    """
-    def __init__(self, d_model: int, d_hidden: int):
-        super().__init__()
-        self.gate_proj = nn.Linear(d_model, d_hidden, bias=False)
-        self.up_proj = nn.Linear(d_model, d_hidden, bias=False)
-        self.down_proj = nn.Linear(d_hidden, d_model, bias=False)
-        self._init_weights()
-
-    def _init_weights(self):
-        for m in [self.gate_proj, self.up_proj, self.down_proj]:
-            nn.init.normal_(m.weight, mean=0.0, std=0.02)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
-
-
 class LightningMLP(nn.Module):
-    """MLP wrapper: uses DenseMLP when num_experts==0, MoEFFN otherwise."""
-    def __init__(self, hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
-                 shared_intermediate_size=2048, data_sparsity=0.5):
+    """MLP wrapper using MoEFFN."""
+    def __init__(self, hidden_size, intermediate_size, num_experts, top_k,
+                 data_sparsity=0.5, moe_backend="auto", require_fused_kernel=False):
         super().__init__()
-        self.is_dense = (num_experts == 0 or data_sparsity == 0.0)
-
-        if self.is_dense:
-            self.mlp = DenseMLP(d_model=hidden_size, d_hidden=shared_intermediate_size)
-        else:
-            self.mlp = MoEFFN(
-                d_model=hidden_size,
-                d_hidden=intermediate_size,
-                num_experts=num_experts,
-                d_shared_hidden=shared_intermediate_size,
-                top_k=top_k,
-                dropout=0.0,
-                data_sparsity=data_sparsity
-            )
+        self.moe = MoEFFN(
+            d_model=hidden_size,
+            d_hidden=intermediate_size,
+            num_experts=num_experts,
+            top_k=top_k,
+            dropout=0.0,
+            data_sparsity=data_sparsity,
+            moe_backend=moe_backend,
+            require_fused_kernel=require_fused_kernel,
+        )
 
     def forward(self, x):
-        return self.mlp(x)
+        return self.moe(x)
 
 
 # ============================================================================
 # mHC (Multi-Head Composition) - From test model
 # ============================================================================
 
-def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> torch.Tensor:
+def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6) -> torch.Tensor:
     """Doubly-stochastic matrix via Sinkhorn-Knopp with numerical stability.
-    FIX #26: Default reduced to 5 iterations (from 20) for performance at long context.
+    Default kept at 20 iterations to match original paper settings.
 
     Triton acceleration: When available, fuses all iterations into a single
     kernel launch (eliminates 2*iters kernel launches).
     """
-    # Triton path: fused kernel (all iterations in one launch, zero extra memory traffic)
-    # IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
-    # autograd, which breaks the reversible midpoint backward recompute.
     if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda and not torch.is_grad_enabled():
         try:
             logits_stable = logits - logits.amax(dim=-1, keepdim=True)
@@ -1411,7 +1607,6 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> t
         except Exception:
             pass  # Fall through to PyTorch path
 
-    # PyTorch fallback
     # CRITICAL FIX: Log-sum-exp trick prevents overflow when logits are large
     logits = logits - logits.amax(dim=-1, keepdim=True)
     M = torch.exp(logits).clamp_min(eps)
@@ -1452,9 +1647,6 @@ class MHCCoeffs(nn.Module):
         B, T, n, D = x_stream.shape
         x_flat = x_stream.reshape(B, T, n * D)
         x_flat = self.rms(x_flat)
-
-        # Cast to weight dtype to prevent float32/bfloat16 mismatch during reversible backward
-        x_flat = x_flat.to(self.phi_pre.weight.dtype)
 
         pre_logits = self.alpha_pre * self.phi_pre(x_flat) + self.b_pre
         post_logits = self.alpha_post * self.phi_post(x_flat) + self.b_post
@@ -1524,8 +1716,11 @@ class LightningDecoderLayer(nn.Module):
                 head_dim=config.delta_head_dim,
                 max_seq_len=config.max_seq_len,
                 rope_base=config.rope_base,
+                rope_original_max=config.rope_original_max_position,
+                rope_scaling_factor=config.rope_scaling_factor,
                 conv_size=4,
-                use_output_norm=True
+                use_output_norm=True,
+                require_fused_kernel=config.require_fused_deltanet_kernel,
             )
         elif layer_type == "gsa":
             attn = GatedSparseAttention(
@@ -1537,6 +1732,9 @@ class LightningDecoderLayer(nn.Module):
                 k_min=config.gsa_k_min,
                 k_max=config.gsa_k_max,
                 indexer_heads=config.gsa_indexer_heads,
+                rope_original_max=config.rope_original_max_position,
+                rope_scaling_factor=config.rope_scaling_factor,
+                require_fused_kernel=config.require_fused_gsa_kernel,
             )
         else:
             raise ValueError(f"Unknown layer type: {layer_type}")
@@ -1544,11 +1742,11 @@ class LightningDecoderLayer(nn.Module):
         mlp = LightningMLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.expert_intermediate_size,
-            shared_intermediate_size=config.shared_expert_intermediate_size,
             num_experts=config.num_real_experts,
-            num_shared_experts=1,
             top_k=config.top_k,
-            data_sparsity=config.data_sparsity
+            data_sparsity=config.data_sparsity,
+            moe_backend=config.moe_backend,
+            require_fused_kernel=config.require_fused_moe_kernel,
         )
 
         # mHC Wrappers
@@ -1570,7 +1768,7 @@ class LightningDecoderLayer(nn.Module):
 
     def force(self, x, attention_mask=None):
         """Compute residual delta for reversible integration."""
-        h, aux1 = self.attn_block(x, attention_mask=None)
+        h, aux1 = self.attn_block(x, attention_mask=attention_mask)
         out, aux2 = self.mlp_block(h, attention_mask=None)
 
         delta = out - x
@@ -1585,9 +1783,7 @@ class LightningDecoderLayer(nn.Module):
                 aux = aux + aux2
 
         if aux is None:
-            # Must have a grad_fn for reversible midpoint backward
-            # (torch.autograd.grad requires all outputs to be differentiable)
-            aux = (delta * 0.0).sum()
+            aux = x.new_zeros((), dtype=torch.float32)
 
         return delta, aux
 
@@ -1618,7 +1814,7 @@ class MTPTransformerBlock(nn.Module):
         self.fusion_proj = nn.Linear(config.hidden_size * 2, config.hidden_size, bias=False)
 
         # Core sublayers (using GSA for better gradient quality)
-        # MTP block runs only once per step (not 8x like backbone layers),
+        # MTP block runs only once per step (not 20x like backbone layers),
         # so full sparse attention cost is negligible but gradient quality is critical
         self.attn = GatedSparseAttention(
             hidden_size=config.hidden_size,
@@ -1629,16 +1825,19 @@ class MTPTransformerBlock(nn.Module):
             k_min=config.gsa_k_min,
             k_max=config.gsa_k_max,
             indexer_heads=config.gsa_indexer_heads,
+            rope_original_max=config.rope_original_max_position,
+            rope_scaling_factor=config.rope_scaling_factor,
+            require_fused_kernel=config.require_fused_gsa_kernel,
         )
 
         self.mlp = LightningMLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.expert_intermediate_size,
-            shared_intermediate_size=config.shared_expert_intermediate_size,
             num_experts=config.num_real_experts,
-            num_shared_experts=1,
             top_k=config.top_k,
-            data_sparsity=config.data_sparsity
+            data_sparsity=config.data_sparsity,
+            moe_backend=config.moe_backend,
+            require_fused_kernel=config.require_fused_moe_kernel,
         )
 
         # mHC Wrappers
@@ -1661,7 +1860,7 @@ class MTPTransformerBlock(nn.Module):
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
-        if isinstance(module, (DenseMLP, MoEFFN, MoEGate, MHCCoeffs)):
+        if isinstance(module, (MoEFFN, MoEGate, MHCCoeffs)):
             return
 
         if isinstance(module, nn.Linear):
@@ -1681,7 +1880,7 @@ class MTPTransformerBlock(nn.Module):
                               device=x.device, dtype=x.dtype)
         x_stream[:, :, 0, :] = x
 
-        # NOTE: Memory stream injection happens in the main Model1B.forward(),
+        # NOTE: Memory stream injection happens in the main Model70B.forward(),
         # not here. The MTP block receives h_t which already contains recurrence
         # information from the backbone processing.
 
@@ -1699,14 +1898,14 @@ class MTPTransformerBlock(nn.Module):
 # Complete 70B Model
 # ============================================================================
 
-class Model1B(nn.Module):
+class Model70B(nn.Module):
     """
-    1B Dense Model with Hybrid Gated DeltaNet + Gated Sparse Attention.
+    70B Full-Scale MoE Model with Hybrid Gated DeltaNet + Gated Sparse Attention.
 
     Configuration:
-    - 1.513B total params, 1.513B active params (100% dense - no MoE)
-    - 8 layers: 75% DeltaNet (6 layers) + 25% GSA (2 layers)
-    - No experts (dense FFN with 2048 intermediate size)
+    - 69.875B total params, 4.079B active params (17.1x sparsity)
+    - 20 layers: 75% DeltaNet (15 layers) + 25% GSA (5 layers)
+    - 254 real + 254 null experts = 508 slots, top-k=10 dynamic (avg 5)
     - 256k context length target
 
     ENHANCED WITH MEMORY STREAM RECURRENCE:
@@ -1727,9 +1926,9 @@ class Model1B(nn.Module):
     Rationale:
     - NTP (t+1) is primary task: weight = 1.0
     - MTP (t+2) is auxiliary teacher: weight = 0.3 (prevents aux dominance)
-    - Aux loss: Minimal for 1B (dense, no MoE routing losses)
+    - Aux loss (router balance + z-loss): weight = 1.0 (already scaled in MoEGate)
 
-    Note: aux_loss will be near-zero for this model (no MoE routers in backbone)
+    Expected aux_loss magnitude: ~0.34 (settles mathematically from L_bal + L_z)
     """
     def __init__(self, config: ModelConfig, embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
         super().__init__()
@@ -1765,10 +1964,9 @@ class Model1B(nn.Module):
         layer_types = []
 
         for i in range(config.num_layers):
-            # Pattern: Delta Delta Delta GSA (every 4th layer is GSA)
-            # Provides periodic retrieval checkpoints for better long-context quality
-            # Layers 3, 7, 11, 15, 19 are GSA (20-layer: 15 Delta + 5 GSA = 75%/25%)
-            # Layers 3, 7 are GSA (8-layer: 6 Delta + 2 GSA = 75%/25%)
+            # Pattern: DDDG repeated across 20 layers:
+            # DDDG DDDG DDDG DDDG DDDG
+            # (every 4th layer is GSA; 15 DeltaNet + 5 GSA total)
             if (i + 1) % 4 == 0:
                 layer_type = "gsa"
             else:
@@ -1832,7 +2030,8 @@ class Model1B(nn.Module):
             embedding_params = self.vocab_size * config.hidden_size / 1e6
             embedding_buffer = 0
 
-        print(f"\n🤖 MODEL-1B (DENSE) INITIALIZED:")
+        print(f"\n🤖 MODEL WITH MEMORY STREAM RECURRENCE INITIALIZED:")
+        print(f"   🔄 Recurrence: Stream {self.recurrence_stream_idx} | λ_r={F.softplus(self.lambda_r_raw).item():.4f}")
         print(f"   Vocabulary: {self.vocab_size:,}")
         print(f"   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
@@ -1844,12 +2043,13 @@ class Model1B(nn.Module):
         print(f"\n   Total Layers: {config.num_layers}")
         print(f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention")
         print(f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse")
-        print(f"\n   Context Target: {config.max_seq_len:,} tokens (standard RoPE)")
+        print(f"\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
         print(f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots")
         print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
+        print(f"   MoE backend: {config.moe_backend} (require_fused={config.require_fused_moe_kernel})")
         print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
-        print(f"   Active Parameters: ~1.513B (100% active, no MoE sparsity)")
+        print(f"   Active Parameters: ~4.079B (avg 5 experts × top-k routing)")
 
     def _init_weights(self, module):
         # FIX #38: Skip initialization for kronecker_embeddings and all its submodules
@@ -1861,7 +2061,7 @@ class Model1B(nn.Module):
                 if module is submodule:
                     return
 
-        if isinstance(module, (DenseMLP, MoEFFN, MoEGate, MHCCoeffs)):
+        if isinstance(module, (MoEFFN, MoEGate, MHCCoeffs)):
             return
 
         if isinstance(module, nn.Linear):
@@ -1875,19 +2075,13 @@ class Model1B(nn.Module):
 
     @staticmethod
     def _chunked_cross_entropy(hidden, lm_head, targets, chunk_size=256):
-        """Compute cross-entropy without materializing the full [B, T, vocab] logit tensor.
-
-        Processes ``chunk_size`` tokens at a time so peak memory is
-        ``B * chunk_size * vocab * 4`` (float32 for CE) instead of
-        ``B * T * vocab * 4``.  For B=2, T=4094, vocab=131072 this
-        reduces peak from ~4 GB to ~130 MB.
-        """
-        B, T, D = hidden.shape
+        """Compute cross-entropy without materializing full [B, T, vocab] logits."""
+        B, T, _ = hidden.shape
         total_loss = torch.tensor(0.0, device=hidden.device, dtype=torch.float32)
         n_tokens = B * T
         for start in range(0, T, chunk_size):
             end = min(start + chunk_size, T)
-            chunk_logits = lm_head(hidden[:, start:end, :])        # [B, chunk, vocab]
+            chunk_logits = lm_head(hidden[:, start:end, :])  # [B, chunk, vocab]
             chunk_loss = torch.nn.functional.cross_entropy(
                 chunk_logits.float().reshape(-1, chunk_logits.size(-1)),
                 targets[:, start:end].reshape(-1),
@@ -1910,10 +2104,10 @@ class Model1B(nn.Module):
             prev_memory_stream: [B, D] - Memory from previous chunk (None for first chunk)
             return_memory: Whether to return memory stream for next chunk
             return_loss: Whether to return auxiliary loss
-            ntp_targets: [B, T] - NTP target IDs.  When provided the model
-                returns a scalar ``loss_ntp`` instead of the full logit tensor,
-                using chunked cross-entropy to avoid materializing [B, T, vocab].
-            mtp_targets: [B, T] - MTP target IDs (same semantics as ntp_targets).
+            ntp_targets: [B, T] - NTP target IDs. When provided, returns scalar
+                NTP loss via chunked CE instead of full logits.
+            mtp_targets: [B, T] - MTP target IDs. When provided, returns scalar
+                MTP loss via chunked CE instead of full logits.
 
         Returns:
             When ``ntp_targets`` is None (inference / eval):
@@ -1922,9 +2116,11 @@ class Model1B(nn.Module):
             When ``ntp_targets`` is provided (training):
                 - loss_ntp: scalar
                 - loss_mtp: scalar or None
-            Plus optionally aux_loss and memory_stream.
+            - memory_stream: [B, D] (if return_memory=True) - Memory for next chunk
+            - aux_loss: Scalar tensor (if return_loss=True)
         """
         batch_size, seq_len = input_ids.size()
+        token_keep_mask = _token_keep_mask(attention_mask, batch_size, seq_len, input_ids.device)
 
         # Embeddings
         if self.use_kronecker:
@@ -1940,7 +2136,7 @@ class Model1B(nn.Module):
         x_stream = torch.zeros(B, T, self.n_streams, D, device=x.device, dtype=x.dtype)
         x_stream[:, :, 0, :] = x
 
-        # FIX #30: Precompute RoPE cos/sin once per forward (shared across all 8 layers)
+        # FIX #30: Precompute RoPE cos/sin once per forward (shared across all 20 layers)
         # FIX #32: Correct path through MHCSublayer wrapper (was layer.attn, now layer.attn_block.sublayer)
         # FIX #36: Include MTP block in RoPE cache optimization
         # FIX #39: Include dtype in cache key for mixed-precision safety
@@ -1992,7 +2188,7 @@ class Model1B(nn.Module):
             x_stream = x_stream + mem_val * one_hot.view(1, 1, self.n_streams, 1)
 
         # Pass through reversible stack
-        x_stream, total_aux_loss = self.stack(x_stream)
+        x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
 
 
         # ============================================================================
@@ -2008,8 +2204,6 @@ class Model1B(nn.Module):
         h_main = self.norm(h_main)
 
         # NTP Prediction
-        # When ntp_targets are provided, use chunked cross-entropy to avoid
-        # materializing the full [B, T, vocab] logit tensor (saves ~4 GB).
         if ntp_targets is not None:
             logits_ntp = self._chunked_cross_entropy(h_main, self.lm_head, ntp_targets)
         else:
@@ -2029,7 +2223,8 @@ class Model1B(nn.Module):
             else:
                 next_emb = self.token_embed(next_ids_use)
 
-            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=None)
+            mtp_attention_mask = token_keep_mask[:, :min_len] if token_keep_mask is not None else None
+            h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
             if mtp_targets is not None:
                 logits_mtp = self._chunked_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
@@ -2065,9 +2260,9 @@ class Model1B(nn.Module):
 # Factory Function
 # ============================================================================
 
-def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
+def create_model_70b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
     """
-    Create 1B model with default configuration.
+    Create 70B model with default configuration.
 
     Args:
         embedding_type: "kronecker" or "standard"
@@ -2075,10 +2270,10 @@ def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
         pf_codec: Required for Kronecker embeddings
 
     Returns:
-        Model1B instance
+        Model70B instance
     """
     config = ModelConfig()
-    return Model1B(config, embedding_type=embedding_type, bpe_vocab=bpe_vocab, pf_codec=pf_codec)
+    return Model70B(config, embedding_type=embedding_type, bpe_vocab=bpe_vocab, pf_codec=pf_codec)
 
 
 if __name__ == "__main__":
@@ -2088,17 +2283,15 @@ if __name__ == "__main__":
     config_calc = LightningConfig(
         vocab_size=131072,
         hidden_size=4096,
-        target_params=1e9,
+        target_params=70e9,
         attention_type="gsa",
         deltanet_layer_ratio=0.75,
-        num_routed_experts_active=0,  # Dense model, no MoE
-        num_shared_experts=0,  # No MoE, pure dense model
-        expert_intermediate_size=1024,  # Not used in dense model
-        shared_expert_intermediate_size=2048,  # Acts as dense FFN when MoE is disabled
+        num_routed_experts_active=5,
+        expert_intermediate_size=1024,
+        shared_expert_intermediate_size=2048,
         enable_mtp=True,
         mtp_num_predictions=2,
-        num_experts_override=0,  # Dense model
-        num_layers_override=8,
+        num_layers_override=20,
     )
 
     calc = LightningCalculator(config_calc)
@@ -2123,7 +2316,7 @@ if __name__ == "__main__":
     config = ModelConfig()
 
     print("=" * 80)
-    print("1B DENSE MODEL ARCHITECTURE")
+    print("70B MODEL ARCHITECTURE")
     print("=" * 80)
     print("\nConfiguration:")
     print(f"  Total Params: {total_params:.3f}B")
@@ -2132,17 +2325,12 @@ if __name__ == "__main__":
     print(f"\nAttention Mix:")
     print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context")
     print(f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality")
-    print(f"\nModel Type:")
-    if num_experts == 0:
-        print(f"  DENSE MODEL (No MoE)")
-        print(f"  Dense FFN intermediate: {config.shared_expert_intermediate_size}")
-    else:
-        print(f"  MoE MODEL")
-        print(f"  Real Experts: {num_experts}")
-        print(f"  Null Experts: {num_experts} (ρ={config.data_sparsity})")
-        print(f"  Total slots: {config.total_expert_slots}")
-        print(f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})")
-        print(f"  Shared Expert FFN: {config.shared_expert_intermediate_size} (always active)")
-        print(f"  Routed Expert FFN: {config.expert_intermediate_size} (sparse)")
+    print(f"\nExperts:")
+    print(f"  Real: {num_experts}")
+    print(f"  Null: {num_experts} (ρ={config.data_sparsity})")
+    print(f"  Total slots: {config.total_expert_slots}")
+    print(f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})")
+    print(f"  Shared Expert FFN: {config.shared_expert_intermediate_size} (always active)")
+    print(f"  Routed Expert FFN: {config.expert_intermediate_size} (sparse)")
     print(f"\nContext: {config.max_seq_len:,} tokens")
     print("=" * 80)
