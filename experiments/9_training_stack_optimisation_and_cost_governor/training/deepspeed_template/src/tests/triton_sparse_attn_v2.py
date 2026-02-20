@@ -389,13 +389,17 @@ if HAS_TRITON:
             out = torch.empty(B, T, H, D, device=q.device, dtype=torch.float32)
             lse = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
 
-            BLOCK_K = triton.next_power_of_2(min(64, k_sel))
+            # tl.dot stages K/V tiles in shared memory:
+            #   BLOCK_K × BLOCK_D × 4 bytes × 2 arrays (K+V)
+            # With BLOCK_K=64, BLOCK_D=128: 64×128×4×2 = 64KB + overhead > T4's 64KB
+            # Solution: use BLOCK_K=32 when BLOCK_D>=128, halving tile SMEM
             BLOCK_D = triton.next_power_of_2(D)
-            grid = (B * H, T)
-
-            # T4 has 64KB shared memory; tl.dot uses more SMEM than tl.sum,
-            # so we need num_stages=1 for large BLOCK_D to fit
+            if BLOCK_D >= 128:
+                BLOCK_K = triton.next_power_of_2(min(32, k_sel))
+            else:
+                BLOCK_K = triton.next_power_of_2(min(64, k_sel))
             num_stages = 1 if BLOCK_D >= 128 else 3
+            grid = (B * H, T)
 
             _sparse_attn_fwd_kernel_v2[grid](
                 q, k, v, indices, mask,
