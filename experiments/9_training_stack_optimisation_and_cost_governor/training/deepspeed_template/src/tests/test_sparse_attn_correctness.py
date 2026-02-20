@@ -88,6 +88,11 @@ def test_correctness():
         check_max_diff("dK", dk_pt, dk_tr)
         check_max_diff("dV", dv_pt, dv_tr)
         print("V1 Edge case survived without crashing!")
+    except ValueError as e:
+        if "out of bounds" in str(e):
+            print(f"V1 Edge case: ✅ Correctly rejected bad indices ({e})")
+        else:
+            print(f"V1 Edge case failed unexpectedly: {e}")
     except Exception as e:
         print(f"V1 Edge case failed: {e}")
 
@@ -107,6 +112,11 @@ def test_correctness():
         check_max_diff("dK", dk_pt, dk_v2)
         check_max_diff("dV", dv_pt, dv_v2)
         print("V2 Edge case survived without crashing!")
+    except ValueError as e:
+        if "out of bounds" in str(e):
+            print(f"V2 Edge case: ✅ Correctly rejected bad indices ({e})")
+        else:
+            print(f"V2 Edge case failed unexpectedly: {e}")
     except Exception as e:
         print(f"V2 Edge case failed: {e}")
 
