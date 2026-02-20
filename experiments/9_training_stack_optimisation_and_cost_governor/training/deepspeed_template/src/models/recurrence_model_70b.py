@@ -1155,9 +1155,12 @@ class GatedSparseAttention(nn.Module):
             and triton_sparse_attention is not None
             and x.is_cuda
         )
-        if not gsa_fused_available:
+        is_grad_enabled = torch.is_grad_enabled()
+        # Training uses differentiable PyTorch sparse attention; fused Triton
+        # path remains required for no-grad / inference execution.
+        if (not is_grad_enabled) and (not gsa_fused_available):
             raise RuntimeError(
-                "GSA fused-only mode requires fused indexer + sparse attention kernels. "
+                "GSA fused kernels are required for no-grad execution. "
                 f"fused_indexer_topk={HAS_FUSED_INDEXER}, "
                 f"triton_sparse_attention={triton_sparse_attention is not None}, "
                 f"x.is_cuda={x.is_cuda}."
@@ -1250,20 +1253,21 @@ class GatedSparseAttention(nn.Module):
         sparse_mask = keep_mask.float().unsqueeze(1).expand(B, self.num_heads, T, k_limit)
         scale_attn = 1.0 / math.sqrt(self.head_dim)
 
-        # Strict fused-only policy: no autograd fallback through PyTorch sparse path.
+        # Training path: differentiable PyTorch sparse attention.
+        # No-grad path: fused Triton sparse attention.
         if torch.is_grad_enabled():
-            raise RuntimeError(
-                "GSA fused-only mode does not permit PyTorch fallback in grad-enabled execution. "
-                "Provide an autograd-capable fused sparse attention kernel."
+            o_sparse = _pytorch_sparse_attention_fallback(
+                q, k_attn, v, sparse_idx, sparse_mask, scale_attn
             )
-        if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
-            raise RuntimeError(
-                "GSA fused sparse attention kernel is required but unavailable. "
-                "Fallback attention path is disabled."
+        else:
+            if not (HAS_TRITON and triton_sparse_attention is not None and q.is_cuda):
+                raise RuntimeError(
+                    "GSA fused sparse attention kernel is required for no-grad execution. "
+                    "Fallback attention path is disabled."
+                )
+            o_sparse = triton_sparse_attention(
+                q, k_attn, v, sparse_idx, sparse_mask, scale_attn
             )
-        o_sparse = triton_sparse_attention(
-            q, k_attn, v, sparse_idx, sparse_mask, scale_attn
-        )
         if token_keep is not None:
             o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
 
