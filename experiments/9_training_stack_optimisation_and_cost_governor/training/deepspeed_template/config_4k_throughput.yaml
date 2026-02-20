@@ -9,6 +9,8 @@ data:
   max_length: 4096
   num_workers: 8
   tokenized_dataset_path: null
+  prefetch_to_gpu: true
+  prefetch_depth: 2
 
 training:
   num_epochs: 1

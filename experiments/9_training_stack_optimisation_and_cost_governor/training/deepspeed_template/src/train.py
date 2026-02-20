@@ -127,12 +127,15 @@ def train_epoch(
             print("Profile started")
             prof.start_profile()
 
-        # Move batch to device
-        input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
-        attention_mask = batch["attention_mask"].to(
-            model_engine.device, non_blocking=True
-        )
-        labels = batch["labels"].to(model_engine.device, non_blocking=True)
+        # Move batch to device (skip if PrefetchDataLoader already placed
+        # tensors on the correct device)
+        input_ids = batch["input_ids"]
+        attention_mask = batch["attention_mask"]
+        labels = batch["labels"]
+        if input_ids.device != model_engine.device:
+            input_ids = input_ids.to(model_engine.device, non_blocking=True)
+            attention_mask = attention_mask.to(model_engine.device, non_blocking=True)
+            labels = labels.to(model_engine.device, non_blocking=True)
 
         # Memory profiling on very first micro-batch
         if i == 0 or (i == skip_micro_batches and skip_micro_batches > 0):
@@ -469,12 +472,17 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
 
     with torch.no_grad():
         for i, batch in enumerate(progress_bar):
-            # Move batch to device
-            input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
-            attention_mask = batch["attention_mask"].to(
-                model_engine.device, non_blocking=True
-            )
-            labels = batch["labels"].to(model_engine.device, non_blocking=True)
+            # Move batch to device (skip if PrefetchDataLoader already
+            # placed tensors on the correct device)
+            input_ids = batch["input_ids"]
+            attention_mask = batch["attention_mask"]
+            labels = batch["labels"]
+            if input_ids.device != model_engine.device:
+                input_ids = input_ids.to(model_engine.device, non_blocking=True)
+                attention_mask = attention_mask.to(
+                    model_engine.device, non_blocking=True
+                )
+                labels = labels.to(model_engine.device, non_blocking=True)
 
             # Forward pass
             # Check if this is a reversible model

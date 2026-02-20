@@ -10,6 +10,9 @@ data:
   use_dataloader: false          # If true, use SPDL pipeline reading .bin/.idx shards
   shard_dir: null                # Required if use_dataloader=true
   shard_manifest_path: null      # Path to consumed_shards.json for tracking/excluding processed shards
+  # GPU Prefetch Settings
+  prefetch_to_gpu: true           # Async H2D transfer on a dedicated CUDA stream
+  prefetch_depth: 2               # Number of batches to prefetch ahead (0 = synchronous fallback)
 
 # Training Configuration
 training:

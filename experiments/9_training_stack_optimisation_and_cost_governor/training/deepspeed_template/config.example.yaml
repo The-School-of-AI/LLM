@@ -16,6 +16,9 @@ data:
   # SPDL Dataloader (Alternative to HuggingFace)
   use_dataloader: false                 # Set to true to use SPDL pipeline with .bin/.idx shards
   shard_dir: null                       # Path to directory containing .bin/.idx files (required if above is true)
+  # GPU Prefetch
+  prefetch_to_gpu: true                 # Async H2D transfer via dedicated CUDA stream (hides PCIe latency)
+  prefetch_depth: 2                     # Batches to prefetch ahead (0 = synchronous fallback)
 
 # =============================================================================
 # Training Configuration

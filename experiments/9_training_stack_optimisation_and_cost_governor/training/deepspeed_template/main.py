@@ -61,6 +61,7 @@ from src.models.recurrence_model_1b import (
     Model1B,
     ModelConfig,
 )
+from src.prefetch_loader import PrefetchDataLoader
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
@@ -117,6 +118,10 @@ class Config:
         self.use_dataloader = config_dict["data"].get("use_dataloader", False)
         self.shard_dir = config_dict["data"].get("shard_dir", None)
         self.shard_manifest_path = config_dict["data"].get("shard_manifest_path", None)
+
+        # GPU prefetch configuration
+        self.prefetch_to_gpu = config_dict["data"].get("prefetch_to_gpu", False)
+        self.prefetch_depth = config_dict["data"].get("prefetch_depth", 2)
 
         # Training configuration
         self.num_epochs = config_dict["training"]["num_epochs"]
@@ -488,6 +493,20 @@ def main():
         except Exception as e:
             print_rank_0(f"  ❌ Failed to resume from checkpoint: {e}")
             print_rank_0("  Starting training from scratch...")
+
+    # ========================================
+    # Step 3.7: Wrap DataLoaders with GPU prefetcher
+    # ========================================
+    if args.prefetch_to_gpu and torch.cuda.is_available():
+        device = model_engine.device
+        depth = args.prefetch_depth
+        print_rank_0(
+            f"\n[3.7/5] Wrapping DataLoaders with PrefetchDataLoader "
+            f"(device={device}, depth={depth})..."
+        )
+        train_loader = PrefetchDataLoader(train_loader, device=device, prefetch_depth=depth)
+        eval_loader = PrefetchDataLoader(eval_loader, device=device, prefetch_depth=depth)
+        test_loader = PrefetchDataLoader(test_loader, device=device, prefetch_depth=depth)
 
     # ========================================
     # Step 4: Training
