@@ -364,7 +364,7 @@ def train_epoch(
                     # Synchronize processed shards across all ranks before saving
                     import torch.distributed as dist
                     if dist.is_initialized():
-                        local_shards = list(shard_tracker.get_processed_shards())
+                        local_shards = list(shard_tracker.get_processed_files())
                         gathered_shards = [None for _ in range(dist.get_world_size())]
                         dist.all_gather_object(gathered_shards, local_shards)
                         
