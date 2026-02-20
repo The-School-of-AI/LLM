@@ -98,7 +98,7 @@ if HAS_TRITON:
                                  mask=idx_load_mask, other=0)
             qi_mask_val = tl.load(mask_row_ptr + k_block_offs * stride_mk,
                                   mask=idx_load_mask, other=0.0)
-            qi_mask = qi_mask_val > 0.5
+            qi_mask = (qi_mask_val > 0.5) & (qi_indices < seq_kv)
 
             # gather K, V via indirect load
             k_ptrs = k_base + qi_indices[:, None] * stride_kk + d_offs[None, :] * stride_kd
@@ -115,15 +115,18 @@ if HAS_TRITON:
             # online softmax update
             block_max = tl.max(scores, axis=0)
             m_new = tl.maximum(m_i, block_max)
-            alpha = tl.exp(m_i - m_new)
-            beta  = tl.exp(scores - m_new)
+            
+            # Prevent NaN when m_new is -inf
+            alpha = tl.where(m_new == float('-inf'), 0.0, tl.exp(m_i - m_new))
+            beta  = tl.where(m_new == float('-inf'), 0.0, tl.exp(scores - m_new))
 
             l_i = alpha * l_i + tl.sum(beta, axis=0)
             acc = alpha * acc + tl.sum(beta[:, None] * v_vals, axis=0)
             m_i = m_new
 
         # normalise
-        acc = acc / l_i
+        l_i_safe = tl.where(l_i == 0.0, 1.0, l_i)
+        acc = acc / l_i_safe
 
         # store output
         out_row_ptr = (OUT_ptr
@@ -182,7 +185,7 @@ if HAS_TRITON:
         IDX_ptr, MASK_ptr,
         LSE_ptr, DELTA_ptr,
         DQ_ptr,
-        seq_len, n_heads, d_head, k_selected,
+        seq_len, seq_kv, n_heads, d_head, k_selected,
         stride_qb, stride_qq, stride_qh, stride_qd,
         stride_kb, stride_kk, stride_kh, stride_kd,
         stride_vb, stride_vk, stride_vh, stride_vd,
@@ -244,7 +247,7 @@ if HAS_TRITON:
                                  mask=idx_load_mask, other=0)
             qi_mask_val = tl.load(mask_row + k_block_offs * stride_mk,
                                   mask=idx_load_mask, other=0.0)
-            valid = idx_load_mask & (qi_mask_val > 0.5)
+            valid = idx_load_mask & (qi_mask_val > 0.5) & (qi_indices < seq_kv)
 
             # Gather K[ki] and V[ki]
             k_ptrs = k_base + qi_indices[:, None] * stride_kk + d_offs[None, :] * stride_kd
@@ -279,7 +282,7 @@ if HAS_TRITON:
         IDX_ptr, MASK_ptr,
         LSE_ptr, DELTA_ptr,
         DK_ptr, DV_ptr,
-        seq_len, n_heads, d_head, k_selected,
+        seq_len, seq_kv, n_heads, d_head, k_selected,
         stride_qb, stride_qq, stride_qh, stride_qd,
         stride_kb, stride_kk, stride_kh, stride_kd,
         stride_vb, stride_vk, stride_vh, stride_vd,
@@ -340,7 +343,7 @@ if HAS_TRITON:
                                  mask=idx_load_mask, other=0)
             qi_mask_val = tl.load(mask_row + k_block_offs * stride_mk,
                                   mask=idx_load_mask, other=0.0)
-            valid = idx_load_mask & (qi_mask_val > 0.5)
+            valid = idx_load_mask & (qi_mask_val > 0.5) & (qi_indices < seq_kv)
 
             # Gather K[ki] and V[ki]
             k_ptrs = k_base + qi_indices[:, None] * stride_kk + d_offs[None, :] * stride_kd
@@ -447,6 +450,7 @@ if HAS_TRITON:
             BLOCK_D = ctx.BLOCK_D
 
             B, T, H, D = q.shape
+            T_kv = k.shape[1]
             k_sel = indices.size(-1)
             grid = (B * H, T)
 
@@ -472,7 +476,7 @@ if HAS_TRITON:
                 indices, mask,
                 lse, delta,
                 dq,
-                T, H, D, k_sel,
+                T, T_kv, H, D, k_sel,
                 q.stride(0), q.stride(1), q.stride(2), q.stride(3),
                 k.stride(0), k.stride(1), k.stride(2), k.stride(3),
                 v.stride(0), v.stride(1), v.stride(2), v.stride(3),
@@ -493,7 +497,7 @@ if HAS_TRITON:
                 indices, mask,
                 lse, delta,
                 dk, dv,
-                T, H, D, k_sel,
+                T, T_kv, H, D, k_sel,
                 q.stride(0), q.stride(1), q.stride(2), q.stride(3),
                 k.stride(0), k.stride(1), k.stride(2), k.stride(3),
                 v.stride(0), v.stride(1), v.stride(2), v.stride(3),
@@ -548,11 +552,21 @@ def triton_sparse_attention(
     # Resolve toggle
     _use_triton = use_triton_backward if use_triton_backward is not None else USE_TRITON_BACKWARD
 
+    # Claude's Sanitization: Assert validity of Masked-In tokens, Clamp Masked-Out tokens
+    T_kv = k.shape[1]
+    bool_mask = mask > 0.5
+    bad = ((indices < 0) | (indices >= T_kv)) & bool_mask
+    
+    if bad.any():
+        raise ValueError("Critical Error: GSA generated masked-in sparse indices that are out of bounds!")
+        
+    safe_indices = torch.where(bool_mask, indices.clamp(0, T_kv - 1), torch.zeros_like(indices))
+
     if _use_triton:
-        return TritonSparseAttnFn.apply(q, k, v, indices, mask, scale)
+        return TritonSparseAttnFn.apply(q, k, v, safe_indices, mask, scale)
     else:
         # PyTorch autograd backward (slower but proven correct)
-        return pytorch_sparse_attention(q, k, v, indices, mask, scale)
+        return pytorch_sparse_attention(q, k, v, safe_indices, mask, scale)
 
 
 def pytorch_sparse_attention(
@@ -594,8 +608,11 @@ def pytorch_sparse_attention(
         # Convert mask to bool for masked_fill (handles both bool and float inputs)
         bool_mask = mask_chunk > 0.5 if mask_chunk.dtype != torch.bool else mask_chunk
 
-        k_gathered = k_bh[bh_idx, h_idx, idx_chunk]
-        v_gathered = v_bh[bh_idx, h_idx, idx_chunk]
+        # Clamp indices for PyTorch fallback so it doesn't crash on device-side asserts
+        idx_chunk_clamped = torch.clamp(idx_chunk, 0, v_bh.size(2) - 1)
+
+        k_gathered = k_bh[bh_idx, h_idx, idx_chunk_clamped]
+        v_gathered = v_bh[bh_idx, h_idx, idx_chunk_clamped]
 
         scores = torch.einsum('bhqd,bhqkd->bhqk', q_chunk, k_gathered) * scale
         scores = scores.masked_fill(~bool_mask, float('-inf'))
