@@ -22,8 +22,7 @@ import datetime as _dt
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Tuple
-
+from typing import Any, Dict, List, Optional, Tuple
 
 _UTC = _dt.timezone.utc
 
@@ -116,7 +115,9 @@ def _merge_by_band_domain(
     band_domain_tokens: Dict[str, Dict[str, int]] = {}
     band_totals: Dict[str, int] = {}
 
-    for band_tokens, by_band in zip(shard_band_token_counts, shard_by_band_domain_ratio, strict=False):
+    for band_tokens, by_band in zip(
+        shard_band_token_counts, shard_by_band_domain_ratio, strict=False
+    ):
         if not isinstance(by_band, dict):
             continue
         for band, dom_ratios in by_band.items():
@@ -129,14 +130,18 @@ def _merge_by_band_domain(
                     continue
                 tok = int(round(band_tok * float(ratio)))
                 band_domain_tokens.setdefault(band, {})
-                band_domain_tokens[band][dom] = band_domain_tokens[band].get(dom, 0) + tok
+                band_domain_tokens[band][dom] = (
+                    band_domain_tokens[band].get(dom, 0) + tok
+                )
 
     out: Dict[str, Dict[str, float]] = {}
     for band, dom_tokens in band_domain_tokens.items():
         total = band_totals.get(band, 0)
         if total <= 0:
             continue
-        out[band] = {dom: tok / total for dom, tok in sorted(dom_tokens.items()) if tok > 0}
+        out[band] = {
+            dom: tok / total for dom, tok in sorted(dom_tokens.items()) if tok > 0
+        }
     return out
 
 
@@ -215,7 +220,9 @@ def _merge_dedup_stats(shards: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]
     return out
 
 
-def _merge_coverage_audit(shards: List[Dict[str, Any]], shard_actual_tokens: List[int]) -> Optional[Dict[str, Any]]:
+def _merge_coverage_audit(
+    shards: List[Dict[str, Any]], shard_actual_tokens: List[int]
+) -> Optional[Dict[str, Any]]:
     audits = [m.get("coverage_audit") for m in shards]
     if not all(isinstance(a, dict) for a in audits if a is not None):
         # If some shards have audits and others do not, drop (avoid misleading data).
@@ -244,7 +251,9 @@ def _merge_coverage_audit(shards: List[Dict[str, Any]], shard_actual_tokens: Lis
         for k, v in ac.items():
             if not _is_number(v):
                 continue
-            actual_weighted[str(k)] = actual_weighted.get(str(k), 0.0) + (float(v) * (tok / total_tokens))
+            actual_weighted[str(k)] = actual_weighted.get(str(k), 0.0) + (
+                float(v) * (tok / total_tokens)
+            )
 
     violations: List[str] = []
     for a in dict_audits:
@@ -261,7 +270,9 @@ def _merge_coverage_audit(shards: List[Dict[str, Any]], shard_actual_tokens: Lis
     }
 
 
-def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str, strict: bool) -> Optional[Path]:
+def merge_stage_manifests(
+    stage_dir: Path, *, overwrite: bool, output_name: str, strict: bool
+) -> Optional[Path]:
     shard_paths = sorted(stage_dir.glob("manifest_shard*.json"))
     if not shard_paths:
         return None
@@ -307,16 +318,23 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
     if target_tokens_global is not None and _is_number(target_tokens_global):
         out["target_tokens_global"] = int(float(target_tokens_global))
         if _is_number(stage_target_scale):
-            out["target_tokens"] = int(round(float(target_tokens_global) * float(stage_target_scale)))
+            out["target_tokens"] = int(
+                round(float(target_tokens_global) * float(stage_target_scale))
+            )
         else:
             out["target_tokens"] = int(float(target_tokens_global))
     else:
         # Fallback: sum per-shard targets
-        per_shard_targets = [_safe_int(m.get("target_tokens") or m.get("target_tokens_shard"), 0) for m in manifests]
+        per_shard_targets = [
+            _safe_int(m.get("target_tokens") or m.get("target_tokens_shard"), 0)
+            for m in manifests
+        ]
         out["target_tokens"] = sum(per_shard_targets)
 
     out["actual_tokens"] = sum(shard_actual_tokens)
-    out["selected_chunks_count"] = sum(_safe_int(m.get("selected_chunks_count"), 0) for m in manifests)
+    out["selected_chunks_count"] = sum(
+        _safe_int(m.get("selected_chunks_count"), 0) for m in manifests
+    )
 
     out["pipeline_version"] = manifests[0].get("pipeline_version")
     out["curriculum_version"] = manifests[0].get("curriculum_version")
@@ -326,7 +344,9 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
     if len({h for h in shard_config_hashes if h}) == 1:
         out["config_hash"] = manifests[0].get("config_hash")
     else:
-        out["config_hash"] = _sha256_text("merged_config_hash:" + json.dumps(shard_config_hashes, sort_keys=True))
+        out["config_hash"] = _sha256_text(
+            "merged_config_hash:" + json.dumps(shard_config_hashes, sort_keys=True)
+        )
     out["algorithm_version"] = manifests[0].get("algorithm_version")
     out["deterministic"] = all(bool(m.get("deterministic", True)) for m in manifests)
 
@@ -336,7 +356,12 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
     if created_times_valid:
         out["created_at"] = max(created_times_valid).isoformat()
     else:
-        out["created_at"] = _dt.datetime.now(_UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        out["created_at"] = (
+            _dt.datetime.now(_UTC)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
 
     # Selected chunks file reference: stage directory
     out["selected_chunks_file"] = str(Path("output") / "coresets" / str(stage_name))
@@ -355,7 +380,9 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
             c = c if isinstance(c, dict) else {}
             band_ratio_map = _flatten_total_distribution(c.get("band_distribution"))
             shard_band_ratios.append(band_ratio_map)
-            shard_lang_ratios.append(_flatten_total_distribution(c.get("language_distribution")))
+            shard_lang_ratios.append(
+                _flatten_total_distribution(c.get("language_distribution"))
+            )
 
             dom = c.get("domain_distribution")
             shard_domain_total_ratios.append(_flatten_total_distribution(dom))
@@ -365,17 +392,31 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
                 for band, dom_map in dom.get("by_band", {}).items():
                     if not isinstance(dom_map, dict):
                         continue
-                    by_band[str(band)] = {str(k): float(v) for k, v in dom_map.items() if _is_number(v)}
+                    by_band[str(band)] = {
+                        str(k): float(v) for k, v in dom_map.items() if _is_number(v)
+                    }
             shard_domain_by_band_ratios.append(by_band)
 
         # Per-shard band token counts (needed for domain-by-band merge).
         for tok, ratio_map in zip(shard_actual_tokens, shard_band_ratios, strict=False):
-            shard_band_token_counts.append({b: int(round(tok * float(r))) for b, r in ratio_map.items() if _is_number(r)})
+            shard_band_token_counts.append(
+                {
+                    b: int(round(tok * float(r)))
+                    for b, r in ratio_map.items()
+                    if _is_number(r)
+                }
+            )
 
-        band_tokens, band_ratios = _weighted_merge_ratios(shard_actual_tokens, shard_band_ratios)
+        band_tokens, band_ratios = _weighted_merge_ratios(
+            shard_actual_tokens, shard_band_ratios
+        )
         _, lang_ratios = _weighted_merge_ratios(shard_actual_tokens, shard_lang_ratios)
-        _, dom_total_ratios = _weighted_merge_ratios(shard_actual_tokens, shard_domain_total_ratios)
-        dom_by_band = _merge_by_band_domain(shard_band_token_counts, shard_domain_by_band_ratios)
+        _, dom_total_ratios = _weighted_merge_ratios(
+            shard_actual_tokens, shard_domain_total_ratios
+        )
+        dom_by_band = _merge_by_band_domain(
+            shard_band_token_counts, shard_domain_by_band_ratios
+        )
 
         out["composition"] = {
             "band_distribution": dict(sorted(band_ratios.items())),
@@ -403,20 +444,31 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
     out["coverage_audit"] = _merge_coverage_audit(manifests, shard_actual_tokens)
 
     # Rolling window stats: take worst-case max deltas
-    rolling = [m.get("rolling_window_stats") for m in manifests if isinstance(m.get("rolling_window_stats"), dict)]
+    rolling = [
+        m.get("rolling_window_stats")
+        for m in manifests
+        if isinstance(m.get("rolling_window_stats"), dict)
+    ]
     if rolling:
         window_tokens = rolling[0].get("window_tokens")
         out["rolling_window_stats"] = {
             "window_tokens": window_tokens,
-            "max_band_delta": max(float(r.get("max_band_delta") or 0.0) for r in rolling),
-            "max_domain_delta": max(float(r.get("max_domain_delta") or 0.0) for r in rolling),
+            "max_band_delta": max(
+                float(r.get("max_band_delta") or 0.0) for r in rolling
+            ),
+            "max_domain_delta": max(
+                float(r.get("max_domain_delta") or 0.0) for r in rolling
+            ),
         }
 
     out["availability_stats"] = _merge_availability_stats(manifests)
 
     # Merge metadata
     out["shard_merge"] = {
-        "merged_at": _dt.datetime.now(_UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "merged_at": _dt.datetime.now(_UTC)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
         "shard_manifests": [p.name for p in shard_paths],
         "shard_actual_tokens": shard_actual_tokens,
         "num_shards_expected": num_shards,
@@ -433,13 +485,22 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
                 raise ValueError(msg)
             print(f"[WARN] {msg}")
 
-    for k in ["pipeline_version", "curriculum_version", "seed", "config_hash", "stage_target_scale", "target_tokens_global"]:
+    for k in [
+        "pipeline_version",
+        "curriculum_version",
+        "seed",
+        "config_hash",
+        "stage_target_scale",
+        "target_tokens_global",
+    ]:
         _expect_same(k)
 
     # Write output
     out_path = stage_dir / output_name
     if out_path.exists() and not overwrite:
-        raise FileExistsError(f"Refusing to overwrite existing {out_path}. Use --overwrite.")
+        raise FileExistsError(
+            f"Refusing to overwrite existing {out_path}. Use --overwrite."
+        )
 
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(out, f, indent=2, sort_keys=False)
@@ -449,12 +510,31 @@ def merge_stage_manifests(stage_dir: Path, *, overwrite: bool, output_name: str,
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Merge sharded manifests per stage into a stage-level manifest.")
-    parser.add_argument("--coreset-root", default="output/coresets", help="Root directory containing stage subfolders")
-    parser.add_argument("--stages", nargs="*", default=None, help="Stages to merge (default: all stage subfolders found)")
-    parser.add_argument("--output-name", default="manifest.json", help="Output manifest filename (default: manifest.json)")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite output file if it exists")
-    parser.add_argument("--strict", action="store_true", help="Fail on inconsistent shard metadata")
+    parser = argparse.ArgumentParser(
+        description="Merge sharded manifests per stage into a stage-level manifest."
+    )
+    parser.add_argument(
+        "--coreset-root",
+        default="output/coresets",
+        help="Root directory containing stage subfolders",
+    )
+    parser.add_argument(
+        "--stages",
+        nargs="*",
+        default=None,
+        help="Stages to merge (default: all stage subfolders found)",
+    )
+    parser.add_argument(
+        "--output-name",
+        default="manifest.json",
+        help="Output manifest filename (default: manifest.json)",
+    )
+    parser.add_argument(
+        "--overwrite", action="store_true", help="Overwrite output file if it exists"
+    )
+    parser.add_argument(
+        "--strict", action="store_true", help="Fail on inconsistent shard metadata"
+    )
     args = parser.parse_args()
 
     root = Path(args.coreset_root)
@@ -462,7 +542,9 @@ def main() -> int:
         raise FileNotFoundError(f"coreset root not found: {root}")
 
     if args.stages is None or len(args.stages) == 0:
-        stage_dirs = [p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")]
+        stage_dirs = [
+            p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")
+        ]
     else:
         stage_dirs = [root / s for s in args.stages]
 
@@ -472,7 +554,12 @@ def main() -> int:
             print(f"[WARN] Missing stage dir: {stage_dir}")
             continue
         try:
-            out_path = merge_stage_manifests(stage_dir, overwrite=args.overwrite, output_name=args.output_name, strict=args.strict)
+            out_path = merge_stage_manifests(
+                stage_dir,
+                overwrite=args.overwrite,
+                output_name=args.output_name,
+                strict=args.strict,
+            )
         except Exception as e:
             print(f"[ERROR] Failed merging stage {stage_dir.name}: {e}")
             return 2

@@ -75,7 +75,9 @@ def _estimate_parquet(paths: Iterable[Path]) -> Tuple[int, int, int]:
         import pyarrow.compute as pc
         import pyarrow.parquet as pq
     except Exception as e:  # pragma: no cover
-        raise RuntimeError("pyarrow is required for parquet estimation (pip install pyarrow)") from e
+        raise RuntimeError(
+            "pyarrow is required for parquet estimation (pip install pyarrow)"
+        ) from e
 
     total_tokens = 0
     total_rows = 0
@@ -116,7 +118,9 @@ def _estimate_parquet(paths: Iterable[Path]) -> Tuple[int, int, int]:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Estimate total tokens for streaming input datasets")
+    parser = argparse.ArgumentParser(
+        description="Estimate total tokens for streaming input datasets"
+    )
     parser.add_argument(
         "--input-path",
         type=str,
@@ -147,7 +151,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.quiet:
             print(int(total_tokens))
         else:
-            print(f"files={len(files)} rows={total_rows:,} total_tokens={total_tokens:,} bad_rows={bad:,}")
+            print(
+                f"files={len(files)} rows={total_rows:,} total_tokens={total_tokens:,} bad_rows={bad:,}"
+            )
         return 0
 
     if args.input_format == "parquet":
@@ -158,7 +164,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.quiet:
             print(int(total_tokens))
         else:
-            print(f"files={len(files)} rows={total_rows:,} total_tokens={total_tokens:,} bad_files={bad_files:,}")
+            print(
+                f"files={len(files)} rows={total_rows:,} total_tokens={total_tokens:,} bad_files={bad_files:,}"
+            )
         return 0
 
     raise SystemExit(2)

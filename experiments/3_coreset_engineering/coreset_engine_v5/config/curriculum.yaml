@@ -7,9 +7,9 @@
 
 version: "0.7"
 owner_team: "Team 2: Curriculum Architects"
-status: "DRAFT"  # "FROZEN"
+status: "DRAFT" # "FROZEN"
 frozen_on: "2026-02-02"
-change_policy: "STRUCTURE_IMMUTABLE"  # "NO_CHANGES_ALLOWED"         
+change_policy: "STRUCTURE_IMMUTABLE" # "NO_CHANGES_ALLOWED"
 
 # ============================================================
 # GLOBAL CONTRACT
@@ -34,7 +34,6 @@ global_contract:
 # LANGUAGE & CONTEXT POLICY
 # ============================================================
 language_and_context:
-
   language_policy:
     definition_method: "hard_cap_with_stage_gating"
     primary_languages:
@@ -60,7 +59,6 @@ language_and_context:
 # DIFFICULTY SYSTEM (CORE OF CURRICULUM)
 # ============================================================
 difficulty_system:
-
   definition_method:
     primary: "heuristic"
     secondary: "tokenizer_proxy"
@@ -99,8 +97,8 @@ difficulty_system:
 
   # Model Capacity Configuration
   model_capacity_config:
-    min_params: 1000000000.0  # 1B
-    max_params: 70000000000.0  # 70B
+    min_params: 1000000000.0 # 1B
+    max_params: 70000000000.0 # 70B
 
   bands:
     # avg_max: The highest allowed average token difficulty across the entire text.
@@ -121,7 +119,6 @@ difficulty_system:
         cot: "forbidden"
         agentic: "forbidden"
 
-
     B1:
       name: "Primary"
       intent: "Fluent everyday language"
@@ -141,7 +138,8 @@ difficulty_system:
       name: "HighSchool"
       intent: "Structured knowledge without explicit reasoning"
       allowed_modalities: ["general_text", "structured_knowledge"]
-      allowed_domains: ["encyclopedia", "news", "education", "literature", "web", "qa"]
+      allowed_domains:
+        ["encyclopedia", "news", "education", "literature", "web", "qa"]
       constraints:
         tokenizer:
           avg_max: 20000
@@ -189,7 +187,8 @@ difficulty_system:
     B5:
       name: "PhD"
       intent: "Planning and system-level reasoning"
-      allowed_modalities: ["hard_reasoning", "math", "advanced_code", "planning"]
+      allowed_modalities:
+        ["hard_reasoning", "math", "advanced_code", "planning"]
       allowed_domains: ["instruction", "science", "math", "code"]
       constraints:
         tokenizer:
@@ -218,7 +217,8 @@ modalities:
     purpose: "factual and conceptual grounding"
   code:
     purpose: "procedural and algorithmic reasoning"
-    allowed_languages: ["python", "javascript", "typescript", "c", "cpp", "java"]
+    allowed_languages:
+      ["python", "javascript", "typescript", "c", "cpp", "java"]
   math:
     purpose: "symbolic abstraction"
   research_papers:
@@ -235,36 +235,43 @@ modalities:
 # ============================================================
 dataset_interface:
   input_from_team1:
-    required_fields: ["id", "text", "source", "added", "created", "metadata", "domain", "language"]
+    required_fields:
+      [
+        "id",
+        "text",
+        "source",
+        "added",
+        "created",
+        "metadata",
+        "domain",
+        "language",
+      ]
   segmentation_requests_allowed: true
   partial_rejection_allowed: true
-
 
 # ============================================================
 # STAGE & GROWTH SCHEDULE
 # ============================================================
 growth_schedule:
-
   stages:
     - name: "1B"
       order: 1
       profile: "base"
-      params: 1000000000.0  # 1B
+      params: 1000000000.0 # 1B
     - name: "3B"
       order: 2
       profile: "harder_shift_1"
-      params: 3000000000.0  # 3B
+      params: 3000000000.0 # 3B
     - name: "8B"
       order: 3
       profile: "harder_shift_2"
-      params: 8000000000.0  # 8B
+      params: 8000000000.0 # 8B
     - name: "70B"
       order: 4
       profile: "final_adaptive"
       params: 70000000000.0 # 70B
 
   stage_profiles:
-
     base:
       total_tokens: 20000000000
       band_weights:
@@ -334,7 +341,6 @@ growth_schedule:
 # GUARDRAILS & SMOOTHING
 # ============================================================
 guardrails:
-
   rolling_window:
     window_tokens: 2000000
     max_band_delta: 0.03

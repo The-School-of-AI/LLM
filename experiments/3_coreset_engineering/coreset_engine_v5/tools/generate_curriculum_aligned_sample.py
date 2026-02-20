@@ -23,15 +23,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 from dataclasses import dataclass
 from math import ceil
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import random
-
 import yaml
-
 
 BANDS: List[str] = ["B0", "B1", "B2", "B3", "B4", "B5"]
 STAGES: List[str] = ["1B", "3B", "8B", "70B"]
@@ -43,7 +41,9 @@ class StageProfile:
     band_weights: Dict[str, float]
 
 
-def _load_stage_profiles(curriculum_path: Path) -> Tuple[Dict[str, str], Dict[str, StageProfile], Dict[str, List[str]]]:
+def _load_stage_profiles(
+    curriculum_path: Path,
+) -> Tuple[Dict[str, str], Dict[str, StageProfile], Dict[str, List[str]]]:
     raw = yaml.safe_load(curriculum_path.read_text(encoding="utf-8"))
 
     growth = (raw or {}).get("growth_schedule", {})
@@ -120,7 +120,7 @@ def generate(
         req = int(required_band_tokens.get(b, 0) or 0)
         band_counts[b] = int(ceil(req / float(chunk_tokens))) if req > 0 else 0
 
-    total_chunks = sum(band_counts.values())
+    sum(band_counts.values())
 
     # Deterministic language assignment spread across the file.
     # Use a 100-step cycle to approximate hi_share; this keeps each input batch
@@ -141,45 +141,58 @@ def generate(
     with out_path.open("w", encoding="utf-8") as f:
         for i, b in enumerate(band_labels):
 
-                allowed = allowed_domains_by_band.get(b) or []
-                if not allowed:
-                    domain = "clean_web"
-                else:
-                    # Choose a single allowed domain per band to keep combos valid and simple.
-                    # This is sufficient for passing curriculum feasibility checks.
-                    domain = allowed[0]
+            allowed = allowed_domains_by_band.get(b) or []
+            if not allowed:
+                domain = "clean_web"
+            else:
+                # Choose a single allowed domain per band to keep combos valid and simple.
+                # This is sufficient for passing curriculum feasibility checks.
+                domain = allowed[0]
 
-                language = "hi" if (hi_per_100 > 0 and (i % 100) < hi_per_100) else "en"
-                token_count = int(chunk_tokens)
-                total_tokens += token_count
+            language = "hi" if (hi_per_100 > 0 and (i % 100) < hi_per_100) else "en"
+            token_count = int(chunk_tokens)
+            total_tokens += token_count
 
-                row = {
-                    "chunk_id": f"chunk_{i:07d}",
-                    "dataset_id": f"ds_{domain}",
-                    "token_count_estimate": token_count,
-                    "byte_length": token_count * 4,
-                    "domain": domain,
-                    "language": language,
-                    "band": b,
-                    "source_doc_id": f"doc_{i // 4:07d}",
-                    "source_url": f"http://example.com/{i}",
-                    "quality_flags": [],
-                    "sensitive_markers": [],
-                    "start_offset": 0,
-                }
-                f.write(json.dumps(row) + "\n")
+            row = {
+                "chunk_id": f"chunk_{i:07d}",
+                "dataset_id": f"ds_{domain}",
+                "token_count_estimate": token_count,
+                "byte_length": token_count * 4,
+                "domain": domain,
+                "language": language,
+                "band": b,
+                "source_doc_id": f"doc_{i // 4:07d}",
+                "source_url": f"http://example.com/{i}",
+                "quality_flags": [],
+                "sensitive_markers": [],
+                "start_offset": 0,
+            }
+            f.write(json.dumps(row) + "\n")
 
     return total_tokens
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Generate a curriculum-aligned JSONL sample")
+    ap = argparse.ArgumentParser(
+        description="Generate a curriculum-aligned JSONL sample"
+    )
     ap.add_argument("--curriculum", type=str, default="config/curriculum.yaml")
-    ap.add_argument("--out", type=str, default="data/datasets/large_sample_chunks.jsonl")
+    ap.add_argument(
+        "--out", type=str, default="data/datasets/large_sample_chunks.jsonl"
+    )
     ap.add_argument("--stage-target-scale", type=float, default=0.00005)
-    ap.add_argument("--slack", type=float, default=0.15, help="Extra supply beyond required tokens per band")
-    ap.add_argument("--chunk-tokens", type=int, default=512, help="Token count per chunk")
-    ap.add_argument("--hi-share", type=float, default=0.075, help="Fraction of chunks labeled hi")
+    ap.add_argument(
+        "--slack",
+        type=float,
+        default=0.15,
+        help="Extra supply beyond required tokens per band",
+    )
+    ap.add_argument(
+        "--chunk-tokens", type=int, default=512, help="Token count per chunk"
+    )
+    ap.add_argument(
+        "--hi-share", type=float, default=0.075, help="Fraction of chunks labeled hi"
+    )
     ap.add_argument("--seed", type=int, default=42, help="Deterministic shuffle seed")
 
     args = ap.parse_args()
@@ -187,7 +200,9 @@ def main() -> None:
     curriculum_path = Path(args.curriculum)
     out_path = Path(args.out)
 
-    stage_to_profile, profiles, allowed_domains_by_band = _load_stage_profiles(curriculum_path)
+    stage_to_profile, profiles, allowed_domains_by_band = _load_stage_profiles(
+        curriculum_path
+    )
     required = compute_required_band_tokens(
         stage_to_profile=stage_to_profile,
         profiles=profiles,

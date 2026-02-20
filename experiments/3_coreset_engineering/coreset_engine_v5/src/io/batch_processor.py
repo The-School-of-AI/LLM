@@ -6,13 +6,12 @@ Handles 2 trillion+ token datasets with streaming and checkpointing.
 import json
 import logging
 import os
+import pickle
 import re
 import urllib.parse
-import datetime
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Iterator, Tuple, Any, Iterable
-from dataclasses import dataclass, asdict
-import pickle
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import xxhash
 
@@ -22,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CheckpointMetadata:
     """Metadata for a checkpoint"""
+
     stage_name: str
     batch_num: int
     chunks_processed: int
@@ -59,7 +59,7 @@ class BatchProcessor:
     ) -> Iterator[Tuple[str, Dict[str, Any]]]:
         """
         Stream chunks from JSONL without loading entire file into memory.
-        
+
         Yields:
             (chunk_id, chunk_dict)
         """
@@ -71,8 +71,9 @@ class BatchProcessor:
         if self._is_s3_path(filepath):
             line_iter: Iterable[str] = self._iter_s3_text_lines(filepath)
         else:
+
             def _local_iter() -> Iterator[str]:
-                with open(filepath, 'r', encoding='utf-8') as f:
+                with open(filepath, "r", encoding="utf-8") as f:
                     yield from f
 
             line_iter = _local_iter()
@@ -85,10 +86,10 @@ class BatchProcessor:
                 # Normalize the unique chunk identifier.
                 # Some datasets use uid/guid/id instead of chunk_id.
                 chunk_id = (
-                    data.get('chunk_id')
-                    or data.get('uid')
-                    or data.get('guid')
-                    or data.get('id')
+                    data.get("chunk_id")
+                    or data.get("uid")
+                    or data.get("guid")
+                    or data.get("id")
                 )
 
                 # Optional row-level sharding (useful when input is a single huge file).
@@ -132,7 +133,7 @@ class BatchProcessor:
     ) -> Iterator[List[Tuple[str, Dict[str, Any]]]]:
         """
         Iterate over chunks in batches from JSONL file.
-        
+
         Yields:
             List of (chunk_id, chunk_dict) tuples
         """
@@ -148,7 +149,7 @@ class BatchProcessor:
             if len(batch) >= self.batch_size:
                 yield batch
                 batch = []
-        
+
         if batch:  # Yield remaining
             yield batch
 
@@ -182,25 +183,29 @@ class BatchProcessor:
             all_files = list(root.glob("**/*.jsonl")) + list(root.glob("**/*.json"))
             # Filter out stats/ and _SUCCESS
             filtered = [
-                f for f in all_files 
-                if "/stats/" not in f.as_posix() 
+                f
+                for f in all_files
+                if "/stats/" not in f.as_posix()
                 and not f.as_posix().startswith("stats/")
                 and f.name != "_SUCCESS"
             ]
             return [str(p) for p in sorted(set(filtered))]
-        
+
         if fmt == "parquet":
             all_files = list(root.glob("**/*.parquet"))
             filtered = [
-                f for f in all_files 
-                if "/stats/" not in f.as_posix() 
+                f
+                for f in all_files
+                if "/stats/" not in f.as_posix()
                 and not f.as_posix().startswith("stats/")
                 and f.name != "_SUCCESS"
             ]
             return [str(p) for p in sorted(set(filtered))]
         return []
 
-    def shard_files(self, files: List[str], shard_id: int, num_shards: int) -> List[str]:
+    def shard_files(
+        self, files: List[str], shard_id: int, num_shards: int
+    ) -> List[str]:
         """Deterministically shard file identifiers across workers using xxhash of the path."""
         if num_shards <= 1:
             return files
@@ -257,17 +262,21 @@ class BatchProcessor:
         allowed_suffixes = [suffix]
         if suffix == ".jsonl":
             allowed_suffixes.append(".json")
-        
+
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             for obj in page.get("Contents", []) or []:
                 key = obj.get("Key")
                 if not key:
                     continue
-                
-                # Filter out _SUCCESS and stats/ folder. 
+
+                # Filter out _SUCCESS and stats/ folder.
                 # stats/ can be anywhere under the prefix.
                 key_lower = key.lower()
-                if key_lower.endswith("_success") or "/stats/" in key_lower or key_lower.startswith("stats/"):
+                if (
+                    key_lower.endswith("_success")
+                    or "/stats/" in key_lower
+                    or key_lower.startswith("stats/")
+                ):
                     continue
 
                 # Match if key ends with any allowed suffix
@@ -309,10 +318,12 @@ class BatchProcessor:
         - If path is an s3:// URL and pyarrow S3 support is available, it will attempt to read it.
         """
         try:
-            import pyarrow.dataset as ds
             import pyarrow as pa
+            import pyarrow.dataset as ds
         except Exception as e:
-            raise RuntimeError("pyarrow is required for parquet streaming; install pyarrow") from e
+            raise RuntimeError(
+                "pyarrow is required for parquet streaming; install pyarrow"
+            ) from e
 
         dataset = ds.dataset(path, format="parquet")
 
@@ -334,9 +345,13 @@ class BatchProcessor:
         # - newer versions: Dataset.scan(...)
         # - others: Dataset.scanner(...)
         try:
-            scanner = dataset.scan(columns=scan_columns, batch_size=int(batch_size_rows))
+            scanner = dataset.scan(
+                columns=scan_columns, batch_size=int(batch_size_rows)
+            )
         except AttributeError:
-            scanner = dataset.scanner(columns=scan_columns, batch_size=int(batch_size_rows))
+            scanner = dataset.scanner(
+                columns=scan_columns, batch_size=int(batch_size_rows)
+            )
         emitted = 0
 
         for record_batch in scanner.to_batches():
@@ -354,27 +369,33 @@ class BatchProcessor:
             yield rows
             emitted += len(rows)
 
-    def save_checkpoint(self, stage_name: str, batch_num: int, 
-                       state: Dict[str, Any], metadata: CheckpointMetadata) -> Path:
+    def save_checkpoint(
+        self,
+        stage_name: str,
+        batch_num: int,
+        state: Dict[str, Any],
+        metadata: CheckpointMetadata,
+    ) -> Path:
         """Save batch checkpoint for resumption."""
         if not self.checkpoint_dir:
             return None
-        
+
         checkpoint_path = (
-            self.checkpoint_dir 
-            / f"checkpoint_{stage_name}_batch_{batch_num:06d}.pkl"
+            self.checkpoint_dir / f"checkpoint_{stage_name}_batch_{batch_num:06d}.pkl"
         )
-        
-        with open(checkpoint_path, 'wb') as f:
-            pickle.dump({'state': state, 'metadata': asdict(metadata)}, f)
-        
+
+        with open(checkpoint_path, "wb") as f:
+            pickle.dump({"state": state, "metadata": asdict(metadata)}, f)
+
         logger.info(f"Saved checkpoint: {checkpoint_path}")
 
         # Test hook: simulate a crash immediately after persisting a checkpoint.
         # This is intentionally gated behind environment variables so production
         # runs are unaffected.
         crash_stage = os.environ.get("CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_STAGE")
-        crash_batch_raw = os.environ.get("CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_BATCH")
+        crash_batch_raw = os.environ.get(
+            "CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_BATCH"
+        )
         if crash_batch_raw is not None:
             try:
                 crash_batch = int(crash_batch_raw)
@@ -393,24 +414,25 @@ class BatchProcessor:
 
         return checkpoint_path
 
-    def load_checkpoint(self, stage_name: str, batch_num: int) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+    def load_checkpoint(
+        self, stage_name: str, batch_num: int
+    ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
         """Load batch checkpoint if exists."""
         if not self.checkpoint_dir:
             return None
-        
+
         checkpoint_path = (
-            self.checkpoint_dir 
-            / f"checkpoint_{stage_name}_batch_{batch_num:06d}.pkl"
+            self.checkpoint_dir / f"checkpoint_{stage_name}_batch_{batch_num:06d}.pkl"
         )
-        
+
         if not checkpoint_path.exists():
             return None
-        
+
         try:
-            with open(checkpoint_path, 'rb') as f:
+            with open(checkpoint_path, "rb") as f:
                 data = pickle.load(f)
             logger.info(f"Loaded checkpoint: {checkpoint_path}")
-            return data['state'], data['metadata']
+            return data["state"], data["metadata"]
         except Exception as e:
             logger.error(f"Failed to load checkpoint: {e}")
             return None
@@ -419,16 +441,16 @@ class BatchProcessor:
         """Find the last completed batch checkpoint for a stage."""
         if not self.checkpoint_dir:
             return None
-        
+
         checkpoints = sorted(
             self.checkpoint_dir.glob(f"checkpoint_{stage_name}_batch_*.pkl"),
-            key=lambda p: int(p.stem.split('_')[-1]),
-            reverse=True
+            key=lambda p: int(p.stem.split("_")[-1]),
+            reverse=True,
         )
-        
+
         if checkpoints:
-            batch_num = int(checkpoints[0].stem.split('_')[-1])
+            batch_num = int(checkpoints[0].stem.split("_")[-1])
             logger.info(f"Found last checkpoint for {stage_name}: batch {batch_num}")
             return batch_num
-        
+
         return None

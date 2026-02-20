@@ -11,12 +11,14 @@ def _write_jsonl(path: Path, rows):
             f.write(json.dumps(r) + "\n")
 
 
-def _collect_batch_chunk_ids(input_path: str, *, batch_size: int, shard_id: int, num_shards: int):
+def _collect_batch_chunk_ids(
+    input_path: str, *, batch_size: int, shard_id: int, num_shards: int
+):
     bp = BatchProcessor(batch_size=batch_size)
     files = bp.list_input_files(input_path, "jsonl")
     assert files
 
-    row_level_shard = (num_shards > 1 and len(files) == 1)
+    row_level_shard = num_shards > 1 and len(files) == 1
     if not row_level_shard:
         files = bp.shard_files(files, shard_id, num_shards)
 

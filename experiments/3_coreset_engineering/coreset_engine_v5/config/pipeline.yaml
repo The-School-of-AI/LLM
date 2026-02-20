@@ -99,31 +99,31 @@ stages:
     target_tokens: 20000000000
     enable_sft_adaptation: false
     enable_alignment_adaptation: false
-  
+
   "3B":
     stage_name: "3B"
     target_tokens: 40000000000
     enable_sft_adaptation: false
     enable_alignment_adaptation: false
-  
+
   "8B":
     stage_name: "8B"
     target_tokens: 100000000000
     enable_sft_adaptation: false
     enable_alignment_adaptation: false
-  
+
   "70B":
     stage_name: "70B"
     target_tokens: 240000000000
     enable_sft_adaptation: false
     enable_alignment_adaptation: false
-  
+
   "SFT":
     stage_name: "SFT"
     target_tokens: 10000000000
     enable_sft_adaptation: true
     enable_alignment_adaptation: false
-  
+
   "ALIGNMENT":
     stage_name: "ALIGNMENT"
     target_tokens: 5000000000

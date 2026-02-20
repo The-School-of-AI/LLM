@@ -37,25 +37,30 @@ def _hash_float(key: str) -> float:
     return value / 2**64
 
 
-def _load_curriculum_band_domain_policy(curriculum_path: Path) -> Dict[str, Tuple[str, ...]]:
+def _load_curriculum_band_domain_policy(
+    curriculum_path: Path,
+) -> Dict[str, Tuple[str, ...]]:
     obj = yaml.safe_load(curriculum_path.read_text(encoding="utf-8"))
-    policy = (
-        obj.get("domains", {})
-        .get("band_domain_policy", {})
-    )
+    policy = obj.get("domains", {}).get("band_domain_policy", {})
     out: Dict[str, Tuple[str, ...]] = {}
     for band, domains in (policy or {}).items():
         out[str(band)] = tuple(str(d) for d in (domains or []))
     return out
 
 
-def _load_stage_profile_band_weights(curriculum_path: Path, profile: str) -> Dict[str, float]:
+def _load_stage_profile_band_weights(
+    curriculum_path: Path, profile: str
+) -> Dict[str, float]:
     obj = yaml.safe_load(curriculum_path.read_text(encoding="utf-8"))
-    stage_profiles = (obj.get("growth_schedule", {}) or {}).get("stage_profiles", {}) or {}
+    stage_profiles = (obj.get("growth_schedule", {}) or {}).get(
+        "stage_profiles", {}
+    ) or {}
     prof = stage_profiles.get(profile)
     if not prof:
-        raise SystemExit(f"Unknown profile '{profile}'. Available: {sorted(stage_profiles.keys())}")
-    weights = (prof.get("band_weights") or {})
+        raise SystemExit(
+            f"Unknown profile '{profile}'. Available: {sorted(stage_profiles.keys())}"
+        )
+    weights = prof.get("band_weights") or {}
     out: Dict[str, float] = {}
     for band, w in weights.items():
         out[str(band)] = float(w)
@@ -164,7 +169,9 @@ def main() -> int:
     written_rows = 0
     with write_path.open("w", encoding="utf-8") as out:
         for row in _iter_jsonl(read_path):
-            chunk_id = str(row.get("chunk_id") or row.get("id") or f"row_{written_rows}")
+            chunk_id = str(
+                row.get("chunk_id") or row.get("id") or f"row_{written_rows}"
+            )
             tc = _get_token_count(row)
 
             # Band: greedy fill by remaining quota
@@ -217,7 +224,9 @@ def main() -> int:
         temp_path.replace(output_path)
 
     # Basic sanity print
-    actual_hi_share = (float(hi_assigned_tokens) / float(written_tokens)) if written_tokens else 0.0
+    actual_hi_share = (
+        (float(hi_assigned_tokens) / float(written_tokens)) if written_tokens else 0.0
+    )
     print(
         f"Rebalanced {written_rows:,} rows ({written_tokens:,} tokens) -> {output_path}. "
         f"hi_share_target={hi_share:.4f}, hi_share_actual={actual_hi_share:.4f}"
