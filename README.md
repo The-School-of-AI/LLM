@@ -591,6 +591,15 @@ Data loading and tokenization utilities:
 - `tokenize_function()`: Tokenizes text examples for language modeling
 - Supports HuggingFace datasets with automatic filtering and batching
 
+- Copy tokenizer into each test folder
+
+```
+cd LLM
+for d in experiments/tests/*/code/src/tokenizer/; do
+  rm -i tokenizer.json "$d"    # -i = interactive prompt
+done
+```
+
 ### `src/train.py`
 
 Training and inference logic:
