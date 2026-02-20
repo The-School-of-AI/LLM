@@ -440,23 +440,24 @@ if HAS_TRITON:
             k_sel = indices.size(-1)
             grid = (B * H, T)
 
-            do = grad_output.contiguous().to(torch.float32)
+            do_native = grad_output.contiguous()
+            do_fp32 = do_native.to(torch.float32)
             num_warps_bwd = 4 if BLOCK_D <= 64 else 8
 
-            # Step 1: delta
+            # Step 1: delta (needs fp32)
             delta = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
             _sparse_attn_bwd_preprocess_v2[grid](
-                out_fp32, do, delta,
+                out_fp32, do_fp32, delta,
                 T, H, D,
                 out_fp32.stride(0), out_fp32.stride(1), out_fp32.stride(2), out_fp32.stride(3),
-                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                do_fp32.stride(0), do_fp32.stride(1), do_fp32.stride(2), do_fp32.stride(3),
                 BLOCK_D=BLOCK_D,
             )
 
-            # Step 2: dQ
+            # Step 2: dQ (native precision do for tl.dot)
             dq = torch.empty_like(q, dtype=torch.float32)
             _sparse_attn_bwd_dq_kernel_v2[grid](
-                q, k, v, do,
+                q, k, v, do_native,
                 indices, mask,
                 lse, delta,
                 dq,
@@ -464,7 +465,7 @@ if HAS_TRITON:
                 q.stride(0), q.stride(1), q.stride(2), q.stride(3),
                 k.stride(0), k.stride(1), k.stride(2), k.stride(3),
                 v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                do_native.stride(0), do_native.stride(1), do_native.stride(2), do_native.stride(3),
                 indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
                 mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
                 dq.stride(0), dq.stride(1), dq.stride(2), dq.stride(3),
@@ -474,11 +475,11 @@ if HAS_TRITON:
                 num_stages=2,
             )
 
-            # Step 3: dK/dV
+            # Step 3: dK/dV (native precision do for tl.dot)
             dk = torch.zeros_like(k, dtype=torch.float32)
             dv = torch.zeros_like(v, dtype=torch.float32)
             _sparse_attn_bwd_dkdv_kernel_v2[grid](
-                q, k, v, do,
+                q, k, v, do_native,
                 indices, mask,
                 lse, delta,
                 dk, dv,
@@ -486,7 +487,7 @@ if HAS_TRITON:
                 q.stride(0), q.stride(1), q.stride(2), q.stride(3),
                 k.stride(0), k.stride(1), k.stride(2), k.stride(3),
                 v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                do_native.stride(0), do_native.stride(1), do_native.stride(2), do_native.stride(3),
                 indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
                 mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
                 dk.stride(0), dk.stride(1), dk.stride(2), dk.stride(3),
