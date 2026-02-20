@@ -1151,25 +1151,46 @@ class GatedSparseAttention(nn.Module):
                 torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
             self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
 
-        # Build per-query keep mask from adaptive k_t
+        # Build per-query keep mask from adaptive k_t with strict causal safety.
         k_limit = top_indices.size(-1)
         base_idx = top_indices.long()  # [B, T, k_limit]
+        q_pos = torch.arange(T, device=device, dtype=base_idx.dtype).view(1, T, 1)
+        causal_cap = (q_pos + 1).to(dtype=k_t.dtype)
+        k_t = torch.minimum(k_t, causal_cap.squeeze(-1)).clamp(min=1)
+
         range_k = torch.arange(k_limit, device=device)
         keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)  # [B, T, k_limit]
+        causal_selected = base_idx <= q_pos
+
         if token_keep is not None:
+            query_keep = token_keep.unsqueeze(-1)
             invalid_query = ~token_keep
             if invalid_query.any():
                 fallback_idx = torch.arange(T, device=device).view(1, T).expand(B, T)
                 base_idx = base_idx.clone()
                 base_idx[..., 0] = torch.where(invalid_query, fallback_idx, base_idx[..., 0])
+                causal_selected = base_idx <= q_pos
 
             key_keep = torch.gather(token_keep, dim=1, index=base_idx.reshape(B, -1)).view(B, T, k_limit)
-            keep_mask = keep_mask & key_keep & token_keep.unsqueeze(-1)
+            keep_mask = keep_mask & key_keep & query_keep
 
             # Keep at least one index for masked queries to avoid empty-kernel rows.
             if invalid_query.any():
                 keep_mask = keep_mask.clone()
                 keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
+
+        attempt_keep_mask = keep_mask
+        leak_attempt_mask = attempt_keep_mask & ~causal_selected
+        keep_mask = attempt_keep_mask & causal_selected
+        leak_final_mask = keep_mask & ~causal_selected
+        attempt_den = attempt_keep_mask.sum().clamp(min=1).float()
+        final_den = keep_mask.sum().clamp(min=1).float()
+        self.last_gsa_leak_attempt_fraction = (
+            leak_attempt_mask.float().sum() / attempt_den
+        ).detach()
+        self.last_gsa_leak_fraction = (
+            leak_final_mask.float().sum() / final_den
+        ).detach()
 
         # Dual Gating & Attention Projections
         q = self.W_q(x)
@@ -2150,6 +2171,28 @@ class Model1B(nn.Module):
 
         # Pass through reversible stack
         x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
+
+        # Surface GSA leak metrics at model level for train.py logging/guards.
+        leak_vals = []
+        leak_attempt_vals = []
+        for layer in self.layers:
+            attn_mod = layer.attn_block.sublayer
+            leak_v = getattr(attn_mod, "last_gsa_leak_fraction", None)
+            leak_attempt_v = getattr(attn_mod, "last_gsa_leak_attempt_fraction", None)
+            if leak_v is not None:
+                leak_vals.append(leak_v.detach().float())
+            if leak_attempt_v is not None:
+                leak_attempt_vals.append(leak_attempt_v.detach().float())
+        self.last_gsa_leak_fraction = (
+            torch.stack(leak_vals).mean()
+            if leak_vals
+            else x_stream.new_tensor(0.0, dtype=torch.float32)
+        )
+        self.last_gsa_leak_attempt_fraction = (
+            torch.stack(leak_attempt_vals).mean()
+            if leak_attempt_vals
+            else x_stream.new_tensor(0.0, dtype=torch.float32)
+        )
 
 
         # ============================================================================
