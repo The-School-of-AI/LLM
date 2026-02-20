@@ -29,6 +29,8 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from urllib.parse import urlparse
+from spdl.pipeline import PipelineBuilder
+
 
 class StreamingTextDataset(IterableDataset):
     """
@@ -65,6 +67,193 @@ class StreamingTextDataset(IterableDataset):
                 yield {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
 
+
+# ============================================================================
+# SPDL pipeline
+# ============================================================================
+
+def read_idx(idx_path: str) -> np.ndarray:
+    """Read a Megatron .idx file and return an array of byte offsets."""
+    with open(idx_path, "rb") as f:
+        _ = f.read(8)  # Skip 8-byte header
+        offsets = np.frombuffer(f.read(), dtype=np.uint64)
+    return offsets
+
+def _should_skip_region(
+    bin_path: str, i: int, start: int, end: int,
+    itemsize: int, seq_len: int,
+) -> bool:
+    """Check if a .bin region should be skipped (corrupt/too small)."""
+    num_bytes = end - start
+    if num_bytes <= 0:
+        print_rank_0(f"WARNING: Corrupt/empty region: {bin_path} [{i}] {start}-{end}")
+        return True
+    num_tokens = num_bytes // itemsize
+    if num_tokens == 0 or num_tokens // seq_len == 0:
+        return True
+    return False
+
+
+def bin_idx_source(
+    shard_dir: str,
+    seq_len: int = 4096,
+    dtype: np.dtype = np.uint32,
+    rank: int = 0,
+    world_size: int = 1,
+):
+    """
+    Generator yielding torch tensors of shape [seq_len] from .bin/.idx shards.
+
+    Handles distributed file-level sharding: files are split across ranks
+    using round-robin assignment.
+
+    Yields:
+        torch.Tensor of shape (seq_len,) with dtype torch.long
+    """
+    dtype = np.dtype(dtype)
+    itemsize = dtype.itemsize
+    bin_files = sorted(f for f in os.listdir(shard_dir) if f.endswith(".bin"))
+    if not bin_files:
+        raise FileNotFoundError(f"No .bin files found in {shard_dir}")
+
+    # Distributed file-level sharding
+    if world_size > 1:
+        bin_files = bin_files[rank::world_size]
+
+    print_rank_0(
+        f"SPDL source: Rank {rank}/{world_size} scanning "
+        f"{len(bin_files)} shards from {shard_dir}"
+    )
+
+    total_yielded = 0
+    for bin_file in bin_files:
+        bin_path = os.path.join(shard_dir, bin_file)
+        idx_path = bin_path.replace(".bin", ".idx")
+        if not os.path.exists(idx_path):
+            print_rank_0(f"WARNING: Missing .idx for {bin_file}, skipping")
+            continue
+
+        offsets = read_idx(idx_path)
+        with open(bin_path, "rb") as f:
+            for i in range(len(offsets) - 1):
+                start = int(offsets[i])
+                end = int(offsets[i + 1])
+                if _should_skip_region(bin_path, i, start, end, itemsize, seq_len):
+                    continue
+                num_tokens = (end - start) // itemsize
+                num_full = num_tokens // seq_len
+                read_tokens = num_full * seq_len
+
+                f.seek(start)
+                raw = f.read(read_tokens * itemsize)
+                tokens = np.frombuffer(raw, dtype=dtype)
+                if tokens.size != read_tokens:
+                    continue
+
+                for j in range(0, len(tokens), seq_len):
+                    total_yielded += 1
+                    yield torch.from_numpy(
+                        tokens[j : j + seq_len].astype(np.int64)
+                    )
+
+    print_rank_0(f"SPDL source: Rank {rank} yielded {total_yielded:,} sequences")
+
+
+def build_spdl_pipeline(
+    shard_dir: str,
+    seq_len: int = 4096,
+    batch_size: int = 8,
+    dtype: np.dtype = np.uint32,
+    rank: int = 0,
+    world_size: int = 1,
+    num_threads: int = 4,
+    prefetch_buffer: int = 16,
+):
+    """
+    Build an SPDL pipeline for streaming .bin/.idx shards.
+
+    Pipeline stages:
+      1. bin_idx_source: yields individual sequences as torch tensors
+      2. aggregate: collects batch_size sequences
+      3. sink: prefetch buffer for async consumption
+
+    Returns:
+        SPDL Pipeline object (context manager, iterable)
+    """
+
+    source = bin_idx_source(
+        shard_dir, seq_len=seq_len, dtype=dtype,
+        rank=rank, world_size=world_size,
+    )
+
+    return (
+        PipelineBuilder()
+        .add_source(source)
+        .aggregate(batch_size)
+        .add_sink(prefetch_buffer)
+        .build(num_threads=num_threads)
+    )
+
+
+class SPDLIterableDataset(IterableDataset):
+    """
+    Wraps an SPDL pipeline as a PyTorch IterableDataset.
+
+    This allows using the SPDL pipeline with a standard PyTorch DataLoader
+    while preserving SPDL's async prefetching and thread pool.
+
+    Each iteration yields a dict with 'input_ids', 'attention_mask', 'labels'.
+    """
+
+    def __init__(
+        self,
+        shard_dir: str,
+        seq_len: int = 4096,
+        batch_size: int = 8,
+        dtype: np.dtype = np.uint32,
+        rank: int = 0,
+        world_size: int = 1,
+        num_threads: int = 4,
+        prefetch_buffer: int = 16,
+    ):
+        self.shard_dir = shard_dir
+        self.seq_len = seq_len
+        self.batch_size = batch_size
+        self.dtype = dtype
+        self.rank = rank
+        self.world_size = world_size
+        self.num_threads = num_threads
+        self.prefetch_buffer = prefetch_buffer
+
+    def __iter__(self):
+        pipeline = build_spdl_pipeline(
+            self.shard_dir,
+            seq_len=self.seq_len,
+            batch_size=self.batch_size,
+            dtype=self.dtype,
+            rank=self.rank,
+            world_size=self.world_size,
+            num_threads=self.num_threads,
+            prefetch_buffer=self.prefetch_buffer,
+        )
+        pipeline.start()
+        try:
+            for batch_list in pipeline:
+                # batch_list is a list of batch_size tensors, each [seq_len]
+                input_ids = torch.stack(batch_list)
+                yield {
+                    "input_ids": input_ids,
+                    "attention_mask": torch.ones_like(input_ids),
+                    "labels": input_ids.clone(),
+                }
+        finally:
+            pipeline.stop()
+
+
+
+# ============================================================================
+# Dataloader
+# ============================================================================
 
 def get_tokenizer(tokenizer_path: str = None):
     """
@@ -470,6 +659,7 @@ def _build_causal_lm_collate_fn(pad_token_id: int):
     return _collate
 
 
+
 def get_dataloaders(
         dataset_name: str = "wikitext",
         dataset_config: str = "wikitext-2-raw-v1",
@@ -487,36 +677,43 @@ def get_dataloaders(
         domain_column: Optional[str] = None,
         concat_across_domains: bool = False,
         drop_remainder: bool = True,
-        
+        streaming: bool = False,
+        use_spdl: bool = False,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
     Load dataset and create dataloaders for training, validation, and testing.
-
-    Args:
-        dataset_name: Name of the dataset from HuggingFace datasets
-        dataset_config: Configuration name for the dataset
-        tokenizer: Tokenizer instance (required)
-        batch_size: Batch size for dataloaders
-        max_length: Maximum sequence length (legacy online tokenization path)
-        tokenized_dataset_path: Local path or s3:// URI of datasets.save_to_disk output
-        dataset_cache_dir: Optional cache dir for Hugging Face datasets
-        local_nvme_cache_dir: NVMe directory for staging S3 tokenized datasets
-        require_local_nvme: If True, hard-fail unless training reads local disk dataset
-        pack_into_blocks: If True, concatenate and repack tokens into fixed blocks
-        block_sizes: Target block sizes to pack (e.g., [4096], [4096, 8192])
-        block_size_counts: Optional explicit counts per block size, e.g. {4096: 100000, 8192: 50000}
-        domain_column: Optional dataset column name; when set and concat_across_domains=False,
-                       packing avoids mixing domains in the same block
-        concat_across_domains: If True, allows cross-domain concatenation while packing
-        drop_remainder: Drop token tails shorter than target block size
-        num_workers: Number of worker processes for data loading
-
-    Returns:
-        Tuple of (train_loader, eval_loader, test_loader, dataset_info)
     """
     if tokenizer is None:
         raise ValueError("tokenizer must be provided")
 
+    if streaming:
+        # Streaming mode : to test until the tokenization is complete
+        print_rank_0(f"Loading dataset in STREAMING mode: {dataset_name} ({dataset_config})")
+        ds = load_dataset(dataset_name, dataset_config, streaming=True, split="train")
+
+        train_dataset = StreamingTextDataset(ds, tokenizer, max_length, split_name="train")
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            num_workers=min(num_workers, 2),  # Streaming doesn't benefit from many workers
+            pin_memory=True,
+        )
+
+        print_rank_0("  Streaming mode: eval/test will use first 100 train examples")
+        eval_loader = train_loader  
+        test_loader = train_loader
+
+        dataset_info = {
+            "train_size": -1,  # Unknown for streaming
+            "eval_size": -1,
+            "test_size": -1,
+            "vocab_size": tokenizer.vocab_size if tokenizer else 0,
+            "streaming": True,
+        }
+        return train_loader, eval_loader, test_loader, dataset_info
+
+    # Use the pre tokenized dataset from S3    
     resolved_tokenized_path = tokenized_dataset_path
     if tokenized_dataset_path:
         if _is_s3_uri(tokenized_dataset_path):
@@ -536,9 +733,60 @@ def get_dataloaders(
                 raise RuntimeError(
                     "require_local_nvme=True but tokenized dataset path is outside local NVMe root."
                 )
+                
+        if use_spdl:
+            print_rank_0(f"Loading dataset in SPDL mode from: {resolved_tokenized_path}")
+            is_distributed, world_size, rank = _resolve_distributed_context()
+            
+            # Helper to locate split subdirectories if they exist
+            def get_shard_dir(split_name: str) -> str:
+                split_dir = os.path.join(resolved_tokenized_path, split_name)
+                return split_dir if os.path.exists(split_dir) else resolved_tokenized_path
 
-        print_rank_0(f"Loading pre-tokenized dataset from disk: {resolved_tokenized_path}")
-        tokenized_dataset = load_from_disk(resolved_tokenized_path)
+            train_dataset = SPDLIterableDataset(
+                shard_dir=get_shard_dir("train"),
+                seq_len=max_length,
+                batch_size=batch_size,
+                rank=rank,
+                world_size=world_size,
+                num_threads=max(1, num_workers)
+            )
+            
+            eval_dataset = SPDLIterableDataset(
+                shard_dir=get_shard_dir("validation"),
+                seq_len=max_length,
+                batch_size=batch_size,
+                rank=rank,
+                world_size=world_size,
+                num_threads=1  # Keep threads light for eval
+            )
+            
+            test_dataset = SPDLIterableDataset(
+                shard_dir=get_shard_dir("test"),
+                seq_len=max_length,
+                batch_size=batch_size,
+                rank=rank,
+                world_size=world_size,
+                num_threads=1
+            )
+
+            # batch_size=None and num_workers=0 because SPDL internally batches and handles threads
+            train_loader = DataLoader(train_dataset, batch_size=None, num_workers=0, pin_memory=True)
+            eval_loader = DataLoader(eval_dataset, batch_size=None, num_workers=0, pin_memory=True)
+            test_loader = DataLoader(test_dataset, batch_size=None, num_workers=0, pin_memory=True)
+
+            dataset_info = {
+                "train_size": -1, 
+                "eval_size": -1,
+                "test_size": -1,
+                "vocab_size": tokenizer.vocab_size if tokenizer else 0,
+                "resolved_tokenized_dataset_path": resolved_tokenized_path,
+                "spdl_mode": True
+            }
+            return train_loader, eval_loader, test_loader, dataset_info            
+        else:
+            print_rank_0(f"Loading pre-tokenized dataset from disk: {resolved_tokenized_path}")
+            tokenized_dataset = load_from_disk(resolved_tokenized_path)
     else:
         if require_local_nvme:
             raise RuntimeError(
