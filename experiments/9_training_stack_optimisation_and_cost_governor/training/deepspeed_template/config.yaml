@@ -9,6 +9,7 @@ data:
   # SPDL Dataloader Settings
   use_dataloader: false          # If true, use SPDL pipeline reading .bin/.idx shards
   shard_dir: null                # Required if use_dataloader=true
+  shard_manifest_path: null      # Path to consumed_shards.json for tracking/excluding processed shards
 
 # Training Configuration
 training:

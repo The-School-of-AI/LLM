@@ -25,8 +25,9 @@ from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 import logging
 from .utils import print_rank_0
+from .shard_tracker import ShardTracker
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 from urllib.parse import urlparse
 from spdl.pipeline import PipelineBuilder
@@ -100,12 +101,24 @@ def bin_idx_source(
     dtype: np.dtype = np.uint32,
     rank: int = 0,
     world_size: int = 1,
+    exclude_files: Optional[Set[str]] = None,
+    on_shard_complete: Optional[Callable[[str], None]] = None,
 ):
     """
     Generator yielding torch tensors of shape [seq_len] from .bin/.idx shards.
 
     Handles distributed file-level sharding: files are split across ranks
     using round-robin assignment.
+
+    Args:
+        shard_dir: Directory containing .bin/.idx shard files.
+        seq_len: Sequence length for each yielded tensor.
+        dtype: NumPy dtype of the token IDs stored in .bin files.
+        rank: Current distributed rank.
+        world_size: Total number of distributed ranks.
+        exclude_files: Set of shard basenames to skip (already processed).
+        on_shard_complete: Callback invoked with the shard basename after
+            all sequences from that shard have been yielded.
 
     Yields:
         torch.Tensor of shape (seq_len,) with dtype torch.long
@@ -115,6 +128,23 @@ def bin_idx_source(
     bin_files = sorted(f for f in os.listdir(shard_dir) if f.endswith(".bin"))
     if not bin_files:
         raise FileNotFoundError(f"No .bin files found in {shard_dir}")
+
+    # Exclude already-processed shards
+    if exclude_files:
+        pre_count = len(bin_files)
+        bin_files = [f for f in bin_files if f not in exclude_files]
+        skipped = pre_count - len(bin_files)
+        if skipped > 0:
+            print_rank_0(
+                f"SPDL source: Rank {rank} excluding {skipped} already-processed "
+                f"shards ({pre_count} total, {len(bin_files)} remaining)"
+            )
+
+    if not bin_files:
+        print_rank_0(
+            f"SPDL source: Rank {rank} has no remaining shards after exclusion"
+        )
+        return
 
     # Distributed file-level sharding
     if world_size > 1:
@@ -156,6 +186,10 @@ def bin_idx_source(
                         tokens[j : j + seq_len].astype(np.int64)
                     )
 
+        # Notify caller that this shard has been fully consumed
+        if on_shard_complete is not None:
+            on_shard_complete(bin_file)
+
     print_rank_0(f"SPDL source: Rank {rank} yielded {total_yielded:,} sequences")
 
 
@@ -168,6 +202,8 @@ def build_spdl_pipeline(
     world_size: int = 1,
     num_threads: int = 4,
     prefetch_buffer: int = 16,
+    exclude_files: Optional[Set[str]] = None,
+    on_shard_complete: Optional[Callable[[str], None]] = None,
 ):
     """
     Build an SPDL pipeline for streaming .bin/.idx shards.
@@ -177,6 +213,10 @@ def build_spdl_pipeline(
       2. aggregate: collects batch_size sequences
       3. sink: prefetch buffer for async consumption
 
+    Args:
+        exclude_files: Set of shard basenames to skip (already processed).
+        on_shard_complete: Callback invoked after each shard is fully consumed.
+
     Returns:
         SPDL Pipeline object (context manager, iterable)
     """
@@ -184,6 +224,8 @@ def build_spdl_pipeline(
     source = bin_idx_source(
         shard_dir, seq_len=seq_len, dtype=dtype,
         rank=rank, world_size=world_size,
+        exclude_files=exclude_files,
+        on_shard_complete=on_shard_complete,
     )
 
     return (
@@ -203,6 +245,10 @@ class SPDLIterableDataset(IterableDataset):
     while preserving SPDL's async prefetching and thread pool.
 
     Each iteration yields a dict with 'input_ids', 'attention_mask', 'labels'.
+
+    When a ``shard_tracker`` is provided, already-processed shards are excluded
+    at file-discovery time and newly consumed shards are marked in the tracker
+    as they complete.
     """
 
     def __init__(
@@ -215,6 +261,7 @@ class SPDLIterableDataset(IterableDataset):
         world_size: int = 1,
         num_threads: int = 4,
         prefetch_buffer: int = 16,
+        shard_tracker: Optional[ShardTracker] = None,
     ):
         self.shard_dir = shard_dir
         self.seq_len = seq_len
@@ -224,8 +271,18 @@ class SPDLIterableDataset(IterableDataset):
         self.world_size = world_size
         self.num_threads = num_threads
         self.prefetch_buffer = prefetch_buffer
+        self.shard_tracker = shard_tracker
 
     def __iter__(self):
+        # Resolve exclude set and completion callback from the tracker
+        exclude_files: Optional[Set[str]] = None
+        on_shard_complete: Optional[Callable[[str], None]] = None
+        if self.shard_tracker is not None:
+            exclude_files = self.shard_tracker.get_processed_files()
+            on_shard_complete = lambda name: self.shard_tracker.mark_processed(
+                name, rank=self.rank, source_dir=self.shard_dir
+            )
+
         pipeline = build_spdl_pipeline(
             self.shard_dir,
             seq_len=self.seq_len,
@@ -235,6 +292,8 @@ class SPDLIterableDataset(IterableDataset):
             world_size=self.world_size,
             num_threads=self.num_threads,
             prefetch_buffer=self.prefetch_buffer,
+            exclude_files=exclude_files,
+            on_shard_complete=on_shard_complete,
         )
         pipeline.start()
         try:
@@ -679,9 +738,17 @@ def get_dataloaders(
         drop_remainder: bool = True,
         streaming: bool = False,
         use_spdl: bool = False,
+        shard_manifest_path: Optional[str] = None,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
     Load dataset and create dataloaders for training, validation, and testing.
+
+    Args:
+        shard_manifest_path: Path to ``consumed_shards.json``. When provided,
+            a :class:`ShardTracker` is created to exclude already-processed
+            shards and to track newly consumed ones.  The tracker is returned
+            in ``dataset_info["shard_tracker"]`` so the training loop can
+            persist it alongside checkpoints.
     """
     if tokenizer is None:
         raise ValueError("tokenizer must be provided")
@@ -737,7 +804,16 @@ def get_dataloaders(
         if use_spdl:
             print_rank_0(f"Loading dataset in SPDL mode from: {resolved_tokenized_path}")
             is_distributed, world_size, rank = _resolve_distributed_context()
-            
+
+            # Initialise shard tracker for excluding already-processed files
+            shard_tracker: Optional[ShardTracker] = None
+            if shard_manifest_path:
+                shard_tracker = ShardTracker(shard_manifest_path)
+                print_rank_0(
+                    f"  ShardTracker loaded: {shard_tracker.num_processed} "
+                    f"shards already processed (manifest: {shard_manifest_path})"
+                )
+
             # Helper to locate split subdirectories if they exist
             def get_shard_dir(split_name: str) -> str:
                 split_dir = os.path.join(resolved_tokenized_path, split_name)
@@ -749,7 +825,8 @@ def get_dataloaders(
                 batch_size=batch_size,
                 rank=rank,
                 world_size=world_size,
-                num_threads=max(1, num_workers)
+                num_threads=max(1, num_workers),
+                shard_tracker=shard_tracker,
             )
             
             eval_dataset = SPDLIterableDataset(
@@ -758,7 +835,7 @@ def get_dataloaders(
                 batch_size=batch_size,
                 rank=rank,
                 world_size=world_size,
-                num_threads=1  # Keep threads light for eval
+                num_threads=1,  # Keep threads light for eval
             )
             
             test_dataset = SPDLIterableDataset(
@@ -767,7 +844,7 @@ def get_dataloaders(
                 batch_size=batch_size,
                 rank=rank,
                 world_size=world_size,
-                num_threads=1
+                num_threads=1,
             )
 
             # batch_size=None and num_workers=0 because SPDL internally batches and handles threads
@@ -781,7 +858,8 @@ def get_dataloaders(
                 "test_size": -1,
                 "vocab_size": tokenizer.vocab_size if tokenizer else 0,
                 "resolved_tokenized_dataset_path": resolved_tokenized_path,
-                "spdl_mode": True
+                "spdl_mode": True,
+                "shard_tracker": shard_tracker,
             }
             return train_loader, eval_loader, test_loader, dataset_info            
         else:

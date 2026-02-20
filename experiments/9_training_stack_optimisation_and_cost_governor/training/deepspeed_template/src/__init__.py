@@ -8,6 +8,7 @@ This package contains modules for training language models with DeepSpeed:
 """
 
 from .data import get_dataloaders, get_tokenizer
+from .shard_tracker import ShardTracker
 from .train import (
     evaluate,
     generate_text,
@@ -21,6 +22,7 @@ __all__ = [
     # Data utilities
     "get_tokenizer",
     "get_dataloaders",
+    "ShardTracker",
     # Training utilities
     "train_epoch",
     "evaluate",

@@ -50,6 +50,7 @@ def train_epoch(
     checkpoint_manager=None,
     start_step=0,
     global_step=0,
+    shard_tracker=None,
 ):
     """
     Train the model for one epoch.
@@ -357,6 +358,13 @@ def train_epoch(
                     "global_step": global_step,
                     "loss": avg_step_loss,
                 }
+
+                # Persist shard tracker manifest alongside checkpoint
+                if shard_tracker is not None:
+                    shard_tracker.save()
+                    print_rank_0(
+                        f"  Shard tracker saved: {shard_tracker.num_processed} shards processed"
+                    )
 
                 if checkpoint_manager:
                     checkpoint_manager.save_checkpoint(
