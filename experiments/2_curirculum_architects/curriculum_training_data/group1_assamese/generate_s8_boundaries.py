@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Statement 8: Word Boundaries
-Target: 15,000 pairs
+Target: 11,500 pairs (no exact duplicates)
 Focus: First letter, Last letter, Prefix identification.
 """
 import os
@@ -32,35 +32,42 @@ def get_assamese_grapheme_clusters(word: str) -> list[str]:
 
 def main():
     samples = []
-    target_count = 15000
-    
-    while len(samples) < target_count:
-        word = random.choice(WORDS)
+    seen = set()  # Track (query, answer) to avoid exact duplicates
+    target_count = 11500
+
+    word_list = list(set(w for w in WORDS if get_assamese_grapheme_clusters(w)))
+    max_attempts = target_count * 15
+    attempts = 0
+
+    while len(samples) < target_count and attempts < max_attempts:
+        attempts += 1
+        word = random.choice(word_list)
         clusters = get_assamese_grapheme_clusters(word)
-        if not clusters: continue
-        
+        if not clusters:
+            continue
+
         if random.random() < 0.5:
-            # First letter
             template = random.choice(TEMPLATES_FIRST)
             query = template.format(word=word)
             answer = clusters[0]
         else:
-            # Last letter
             template = random.choice(TEMPLATES_LAST)
             query = template.format(word=word)
             answer = clusters[-1]
-            
-        samples.append((query, answer))
+
+        key = (query, answer)
+        if key not in seen:
+            seen.add(key)
+            samples.append((query, answer))
 
     random.shuffle(samples)
-    samples = samples[:target_count]
 
     output_file = os.path.join(os.path.dirname(__file__), "group1_s8.txt")
     with open(output_file, "w", encoding="utf-8") as f:
         for query, answer in samples:
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-    print(f"S8 Boundaries: Generated {len(samples)} samples")
+    print(f"S8 Boundaries: Generated {len(samples)} samples (no duplicates)")
 
 if __name__ == "__main__":
     main()

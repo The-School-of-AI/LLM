@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Generate Statement 1: Spelling (বানান) questions for Assamese
-Target: 28,600 pairs (14.3% of 200,000)
+Target: 25,000 pairs
+Uses expanded vocabulary (Wikipedia + GitHub) for unique generations.
 """
 import os
 import random
@@ -10,7 +11,7 @@ import sys
 import regex  # noqa: E402
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_assamese.assamese_vocabulary import (  # noqa: E402
+from group1_assamese.assamese_vocabulary import (
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
@@ -45,20 +46,12 @@ TEMPLATES = [
 
 
 def get_assamese_characters(word: str) -> list[str]:
-    """
-    Break down an Assamese word into its constituent Unicode characters.
-    Each Unicode character (consonant, vowel, matra) is separate.
-    Used for: Spelling questions (S1, S8)
-    """
+    """Break down an Assamese word into its constituent Unicode characters."""
     return list(word)
 
 
 def get_assamese_grapheme_clusters(word: str) -> list[str]:
-    """
-    Get grapheme clusters for Assamese word (for counting/length/position).
-    Uses regex library's \\X pattern (Unicode UAX#29 compliant).
-    Used for: Counting, length, and position questions (S2, S4, S7, S9, S10)
-    """
+    """Get grapheme clusters for Assamese word (for S2, S4, S7, S9, S10)."""
     return regex.findall(r"\X", word)
 
 
@@ -70,30 +63,36 @@ def generate_spelling_answer(word: str) -> str:
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
 samples = []
-target_count = 25000
+target_count = 32000
+seen = set()
 
-# Generate all unique combinations first
-unique_combinations = {}
+# Generate unique (query, answer) pairs
 for word in set(all_words):
-    for template_idx, template in enumerate(TEMPLATES):
+    for template in TEMPLATES:
         query = template.format(word=word)
         answer = generate_spelling_answer(word)
-        unique_combinations[(word, template_idx)] = (query, answer)
+        key = (query, answer)
+        if key not in seen:
+            seen.add(key)
+            samples.append((query, answer))
+        if len(samples) >= target_count:
+            break
+    if len(samples) >= target_count:
+        break
 
-# If we have enough unique combinations, use them
-if len(unique_combinations) >= target_count:
-    samples = list(unique_combinations.values())[:target_count]
-else:
-    samples = list(unique_combinations.values())
+if len(samples) < target_count:
+    words_list = list(set(all_words))
     while len(samples) < target_count:
-        word = random.choice(list(set(all_words)))
-        template_idx = random.randint(0, len(TEMPLATES) - 1)
-        template = TEMPLATES[template_idx]
+        word = random.choice(words_list)
+        template = random.choice(TEMPLATES)
         query = template.format(word=word)
         answer = generate_spelling_answer(word)
-        samples.append((query, answer))
+        key = (query, answer)
+        if key not in seen:
+            seen.add(key)
+            samples.append((query, answer))
 
-# Shuffle for randomness
+samples = samples[:target_count]
 random.shuffle(samples)
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s1.txt")
@@ -101,4 +100,4 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S1 Spelling: Generated {len(samples)} samples")
+print(f"S1 Spelling: Generated {len(samples)} samples (unique: {len(seen)})")

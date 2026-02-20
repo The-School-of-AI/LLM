@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Statement 5: Rhyming (Verb endings)
-Target: 15,000 pairs
+Target: 15,000 pairs (no exact duplicates, quality distractors)
 Focus: Matching words with same ending sounds/suffixes.
 """
 import os
@@ -24,70 +24,82 @@ TEMPLATES_PAIR = [
 
 TEMPLATES_CHOICE = [
     '"{word}"ৰ লগত কোনটো শব্দৰ ছন্দ মিলে: "{option1}" নে "{option2}"?',
-    '"{word}" আৰু "{option1}"ৰ মাজত ছন্দৰ মিল আছেনে?', # This is yes/no, maybe stick to choice
     '"{word}"ৰ লগত ছন্দ মিল থকা শব্দটো বাছনি কৰক: "{option1}", "{option2}"।',
 ]
 
+def _build_rhyme_sets():
+    """Build set of words that rhyme with each word (for quality distractor exclusion)."""
+    rhyme_with = {}
+    for w, r in RHYMING_PAIRS.items():
+        rhyme_with.setdefault(w, set()).add(r)
+        rhyme_with.setdefault(r, set()).add(w)
+    for group in RHYMING_GROUPS.values():
+        if len(group) >= 2:
+            gset = set(group)
+            for w in group:
+                rhyme_with.setdefault(w, set()).update(gset - {w})
+    return rhyme_with
+
+
 def main():
     samples = []
+    seen = set()  # Track (query, answer) to avoid exact duplicates
     target_count = 15000
-    
-    # 1. Generate from RHYMING_PAIRS (Direct mapping)
+
     pairs = list(RHYMING_PAIRS.items())
-    
-    # 2. Generate from RHYMING_GROUPS (Combinations within group)
     group_pairs = []
     for group in RHYMING_GROUPS.values():
         if len(group) >= 2:
-            # Generate all pairs in group
             for i in range(len(group)):
                 for j in range(len(group)):
                     if i != j:
                         group_pairs.append((group[i], group[j]))
-    
     all_pairs = pairs + group_pairs
-    
-    while len(samples) < target_count:
-        # Pick a valid rhyming pair
+    rhyme_with = _build_rhyme_sets()
+    all_words_set = set(ALL_WORDS_UNIQUE)
+    max_attempts = target_count * 25
+    attempts = 0
+
+    while len(samples) < target_count and attempts < max_attempts:
+        attempts += 1
         word, rhyme = random.choice(all_pairs)
-        
-        # Strategy 1: Direct question (Open ended -> formatted as single answer)
+
+        # Strategy 1: Direct question (40%)
         if random.random() < 0.4:
             template = random.choice(TEMPLATES_PAIR)
             query = template.format(word=word)
             answer = rhyme
-            samples.append((query, answer))
-            
-        # Strategy 2: Multiple Choice
+            key = (query, answer)
+            if key not in seen:
+                seen.add(key)
+                samples.append((query, answer))
+
+        # Strategy 2: Multiple Choice (60%) - use non-rhyming distractors for quality
         else:
-            # Pick a distractor (non-rhyming)
-            # Ideally ending shouldn't match. 
-            # Simple heuristic: word not in the same rhyming group/pair
-            distractor = random.choice(ALL_WORDS_UNIQUE)
-            if distractor == rhyme or distractor == word:
+            exclude = rhyme_with.get(word, set()) | {word, rhyme}
+            valid_distractors = [w for w in all_words_set if w not in exclude]
+            if not valid_distractors:
                 continue
-                
+            distractor = random.choice(valid_distractors)
             template = random.choice(TEMPLATES_CHOICE)
-            
-            # Randomize options
-            opts = [(rhyme, "correct"), (distractor, "wrong")]
+            opts = [rhyme, distractor]
             random.shuffle(opts)
-            opt1, type1 = opts[0]
-            opt2, type2 = opts[1]
-            
+            opt1, opt2 = opts[0], opts[1]
             query = template.format(word=word, option1=opt1, option2=opt2)
             answer = rhyme
-            samples.append((query, answer))
+            key = (query, answer)
+            if key not in seen:
+                seen.add(key)
+                samples.append((query, answer))
 
     random.shuffle(samples)
-    samples = samples[:target_count]
 
     output_file = os.path.join(os.path.dirname(__file__), "group1_s5.txt")
     with open(output_file, "w", encoding="utf-8") as f:
         for query, answer in samples:
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-    print(f"S5 Rhyming: Generated {len(samples)} samples")
+    print(f"S5 Rhyming: Generated {len(samples)} samples (no duplicates)")
 
 if __name__ == "__main__":
     main()

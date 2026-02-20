@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Statement 9: Morphology (Roots + Suffixes)
-Target: 30,000 pairs
+Target: All unique pairs possible (~9,498)
 Focus: Root word extraction and suffix identification.
 """
 import os
@@ -9,12 +9,9 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_assamese.assamese_vocabulary import (
-    VERBS,
-    EASY_OBJECTS,
-    EASY_PEOPLE,
-    SUFFIXES
-)
+from group1_assamese.assamese_vocabulary import VERBS, SUFFIXES
+# Use EASY_OBJECTS/EASY_PEOPLE if available, else OBJECTS/PEOPLE (cleaned vocab)
+from group1_assamese.assamese_vocabulary import EASY_OBJECTS, EASY_PEOPLE
 from prompt_utils import format_qa_pair_hindi
 
 # Define specific suffix categories based on SUFFIXES dict
@@ -47,61 +44,34 @@ TEMPLATES_SUFFIX = [
 
 def main():
     samples = []
-    target_count = 30000
-    
-    # Flatten suffixes
-    all_suffixes = []
-    for type_list in SUFFIXES.values():
-        all_suffixes.extend(type_list)
-        
-    while len(samples) < target_count:
-        # Select a category of words and compatible suffixes
-        word_list, allowed_suffix_groups = random.choice(COMBINATIONS)
-        root = random.choice(word_list)
-        
-        # Pick a suffix group then a suffix
-        suffix_group = random.choice(allowed_suffix_groups)
-        suffix = random.choice(suffix_group)
-        
-        # Simple agglutination (naive concatenation)
-        # Note: Assamese sandhi rules are complex. 
-        # For this dataset, we use simple concatenation which works for many cases
-        # or accepted colloquial forms.
-        # Ideally we'd have a conjugator, but naive approx is standard for this level.
-        inflected = root + suffix
-        
-        task_type = random.random()
-        
-        if task_type < 0.4:
-            # Identify Root
-            template = random.choice(TEMPLATES_ROOT)
-            query = template.format(inflected=inflected)
-            answer = root
-            samples.append((query, answer))
-            
-        elif task_type < 0.7:
-            # Identify Suffix
-            template = random.choice(TEMPLATES_SUFFIX[:2])
-            query = template.format(inflected=inflected)
-            answer = suffix
-            samples.append((query, answer))
-            
-        else:
-            # Synthesis (Root + Suffix -> Inflected)
-            template = TEMPLATES_SUFFIX[2]
-            query = template.format(root=root, suffix=suffix)
-            answer = inflected
-            samples.append((query, answer))
+
+    for word_list, allowed_suffix_groups in COMBINATIONS:
+        all_suffixes = []
+        for g in allowed_suffix_groups:
+            all_suffixes.extend(g)
+        for root in word_list:
+            for suffix in all_suffixes:
+                inflected = root + suffix
+                # Identify Root (3 templates)
+                for template in TEMPLATES_ROOT:
+                    query = template.format(inflected=inflected)
+                    samples.append((query, root))
+                # Identify Suffix (2 templates)
+                for template in TEMPLATES_SUFFIX[:2]:
+                    query = template.format(inflected=inflected)
+                    samples.append((query, suffix))
+                # Synthesis (1 template)
+                query = TEMPLATES_SUFFIX[2].format(root=root, suffix=suffix)
+                samples.append((query, inflected))
 
     random.shuffle(samples)
-    samples = samples[:target_count]
 
     output_file = os.path.join(os.path.dirname(__file__), "group1_s9.txt")
     with open(output_file, "w", encoding="utf-8") as f:
         for query, answer in samples:
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-    print(f"S9 Morphology: Generated {len(samples)} samples")
+    print(f"S9 Morphology: Generated {len(samples)} samples (all unique)")
 
 if __name__ == "__main__":
     main()

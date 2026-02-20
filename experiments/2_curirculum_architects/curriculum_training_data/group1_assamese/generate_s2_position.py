@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Statement 2: Positional Analysis (Merged S2+S7)
-Target: 20,000 pairs
+Target: 55,000 pairs (no exact duplicates)
 Focus: Identify letter at index X, and Index of letter X.
 """
 import os
@@ -39,66 +39,59 @@ def get_assamese_grapheme_clusters(word: str) -> list[str]:
 
 def main():
     samples = []
-    target_count = 20000
-    
+    seen = set()  # Track (query, answer) to avoid exact duplicates
+    target_count = 55000
+
     # Pre-calculate clusters for all words to save time
     word_clusters = [(w, get_assamese_grapheme_clusters(w)) for w in set(WORDS) if len(w) > 1]
-    
-    while len(samples) < target_count:
+    max_attempts = target_count * 20  # Safeguard against infinite loop
+    attempts = 0
+
+    while len(samples) < target_count and attempts < max_attempts:
+        attempts += 1
         word, clusters = random.choice(word_clusters)
         length = len(clusters)
-        
+
         # Mode 1: Letter at Index
         if random.random() < 0.5:
-            # Pick a random position (1-based)
             idx = random.randint(0, length - 1)
-            
-            # Only use if we have an ordinal word for this index
             if idx < len(ORDINALS):
                 ordinal = ORDINALS[idx]
                 template = random.choice(TEMPLATES_LETTER_AT_INDEX)
                 query = template.format(word=word, ordinal=ordinal)
                 answer = clusters[idx]
-                samples.append((query, answer))
-                
+                key = (query, answer)
+                if key not in seen:
+                    seen.add(key)
+                    samples.append((query, answer))
+
         # Mode 2: Index of Letter
         else:
-            # Pick a random character from the word
             target_char = random.choice(clusters)
-            # Find all indices
             indices = [i + 1 for i, char in enumerate(clusters) if char == target_char]
-            
-            # Pick one answer (usually the first one if multiple, or specify)
-            # For simplicity, if multiple, we say "X and Y" or just the first. 
-            # Let's stick to first occurrence for simple templates, or list all.
-            # Answer format: "প্ৰথম", "দ্বিতীয়" etc. or numeric "1", "2".
-            # Let's use numeric string or Ordinal string.
-            
-            # Using ordinal string for answer
             ans_indices = []
-            valid = True
             for i in indices:
-                if (i-1) < len(ORDINALS):
-                    ans_indices.append(ORDINALS[i-1])
+                if (i - 1) < len(ORDINALS):
+                    ans_indices.append(ORDINALS[i - 1])
                 else:
-                    ans_indices.append(str(i)) # Fallback to number
-            
+                    ans_indices.append(str(i))
             answer = ", ".join(ans_indices)
-            
             template = random.choice(TEMPLATES_INDEX_OF_LETTER)
             query = template.format(word=word, char=target_char)
-            samples.append((query, answer))
+            key = (query, answer)
+            if key not in seen:
+                seen.add(key)
+                samples.append((query, answer))
 
     # Shuffle
     random.shuffle(samples)
-    samples = samples[:target_count]
 
     output_file = os.path.join(os.path.dirname(__file__), "group1_s2.txt")
     with open(output_file, "w", encoding="utf-8") as f:
         for query, answer in samples:
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-    print(f"S2 Positional: Generated {len(samples)} samples")
+    print(f"S2 Positional: Generated {len(samples)} samples (no duplicates)")
 
 if __name__ == "__main__":
     main()

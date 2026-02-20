@@ -43,16 +43,16 @@ This document describes the approach for generating an Assamese language curricu
 
 | Statement | Skill | Target Pairs | Focus |
 |-----------|-------|--------------|-------|
-| S1 | Spelling (বানান) | 25,000 | Orthography, Yuktakshars (conjuncts) |
-| S2 | Positional Analysis | 20,000 | Merged S2+S7 (Letter at index X) |
-| S3 | Phonetic Matching | 15,000 | Sibilants (শ/ষ/স), Wa/Ba distinction |
-| S4 | Akshara Count | 15,000 | Visual vs phonetic units (uses expanded vocab) |
+| S1 | Spelling (বানান) | 32,000 | Orthography, Yuktakshars (conjuncts) |
+| S2 | Positional Analysis | 52,292 | Merged S2+S7 (Letter at index X) |
+| S3 | Phonetic Matching | 38,250 | Sibilants (শ/ষ/স), Wa/Ba distinction |
+| S4 | Akshara Count | 30,712 | Visual vs phonetic units (uses expanded vocab) |
 | S5 | Rhyming | 15,000 | Verb endings, standard rhymes |
-| S6 | Classification | 20,000 | Semantic categories, Action vs Object |
-| S7 | Numeric Mastery | 15,000 | Numbers, Ordinals |
-| S8 | Word Boundaries | 15,000 | First/Last letter, Prefix |
-| S9 | Morphology | 30,000 | Roots + Suffixes (Bibhakti) |
-| S10 | Semantics | 30,000 | Synonyms, Antonyms |
+| S6 | Classification | 10,000 | Semantic categories, Action vs Object |
+| S7 | Numeric Mastery | 114 | Numbers, Ordinals (max unique) |
+| S8 | Word Boundaries | 11,500 | First/Last letter, Prefix |
+| S9 | Morphology | 9,498 | Roots + Suffixes (Bibhakti) |
+| S10 | Semantics | 634 | Synonyms, Antonyms |
 | **Total** | | **200,000** | |
 
 ## File Structure

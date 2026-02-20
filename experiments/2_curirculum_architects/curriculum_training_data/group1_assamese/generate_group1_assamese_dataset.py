@@ -18,19 +18,19 @@ from prompt_utils import (  # noqa: E402
 # Statement files and their target counts
 # Updated based on linguistic analysis (Morphology & Semantics emphasis)
 STATEMENT_FILES = [
-    ("group1_s1.txt", 25000, "S1: Spelling (Orthography & Yuktakshars)"),
-    ("group1_s2.txt", 20000, "S2: Positional Analysis (Merged S2+S7)"),
-    ("group1_s3.txt", 15000, "S3: Phonetic Matching (Sibilants/Wa)"),
-    ("group1_s4.txt", 15000, "S4: Character/Akshara Count"),
+    ("group1_s1.txt", 32000, "S1: Spelling (Orthography & Yuktakshars)"),
+    ("group1_s2.txt", 52292, "S2: Positional Analysis (Merged S2+S7)"),
+    ("group1_s3.txt", 38250, "S3: Phonetic Matching (Sibilants/Wa)"),
+    ("group1_s4.txt", 30712, "S4: Character/Akshara Count"),
     ("group1_s5.txt", 15000, "S5: Rhyming (Verb endings)"),
-    ("group1_s6.txt", 20000, "S6: Semantic Classification"),
-    ("group1_s7.txt", 15000, "S7: Numeric Mastery (Ordinals)"),
-    ("group1_s8.txt", 15000, "S8: Word Boundaries"),
-    ("group1_s9.txt", 30000, "S9: Morphology (Roots + Suffixes)"),
-    ("group1_s10.txt", 30000, "S10: Synonyms & Antonyms"),
+    ("group1_s6.txt", 10000, "S6: Semantic Classification"),
+    ("group1_s7.txt", 114, "S7: Numeric Mastery (Ordinals)"),
+    ("group1_s8.txt", 11500, "S8: Word Boundaries"),
+    ("group1_s9.txt", 9498, "S9: Morphology (Roots + Suffixes)"),
+    ("group1_s10.txt", 634, "S10: Synonyms & Antonyms"),
 ]
 
-TOTAL_TARGET = 200000
+TOTAL_TARGET = 200000  # S2+30k, S4+11.7k, S3+4.5k to reach 200k
 MIN_TOKENS_PER_DATAPOINT = 512
 
 

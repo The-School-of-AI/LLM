@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Statement 4: Character/Akshara Count
-Target: 15,000 pairs
+Target: 31,746 pairs (max unique)
 Focus: Counting grapheme clusters (visual units).
 """
 import os
@@ -45,7 +45,7 @@ def get_assamese_grapheme_clusters(word: str) -> list[str]:
 
 def main():
     samples = []
-    target_count = 15000
+    target_count = 31746
     
     unique_combinations = set()
     max_attempts = target_count * 10

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Statement 10: Synonyms & Antonyms
-Target: 30,000 pairs
+Target: All unique pairs possible (~634)
 Focus: Semantic relationship mapping.
 """
 import os
@@ -25,6 +25,13 @@ TEMPLATES_SYNONYM = [
     '"{word}"ৰ নিচিনা অৰ্থ থকা এটা শব্দ কওক?',
 ]
 
+# Yes/no verification: "Is {syn} another meaning of {word}?" → Answer: হয়
+TEMPLATES_SYNONYM_VERIFY = [
+    '"{word}"ৰ আন এটা অৰ্থ "{syn}" হ\'ব পাৰে নেকি?',
+    '"{syn}" "{word}"ৰ সমাৰ্থক শব্দ হয় নেকি?',
+    '"{syn}" "{word}"ৰ প্ৰতিশব্দ হয় নেকি?',
+]
+
 TEMPLATES_ANTONYM = [
     '"{word}"ৰ বিপৰীত শব্দ কি?',
     '"{word}"ৰ বিপৰীতাৰ্থক শব্দটো কি?',
@@ -39,50 +46,31 @@ TEMPLATES_ANTONYM = [
 
 def main():
     samples = []
-    target_count = 30000
-    
-    syn_keys = list(SYNONYMS.keys())
-    ant_keys = list(ANTONYMS.keys())
-    
-    while len(samples) < target_count:
-        if random.random() < 0.6:
-            # Synonyms
-            word = random.choice(syn_keys)
-            syn_list = SYNONYMS[word]
-            syn = random.choice(syn_list)
-            
-            if random.random() < 0.7:
-                # Ask for synonym
-                template = random.choice(TEMPLATES_SYNONYM[:3])
+
+    # Synonyms: all (word, syn) pairs × all templates
+    for word, syn_list in SYNONYMS.items():
+        for syn in syn_list:
+            for template in TEMPLATES_SYNONYM:
                 query = template.format(word=word)
-                answer = syn
-            else:
-                # Verification
-                template = TEMPLATES_SYNONYM[3]
+                samples.append((query, syn))
+            for template in TEMPLATES_SYNONYM_VERIFY:
                 query = template.format(word=word, syn=syn)
-                answer = "হয়" # Yes
-            
-            samples.append((query, answer))
-            
-        else:
-            # Antonyms
-            word = random.choice(ant_keys)
-            ant = ANTONYMS[word]
-            
-            template = random.choice(TEMPLATES_ANTONYM)
+                samples.append((query, "হয়"))
+
+    # Antonyms: all (word, ant) pairs × all templates
+    for word, ant in ANTONYMS.items():
+        for template in TEMPLATES_ANTONYM:
             query = template.format(word=word)
-            answer = ant
-            samples.append((query, answer))
+            samples.append((query, ant))
 
     random.shuffle(samples)
-    samples = samples[:target_count]
 
     output_file = os.path.join(os.path.dirname(__file__), "group1_s10.txt")
     with open(output_file, "w", encoding="utf-8") as f:
         for query, answer in samples:
             f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-    print(f"S10 Semantics: Generated {len(samples)} samples")
+    print(f"S10 Semantics: Generated {len(samples)} samples (all unique)")
 
 if __name__ == "__main__":
     main()
