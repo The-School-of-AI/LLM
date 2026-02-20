@@ -41,6 +41,7 @@ except ImportError:
 from .triton_sparse_attn import (
     triton_sparse_attention,
     pytorch_sparse_attention,
+    USE_TRITON_BACKWARD,
 )
 
 # ── Gated Lightning Indexer ───────────────────────────────────────────
