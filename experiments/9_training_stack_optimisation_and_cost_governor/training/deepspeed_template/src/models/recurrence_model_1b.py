@@ -638,8 +638,8 @@ class RMSNorm(nn.Module):
     FIX #43: Computes variance in fp32 for numerical stability at 256k context.
     Critical for preventing rare NaN spikes with bf16/fp16 training.
 
-    Triton acceleration: When available, uses fused Triton kernel that computes
-    variance + rsqrt + weight multiply in a single kernel launch.
+    Triton acceleration: When available, uses fused Triton kernel with both
+    forward AND backward in Triton (Liger-style). No more autograd fallback.
     """
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -648,10 +648,9 @@ class RMSNorm(nn.Module):
         self._use_triton = HAS_TRITON and triton_rmsnorm is not None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Triton path: fused kernel (variance + rsqrt + weight in one launch)
-        # IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
-        # autograd, which breaks the reversible midpoint backward recompute.
-        if self._use_triton and x.is_cuda and not torch.is_grad_enabled():
+        # Triton path: fused forward + backward kernel (Liger-style)
+        # Now safe with grad enabled — the new kernel wraps torch.autograd.Function
+        if self._use_triton and x.is_cuda:
             try:
                 return triton_rmsnorm(x, self.weight, self.eps)
             except Exception:
