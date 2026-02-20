@@ -472,6 +472,10 @@ if HAS_TRITON:
             BLOCK_D = triton.next_power_of_2(D)
             grid = (B * H, T)
 
+            # Adaptive num_stages: T4 has 64KB shared memory,
+            # 3 stages with BLOCK_D>=128 exceeds that limit
+            num_stages = 2 if BLOCK_D >= 128 else 3
+
             _sparse_attn_fwd_kernel[grid](
                 q, k, v, indices, mask,
                 out, lse,
@@ -485,7 +489,7 @@ if HAS_TRITON:
                 scale,
                 BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
                 num_warps=4 if BLOCK_D <= 64 else 8,
-                num_stages=3,
+                num_stages=num_stages,
             )
 
             out_typed = out.to(q.dtype)
@@ -515,6 +519,7 @@ if HAS_TRITON:
                 do = do.to(torch.float32)
 
             num_warps_bwd = 4 if BLOCK_D <= 64 else 8
+            num_stages_bwd = 2 if BLOCK_D >= 128 else 3
 
             # ── Step 1: delta[b,h,q] = sum_d(O * dO) ──────────────
             delta = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
@@ -546,7 +551,7 @@ if HAS_TRITON:
                 scale,
                 BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
                 num_warps=num_warps_bwd,
-                num_stages=3,
+                num_stages=num_stages_bwd,
             )
 
             # ── Step 3: dK/dV (atomic scatter) ─────────────────────
@@ -570,7 +575,7 @@ if HAS_TRITON:
                 scale,
                 BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
                 num_warps=num_warps_bwd,
-                num_stages=3,
+                num_stages=num_stages_bwd,
             )
 
             # Cast gradients back to input dtype
