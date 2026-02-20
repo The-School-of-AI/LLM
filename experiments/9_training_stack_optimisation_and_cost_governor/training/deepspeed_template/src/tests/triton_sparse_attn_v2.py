@@ -393,8 +393,9 @@ if HAS_TRITON:
             BLOCK_D = triton.next_power_of_2(D)
             grid = (B * H, T)
 
-            # T4 has 64KB shared memory; 3 stages with BLOCK_D>=128 exceeds it
-            num_stages = 2 if BLOCK_D >= 128 else 3
+            # T4 has 64KB shared memory; tl.dot uses more SMEM than tl.sum,
+            # so we need num_stages=1 for large BLOCK_D to fit
+            num_stages = 1 if BLOCK_D >= 128 else 3
 
             _sparse_attn_fwd_kernel_v2[grid](
                 q, k, v, indices, mask,
@@ -435,7 +436,7 @@ if HAS_TRITON:
 
             do = grad_output.contiguous().to(torch.float32)
             num_warps_bwd = 4 if BLOCK_D <= 64 else 8
-            num_stages_bwd = 2 if BLOCK_D >= 128 else 3
+            num_stages_bwd = 1 if BLOCK_D >= 128 else 3
 
             # Step 1: delta
             delta = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
