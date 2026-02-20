@@ -129,6 +129,12 @@ def bin_idx_source(
     if not bin_files:
         raise FileNotFoundError(f"No .bin files found in {shard_dir}")
 
+    # Distributed file-level sharding
+    # CRITICAL: Sharding must happen BEFORE exclusion to maintain consistent
+    # rank assignments across resumes.
+    if world_size > 1:
+        bin_files = bin_files[rank::world_size]
+
     # Exclude already-processed shards
     if exclude_files:
         pre_count = len(bin_files)
@@ -145,10 +151,6 @@ def bin_idx_source(
             f"SPDL source: Rank {rank} has no remaining shards after exclusion"
         )
         return
-
-    # Distributed file-level sharding
-    if world_size > 1:
-        bin_files = bin_files[rank::world_size]
 
     print_rank_0(
         f"SPDL source: Rank {rank}/{world_size} scanning "
@@ -808,7 +810,8 @@ def get_dataloaders(
             # Initialise shard tracker for excluding already-processed files
             shard_tracker: Optional[ShardTracker] = None
             if shard_manifest_path:
-                shard_tracker = ShardTracker(shard_manifest_path)
+                # Disable auto_save to prevent race conditions and desync from checkpoints
+                shard_tracker = ShardTracker(shard_manifest_path, auto_save=False)
                 print_rank_0(
                     f"  ShardTracker loaded: {shard_tracker.num_processed} "
                     f"shards already processed (manifest: {shard_manifest_path})"

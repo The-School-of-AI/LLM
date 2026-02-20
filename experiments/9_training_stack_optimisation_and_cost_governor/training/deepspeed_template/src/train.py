@@ -361,10 +361,24 @@ def train_epoch(
 
                 # Persist shard tracker manifest alongside checkpoint
                 if shard_tracker is not None:
-                    shard_tracker.save()
-                    print_rank_0(
-                        f"  Shard tracker saved: {shard_tracker.num_processed} shards processed"
-                    )
+                    # Synchronize processed shards across all ranks before saving
+                    import torch.distributed as dist
+                    if dist.is_initialized():
+                        local_shards = list(shard_tracker.get_processed_shards())
+                        gathered_shards = [None for _ in range(dist.get_world_size())]
+                        dist.all_gather_object(gathered_shards, local_shards)
+                        
+                        # Merge all gathered shards into the local tracker
+                        for rank_shards in gathered_shards:
+                            for shard in rank_shards:
+                                shard_tracker.mark_processed(shard)
+                    
+                    # Only save on rank 0 to prevent race conditions and file corruption
+                    if is_main_process():
+                        shard_tracker.save()
+                        print_rank_0(
+                            f"  Shard tracker saved: {shard_tracker.num_processed} shards processed"
+                        )
 
                 if checkpoint_manager:
                     checkpoint_manager.save_checkpoint(
