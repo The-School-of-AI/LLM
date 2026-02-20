@@ -15,25 +15,13 @@ from ..core.config import PipelineConfig
 from ..core.types import (
     BandDistribution,
     ChunkMetadata,
-    CoresetComposition,
-    CoresetManifest,
-    CoverageAudit,
-    DeduplicationStats,
     DifficultyBand,
-    DomainDistribution,
     LanguageDistribution,
     ProtectedSliceRule,
-    ProtectedSlicesPreserved,
-    SelectionStatistics,
-    StageName,
     difficulty_band_order,
 )
 from ..curriculum.loader import CurriculumLoader
-from ..dedup.deduplicator import (
-    DuplicateRemovalStrategy,
-    ExactDeduplicator,
-    NearDeduplicator,
-)
+from ..dedup.deduplicator import ExactDeduplicator, NearDeduplicator
 from ..diversity.scorer import (
     DiversityScorer,
     DomainDiversityMatrix,
@@ -847,7 +835,7 @@ class SelectionEngine:
             )
         else:
             self.logger.info(
-                f"Protected slice coverage already meets curriculum targets"
+                "Protected slice coverage already meets curriculum targets"
             )
 
         return selected

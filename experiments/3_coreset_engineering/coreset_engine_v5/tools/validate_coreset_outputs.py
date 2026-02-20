@@ -5,17 +5,15 @@ Generates checklists and verification reports for manifest and selected indices
 
 import json
 import logging
-import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.core.config import PipelineConfig
-from src.core.types import BandDistribution, DifficultyBand, difficulty_band_order
+from src.core.types import DifficultyBand, difficulty_band_order
 from src.curriculum.loader import CurriculumLoader
 
 
@@ -310,7 +308,7 @@ class CoresetValidator:
                 passed=has_indices,
                 severity="medium" if not has_indices else "low",
                 message=f"Found {len(indices)} selected indices",
-                details=f"Should have at least some selected indices",
+                details="Should have at least some selected indices",
             )
         )
 
@@ -851,7 +849,7 @@ class CoresetValidator:
                 passed=domain_delta_ok,
                 severity="high" if not domain_delta_ok else "low",
                 message=f"Max domain delta: {max_domain_delta:.4f} <= {constraint_domain_delta:.4f}",
-                details=f"Domain delta constraint",
+                details="Domain delta constraint",
             )
         )
 
@@ -937,7 +935,7 @@ class CoresetValidator:
         lines.append(f"Manifest: {report.manifest_path}")
         lines.append(f"Indices:  {report.indices_path}")
 
-        lines.append(f"\n### SUMMARY")
+        lines.append("\n### SUMMARY")
         lines.append("-" * 100)
         lines.append(f"Total Checks:        {summary['total_checks']}")
         lines.append(f"Passed:              {summary['by_status']['passed']}")
@@ -949,7 +947,7 @@ class CoresetValidator:
         lines.append(f"Low Severity:        {summary['by_severity']['low']}")
 
         # Detailed findings
-        lines.append(f"\n### DETAILED FINDINGS")
+        lines.append("\n### DETAILED FINDINGS")
         lines.append("-" * 100)
 
         # Group failures by category
@@ -975,7 +973,7 @@ class CoresetValidator:
             lines.append("\n✓ All checks passed!\n")
 
         # By category breakdown
-        lines.append(f"\n### BREAKDOWN BY CATEGORY")
+        lines.append("\n### BREAKDOWN BY CATEGORY")
         lines.append("-" * 100)
         by_category = {}
         for check in report.checks:
@@ -996,7 +994,7 @@ class CoresetValidator:
 
         # Language policy compliance metrics (if available)
         if report.language_metrics:
-            lines.append(f"\n### LANGUAGE POLICY COMPLIANCE METRICS")
+            lines.append("\n### LANGUAGE POLICY COMPLIANCE METRICS")
             lines.append("-" * 100)
             metrics = report.language_metrics
 
@@ -1010,17 +1008,17 @@ class CoresetValidator:
             if metrics.get("unrecognized_languages"):
                 unknown = metrics["unrecognized_languages"]
                 lines.append(
-                    f"  Unrecognized: {', '.join([f'{l[0]} ({l[1]:.1%})' for l in unknown])}"
+                    f"  Unrecognized: {', '.join([f'{lang[0]} ({lang[1]:.1%})' for lang in unknown])}"
                 )
 
             # Primary languages
             if metrics.get("primary_total", 0) > 0:
-                lines.append(f"\nPrimary languages:")
+                lines.append("\nPrimary languages:")
                 lines.append(
                     f"  Compliant: {metrics.get('primary_compliant', 0)}/{metrics.get('primary_total', 0)}"
                 )
                 if metrics.get("primary_violations"):
-                    lines.append(f"  Violations:")
+                    lines.append("  Violations:")
                     for v in metrics["primary_violations"]:
                         lines.append(
                             f"    {v['lang']}: {v['actual']:.2%} (max: {v['max']:.2%}, excess: {v['excess']:.2%})"
@@ -1028,12 +1026,12 @@ class CoresetValidator:
 
             # Secondary languages
             if metrics.get("secondary_total", 0) > 0:
-                lines.append(f"\nSecondary languages:")
+                lines.append("\nSecondary languages:")
                 lines.append(
                     f"  Compliant: {metrics.get('secondary_compliant', 0)}/{metrics.get('secondary_total', 0)}"
                 )
                 if metrics.get("secondary_violations"):
-                    lines.append(f"  Violations:")
+                    lines.append("  Violations:")
                     for v in metrics["secondary_violations"]:
                         lines.append(
                             f"    {v['lang']}: {v['actual']:.2%} (max: {v['max']:.2%}, excess: {v['excess']:.2%})"
@@ -1053,7 +1051,6 @@ class CoresetValidator:
 def main():
     """Main entry point for validation"""
     import argparse
-    from datetime import datetime
 
     parser = argparse.ArgumentParser(description="Validate coreset engine outputs")
     parser.add_argument(

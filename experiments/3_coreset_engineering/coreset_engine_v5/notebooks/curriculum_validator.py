@@ -4,7 +4,7 @@ Curriculum Data Validator for Coreset Building
 Validates curriculum data from the curriculum team before coreset selection.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -161,7 +161,7 @@ class CurriculumValidator:
         if missing:
             print(f"\n⚠️ Missing bands: {missing}")
         else:
-            print(f"\n✓ All bands present")
+            print("\n✓ All bands present")
 
         print(f"  Total: {len(self.df):,}")
 
@@ -297,7 +297,7 @@ class CurriculumValidator:
         if "math_score" in self.df.columns:
             protected["high_math"] = len(self.df[self.df["math_score"] >= 8])
 
-        print(f"\n  Protected content counts:")
+        print("\n  Protected content counts:")
         for k, v in protected.items():
             print(f"    {k}: {v:,}")
 

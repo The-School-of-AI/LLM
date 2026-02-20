@@ -25,7 +25,7 @@ import datetime as _dt
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from src.core.types import difficulty_band_order
 
@@ -160,16 +160,18 @@ def parse_report(text: str) -> ParsedReport:
         # Band table
         def _extract_table(header: str) -> List[str]:
             try:
-                start = next(i for i, l in enumerate(block) if l.strip() == header)
+                start = next(
+                    i for i, line in enumerate(block) if line.strip() == header
+                )
             except StopIteration:
                 return []
             # Take lines after header until blank line
             rows = []
-            for l in block[start + 1 :]:
-                if not l.strip():
+            for line in block[start + 1 :]:
+                if not line.strip():
                     break
-                if l.strip().startswith("|"):
-                    rows.append(l)
+                if line.strip().startswith("|"):
+                    rows.append(line)
             return rows
 
         band_rows = _extract_table("| Band | Ratio | Tokens | Coverage |")
@@ -364,9 +366,9 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
         for d, tok in st.domain_tokens.items():
             if tok > 0:
                 all_domains.add(d)
-        for l, tok in st.language_tokens.items():
+        for lang, tok in st.language_tokens.items():
             if tok > 0:
-                all_langs.add(l)
+                all_langs.add(lang)
 
     report.append("## Coverage Diagnostics\n\n")
     report.append("### Curriculum Adherence\n\n")

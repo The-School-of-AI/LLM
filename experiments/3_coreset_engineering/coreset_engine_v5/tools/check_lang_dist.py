@@ -20,7 +20,7 @@ with open("data/datasets/large_sample_chunks.jsonl") as f:
 
 print(f"Total chunks: {total}")
 print(f"After filtering excluded languages: {allowed} ({100*allowed/total:.1f}%)")
-print(f"\nAllowed language distribution:")
+print("\nAllowed language distribution:")
 for lang, count in sorted(lang_dist.items(), key=lambda x: -x[1]):
     pct = 100 * count / allowed
     print(f"  {lang}: {count} ({pct:.1f}%)")

@@ -3,11 +3,10 @@ Unit tests for coreset selection engine.
 Run with: pytest tests/
 """
 
-import tempfile
 from pathlib import Path
 
 import pytest
-from src.core.config import DeduplicationConfig, PipelineConfig
+from src.core.config import PipelineConfig
 from src.core.types import (
     BandDistribution,
     ChunkMetadata,
@@ -379,7 +378,6 @@ stages:
         """If a large sample file exists, reservoir-sample 200 rows and run selection."""
         import json
         import random
-        import time
 
         from src.core.config import PipelineConfig
         from src.core.types import ChunkMetadata, DifficultyBand

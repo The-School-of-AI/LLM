@@ -24,7 +24,6 @@ import boto3
 import yaml
 from awsglue.context import GlueContext
 from awsglue.job import Job
-from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from pyspark.sql import DataFrame, SparkSession, Window
@@ -143,7 +142,7 @@ class CheckpointManager:
             return self.spark._jvm.org.apache.hadoop.fs.FileSystem.get(
                 self.spark._jsc.hadoopConfiguration()
             ).exists(self.spark._jvm.org.apache.hadoop.fs.Path(path))
-        except:
+        except Exception:
             return False
 
     def mark_finished(self, identifier: str):
@@ -274,7 +273,7 @@ def main():
     logger.info(f"Job Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     # 2. Load Config
-    config_path = args["config_path"]
+    args["config_path"]
     global config
 
     bucket = config["s3"]["bucket"]

@@ -21,10 +21,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 # Ensure repo root imports work when run from anywhere.
 REPO_ROOT = Path(__file__).resolve().parent.parent

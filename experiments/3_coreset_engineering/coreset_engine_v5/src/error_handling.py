@@ -7,6 +7,7 @@ import functools
 import logging
 import time
 import traceback
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
@@ -341,6 +342,3 @@ def handle_batch_error(
         return wrapper
 
     return decorator
-
-
-from collections import defaultdict

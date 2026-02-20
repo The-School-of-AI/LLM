@@ -44,7 +44,7 @@ def profile_selection_at_scale(k: int):
     print(f"DONE ({sample_time:.2f}s)\n")
 
     # Build chunks
-    print(f"Building chunk metadata...", end=" ", flush=True)
+    print("Building chunk metadata...", end=" ", flush=True)
     start = time.time()
 
     all_chunks = {}
@@ -74,7 +74,7 @@ def profile_selection_at_scale(k: int):
     print(f"  Total tokens: {total_tokens:,}\n")
 
     # Load curriculum
-    print(f"Loading curriculum...", end=" ", flush=True)
+    print("Loading curriculum...", end=" ", flush=True)
     start = time.time()
 
     curriculum_yaml = Path("data/datasets/curriculum_min_for_large_test.yaml")
@@ -86,7 +86,7 @@ def profile_selection_at_scale(k: int):
     print(f"DONE ({curriculum_time:.2f}s)\n")
 
     # Initialize engine
-    print(f"Initializing SelectionEngine...", end=" ", flush=True)
+    print("Initializing SelectionEngine...", end=" ", flush=True)
     start = time.time()
 
     config = PipelineConfig()
@@ -97,7 +97,7 @@ def profile_selection_at_scale(k: int):
     print(f"DONE ({init_time:.2f}s)\n")
 
     # Register chunks
-    print(f"Registering chunks with engine...", end=" ", flush=True)
+    print("Registering chunks with engine...", end=" ", flush=True)
     start = time.time()
 
     chunks_list = [(cid, meta, None) for cid, meta in all_chunks.items()]
@@ -107,7 +107,7 @@ def profile_selection_at_scale(k: int):
     print(f"DONE ({register_time:.2f}s)\n")
 
     # Create buckets
-    print(f"Creating stratified buckets...", end=" ", flush=True)
+    print("Creating stratified buckets...", end=" ", flush=True)
     start = time.time()
 
     engine._create_buckets(all_chunks, "1B")
@@ -117,7 +117,7 @@ def profile_selection_at_scale(k: int):
     print(f"  Buckets created: {len(engine.buckets)}\n")
 
     # Score chunks
-    print(f"Scoring chunks in buckets...", end=" ", flush=True)
+    print("Scoring chunks in buckets...", end=" ", flush=True)
     start = time.time()
 
     for bucket in engine.buckets.values():
@@ -127,7 +127,7 @@ def profile_selection_at_scale(k: int):
     print(f"DONE ({score_time:.2f}s)\n")
 
     # Stratified sample
-    print(f"Stratified sampling from buckets...", end=" ", flush=True)
+    print("Stratified sampling from buckets...", end=" ", flush=True)
     start = time.time()
 
     selected = set()

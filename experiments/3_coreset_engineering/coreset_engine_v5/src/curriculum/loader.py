@@ -4,8 +4,7 @@ Ensures strict compliance with curriculum YAML specifications.
 """
 
 import hashlib
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -441,7 +440,7 @@ class CurriculumLoader:
 
                 # Extract tokenizer constraints from new schema
                 constraints = band_spec.get("constraints", {})
-                tokenizer_constraints = constraints.get("tokenizer", {})
+                constraints.get("tokenizer", {})
 
                 self.bands[band] = BandDefinition(
                     band=band,

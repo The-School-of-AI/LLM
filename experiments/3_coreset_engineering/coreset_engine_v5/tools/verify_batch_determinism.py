@@ -31,12 +31,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import xxhash
+from src.io.batch_processor import BatchProcessor
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-
-import xxhash
-from src.io.batch_processor import BatchProcessor
 
 
 @dataclass

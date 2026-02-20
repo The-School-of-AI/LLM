@@ -2,7 +2,7 @@ import pytest
 
 
 def test_parquet_batch_iterator_ignores_missing_columns(tmp_path):
-    pyarrow = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
     import pandas as pd
     from src.io.batch_processor import BatchProcessor
 

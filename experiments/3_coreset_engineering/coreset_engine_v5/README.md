@@ -123,7 +123,7 @@ Streaming runs support multi-worker sharding with:
 - `--num-shards N`: total number of workers
 - `--shard-id K`: this worker’s index, `0..N-1`
 
-**Stage budgets in sharded runs**
+#### Stage budgets in sharded runs
 
 - In streaming mode, each worker applies the **per-shard** stage budget (`target_tokens_shard`) computed from the global stage target, `--stage-target-scale`, and `--num-shards` (see formula above).
 - Manifests record both values for clarity:
@@ -131,7 +131,7 @@ Streaming runs support multi-worker sharding with:
   - `target_tokens_shard`: effective per-worker target budget used by selection
 - When `--num-shards > 1`, each shard only sees a *subset* of the data. Do not compare a single shard’s `actual_tokens` to a `--num-shards 1` run; compare the **merged** output across all shards (and ensure you actually ran all shard workers `0..N-1`).
 
-**How sharding is applied**
+#### How sharding is applied
 
 - **Many input files (directory input): file-level sharding**
   - When `--input-path` is a directory containing multiple `*.jsonl` (or `*.parquet`) files, files are deterministically assigned to shards.
@@ -143,7 +143,7 @@ Streaming runs support multi-worker sharding with:
   - If `chunk_id` exists but is empty (e.g., `""`), it is treated as missing and the fallback (`uid/guid/id`) is used for sharding.
   - This guarantees each chunk belongs to exactly one worker (deterministically) assuming the identifier is stable.
 
-**Checkpointing: use a unique directory per shard**
+#### Checkpointing: use a unique directory per shard
 
 Checkpoint filenames are keyed by stage and batch number. If multiple shards share the same `--checkpoint-dir`, they will overwrite each other’s checkpoints.
 
@@ -155,7 +155,7 @@ Recommended pattern:
 - `--checkpoint-dir output/checkpoints_1B/shard001`
 - …
 
-**Non-overlap across stages (streaming mode)**
+#### Non-overlap across stages (streaming mode)
 
 Streaming enforces cross-stage non-overlap via a disk-backed used-chunk membership store under `output/coresets/.used_chunks/`.
 
@@ -169,7 +169,7 @@ Operational rules:
 - Do not run multiple processes with the same `--shard-id` writing to the same output path concurrently.
 - Prefer running stages sequentially (finish 1B across all shards, then 3B, etc.) so later stages don’t race ahead of the used-chunk updates.
 
-**Example: 8-worker run for a single JSONL input (stage 1B)**
+#### Example: 8-worker run for a single JSONL input (stage 1B)
 
 Run these on 8 separate machines/processes, changing only `--shard-id` and `--checkpoint-dir`:
 
@@ -191,6 +191,38 @@ python coreset_builder.py --config config/pipeline.yaml --curriculum config/curr
 
 Note: for single-file inputs, all shards will read the same file. For best throughput at very large scale, consider pre-splitting the JSONL into multiple files so file-level sharding can distribute I/O.
 
+### Sharded Execution with `shard.sh`
+
+The `shard.sh` script provides a convenient way to launch and manage multiple parallel shards on a single machine using background processes.
+
+#### 1. Fresh Start (Standard Run)
+
+Use this if it is your first time running the job or if you want to wipe previous results and start fresh. It will delete the `output/checkpoints` and `output/coresets` folders before starting.
+
+```bash
+bash shard.sh \
+  --num-shards 8 \
+  --input-path "data/combined/bands/" \
+  --total-tokens 4523096944
+```
+
+#### 2. Resume (Continue Interrupted Job)
+
+Use this if your job was interrupted (e.g., manual kill or crash). It will **keep** existing progress and skip any data that has already been processed by each shard.
+
+```bash
+bash shard.sh \
+  --num-shards 8 \
+  --input-path "data/combined/bands/" \
+  --total-tokens 4523096944 \
+  --resume
+```
+
+#### Key Wrapper Flags
+
+- `--resume`: Skips cleaning `output/` and tells the builder to jump to the last saved checkpoint.
+- `--num-shards`: Controls how many background processes to spawn.
+
 ### Optional: Band Inference for Curriculum Eligibility
 
 Some datasets provide a `band` label that makes large portions of the data curriculum-ineligible for early stages (e.g., many rows labeled `B0` but with domains only allowed in higher bands). In streaming mode, this can lead to unexpectedly low selection volume and skewed language/domain composition.
@@ -207,7 +239,7 @@ Band inference has two knobs:
 - `--band-inference infer_if_missing`: only infer when `band` is missing/invalid.
 - `--band-inference force`: always infer a band when a score exists.
 
-**Band score source (`--band-score-source`)**
+#### Band score source (`--band-score-source`)
 
 - `auto` (default): `band_score → difficulty_score → band_p_max`
 - `band_score`: use `band_score` only
@@ -254,7 +286,7 @@ bash shard.sh --input-path "data/cdset" --band-inference infer_if_ineligible --b
 #### Execution Modes
 
 | Mode | Command | Use Case |
-|------|---------|----------|
+| --- | --- | --- |
 | **Manual EC2** | `./commands.sh` | Full setup on a fresh EC2 instance (clones repo, installs deps, runs pipeline in background via `nohup`) |
 | **Dry Run** | `./commands.sh --dry-run` | Validates setup steps without launching the pipeline — useful for debugging |
 | **CI (self-hosted)** | `./commands.sh --foreground --skip-repo-setup` | For GitHub Actions self-hosted runners where `actions/checkout` already cloned the repo |
@@ -263,7 +295,7 @@ bash shard.sh --input-path "data/cdset" --band-inference infer_if_ineligible --b
 #### Flags
 
 | Flag | Effect |
-|------|--------|
+| --- | --- |
 | `--foreground` | Runs `shard.sh` in the foreground (no `nohup`). Required for CI so the job waits for completion. |
 | `--skip-repo-setup` | Skips `git clone` and uses the current directory as the repo root. Includes safety checks: verifies `.git` exists, remote URL matches, and critical files are present. |
 | `--dry-run` | Prints what each step would do without executing. No pipeline is launched. |
@@ -273,7 +305,7 @@ bash shard.sh --input-path "data/cdset" --band-inference infer_if_ineligible --b
 All parameters are configured via environment variables (with defaults):
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| --- | --- | --- |
 | `S3_BUCKET` | *(required)* | S3 bucket name for input data |
 | `S3_INPUT_PATH` | `s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/source=ncert/` | S3 prefix containing input JSONL/Parquet files |
 | `NUM_SHARDS` | `8` | Number of parallel shards |
@@ -286,7 +318,7 @@ All parameters are configured via environment variables (with defaults):
 
 #### Usage Examples
 
-**Run against ncert on EC2 (from a local machine or CI):**
+#### Run against ncert on EC2 (from a local machine or CI)
 
 ```bash
 S3_BUCKET=t2-datacurriculum-353 \
@@ -298,7 +330,7 @@ RESUME=false \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
 ```
 
-**Run all stages with resume:**
+#### Run all stages with resume
 
 ```bash
 S3_BUCKET=t2-datacurriculum-353 \
@@ -310,14 +342,14 @@ RESUME=true \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
 ```
 
-**Dry run to verify configuration:**
+#### Dry run to verify configuration
 
 ```bash
 S3_BUCKET=t2-datacurriculum-353 \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --dry-run
 ```
 
-**Manual deployment on a fresh EC2 instance (runs in background):**
+#### Manual deployment on a fresh EC2 instance (runs in background)
 
 ```bash
 export S3_BUCKET=t2-datacurriculum-353
@@ -340,7 +372,7 @@ export TOTAL_TOKENS=4523096944
 
 Streaming runs can read input data directly from S3 via `s3://...` paths.
 
-**Credentials / environment**
+#### Credentials / environment
 
 The pipeline relies on the standard AWS credential resolution chain (environment variables, shared config/credentials files, or instance/role credentials).
 
@@ -352,7 +384,7 @@ Common environment variables:
 - `AWS_DEFAULT_REGION` (or `AWS_REGION`)
 - `AWS_PROFILE` (optional; if using `~/.aws/credentials`)
 
-**JSONL on S3**
+#### JSONL on S3
 
 - Single object:
 
@@ -374,7 +406,7 @@ python coreset_builder.py --config config/pipeline.yaml --curriculum config/curr
 
 Note: JSONL S3 streaming requires `boto3`.
 
-**Parquet on S3**
+#### Parquet on S3
 
 Parquet streaming uses `pyarrow.dataset` and can read from:
 
@@ -456,7 +488,7 @@ python tools/generate_verification_artifacts.py \
 
 ### Expected Output
 
-```
+```text
 coreset_engine/
 ├── output/
 │   ├── coresets/
@@ -490,7 +522,7 @@ coreset_engine/
 
 ### Pipeline Stages
 
-```
+```text
 1. Data Loading & Registration
    ↓
 2. Deduplication (Exact + Near)
@@ -511,7 +543,7 @@ coreset_engine/
 ### Core Components
 
 | Component | Location | Purpose |
-|-----------|----------|---------|
+| --- | --- | --- |
 | Pipeline Config (source of truth) | `config/pipeline.yaml` | All runtime configuration knobs (stages, dedup, diversity, selection, IO) |
 | Config Schema/Loader | `src/core/config.py` | Parses/validates YAML into typed config objects |
 | Type System | `src/core/types.py` | Type-safe data structures |
@@ -600,7 +632,7 @@ Streaming manifests may include `availability_stats` describing the *eligible un
 
 The validator uses this to label certain target/band failures as **availability-limited** (informational) when the manifest proves the constraint is not achievable with remaining data.
 
-## Usage Examples
+## Usage Example's
 
 ### Example 1: Basic Selection for 70B Stage
 
@@ -680,7 +712,7 @@ selected_chunks, stats = engine.select_for_stage(
 ### Expected Compression Results
 
 | Stage | Input Tokens | Output Tokens | Ratio | Chunks |
-|-------|--------------|---------------|-------|--------|
+| --- | --- | --- | --- | --- |
 | 1B | 400B | 20B | 20x | ~5M |
 | 3B | 800B | 40B | 20x | ~10M |
 | 8B | 2T | 100B | 20x | ~25M |
@@ -715,7 +747,7 @@ assert preserved.code_preservation_ratio >= 0.90, "Code not preserved!"
 
 **Error**:
 
-```
+```text
 Curriculum validation failed: Curriculum is not frozen
 ```
 
@@ -728,7 +760,7 @@ Curriculum validation failed: Curriculum is not frozen
 
 **Error**:
 
-```
+```text
 HARD_REJECT: Rolling window constraint violated
 ```
 
@@ -742,7 +774,7 @@ HARD_REJECT: Rolling window constraint violated
 
 **Error**:
 
-```
+```text
 B5 preservation ratio: 0.85 < 0.95 (minimum required)
 ```
 
@@ -806,7 +838,7 @@ If you see `--input-path is required unless --legacy is set`, you are running th
 ### Runtime (Measured on 64-node GPU cluster)
 
 | Stage | Input Tokens | Dedup | Scoring | Selection | Total |
-|-------|--------------|-------|---------|-----------|-------|
+| --- | --- | --- | --- | --- | --- |
 | 1B | 400B | 15m | 10m | 5m | 30m |
 | 3B | 800B | 20m | 15m | 8m | 43m |
 | 8B | 2T | 45m | 35m | 15m | 95m |

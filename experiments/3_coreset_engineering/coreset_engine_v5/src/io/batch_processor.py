@@ -3,7 +3,6 @@ Optimized batch processing utilities for large-scale coreset selection.
 Handles 2 trillion+ token datasets with streaming and checkpointing.
 """
 
-import datetime
 import json
 import logging
 import os

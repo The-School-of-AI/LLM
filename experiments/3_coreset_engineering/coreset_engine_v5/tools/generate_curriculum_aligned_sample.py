@@ -120,7 +120,7 @@ def generate(
         req = int(required_band_tokens.get(b, 0) or 0)
         band_counts[b] = int(ceil(req / float(chunk_tokens))) if req > 0 else 0
 
-    total_chunks = sum(band_counts.values())
+    sum(band_counts.values())
 
     # Deterministic language assignment spread across the file.
     # Use a 100-step cycle to approximate hi_share; this keeps each input batch

@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
 from tools.verify_batch_determinism import compare_output_dirs
 
 

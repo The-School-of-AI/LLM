@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from pathlib import Path
 
 # Load sample chunks
@@ -17,7 +18,7 @@ with open(chunks_file) as f:
 print(f"\nTotal B3 reasoning chunks: {len(reasoning_b3)}")
 
 # Count by language
-from collections import Counter
+
 
 langs = Counter(c["language"] for c in reasoning_b3)
 total_tokens = sum(c["token_count"] for c in reasoning_b3)

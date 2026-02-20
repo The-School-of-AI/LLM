@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-from src.core.types import ChunkMetadata
 from src.curriculum.loader import CurriculumLoader
 
 # Load curriculum
@@ -17,7 +16,7 @@ print()
 
 # Check what the curriculum raw_curriculum says
 secondary_raw = loader.raw_curriculum.get("languages", {}).get("secondary", [])
-print(f"Secondary languages (raw from YAML):")
+print("Secondary languages (raw from YAML):")
 for spec in secondary_raw:
     print(f"  {spec}")
 print()
@@ -47,7 +46,7 @@ with open(chunks_file) as f:
                 b5_chunks["other"].append(chunk)
             count += 1
 
-print(f"Sample B5 (reasoning/agentic/indic) chunks found:")
+print("Sample B5 (reasoning/agentic/indic) chunks found:")
 for lang, chunks in b5_chunks.items():
     total_tokens = sum(c.get("token_count", 0) for c in chunks)
     print(f"  {lang}: {len(chunks)} chunks, {total_tokens:,} tokens")

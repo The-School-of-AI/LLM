@@ -74,7 +74,7 @@ class CheckpointManager:
             return self.spark._jvm.org.apache.hadoop.fs.FileSystem.get(
                 self.spark._jsc.hadoopConfiguration()
             ).exists(self.spark._jvm.org.apache.hadoop.fs.Path(path))
-        except:
+        except Exception:
             return False
 
     def mark_finished(self, identifier: str):

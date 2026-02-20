@@ -137,7 +137,7 @@ class OptimizedCoresetBuilder:
             batch_count = 0
 
             # Stream and process chunks in batches
-            chunk_loader = ChunkLoader(
+            ChunkLoader(
                 base_path=self.config.io.input_dataset_path,
                 use_object_store=self.config.io.use_object_store,
                 object_store_type=self.config.io.object_store_type,
@@ -321,12 +321,7 @@ class OptimizedCoresetBuilder:
 
     def _build_composition(self, stats: Dict):
         """Build CoresetComposition from stats"""
-        from src.core.types import (
-            BandDistribution,
-            CoresetComposition,
-            DomainDistribution,
-            LanguageDistribution,
-        )
+        from src.core.types import CoresetComposition
 
         return CoresetComposition(
             band_distribution=stats.get("band_distribution"),

@@ -1,6 +1,7 @@
 import glob
 import json
 from collections import defaultdict
+from itertools import combinations
 
 base = "output/coresets"
 files = glob.glob(base + "/*/selected_indices.jsonl")
@@ -46,7 +47,7 @@ print("\nTotal unique selected chunk ids across all stages:", len(id_to_stages))
 print("Total chunk ids appearing in >1 stage:", len(multi))
 
 # per-pair overlap counts
-from itertools import combinations
+
 
 pair_counts = defaultdict(int)
 for cid, stages in multi.items():

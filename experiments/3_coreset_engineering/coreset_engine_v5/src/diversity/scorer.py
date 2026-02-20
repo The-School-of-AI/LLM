@@ -5,7 +5,7 @@ Ensures coverage across rare tokens, tail phenomena, and diverse domains.
 
 from bisect import bisect_right
 from collections import Counter, OrderedDict, defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 import numpy as np
 from scipy.stats import entropy as scipy_entropy

@@ -285,7 +285,7 @@ class CoresetBuilder:
         manifest.selected_chunks_file = str(index_path)
 
         # Save manifest
-        manifest_path = writer.save_manifest(manifest, stage_name)
+        writer.save_manifest(manifest, stage_name)
 
         logger.info(f"Stage {stage_name} coreset complete")
         logger.info(f"  - Chunks: {stats['selected_chunks']:,}")
@@ -299,12 +299,7 @@ class CoresetBuilder:
 
     def _build_composition(self, stats: dict):
         """Build CoresetComposition from stats"""
-        from src.core.types import (
-            BandDistribution,
-            CoresetComposition,
-            DomainDistribution,
-            LanguageDistribution,
-        )
+        from src.core.types import CoresetComposition
 
         return CoresetComposition(
             band_distribution=stats.get("band_distribution"),
@@ -821,7 +816,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                     ProtectedSliceRule("indic", 0.85, "Multilingual grounding")
                 )
 
-        writer = CoresetWriter(self.config.io.output_coreset_path)
+        CoresetWriter(self.config.io.output_coreset_path)
         stage_dir = Path(self.config.io.output_coreset_path) / stage_name
         stage_dir.mkdir(parents=True, exist_ok=True)
 

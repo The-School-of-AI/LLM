@@ -6,9 +6,8 @@ Supports filesystem and object store (S3/GCS) backends.
 import concurrent.futures
 import json
 import logging
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, Optional, Tuple
 
 import pandas as pd
 
@@ -362,8 +361,8 @@ class AblationReporter:
         )
 
         report.append("## Overall Reduction Metrics\n\n")
-        report.append(f"| Metric | Value | Reduction |\n")
-        report.append(f"|--------|-------|----------|\n")
+        report.append("| Metric | Value | Reduction |\n")
+        report.append("|--------|-------|----------|\n")
         report.append(f"| Total Input Tokens | {total_input:,} | - |\n")
         if total_input > 0:
             report.append(
@@ -377,7 +376,7 @@ class AblationReporter:
                 f"| **Compression Ratio** | **{compression_ratio:.2f}x** | **{overall_reduction:.1f}%** |\n"
             )
         else:
-            report.append(f"| **Compression Ratio** | **N/A** | **N/A** |\n")
+            report.append("| **Compression Ratio** | **N/A** | **N/A** |\n")
         report.append(f"| Total Input Chunks | {total_chunks_input:,} | - |\n")
         if total_chunks_input > 0:
             report.append(
@@ -391,7 +390,7 @@ class AblationReporter:
                 f"| **Chunk Reduction** | **{chunk_reduction:.2f}x** | **{chunk_reduction_pct:.1f}%** |\n\n"
             )
         else:
-            report.append(f"| **Chunk Reduction** | **N/A** | **N/A** |\n\n")
+            report.append("| **Chunk Reduction** | **N/A** | **N/A** |\n\n")
 
         def _flatten_domain_distribution(dom: Any) -> Dict[str, Any]:
             """Return a flat {domain: ratio_or_obj} mapping.
@@ -427,7 +426,7 @@ class AblationReporter:
             stage_ratio = (stage_input / stage_selected) if stage_selected > 0 else None
 
             report.append(f"### {stage_name}\n\n")
-            report.append(f"**Selection Metrics:**\n")
+            report.append("**Selection Metrics:**\n")
             report.append(f"- Input Tokens: {stage_input:,}\n")
             report.append(f"- Selected Tokens: {stage_selected:,}\n")
             if stage_ratio and stage_ratio > 0:
@@ -436,7 +435,7 @@ class AblationReporter:
                     f"- Compression Ratio: **{stage_ratio:.2f}x** (reduction: {reduction:.1f}%)\n"
                 )
             else:
-                report.append(f"- Compression Ratio: **N/A** (no selected tokens)\n")
+                report.append("- Compression Ratio: **N/A** (no selected tokens)\n")
             report.append(
                 f"- Selected Chunks: {results.get('selected_chunks', 0):,}\n\n"
             )
@@ -674,8 +673,8 @@ class AblationReporter:
 
         if total_input > 0 and total_selected > 0:
             speedup = total_input / total_selected
-            report.append(f"| Metric | Full Dataset | Coreset | Improvement |\n")
-            report.append(f"|--------|-------------|---------|----------|\n")
+            report.append("| Metric | Full Dataset | Coreset | Improvement |\n")
+            report.append("|--------|-------------|---------|----------|\n")
             report.append(
                 f"| Tokens Processed | {total_input:,} | {total_selected:,} | {speedup:.2f}x faster |\n"
             )
@@ -697,10 +696,10 @@ class AblationReporter:
                 f"- Compute cost reduction: **~{100*(1 - 1/speedup):.1f}%**\n"
             )
             report.append(
-                f"- Estimated quality retention: **85-95%** (based on diversity coverage)\n"
+                "- Estimated quality retention: **85-95%** (based on diversity coverage)\n"
             )
             report.append(
-                f"- Quality loss (estimated): **5-15%** due to dataset reduction\n\n"
+                "- Quality loss (estimated): **5-15%** due to dataset reduction\n\n"
             )
 
             report.append("### Effectiveness Metrics\n\n")
@@ -732,7 +731,7 @@ class AblationReporter:
                 f"- Chunks retained: {total_dedup_removed:,} ({dedup_ratio:.2%})\n"
             )
             report.append(
-                f"- Redundancy elimination: Improved data quality without additional storage\n\n"
+                "- Redundancy elimination: Improved data quality without additional storage\n\n"
             )
 
         # ===== RECOMMENDATIONS =====

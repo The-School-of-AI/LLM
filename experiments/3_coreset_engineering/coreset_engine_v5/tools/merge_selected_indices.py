@@ -117,7 +117,6 @@ def merge_stage_parts(
     """Merge part parquet files under a stage directory into one parquet file."""
 
     try:
-        import pyarrow as pa
         import pyarrow.parquet as pq
     except Exception as e:  # pragma: no cover
         raise RuntimeError("pyarrow is required to merge parquet part files") from e

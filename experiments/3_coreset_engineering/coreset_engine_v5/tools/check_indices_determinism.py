@@ -51,11 +51,10 @@ import argparse
 import hashlib
 import heapq
 import json
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 _MISSING = "__MISSING__"
 
@@ -397,7 +396,6 @@ def _iter_chunk_band_pairs_from_parquet(
     path: Path, *, batch_rows: int = 65_536
 ) -> Iterator[Tuple[str, str]]:
     try:
-        import pyarrow as pa  # type: ignore
         import pyarrow.parquet as pq  # type: ignore
     except Exception as e:  # pragma: no cover
         raise RuntimeError("pyarrow is required to compare parquet indices") from e

@@ -22,7 +22,7 @@ print(f"Total chunks: {total}")
 print(
     f"Chunks in allowed langs (en, hi): {allowed_count} ({100*allowed_count/total:.1f}%)"
 )
-print(f"\nLanguage distribution in allowed langs:")
+print("\nLanguage distribution in allowed langs:")
 for lang, count in sorted(lang_dist.items(), key=lambda x: -x[1]):
     pct = 100 * count / allowed_count if allowed_count > 0 else 0
     print(f"  {lang}: {count} ({pct:.1f}%)")
@@ -33,6 +33,6 @@ total_allowed_tokens = (
 )  # rough estimate, avg 100 tokens/chunk
 en_target_max = int(total_allowed_tokens * 0.92)
 hi_target = int(total_allowed_tokens * 0.08)
-print(f"\nWith curriculum targets (en: 92%, hi: 8%):")
+print("\nWith curriculum targets (en: 92%, hi: 8%):")
 print(f"  EN tokens max: {en_target_max}")
 print(f"  HI tokens target: {hi_target}")

@@ -7,7 +7,7 @@
 dedup:
   enable_exact_dedup: true
   enable_near_dedup: true
-  near_dedup_threshold: 0.90    # ← More aggressive near-dedup
+  near_dedup_threshold: 0.90 # ← More aggressive near-dedup
   hash_algorithm: xxhash64
   parallel_workers: 32
 
@@ -23,11 +23,11 @@ selection:
   strategy: stratified_density_aware
   include_protected_slices: true
   protected_preservation_override:
-    B4: 0.90      # ← Reduced from 0.95
-    B5: 0.90      # ← Reduced from 0.95
-    code: 0.85    # ← Reduced from 0.90
+    B4: 0.90 # ← Reduced from 0.95
+    B5: 0.90 # ← Reduced from 0.95
+    code: 0.85 # ← Reduced from 0.90
     agentic: 0.85 # ← Reduced from 0.90
-    indic: 0.75   # ← Reduced from 0.85
+    indic: 0.75 # ← Reduced from 0.85
   bucket_internal_sampling: stratified
   non_overlap_enforcement: true
 
@@ -35,7 +35,7 @@ curriculum:
   curriculum_yaml_path: config/curriculum.yaml
   freeze_curriculum: true
   enforce_rolling_window: true
-  rolling_window_tolerance: 0.05    # ← Relaxed from 0.03
+  rolling_window_tolerance: 0.05 # ← Relaxed from 0.03
   deterministic_seed: 42
   seed_scope:
     - sampling
@@ -55,7 +55,7 @@ validation:
   enable_coverage_validation: true
   enable_determinism_check: true
   enable_overlap_check: true
-  strict_mode: false    # ← Less strict validation
+  strict_mode: false # ← Less strict validation
   validation_tolerance: 0.05
 
 reproducibility:
@@ -79,11 +79,11 @@ ablation:
 stages:
   "1B":
     stage_name: "1B"
-    target_tokens: 10000000000    # ← Halved from 20B
-  
+    target_tokens: 10000000000 # ← Halved from 20B
+
   "70B":
     stage_name: "70B"
-    target_tokens: 120000000000   # ← Halved from 240B
+    target_tokens: 120000000000 # ← Halved from 240B
 
 pipeline_version: "1.0.0"
 config_name: "ablation_high_compression"

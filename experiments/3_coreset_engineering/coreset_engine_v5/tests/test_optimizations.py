@@ -7,16 +7,12 @@ import os
 import random
 import shutil
 import tempfile
-from pathlib import Path
-from typing import Dict, List, Tuple
 
 import pytest
 from src.core.config import PipelineConfig
 from src.core.types import ChunkMetadata, DifficultyBand
-from src.curriculum.loader import CurriculumLoader
 from src.error_handling import ErrorRecoveryManager, ErrorSeverity, RetryableError
 from src.io.batch_processor import BatchProcessor, CheckpointMetadata
-from src.selection.engine_batched import BatchedSelectionEngine
 
 
 class TestBatchProcessing:
@@ -84,7 +80,7 @@ class TestBatchProcessing:
 
     def test_batch_memory_efficiency(self):
         """Test that batching doesn't load entire dataset"""
-        processor = BatchProcessor(batch_size=100)
+        BatchProcessor(batch_size=100)
 
         # Mock generator that tracks max simultaneous chunks
         max_chunks_loaded = [0]
@@ -164,7 +160,7 @@ class TestCheckpointing:
 
     def test_checkpoint_resumption_logic(self, checkpoint_dir):
         """Test logic for resuming from checkpoint"""
-        processor = BatchProcessor(batch_size=100, checkpoint_dir=checkpoint_dir)
+        BatchProcessor(batch_size=100, checkpoint_dir=checkpoint_dir)
 
         # Simulate: processed batches 0-4, now resuming
         last_batch = 4

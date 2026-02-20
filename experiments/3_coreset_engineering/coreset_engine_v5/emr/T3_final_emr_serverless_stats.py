@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Tuple
 
 import boto3
 from pyspark import StorageLevel
-from pyspark.sql import DataFrame, SparkSession, Window
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 # =========================================================================
@@ -187,7 +187,7 @@ class CheckpointManager:
         try:
             self.s3.head_object(Bucket=self.bucket, Key=key)
             return True
-        except:
+        except Exception:
             return False
 
     def mark_finished(self, identifier: str):
