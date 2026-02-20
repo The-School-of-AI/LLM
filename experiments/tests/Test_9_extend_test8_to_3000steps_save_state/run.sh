@@ -2,6 +2,8 @@
 set -euo pipefail
 
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$TEST_ROOT/../../.." && pwd)"
+export PYTHONPATH="${REPO_ROOT}:${PYTHONPATH:-}"
 CODE_DIR="$TEST_ROOT/code"
 CFG="$TEST_ROOT/configs/test9_extend_from_test8_to_3000steps.yaml"
 RESULTS_DIR="$TEST_ROOT/results"

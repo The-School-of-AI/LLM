@@ -29,7 +29,7 @@ deepspeed:
   local_rank: -1
 
 model:
-  tokenizer_name: "Qwen/Qwen2.5-0.5B"
+  tokenizer_name: null
   embedding_type: "standard"
   model_variant: "diff_rec"
   require_fused_deltanet_kernel: false
