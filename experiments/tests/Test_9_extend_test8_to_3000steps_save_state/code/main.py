@@ -538,6 +538,7 @@ def main():
             start_step=epoch_start_step,
             global_step=global_step,
             metrics_jsonl_path=args.metrics_jsonl_path,
+            use_fused_ce = bool(getattr(args, "use_fused_ce", False)),
         )
 
         # Evaluate on validation set
