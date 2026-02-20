@@ -33,7 +33,7 @@ from torch.nn.utils import clip_grad_norm_
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from src.data import get_tokenizer
-from src.models import ModelConfig, Model1B
+from src.models import Model1B, ModelConfig
 from src.models.recurrence_model_1b import KroneckerConfig, KroneckerEmbeddings
 
 # -----------------------------------------------------------------------------
@@ -120,8 +120,8 @@ def test_reversible_midpoint_reconstruction_random(model_and_fixtures):
     with torch.no_grad():
         delta_recomputed, _ = layer.force(p_cur_original)
         p_prev_reconstructed = (
-            (p_next - ((1.0 - a) * p_cur_original) - (two_h * delta_recomputed)) / a
-        )
+            p_next - ((1.0 - a) * p_cur_original) - (two_h * delta_recomputed)
+        ) / a
 
     error = (p_prev_original - p_prev_reconstructed).abs().max().item()
     _log(f"Reconstruction error (max abs diff): {error:.2e}")
@@ -162,8 +162,8 @@ def test_reversible_midpoint_reconstruction_real_embeddings(model_and_fixtures):
 
         delta_recomputed, _ = layer.force(p_cur_original)
         p_prev_reconstructed = (
-            (p_next - ((1.0 - a) * p_cur_original) - (two_h * delta_recomputed)) / a
-        )
+            p_next - ((1.0 - a) * p_cur_original) - (two_h * delta_recomputed)
+        ) / a
 
         error = (p_prev_original - p_prev_reconstructed).abs().max().item()
 
@@ -294,9 +294,9 @@ def test_signal_explosion(model_and_fixtures):
 
     _log(f"Layer norms: {[f'L{i}:{n:.2f}' for i, n in enumerate(norms)]}")
 
-    assert norms[-1] <= norms[0] * 10, (
-        f"Signal exploding: final norm {norms[-1]:.2f} > 10x initial {norms[0]:.2f}"
-    )
+    assert (
+        norms[-1] <= norms[0] * 10
+    ), f"Signal exploding: final norm {norms[-1]:.2f} > 10x initial {norms[0]:.2f}"
 
 
 # -----------------------------------------------------------------------------
@@ -348,9 +348,9 @@ def test_learning_dynamics(model_and_fixtures, seq_len=16):
         optimizer.step()
         _log(f"{i:4d} | {total_loss.item():.4f}")
 
-    assert total_loss.item() < 5.0, (
-        f"Loss stuck: {total_loss.item():.4f}. Gradients may not be flowing."
-    )
+    assert (
+        total_loss.item() < 5.0
+    ), f"Loss stuck: {total_loss.item():.4f}. Gradients may not be flowing."
 
 
 # -----------------------------------------------------------------------------
@@ -396,9 +396,9 @@ def test_overfit_one_batch(model_and_fixtures, seq_len=16, steps=25):
         optimizer.step()
         _log(f"{i:4d} | {total_loss.item():.4f}    | {grad_norm:.4f}")
 
-    assert total_loss.item() < 5.0, (
-        f"Model still unstable: loss={total_loss.item():.4f}"
-    )
+    assert (
+        total_loss.item() < 5.0
+    ), f"Model still unstable: loss={total_loss.item():.4f}"
 
 
 def test_learning_dynamics_stable(model_and_fixtures):
@@ -421,7 +421,9 @@ def test_forward_pass_shape(model_and_fixtures):
     input_ids = tokenizer(text, return_tensors="pt")["input_ids"].to(DEVICE)
 
     with torch.no_grad():
-        logits_ntp, logits_mtp = model(input_ids, return_memory=False, return_loss=False)
+        logits_ntp, logits_mtp = model(
+            input_ids, return_memory=False, return_loss=False
+        )
 
     _log(f"logits_ntp shape: {logits_ntp.shape}")
     # _log(f"logits_mtp shape: {logits_mtp.shape}")
@@ -445,7 +447,10 @@ def _run_test(name: str, fn, model_and_fixtures):
 _SCRIPT_TESTS = [
     ("Forward pass shape", test_forward_pass_shape),
     ("Reversible midpoint (random)", test_reversible_midpoint_reconstruction_random),
-    ("Reversible midpoint (real embeddings)", test_reversible_midpoint_reconstruction_real_embeddings),
+    (
+        "Reversible midpoint (real embeddings)",
+        test_reversible_midpoint_reconstruction_real_embeddings,
+    ),
     ("Spectral stability", test_spectral_stability),
     ("Bitwise reversibility", test_bitwise_reversibility),
     ("Signal explosion", test_signal_explosion),
@@ -462,6 +467,7 @@ _NAMED_TESTS = {
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Reversibility checks for 1B model")
     parser.add_argument(
         "--only",

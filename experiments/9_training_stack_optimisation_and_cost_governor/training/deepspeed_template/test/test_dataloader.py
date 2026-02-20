@@ -18,22 +18,24 @@ Windows notes
   errors that are benign but verbose on Windows.
 """
 
-import sys
+import multiprocessing as mp
 import os
+import shutil
+import sys
+import tempfile
 import time
 import types
-import shutil
-import tempfile
-import multiprocessing as mp
 from dataclasses import dataclass
 from typing import Optional
 
-import torch
 import numpy as np
+import torch
+
 
 # ── Mock deepspeed so it can be imported on any machine ──────────────────────
 class _DummyFlopsProfiler:
     pass
+
 
 _ds = types.ModuleType("deepspeed")
 _ds_prof = types.ModuleType("deepspeed.profiling")
@@ -63,13 +65,13 @@ import importlib.util
 _src_stub = types.ModuleType("src")
 _src_stub.__path__ = [os.path.join(_PROJECT_ROOT, "src")]
 _src_stub.__package__ = "src"
-sys.modules["src"] = _src_stub   # unconditional: always use our clean stub
+sys.modules["src"] = _src_stub  # unconditional: always use our clean stub
 
 # 2. Stub src.utils so `from .utils import print_rank_0` inside data.py works.
 #    data.py calls print_rank_0 for informational messages; route to print().
 _utils_stub = types.ModuleType("src.utils")
 _utils_stub.print_rank_0 = lambda msg, *a, **kw: print(msg)
-_utils_stub.set_seed = lambda seed: None          # safe no-op for any callers
+_utils_stub.set_seed = lambda seed: None  # safe no-op for any callers
 sys.modules["src.utils"] = _utils_stub
 setattr(_src_stub, "utils", _utils_stub)
 
@@ -80,19 +82,16 @@ _data_spec = importlib.util.spec_from_file_location(
     submodule_search_locations=[],
 )
 data_module = importlib.util.module_from_spec(_data_spec)
-data_module.__package__ = "src"   # needed for relative imports inside data.py
+data_module.__package__ = "src"  # needed for relative imports inside data.py
 sys.modules["src.data"] = data_module
 _data_spec.loader.exec_module(data_module)
 
-from src.data import (
-    bin_idx_source,
-    SPDLIterableDataset,
-    get_dataloaders,
-)
+from src.data import SPDLIterableDataset, bin_idx_source, get_dataloaders
 
 # Try to detect whether SPDL is actually importable at runtime
 try:
     from spdl.pipeline import PipelineBuilder  # noqa: F401
+
     SPDL_AVAILABLE = True
 except Exception:
     SPDL_AVAILABLE = False
@@ -101,6 +100,7 @@ except Exception:
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared result container written to a multiprocessing Queue
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class RankResult:
@@ -124,9 +124,15 @@ class RankResult:
 # Per-rank worker functions
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _run_standard_rank(rank: int, world_size: int, tokens_dir: str,
-                        result_queue: mp.Queue, max_length: int = 4096,
-                        batch_size: int = 8):
+
+def _run_standard_rank(
+    rank: int,
+    world_size: int,
+    tokens_dir: str,
+    result_queue: mp.Queue,
+    max_length: int = 4096,
+    batch_size: int = 8,
+):
     """
     Benchmark one rank using a plain PyTorch DataLoader backed by bin_idx_source.
     No SPDL -- this is the baseline.
@@ -201,9 +207,14 @@ def _run_standard_rank(rank: int, world_size: int, tokens_dir: str,
     os._exit(0)
 
 
-def _run_spdl_rank(rank: int, world_size: int, tokens_dir: str,
-                   result_queue: mp.Queue, max_length: int = 4096,
-                   batch_size: int = 8):
+def _run_spdl_rank(
+    rank: int,
+    world_size: int,
+    tokens_dir: str,
+    result_queue: mp.Queue,
+    max_length: int = 4096,
+    batch_size: int = 8,
+):
     """
     Benchmark one rank using the SPDL pipeline (SPDLIterableDataset).
     """
@@ -258,13 +269,14 @@ def _run_spdl_rank(rank: int, world_size: int, tokens_dir: str,
 # Multi-process runner
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _run_distributed(
-        target_fn,
-        world_size: int,
-        tokens_dir: str,
-        max_length: int,
-        batch_size: int,
-        label: str,
+    target_fn,
+    world_size: int,
+    tokens_dir: str,
+    max_length: int,
+    batch_size: int,
+    label: str,
 ) -> list[RankResult]:
     """Fork *world_size* processes running *target_fn* and collect RankResults."""
     print(f"\n  Launching {world_size} parallel processes for [{label}]...")
@@ -308,6 +320,7 @@ def _run_distributed(
 # Comparison table printer
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _print_comparison(std_results: list[RankResult], spdl_results: list[RankResult]):
     """Print a side-by-side per-rank comparison table and aggregate summary."""
 
@@ -325,8 +338,10 @@ def _print_comparison(std_results: list[RankResult], spdl_results: list[RankResu
     )
     sep = "-" * 72
 
-    for label, results in (("Standard PyTorch DataLoader", std_results),
-                            ("SPDL Pipeline", spdl_results)):
+    for label, results in (
+        ("Standard PyTorch DataLoader", std_results),
+        ("SPDL Pipeline", spdl_results),
+    ):
         print(f"\n  {label}")
         print("  " + hdr)
         print("  " + sep)
@@ -363,16 +378,25 @@ def _print_comparison(std_results: list[RankResult], spdl_results: list[RankResu
     def _pct_improvement(new, old):
         if old == 0:
             return "N/A"
-        return f"{(old - new) / old:.1%} (lower)" if new < old else f"{(new - old) / old:.1%} (higher)"
+        return (
+            f"{(old - new) / old:.1%} (lower)"
+            if new < old
+            else f"{(new - old) / old:.1%} (higher)"
+        )
 
-    print(f"  {'Aggregate throughput (tok/s)':<28} {std_thru:>16,.0f} {spdl_thru:>14,.0f} {thru_ratio:>11.2f}x")
-    print(f"  {'Avg DataLoader wait ratio':<28} {std_wait_r:>15.1%} {spdl_wait_r:>13.1%} {_pct_improvement(spdl_wait_r, std_wait_r):>12}")
+    print(
+        f"  {'Aggregate throughput (tok/s)':<28} {std_thru:>16,.0f} {spdl_thru:>14,.0f} {thru_ratio:>11.2f}x"
+    )
+    print(
+        f"  {'Avg DataLoader wait ratio':<28} {std_wait_r:>15.1%} {spdl_wait_r:>13.1%} {_pct_improvement(spdl_wait_r, std_wait_r):>12}"
+    )
     print("=" * 72)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def main():
     # ── Locate source tokens directory ───────────────────────────────────────
@@ -388,8 +412,10 @@ def main():
     BATCH_SIZE = 8
     WORLD_SIZE = 2
 
-    print(f"Benchmark config: block_size={MAX_LENGTH}, batch_size={BATCH_SIZE}, "
-          f"world_size={WORLD_SIZE}")
+    print(
+        f"Benchmark config: block_size={MAX_LENGTH}, batch_size={BATCH_SIZE}, "
+        f"world_size={WORLD_SIZE}"
+    )
 
     # =========================================================================
     # Phase 1 - Simulate S3 -> NVMe staging
@@ -424,9 +450,11 @@ def main():
         total_bytes += os.path.getsize(new_bin) + os.path.getsize(new_idx)
 
     stage_elapsed = time.perf_counter() - t0_stage
-    print(f"  Staged {NUM_SHARDS} shards ({total_bytes / 1024**2:.1f} MB) "
-          f"in {stage_elapsed:.2f}s "
-          f"({total_bytes / 1024**2 / stage_elapsed:.1f} MB/s)")
+    print(
+        f"  Staged {NUM_SHARDS} shards ({total_bytes / 1024**2:.1f} MB) "
+        f"in {stage_elapsed:.2f}s "
+        f"({total_bytes / 1024**2 / stage_elapsed:.1f} MB/s)"
+    )
 
     # =========================================================================
     # Phase 2 - Standard PyTorch DataLoader (baseline, no SPDL)

@@ -7,14 +7,15 @@ for training language models with DeepSpeed optimization.
 
 import json as _json
 import os
-import torch
-from tqdm import tqdm
 import time
-import torch.distributed as dist
+
 import psutil
+import torch
+import torch.distributed as dist
+from deepspeed.profiling.flops_profiler import FlopsProfiler
+from tqdm import tqdm
 
 from .utils import is_main_process, print_rank_0
-from deepspeed.profiling.flops_profiler import FlopsProfiler
 
 
 def _jsonl_logger(output_dir: str):
@@ -30,6 +31,7 @@ def _jsonl_logger(output_dir: str):
 
     return _log
 
+
 try:
     import pynvml
 
@@ -37,6 +39,7 @@ try:
     pynvml.nvmlInit()
 except Exception:
     _NVML_AVAILABLE = False
+
 
 def train_epoch(
     model_engine,
@@ -126,7 +129,9 @@ def train_epoch(
 
         # Move batch to device
         input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
-        attention_mask = batch["attention_mask"].to(model_engine.device, non_blocking=True)
+        attention_mask = batch["attention_mask"].to(
+            model_engine.device, non_blocking=True
+        )
         labels = batch["labels"].to(model_engine.device, non_blocking=True)
 
         # Memory profiling on very first micro-batch
@@ -136,7 +141,9 @@ def train_epoch(
             print_rank_0(f"\n[MEMORY] Before forward pass: {mem_before:.2f}GB")
 
         # Forward pass
-        is_reversible = hasattr(model_engine.module, 'stack') and hasattr(model_engine.module.stack, 'bootstrap_layer')
+        is_reversible = hasattr(model_engine.module, "stack") and hasattr(
+            model_engine.module.stack, "bootstrap_layer"
+        )
 
         if is_reversible:
             x_input = input_ids[:, :-2].contiguous()
@@ -148,7 +155,11 @@ def train_epoch(
             loss_ntp, loss_mtp, aux_loss = model_engine(
                 x_input,
                 next_token_ids=y_ntp,
-                attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                attention_mask=(
+                    attention_mask[:, :-2].contiguous()
+                    if attention_mask is not None
+                    else None
+                ),
                 return_loss=True,
                 return_memory=False,
                 prev_memory_stream=None,
@@ -160,12 +171,20 @@ def train_epoch(
             if i == 0 or (i == skip_micro_batches and skip_micro_batches > 0):
                 mem_after_fwd = torch.cuda.memory_allocated(model_engine.device) / 1e9
                 mem_peak = torch.cuda.max_memory_allocated(model_engine.device) / 1e9
-                print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
-                print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
+                print_rank_0(
+                    f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)"
+                )
+                print_rank_0(
+                    f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB"
+                )
 
             # loss_ntp and loss_mtp are already scalar losses (chunked CE computed in model)
             # FAIL-FAST: Raise immediately on NaN to prevent parameter corruption
-            if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
+            if (
+                torch.isnan(loss_ntp)
+                or torch.isnan(loss_mtp)
+                or (aux_loss is not None and torch.isnan(aux_loss))
+            ):
                 raise FloatingPointError(
                     f"NaN loss detected at epoch {epoch}, micro-batch {i}!\n"
                     f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}, aux_loss={aux_loss.item() if aux_loss is not None else None}"
@@ -179,7 +198,9 @@ def train_epoch(
             del x_input, y_ntp, y_mtp
 
         else:
-            outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
+            outputs = model_engine(
+                input_ids, attention_mask=attention_mask, labels=labels
+            )
             loss = outputs.loss
 
         # DeepSpeed backward — internally divides by grad_accum_steps and
@@ -194,7 +215,11 @@ def train_epoch(
         if is_reversible:
             accum_loss_ntp += loss_ntp.item()
             accum_loss_mtp += loss_mtp.item()
-            accum_loss_aux += aux_loss.item() if (aux_loss is not None and aux_loss.numel() > 0) else 0.0
+            accum_loss_aux += (
+                aux_loss.item()
+                if (aux_loss is not None and aux_loss.numel() > 0)
+                else 0.0
+            )
         with torch.no_grad():
             tokens = attention_mask.sum().item()
             accum_tokens += int(tokens)
@@ -214,7 +239,7 @@ def train_epoch(
                             f"Non-finite parameter detected after optimizer step at epoch {epoch}, "
                             f"micro-batch {i}, global_step {global_step + 1}: {name}"
                         )
-            
+
             step_time = time.time() - step_start_time
             global_step += 1
             optimizer_steps += 1
@@ -227,7 +252,9 @@ def train_epoch(
 
             # tok/s = total tokens across ALL micro-batches in this step / wall time
             # Also aggregate across ranks for multi-GPU
-            step_tokens_tensor = torch.tensor(float(accum_tokens), device=model_engine.device)
+            step_tokens_tensor = torch.tensor(
+                float(accum_tokens), device=model_engine.device
+            )
             if dist.is_available() and dist.is_initialized():
                 dist.all_reduce(step_tokens_tensor, op=dist.ReduceOp.SUM)
             total_step_tokens = step_tokens_tensor.item()
@@ -329,25 +356,34 @@ def train_epoch(
                     print_rank_0(gpu_table)
 
             # Structured JSONL metrics (every optimizer step, rank 0 only)
-            jsonl_log({
-                "epoch": epoch,
-                "global_step": global_step,
-                "loss": avg_step_loss,
-                "loss_ntp": avg_ntp,
-                "loss_mtp": avg_mtp,
-                "loss_aux": avg_aux,
-                "tokens_per_sec": tokens_per_sec,
-                "tokens": int(total_step_tokens),
-                "step_time_s": step_time,
-                "gpu_util_pct": gpu_util,
-                "gpu_mem_gb": gpu_mem_used,
-                "cpu_util_pct": cpu_util,
-                "lr": model_engine.get_lr()[0] if hasattr(model_engine, "get_lr") else None,
-                "timestamp": time.time(),
-            })
+            jsonl_log(
+                {
+                    "epoch": epoch,
+                    "global_step": global_step,
+                    "loss": avg_step_loss,
+                    "loss_ntp": avg_ntp,
+                    "loss_mtp": avg_mtp,
+                    "loss_aux": avg_aux,
+                    "tokens_per_sec": tokens_per_sec,
+                    "tokens": int(total_step_tokens),
+                    "step_time_s": step_time,
+                    "gpu_util_pct": gpu_util,
+                    "gpu_mem_gb": gpu_mem_used,
+                    "cpu_util_pct": cpu_util,
+                    "lr": (
+                        model_engine.get_lr()[0]
+                        if hasattr(model_engine, "get_lr")
+                        else None
+                    ),
+                    "timestamp": time.time(),
+                }
+            )
 
             # Save checkpoint at optimizer-step granularity
-            if checkpoint_interval is not None and global_step % checkpoint_interval == 0:
+            if (
+                checkpoint_interval is not None
+                and global_step % checkpoint_interval == 0
+            ):
                 checkpoint_tag = f"epoch{epoch}_step{global_step}"
                 print_rank_0(
                     f"\nSaving checkpoint at epoch {epoch}, global_step {global_step}..."
@@ -363,16 +399,17 @@ def train_epoch(
                 if shard_tracker is not None:
                     # Synchronize processed shards across all ranks before saving
                     import torch.distributed as dist
+
                     if dist.is_initialized():
                         local_shards = list(shard_tracker.get_processed_files())
                         gathered_shards = [None for _ in range(dist.get_world_size())]
                         dist.all_gather_object(gathered_shards, local_shards)
-                        
+
                         # Merge all gathered shards into the local tracker
                         for rank_shards in gathered_shards:
                             for shard in rank_shards:
                                 shard_tracker.mark_processed(shard)
-                    
+
                     # Only save on rank 0 to prevent race conditions and file corruption
                     if is_main_process():
                         shard_tracker.save()
@@ -434,12 +471,16 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
         for i, batch in enumerate(progress_bar):
             # Move batch to device
             input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
-            attention_mask = batch["attention_mask"].to(model_engine.device, non_blocking=True)
+            attention_mask = batch["attention_mask"].to(
+                model_engine.device, non_blocking=True
+            )
             labels = batch["labels"].to(model_engine.device, non_blocking=True)
 
             # Forward pass
             # Check if this is a reversible model
-            is_reversible = hasattr(model_engine.module, 'stack') and hasattr(model_engine.module.stack, 'bootstrap_layer')
+            is_reversible = hasattr(model_engine.module, "stack") and hasattr(
+                model_engine.module.stack, "bootstrap_layer"
+            )
 
             if is_reversible:
                 # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)
@@ -451,22 +492,24 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
                 logits_ntp, logits_mtp, aux_loss = model_engine.module(
                     x_input,
                     next_token_ids=y_ntp,
-                    attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                    attention_mask=(
+                        attention_mask[:, :-2].contiguous()
+                        if attention_mask is not None
+                        else None
+                    ),
                     return_loss=True,
                     return_memory=False,
-                    prev_memory_stream=None
+                    prev_memory_stream=None,
                 )
 
                 vocab_size = logits_ntp.size(-1)
                 loss_ntp = torch.nn.functional.cross_entropy(
-                    logits_ntp.float().view(-1, vocab_size),
-                    y_ntp.view(-1)
+                    logits_ntp.float().view(-1, vocab_size), y_ntp.view(-1)
                 )
                 del logits_ntp
 
                 loss_mtp = torch.nn.functional.cross_entropy(
-                    logits_mtp.float().view(-1, vocab_size),
-                    y_mtp.view(-1)
+                    logits_mtp.float().view(-1, vocab_size), y_mtp.view(-1)
                 )
                 del logits_mtp
 
@@ -541,7 +584,9 @@ def generate_text(
     if is_main_process():
         with torch.no_grad():
             # Check if this is a reversible model
-            is_reversible = hasattr(model_engine.module, 'stack') and hasattr(model_engine.module.stack, 'bootstrap_layer')
+            is_reversible = hasattr(model_engine.module, "stack") and hasattr(
+                model_engine.module.stack, "bootstrap_layer"
+            )
 
             if is_reversible:
                 # Reversible models need custom generation logic
@@ -555,7 +600,7 @@ def generate_text(
                         generated_ids,
                         next_token_ids=None,
                         attention_mask=None,
-                        return_loss=True
+                        return_loss=True,
                     )
 
                     # Get next token (greedy or sampling)
@@ -563,8 +608,12 @@ def generate_text(
 
                     if top_k > 0:
                         # Top-k sampling
-                        top_k_logits, top_k_indices = torch.topk(next_token_logits, top_k)
-                        next_token_logits = torch.full_like(next_token_logits, float('-inf'))
+                        top_k_logits, top_k_indices = torch.topk(
+                            next_token_logits, top_k
+                        )
+                        next_token_logits = torch.full_like(
+                            next_token_logits, float("-inf")
+                        )
                         next_token_logits.scatter_(1, top_k_indices, top_k_logits)
 
                     probs = torch.nn.functional.softmax(next_token_logits, dim=-1)

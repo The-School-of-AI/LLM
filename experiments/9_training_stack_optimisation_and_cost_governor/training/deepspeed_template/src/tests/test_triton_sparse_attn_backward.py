@@ -8,21 +8,22 @@ Run on a CUDA GPU:
     python test_triton_sparse_attn_backward.py
 """
 
-import torch
-import sys
 import os
+import sys
+
+import torch
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from kernels.triton_sparse_attn import (
-    triton_sparse_attention,
-    pytorch_sparse_attention,
     HAS_TRITON,
+    pytorch_sparse_attention,
+    triton_sparse_attention,
 )
 
 
-def make_test_data(B=2, T=64, H=4, D=32, k_sel=16, device='cuda', seed=42):
+def make_test_data(B=2, T=64, H=4, D=32, k_sel=16, device="cuda", seed=42):
     """Generate random Q, K, V and valid sparse indices/mask."""
     torch.manual_seed(seed)
 
@@ -41,7 +42,14 @@ def make_test_data(B=2, T=64, H=4, D=32, k_sel=16, device='cuda', seed=42):
             else:
                 # Fewer valid positions than k_sel — pad with 0
                 idx = torch.arange(valid_range, device=device)
-                idx = torch.cat([idx, torch.zeros(k_sel - valid_range, dtype=torch.long, device=device)])
+                idx = torch.cat(
+                    [
+                        idx,
+                        torch.zeros(
+                            k_sel - valid_range, dtype=torch.long, device=device
+                        ),
+                    ]
+                )
             indices[b, :, t, :] = idx  # same indices for all heads (shared indexer)
 
     # Mask: 1.0 for valid, 0.0 for padding
@@ -51,7 +59,7 @@ def make_test_data(B=2, T=64, H=4, D=32, k_sel=16, device='cuda', seed=42):
         if valid_range < k_sel:
             mask[:, :, t, valid_range:] = 0.0
 
-    scale = 1.0 / (D ** 0.5)
+    scale = 1.0 / (D**0.5)
     return q, k, v, indices, mask, scale
 
 
@@ -98,12 +106,18 @@ def test_backward_match():
     dv_tri = v_tri.grad.clone()
 
     # ── Compare ────────────────────────────────────────────────
-    for name, ref, tri in [("dQ", dq_ref, dq_tri), ("dK", dk_ref, dk_tri), ("dV", dv_ref, dv_tri)]:
+    for name, ref, tri in [
+        ("dQ", dq_ref, dq_tri),
+        ("dK", dk_ref, dk_tri),
+        ("dV", dv_ref, dv_tri),
+    ]:
         max_diff = (ref - tri).abs().max().item()
         mean_diff = (ref - tri).abs().mean().item()
         ref_norm = ref.abs().mean().item()
         rel_diff = mean_diff / max(ref_norm, 1e-8)
-        print(f"  {name}:  max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e}, rel_diff={rel_diff:.2e}")
+        print(
+            f"  {name}:  max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e}, rel_diff={rel_diff:.2e}"
+        )
         assert max_diff < 1e-2, f"{name} mismatch: max_diff={max_diff}"
 
     print("  ✅ Backward gradients match OK")
@@ -112,11 +126,11 @@ def test_backward_match():
 def test_backward_sizes():
     """Test with various sizes to catch edge cases."""
     configs = [
-        (1, 32, 2, 16, 8),    # small
-        (2, 64, 4, 32, 16),   # medium
+        (1, 32, 2, 16, 8),  # small
+        (2, 64, 4, 32, 16),  # medium
         (1, 128, 8, 64, 32),  # larger heads/dim
-        (2, 16, 2, 16, 4),    # k_sel << T
-        (1, 8, 1, 8, 8),      # k_sel == T (dense-ish)
+        (2, 16, 2, 16, 4),  # k_sel << T
+        (1, 8, 1, 8, 8),  # k_sel == T (dense-ish)
     ]
     for B, T, H, D, k_sel in configs:
         print(f"  Config: B={B}, T={T}, H={H}, D={D}, k_sel={k_sel}")
@@ -133,14 +147,20 @@ def test_backward_sizes():
         out_tri = triton_sparse_attention(q2, k2, v2, indices, mask, scale)
         out_tri.backward(grad_out)
 
-        for name, ref_g, tri_g in [("dQ", q.grad, q2.grad), ("dK", k.grad, k2.grad), ("dV", v.grad, v2.grad)]:
+        for name, ref_g, tri_g in [
+            ("dQ", q.grad, q2.grad),
+            ("dK", k.grad, k2.grad),
+            ("dV", v.grad, v2.grad),
+        ]:
             max_diff = (ref_g - tri_g).abs().max().item()
-            assert max_diff < 5e-2, f"{name} mismatch at {(B,T,H,D,k_sel)}: max_diff={max_diff}"
+            assert (
+                max_diff < 5e-2
+            ), f"{name} mismatch at {(B,T,H,D,k_sel)}: max_diff={max_diff}"
 
         print(f"    ✅ OK")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if not torch.cuda.is_available():
         print("⚠️  CUDA not available — cannot run Triton kernel tests.")
         print("   These tests must be run on a GPU machine.")

@@ -16,28 +16,31 @@ Run on a CUDA GPU:
     python -m tests.test_rmsnorm
 """
 
-import sys
 import os
+import sys
 import time
+
 import torch
 import torch.nn.functional as F
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from kernels.triton_rmsnorm import (
-    triton_rmsnorm,
-    pytorch_rmsnorm,
-    triton_rmsnorm_fwd_only,
     HAS_TRITON,
+    pytorch_rmsnorm,
+    triton_rmsnorm,
+    triton_rmsnorm_fwd_only,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Test Helpers
 # ═══════════════════════════════════════════════════════════════════════
 
-def make_test_data(B=2, T=128, hidden=4096, dtype=torch.float32, device='cuda', seed=42):
+
+def make_test_data(
+    B=2, T=128, hidden=4096, dtype=torch.float32, device="cuda", seed=42
+):
     """Generate random input and weight for RMSNorm testing."""
     torch.manual_seed(seed)
     x = torch.randn(B, T, hidden, device=device, dtype=dtype, requires_grad=True)
@@ -66,6 +69,7 @@ def pytorch_rmsnorm_ref(x, weight, eps=1e-6):
 # ═══════════════════════════════════════════════════════════════════════
 # Correctness Tests
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_forward_correctness():
     """Test that new Triton RMSNorm forward matches PyTorch reference."""
@@ -100,8 +104,10 @@ def test_forward_correctness():
             all_pass = False
 
         dtype_str = "fp32" if dtype == torch.float32 else "bf16"
-        print(f"   {status} B={B}, T={T}, H={hidden}, {dtype_str}:  "
-              f"max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e}")
+        print(
+            f"   {status} B={B}, T={T}, H={hidden}, {dtype_str}:  "
+            f"max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e}"
+        )
 
     return all_pass
 
@@ -151,8 +157,10 @@ def test_backward_correctness():
             all_pass = False
 
         dtype_str = "fp32" if dtype == torch.float32 else "bf16"
-        print(f"   {status} B={B}, T={T}, H={hidden}, {dtype_str}:  "
-              f"dX_max={dx_max:.2e}, dW_max={dw_max:.2e}")
+        print(
+            f"   {status} B={B}, T={T}, H={hidden}, {dtype_str}:  "
+            f"dX_max={dx_max:.2e}, dW_max={dw_max:.2e}"
+        )
 
     return all_pass
 
@@ -182,7 +190,9 @@ def test_old_vs_new_forward():
             all_pass = False
 
         dtype_str = "fp32" if dtype == torch.float32 else "bf16"
-        print(f"   {status} B={B}, T={T}, H={hidden}, {dtype_str}:  max_diff={max_diff:.2e}")
+        print(
+            f"   {status} B={B}, T={T}, H={hidden}, {dtype_str}:  max_diff={max_diff:.2e}"
+        )
 
     return all_pass
 
@@ -190,6 +200,7 @@ def test_old_vs_new_forward():
 # ═══════════════════════════════════════════════════════════════════════
 # Benchmark
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def benchmark_fn(fn, *args, warmup=10, repeats=50, backward=False, grad_output=None):
     """Benchmark a function, measuring time and peak memory."""
@@ -199,7 +210,7 @@ def benchmark_fn(fn, *args, warmup=10, repeats=50, backward=False, grad_output=N
         if backward:
             out.backward(grad_output, retain_graph=True)
             for a in args:
-                if hasattr(a, 'grad') and a.grad is not None:
+                if hasattr(a, "grad") and a.grad is not None:
                     a.grad = None
 
     torch.cuda.synchronize()
@@ -211,12 +222,12 @@ def benchmark_fn(fn, *args, warmup=10, repeats=50, backward=False, grad_output=N
         if backward:
             out.backward(grad_output, retain_graph=True)
             for a in args:
-                if hasattr(a, 'grad') and a.grad is not None:
+                if hasattr(a, "grad") and a.grad is not None:
                     a.grad = None
     torch.cuda.synchronize()
     elapsed = (time.perf_counter() - start) / repeats * 1000  # ms
 
-    peak_mem = torch.cuda.max_memory_allocated() / (1024 ** 2)  # MB
+    peak_mem = torch.cuda.max_memory_allocated() / (1024**2)  # MB
     return elapsed, peak_mem
 
 
@@ -236,7 +247,9 @@ def run_benchmarks():
     for B, T, hidden, dtype_name in configs:
         dtype = torch.bfloat16 if dtype_name == "bf16" else torch.float32
         print(f"\n   Config: B={B}, T={T}, H={hidden}, {dtype_name}")
-        print(f"   {'Method':<28} {'FWD (ms)':>10} {'BWD (ms)':>10} {'Total':>10} {'Peak MB':>10}")
+        print(
+            f"   {'Method':<28} {'FWD (ms)':>10} {'BWD (ms)':>10} {'Total':>10} {'Peak MB':>10}"
+        )
         print(f"   {'-'*68}")
 
         # Generate data
@@ -244,14 +257,17 @@ def run_benchmarks():
         x_old, w_old = make_test_data(B, T, hidden, dtype=dtype)
         x_new, w_new = make_test_data(B, T, hidden, dtype=dtype)
 
-        grad_out = torch.randn(B, T, hidden, device='cuda', dtype=dtype)
+        grad_out = torch.randn(B, T, hidden, device="cuda", dtype=dtype)
 
         # ── PyTorch Reference ──
         fwd_time, _ = benchmark_fn(pytorch_rmsnorm_ref, x_pt, w_pt)
-        total_time, peak_mem = benchmark_fn(pytorch_rmsnorm_ref, x_pt, w_pt,
-                                             backward=True, grad_output=grad_out)
+        total_time, peak_mem = benchmark_fn(
+            pytorch_rmsnorm_ref, x_pt, w_pt, backward=True, grad_output=grad_out
+        )
         bwd_time = total_time - fwd_time
-        print(f"   {'PyTorch RMSNorm':<28} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}")
+        print(
+            f"   {'PyTorch RMSNorm':<28} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}"
+        )
 
         pt_fwd = fwd_time
         pt_bwd = bwd_time
@@ -261,22 +277,28 @@ def run_benchmarks():
         fwd_time, _ = benchmark_fn(triton_rmsnorm_fwd_only, x_old, w_old, 1e-6)
         # Old kernel doesn't support backward — use pytorch_rmsnorm_ref for backward
         # to simulate the .forward() path that the model used
-        total_time, peak_mem = benchmark_fn(pytorch_rmsnorm_ref, x_old, w_old,
-                                             backward=True, grad_output=grad_out)
+        total_time, peak_mem = benchmark_fn(
+            pytorch_rmsnorm_ref, x_old, w_old, backward=True, grad_output=grad_out
+        )
         # Replace only forward time with old triton forward
         bwd_time = total_time - fwd_time
         old_total = fwd_time + bwd_time
-        print(f"   {'Old Triton (fwd-only)':<28} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {old_total:>9.3f}  {peak_mem:>9.1f}")
+        print(
+            f"   {'Old Triton (fwd-only)':<28} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {old_total:>9.3f}  {peak_mem:>9.1f}"
+        )
 
         old_fwd = fwd_time
         old_bwd = bwd_time
 
         # ── New Liger Triton (fused fwd + bwd) ──
         fwd_time, _ = benchmark_fn(triton_rmsnorm, x_new, w_new, 1e-6)
-        total_time, peak_mem = benchmark_fn(triton_rmsnorm, x_new, w_new, 1e-6,
-                                             backward=True, grad_output=grad_out)
+        total_time, peak_mem = benchmark_fn(
+            triton_rmsnorm, x_new, w_new, 1e-6, backward=True, grad_output=grad_out
+        )
         bwd_time = total_time - fwd_time
-        print(f"   {'New Liger Triton (fwd+bwd)':<28} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}")
+        print(
+            f"   {'New Liger Triton (fwd+bwd)':<28} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}"
+        )
 
         new_fwd = fwd_time
         new_bwd = bwd_time
@@ -285,22 +307,26 @@ def run_benchmarks():
         # ── Speedup summary ──
         print(f"   {'-'*68}")
         if old_fwd > 0 and old_bwd > 0:
-            print(f"   {'Speedup vs Old Triton':<28} "
-                  f"{old_fwd/new_fwd:>9.2f}x "
-                  f"{old_bwd/new_bwd:>9.2f}x "
-                  f"{old_total/new_total:>9.2f}x")
+            print(
+                f"   {'Speedup vs Old Triton':<28} "
+                f"{old_fwd/new_fwd:>9.2f}x "
+                f"{old_bwd/new_bwd:>9.2f}x "
+                f"{old_total/new_total:>9.2f}x"
+            )
         if pt_fwd > 0 and pt_bwd > 0:
-            print(f"   {'Speedup vs PyTorch':<28} "
-                  f"{pt_fwd/new_fwd:>9.2f}x "
-                  f"{pt_bwd/new_bwd:>9.2f}x "
-                  f"{pt_total/new_total:>9.2f}x")
+            print(
+                f"   {'Speedup vs PyTorch':<28} "
+                f"{pt_fwd/new_fwd:>9.2f}x "
+                f"{pt_bwd/new_bwd:>9.2f}x "
+                f"{pt_total/new_total:>9.2f}x"
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if not torch.cuda.is_available():
         print("⚠️  CUDA not available — cannot run Triton kernel tests.")
         print("   These tests must be run on a GPU machine (e.g., Colab T4).")

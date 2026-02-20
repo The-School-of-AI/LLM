@@ -1,13 +1,13 @@
-
-
-import os
-import torch
-import numpy as np
 import logging
+import os
+
+import numpy as np
+import torch
+from common import BATCH_SIZE, DTYPE, NUM_THREADS, PREFETCH_BUFFER, SEQUENCE_LENGTH
 from spdl.pipeline import PipelineBuilder
-from common import BATCH_SIZE, NUM_THREADS, PREFETCH_BUFFER, SEQUENCE_LENGTH, DTYPE
 
 logger = logging.getLogger("spdl.loader")
+
 
 # --- Helper Functions ---
 def read_idx(idx_path):
@@ -21,6 +21,7 @@ def read_idx(idx_path):
         offsets = np.frombuffer(f.read(), dtype=np.uint64)
     logger.debug(f"Offsets loaded: {len(offsets)} entries")
     return offsets
+
 
 def _should_skip_region(bin_path, i, start, end, itemsize, seq_len, logger):
     """
@@ -40,6 +41,7 @@ def _should_skip_region(bin_path, i, start, end, itemsize, seq_len, logger):
         logger.warning(f"Incomplete sequence: {bin_path} [{i}] {num_tokens} tokens")
         return True
     return False
+
 
 # --- Main Data Loading Logic ---
 def load_tokens_from_bin_idx(bin_path, idx_path, dtype=None, seq_len=None):
@@ -65,11 +67,14 @@ def load_tokens_from_bin_idx(bin_path, idx_path, dtype=None, seq_len=None):
             f.seek(start)
             tokens = np.frombuffer(f.read(read_tokens * itemsize), dtype=dtype)
             if tokens.size != read_tokens:
-                logger.warning(f"Incomplete read: {bin_path} [{i}] expected {read_tokens}, got {tokens.size}")
+                logger.warning(
+                    f"Incomplete read: {bin_path} [{i}] expected {read_tokens}, got {tokens.size}"
+                )
                 continue
             for j in range(0, len(tokens), seq_len):
                 logger.debug(f"Yielding sequence {j//seq_len} from {bin_path}")
-                yield torch.from_numpy(tokens[j:j+seq_len])
+                yield torch.from_numpy(tokens[j : j + seq_len])
+
 
 def bin_idx_source(shard_dir, seq_len=None, dtype=None):
     """
@@ -83,7 +88,10 @@ def bin_idx_source(shard_dir, seq_len=None, dtype=None):
         bin_path = os.path.join(shard_dir, bin_file)
         idx_path = bin_path.replace(".bin", ".idx")
         logger.info(f"Processing shard: {bin_path}")
-        yield from load_tokens_from_bin_idx(bin_path, idx_path, dtype=dtype, seq_len=seq_len)
+        yield from load_tokens_from_bin_idx(
+            bin_path, idx_path, dtype=dtype, seq_len=seq_len
+        )
+
 
 def build_pipeline(shard_dir, seq_len=None, dtype=None):
     """
@@ -97,12 +105,15 @@ def build_pipeline(shard_dir, seq_len=None, dtype=None):
         .build(num_threads=NUM_THREADS)
     )
 
+
 # --- Dummy Model (for testing) ---
 class DummyModel(torch.nn.Module):
     """
     Dummy model for testing: sums across dim=1.
     """
+
     def forward(self, x):
         return x.sum(dim=1)
+
     def forward(self, x):
         return x.sum(dim=1)

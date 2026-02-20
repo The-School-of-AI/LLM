@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -58,9 +57,9 @@ def test_sampler_epoch_is_set_each_epoch():
     """
     main_src = _read("main.py")
     train_src = _read("src/train.py")
-    assert ".set_epoch(" in (main_src + "\n" + train_src), (
-        "Expected sampler.set_epoch(epoch) call not found."
-    )
+    assert ".set_epoch(" in (
+        main_src + "\n" + train_src
+    ), "Expected sampler.set_epoch(epoch) call not found."
 
 
 def test_offline_dataset_loading_is_supported():
@@ -74,12 +73,12 @@ def test_offline_dataset_loading_is_supported():
         k in data_cfg
         for k in ("offline_dataset_path", "tokenized_dataset_path", "dataset_cache_dir")
     )
-    assert "load_from_disk" in data_src, (
-        "Expected datasets.load_from_disk support for offline tokenized datasets."
-    )
-    assert has_offline_key, (
-        "config.example.yaml is expected to expose an offline dataset path option."
-    )
+    assert (
+        "load_from_disk" in data_src
+    ), "Expected datasets.load_from_disk support for offline tokenized datasets."
+    assert (
+        has_offline_key
+    ), "config.example.yaml is expected to expose an offline dataset path option."
 
 
 def test_no_per_step_cuda_empty_cache_in_train_loop():
@@ -103,9 +102,9 @@ def test_h2d_transfers_use_non_blocking_when_pinned_memory():
 
     to_calls = re.findall(r"\.to\(model_engine\.device[^\)]*\)", train_src)
     assert to_calls, "Expected device transfer calls in src/train.py."
-    assert any("non_blocking=True" in call for call in to_calls), (
-        "Expected non_blocking=True in .to(model_engine.device, ...)."
-    )
+    assert any(
+        "non_blocking=True" in call for call in to_calls
+    ), "Expected non_blocking=True in .to(model_engine.device, ...)."
 
 
 def test_precision_policy_validation_exists():
@@ -113,12 +112,12 @@ def test_precision_policy_validation_exists():
     Mixed precision mode must be validated to avoid bf16/fp16 mismatch bugs.
     """
     main_src = _read("main.py")
-    assert "validate_precision_policy" in main_src, (
-        "Expected explicit precision policy validator in main.py."
-    )
-    assert "raise ValueError" in main_src, (
-        "Expected startup hard-fail for invalid precision combinations."
-    )
+    assert (
+        "validate_precision_policy" in main_src
+    ), "Expected explicit precision policy validator in main.py."
+    assert (
+        "raise ValueError" in main_src
+    ), "Expected startup hard-fail for invalid precision combinations."
 
 
 def test_required_kernel_fail_fast_exists():
@@ -129,18 +128,18 @@ def test_required_kernel_fail_fast_exists():
     cfg = _load_yaml("config.example.yaml")
     training_cfg = cfg.get("training", {})
 
-    assert "require_fused_kernels" in training_cfg, (
-        "Expected training.require_fused_kernels in config.example.yaml."
-    )
-    assert "require_fused_kernels" in main_src, (
-        "Expected main.py to read require_fused_kernels."
-    )
-    assert "HAS_TRITON" in main_src or "HAS_FLA" in main_src, (
-        "Expected kernel availability checks in main.py."
-    )
-    assert "RuntimeError" in main_src, (
-        "Expected hard failure when required kernels are missing."
-    )
+    assert (
+        "require_fused_kernels" in training_cfg
+    ), "Expected training.require_fused_kernels in config.example.yaml."
+    assert (
+        "require_fused_kernels" in main_src
+    ), "Expected main.py to read require_fused_kernels."
+    assert (
+        "HAS_TRITON" in main_src or "HAS_FLA" in main_src
+    ), "Expected kernel availability checks in main.py."
+    assert (
+        "RuntimeError" in main_src
+    ), "Expected hard failure when required kernels are missing."
 
 
 def test_structured_logging_is_configured():
@@ -155,9 +154,7 @@ def test_structured_logging_is_configured():
         or "wandb" in combined
         or "tensorboard" in combined
         or "SummaryWriter" in combined
-    ), (
-        "Expected structured metrics logging (JSONL/W&B/TensorBoard)."
-    )
+    ), "Expected structured metrics logging (JSONL/W&B/TensorBoard)."
 
 
 def test_dense_default_config_does_not_point_to_moe_profile():
@@ -166,14 +163,19 @@ def test_dense_default_config_does_not_point_to_moe_profile():
     """
     cfg = _load_yaml("config.yaml")
     ds_path = cfg.get("deepspeed", {}).get("config_path", "")
-    assert "moe" not in ds_path.lower(), (
-        f"Dense default config should not use MoE profile, found: {ds_path}"
-    )
+    assert (
+        "moe" not in ds_path.lower()
+    ), f"Dense default config should not use MoE profile, found: {ds_path}"
 
 
 @pytest.mark.parametrize(
     "cfg_file",
-    ["config.yaml", "config_reversible.yaml", "config_fix_oom.yaml", "config_profile.yaml"],
+    [
+        "config.yaml",
+        "config_reversible.yaml",
+        "config_fix_oom.yaml",
+        "config_profile.yaml",
+    ],
 )
 def test_dense_configs_do_not_expose_model_type_switches(cfg_file: str):
     """
@@ -181,7 +183,6 @@ def test_dense_configs_do_not_expose_model_type_switches(cfg_file: str):
     """
     cfg = _load_yaml(cfg_file)
     model_cfg = cfg.get("model", {})
-    assert "model_type" not in model_cfg, (
-        f"{cfg_file} still has model_type. Remove stale Dense/MoE switch from dense pipeline configs."
-    )
-
+    assert (
+        "model_type" not in model_cfg
+    ), f"{cfg_file} still has model_type. Remove stale Dense/MoE switch from dense pipeline configs."

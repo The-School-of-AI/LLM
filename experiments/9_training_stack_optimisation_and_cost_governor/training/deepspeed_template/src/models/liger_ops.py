@@ -22,7 +22,9 @@ def liger_silu_mul(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
     return F.silu(gate) * up
 
 
-def liger_rotary_pos_emb(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+def liger_rotary_pos_emb(
+    x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
+) -> torch.Tensor:
     """Apply RoPE rotation to the last dimension using precomputed cos/sin."""
     if x.size(-1) % 2 != 0:
         raise ValueError(f"RoPE head dim must be even, got {x.size(-1)}")
@@ -122,7 +124,9 @@ class LigerFusedLinearCrossEntropyLoss(nn.Module):
             total_loss = total_loss + chunk_loss
 
             if self.ignore_index >= 0:
-                chunk_count = (chunk_targets != self.ignore_index).sum(dtype=torch.float32)
+                chunk_count = (chunk_targets != self.ignore_index).sum(
+                    dtype=torch.float32
+                )
             else:
                 chunk_count = torch.tensor(
                     chunk_targets.numel(),

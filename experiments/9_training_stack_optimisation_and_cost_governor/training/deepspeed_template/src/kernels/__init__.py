@@ -24,6 +24,7 @@ Usage:
 # ── Triton availability flag ──────────────────────────────────────────
 try:
     import triton
+
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
@@ -31,48 +32,38 @@ except ImportError:
 # ── fla availability flag ─────────────────────────────────────────────
 try:
     from fla.ops.gated_delta_rule import chunk_gated_delta_rule as _check_fla
+
     HAS_FLA = True
     del _check_fla
 except ImportError:
     HAS_FLA = False
 
 
-# ── Sparse Attention ──────────────────────────────────────────────────
-from .triton_sparse_attn import (
-    triton_sparse_attention,
-    pytorch_sparse_attention,
-    USE_TRITON_BACKWARD,
-)
+# ── fla DeltaNet ──────────────────────────────────────────────────────
+from .fla_deltanet import fla_gated_delta_rule
 
 # ── Gated Lightning Indexer ───────────────────────────────────────────
-from .triton_indexer import (
-    triton_gated_indexer,
-    pytorch_gated_indexer,
-)
+from .triton_indexer import pytorch_gated_indexer, triton_gated_indexer
 
 # ── Streaming Indexer (memory-efficient variance + chunked topk) ─────
-from .triton_indexer_streaming import (
-    fused_indexer_topk,
-    streaming_indexer_variance,
-)
-
-# ── Sinkhorn-Knopp ───────────────────────────────────────────────────
-from .triton_sinkhorn import (
-    triton_sinkhorn_knopp,
-    pytorch_sinkhorn_knopp,
-)
+from .triton_indexer_streaming import fused_indexer_topk, streaming_indexer_variance
 
 # ── RMSNorm ───────────────────────────────────────────────────────────
 from .triton_rmsnorm import (
+    TritonRMSNorm,
+    pytorch_rmsnorm,
     triton_rmsnorm,
     triton_rmsnorm_fwd_only,
-    pytorch_rmsnorm,
-    TritonRMSNorm,
 )
 
-# ── fla DeltaNet ──────────────────────────────────────────────────────
-from .fla_deltanet import (
-    fla_gated_delta_rule,
+# ── Sinkhorn-Knopp ───────────────────────────────────────────────────
+from .triton_sinkhorn import pytorch_sinkhorn_knopp, triton_sinkhorn_knopp
+
+# ── Sparse Attention ──────────────────────────────────────────────────
+from .triton_sparse_attn import (
+    USE_TRITON_BACKWARD,
+    pytorch_sparse_attention,
+    triton_sparse_attention,
 )
 
 __all__ = [

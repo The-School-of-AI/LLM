@@ -19,26 +19,23 @@ Memory comparison at T=256K, B=16:
 Based on the GSA paper implementation (arXiv:2601.15305v1).
 """
 
+from typing import Optional, Tuple
+
 import torch
-from typing import Tuple, Optional
 
 # Import the base indexer kernels
-from .triton_indexer import (
-    HAS_TRITON,
-    triton_gated_indexer,
-    pytorch_gated_indexer,
-)
-
+from .triton_indexer import HAS_TRITON, pytorch_gated_indexer, triton_gated_indexer
 
 # ============================================================
 # Single-Pass Chunked Indexer: Variance + TopK in one loop
 # ============================================================
 
+
 def fused_indexer_topk(
-    q: torch.Tensor,       # [batch, seq_q, n_heads, d_idx]
-    k: torch.Tensor,       # [batch, seq_kv, d_idx]
-    w: torch.Tensor,       # [batch, seq_q, n_heads]
-    b: torch.Tensor,       # [n_heads]
+    q: torch.Tensor,  # [batch, seq_q, n_heads, d_idx]
+    k: torch.Tensor,  # [batch, seq_kv, d_idx]
+    w: torch.Tensor,  # [batch, seq_q, n_heads]
+    b: torch.Tensor,  # [n_heads]
     scale: float,
     causal: bool = True,
     k_base: int = 512,
@@ -110,7 +107,9 @@ def fused_indexer_topk(
         # ---- TRUE SINGLE PASS: variance + topk from same chunk ----
         k_limit = min(seq_kv, max(k_max, sink_size))
         var_t = torch.empty(batch_size, seq_q, device=device, dtype=torch.float32)
-        top_indices = torch.empty(batch_size, seq_q, k_limit, device=device, dtype=torch.int32)
+        top_indices = torch.empty(
+            batch_size, seq_q, k_limit, device=device, dtype=torch.int32
+        )
 
         for q_start in range(0, seq_q, C):
             q_end = min(q_start + C, seq_q)
@@ -118,17 +117,19 @@ def fused_indexer_topk(
             w_chunk = w[:, q_start:q_end]
 
             # Compute (B, C_actual, seq_kv) importance scores
-            scores = _compute_scores(q_chunk, k, w_chunk, b, scale, causal, q_start, use_triton)
+            scores = _compute_scores(
+                q_chunk, k, w_chunk, b, scale, causal, q_start, use_triton
+            )
 
             # Variance from this chunk (replace -inf with 0)
-            scores_for_var = scores.masked_fill(scores == float('-inf'), 0.0)
+            scores_for_var = scores.masked_fill(scores == float("-inf"), 0.0)
             var_t[:, q_start:q_end] = scores_for_var.var(dim=-1, unbiased=False)
             del scores_for_var
 
             # Attention sinks
             if seq_kv > sink_size:
                 scores = scores.clone()
-                scores[:, :, :sink_size] = float('inf')
+                scores[:, :, :sink_size] = float("inf")
 
             # TopK
             _, chunk_idx = scores.topk(k_limit, dim=-1)
@@ -155,9 +156,16 @@ def fused_indexer_topk(
         for q_start in range(0, seq_q, C):
             q_end = min(q_start + C, seq_q)
             scores = _compute_scores(
-                q[:, q_start:q_end], k, w[:, q_start:q_end],
-                b, scale, causal, q_start, use_triton)
-            scores_for_var = scores.masked_fill(scores == float('-inf'), 0.0)
+                q[:, q_start:q_end],
+                k,
+                w[:, q_start:q_end],
+                b,
+                scale,
+                causal,
+                q_start,
+                use_triton,
+            )
+            scores_for_var = scores.masked_fill(scores == float("-inf"), 0.0)
             var_t[:, q_start:q_end] = scores_for_var.var(dim=-1, unbiased=False)
             del scores, scores_for_var
 
@@ -176,16 +184,25 @@ def fused_indexer_topk(
         k_limit = min(seq_kv, max(int(k_t.max().item()), sink_size, 1))
 
         # Phase 2: Chunked topk
-        top_indices = torch.empty(batch_size, seq_q, k_limit, device=device, dtype=torch.int32)
+        top_indices = torch.empty(
+            batch_size, seq_q, k_limit, device=device, dtype=torch.int32
+        )
         for q_start in range(0, seq_q, C):
             q_end = min(q_start + C, seq_q)
             scores = _compute_scores(
-                q[:, q_start:q_end], k, w[:, q_start:q_end],
-                b, scale, causal, q_start, use_triton)
+                q[:, q_start:q_end],
+                k,
+                w[:, q_start:q_end],
+                b,
+                scale,
+                causal,
+                q_start,
+                use_triton,
+            )
 
             if seq_kv > sink_size:
                 scores = scores.clone()
-                scores[:, :, :sink_size] = float('inf')
+                scores[:, :, :sink_size] = float("inf")
 
             _, chunk_idx = scores.topk(k_limit, dim=-1)
             top_indices[:, q_start:q_end, :] = chunk_idx.to(torch.int32)
@@ -237,9 +254,16 @@ def streaming_indexer_variance(
     for q_start in range(0, seq_q, C):
         q_end = min(q_start + C, seq_q)
         scores = _compute_scores(
-            q[:, q_start:q_end], k, w[:, q_start:q_end],
-            b, scale, causal, q_start, use_triton)
-        scores_for_var = scores.masked_fill(scores == float('-inf'), 0.0)
+            q[:, q_start:q_end],
+            k,
+            w[:, q_start:q_end],
+            b,
+            scale,
+            causal,
+            q_start,
+            use_triton,
+        )
+        scores_for_var = scores.masked_fill(scores == float("-inf"), 0.0)
         var_out[:, q_start:q_end] = scores_for_var.var(dim=-1, unbiased=False)
         del scores, scores_for_var
 
@@ -250,8 +274,10 @@ def streaming_indexer_variance(
 # Utilities
 # ============================================================
 
-def _auto_chunk_size(batch_size: int, seq_kv: int,
-                     target_bytes: int = 512 * 1024 * 1024) -> int:
+
+def _auto_chunk_size(
+    batch_size: int, seq_kv: int, target_bytes: int = 512 * 1024 * 1024
+) -> int:
     """
     Auto-select chunk size C so that (B, C, seq_kv) x 4 bytes < target_bytes.
 

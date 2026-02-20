@@ -23,14 +23,16 @@ Attribution:
 """
 
 import math
+from typing import Optional
+
 import torch
 import torch.nn as nn
-from typing import Optional
 
 # Check for Triton availability
 try:
     import triton
     import triton.language as tl
+
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
@@ -43,13 +45,14 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════════
 
 if HAS_TRITON:
+
     @triton.jit
     def _rmsnorm_fwd_kernel(
         # Pointers
-        Y_ptr,          # Output tensor
-        X_ptr,          # Input tensor
-        W_ptr,          # RMSNorm weight
-        RSTD_ptr,       # Saved reciprocal std (for backward)
+        Y_ptr,  # Output tensor
+        X_ptr,  # Input tensor
+        W_ptr,  # RMSNorm weight
+        RSTD_ptr,  # Saved reciprocal std (for backward)
         # Dimensions
         n_cols,
         # Hyperparameters
@@ -105,15 +108,16 @@ if HAS_TRITON:
 # ═══════════════════════════════════════════════════════════════════════
 
 if HAS_TRITON:
+
     @triton.jit
     def _rmsnorm_bwd_kernel(
         # Pointers
-        dY_ptr,         # Gradient of output
-        dX_ptr,         # Gradient of input (output)
-        X_ptr,          # Saved input (from forward)
-        W_ptr,          # Weight
-        RSTD_ptr,       # Saved reciprocal std
-        dW_ptr,         # Partial gradient of weight (output, per-block)
+        dY_ptr,  # Gradient of output
+        dX_ptr,  # Gradient of input (output)
+        X_ptr,  # Saved input (from forward)
+        W_ptr,  # Weight
+        RSTD_ptr,  # Saved reciprocal std
+        dW_ptr,  # Partial gradient of weight (output, per-block)
         # Dimensions
         n_rows,
         n_cols,
@@ -169,7 +173,9 @@ if HAS_TRITON:
 
             # dX = rstd * (m - (1/N) * rstd^2 * dot(m, X) * X)
             dot_mx = tl.sum(m * X_row_f32, axis=0)
-            dX_row = rstd * m + rstd * (-(1.0 / n_cols) * rstd * rstd * dot_mx * X_row_f32)
+            dX_row = rstd * m + rstd * (
+                -(1.0 / n_cols) * rstd * rstd * dot_mx * X_row_f32
+            )
 
             # Store dX (cast back to input dtype)
             dx_base = dX_ptr + row_idx * stride_dx_row
@@ -188,6 +194,7 @@ if HAS_TRITON:
 # ═══════════════════════════════════════════════════════════════════════
 
 if HAS_TRITON:
+
     def _calculate_settings(n_cols):
         """Calculate BLOCK_SIZE and num_warps for a given hidden dim."""
         BLOCK_SIZE = triton.next_power_of_2(n_cols)
@@ -235,9 +242,14 @@ if HAS_TRITON:
             RSTD = torch.empty(n_rows, dtype=torch.float32, device=X.device)
 
             _rmsnorm_fwd_kernel[(n_rows,)](
-                Y, X_2d, W, RSTD,
-                n_cols, eps,
-                X_2d.stride(0), Y.stride(0),
+                Y,
+                X_2d,
+                W,
+                RSTD,
+                n_cols,
+                eps,
+                X_2d.stride(0),
+                Y.stride(0),
                 BLOCK_SIZE=BLOCK_SIZE,
                 num_warps=num_warps,
             )
@@ -268,16 +280,26 @@ if HAS_TRITON:
             dX = torch.empty_like(X_2d)
 
             # Number of SMs for dW accumulation across row blocks
-            sm_count = torch.cuda.get_device_properties(X_2d.device).multi_processor_count
+            sm_count = torch.cuda.get_device_properties(
+                X_2d.device
+            ).multi_processor_count
             _dW = torch.empty(sm_count, n_cols, dtype=torch.float32, device=W.device)
 
             rows_per_program = math.ceil(n_rows / sm_count)
             grid = (sm_count,)
 
             _rmsnorm_bwd_kernel[grid](
-                dY_2d, dX, X_2d, W, RSTD, _dW,
-                n_rows, n_cols,
-                dY_2d.stride(0), dX.stride(0), X_2d.stride(0),
+                dY_2d,
+                dX,
+                X_2d,
+                W,
+                RSTD,
+                _dW,
+                n_rows,
+                n_cols,
+                dY_2d.stride(0),
+                dX.stride(0),
+                X_2d.stride(0),
                 rows_per_program,
                 BLOCK_SIZE=BLOCK_SIZE,
                 num_warps=num_warps,
@@ -292,6 +314,7 @@ if HAS_TRITON:
 # ═══════════════════════════════════════════════════════════════════════
 # Public API (drop-in replacement, now with backward support)
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def triton_rmsnorm(
     x: torch.Tensor,
@@ -356,6 +379,7 @@ def pytorch_rmsnorm(
 # Legacy forward-only kernel (kept for benchmark comparison)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def triton_rmsnorm_fwd_only(
     x: torch.Tensor,
     weight: torch.Tensor,
@@ -390,9 +414,14 @@ def triton_rmsnorm_fwd_only(
     rstd_dummy = torch.empty(n_rows, dtype=torch.float32, device=x.device)
 
     _rmsnorm_fwd_kernel[(n_rows,)](
-        out, x_2d, weight, rstd_dummy,
-        n_cols, eps,
-        x_2d.stride(0), out.stride(0),
+        out,
+        x_2d,
+        weight,
+        rstd_dummy,
+        n_cols,
+        eps,
+        x_2d.stride(0),
+        out.stride(0),
         BLOCK_SIZE=BLOCK_SIZE,
         num_warps=num_warps,
     )
@@ -428,10 +457,11 @@ class TritonRMSNorm(nn.Module):
                 return triton_rmsnorm(x, self.weight, self.eps, residual)
             except Exception as e:
                 import warnings
+
                 warnings.warn(f"Triton RMSNorm failed: {e}. Using PyTorch fallback.")
                 return pytorch_rmsnorm(x, self.weight, self.eps, residual)
         else:
             return pytorch_rmsnorm(x, self.weight, self.eps, residual)
 
     def extra_repr(self) -> str:
-        return f'{self.hidden_size}, eps={self.eps}, triton={self.use_triton}'
+        return f"{self.hidden_size}, eps={self.eps}, triton={self.use_triton}"

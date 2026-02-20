@@ -2,8 +2,8 @@
 import gc
 
 import torch
-from src.models.model_3b import Model3B, ModelConfig
 from src.data import get_tokenizer
+from src.models.model_3b import Model3B, ModelConfig
 
 
 def print_memory(stage):
@@ -40,7 +40,7 @@ model = Model3B(
     config=config,
     embedding_type="standard",  # Standard embeddings for simpler testing
     bpe_vocab=None,
-    pf_codec=None
+    pf_codec=None,
 )
 model = model.to("cuda")
 print_memory("After model load")
@@ -73,12 +73,24 @@ peak = torch.cuda.max_memory_allocated() / 1e9
 print("\n" + "=" * 80)
 print(f"PEAK GPU MEMORY: {peak:.2f} GB")
 print("\nGPU Compatibility:")
-print(f"  T4 (16 GB):    {'✅ FITS' if peak < 14.0 else '❌ TOO LARGE'} (Headroom: {16.0 - peak:.2f} GB)")
-print(f"  L4 (24 GB):    {'✅ FITS' if peak < 22.0 else '❌ TOO LARGE'} (Headroom: {24.0 - peak:.2f} GB)")
-print(f"  A10G (24 GB):  {'✅ FITS' if peak < 22.0 else '❌ TOO LARGE'} (Headroom: {24.0 - peak:.2f} GB)")
-print(f"  V100 (32 GB):  {'✅ FITS' if peak < 30.0 else '❌ TOO LARGE'} (Headroom: {32.0 - peak:.2f} GB)")
-print(f"  A100 (40 GB):  {'✅ FITS' if peak < 38.0 else '❌ TOO LARGE'} (Headroom: {40.0 - peak:.2f} GB)")
-print(f"  A100 (80 GB):  {'✅ FITS' if peak < 78.0 else '❌ TOO LARGE'} (Headroom: {80.0 - peak:.2f} GB)")
+print(
+    f"  T4 (16 GB):    {'✅ FITS' if peak < 14.0 else '❌ TOO LARGE'} (Headroom: {16.0 - peak:.2f} GB)"
+)
+print(
+    f"  L4 (24 GB):    {'✅ FITS' if peak < 22.0 else '❌ TOO LARGE'} (Headroom: {24.0 - peak:.2f} GB)"
+)
+print(
+    f"  A10G (24 GB):  {'✅ FITS' if peak < 22.0 else '❌ TOO LARGE'} (Headroom: {24.0 - peak:.2f} GB)"
+)
+print(
+    f"  V100 (32 GB):  {'✅ FITS' if peak < 30.0 else '❌ TOO LARGE'} (Headroom: {32.0 - peak:.2f} GB)"
+)
+print(
+    f"  A100 (40 GB):  {'✅ FITS' if peak < 38.0 else '❌ TOO LARGE'} (Headroom: {40.0 - peak:.2f} GB)"
+)
+print(
+    f"  A100 (80 GB):  {'✅ FITS' if peak < 78.0 else '❌ TOO LARGE'} (Headroom: {80.0 - peak:.2f} GB)"
+)
 
 print("\nMemory Status:")
 if peak < 12.0:

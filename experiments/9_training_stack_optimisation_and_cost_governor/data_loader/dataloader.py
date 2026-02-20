@@ -1,12 +1,11 @@
 import argparse
 import logging
-from spdl_dataloader import build_pipeline, DummyModel
-from common import SEQUENCE_LENGTH, DTYPE, LOG_FILE_SIZE, LOG_BACKUP_COUNT
-import torch
-import numpy as np
 from logging.handlers import RotatingFileHandler
 
-
+import numpy as np
+import torch
+from common import DTYPE, LOG_BACKUP_COUNT, LOG_FILE_SIZE, SEQUENCE_LENGTH
+from spdl_dataloader import DummyModel, build_pipeline
 
 
 # --- Argument Parsing ---
@@ -17,10 +16,22 @@ def parse_args():
         argparse.Namespace: Parsed arguments with token_folder, batches, and log_level.
     """
     parser = argparse.ArgumentParser(description="SPDL bin/idx dataloader runner")
-    parser.add_argument("--token-folder", required=True, help="Path to folder containing .bin/.idx files")
-    parser.add_argument("--batches", type=int, default=10, help="Number of batches to process (default: 10)")
-    parser.add_argument("--log-level", default="INFO", help="Logging level (default: INFO)")
+    parser.add_argument(
+        "--token-folder",
+        required=True,
+        help="Path to folder containing .bin/.idx files",
+    )
+    parser.add_argument(
+        "--batches",
+        type=int,
+        default=10,
+        help="Number of batches to process (default: 10)",
+    )
+    parser.add_argument(
+        "--log-level", default="INFO", help="Logging level (default: INFO)"
+    )
     return parser.parse_args()
+
 
 # --- Logger Setup ---
 def setup_logger(log_level):
@@ -40,10 +51,13 @@ def setup_logger(log_level):
     ch.setFormatter(logging.Formatter(log_format))
     logger.addHandler(ch)
     # Rotating file handler: 100MB per file, 20 backups
-    fh = RotatingFileHandler("dataloader.log", maxBytes=LOG_FILE_SIZE, backupCount=LOG_BACKUP_COUNT)
+    fh = RotatingFileHandler(
+        "dataloader.log", maxBytes=LOG_FILE_SIZE, backupCount=LOG_BACKUP_COUNT
+    )
     fh.setFormatter(logging.Formatter(log_format))
     logger.addHandler(fh)
     return logger
+
 
 # --- Batch Processing ---
 def process_batch(step, batch, model, logger):
@@ -58,12 +72,21 @@ def process_batch(step, batch, model, logger):
         tuple: (batch, outputs, batch_time, offset_start, offset_end)
     """
     import time as _time
+
     batch_start_time = _time.time()
     offset_start, offset_end = None, None
     if isinstance(batch, list) and len(batch) > 0:
         try:
-            offset_start = min(getattr(x, 'offset_start', None) for x in batch if hasattr(x, 'offset_start'))
-            offset_end = max(getattr(x, 'offset_end', None) for x in batch if hasattr(x, 'offset_end'))
+            offset_start = min(
+                getattr(x, "offset_start", None)
+                for x in batch
+                if hasattr(x, "offset_start")
+            )
+            offset_end = max(
+                getattr(x, "offset_end", None)
+                for x in batch
+                if hasattr(x, "offset_end")
+            )
         except Exception:
             offset_start, offset_end = None, None
         batch = torch.stack(batch)
@@ -76,6 +99,7 @@ def process_batch(step, batch, model, logger):
     logger.info(f"Batch {step} processing time: {batch_time:.4f} seconds")
     return batch, outputs, batch_time, offset_start, offset_end
 
+
 # --- Pipeline Runner ---
 def run_pipeline(token_folder, batches, logger):
     """
@@ -86,25 +110,33 @@ def run_pipeline(token_folder, batches, logger):
         logger (logging.Logger): Logger instance.
     """
     import time
+
     seq_len = SEQUENCE_LENGTH
     dtype = np.dtype(DTYPE)
     model = DummyModel()
     pipeline = build_pipeline(token_folder, seq_len=seq_len, dtype=dtype)
-    logger.info(f"Running dataloader on: {token_folder} | seq_len={seq_len} | dtype={dtype}")
+    logger.info(
+        f"Running dataloader on: {token_folder} | seq_len={seq_len} | dtype={dtype}"
+    )
     batch_count = 0
     total_tokens = 0
     start_time = time.time()
     with pipeline.auto_stop():
         for step, batch in enumerate(pipeline):
-            batch, outputs, batch_time, offset_start, offset_end = process_batch(step, batch, model, logger)
+            batch, outputs, batch_time, offset_start, offset_end = process_batch(
+                step, batch, model, logger
+            )
             batch_count += 1
             total_tokens += batch.numel()
             if step >= batches - 1:
                 break
     elapsed = time.time() - start_time
     throughput = total_tokens / elapsed if elapsed > 0 else 0
-    logger.info(f"Completed: {batch_count} batches, {total_tokens} tokens processed in {elapsed:.2f} seconds.")
+    logger.info(
+        f"Completed: {batch_count} batches, {total_tokens} tokens processed in {elapsed:.2f} seconds."
+    )
     logger.info(f"Throughput: {throughput:.2f} tokens/sec")
+
 
 # --- Main Entrypoint ---
 def main():
@@ -114,6 +146,7 @@ def main():
     args = parse_args()
     logger = setup_logger(args.log_level)
     run_pipeline(args.token_folder, args.batches, logger)
+
 
 if __name__ == "__main__":
     main()

@@ -47,14 +47,20 @@ warnings.filterwarnings(
     category=FutureWarning,
 )
 
-import deepspeed
 import json
+
+import deepspeed
 import torch
 import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
-from src.models.recurrence_model_1b import Model1B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
+from src.models.recurrence_model_1b import (
+    KroneckerConfig,
+    KroneckerEmbeddings,
+    Model1B,
+    ModelConfig,
+)
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
@@ -97,10 +103,16 @@ class Config:
         self.dataset_name = config_dict["data"]["dataset_name"]
         self.dataset_config = config_dict["data"]["dataset_config"]
         self.max_length = config_dict["data"]["max_length"]
-        self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
-        self.streaming = config_dict["data"].get("streaming", False)  # Enable HF streaming for large datasets
-        self.tokenized_dataset_path = config_dict["data"].get("tokenized_dataset_path", None)
-        
+        self.num_workers = config_dict["data"].get(
+            "num_workers", 8
+        )  # Default to 8 for p4d.24xlarge
+        self.streaming = config_dict["data"].get(
+            "streaming", False
+        )  # Enable HF streaming for large datasets
+        self.tokenized_dataset_path = config_dict["data"].get(
+            "tokenized_dataset_path", None
+        )
+
         # SPDL Configuration
         self.use_dataloader = config_dict["data"].get("use_dataloader", False)
         self.shard_dir = config_dict["data"].get("shard_dir", None)
@@ -122,15 +134,19 @@ class Config:
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
         self.local_rank = config_dict["deepspeed"]["local_rank"]
-        
+
         # Load batch size from DeepSpeed config
-        with open(self.deepspeed_config, 'r') as f:
+        with open(self.deepspeed_config, "r") as f:
             deepspeed_cfg = json.load(f)
-        self.batch_size = deepspeed_cfg.get('train_micro_batch_size_per_gpu', 1)
+        self.batch_size = deepspeed_cfg.get("train_micro_batch_size_per_gpu", 1)
 
         # Model configuration
-        self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
-        self._model_overrides = config_dict.get("model", {})  # Store full model dict for ModelConfig overrides
+        self.embedding_type = config_dict["model"].get(
+            "embedding_type", "kronecker"
+        )  # "kronecker" or "standard"
+        self._model_overrides = config_dict.get(
+            "model", {}
+        )  # Store full model dict for ModelConfig overrides
 
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
@@ -244,25 +260,27 @@ def main():
     # Step 0.5: Read DeepSpeed Config to Get Batch Size
     # ========================================
     print_rank_0("\n[0.5/5] Reading DeepSpeed configuration...")
-    with open(args.deepspeed_config, 'r') as f:
+    with open(args.deepspeed_config, "r") as f:
         deepspeed_config = json.load(f)
-    
+
     # Extract batch size from DeepSpeed config
-    micro_batch_size = deepspeed_config.get('train_micro_batch_size_per_gpu', 1)
-    gradient_accumulation_steps = deepspeed_config.get('gradient_accumulation_steps', 1)
-    
+    micro_batch_size = deepspeed_config.get("train_micro_batch_size_per_gpu", 1)
+    gradient_accumulation_steps = deepspeed_config.get("gradient_accumulation_steps", 1)
+
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  train_micro_batch_size_per_gpu: {micro_batch_size}")
     print_rank_0(f"  gradient_accumulation_steps: {gradient_accumulation_steps}")
-    
+
     # Do NOT inject train_batch_size here — distributed is not initialized yet,
     # Let DeepSpeed auto-compute it:
     #   train_batch_size = micro_batch × grad_accum × world_size
     # by ensuring train_batch_size is absent from the config.
-    if 'train_batch_size' in deepspeed_config:
-        print_rank_0(f"  Removing explicit train_batch_size={deepspeed_config['train_batch_size']} "
-                     f"from config — DeepSpeed will auto-compute it after dist init.")
-        del deepspeed_config['train_batch_size']
+    if "train_batch_size" in deepspeed_config:
+        print_rank_0(
+            f"  Removing explicit train_batch_size={deepspeed_config['train_batch_size']} "
+            f"from config — DeepSpeed will auto-compute it after dist init."
+        )
+        del deepspeed_config["train_batch_size"]
 
     print_rank_0(f"  Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
 
@@ -296,16 +314,21 @@ def main():
     # Step 2: Load Model (1B Dense Model)
     # ========================================
     print_rank_0("\n[2/5] Loading model...")
-    print_rank_0("  Creating 1B Dense Model with memory-efficient reversible architecture...")
-    
+    print_rank_0(
+        "  Creating 1B Dense Model with memory-efficient reversible architecture..."
+    )
+
     # Create model configuration
     config = ModelConfig()
-    
+
     # ── Apply YAML model overrides to ModelConfig ─────────────────────────
     # This lets YAML presets (config_4k_throughput.yaml, etc.) control
     # model behavior: GSA sparsity budget, sequence length, etc.
     _model_override_keys = [
-        'max_seq_len', 'gsa_k_base', 'gsa_k_min', 'gsa_k_max',
+        "max_seq_len",
+        "gsa_k_base",
+        "gsa_k_min",
+        "gsa_k_max",
     ]
     for key in _model_override_keys:
         yaml_val = args._model_overrides.get(key)
@@ -313,21 +336,23 @@ def main():
             old_val = getattr(config, key, None)
             setattr(config, key, yaml_val)
             print_rank_0(f"  Model override: {key} = {old_val} → {yaml_val}")
-    
+
     # Update vocab size to match tokenizer
     # Use len(tokenizer) to include special tokens (pad, eos, etc.)
     vocab_size = len(tokenizer)
     config.vocab_size = vocab_size
     print_rank_0(f"  Updated model vocab_size to match tokenizer: {vocab_size:,}")
-    print_rank_0(f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})")
-    
+    print_rank_0(
+        f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})"
+    )
+
     # Prepare vocabulary for Kronecker embeddings if needed
     bpe_vocab = None
     pf_codec = None
-    
+
     if args.embedding_type == "kronecker":
         print_rank_0("  Setting up Kronecker Product Embeddings (byte-level)...")
-        
+
         # Extract vocabulary words from tokenizer
         bpe_vocab = []
         for i in range(vocab_size):
@@ -336,33 +361,35 @@ def main():
                 bpe_vocab.append(token if token else f"<unk_{i}>")
             except:
                 bpe_vocab.append(f"<unk_{i}>")
-        
+
         # Create Kronecker codec
         pf_config = KroneckerConfig(
             CHAR_DIM=256,
             POS_DIM=32,
             D=8192,
             length_normalize=True,
-            truncate_long_words=True
+            truncate_long_words=True,
         )
         pf_codec = KroneckerEmbeddings(pf_config)
-        
+
         print_rank_0(f"  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192")
     else:
         print_rank_0("  Using Standard Embeddings")
-    
+
     # Create the 1B model
     model = Model1B(
         config=config,
         embedding_type=args.embedding_type,
         bpe_vocab=bpe_vocab,
-        pf_codec=pf_codec
+        pf_codec=pf_codec,
     )
 
-    print_rank_0("  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...")
+    print_rank_0(
+        "  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass..."
+    )
     model = model.to(dtype=torch.bfloat16)
     # ----------------------
-    
+
     print_rank_0(f"  Model cast to bfloat16")
     print_rank_0(f"  Model created successfully")
 
@@ -376,7 +403,8 @@ def main():
 
     # Kernel fail-fast — abort if required fused kernels are missing
     if args.require_fused_kernels:
-        from src.models.recurrence_model_1b import HAS_TRITON, HAS_FLA
+        from src.models.recurrence_model_1b import HAS_FLA, HAS_TRITON
+
         missing = []
         if not HAS_TRITON:
             missing.append("Triton")

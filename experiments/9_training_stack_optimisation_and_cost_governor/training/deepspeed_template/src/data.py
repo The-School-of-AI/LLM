@@ -14,23 +14,24 @@ Uses the standard LLM pre-training approach: concatenate all text, tokenize,
 then chunk into fixed-length sequences. Every token is a real token — no
 padding waste.
 """
-from collections import defaultdict
-from typing import Optional, Tuple
 
+import logging
+import os
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlparse
+
+import numpy as np
 import torch
 import torch.distributed as dist
 from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
-from torch.utils.data import DataLoader, TensorDataset, IterableDataset
-from torch.utils.data.distributed import DistributedSampler
-import numpy as np
-import logging
-from .utils import print_rank_0
-from .shard_tracker import ShardTracker
-import os
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
-from pathlib import Path
-from urllib.parse import urlparse
 from spdl.pipeline import PipelineBuilder
+from torch.utils.data import DataLoader, IterableDataset, TensorDataset
+from torch.utils.data.distributed import DistributedSampler
+
+from .shard_tracker import ShardTracker
+from .utils import print_rank_0
 
 
 class StreamingTextDataset(IterableDataset):
@@ -43,6 +44,7 @@ class StreamingTextDataset(IterableDataset):
 
     Multi-GPU: uses worker_info + distributed rank to shard the stream.
     """
+
     def __init__(self, hf_dataset_iter, tokenizer, max_length, split_name="train"):
         self.hf_dataset_iter = hf_dataset_iter
         self.tokenizer = tokenizer
@@ -60,18 +62,22 @@ class StreamingTextDataset(IterableDataset):
 
             # Yield full chunks from the buffer
             while len(buffer) >= self.max_length:
-                chunk = buffer[:self.max_length]
-                buffer = buffer[self.max_length:]
+                chunk = buffer[: self.max_length]
+                buffer = buffer[self.max_length :]
                 input_ids = torch.tensor(chunk, dtype=torch.long)
                 attention_mask = torch.ones(self.max_length, dtype=torch.long)
                 labels = input_ids.clone()
-                yield {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
-
+                yield {
+                    "input_ids": input_ids,
+                    "attention_mask": attention_mask,
+                    "labels": labels,
+                }
 
 
 # ============================================================================
 # SPDL pipeline
 # ============================================================================
+
 
 def read_idx(idx_path: str) -> np.ndarray:
     """Read a Megatron .idx file and return an array of byte offsets."""
@@ -80,9 +86,14 @@ def read_idx(idx_path: str) -> np.ndarray:
         offsets = np.frombuffer(f.read(), dtype=np.uint64)
     return offsets
 
+
 def _should_skip_region(
-    bin_path: str, i: int, start: int, end: int,
-    itemsize: int, seq_len: int,
+    bin_path: str,
+    i: int,
+    start: int,
+    end: int,
+    itemsize: int,
+    seq_len: int,
 ) -> bool:
     """Check if a .bin region should be skipped (corrupt/too small)."""
     num_bytes = end - start
@@ -184,9 +195,7 @@ def bin_idx_source(
 
                 for j in range(0, len(tokens), seq_len):
                     total_yielded += 1
-                    yield torch.from_numpy(
-                        tokens[j : j + seq_len].astype(np.int64)
-                    )
+                    yield torch.from_numpy(tokens[j : j + seq_len].astype(np.int64))
 
         # Notify caller that this shard has been fully consumed
         if on_shard_complete is not None:
@@ -224,8 +233,11 @@ def build_spdl_pipeline(
     """
 
     source = bin_idx_source(
-        shard_dir, seq_len=seq_len, dtype=dtype,
-        rank=rank, world_size=world_size,
+        shard_dir,
+        seq_len=seq_len,
+        dtype=dtype,
+        rank=rank,
+        world_size=world_size,
         exclude_files=exclude_files,
         on_shard_complete=on_shard_complete,
     )
@@ -311,10 +323,10 @@ class SPDLIterableDataset(IterableDataset):
             pipeline.stop()
 
 
-
 # ============================================================================
 # Dataloader
 # ============================================================================
+
 
 def get_tokenizer(tokenizer_path: str = None):
     """
@@ -341,23 +353,31 @@ def get_tokenizer(tokenizer_path: str = None):
 
     print_rank_0(f"  Loading TSAI 131K tokenizer from: {tokenizer_path}")
     from transformers import AutoTokenizer
+
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
     print_rank_0(f"  Tokenizer loaded:")
     print_rank_0(f"    - Vocab size: {tokenizer.vocab_size:,}")
     print_rank_0(f"    - Total tokens (with special): {len(tokenizer):,}")
-    print_rank_0(f"    - BOS token: {tokenizer.bos_token} (ID: {tokenizer.bos_token_id})")
-    print_rank_0(f"    - EOS token: {tokenizer.eos_token} (ID: {tokenizer.eos_token_id})")
-    print_rank_0(f"    - PAD token: {tokenizer.pad_token} (ID: {tokenizer.pad_token_id})")
+    print_rank_0(
+        f"    - BOS token: {tokenizer.bos_token} (ID: {tokenizer.bos_token_id})"
+    )
+    print_rank_0(
+        f"    - EOS token: {tokenizer.eos_token} (ID: {tokenizer.eos_token_id})"
+    )
+    print_rank_0(
+        f"    - PAD token: {tokenizer.pad_token} (ID: {tokenizer.pad_token_id})"
+    )
 
     return tokenizer
 
+
 def tokenize_function(
-        examples: Dict[str, List[str]],
-        tokenizer,
-        max_length: Optional[int] = None,
-        pad_to_max_length: bool = False,
-        truncation: bool = True,
+    examples: Dict[str, List[str]],
+    tokenizer,
+    max_length: Optional[int] = None,
+    pad_to_max_length: bool = False,
+    truncation: bool = True,
 ) -> Dict[str, List[List[int]]]:
     """
     Tokenize text examples for language modeling.
@@ -449,7 +469,6 @@ def _stage_s3_dataset_to_local_nvme(s3_uri: str, local_nvme_cache_dir: str) -> s
     return str(local_dir)
 
 
-
 def _resolve_distributed_context() -> Tuple[bool, int, int]:
     """
     Resolve distributed world-size/rank even before torch.distributed is initialized.
@@ -469,7 +488,9 @@ def _resolve_distributed_context() -> Tuple[bool, int, int]:
     return world_size > 1, world_size, rank
 
 
-def _normalize_block_sizes(block_sizes: Optional[List[int]], max_length: int) -> List[int]:
+def _normalize_block_sizes(
+    block_sizes: Optional[List[int]], max_length: int
+) -> List[int]:
     raw = block_sizes or [max_length]
     sizes = sorted({int(v) for v in raw if int(v) > 0})
     if not sizes:
@@ -477,7 +498,9 @@ def _normalize_block_sizes(block_sizes: Optional[List[int]], max_length: int) ->
     return sizes
 
 
-def _parse_block_size_counts(block_size_counts: Optional[Dict[Any, Any]]) -> Optional[Dict[int, int]]:
+def _parse_block_size_counts(
+    block_size_counts: Optional[Dict[Any, Any]]
+) -> Optional[Dict[int, int]]:
     if not block_size_counts:
         return None
     parsed: Dict[int, int] = {}
@@ -491,9 +514,9 @@ def _parse_block_size_counts(block_size_counts: Optional[Dict[Any, Any]]) -> Opt
 
 
 def _next_target_size(
-        ordered_sizes: List[int],
-        buffer_len: int,
-        remaining_counts: Optional[Dict[int, int]],
+    ordered_sizes: List[int],
+    buffer_len: int,
+    remaining_counts: Optional[Dict[int, int]],
 ) -> Optional[int]:
     if remaining_counts is None:
         # Single-size training is strongly preferred for throughput.
@@ -514,14 +537,14 @@ def _all_requested_blocks_generated(remaining_counts: Optional[Dict[int, int]]) 
 
 
 def _emit_block(
-        out_input_ids: List[List[int]],
-        out_attention_mask: List[List[int]],
-        out_labels: List[List[int]],
-        out_sequence_length: List[int],
-        block: List[int],
-        target_size: int,
-        pad_token_id: int,
-        drop_remainder: bool,
+    out_input_ids: List[List[int]],
+    out_attention_mask: List[List[int]],
+    out_labels: List[List[int]],
+    out_sequence_length: List[int],
+    block: List[int],
+    target_size: int,
+    pad_token_id: int,
+    drop_remainder: bool,
 ) -> None:
     if len(block) < target_size:
         if drop_remainder:
@@ -543,16 +566,15 @@ def _emit_block(
     out_sequence_length.append(target_size)
 
 
-
 def _pack_split_to_fixed_blocks(
-        split_dataset: Dataset,
-        block_sizes: List[int],
-        block_size_counts: Optional[Dict[int, int]],
-        eos_token_id: Optional[int],
-        pad_token_id: int,
-        domain_column: Optional[str],
-        concat_across_domains: bool,
-        drop_remainder: bool,
+    split_dataset: Dataset,
+    block_sizes: List[int],
+    block_size_counts: Optional[Dict[int, int]],
+    eos_token_id: Optional[int],
+    pad_token_id: int,
+    domain_column: Optional[str],
+    concat_across_domains: bool,
+    drop_remainder: bool,
 ) -> Dataset:
     """
     Concatenate tokenized docs and cut fixed-size training blocks.
@@ -568,7 +590,9 @@ def _pack_split_to_fixed_blocks(
 
     remaining_counts = None
     if block_size_counts is not None:
-        remaining_counts = {size: block_size_counts.get(size, 0) for size in ordered_sizes}
+        remaining_counts = {
+            size: block_size_counts.get(size, 0) for size in ordered_sizes
+        }
 
     buffers: Dict[str, List[int]] = defaultdict(list)
     out_input_ids: List[List[int]] = []
@@ -607,7 +631,11 @@ def _pack_split_to_fixed_blocks(
         if not ids:
             continue
 
-        if domain_column and not concat_across_domains and domain_column in split_dataset.column_names:
+        if (
+            domain_column
+            and not concat_across_domains
+            and domain_column in split_dataset.column_names
+        ):
             domain_key = str(example.get(domain_column, "__unknown_domain__"))
         else:
             domain_key = "__all__"
@@ -666,15 +694,14 @@ def _pack_split_to_fixed_blocks(
     )
 
 
-
 def _pack_dataset_dict(
-        tokenized_dataset: DatasetDict,
-        block_sizes: List[int],
-        block_size_counts: Optional[Dict[int, int]],
-        tokenizer,
-        domain_column: Optional[str],
-        concat_across_domains: bool,
-        drop_remainder: bool,
+    tokenized_dataset: DatasetDict,
+    block_sizes: List[int],
+    block_size_counts: Optional[Dict[int, int]],
+    tokenizer,
+    domain_column: Optional[str],
+    concat_across_domains: bool,
+    drop_remainder: bool,
 ) -> DatasetDict:
     packed = {}
     eos_token_id = tokenizer.eos_token_id
@@ -720,27 +747,26 @@ def _build_causal_lm_collate_fn(pad_token_id: int):
     return _collate
 
 
-
 def get_dataloaders(
-        dataset_name: str = "wikitext",
-        dataset_config: str = "wikitext-2-raw-v1",
-        tokenizer=None,
-        batch_size: int = 8,
-        max_length: int = 128,
-        num_workers: int = 12,
-        tokenized_dataset_path: Optional[str] = None,
-        dataset_cache_dir: Optional[str] = None,
-        local_nvme_cache_dir: Optional[str] = None,
-        require_local_nvme: bool = False,
-        pack_into_blocks: bool = False,
-        block_sizes: Optional[List[int]] = None,
-        block_size_counts: Optional[Dict[Any, Any]] = None,
-        domain_column: Optional[str] = None,
-        concat_across_domains: bool = False,
-        drop_remainder: bool = True,
-        streaming: bool = False,
-        use_spdl: bool = False,
-        shard_manifest_path: Optional[str] = None,
+    dataset_name: str = "wikitext",
+    dataset_config: str = "wikitext-2-raw-v1",
+    tokenizer=None,
+    batch_size: int = 8,
+    max_length: int = 128,
+    num_workers: int = 12,
+    tokenized_dataset_path: Optional[str] = None,
+    dataset_cache_dir: Optional[str] = None,
+    local_nvme_cache_dir: Optional[str] = None,
+    require_local_nvme: bool = False,
+    pack_into_blocks: bool = False,
+    block_sizes: Optional[List[int]] = None,
+    block_size_counts: Optional[Dict[Any, Any]] = None,
+    domain_column: Optional[str] = None,
+    concat_across_domains: bool = False,
+    drop_remainder: bool = True,
+    streaming: bool = False,
+    use_spdl: bool = False,
+    shard_manifest_path: Optional[str] = None,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
     Load dataset and create dataloaders for training, validation, and testing.
@@ -757,20 +783,26 @@ def get_dataloaders(
 
     if streaming:
         # Streaming mode : to test until the tokenization is complete
-        print_rank_0(f"Loading dataset in STREAMING mode: {dataset_name} ({dataset_config})")
+        print_rank_0(
+            f"Loading dataset in STREAMING mode: {dataset_name} ({dataset_config})"
+        )
         ds = load_dataset(dataset_name, dataset_config, streaming=True, split="train")
 
-        train_dataset = StreamingTextDataset(ds, tokenizer, max_length, split_name="train")
+        train_dataset = StreamingTextDataset(
+            ds, tokenizer, max_length, split_name="train"
+        )
 
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
-            num_workers=min(num_workers, 2),  # Streaming doesn't benefit from many workers
+            num_workers=min(
+                num_workers, 2
+            ),  # Streaming doesn't benefit from many workers
             pin_memory=True,
         )
 
         print_rank_0("  Streaming mode: eval/test will use first 100 train examples")
-        eval_loader = train_loader  
+        eval_loader = train_loader
         test_loader = train_loader
 
         dataset_info = {
@@ -782,7 +814,7 @@ def get_dataloaders(
         }
         return train_loader, eval_loader, test_loader, dataset_info
 
-    # Use the pre tokenized dataset from S3    
+    # Use the pre tokenized dataset from S3
     resolved_tokenized_path = tokenized_dataset_path
     if tokenized_dataset_path:
         if _is_s3_uri(tokenized_dataset_path):
@@ -802,9 +834,11 @@ def get_dataloaders(
                 raise RuntimeError(
                     "require_local_nvme=True but tokenized dataset path is outside local NVMe root."
                 )
-                
+
         if use_spdl:
-            print_rank_0(f"Loading dataset in SPDL mode from: {resolved_tokenized_path}")
+            print_rank_0(
+                f"Loading dataset in SPDL mode from: {resolved_tokenized_path}"
+            )
             is_distributed, world_size, rank = _resolve_distributed_context()
 
             # Initialise shard tracker for excluding already-processed files
@@ -820,7 +854,9 @@ def get_dataloaders(
             # Helper to locate split subdirectories if they exist
             def get_shard_dir(split_name: str) -> str:
                 split_dir = os.path.join(resolved_tokenized_path, split_name)
-                return split_dir if os.path.exists(split_dir) else resolved_tokenized_path
+                return (
+                    split_dir if os.path.exists(split_dir) else resolved_tokenized_path
+                )
 
             train_dataset = SPDLIterableDataset(
                 shard_dir=get_shard_dir("train"),
@@ -831,7 +867,7 @@ def get_dataloaders(
                 num_threads=max(1, num_workers),
                 shard_tracker=shard_tracker,
             )
-            
+
             eval_dataset = SPDLIterableDataset(
                 shard_dir=get_shard_dir("validation"),
                 seq_len=max_length,
@@ -840,7 +876,7 @@ def get_dataloaders(
                 world_size=world_size,
                 num_threads=1,  # Keep threads light for eval
             )
-            
+
             test_dataset = SPDLIterableDataset(
                 shard_dir=get_shard_dir("test"),
                 seq_len=max_length,
@@ -851,12 +887,18 @@ def get_dataloaders(
             )
 
             # batch_size=None and num_workers=0 because SPDL internally batches and handles threads
-            train_loader = DataLoader(train_dataset, batch_size=None, num_workers=0, pin_memory=True)
-            eval_loader = DataLoader(eval_dataset, batch_size=None, num_workers=0, pin_memory=True)
-            test_loader = DataLoader(test_dataset, batch_size=None, num_workers=0, pin_memory=True)
+            train_loader = DataLoader(
+                train_dataset, batch_size=None, num_workers=0, pin_memory=True
+            )
+            eval_loader = DataLoader(
+                eval_dataset, batch_size=None, num_workers=0, pin_memory=True
+            )
+            test_loader = DataLoader(
+                test_dataset, batch_size=None, num_workers=0, pin_memory=True
+            )
 
             dataset_info = {
-                "train_size": -1, 
+                "train_size": -1,
                 "eval_size": -1,
                 "test_size": -1,
                 "vocab_size": tokenizer.vocab_size if tokenizer else 0,
@@ -864,9 +906,11 @@ def get_dataloaders(
                 "spdl_mode": True,
                 "shard_tracker": shard_tracker,
             }
-            return train_loader, eval_loader, test_loader, dataset_info            
+            return train_loader, eval_loader, test_loader, dataset_info
         else:
-            print_rank_0(f"Loading pre-tokenized dataset from disk: {resolved_tokenized_path}")
+            print_rank_0(
+                f"Loading pre-tokenized dataset from disk: {resolved_tokenized_path}"
+            )
             tokenized_dataset = load_from_disk(resolved_tokenized_path)
     else:
         if require_local_nvme:
@@ -876,7 +920,9 @@ def get_dataloaders(
             )
 
         print_rank_0(f"Loading dataset: {dataset_name} ({dataset_config})")
-        dataset = load_dataset(dataset_name, dataset_config, cache_dir=dataset_cache_dir)
+        dataset = load_dataset(
+            dataset_name, dataset_config, cache_dir=dataset_cache_dir
+        )
 
         def filter_empty(example):
             return len(example["text"].strip()) > 0
@@ -926,7 +972,9 @@ def get_dataloaders(
                 drop_remainder=drop_remainder,
             )
         else:
-            print_rank_0("Tokenizing dataset with fixed truncation/padding (legacy path)...")
+            print_rank_0(
+                "Tokenizing dataset with fixed truncation/padding (legacy path)..."
+            )
             tokenized_dataset = dataset.map(
                 lambda examples: tokenize_function(
                     examples,
@@ -1061,4 +1109,3 @@ def get_dataloaders(
     }
 
     return train_loader, eval_loader, test_loader, dataset_info
-

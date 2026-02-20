@@ -19,12 +19,14 @@ Requirements:
     pip install fla
 """
 
-import torch
 from typing import Optional, Tuple
+
+import torch
 
 # Check for fla availability
 try:
     from fla.ops.gated_delta_rule import chunk_gated_delta_rule
+
     HAS_FLA = True
 except ImportError:
     HAS_FLA = False
@@ -32,12 +34,12 @@ except ImportError:
 
 
 def fla_gated_delta_rule(
-    q: torch.Tensor,       # [B, T, H, d]
-    k: torch.Tensor,       # [B, T, H, d]
-    v: torch.Tensor,       # [B, T, H, d]
-    alpha: torch.Tensor,   # [B, T, H, 1]  (sigmoid output in [0,1])
-    beta: torch.Tensor,    # [B, T, H, 1]  (sigmoid output in [0,1])
-    D: torch.Tensor,       # [H]  (per-head residual weight)
+    q: torch.Tensor,  # [B, T, H, d]
+    k: torch.Tensor,  # [B, T, H, d]
+    v: torch.Tensor,  # [B, T, H, d]
+    alpha: torch.Tensor,  # [B, T, H, 1]  (sigmoid output in [0,1])
+    beta: torch.Tensor,  # [B, T, H, 1]  (sigmoid output in [0,1])
+    D: torch.Tensor,  # [H]  (per-head residual weight)
     num_heads: int,
     chunk_size: int = 256,
 ) -> torch.Tensor:
@@ -90,7 +92,11 @@ def fla_gated_delta_rule(
 
     # Call fla fused kernel — scale=1.0 since q, k are L2-normalized
     o_fla, _ = chunk_gated_delta_rule(
-        q_f32, k_f32, v_f32, g, beta_fla,
+        q_f32,
+        k_f32,
+        v_f32,
+        g,
+        beta_fla,
         scale=1.0,
         output_final_state=False,
         chunk_size=chunk_size,

@@ -9,6 +9,7 @@ class _ForceWrapper(nn.Module):
     Wraps a Transformer block so functional_call(module, ...) calls force(x),
     not forward(x). This is CRITICAL for midpoint/leapfrog, where f(x)=delta.
     """
+
     def __init__(self, layer: nn.Module):
         super().__init__()
         self.layer = layer
@@ -20,7 +21,18 @@ class _ForceWrapper(nn.Module):
 
 class MidpointFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, p_prev, p_cur, attention_mask, two_h, a, module, param_keys, buffer_keys, *flat_tensors):
+    def forward(
+        ctx,
+        p_prev,
+        p_cur,
+        attention_mask,
+        two_h,
+        a,
+        module,
+        param_keys,
+        buffer_keys,
+        *flat_tensors,
+    ):
         """
         Implements generalized reversible midpoint:
             p_next = a*p_prev + (1-a)*p_cur + two_h * f(p_cur)
@@ -59,7 +71,9 @@ class MidpointFunction(torch.autograd.Function):
         ctx.attention_mask = attention_mask
 
         with torch.no_grad():
-            delta, aux = functional_call(module, (params, buffers), (p_cur, attention_mask), tie_weights=True)
+            delta, aux = functional_call(
+                module, (params, buffers), (p_cur, attention_mask), tie_weights=True
+            )
             p_next = (ctx.a * p_prev) + ((1.0 - ctx.a) * p_cur) + (ctx.two_h * delta)
 
         return p_next, aux
@@ -71,7 +85,7 @@ class MidpointFunction(torch.autograd.Function):
         n_buffers = ctx.n_buffers
 
         param_tensors = saved_tensors[:n_params]
-        buffer_clones = saved_tensors[n_params:n_params + n_buffers]
+        buffer_clones = saved_tensors[n_params : n_params + n_buffers]
 
         # Rebuild params/buffers for functional_call
         params = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_tensors)}
@@ -128,11 +142,16 @@ class MidpointFunction(torch.autograd.Function):
                     allow_unused=True,
                 )
 
-        grad_p_cur_through_f = grads[0] if grads[0] is not None else torch.zeros_like(p_cur)
+        grad_p_cur_through_f = (
+            grads[0] if grads[0] is not None else torch.zeros_like(p_cur)
+        )
         grad_p_cur = grad_p_cur_direct + grad_p_cur_through_f
 
         grad_params = grads[1:]
-        grad_params = [g if g is not None else torch.zeros_like(t) for g, t in zip(grad_params, param_tensors)]
+        grad_params = [
+            g if g is not None else torch.zeros_like(t)
+            for g, t in zip(grad_params, param_tensors)
+        ]
 
         # Return grads for (p_prev, p_cur, attention_mask, two_h, a, module, param_keys, buffer_keys, *flat_tensors)
         # Non-tensor args -> None
@@ -203,6 +222,7 @@ class ReversibleMidpointStack(nn.Module):
     - bootstrap: "no_kick" or "euler"
     - noise_eps: optional noise to delta during training
     """
+
     def __init__(
         self,
         blocks: nn.ModuleList,
@@ -213,7 +233,10 @@ class ReversibleMidpointStack(nn.Module):
     ):
         super().__init__()
         assert 0.0 <= a <= 1.0, "a must be in [0,1]"
-        assert bootstrap in ("no_kick", "euler"), "bootstrap must be 'no_kick' or 'euler'"
+        assert bootstrap in (
+            "no_kick",
+            "euler",
+        ), "bootstrap must be 'no_kick' or 'euler'"
 
         self.blocks = blocks
         self.h = float(step_size)
@@ -222,7 +245,9 @@ class ReversibleMidpointStack(nn.Module):
         self.bootstrap = bootstrap
 
         self.bootstrap_layer = blocks[0]
-        self.mid_layers = nn.ModuleList([MidpointBlock(b, step_size=self.h, a=self.a) for b in blocks[1:]])
+        self.mid_layers = nn.ModuleList(
+            [MidpointBlock(b, step_size=self.h, a=self.a) for b in blocks[1:]]
+        )
 
         self.step_count = 0
 
@@ -239,7 +264,10 @@ class ReversibleMidpointStack(nn.Module):
                 )
             else:
                 delta0, aux0 = grad_checkpoint(
-                    self.bootstrap_layer.force, p_cur, attention_mask, use_reentrant=False
+                    self.bootstrap_layer.force,
+                    p_cur,
+                    attention_mask,
+                    use_reentrant=False,
                 )
         else:
             # HALF-STEP Euler bootstrap (paper-consistent + stable for h=0.25, a=0.5)
@@ -249,7 +277,10 @@ class ReversibleMidpointStack(nn.Module):
                 )
             else:
                 delta0, aux0 = grad_checkpoint(
-                    self.bootstrap_layer.force, p_prev, attention_mask, use_reentrant=False
+                    self.bootstrap_layer.force,
+                    p_prev,
+                    attention_mask,
+                    use_reentrant=False,
                 )
             if self.training and self.noise_eps > 0:
                 delta0 = delta0 + self.noise_eps * torch.randn_like(delta0)
@@ -257,7 +288,11 @@ class ReversibleMidpointStack(nn.Module):
             # critical change: half-step, NOT full h
             p_cur = p_prev + (0.5 * self.h * delta0)
 
-        total_aux = aux0 if aux0 is not None else torch.tensor(0.0, device=x.device, dtype=torch.float32)
+        total_aux = (
+            aux0
+            if aux0 is not None
+            else torch.tensor(0.0, device=x.device, dtype=torch.float32)
+        )
 
         # Midpoint / leapfrog recurrence
         for layer in self.mid_layers:

@@ -11,14 +11,14 @@ Tests cover:
   - manifest portability (basenames only)
 """
 
-import sys
-import os
 import json
-import types
-import struct
-import tempfile
+import os
 import shutil
+import struct
+import sys
+import tempfile
 import threading
+import types
 from pathlib import Path
 
 import pytest
@@ -28,13 +28,16 @@ import pytest
 try:
     import numpy as np
     import torch
+
     _HAS_NUMPY_TORCH = True
 except ImportError:
     _HAS_NUMPY_TORCH = False
 
+
 # ── Mock deepspeed so it can be imported on any machine ──────────────────────
 class _DummyFlopsProfiler:
     pass
+
 
 _ds = types.ModuleType("deepspeed")
 _ds_prof = types.ModuleType("deepspeed.profiling")
@@ -87,6 +90,7 @@ ShardTracker = _tracker_mod.ShardTracker
 # ============================================================================
 
 if _HAS_NUMPY_TORCH:
+
     def _create_mock_shard(shard_dir: str, name: str, num_tokens: int, dtype=np.uint32):
         """Create a .bin/.idx pair with sequential token IDs."""
         tokens = np.arange(num_tokens, dtype=dtype)
@@ -107,6 +111,7 @@ if _HAS_NUMPY_TORCH:
 # ============================================================================
 # Tests: ShardTracker core functionality
 # ============================================================================
+
 
 class TestShardTrackerBasic:
     """Tests for ShardTracker mark / exclude / persistence."""
@@ -261,6 +266,7 @@ class TestShardTrackerConcurrency:
         tracker = ShardTracker(manifest, auto_save=False)
 
         errors = []
+
         def mark_range(start, count):
             try:
                 for i in range(start, start + count):
@@ -330,9 +336,11 @@ class TestShardTrackerWithBinIdxSource:
 
             # Exclude 2 shards
             exclude = {"shard_000.bin", "shard_001.bin"}
-            partial_seqs = list(bin_idx_source(
-                shard_dir, seq_len=seq_len, dtype=np.uint32, exclude_files=exclude
-            ))
+            partial_seqs = list(
+                bin_idx_source(
+                    shard_dir, seq_len=seq_len, dtype=np.uint32, exclude_files=exclude
+                )
+            )
             assert len(partial_seqs) == 12  # 3 shards * 4 sequences
 
         finally:
@@ -362,13 +370,18 @@ class TestShardTrackerWithBinIdxSource:
             bin_idx_source = _data_mod.bin_idx_source
 
             completed = []
+
             def on_complete(name):
                 completed.append(name)
 
-            seqs = list(bin_idx_source(
-                shard_dir, seq_len=seq_len, dtype=np.uint32,
-                on_shard_complete=on_complete
-            ))
+            seqs = list(
+                bin_idx_source(
+                    shard_dir,
+                    seq_len=seq_len,
+                    dtype=np.uint32,
+                    on_shard_complete=on_complete,
+                )
+            )
             assert len(seqs) == 6  # 3 shards * 2 sequences
             assert completed == ["shard_000.bin", "shard_001.bin", "shard_002.bin"]
 
@@ -402,14 +415,18 @@ class TestShardTrackerWithBinIdxSource:
             tracker = ShardTracker(manifest_path)
 
             completed_phase1 = []
-            seqs1 = list(bin_idx_source(
-                shard_dir, seq_len=seq_len, dtype=np.uint32,
-                exclude_files=tracker.get_processed_files(),
-                on_shard_complete=lambda name: (
-                    completed_phase1.append(name),
-                    tracker.mark_processed(name, rank=0, source_dir=shard_dir)
-                ),
-            ))
+            seqs1 = list(
+                bin_idx_source(
+                    shard_dir,
+                    seq_len=seq_len,
+                    dtype=np.uint32,
+                    exclude_files=tracker.get_processed_files(),
+                    on_shard_complete=lambda name: (
+                        completed_phase1.append(name),
+                        tracker.mark_processed(name, rank=0, source_dir=shard_dir),
+                    ),
+                )
+            )
             assert len(seqs1) == 10  # 5 shards * 2 sequences
 
             # Simulate crash after processing 3 shards — only mark first 3
@@ -423,10 +440,14 @@ class TestShardTrackerWithBinIdxSource:
             tracker_resume = ShardTracker(manifest_path)
             assert tracker_resume.num_processed == 3
 
-            seqs2 = list(bin_idx_source(
-                shard_dir, seq_len=seq_len, dtype=np.uint32,
-                exclude_files=tracker_resume.get_processed_files(),
-            ))
+            seqs2 = list(
+                bin_idx_source(
+                    shard_dir,
+                    seq_len=seq_len,
+                    dtype=np.uint32,
+                    exclude_files=tracker_resume.get_processed_files(),
+                )
+            )
             assert len(seqs2) == 4  # 2 remaining shards * 2 sequences
 
         finally:
@@ -440,4 +461,5 @@ class TestShardTrackerWithBinIdxSource:
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v", "--tb=short"])
