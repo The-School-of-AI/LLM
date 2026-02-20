@@ -14,18 +14,21 @@ Uses the standard LLM pre-training approach: concatenate all text, tokenize,
 then chunk into fixed-length sequences. Every token is a real token — no
 padding waste.
 """
-
+from collections import defaultdict
 from typing import Optional, Tuple
 
 import torch
 import torch.distributed as dist
-from datasets import load_dataset, load_from_disk
+from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
 from torch.utils.data import DataLoader, TensorDataset, IterableDataset
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 import logging
 from .utils import print_rank_0
-
+import os
+from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from urllib.parse import urlparse
 
 class StreamingTextDataset(IterableDataset):
     """
@@ -99,360 +102,634 @@ def get_tokenizer(tokenizer_path: str = None):
 
     return tokenizer
 
-# =================================================================
-# SPDL Helper Functions
-# =================================================================
-def read_idx(idx_path):
-    """Read the .idx file and return an array of offsets."""
-    import numpy as np
-    with open(idx_path, "rb") as f:
-        _ = f.read(8)  # Skip header
-        offsets = np.frombuffer(f.read(), dtype=np.uint64)
-    return offsets
-
-def _should_skip_region(bin_path, i, start, end, itemsize, seq_len):
-    """Helper to check if a region in the bin/idx file should be skipped."""
-    num_bytes = end - start
-    if num_bytes <= 0:
-        return True
-    num_tokens = num_bytes // itemsize
-    if num_tokens == 0:
-        return True
-    num_full = num_tokens // seq_len
-    if num_full == 0:
-        return True
-    return False
-
-def load_tokens_from_bin_idx(bin_path, idx_path, dtype, seq_len):
-    """Yield token sequences from a .bin file using .idx offsets."""
-    itemsize = dtype.itemsize
-    offsets = read_idx(idx_path)
-    
-    with open(bin_path, "rb") as f:
-        for i in range(len(offsets) - 1):
-            start = int(offsets[i])
-            end = int(offsets[i + 1])
-            if _should_skip_region(bin_path, i, start, end, itemsize, seq_len):
-                continue
-            
-            num_bytes = end - start
-            num_tokens = num_bytes // itemsize
-            num_full = num_tokens // seq_len
-            read_tokens = num_full * seq_len
-            
-            f.seek(start)
-            tokens = np.frombuffer(f.read(read_tokens * itemsize), dtype=dtype)
-            
-            if tokens.size != read_tokens:
-                continue
-                
-            for j in range(0, len(tokens), seq_len):
-                yield torch.from_numpy(tokens[j:j+seq_len].astype(np.int64))
-
-def bin_idx_source(shard_dir, seq_len, dtype, rank=0, world_size=1):
+def tokenize_function(
+        examples: Dict[str, List[str]],
+        tokenizer,
+        max_length: Optional[int] = None,
+        pad_to_max_length: bool = False,
+        truncation: bool = True,
+) -> Dict[str, List[List[int]]]:
     """
-    Generator yielding token sequences from .bin/.idx shards in directory.
-    Handles Distributed Sharding: splits files across ranks.
-    """
-    files = sorted(f for f in os.listdir(shard_dir) if f.endswith(".bin"))
-    
-    # Shard files across ranks
-    if world_size > 1:
-        files = files[rank::world_size]
-        print_rank_0(f"SPDL: Rank {rank} processing {len(files)} shards (shard stride {world_size})")
-    
-    for bin_file in files:
-        bin_path = os.path.join(shard_dir, bin_file)
-        idx_path = bin_path.replace(".bin", ".idx")
-        yield from load_tokens_from_bin_idx(bin_path, idx_path, dtype, seq_len)
-
-def build_pipeline(shard_dir, seq_len, dtype, batch_size, rank=0, world_size=1):
-    """Build SPDL pipeline yielding batches of {input_ids, attention_mask, labels}."""
-    from spdl.pipeline import PipelineBuilder
-    
-    # Define source generator
-    source = bin_idx_source(shard_dir, seq_len, dtype, rank, world_size)
-    
-    # Transform function to match training batch format
-    # SPDL aggregation yields a list/tensor of token sequences [B, L]
-    # We need to wrap it into the dict expected by train_epoch
-    
-    def transform_to_batch(batch_tokens):
-        # batch_tokens is a list of tensors [L], or valid tensor [B, L] depending on SPDL version
-        # Assuming aggregation yields list of tensors
-        if isinstance(batch_tokens, list):
-            input_ids = torch.stack(batch_tokens)
-        else:
-            input_ids = batch_tokens
-            
-        # Create masks/labels
-        B, L = input_ids.shape
-        attention_mask = torch.ones((B, L), dtype=torch.long)
-        labels = input_ids.clone()
-        
-        return {
-            "input_ids": input_ids.long(), # Ensure long for embeddings
-            "attention_mask": attention_mask,
-            "labels": labels
-        }
-
-    # Pipeline
-    # Note: SPDL aggregation happens BEFORE transform usually, or we use map. 
-    # Let's use Source -> Aggregate -> Map
-    
-    pipeline = (
-        PipelineBuilder()
-        .add_source(source)
-        .aggregate(batch_size)
-        .transform(transform_to_batch)
-        .add_sink(4) # buffer size
-        .build(num_threads=2) # hardcoded small threads per GPU to avoid contention
-    )
-    return pipeline
-
-
-def get_dataloaders(
-    dataset_name: str = "wikitext",
-    dataset_config: str = "wikitext-2-raw-v1",
-    tokenizer=None,
-    batch_size: int = 8,
-    max_length: int = 128,
-    num_workers: int = 12,
-    tokenized_dataset_path: Optional[str] = None,
-    streaming: bool = False,
-    # --- New Arguments ---
-    use_dataloader: bool = False,
-    shard_dir: Optional[str] = None,
-) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
-    """
-    Load dataset and create dataloaders for training, validation, and testing.
-
-    Supports three modes:
-    1. SPDL Mode (New): Reads .bin/.idx shards from shard_dir (use_dataloader=True)
-    2. Offline (preferred): Pass tokenized_dataset_path
-    3. Online (fallback): HuggingFace load_dataset
+    Tokenize text examples for language modeling.
 
     Args:
-        dataset_name: HuggingFace dataset name (online mode)
-        dataset_config: HuggingFace dataset config (online mode)
-        tokenizer: Tokenizer instance (required for online/streaming mode)
-        batch_size: Micro-batch size per GPU
-        max_length: Maximum sequence length
-        num_workers: DataLoader workers per GPU
-        tokenized_dataset_path: Path to pre-tokenized dataset on disk (offline mode)
-        streaming: If True, use HF streaming mode
-        use_dataloader: If True, use SPDL pipeline (reads .bin/.idx shards)
-        shard_dir: Path to directory containing .bin/.idx files (required if use_dataloader=True)
+        examples: Dictionary with 'text' key containing text examples
+        tokenizer: Tokenizer instance
+        max_length: Maximum sequence length (used only when truncation=True)
+        pad_to_max_length: If True, pad every sample to max_length
+        truncation: If True, truncate to max_length
 
     Returns:
-        Tuple of (train_loader, eval_loader, test_loader, dataset_info)
+        Dictionary with tokenized inputs
     """
-    if tokenizer is None and tokenized_dataset_path is None and not use_dataloader:
-        raise ValueError("tokenizer must be provided for online tokenisation")
+    if truncation and max_length is None:
+        raise ValueError("max_length must be provided when truncation=True")
 
-    # =================================================================
-    # SPDL Pipeline Mode (New)
-    # =================================================================
-    if use_dataloader:
-        if not shard_dir:
-            raise ValueError("shard_dir must be provided when use_dataloader=True")
-
-        print_rank_0(f"Loading dataset via SPDL pipeline from: {shard_dir}")
-        try:
-            import spdl.pipeline
-        except ImportError:
-            raise ImportError("spdl not installed. Please install spdl to use use_dataloader=True")
-
-        # Config constants for SPDL
-        # DTYPE is usually uint16 or uint32 depending on vocab size. 
-        # We'll default to uint32 to be safe, or user can change code if needed.
-        # Ideally this should be in config, but for now we hardcode or infer.
-        dtype = np.uint32 
-        
-        # Distributed info
-        if dist.is_available() and dist.is_initialized():
-            rank = dist.get_rank()
-            world_size = dist.get_world_size()
-        else:
-            rank = 0
-            world_size = 1
-            
-        print_rank_0(f"  SPDL: Rank {rank}/{world_size}, Batch Size {batch_size}, Seq Len {max_length}")
-
-        # Build pipelines
-        # Train
-        train_loader = build_pipeline(
-            shard_dir, 
-            seq_len=max_length, 
-            dtype=dtype, 
-            batch_size=batch_size, 
-            rank=rank, 
-            world_size=world_size
-        )
-        
-        eval_loader = train_loader
-        test_loader = train_loader
-
-        dataset_info = {
-            "train_size": -1, # Unknown/Huge
-            "eval_size": -1,
-            "test_size": -1,
-            "vocab_size": tokenizer.vocab_size if tokenizer else 0,
-            "streaming": True, # Behaves like streaming
-        }
-        return train_loader, eval_loader, test_loader, dataset_info
-
-    # =================================================================
-    # Streaming mode — for very large datasets (FineWeb, etc.)
-    # =================================================================
-    if streaming:
-        print_rank_0(f"Loading dataset in STREAMING mode: {dataset_name} ({dataset_config})")
-        ds = load_dataset(dataset_name, dataset_config, streaming=True, split="train")
-
-        train_dataset = StreamingTextDataset(ds, tokenizer, max_length, split_name="train")
-
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            num_workers=min(num_workers, 2),  # Streaming doesn't benefit from many workers
-            pin_memory=True,
-        )
-
-        # For streaming, eval/test use a tiny in-memory sample
-        # (FineWeb doesn't have validation/test splits)
-        print_rank_0("  Streaming mode: eval/test will use first 100 train examples")
-        eval_loader = train_loader  # Placeholder — override in main if needed
-        test_loader = train_loader
-
-        dataset_info = {
-            "train_size": -1,  # Unknown for streaming
-            "eval_size": -1,
-            "test_size": -1,
-            "vocab_size": tokenizer.vocab_size if tokenizer else 0,
-            "streaming": True,
-        }
-        return train_loader, eval_loader, test_loader, dataset_info
-
-    # -----------------------------------------------------------------
-    # Load dataset (offline or online)
-    # -----------------------------------------------------------------
-    if tokenized_dataset_path is not None:
-        print_rank_0(f"Loading pre-tokenized dataset from disk: {tokenized_dataset_path}")
-        dataset = load_from_disk(tokenized_dataset_path)
-    else:
-        print_rank_0(f"Loading dataset: {dataset_name} ({dataset_config})")
-        dataset = load_dataset(dataset_name, dataset_config)
-
-    # -----------------------------------------------------------------
-    # Tokenize & pack (only needed when running online)
-    # -----------------------------------------------------------------
-    eos_token = (tokenizer.eos_token if tokenizer and tokenizer.eos_token else "")
-
-    def tokenize_and_concat(split_dataset):
-        """Concatenate all texts, tokenize, and chunk into fixed-length sequences."""
-        all_text = eos_token.join(
-            text for text in split_dataset["text"] if text.strip()
-        )
-        all_ids = tokenizer(all_text, return_attention_mask=False)["input_ids"]
-
-        total_tokens = len(all_ids)
-        n_chunks = total_tokens // max_length
-        print_rank_0(
-            f"    Total tokens: {total_tokens:,} -> {n_chunks:,} chunks of {max_length:,}"
-        )
-
-        chunks = {"input_ids": [], "attention_mask": [], "labels": []}
-        for i in range(n_chunks):
-            start = i * max_length
-            end = start + max_length
-            ids = all_ids[start:end]
-            chunks["input_ids"].append(ids)
-            chunks["attention_mask"].append([1] * max_length)
-            chunks["labels"].append(ids.copy())
-        return chunks
-
-    def make_tensor_dataset(split_dataset, split_name):
-        print_rank_0(f"  Processing {split_name} split...")
-        chunks = tokenize_and_concat(split_dataset)
-        n = len(chunks["input_ids"])
-        if n == 0:
-            print_rank_0(f"    WARNING: {split_name} has 0 packed sequences!")
-            return TensorDataset(
-                torch.zeros(1, max_length, dtype=torch.long),
-                torch.ones(1, max_length, dtype=torch.long),
-                torch.zeros(1, max_length, dtype=torch.long),
-            )
-        input_ids = torch.tensor(chunks["input_ids"], dtype=torch.long)
-        attention_mask = torch.tensor(chunks["attention_mask"], dtype=torch.long)
-        labels = torch.tensor(chunks["labels"], dtype=torch.long)
-        return TensorDataset(input_ids, attention_mask, labels)
-
-    print_rank_0("Tokenizing and packing dataset...")
-    train_dataset = make_tensor_dataset(dataset["train"], "train")
-    eval_dataset = make_tensor_dataset(dataset["validation"], "validation")
-    test_dataset = make_tensor_dataset(dataset["test"], "test")
-
-    # -----------------------------------------------------------------
-    # Distributed samplers (required for multi-GPU data sharding)
-    # -----------------------------------------------------------------
-    distributed = dist.is_available() and dist.is_initialized()
-
-    train_sampler = DistributedSampler(train_dataset, shuffle=True) if distributed else None
-    eval_sampler = DistributedSampler(eval_dataset, shuffle=False) if distributed else None
-    test_sampler = DistributedSampler(test_dataset, shuffle=False) if distributed else None
-
-    # -----------------------------------------------------------------
-    # DataLoader construction
-    # -----------------------------------------------------------------
-    effective_workers = num_workers if num_workers > 0 else 0
-    loader_kwargs = dict(
-        batch_size=batch_size,
-        num_workers=effective_workers,
-        pin_memory=True,
+    tokenized = tokenizer(
+        examples["text"],
+        truncation=truncation,
+        padding="max_length" if pad_to_max_length else False,
+        max_length=max_length if truncation else None,
+        return_tensors=None,
     )
-    if effective_workers > 0:
-        loader_kwargs["prefetch_factor"] = 4
-        loader_kwargs["persistent_workers"] = True
 
-    def collate_fn(batch):
-        input_ids = torch.stack([b[0] for b in batch])
-        attention_mask = torch.stack([b[1] for b in batch])
-        labels = torch.stack([b[2] for b in batch])
+    tokenized["labels"] = [ids.copy() for ids in tokenized["input_ids"]]
+    return tokenized
+
+
+def _is_s3_uri(path: str) -> bool:
+    return isinstance(path, str) and path.startswith("s3://")
+
+
+def _parse_s3_uri(s3_uri: str) -> Tuple[str, str]:
+    parsed = urlparse(s3_uri)
+    if parsed.scheme != "s3" or not parsed.netloc:
+        raise ValueError(f"Invalid S3 URI: {s3_uri}")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def _stage_s3_dataset_to_local_nvme(s3_uri: str, local_nvme_cache_dir: str) -> str:
+    """
+    Download a dataset directory from S3 to local NVMe and return local path.
+    """
+    try:
+        import boto3
+    except Exception as exc:  # pragma: no cover - environment dependent
+        raise RuntimeError(
+            "boto3 is required for S3 dataset staging but is not available."
+        ) from exc
+
+    bucket, prefix = _parse_s3_uri(s3_uri)
+    if not prefix:
+        raise ValueError(
+            "S3 dataset URI must include a prefix, e.g. s3://bucket/path/to/dataset"
+        )
+
+    nvme_root = Path(local_nvme_cache_dir).expanduser().resolve()
+    local_dir = nvme_root / bucket / prefix
+    marker = local_dir / "_STAGED_COMPLETE"
+
+    if marker.exists():
+        print_rank_0(f"Using existing staged dataset on NVMe: {local_dir}")
+        return str(local_dir)
+
+    print_rank_0(f"Staging tokenized dataset from {s3_uri} to NVMe: {local_dir}")
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    s3_client = boto3.client("s3")
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    file_count = 0
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith("/"):
+                continue
+            rel = key[len(prefix) :].lstrip("/")
+            out_path = local_dir / rel
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            s3_client.download_file(bucket, key, str(out_path))
+            file_count += 1
+
+    if file_count == 0:
+        raise FileNotFoundError(f"No dataset files found under {s3_uri}")
+
+    marker.write_text("ok\n", encoding="utf-8")
+    print_rank_0(f"Staged {file_count} files to local NVMe")
+    return str(local_dir)
+
+
+
+def _resolve_distributed_context() -> Tuple[bool, int, int]:
+    """
+    Resolve distributed world-size/rank even before torch.distributed is initialized.
+    """
+    if dist.is_available() and dist.is_initialized():
+        world_size = dist.get_world_size()
+        rank = dist.get_rank()
+    else:
+        world_size = int(os.environ.get("WORLD_SIZE", "1"))
+        rank = int(os.environ.get("RANK", "0"))
+
+    if world_size < 1:
+        world_size = 1
+    if rank < 0:
+        rank = 0
+
+    return world_size > 1, world_size, rank
+
+
+def _normalize_block_sizes(block_sizes: Optional[List[int]], max_length: int) -> List[int]:
+    raw = block_sizes or [max_length]
+    sizes = sorted({int(v) for v in raw if int(v) > 0})
+    if not sizes:
+        raise ValueError("At least one positive block size is required")
+    return sizes
+
+
+def _parse_block_size_counts(block_size_counts: Optional[Dict[Any, Any]]) -> Optional[Dict[int, int]]:
+    if not block_size_counts:
+        return None
+    parsed: Dict[int, int] = {}
+    for key, value in block_size_counts.items():
+        size = int(key)
+        count = int(value)
+        if size <= 0 or count < 0:
+            raise ValueError(f"Invalid block_size_counts entry: {key} -> {value}")
+        parsed[size] = count
+    return parsed
+
+
+def _next_target_size(
+        ordered_sizes: List[int],
+        buffer_len: int,
+        remaining_counts: Optional[Dict[int, int]],
+) -> Optional[int]:
+    if remaining_counts is None:
+        # Single-size training is strongly preferred for throughput.
+        size = ordered_sizes[0]
+        return size if buffer_len >= size else None
+
+    # Try larger sizes first to minimize fragmentation.
+    for size in sorted(ordered_sizes, reverse=True):
+        if remaining_counts.get(size, 0) > 0 and buffer_len >= size:
+            return size
+    return None
+
+
+def _all_requested_blocks_generated(remaining_counts: Optional[Dict[int, int]]) -> bool:
+    if remaining_counts is None:
+        return False
+    return all(v == 0 for v in remaining_counts.values())
+
+
+def _emit_block(
+        out_input_ids: List[List[int]],
+        out_attention_mask: List[List[int]],
+        out_labels: List[List[int]],
+        out_sequence_length: List[int],
+        block: List[int],
+        target_size: int,
+        pad_token_id: int,
+        drop_remainder: bool,
+) -> None:
+    if len(block) < target_size:
+        if drop_remainder:
+            return
+        pad_len = target_size - len(block)
+        padded_ids = block + [pad_token_id] * pad_len
+        attention_mask = [1] * len(block) + [0] * pad_len
+        labels = block + [-100] * pad_len
+        out_input_ids.append(padded_ids)
+        out_attention_mask.append(attention_mask)
+        out_labels.append(labels)
+        out_sequence_length.append(target_size)
+        return
+
+    ids = block[:target_size]
+    out_input_ids.append(ids)
+    out_attention_mask.append([1] * target_size)
+    out_labels.append(ids.copy())
+    out_sequence_length.append(target_size)
+
+
+
+def _pack_split_to_fixed_blocks(
+        split_dataset: Dataset,
+        block_sizes: List[int],
+        block_size_counts: Optional[Dict[int, int]],
+        eos_token_id: Optional[int],
+        pad_token_id: int,
+        domain_column: Optional[str],
+        concat_across_domains: bool,
+        drop_remainder: bool,
+) -> Dataset:
+    """
+    Concatenate tokenized docs and cut fixed-size training blocks.
+
+    If block_size_counts is provided, that defines exactly how many blocks
+    of each size to emit (best for explicit 4k/8k/16k budgeting).
+    """
+    if "input_ids" not in split_dataset.column_names:
+        raise ValueError("Packing requires 'input_ids' column")
+
+    ordered_sizes = sorted(block_sizes)
+    smallest_size = ordered_sizes[0]
+
+    remaining_counts = None
+    if block_size_counts is not None:
+        remaining_counts = {size: block_size_counts.get(size, 0) for size in ordered_sizes}
+
+    buffers: Dict[str, List[int]] = defaultdict(list)
+    out_input_ids: List[List[int]] = []
+    out_attention_mask: List[List[int]] = []
+    out_labels: List[List[int]] = []
+    out_sequence_length: List[int] = []
+
+    def flush_buffer(domain_key: str) -> None:
+        buf = buffers[domain_key]
+        while len(buf) >= smallest_size:
+            if _all_requested_blocks_generated(remaining_counts):
+                return
+            target = _next_target_size(ordered_sizes, len(buf), remaining_counts)
+            if target is None:
+                return
+            block = buf[:target]
+            del buf[:target]
+            _emit_block(
+                out_input_ids,
+                out_attention_mask,
+                out_labels,
+                out_sequence_length,
+                block,
+                target,
+                pad_token_id,
+                drop_remainder,
+            )
+            if remaining_counts is not None:
+                remaining_counts[target] -= 1
+
+    for example in split_dataset:
+        if _all_requested_blocks_generated(remaining_counts):
+            break
+
+        ids = example.get("input_ids")
+        if not ids:
+            continue
+
+        if domain_column and not concat_across_domains and domain_column in split_dataset.column_names:
+            domain_key = str(example.get(domain_column, "__unknown_domain__"))
+        else:
+            domain_key = "__all__"
+
+        buffers[domain_key].extend(ids)
+        if eos_token_id is not None:
+            buffers[domain_key].append(eos_token_id)
+
+        flush_buffer(domain_key)
+
+    # Optionally keep tails by padding up to the smallest configured size.
+    if not drop_remainder:
+        for domain_key, buf in buffers.items():
+            if not buf:
+                continue
+            if _all_requested_blocks_generated(remaining_counts):
+                break
+            target = _next_target_size(ordered_sizes, len(buf), remaining_counts)
+            if target is None:
+                target = smallest_size
+            _emit_block(
+                out_input_ids,
+                out_attention_mask,
+                out_labels,
+                out_sequence_length,
+                buf,
+                target,
+                pad_token_id,
+                drop_remainder,
+            )
+            buffers[domain_key] = []
+            if remaining_counts is not None:
+                remaining_counts[target] -= 1
+
+    if remaining_counts is not None:
+        missing = {k: v for k, v in remaining_counts.items() if v > 0}
+        if missing:
+            print_rank_0(
+                "WARNING: requested block counts were not fully met "
+                f"(insufficient tokens): {missing}"
+            )
+
+    if not out_input_ids:
+        raise ValueError(
+            "Packing produced zero blocks. Lower block size, disable strict counts, "
+            "or provide more source tokens."
+        )
+
+    return Dataset.from_dict(
+        {
+            "input_ids": out_input_ids,
+            "attention_mask": out_attention_mask,
+            "labels": out_labels,
+            "sequence_length": out_sequence_length,
+        }
+    )
+
+
+
+def _pack_dataset_dict(
+        tokenized_dataset: DatasetDict,
+        block_sizes: List[int],
+        block_size_counts: Optional[Dict[int, int]],
+        tokenizer,
+        domain_column: Optional[str],
+        concat_across_domains: bool,
+        drop_remainder: bool,
+) -> DatasetDict:
+    packed = {}
+    eos_token_id = tokenizer.eos_token_id
+    pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+
+    for split_name in tokenized_dataset.keys():
+        split = tokenized_dataset[split_name]
+        packed[split_name] = _pack_split_to_fixed_blocks(
+            split_dataset=split,
+            block_sizes=block_sizes,
+            block_size_counts=block_size_counts,
+            eos_token_id=eos_token_id,
+            pad_token_id=pad_token_id,
+            domain_column=domain_column,
+            concat_across_domains=concat_across_domains,
+            drop_remainder=drop_remainder,
+        )
+
+    return DatasetDict(packed)
+
+
+def _build_causal_lm_collate_fn(pad_token_id: int):
+    def _collate(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+        max_len = max(int(item["input_ids"].shape[0]) for item in batch)
+        bsz = len(batch)
+
+        input_ids = torch.full((bsz, max_len), pad_token_id, dtype=torch.long)
+        attention_mask = torch.zeros((bsz, max_len), dtype=torch.long)
+        labels = torch.full((bsz, max_len), -100, dtype=torch.long)
+
+        for i, item in enumerate(batch):
+            seq_len = int(item["input_ids"].shape[0])
+            input_ids[i, :seq_len] = item["input_ids"]
+            attention_mask[i, :seq_len] = item["attention_mask"]
+            labels[i, :seq_len] = item["labels"]
+
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "labels": labels,
         }
 
+    return _collate
+
+
+def get_dataloaders(
+        dataset_name: str = "wikitext",
+        dataset_config: str = "wikitext-2-raw-v1",
+        tokenizer=None,
+        batch_size: int = 8,
+        max_length: int = 128,
+        num_workers: int = 12,
+        tokenized_dataset_path: Optional[str] = None,
+        dataset_cache_dir: Optional[str] = None,
+        local_nvme_cache_dir: Optional[str] = None,
+        require_local_nvme: bool = False,
+        pack_into_blocks: bool = False,
+        block_sizes: Optional[List[int]] = None,
+        block_size_counts: Optional[Dict[Any, Any]] = None,
+        domain_column: Optional[str] = None,
+        concat_across_domains: bool = False,
+        drop_remainder: bool = True,
+        
+) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
+    """
+    Load dataset and create dataloaders for training, validation, and testing.
+
+    Args:
+        dataset_name: Name of the dataset from HuggingFace datasets
+        dataset_config: Configuration name for the dataset
+        tokenizer: Tokenizer instance (required)
+        batch_size: Batch size for dataloaders
+        max_length: Maximum sequence length (legacy online tokenization path)
+        tokenized_dataset_path: Local path or s3:// URI of datasets.save_to_disk output
+        dataset_cache_dir: Optional cache dir for Hugging Face datasets
+        local_nvme_cache_dir: NVMe directory for staging S3 tokenized datasets
+        require_local_nvme: If True, hard-fail unless training reads local disk dataset
+        pack_into_blocks: If True, concatenate and repack tokens into fixed blocks
+        block_sizes: Target block sizes to pack (e.g., [4096], [4096, 8192])
+        block_size_counts: Optional explicit counts per block size, e.g. {4096: 100000, 8192: 50000}
+        domain_column: Optional dataset column name; when set and concat_across_domains=False,
+                       packing avoids mixing domains in the same block
+        concat_across_domains: If True, allows cross-domain concatenation while packing
+        drop_remainder: Drop token tails shorter than target block size
+        num_workers: Number of worker processes for data loading
+
+    Returns:
+        Tuple of (train_loader, eval_loader, test_loader, dataset_info)
+    """
+    if tokenizer is None:
+        raise ValueError("tokenizer must be provided")
+
+    resolved_tokenized_path = tokenized_dataset_path
+    if tokenized_dataset_path:
+        if _is_s3_uri(tokenized_dataset_path):
+            if not local_nvme_cache_dir:
+                raise ValueError(
+                    "tokenized_dataset_path is S3 but local_nvme_cache_dir is not set. "
+                    "Training must stage shards to local NVMe first."
+                )
+            resolved_tokenized_path = _stage_s3_dataset_to_local_nvme(
+                tokenized_dataset_path, local_nvme_cache_dir
+            )
+
+        if require_local_nvme and local_nvme_cache_dir:
+            nvme_root = Path(local_nvme_cache_dir).expanduser().resolve()
+            resolved = Path(resolved_tokenized_path).expanduser().resolve()
+            if nvme_root not in resolved.parents and resolved != nvme_root:
+                raise RuntimeError(
+                    "require_local_nvme=True but tokenized dataset path is outside local NVMe root."
+                )
+
+        print_rank_0(f"Loading pre-tokenized dataset from disk: {resolved_tokenized_path}")
+        tokenized_dataset = load_from_disk(resolved_tokenized_path)
+    else:
+        if require_local_nvme:
+            raise RuntimeError(
+                "require_local_nvme=True requires tokenized_dataset_path (local or s3://). "
+                "Online tokenization path is disabled."
+            )
+
+        print_rank_0(f"Loading dataset: {dataset_name} ({dataset_config})")
+        dataset = load_dataset(dataset_name, dataset_config, cache_dir=dataset_cache_dir)
+
+        def filter_empty(example):
+            return len(example["text"].strip()) > 0
+
+        dataset = dataset.filter(filter_empty)
+
+        if pack_into_blocks:
+            print_rank_0("Tokenizing dataset for block packing...")
+            tokenized_dataset = dataset.map(
+                lambda examples: tokenize_function(
+                    examples,
+                    tokenizer,
+                    max_length=None,
+                    pad_to_max_length=False,
+                    truncation=False,
+                ),
+                batched=True,
+                remove_columns=dataset["train"].column_names,
+            )
+
+            normalized_sizes = _normalize_block_sizes(block_sizes, max_length)
+            parsed_counts = _parse_block_size_counts(block_size_counts)
+            if parsed_counts:
+                unknown_sizes = sorted(set(parsed_counts) - set(normalized_sizes))
+                if unknown_sizes:
+                    raise ValueError(
+                        "block_size_counts has sizes not present in block_sizes: "
+                        f"{unknown_sizes}"
+                    )
+
+            print_rank_0(
+                "Packing token stream into fixed training blocks: "
+                f"sizes={normalized_sizes}, counts={parsed_counts}"
+            )
+            if domain_column and not concat_across_domains:
+                print_rank_0(
+                    f"Domain-aware packing enabled. Will not mix domains using column '{domain_column}'."
+                )
+
+            tokenized_dataset = _pack_dataset_dict(
+                tokenized_dataset=tokenized_dataset,
+                block_sizes=normalized_sizes,
+                block_size_counts=parsed_counts,
+                tokenizer=tokenizer,
+                domain_column=domain_column,
+                concat_across_domains=concat_across_domains,
+                drop_remainder=drop_remainder,
+            )
+        else:
+            print_rank_0("Tokenizing dataset with fixed truncation/padding (legacy path)...")
+            tokenized_dataset = dataset.map(
+                lambda examples: tokenize_function(
+                    examples,
+                    tokenizer,
+                    max_length=max_length,
+                    pad_to_max_length=True,
+                    truncation=True,
+                ),
+                batched=True,
+                remove_columns=dataset["train"].column_names,
+            )
+
+    if not isinstance(tokenized_dataset, DatasetDict):
+        raise ValueError(
+            "Tokenized dataset must be a DatasetDict with train/validation/test splits."
+        )
+
+    for split_name in tokenized_dataset.keys():
+        split_columns = [
+            col
+            for col in ("input_ids", "attention_mask", "labels", "sequence_length")
+            if col in tokenized_dataset[split_name].column_names
+        ]
+        tokenized_dataset[split_name].set_format(type="torch", columns=split_columns)
+
+    effective_workers = max(int(num_workers), 0)
+    loader_kwargs = {
+        "batch_size": batch_size,
+        "num_workers": effective_workers,
+    }
+    if effective_workers > 0:
+        loader_kwargs["prefetch_factor"] = 4
+        loader_kwargs["persistent_workers"] = True
+
+    is_distributed, world_size, rank = _resolve_distributed_context()
+    print_rank_0(
+        f"Distributed context: is_distributed={is_distributed}, world_size={world_size}, rank={rank}"
+    )
+
+    train_sampler = None
+    eval_sampler = None
+    test_sampler = None
+
+    if is_distributed:
+        train_sampler = DistributedSampler(
+            tokenized_dataset["train"],
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=True,
+            drop_last=True,
+        )
+        eval_sampler = DistributedSampler(
+            tokenized_dataset["validation"],
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=False,
+            drop_last=False,
+        )
+        test_sampler = DistributedSampler(
+            tokenized_dataset["test"],
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=False,
+            drop_last=False,
+        )
+
+    if world_size > 1 and train_sampler is None:
+        raise RuntimeError(
+            "Distributed training detected but DistributedSampler is not configured. "
+            "Refusing to run due to potential duplicated data across GPUs."
+        )
+
+    pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+    collate_fn = _build_causal_lm_collate_fn(pad_token_id)
+
     train_loader = DataLoader(
-        train_dataset,
-        shuffle=(train_sampler is None),
+        tokenized_dataset["train"],
+        shuffle=train_sampler is None,
         sampler=train_sampler,
+        drop_last=is_distributed,
         collate_fn=collate_fn,
+        pin_memory=True,
         **loader_kwargs,
     )
 
     eval_loader = DataLoader(
-        eval_dataset,
+        tokenized_dataset["validation"],
         shuffle=False,
         sampler=eval_sampler,
+        drop_last=False,
         collate_fn=collate_fn,
+        pin_memory=True,
         **loader_kwargs,
     )
 
     test_loader = DataLoader(
-        test_dataset,
+        tokenized_dataset["test"],
         shuffle=False,
         sampler=test_sampler,
+        drop_last=False,
         collate_fn=collate_fn,
+        pin_memory=True,
         **loader_kwargs,
     )
 
+    persistent_workers = bool(getattr(train_loader, "persistent_workers", False))
+    prefetch_factor = getattr(train_loader, "prefetch_factor", None)
+
+    print_rank_0(
+        "DataLoader worker config: "
+        f"num_workers={train_loader.num_workers}, "
+        f"persistent_workers={persistent_workers}, "
+        f"pin_memory={train_loader.pin_memory}, "
+        f"prefetch_factor={prefetch_factor}"
+    )
+
     dataset_info = {
-        "train_size": len(train_dataset),
-        "eval_size": len(eval_dataset),
-        "test_size": len(test_dataset),
-        "vocab_size": tokenizer.vocab_size if tokenizer else 0,
+        "train_size": len(tokenized_dataset["train"]),
+        "eval_size": len(tokenized_dataset["validation"]),
+        "test_size": len(tokenized_dataset["test"]),
+        "vocab_size": tokenizer.vocab_size,
+        "train_sampler": train_sampler,
+        "eval_sampler": eval_sampler,
+        "test_sampler": test_sampler,
+        "resolved_tokenized_dataset_path": resolved_tokenized_path,
+        "worker_config": {
+            "num_workers": train_loader.num_workers,
+            "persistent_workers": persistent_workers,
+            "pin_memory": train_loader.pin_memory,
+            "prefetch_factor": prefetch_factor,
+        },
     }
 
     return train_loader, eval_loader, test_loader, dataset_info
+
