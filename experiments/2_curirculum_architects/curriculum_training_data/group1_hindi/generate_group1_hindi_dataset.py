@@ -17,14 +17,22 @@ from prompt_utils import (  # noqa: E402
 
 # Statement files and their target counts
 STATEMENT_FILES = [
-    ("group1_s1.txt", 28600, "S1: Spelling"),
+    ("group1_s1.txt", 35000, "S1: Spelling"),  # Increased from 28600 for 200K push
     ("group1_s2.txt", 25800, "S2: Letter Position"),
-    ("group1_s3.txt", 20000, "S3: Sound Matching"),
-    ("group1_s4.txt", 25800, "S4: Letter Count"),
+    (
+        "group1_s3.txt",
+        25000,
+        "S3: Sound Matching",
+    ),  # Increased from 20000 for 200K push
+    ("group1_s4.txt", 30000, "S4: Letter Count"),  # Increased from 25800 for 200K push
     ("group1_s5.txt", 20000, "S5: Rhyming"),
     ("group1_s6.txt", 20000, "S6: Classification"),
     ("group1_s7.txt", 17200, "S7: Position of Letter"),
-    ("group1_s8.txt", 10000, "S8: Number Spelling"),
+    (
+        "group1_s8.txt",
+        1250,
+        "S8: Number Spelling",
+    ),  # Reduced from 10000 as numbers limited
     ("group1_s9.txt", 17200, "S9: Last Letter"),
     ("group1_s10.txt", 11000, "S10: Word Comparison"),
 ]
@@ -97,6 +105,20 @@ def main():
             f"Warning: Only {total_loaded} pairs loaded, less than target {TOTAL_TARGET}"
         )
 
+    # DEDUPLICATE Q&A pairs before shuffling
+    print("\nDeduplicating Q&A pairs...")
+    initial_count = len(all_qa_pairs)
+    # Convert to set of tuples for deduplication, then back to list
+    unique_qa_pairs = list(set(all_qa_pairs))
+    duplicates_removed = initial_count - len(unique_qa_pairs)
+    print(f"  Initial pairs: {initial_count:,}")
+    print(f"  Unique pairs: {len(unique_qa_pairs):,}")
+    print(
+        f"  Duplicates removed: {duplicates_removed:,} ({duplicates_removed/initial_count*100:.1f}%)"
+    )
+
+    all_qa_pairs = unique_qa_pairs
+
     # Shuffle all pairs
     random.shuffle(all_qa_pairs)
 
@@ -133,7 +155,8 @@ def main():
     print("\n✓ Dataset generation complete!")
     print(f"  Output file: {output_file}")
     print(f"  Total data points: {len(combined_samples)}")
-    print(f"  Total Q&A pairs: {total_loaded}")
+    print(f"  Unique Q&A pairs used: {len(all_qa_pairs):,}")
+    print(f"  Duplicates removed: {duplicates_removed:,}")
     print("=" * 80)
 
 

@@ -5,6 +5,7 @@ Uses actual rhyming words from vocabulary (same last akshara).
 Templates: multiple-choice, open-ended, do-they-rhyme (yes/no).
 Target: up to 20,000.
 """
+
 import os
 import random
 import sys
@@ -13,13 +14,15 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     BAD_RHYME_PAIRS,
-    RHYMING_PAIRS,
     RHYMING_GROUPS,
+    RHYMING_PAIRS,
 )
 from prompt_utils import format_qa_pair_kannada  # noqa: E402
 
 unique_words = list(set(ALL_WORDS_UNIQUE))
-rhyme_set = {(a, b) for a, b in RHYMING_PAIRS.items()} | {(b, a) for a, b in RHYMING_PAIRS.items()}
+rhyme_set = {(a, b) for a, b in RHYMING_PAIRS.items()} | {
+    (b, a) for a, b in RHYMING_PAIRS.items()
+}
 
 
 def do_rhyme(w1: str, w2: str) -> bool:
@@ -31,7 +34,10 @@ def do_rhyme(w1: str, w2: str) -> bool:
 
 # Templates using ಪದದ (not ಶಬ್ದದ)
 TEMPLATES = [
-    ('"{word}" ಪದಕ್ಕೆ ಪ್ರಾಸ ಆಗುವ ಪದ ಯಾವುದು, "{option1}" ಅಥವಾ "{option2}"?', "multiple_choice"),
+    (
+        '"{word}" ಪದಕ್ಕೆ ಪ್ರಾಸ ಆಗುವ ಪದ ಯಾವುದು, "{option1}" ಅಥವಾ "{option2}"?',
+        "multiple_choice",
+    ),
     ('"{word}" ಪದಕ್ಕೆ ಪ್ರಾಸಬದ್ಧವಾದ ಪದ ಯಾವುದು?', "open_ended"),
     ('"{word}" ಪದಕ್ಕೆ ಪ್ರಾಸವಾಗುವ ಮತ್ತೊಂದು ಪದ ತಿಳಿಸಿ?', "open_ended"),
     ('"{word1}" ಮತ್ತು "{word2}" ಪದಗಳು ಪ್ರಾಸವಾಗುತ್ತವೆಯೇ?', "do_rhyme_yes_no"),
@@ -54,7 +60,11 @@ seen_mc = set()
 for word, rhyme_word in RHYMING_PAIRS.items():
     if word in seen_mc:
         continue
-    non_rhyming = [w for w in unique_words if w != word and w != rhyme_word and not do_rhyme(word, w)]
+    non_rhyming = [
+        w
+        for w in unique_words
+        if w != word and w != rhyme_word and not do_rhyme(word, w)
+    ]
     if not non_rhyming:
         continue
     distractor = random.choice(non_rhyming)
@@ -66,7 +76,11 @@ for word, rhyme_word in RHYMING_PAIRS.items():
 for word, rhyme_word in RHYMING_PAIRS.items():
     if rhyme_word in seen_mc:
         continue
-    non_rhyming = [w for w in unique_words if w != rhyme_word and w != word and not do_rhyme(rhyme_word, w)]
+    non_rhyming = [
+        w
+        for w in unique_words
+        if w != rhyme_word and w != word and not do_rhyme(rhyme_word, w)
+    ]
     if not non_rhyming:
         continue
     distractor = random.choice(non_rhyming)

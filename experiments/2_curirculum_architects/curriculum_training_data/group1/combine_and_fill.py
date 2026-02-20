@@ -2,6 +2,7 @@
 """
 Combine all group1 TXT files and fill to 70,000 samples
 """
+
 import json
 import os
 import random

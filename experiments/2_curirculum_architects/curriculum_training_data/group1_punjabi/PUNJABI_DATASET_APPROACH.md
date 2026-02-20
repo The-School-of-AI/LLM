@@ -91,4 +91,16 @@ Words are organized into categories:
 
 - All scripts use UTF-8 encoding.
 - Dataset follows the structure of English `group1` but adapted for Punjabi.
-- Minimum 512 tokens per data point achieved by concatenation.
+## Final Dataset Statistics
+
+After verification and processing, the final counts for the Punjabi dataset are as follows:
+
+| Item | Count |
+|------|-------|
+| Total Q&A Pairs (Initial) | 223,451 |
+| Total Unique Q&A Pairs (Verified) | 223,359 |
+| Empty/Space Answers Resolved | ✅ Fixed |
+| Minimum Tokens per Sample | 512 |
+
+**Status**: ✅ Complete and Verified
+

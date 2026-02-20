@@ -5,6 +5,7 @@ Target: 20,000 pairs (10% of 200,000)
 Uses S6_CLASSIFICATION_VOCABULARY: only words with clear classifications,
 with category-appropriate option pairs (e.g. ಆಹಾರ vs ಹಣ್ಣು for food, not ವಾಹನ vs ವಸ್ತು).
 """
+
 import os
 import random
 import sys

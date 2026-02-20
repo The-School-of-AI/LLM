@@ -3,6 +3,7 @@
 Generate Statement 3: Sound Matching (ध्वनि मिलान) questions
 Target: 20,000 pairs (10% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -21,6 +22,23 @@ TEMPLATES = [
     'कौन सा शब्द "/{sound}/" ध्वनि से आरंभ होता है, "{word1}" या "{word2}"?',
     '"/{sound}/" ध्वनि से शुरू होने वाला शब्द "{word1}" और "{word2}" में से कौन सा है?',
     'कौन सा शब्द "/{sound}/" से शुरू होता है, "{word1}" या "{word2}"?',
+    'बताइए "/{sound}/" ध्वनि से कौन सा शब्द शुरू होता है, "{word1}" या "{word2}"?',
+    '"/{sound}/" से आरंभ होता है कौन सा शब्द, "{word1}" या "{word2}"?',
+    '"/{sound}/" की ध्वनि से शुरू होने वाला शब्द कौन सा है, "{word1}" या "{word2}"?',
+    'कौन "{word1}" या "{word2}" "/{sound}/" से शुरू होता है?',
+    '"/{sound}/" ध्वनि से कौन सा शब्द आरंभ होता है, "{word1}" या "{word2}"?',
+    'बताइए "{word1}" या "{word2}" में से कौन "/{sound}/" से शुरू होता है?',
+    # Additional 10 templates
+    '"/{sound}/" अक्षर से कौन शुरू होता है, "{word1}" या "{word2}"?',
+    '"{word1}" और "{word2}" में से "/{sound}/" से कौन शुरू होता है?',
+    '"/{sound}/" ध्वनि से शुरू होने वाला है कौन, "{word1}" या "{word2}"?',
+    'कौन सा "/{sound}/" से आरंभ होता है, "{word1}" या "{word2}"?',
+    '"/{sound}/" अक्षर से शुरू होता है, "{word1}" या "{word2}"?',
+    'बताओ "/{sound}/" से कौन शुरू होता है, "{word1}" या "{word2}"?',
+    '"/{sound}/" ध्वनि से कौन शब्द शुरू होता है, "{word1}" या "{word2}"?',
+    '"{word1}" या "{word2}" में से "/{sound}/" से कौन है?',
+    '"/{sound}/" के साथ शुरू होने वाला कौन है, "{word1}" या "{word2}"?',
+    'कौन सा शब्द "/{sound}/" अक्षर से है, "{word1}" या "{word2}"?',
 ]
 
 
@@ -45,7 +63,7 @@ for word in unique_words:
 all_sounds = list(words_by_sound.keys())
 
 samples = []
-target_count = 20000
+target_count = 25000  # Increased from 20000 for 200K push
 unique_combinations = set()
 
 # Generate samples efficiently
@@ -76,37 +94,23 @@ for word1 in unique_words:
             unique_combinations.add(key)
             samples.append((query, answer))
 
-# Sample with replacement to reach target (OPTIMIZED)
-while len(samples) < target_count:
-    word1 = random.choice(unique_words)
-    sound1 = get_first_sound(word1)
-    if not sound1 or sound1 not in words_by_sound:
-        continue
+# Only use unique combinations - NO sampling with replacement
+unique_count = len(samples)
 
-    matching_words = [w for w in words_by_sound[sound1] if w != word1]
-    non_matching_words = []
-    for sound in all_sounds:
-        if sound != sound1:
-            non_matching_words.extend(words_by_sound[sound])
-
-    if not matching_words or not non_matching_words:
-        continue
-
-    template = random.choice(TEMPLATES)
-    # CRITICAL FIX: word2 must NOT match the sound (must be a distractor)
-    # word1 matches the sound, so answer is always word1
-    word2 = random.choice(non_matching_words)
-
-    query = template.format(sound=sound1, word1=word1, word2=word2)
-    answer = word1  # word1 is correct because it matches the sound
-    samples.append((query, answer))
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
+    # Use all available unique combinations
+else:
+    # Take only what we need
+    samples = samples[:target_count]
 
 random.shuffle(samples)
-samples = samples[:target_count]
 
 output_file = os.path.join(os.path.dirname(__file__), "group1_s3.txt")
 with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S3 Sound Matching: Generated {len(samples)} samples")
+print(
+    f"S3 Sound Matching: Generated {len(samples)} unique samples (target: {target_count})"
+)

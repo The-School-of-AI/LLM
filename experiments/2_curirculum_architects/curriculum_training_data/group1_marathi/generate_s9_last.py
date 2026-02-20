@@ -9,20 +9,15 @@ import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_marathi.generate_s1_spelling import (  # noqa: E402
-    get_marathi_grapheme_clusters,
-)
 from group1_marathi.marathi_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import format_qa_pair_marathi  # noqa: E402
-
-# Expand word lists
-EASY_WORDS = EASY_WORDS_UNIQUE * 50
-MEDIUM_WORDS = MEDIUM_WORDS_UNIQUE * 60
-HARD_WORDS = HARD_WORDS_UNIQUE * 70
+from prompt_utils import (  # noqa: E402
+    format_qa_pair_marathi,
+    get_marathi_grapheme_clusters,
+)
 
 # Question templates
 TEMPLATES = [
@@ -32,40 +27,41 @@ TEMPLATES = [
     '"{word}" चे आखेरचे अक्षर काय आहे?',
     '"{word}" कोणत्या अक्षरावर संपते?',
     '"{word}" च्या शेवटी कोणते अक्षर आहे?',
+    '"{word}" या शब्दाचा शेवट कोणत्या अक्षराने होतो?',
+    '"{word}" मधील अंतिम अक्षर सांगा?',
+    '"{word}" चा अंत कोणत्या अक्षराने होतो?',
+    '"{word}" शब्दाचा शेवटचा वर्ण कोणता आहे?',
 ]
 
-all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
+all_words_set = set(EASY_WORDS_UNIQUE + MEDIUM_WORDS_UNIQUE + HARD_WORDS_UNIQUE)
 samples = []
 target_count = 17200
 
-# Generate samples
-unique_combinations = {}
-for word in set(all_words):
+# Generate all possible unique combinations
+unique_combinations = []
+all_words_list = list(all_words_set)
+random.shuffle(all_words_list)
+
+for word in all_words_list:
     clusters = get_marathi_grapheme_clusters(word)
     if len(clusters) == 0:
         continue
-
     last_cluster = clusters[-1]
-    for template_idx, template in enumerate(TEMPLATES):
+
+    # Shuffle templates for each word
+    current_templates = list(enumerate(TEMPLATES))
+    random.shuffle(current_templates)
+
+    for template_idx, template in current_templates:
         query = template.format(word=word)
         answer = last_cluster
-        key = (word, template_idx)
-        if key not in unique_combinations:
-            unique_combinations[key] = (query, answer)
+        unique_combinations.append((query, answer))
+        if len(unique_combinations) >= target_count:
+            break
+    if len(unique_combinations) >= target_count:
+        break
 
-# Use unique combinations, then sample with replacement to reach target
-samples = list(unique_combinations.values())
-while len(samples) < target_count:
-    word = random.choice(list(set(all_words)))
-    clusters = get_marathi_grapheme_clusters(word)
-    if len(clusters) == 0:
-        continue
-
-    last_cluster = clusters[-1]
-    template = random.choice(TEMPLATES)
-    query = template.format(word=word)
-    answer = last_cluster
-    samples.append((query, answer))
+samples = unique_combinations
 
 random.shuffle(samples)
 

@@ -3,14 +3,15 @@
 Generate Statement 8: Number Spelling (సంఖ్య అక్షరక్రమం) questions - Telugu
 Target: 12,000 pairs (6% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 from group1_telugu.telugu_grammar import get_telugu_aksharas_with_roots  # noqa: E402
 from group1_telugu.telugu_vocabulary import NUMBERS_EXTENDED  # noqa: E402
-from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
 
 # Templates — Telugu uses invariant యొక్క (no genitive suffix needed)
 TEMPLATES_NAME = [

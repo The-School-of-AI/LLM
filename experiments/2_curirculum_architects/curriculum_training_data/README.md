@@ -4,13 +4,12 @@ A comprehensive dataset generation system for AI curriculum learning, focusing o
 
 ## Purpose
 
-This repository contains scripts and data for generating high-quality training datasets across multiple curriculum groups:
+This repository contains scripts and data for generating high-quality training datasets across multiple curriculum groups and languages:
 
-- **Group 1**: Language and Literacy (690,400 samples)
-- **Group 2**: Math and Numbers (382,886 samples)
-- **Group 3**: Shapes, Colors & Patterns (128,302 samples)
-
-**Total**: ~1.2 million training samples
+- **Group 1 (English)**: Language and Literacy (~690,400 samples)
+- **Group 1 (Indian languages)**: Hindi, Punjabi, Marathi, Kannada, Telugu, Assamese — each ~200,000 samples
+- **Group 2**: Math and Numbers (~382,886 samples)
+- **Group 3**: Shapes, Colors & Patterns (~128,302 samples)
 
 These datasets are designed for curriculum learning in AI models, following educational progression from foundational concepts to advanced skills.
 
@@ -75,7 +74,7 @@ Covers mathematical concepts across 6 statement types:
 **Architecture**:
 - Main generator: `group2/generate_group2_dataset.py`
 - Validation: `group2/validate_group2.py`
-- Documentation: `group2/FINAL_IMPROVEMENTS_SUMMARY.md`, `group2/DISTRIBUTION_JUSTIFICATION.md`
+- Documentation: `group2/DISTRIBUTION_JUSTIFICATION.md`, `group2/TECHNICAL_SUMMARY_final.md`
 - Output format: Q&A pairs combined to reach minimum 512 tokens per data point
 
 **Files**:
@@ -133,84 +132,103 @@ Visual perception and pattern recognition across 4 statement types with 35 sub-g
 
 ```
 curriculum_training_data/
-├── README.md                          # This file
-├── requirements.txt                   # Python dependencies
-├── prompt_utils.py                    # Shared utilities (token counting, Q&A combination)
-├── CURRICULUM_LANGUAGE_DATA_GUIDE.md # Curriculum language data guide
+├── README.md                           # This file
+├── requirements.txt                    # Python dependencies
+├── prompt_utils.py                     # Shared utilities (token counting, Q&A combination)
+├── combine_group1_parts.py             # Utility to combine group1_part1.txt + group1_part2.txt
+├── CURRICULUM_LANGUAGE_DATA_GUIDE.md   # Curriculum language data guide
 ├── analyze_group1_queries.py          # Analysis utilities
-├── calculate_sample_distribution.py  # Sample distribution calculator
-├── curriculum_distribution.json      # Distribution configuration
+├── calculate_sample_distribution.py   # Sample distribution calculator
+├── curriculum_distribution.json       # Distribution configuration
 │
-├── output/                            # Generated dataset outputs
-│   ├── group1_part1.txt               # Group 1 English output part 1 (15.8MB, ~345K samples)
-│   ├── group1_part2.txt               # Group 1 English output part 2 (17.3MB, ~345K samples)
-│   ├── group1_hindi.txt               # Group 1 Hindi output (22MB, 200,000 samples)
-│   ├── group2.txt                     # Group 2 English output (16MB, 382,886 samples)
-│   └── group3.txt                     # Group 3 English output (4.6MB, 128,302 samples)
-├── group1/                            # Group 1 English generators
-│   ├── generate_group1_dataset.py     # Main generator
-│   ├── generate_s1_spelling.py        # Statement 1: Spelling
-│   ├── generate_s2_letter_position.py # Statement 2: Letter at Position
-│   ├── generate_s3_sound.py           # Statement 3: Sound Matching
-│   ├── generate_s4_count.py           # Statement 4: Letter Count
-│   ├── generate_s5_rhyme.py           # Statement 5: Rhyming
-│   ├── generate_s6_classify.py        # Statement 6: Classification
-│   ├── generate_s7_position.py        # Statement 7: Position of Letter
-│   ├── generate_s8_numbers.py         # Statement 8: Number Spelling
+├── output/                             # Generated dataset outputs
+│   ├── group1_part1.txt                # Group 1 English output part 1 (~345K samples)
+│   ├── group1_part2.txt                # Group 1 English output part 2 (~345K samples)
+│   ├── group1_hindi.txt                # Group 1 Hindi output (200,000 samples)
+│   ├── group1_punjabi.txt              # Group 1 Punjabi (200,000 samples)
+│   ├── group1_marathi.txt              # Group 1 Marathi (200,000 samples)
+│   ├── group1_kannada.txt              # Group 1 Kannada (200,000 samples)
+│   ├── group1_telugu.txt               # Group 1 Telugu (200,000 samples)
+│   ├── group1_assamese.txt             # Group 1 Assamese (200,000 samples)
+│   ├── group2.txt                     # Group 2 English output (382,886 samples)
+│   └── group3.txt                     # Group 3 English output (128,302 samples)
+│
+├── group1/                             # Group 1 English generators
+│   ├── generate_group1_dataset.py      # Main generator
+│   ├── generate_s1_spelling.py         # Statement 1: Spelling
+│   ├── generate_s2_letter_position.py  # Statement 2: Letter at Position
+│   ├── generate_s3_sound.py            # Statement 3: Sound Matching
+│   ├── generate_s4_count.py            # Statement 4: Letter Count
+│   ├── generate_s5_rhyme.py            # Statement 5: Rhyming
+│   ├── generate_s6_classify.py         # Statement 6: Classification
+│   ├── generate_s7_position.py         # Statement 7: Position of Letter
+│   ├── generate_s8_numbers.py          # Statement 8: Number Spelling
 │   ├── generate_s9_last.py            # Statement 9: Last Letter
 │   ├── generate_s10_compare.py        # Statement 10: Word Comparison
-│   ├── combine_and_fill.py            # Q&A combination utilities
-│   ├── group1_plan.md                 # Detailed documentation
+│   ├── combine_and_fill.py             # Q&A combination utilities
+│   ├── group1_plan.md                  # Detailed documentation
 │   ├── final_updated_analysis_group1.md
-│   ├── group1_s1.json                 # Statement 1 output (JSON)
-│   ├── group1_s2.json                 # Statement 2 output (JSON)
-│   ├── group1_s3.json                 # Statement 3 output (JSON)
-│   ├── group1_s4.json                 # Statement 4 output (JSON)
-│   ├── group1_s5.json                 # Statement 5 output (JSON)
-│   ├── group1_s6.json                 # Statement 6 output (JSON)
-│   ├── group1_s7.json                 # Statement 7 output (JSON)
-│   ├── group1_s8.json                 # Statement 8 output (JSON)
-│   ├── group1_s9.json                 # Statement 9 output (JSON)
-│   └── group1_s10.json                # Statement 10 output (JSON)
+│   └── group1_s1.json … group1_s10.json  # Statement outputs (JSON)
 │
-├── group1_hindi/                      # Group 1 Hindi generators
-│   ├── HINDI_DATASET_APPROACH.md      # Comprehensive approach document
-│   ├── generate_group1_hindi_dataset.py # Main generator
-│   ├── generate_s1_spelling.py        # Statement 1: Spelling (वर्तनी)
-│   ├── generate_s2_letter_position.py # Statement 2: Letter Position (अक्षर स्थिति)
-│   ├── generate_s3_sound.py           # Statement 3: Sound Matching (ध्वनि मिलान)
-│   ├── generate_s4_count.py           # Statement 4: Letter Count (अक्षर गिनती)
-│   ├── generate_s5_rhyme.py           # Statement 5: Rhyming (तुकबंदी)
-│   ├── generate_s6_classify.py        # Statement 6: Classification (वर्गीकरण)
-│   ├── generate_s7_position.py        # Statement 7: Position of Letter
-│   ├── generate_s8_numbers.py         # Statement 8: Number Spelling (संख्या वर्तनी)
-│   ├── generate_s9_last.py            # Statement 9: Last Letter (अंतिम अक्षर)
-│   ├── generate_s10_compare.py        # Statement 10: Word Comparison (शब्द तुलना)
-│   ├── hindi_vocabulary.py            # Hindi word lists (335 verified words)
-│   ├── group1_s1.txt                  # Statement 1 intermediate output
-│   ├── group1_s2.txt                  # Statement 2 intermediate output
-│   ├── group1_s3.txt                  # Statement 3 intermediate output
-│   ├── group1_s4.txt                  # Statement 4 intermediate output
-│   ├── group1_s5.txt                  # Statement 5 intermediate output
-│   ├── group1_s6.txt                  # Statement 6 intermediate output
-│   ├── group1_s7.txt                  # Statement 7 intermediate output
-│   ├── group1_s8.txt                  # Statement 8 intermediate output
-│   ├── group1_s9.txt                  # Statement 9 intermediate output
-│   └── group1_s10.txt                 # Statement 10 intermediate output
+├── group1_hindi/                       # Group 1 Hindi (Devanagari)
+│   ├── HINDI_DATASET_APPROACH.md       # Approach document
+│   ├── generate_group1_hindi_dataset.py
+│   ├── generate_s1_spelling.py … generate_s10_compare.py
+│   ├── hindi_vocabulary.py             # 335 verified words
+│   ├── validate_dataset.py
+│   └── group1_s1.txt … group1_s10.txt  # Intermediate outputs
 │
-├── group2/                            # Group 2 English generators
-│   ├── generate_group2_dataset.py     # Main generator
-│   ├── validate_group2.py             # Validation and distribution analysis
+├── group1_punjabi/                     # Group 1 Punjabi (Gurmukhi)
+│   ├── PUNJABI_DATASET_APPROACH.md
+│   ├── generate_group1_punjabi_dataset.py
+│   ├── generate_s1_spelling.py … generate_s10_compare.py
+│   ├── punjabi_vocabulary.py           # ~450 verified words
+│   └── group1_s1.txt … group1_s10.txt
+│
+├── group1_marathi/                     # Group 1 Marathi (Devanagari)
+│   ├── MARATHI_DATASET_APPROACH.md
+│   ├── generate_group1_marathi_dataset.py
+│   ├── generate_s1_spelling.py … generate_s10_compare.py
+│   ├── marathi_vocabulary.py            # 335 verified words
+│   └── group1_s1.txt … group1_s10.txt
+│
+├── group1_kannada/                     # Group 1 Kannada (Kannada script)
+│   ├── KANNADA_DATASET_APPROACH.md
+│   ├── generate_group1_kannada_dataset.py
+│   ├── generate_s1_spelling.py … generate_s11_ottakshara.py  # S11: Ottakshara
+│   ├── kannada_vocabulary.py, kannada_expanded_vocabulary.py
+│   ├── kannada_grammar.py
+│   └── group1_s1.txt … group1_s11.txt
+│
+├── group1_telugu/                      # Group 1 Telugu (Telugu script)
+│   ├── TELUGU_DATASET_APPROACH.md, TELUGU_DATASET_VALIDATION.md
+│   ├── generate_group1_telugu_dataset.py
+│   ├── generate_s1_spelling.py … generate_s11_ottulu_gunintalu.py  # S11: Ottulu/Gunintalu
+│   ├── telugu_vocabulary.py, telugu_grammar.py
+│   ├── prompt_utils_telugu.py
+│   ├── tests/                          # Unit tests
+│   └── group1_s1.txt … group1_s11.txt
+│
+├── group1_assamese/                    # Group 1 Assamese (Bengali-Assamese script)
+│   ├── ASSAMESE_DATASET_APPROACH.md
+│   ├── generate_group1_assamese_dataset.py
+│   ├── generate_s1_spelling.py … generate_s10_semantics.py  # Custom statement mapping
+│   ├── assamese_vocabulary.py, assamese_vocabulary_expanded.py
+│   └── group1_s1.txt … group1_s10.txt
+│
+├── group2/                             # Group 2 English (Math and Numbers)
+│   ├── generate_group2_dataset.py
+│   ├── validate_group2.py
 │   ├── group2_curriculum_distribution.md
-│   ├── DISTRIBUTION_JUSTIFICATION.md  # Technical rationale
-│   └── TECHNICAL_SUMMARY_final.md     # Technical summary
+│   ├── DISTRIBUTION_JUSTIFICATION.md
+│   └── TECHNICAL_SUMMARY_final.md
 │
-├── group3/                            # Group 3 English generators
-│   ├── generate_group3_dataset.py     # Main generator (~3,000 lines, 35 sub-generators)
-│   ├── validate_data_quality.py       # Quality validation
-│   └── group3_approach.md             # Technical documentation & target revision
+├── group3/                             # Group 3 English (Shapes, Colors & Patterns)
+│   ├── generate_group3_dataset.py     # ~3,000 lines, 35 sub-generators
+│   ├── validate_data_quality.py
+│   └── group3_approach.md
 │
-└── prompts/                           # Original prompt files
+└── prompts/
     ├── group1prompt.txt
     ├── group2prompt.txt
     └── group3prompt.txt
@@ -220,7 +238,7 @@ curriculum_training_data/
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.12
 - Standard library only (no external dependencies required)
 
 ### Setup
@@ -237,7 +255,7 @@ curriculum_training_data/
 
 3. **Verify Python version**:
    ```bash
-   python3 --version  # Should be 3.8+
+   python3 --version  # Should be 3.12+
    ```
 
 ## Usage
@@ -291,6 +309,42 @@ python group1_hindi/generate_group1_hindi_dataset.py
 - Two character splitting methods: Unicode characters (spelling) and grapheme clusters (counting/position)
 - All queries end with "?" and answers end with "।" (purna-viraam)
 - See `group1_hindi/HINDI_DATASET_APPROACH.md` for comprehensive documentation
+
+### Generating Group 1 Punjabi Dataset
+
+```bash
+python group1_punjabi/generate_group1_punjabi_dataset.py
+# Output: output/group1_punjabi.txt (200,000 samples, Gurmukhi script)
+```
+
+### Generating Group 1 Marathi Dataset
+
+```bash
+python group1_marathi/generate_group1_marathi_dataset.py
+# Output: output/group1_marathi.txt (200,000 samples, Devanagari script)
+```
+
+### Generating Group 1 Kannada Dataset
+
+```bash
+python group1_kannada/generate_group1_kannada_dataset.py
+# Output: output/group1_kannada.txt (200,000 samples, S1–S11 including Ottakshara)
+```
+
+### Generating Group 1 Telugu Dataset
+
+```bash
+python group1_telugu/generate_group1_telugu_dataset.py
+# Output: output/group1_telugu.txt (200,000 samples, S1–S11 including Ottulu/Gunintalu)
+```
+
+### Generating Group 1 Assamese Dataset
+
+```bash
+python group1_assamese/generate_group1_assamese_dataset.py
+# Output: output/group1_assamese.txt (200,000 samples, Bengali-Assamese script)
+# Note: Assamese uses custom statement mapping (S2+S7 merged, S9 Morphology, S10 Semantics)
+```
 
 ### Generating Group 2 English Dataset
 
@@ -361,22 +415,26 @@ Q? A। Q? A। Q? A। ...
 - **Encoding**: UTF-8
 - **Minimum tokens**: 512 tokens per data point (enforced by `combine_qa_pairs_to_reach_min_tokens()`)
 - **Separators**: 
-  - English: Period (`.`) after answers
-  - Hindi: Purna-viraam (`।`) after answers
+  - English, Kannada, Telugu: Period (`.`) after answers
+  - Hindi, Punjabi, Marathi, Assamese: Purna-viraam (`।`) after answers
 - **Query format**: All queries end with `?`
-- **Answer format**: All answers end with `.` (English) or `।` (Hindi)
+- **Answer format**: All answers end with `.` or `।` as above
 
 ## Dataset Statistics
 
 ### Current Sample Counts
 
-| Group | Language | Target | Generated | Status | File Size |
-|-------|----------|--------|-----------|--------|-----------|
-| Group 1 | English | 70,000 | 690,400 | ✅ Exceeded | 33MB |
-| Group 1 | Hindi | 200,000 | 200,000 | ✅ Complete | 22MB |
-| Group 2 | English | 600,000 | 382,886 | ⚠️ 64% complete | 16MB |
-| Group 3 | English | 150,000 | 128,302 | ⚠️ 86% complete | 4.6MB |
-| **Total** | | **1,020,000** | **1,401,588** | **137%** | **~76MB** |
+| Group | Language | Target | Generated | Status |
+|-------|----------|--------|-----------|--------|
+| Group 1 | English | 70,000 | 690,400 | ✅ Exceeded |
+| Group 1 | Hindi | 200,000 | 200,000 | ✅ Complete |
+| Group 1 | Punjabi | 200,000 | 200,000 | ✅ Complete |
+| Group 1 | Marathi | 200,000 | 200,000 | ✅ Complete |
+| Group 1 | Kannada | 200,000 | 200,000 | ✅ Complete |
+| Group 1 | Telugu | 200,000 | 200,000 | ✅ Complete |
+| Group 1 | Assamese | 200,000 | 200,000 | ✅ Complete |
+| Group 2 | English | 600,000 | 382,886 | ⚠️ 64% complete |
+| Group 3 | English | 150,000 | 128,302 | ⚠️ 86% complete |
 
 ### Quality Metrics
 
@@ -403,9 +461,6 @@ Validation runs automatically during generation. To analyze existing datasets:
 ```bash
 # Analyze Group 1
 python analyze_group1_queries.py
-
-# Or use custom analysis
-python analyze_group1.py
 ```
 
 ## Technical Details
@@ -438,20 +493,16 @@ python analyze_group1.py
 
 ### English Datasets
 - **Group 1**: `group1/group1_plan.md` - Detailed breakdown of 10 statement types, word pools, templates
-- **Group 2**: 
-  - `group2/FINAL_IMPROVEMENTS_SUMMARY.md` - Bug fixes, template expansions, validation improvements
-  - `group2/DISTRIBUTION_JUSTIFICATION.md` - Technical rationale for curriculum-optimized distribution
-  - `group2/PROBLEM_ANALYSIS_AND_SOLUTIONS.md` - Problem analysis and solutions
+- **Group 2**: `group2/DISTRIBUTION_JUSTIFICATION.md`, `group2/TECHNICAL_SUMMARY_final.md` - Technical rationale and curriculum distribution
 - **Group 3**: `group3/group3_approach.md` - Comprehensive approach, combinatorial analysis, target revision justification
 
-### Hindi Dataset
-- **Group 1 Hindi**: `group1_hindi/HINDI_DATASET_APPROACH.md` - Comprehensive documentation covering:
-  - Vocabulary sources and verification (335 verified words)
-  - Format specifications (Devanagari script, purna-viraam)
-  - Statement type breakdown (10 types, 200,000 samples)
-  - Character splitting methodology (Unicode vs grapheme clusters)
-  - Token counting methodology
-  - Implementation strategy and validation criteria
+### Indian Language Datasets
+- **Hindi**: `group1_hindi/HINDI_DATASET_APPROACH.md` - Devanagari, 335 words, 10 statement types
+- **Punjabi**: `group1_punjabi/PUNJABI_DATASET_APPROACH.md` - Gurmukhi, ~450 words
+- **Marathi**: `group1_marathi/MARATHI_DATASET_APPROACH.md` - Devanagari, 335 words
+- **Kannada**: `group1_kannada/KANNADA_DATASET_APPROACH.md` - Kannada script, akshara segmentation, S1–S11
+- **Telugu**: `group1_telugu/TELUGU_DATASET_APPROACH.md`, `TELUGU_DATASET_VALIDATION.md` - Telugu script, akshara segmentation, S1–S11
+- **Assamese**: `group1_assamese/ASSAMESE_DATASET_APPROACH.md` - Bengali-Assamese script, custom statement mapping
 
 ## Contributing
 
@@ -494,8 +545,8 @@ When adding new generators or modifying existing ones:
 
 ---
 
-**Last Updated**: 2026-02-13  
-**Version**: 1.1  
+**Last Updated**: 2026-02-17  
+**Version**: 1.2  
 **Status**: Active Development
 
 ---
@@ -507,11 +558,12 @@ When adding new generators or modifying existing ones:
 - **Group 2**: Math and Numbers (382,886 samples)
 - **Group 3**: Shapes, Colors & Patterns (128,302 samples)
 
-### Hindi Dataset
-- **Group 1 Hindi**: Language and Literacy in Devanagari script (200,000 samples)
-  - All 10 statement types adapted for Hindi
-  - Proper handling of matras, halant, and combining marks
-  - Two character splitting methods for different contexts
-  - Verified vocabulary from trusted sources (Shabdkosh, HindiPod101)
-
-**Future**: Additional language support can be added following the Hindi dataset approach.
+### Indian Language Datasets (Group 1)
+| Language | Script | Target | Key Features |
+|----------|--------|--------|--------------|
+| Hindi | Devanagari | 200,000 | 335 words, purna-viraam (।) separator |
+| Punjabi | Gurmukhi | 200,000 | ~450 words, purna-viraam separator |
+| Marathi | Devanagari | 200,000 | 335 words, purna-viraam separator |
+| Kannada | Kannada | 200,000 | Akshara segmentation, S11 Ottakshara |
+| Telugu | Telugu | 200,000 | Akshara segmentation, S11 Ottulu/Gunintalu |
+| Assamese | Bengali-Assamese | 200,000 | Custom statement mapping (morphology, semantics) |

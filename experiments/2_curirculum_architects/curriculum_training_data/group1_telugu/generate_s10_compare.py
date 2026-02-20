@@ -3,14 +3,17 @@
 Generate Statement 10: Word Comparison (పద పోలిక) questions - Telugu
 Target: 10,000 pairs (5% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
-from group1_telugu.telugu_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
+from group1_telugu.generate_s1_spelling import (  # noqa: E402
+    get_telugu_grapheme_clusters,
+)
 from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
+from group1_telugu.telugu_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
 
 # Expand word list
 ALL_WORDS = ALL_WORDS_UNIQUE * 30

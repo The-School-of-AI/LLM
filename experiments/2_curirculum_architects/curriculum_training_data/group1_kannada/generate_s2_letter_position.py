@@ -4,20 +4,27 @@ Generate Statement 2: Letter Position (ಅಕ್ಷರ ಸ್ಥಿತಿ) quest
 User-specified templates: first/last/Nth/middle letter, position of char, at-end yes/no, fifth exists.
 Target: 25,800 pairs (12.9% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
+    get_kannada_grapheme_clusters,
+)
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,
     HARD_WORDS_UNIQUE,
     MEDIUM_WORDS_UNIQUE,
 )
-from prompt_utils import format_qa_pair_kannada, int_to_kannada, int_to_kannada_word  # noqa: E402
+from prompt_utils import (  # noqa: E402
+    format_qa_pair_kannada,
+    int_to_kannada,
+    int_to_kannada_word,
+)
 
-HALANT = "\u0CCD"  # Virama for ottakshara check
+HALANT = "\u0ccd"  # Virama for ottakshara check
 # Mahaprana (aspirated) consonants: ಖ, ಛ, ಠ, ಥ, ಫ, ಘ, ಝ, ಢ, ಧ, ಭ
 MAHAPRANA = set("ಖಛಠಥಫಘಝಢಧಭ")
 VOWEL_SIGNS = set("ಾಿೀುೂೃೄೆೇೈೊೋೌ")  # For gunitakshara (conjunct) check
@@ -36,8 +43,12 @@ POSITION_NAMES = [
     ("ಹತ್ತನೇ", 10),
 ]
 
-VOWELS = set([chr(c) for c in range(0x0C85, 0x0C91) if c not in [0x0C8C, 0x0C8E]]) # ಅ-ಔ, excluding deprecated
-CONSONANTS = set([chr(c) for c in range(0x0C95, 0x0CB9) if chr(c) not in ['ಱ', 'ೞ']]) # ಕ-ಹ (excluding old/deprecated chars)
+VOWELS = set(
+    [chr(c) for c in range(0x0C85, 0x0C91) if c not in [0x0C8C, 0x0C8E]]
+)  # ಅ-ಔ, excluding deprecated
+CONSONANTS = set(
+    [chr(c) for c in range(0x0C95, 0x0CB9) if chr(c) not in ["ಱ", "ೞ"]]
+)  # ಕ-ಹ (excluding old/deprecated chars)
 
 # User-specified Letter Position templates with generation type.
 # Types: first, last, second, third, fourth, fifth, sixth, middle, position_of, at_end,
@@ -67,7 +78,10 @@ TEMPLATES = [
     ('"{word}" ಪದದ ಆರಂಭಿಕ ಅಕ್ಷರ ಯಾವುದು?', "aarambhika"),
     ('"{word}" ಪದದ 2ನೇ ಅಕ್ಷರ ಸ್ವರವೋ ಅಥವಾ ಗುಣಿತಾಕ್ಷರವೋ?', "second_vowel_or_gunita"),
     ('"{word}" ಪದದ ಕೊನೆಯ ಅಕ್ಷರವು ಒತ್ತಕ್ಷರವೇ?', "last_is_ottakshara"),
-    ('"{word}" ಪದದ ಎರಡನೇ ಅಕ್ಷರವು ಅಲ್ಪಪ್ರಾಣವೇ ಅಥವಾ ಮಹಾಪ್ರಾಣವೇ?', "second_alpa_mahaprana"),
+    (
+        '"{word}" ಪದದ ಎರಡನೇ ಅಕ್ಷರವು ಅಲ್ಪಪ್ರಾಣವೇ ಅಥವಾ ಮಹಾಪ್ರಾಣವೇ?',
+        "second_alpa_mahaprana",
+    ),
     ('"{word}" ಪದದಲ್ಲಿ "{char}" ಅಕ್ಷರವು ಒಂದಕ್ಕಿಂತ ಹೆಚ್ಚು ಬಾರಿ ಇದೆಯೇ?', "char_repeated"),
 ]
 
@@ -220,7 +234,9 @@ for word in unique_words:
             mid_idx = n // 2
             for c in clusters:
                 q = template.format(word=word, char=c)
-                a = "ಹೌದು" if clusters[mid_idx] == c else "ಇಲ್ಲ"  # ಮಧ್ಯದಲ್ಲಿ ಬಂದಿದೆಯೇ? → presence → ಇಲ್ಲ
+                a = (
+                    "ಹೌದು" if clusters[mid_idx] == c else "ಇಲ್ಲ"
+                )  # ಮಧ್ಯದಲ್ಲಿ ಬಂದಿದೆಯೇ? → presence → ಇಲ್ಲ
                 key = (word, "char_in_middle", c)
                 if key not in seen:
                     seen.add(key)
@@ -352,7 +368,9 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         c = random.choice(clusters)
         mid_idx = n // 2
         q = template.format(word=word, char=c)
-        a = "ಹೌದು" if clusters[mid_idx] == c else "ಇಲ್ಲ"  # ಮಧ್ಯದಲ್ಲಿ ಬಂದಿದೆಯೇ? → presence → ಇಲ್ಲ
+        a = (
+            "ಹೌದು" if clusters[mid_idx] == c else "ಇಲ್ಲ"
+        )  # ಮಧ್ಯದಲ್ಲಿ ಬಂದಿದೆಯೇ? → presence → ಇಲ್ಲ
     elif ttype == "aarambhika":
         q = template.format(word=word)
         a = clusters[0]

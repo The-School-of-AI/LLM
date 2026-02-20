@@ -3,12 +3,15 @@
 Generate Statement 9: Last Letter (ಕೊನೆಯ ಅಕ್ಷರ) questions - Kannada
 Target: 17,200 pairs (8.6% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
+    get_kannada_grapheme_clusters,
+)
 from group1_kannada.kannada_grammar import get_genitive_suffix  # noqa: E402
 from group1_kannada.kannada_vocabulary import (  # noqa: E402
     EASY_WORDS_UNIQUE,
@@ -18,9 +21,9 @@ from group1_kannada.kannada_vocabulary import (  # noqa: E402
 from prompt_utils import format_qa_pair_kannada  # noqa: E402
 
 VOWELS = set([chr(c) for c in range(0x0C85, 0x0C91) if c not in [0x0C8C, 0x0C8E]])
-CONSONANTS = set([chr(c) for c in range(0x0C95, 0x0CB9) if chr(c) not in ['ಱ', 'ೞ']])
+CONSONANTS = set([chr(c) for c in range(0x0C95, 0x0CB9) if chr(c) not in ["ಱ", "ೞ"]])
 VOWEL_SIGNS = "ಾಿೀುೂೃೄೆೇೈೊೋೌ"  # Dependent vowel signs
-HALANT = "\u0CCD"
+HALANT = "\u0ccd"
 
 
 def get_last_vowel_in_cluster(cluster: str) -> str:
@@ -30,7 +33,20 @@ def get_last_vowel_in_cluster(cluster: str) -> str:
             return c
         if c in VOWEL_SIGNS:
             # Map matra to full vowel: ು->ಉ, ಾ->ಆ, etc.
-            m = {"ಾ": "ಆ", "ಿ": "ಇ", "ೀ": "ಈ", "ು": "ಉ", "ೂ": "ಊ", "ೃ": "ಋ", "ೆ": "ಎ", "ೇ": "ಏ", "ೈ": "ಐ", "ೊ": "ಒ", "ೋ": "ಓ", "ೌ": "ಔ"}
+            m = {
+                "ಾ": "ಆ",
+                "ಿ": "ಇ",
+                "ೀ": "ಈ",
+                "ು": "ಉ",
+                "ೂ": "ಊ",
+                "ೃ": "ಋ",
+                "ೆ": "ಎ",
+                "ೇ": "ಏ",
+                "ೈ": "ಐ",
+                "ೊ": "ಒ",
+                "ೋ": "ಓ",
+                "ೌ": "ಔ",
+            }
             return m.get(c, c)
     return ""
 

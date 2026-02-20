@@ -3,11 +3,10 @@
 Generate Statement 1: Spelling (ವर्तನಿ) questions - Kannada
 Target: 28,600 pairs (14.3% of 200,000)
 """
+
 import os
 import random
 import sys
-
-import regex  # noqa: E402
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
@@ -19,20 +18,32 @@ from group1_kannada.kannada_vocabulary import (  # noqa: E402
 )
 from prompt_utils import format_qa_pair_kannada  # noqa: E402
 
-HALANT = "\u0CCD"
+HALANT = "\u0ccd"
 # Vowel sign → independent swara (for varṇa decomposition)
 VOWEL_SIGN_TO_SWARA = {
-    "\u0CBE": "ಆ", "\u0CBF": "ಇ", "\u0CC0": "ಈ", "\u0CC1": "ಉ", "\u0CC2": "ಊ",
-    "\u0CC3": "ಋ", "\u0CC4": "ೠ", "\u0CC6": "ಎ", "\u0CC7": "ಏ", "\u0CC8": "ಐ",
-    "\u0CCA": "ಒ", "\u0CCB": "ಓ", "\u0CCC": "ಔ",
+    "\u0cbe": "ಆ",
+    "\u0cbf": "ಇ",
+    "\u0cc0": "ಈ",
+    "\u0cc1": "ಉ",
+    "\u0cc2": "ಊ",
+    "\u0cc3": "ಋ",
+    "\u0cc4": "ೠ",
+    "\u0cc6": "ಎ",
+    "\u0cc7": "ಏ",
+    "\u0cc8": "ಐ",
+    "\u0cca": "ಒ",
+    "\u0ccb": "ಓ",
+    "\u0ccc": "ಔ",
 }
 
 # Exclude number words from S1: ವರ್ಣವಿಚ್ಛೇದ/spelling should use other words, not numbers.
 NUMBER_WORDS = frozenset(NUMBERS)
 
+
 # Expand word lists to reach target count (excluding number words)
 def _exclude_numbers(words: list) -> list:
     return [w for w in words if w not in NUMBER_WORDS]
+
 
 EASY_WORDS = _exclude_numbers(EASY_WORDS_UNIQUE) * 50
 MEDIUM_WORDS = _exclude_numbers(MEDIUM_WORDS_UNIQUE) * 60
@@ -137,7 +148,7 @@ def get_swara_vyanjana_lists(word: str) -> tuple[list[str], list[str]]:
         elif c in VOWEL_SIGN_TO_SWARA:
             swaras.append(VOWEL_SIGN_TO_SWARA[c])
             i += 1
-        elif c in ("\u0C82", "\u0C83"):  # Anusvara, visarga - skip or add
+        elif c in ("\u0c82", "\u0c83"):  # Anusvara, visarga - skip or add
             i += 1
         else:
             i += 1
@@ -164,7 +175,9 @@ def get_varnavichcheda_str(word: str) -> str:
                 if i < len(chars) and chars[i] in VOWEL_SIGN_TO_SWARA:
                     varnas.append(VOWEL_SIGN_TO_SWARA[chars[i]])
                     i += 1
-                elif i < len(chars) and chars[i] == "\u0C82":  # Anusvara after consonant → ಅಂ
+                elif (
+                    i < len(chars) and chars[i] == "\u0c82"
+                ):  # Anusvara after consonant → ಅಂ
                     varnas.append("ಅಂ")
                     i += 1
                 else:
@@ -175,10 +188,10 @@ def get_varnavichcheda_str(word: str) -> str:
         elif c in VOWEL_SIGN_TO_SWARA:
             varnas.append(VOWEL_SIGN_TO_SWARA[c])
             i += 1
-        elif c == "\u0C82":  # Anusvara after vowel (e.g. ಅಂ in ಅಂಚು) → ಅಂ
+        elif c == "\u0c82":  # Anusvara after vowel (e.g. ಅಂ in ಅಂಚು) → ಅಂ
             varnas.append("ಅಂ")
             i += 1
-        elif c == "\u0C83":  # Visarga (ಃ) - include in ವರ್ಣವಿಚ್ಛೇದ
+        elif c == "\u0c83":  # Visarga (ಃ) - include in ವರ್ಣವಿಚ್ಛೇದ
             varnas.append("ಃ")
             i += 1
         else:
@@ -195,9 +208,13 @@ def generate_spelling_answer(word: str) -> str:
 def generate_listing_answer(word: str, template: str) -> str:
     """Generate listing answer based on specific template rules."""
     clusters = get_kannada_aksharas(word)
-    characters = get_kannada_characters(word) # For character-level details if needed
 
-    if "ಕ್ರಮಾನುಗತವಾಗಿ ನೀಡಿ" in template or "ಕ್ರಮವಾಗಿ ತೋರಿಸಿ" in template or "ಪ್ರತ್ಯೇಕವಾಗಿ ತಿಳಿಸಿ" in template or "ಅನುಕ್ರಮವಾಗಿ ಬರೆಯಿರಿ" in template:
+    if (
+        "ಕ್ರಮಾನುಗತವಾಗಿ ನೀಡಿ" in template
+        or "ಕ್ರಮವಾಗಿ ತೋರಿಸಿ" in template
+        or "ಪ್ರತ್ಯೇಕವಾಗಿ ತಿಳಿಸಿ" in template
+        or "ಅನುಕ್ರಮವಾಗಿ ಬರೆಯಿರಿ" in template
+    ):
         return ", ".join(clusters)
     elif "ಅಕ್ಷರ ಘಟಕಗಳನ್ನು ಪಟ್ಟಿ ಮಾಡಿ" in template:
         return ", ".join(clusters)
@@ -210,10 +227,10 @@ def generate_listing_answer(word: str, template: str) -> str:
     elif "ಅಕ್ಷರಗಳನ್ನು ಕ್ರಮಾನುಗತವಾಗಿ ನೀಡಿ" in template:
         return ", ".join(clusters)
     elif "ಅಕ್ಷರಗಳು ಯಾವುವು" in template:
-        if len(clusters) == 2: # For "ಬಾನು" -> "ಬಾ ಮತ್ತು ನು"
+        if len(clusters) == 2:  # For "ಬಾನು" -> "ಬಾ ಮತ್ತು ನು"
             return f"{clusters[0]} ಮತ್ತು {clusters[1]}"
         return ", ".join(clusters)
-    elif "ಅಕ್ಷರಗಳನ್ನು ಕ್ರಮಾಂಕದಲ್ಲಿ ನೀಡಿ" in template: # For "ಅಮ್ಮ" -> "೧: ಅ, ೨: ಮ್ಮ"
+    elif "ಅಕ್ಷರಗಳನ್ನು ಕ್ರಮಾಂಕದಲ್ಲಿ ನೀಡಿ" in template:  # For "ಅಮ್ಮ" -> "೧: ಅ, ೨: ಮ್ಮ"
         return ", ".join([f"{i+1}: {c}" for i, c in enumerate(clusters)])
     elif "ಸ್ವರ ಮತ್ತು ವ್ಯಂಜನಗಳನ್ನು ಪಟ್ಟಿ ಮಾಡಿ" in template:
         vyanjanas, swaras = get_swara_vyanjana_lists(word)
@@ -238,7 +255,11 @@ if __name__ == "__main__":
         for template_idx, template in enumerate(TEMPLATES):
             query = template.format(word=word)
             if template in TEMPLATES_SPELLING:
-                answer = get_varnavichcheda_str(word) if "ಅಕ್ಷರಶಃ ಬಿಡಿಸಿ" in template else generate_spelling_answer(word)
+                answer = (
+                    get_varnavichcheda_str(word)
+                    if "ಅಕ್ಷರಶಃ ಬಿಡಿಸಿ" in template
+                    else generate_spelling_answer(word)
+                )
             else:  # TEMPLATES_LISTING or TEMPLATES_VARNAVICHCHEDA
                 answer = generate_listing_answer(word, template)
             unique_combinations[(word, template_idx)] = (query, answer)
@@ -258,7 +279,11 @@ if __name__ == "__main__":
             template = TEMPLATES[template_idx]
             query = template.format(word=word)
             if template in TEMPLATES_SPELLING:
-                answer = get_varnavichcheda_str(word) if "ಅಕ್ಷರಶಃ ಬಿಡಿಸಿ" in template else generate_spelling_answer(word)
+                answer = (
+                    get_varnavichcheda_str(word)
+                    if "ಅಕ್ಷರಶಃ ಬಿಡಿಸಿ" in template
+                    else generate_spelling_answer(word)
+                )
             else:
                 answer = generate_listing_answer(word, template)
             if (query, answer) not in seen_qa:

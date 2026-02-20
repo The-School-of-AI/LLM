@@ -4,19 +4,22 @@ Generate Statement 3: Sound Matching (ಧ್ವನಿ ಹೊಂದಿಕೆ) que
 User-specified templates: rhyme, word starting/ending with, do they rhyme?, pronunciation, etc.
 Target: 20,000 pairs (10% of 200,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
-from group1_kannada.kannada_vocabulary import (
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
+    get_kannada_grapheme_clusters,
+)
+from group1_kannada.kannada_vocabulary import (  # noqa: E402
     ALL_WORDS_UNIQUE,
     BAD_RHYME_PAIRS,
     CLASSIFICATION_CATEGORIES,
     RHYMING_PAIRS,
     VARGAS,
-)  # noqa: E402
+)
 from prompt_utils import format_qa_pair_kannada  # noqa: E402
 
 ALL_WORDS = ALL_WORDS_UNIQUE * 30
@@ -55,6 +58,7 @@ for a, b in RHYMING_PAIRS.items():
     rhyme_set.add((a, b))
     rhyme_set.add((b, a))
 
+
 def do_rhyme(w1: str, w2: str) -> bool:
     if (w1, w2) in BAD_RHYME_PAIRS or (w2, w1) in BAD_RHYME_PAIRS:
         return False
@@ -66,14 +70,16 @@ def do_rhyme(w1: str, w2: str) -> bool:
         return True
     return False
 
+
 # Helper to get verbs (simple heuristic - ends with "ಸು" or "ಗು" or "ಳು" etc.)
 def get_verbs(word_list):
     verbs = []
-    verb_endings = ["ಸು", "ಗು", "ಳು", "ಡು", "ಬು", "ವು", "ಡು"] # Added ಡು to match ಕಟ್ಟು
+    verb_endings = ["ಸು", "ಗು", "ಳು", "ಡು", "ಬು", "ವು", "ಡು"]  # Added ಡು to match ಕಟ್ಟು
     for w in word_list:
         if any(w.endswith(end) for end in verb_endings):
             verbs.append(w)
     return verbs
+
 
 VERBS = get_verbs(unique_words)
 
@@ -110,7 +116,10 @@ TEMPLATES = [
     ('"ಶ" ಮತ್ತು "ಷ" ಉಚ್ಚಾರಣೆಯಲ್ಲಿ ಸಮಾನತೆ ಇದೆಯೇ?', "same_pronunciation_sh_sha"),
     ('"{letter}" ಅಕ್ಷರದ ಧ್ವನಿ ಇರುವ ಎರಡು ಪದಗಳನ್ನು ನೀಡಿ?', "two_words_with_sound"),
     ('"{letter}" ಅಕ್ಷರದಿಂದ ಆರಂಭವಾಗುವ ಕ್ರಿಯಾಪದ ಯಾವುದು?', "verb_starting"),
-    ('"{word}" ಪದದ ಮೊದಲ ಅಕ್ಷರ ಯಾವುದು?', "first_sound"),  # ಶಬ್ದ=ಪದ; ಅಕ್ಷರ=syllable/letter
+    (
+        '"{word}" ಪದದ ಮೊದಲ ಅಕ್ಷರ ಯಾವುದು?',
+        "first_sound",
+    ),  # ಶಬ್ದ=ಪದ; ಅಕ್ಷರ=syllable/letter
     ('"{word}" ಪದದ ಧ್ವನಿಗೆ ಹತ್ತಿರವಿರುವ ಪದ ತಿಳಿಸಿ?', "similar_sound"),
 ]
 
@@ -157,7 +166,9 @@ for _ in range(100):
         q = TEMPLATES[2][0].format(word1=word1, word2=word2)
         a = "ಹೌದು"
     else:
-        non_rhyming_words = [w for w in unique_words if w != word1 and not do_rhyme(word1, w)]
+        non_rhyming_words = [
+            w for w in unique_words if w != word1 and not do_rhyme(word1, w)
+        ]
         if not non_rhyming_words:
             continue
         word2 = random.choice(non_rhyming_words)
@@ -176,7 +187,9 @@ for _ in range(100):
         q = TEMPLATES[11][0].format(word1=word1, word2=word2)
         a = "ಹೌದು"
     else:
-        non_rhyming_words = [w for w in unique_words if w != word1 and not do_rhyme(word1, w)]
+        non_rhyming_words = [
+            w for w in unique_words if w != word1 and not do_rhyme(word1, w)
+        ]
         if not non_rhyming_words:
             continue
         word2 = random.choice(non_rhyming_words)
@@ -302,6 +315,7 @@ for w in (words_with_n or unique_words)[:80]:
         seen.add(key)
         samples.append((q, a))
 
+
 # New: 14 & 20. similar_sound (ಹೋಲುವ ಧ್ವನಿ): same last akshara + similar length (ಪ್ರಾಸ-like)
 def get_similar_sound_words(word: str, word_list: list) -> list:
     """Words with same last akshara and same akshara count (phonetically similar length)."""
@@ -311,12 +325,14 @@ def get_similar_sound_words(word: str, word_list: list) -> list:
     last = clusters[-1]
     n = len(clusters)
     return [
-        w for w in word_list
+        w
+        for w in word_list
         if w != word
         and (c := get_kannada_grapheme_clusters(w))
         and c[-1] == last
         and len(c) == n
     ]
+
 
 # New: 14 & 20. similar_sound (skip when no different similar word exists)
 for word in unique_words[:100]:
@@ -362,8 +378,8 @@ no_progress_limit = 50000
 no_progress = 0
 while len(samples) < target_count and no_progress < no_progress_limit:
     tpl_full, ttype = random.choice(TEMPLATES)
-    q, a = None, None # Initialize q and a
-    template_text = tpl_full # Use full template text as template_text
+    q, a = None, None  # Initialize q and a
+    template_text = tpl_full  # Use full template text as template_text
 
     if ttype == "rhyme_word" and RHYMING_PAIRS:
         word = random.choice(list(RHYMING_PAIRS.keys()))
@@ -375,17 +391,21 @@ while len(samples) < target_count and no_progress < no_progress_limit:
         q = template_text.format(letter=letter)
     elif ttype == "do_rhyme_yes_no":
         word1 = random.choice(unique_words)
-        if word1 in RHYMING_PAIRS and random.random() < 0.7: # Bias towards positive rhyme answers initially
+        if (
+            word1 in RHYMING_PAIRS and random.random() < 0.7
+        ):  # Bias towards positive rhyme answers initially
             word2 = RHYMING_PAIRS[word1]
             a = "ಹೌದು"
         else:
-            non_rhyming_words = [w for w in unique_words if w != word1 and not do_rhyme(word1, w)]
+            non_rhyming_words = [
+                w for w in unique_words if w != word1 and not do_rhyme(word1, w)
+            ]
             if not non_rhyming_words:
-                q, a = None, None # Skip if no non-rhyming words found
+                q, a = None, None  # Skip if no non-rhyming words found
             else:
                 word2 = random.choice(non_rhyming_words)
                 a = "ಅಲ್ಲ"  # ಪ್ರಾಸಬದ್ಧವೇ? → quality → ಅಲ್ಲ
-        if q is not None and a is not None: # Check if a valid pair was generated
+        if q is not None and a is not None:  # Check if a valid pair was generated
             q = template_text.format(word1=word1, word2=word2)
     elif ttype == "word_with_vowel":
         lst = words_by_first.get("ಅ", unique_words)

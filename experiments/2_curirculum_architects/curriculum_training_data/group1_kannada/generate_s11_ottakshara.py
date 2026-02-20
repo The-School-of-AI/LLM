@@ -4,40 +4,44 @@ Generate Statement 11: Ottakshara & Kagunita (ಒತ್ತಕ್ಷರ, ಗು�
 Language-specific: conjuncts, vowel signs, ಋ/ಐ/ಔ, ಷ vs ಶ, ಕ್ಷ as consonant.
 Answers for "ಒತ್ತಕ್ಷರವನ್ನು ಹೆಸರಿಸಿ" list ALL ottakshara in the word (e.g. ದೃಶ್ಯ → ದೃ ಮತ್ತು ಶ್ಯ).
 """
+
 import os
 import random
 import sys
+
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
-from group1_kannada.generate_s1_spelling import get_kannada_grapheme_clusters  # noqa: E402
+from group1_kannada.generate_s1_spelling import (  # noqa: E402
+    get_kannada_grapheme_clusters,
+)
 from group1_kannada.kannada_grammar import get_kannada_aksharas  # noqa: E402
 from group1_kannada.kannada_vocabulary import ALL_WORDS_UNIQUE, VARGAS  # noqa: E402
+from prompt_utils import format_qa_pair_kannada, int_to_kannada  # noqa: E402
 
 # Halant and vowel signs that make an akshara a conjunct (ottakshara)
-HALANT = "\u0CCD"
-R_VOWEL, RR_VOWEL = "\u0CC3", "\u0CC4"  # ೃ, ೄ
+HALANT = "\u0ccd"
+R_VOWEL, RR_VOWEL = "\u0cc3", "\u0cc4"  # ೃ, ೄ
 VIRAMA = HALANT
-RA = "\u0CB0"
+RA = "\u0cb0"
 
 # Vowel signs (Matras) mapping - for matra identification questions
 MATRA_MAP = {
-    "\u0BE7": "ಆ-ಕಾರ",  # ಾ
-    "\u0BE8": "ಇ-ಕಾರ",  # ಿ
-    "\u0BE9": "ಈ-ಕಾರ",  # ೀ
-    "\u0BEA": "ಉ-ಕಾರ",  # ು
-    "\u0BEB": "ಊ-ಕಾರ",  # ೂ
-    "\u0BEC": "ಋ-ಕಾರ",  # ೃ
-    "\u0BED": "ಎ-ತ್ವ",   # ೆ
-    "\u0BEE": "ಏ-ತ್ವ",   # ೇ
-    "\u0BEF": "ಐ-ಕಾರ",  # ೈ
-    "\u0BF0": "ಓ-ತ್ವ",   # ೊ
-    "\u0BF1": "ಓ-ತ್ವ",   # ೋ
-    "\u0BF2": "ಔ-ತ್ವ",   # ೌ
-    "\u0C01": "ಅಕ",     # ಁ
-    "\u0C02": "ಅನುಸ್ವಾರ",  # ಂ
-    "\u0C03": "ವಿಸರ್ಗ",  # ಃ
+    "\u0be7": "ಆ-ಕಾರ",  # ಾ
+    "\u0be8": "ಇ-ಕಾರ",  # ಿ
+    "\u0be9": "ಈ-ಕಾರ",  # ೀ
+    "\u0bea": "ಉ-ಕಾರ",  # ು
+    "\u0beb": "ಊ-ಕಾರ",  # ೂ
+    "\u0bec": "ಋ-ಕಾರ",  # ೃ
+    "\u0bed": "ಎ-ತ್ವ",  # ೆ
+    "\u0bee": "ಏ-ತ್ವ",  # ೇ
+    "\u0bef": "ಐ-ಕಾರ",  # ೈ
+    "\u0bf0": "ಓ-ತ್ವ",  # ೊ
+    "\u0bf1": "ಓ-ತ್ವ",  # ೋ
+    "\u0bf2": "ಔ-ತ್ವ",  # ೌ
+    "\u0c01": "ಅಕ",  # ಁ
+    "\u0c02": "ಅನುಸ್ವಾರ",  # ಂ
+    "\u0c03": "ವಿಸರ್ಗ",  # ಃ
 }
 
 ORDINALS = ["", "ಮೊದಲ", "ಎರಡನೇ", "ಮೂರನೇ", "ನಾಲ್ಕನೇ", "ಐದನೇ"]
@@ -136,18 +140,22 @@ def analyze_word_for_questions(word: str) -> list[tuple[str, str]]:
     if regex.search(rf"{RA}{VIRAMA}([\u0C95-\u0CB9])", word):
         for cluster in clusters:
             if RA + VIRAMA in cluster:
-                questions.append((
-                    f'"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು ಚಿಹ್ನೆಯನ್ನು ಗುರುತಿಸಿ?',
-                    cluster,
-                ))
+                questions.append(
+                    (
+                        f'"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು ಚಿಹ್ನೆಯನ್ನು ಗುರುತಿಸಿ?',
+                        cluster,
+                    )
+                )
                 break
 
     # 5. Independent Letter Count (Akshara count)
     count = len(aksharas)
-    questions.append((
-        f'"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಸ್ವತಂತ್ರ ಅಕ್ಷರಗಳಿವೆ?',
-        int_to_kannada(count),
-    ))
+    questions.append(
+        (
+            f'"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಸ್ವತಂತ್ರ ಅಕ್ಷರಗಳಿವೆ?',
+            int_to_kannada(count),
+        )
+    )
 
     return questions
 
@@ -172,16 +180,28 @@ OTTAKSHARA_QA = [
     ('"{word}" ಪದದಲ್ಲಿರುವ ಋ-ಕಾರ ಗುರುತಿಸಿ?', "ಕೃಷಿ", "ಋ"),
     ('"{word}" ಪದದಲ್ಲಿ ಯಾವ ಸಂಯುಕ್ತಾಕ್ಷರ ಇದೆ?', "ಜ್ಞಾನ", "ಜ್ಞ"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ಓ-ತ್ವ ಚಿಹ್ನೆ ಯಾವುದು?', "ಕೋಳಿ", "ೋ"),
-    ('"{letter}" ಅಕ್ಷರದ ಗುಣಿತಾಕ್ಷರಗಳನ್ನು ಬರೆಯಿರಿ?', "ಕ", "ಕ, ಕಾ, ಕಿ, ಕೀ, ಕು, ಕೂ, ಕೃ, ಕೆ, ಕೇ, ಕೈ, ಕೊ, ಕೋ, ಕೌ"),
+    (
+        '"{letter}" ಅಕ್ಷರದ ಗುಣಿತಾಕ್ಷರಗಳನ್ನು ಬರೆಯಿರಿ?',
+        "ಕ",
+        "ಕ, ಕಾ, ಕಿ, ಕೀ, ಕು, ಕೂ, ಕೃ, ಕೆ, ಕೇ, ಕೈ, ಕೊ, ಕೋ, ಕೌ",
+    ),
     ('"ಷ" ಮತ್ತು "ಶ" ಅಕ್ಷರಗಳ ವ್ಯತ್ಯಾಸವೇನು?', None, "ಅವು ವಿಭಿನ್ನ ವ್ಯಂಜನಾಕ್ಷರಗಳು"),
     # ದೃಶ್ಯ has two ottakshara: ದೃ and ಶ್ಯ — answer lists both
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವನ್ನು ಹೆಸರಿಸಿ?', "ದೃಶ್ಯ", None),  # answer computed below
+    (
+        '"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವನ್ನು ಹೆಸರಿಸಿ?',
+        "ದೃಶ್ಯ",
+        None,
+    ),  # answer computed below
     ('"{word}" ಪದದಲ್ಲಿರುವ ಐ-ಕಾರ ಯಾವುದು?', "ಐದು", "ೈ"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ಔ-ತ್ವ ಚಿಹ್ನೆಯನ್ನು ತೋರಿಸಿ?', "ಸೌರ", "ೌ"),
     ('"{char}" ಅಕ್ಷರವು ಸ್ವರವೋ ಅಥವಾ ವ್ಯಂಜನವೋ?', "ಕ್ಷ", "ವ್ಯಂಜನ"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ಸಂಯುಕ್ತಾಕ್ಷರ ಯಾವುದು?', "ಲಕ್ಷ್ಮಿ", "ಕ್ಷ್ಮಿ"),
     ('"{word}" ಪದದಲ್ಲಿ ಯಾವ ಎ-ತ್ವ ಚಿಹ್ನೆ ಇದೆ?', "ಕೇಸರಿ", "ೇ"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು ಚಿಹ್ನೆಯನ್ನು ಗುರುತಿಸಿ?', "ಸೂರ್ಯ", "೯"),  # ೯ = ಅರ್ಕಾವತ್ತು (ರೆಫೆ) ಚಿಹ್ನೆ
+    (
+        '"{word}" ಪದದಲ್ಲಿರುವ ಅರ್ಕಾವತ್ತು ಚಿಹ್ನೆಯನ್ನು ಗುರುತಿಸಿ?',
+        "ಸೂರ್ಯ",
+        "೯",
+    ),  # ೯ = ಅರ್ಕಾವತ್ತು (ರೆಫೆ) ಚಿಹ್ನೆ
     ('"{letter}" ವರ್ಗದ ಐದನೇ ಅಕ್ಷರ (ಅನುನಾಸಿಕ) ಯಾವುದು?', "ಕ", "ಙ"),
     ('"{letter}" ಅಕ್ಷರದ ಒತ್ತಕ್ಷರ ಹೇಗೆ ಬರೆಯುವುದು?', "ತ", "ತ್ತ"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ಸ್ವರಾಕ್ಷರ ಯಾವುದು?', "ಋಷಿ", "ಋ"),
@@ -199,7 +219,7 @@ OTTAKSHARA_QA = [
     ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವು ಯಾವ ವ್ಯಂಜನಕ್ಕೆ ಸೇರಿದೆ?', "ಅಕ್ಕ", "ಕ"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ದೀರ್ಘ ಸ್ವರವನ್ನು ಗುರುತಿಸಿ?', "ಆಕಾಶ", "ಆ"),
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಅಕ್ಷರಗಳಿವೆ?', "ಮೈಸೂರು", "೩"),
-    ('"{word}" ಪದದಲ್ಲಿ \'ರ\' ಅಕ್ಷರದ ಒತ್ತಕ್ಷರ ರೂಪ (ಅರ್ಕಾವತ್ತು) ಇದೆಯೇ?', "ಕರ್ಣ", "ಹೌದು"),
+    ("\"{word}\" ಪದದಲ್ಲಿ 'ರ' ಅಕ್ಷರದ ಒತ್ತಕ್ಷರ ರೂಪ (ಅರ್ಕಾವತ್ತು) ಇದೆಯೇ?", "ಕರ್ಣ", "ಹೌದು"),
     ('"{word}" ಪದದಲ್ಲಿ ಯಾವ ವ್ಯಂಜನಕ್ಕೆ ಯ ಒತ್ತಕ್ಷರ ಬಂದಿದೆ?', "ಸೂರ್ಯ", "ರ್"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವು ಪೂರ್ಣ ರೂಪ ಬದಲಿಸುವ ಒತ್ತಕ್ಷರವೇ?', "ಅಣ್ಣ", "ಹೌದು"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ತ ಕಾರದ ಒತ್ತಕ್ಷರವನ್ನು ಗುರುತಿಸಿ?', "ಕತ್ತಿ", "ತ್ತಿ"),
@@ -222,10 +242,18 @@ OTTAKSHARA_QA = [
     ('"{word}" ಪದದಲ್ಲಿ ದ ವ್ಯಂಜನಕ್ಕೆ ಯಾವ ಸ್ವರ ಸೇರಿ ಒತ್ತಕ್ಷರವಾಗಿದೆ?', "ವಿದ್ಯೆ", "ಎ"),
     ('"{word}" ಪದದಲ್ಲಿ ನ ಮತ್ತು ಯ ಒತ್ತುಗಳು ಒಟ್ಟಿಗೆ ಬಂದಿವೆಯೇ?', "ನ್ಯೂನತೆ", "ಹೌದು"),
     ('"{word}" ಪದದಲ್ಲಿ ರ ಅಕ್ಷರದ ಒತ್ತಕ್ಷರ ರೂಪ ಯಾವುದು?', "ಪ್ರಗತಿ", "ಕ್ರ-ವತ್ತು"),
-    ('"{word}" ಪದದಲ್ಲಿ ಯಾವ ವರ್ಗದ ವ್ಯಂಜನಕ್ಕೆ ಅದೇ ವರ್ಗದ ಒತ್ತು ಬಂದಿದೆ?', "ಬೊಟ್ಟು", "ಟ-ವರ್ಗ"),
+    (
+        '"{word}" ಪದದಲ್ಲಿ ಯಾವ ವರ್ಗದ ವ್ಯಂಜನಕ್ಕೆ ಅದೇ ವರ್ಗದ ಒತ್ತು ಬಂದಿದೆ?',
+        "ಬೊಟ್ಟು",
+        "ಟ-ವರ್ಗ",
+    ),
     ('"{word}" ಪದದಲ್ಲಿ ಹ ಕಾರದ ಒತ್ತಕ್ಷರ ಎಲ್ಲಿದೆ?', "ಅರ್ಹತೆ", "ರ್ಹ"),
     ('"{word}" ಪದದಲ್ಲಿ ಚ ಕಾರಕ್ಕೆ ಛ ಒತ್ತಕ್ಷರ ಬಂದಿದೆಯೇ?', "ಲಾಂಛನ", "ಹೌದು"),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ವ್ಯಂಜನ ಮತ್ತು ಒತ್ತಕ್ಷರವನ್ನು ಬೇರ್ಪಡಿಸಿ?', "ಸ್ತೋತ್ರ", "ಸ್+ತ, ತ್+ರ"),
+    (
+        '"{word}" ಪದದಲ್ಲಿರುವ ವ್ಯಂಜನ ಮತ್ತು ಒತ್ತಕ್ಷರವನ್ನು ಬೇರ್ಪಡಿಸಿ?',
+        "ಸ್ತೋತ್ರ",
+        "ಸ್+ತ, ತ್+ರ",
+    ),
     ('"{word}" ಪದದಲ್ಲಿ ಕ ಕಾರಕ್ಕೆ ಷ ಒತ್ತು ಸೇರಿದರೆ ಏನಾಗುತ್ತದೆ?', "ಅಕ್ಷರ", "ಕ್ಷ"),
     ('"{word}" ಪದದಲ್ಲಿ ಸ ಕಾರಕ್ಕೆ ತ ಒತ್ತು ಸೇರಿದ ರೂಪ ಯಾವುದು?', "ರಸ್ತೆ", "ಸ್ತೆ"),
     ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವು ಮಹಾಪ್ರಾಣವೇ?', "ಬುದ್ಧಿ", "ಹೌದು (ದ್ಧ)"),
@@ -235,9 +263,9 @@ OTTAKSHARA_QA = [
 
 # Words with ottakshara (conjuncts) from vocabulary - for multi-word expansion
 OTTAKSHARA_WORDS = [
-    w for w in ALL_WORDS_UNIQUE
-    if w and (HALANT in w or R_VOWEL in w or RR_VOWEL in w)
+    w for w in ALL_WORDS_UNIQUE if w and (HALANT in w or R_VOWEL in w or RR_VOWEL in w)
 ]
+
 
 # Multi-word templates: (template_str, filter_fn, answer_fn)
 # filter_fn(word) -> bool; answer_fn(word) -> str or None to skip
@@ -245,21 +273,41 @@ def _first_ottakshara(w):
     ott = get_all_ottakshara_in_word(w)
     return ott[0] if ott else None
 
+
 def _all_ottakshara(w):
     ott = get_all_ottakshara_in_word(w)
     return format_ottakshara_answer(ott) if ott else None
 
+
 def _cluster_count(w):
     return int_to_kannada(len(get_kannada_grapheme_clusters(w)))
+
 
 def _ottakshara_count(w):
     return int_to_kannada(len(get_all_ottakshara_in_word(w)))
 
+
 MULTI_WORD_TEMPLATES = [
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರ ಯಾವುದು?', lambda w: bool(get_all_ottakshara_in_word(w)), _first_ottakshara),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವನ್ನು ಹೆಸರಿಸಿ?', lambda w: len(get_all_ottakshara_in_word(w)) >= 1, _all_ottakshara),
-    ('"{word}" ಪದದಲ್ಲಿ ಯಾವ ಸಂಯುಕ್ತಾಕ್ಷರ ಇದೆ?', lambda w: HALANT in w, _first_ottakshara),
-    ('"{word}" ಪದದಲ್ಲಿರುವ ಸಂಯುಕ್ತಾಕ್ಷರ ಯಾವುದು?', lambda w: HALANT in w, _first_ottakshara),
+    (
+        '"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರ ಯಾವುದು?',
+        lambda w: bool(get_all_ottakshara_in_word(w)),
+        _first_ottakshara,
+    ),
+    (
+        '"{word}" ಪದದಲ್ಲಿರುವ ಒತ್ತಕ್ಷರವನ್ನು ಹೆಸರಿಸಿ?',
+        lambda w: len(get_all_ottakshara_in_word(w)) >= 1,
+        _all_ottakshara,
+    ),
+    (
+        '"{word}" ಪದದಲ್ಲಿ ಯಾವ ಸಂಯುಕ್ತಾಕ್ಷರ ಇದೆ?',
+        lambda w: HALANT in w,
+        _first_ottakshara,
+    ),
+    (
+        '"{word}" ಪದದಲ್ಲಿರುವ ಸಂಯುಕ್ತಾಕ್ಷರ ಯಾವುದು?',
+        lambda w: HALANT in w,
+        _first_ottakshara,
+    ),
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಸ್ವತಂತ್ರ ಅಕ್ಷರಗಳಿವೆ?', lambda w: True, _cluster_count),
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಅಕ್ಷರಗಳಿವೆ?', lambda w: True, _cluster_count),
     ('"{word}" ಪದದಲ್ಲಿ ಎಷ್ಟು ಒತ್ತಕ್ಷರಗಳಿವೆ?', lambda w: True, _ottakshara_count),
@@ -291,7 +339,9 @@ for template, word_or_letter, answer in OTTAKSHARA_QA:
 # Multi-word expansion: generate from vocabulary for templates that support it
 for template_str, filter_fn, answer_fn in MULTI_WORD_TEMPLATES:
     # Use all words for count templates; ottakshara words for identification templates
-    word_pool = OTTAKSHARA_WORDS if "ಎಷ್ಟು" not in template_str else list(ALL_WORDS_UNIQUE)
+    word_pool = (
+        OTTAKSHARA_WORDS if "ಎಷ್ಟು" not in template_str else list(ALL_WORDS_UNIQUE)
+    )
     for word in word_pool:
         if not word or not filter_fn(word):
             continue
@@ -316,7 +366,8 @@ for word in ALL_WORDS_UNIQUE:
 
 # Negation: words WITHOUT ottakshara -> "ಒತ್ತಕ್ಷರ ಇದೆಯೇ?" -> "ಇಲ್ಲ"
 simple_words = [
-    w for w in ALL_WORDS_UNIQUE
+    w
+    for w in ALL_WORDS_UNIQUE
     if w and not any(get_ottakshara_component(ak) for ak in get_kannada_aksharas(w))
 ]
 for word in simple_words[:1000]:  # Cap to avoid imbalance

@@ -3,6 +3,7 @@
 Generate Statement 8: Number Spelling (संख्या वर्तनी) questions
 Target: 10,000 pairs (5% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -60,27 +61,14 @@ for word in NUMBERS:
         if key not in unique_combinations:
             unique_combinations[key] = (query, answer)
 
-# Use unique combinations, then sample with replacement to reach target
+# Only use unique combinations - NO sampling with replacement
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
-    if random.random() < 0.5:
-        # Number to name
-        num = random.randint(1, 100)
-        if num <= len(NUMBERS):
-            word = NUMBERS[num - 1]
-            template = random.choice(TEMPLATES_NAME)
-            query = template.format(num=num)
-            answer = word
-            samples.append((query, answer))
-    else:
-        # Name to spelling
-        word = random.choice(NUMBERS)
-        chars = get_hindi_characters(word)
-        if len(chars) > 0:
-            template = random.choice(TEMPLATES_SPELLING)
-            query = template.format(word=word)
-            answer = ", ".join(chars)
-            samples.append((query, answer))
+unique_count = len(samples)
+
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
+else:
+    samples = samples[:target_count]
 
 random.shuffle(samples)
 
@@ -89,4 +77,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S8 Number Spelling: Generated {len(samples)} samples")
+print(
+    f"S8 Number Spelling: Generated {len(samples)} unique samples (target: {target_count})"
+)

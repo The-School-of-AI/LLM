@@ -3,6 +3,7 @@
 Generate Statement 4: Letter Count (अक्षर गिनती) questions
 Target: 25,800 pairs (12.9% of 200,000)
 """
+
 import os
 import random
 import sys
@@ -30,11 +31,25 @@ TEMPLATES = [
     '"{word}" शब्द में कितने अक्षर होते हैं?',
     '"{word}" में अक्षरों की गिनती क्या है?',
     '"{word}" में कितने अक्षर मौजूद हैं?',
+    'बताइए "{word}" में कितने अक्षर हैं?',
+    '"{word}" शब्द में अक्षरों की संख्या बताइए?',
+    '"{word}" में अक्षरों की गणना करें?',
+    # Additional 10 templates
+    '"{word}" के कितने अक्षर हैं?',
+    '"{word}" में अक्षर कितने हैं?',
+    'बताओ "{word}" में कितने अक्षर हैं?',
+    '"{word}" शब्द के अक्षरों की संख्या क्या है?',
+    '"{word}" में अक्षरों की संख्या बताओ?',
+    '"{word}" के कुल अक्षर कितने हैं?',
+    '"{word}" शब्द में कितने अक्षर गिने जाते हैं?',
+    '"{word}" का अक्षर गणना क्या है?',
+    '"{word}" में कितने वर्ण हैं?',
+    '"{word}" शब्द के वर्णों की संख्या क्या है?',
 ]
 
 all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
 samples = []
-target_count = 25800
+target_count = 30000  # Increased from 25800 for 200K push
 
 # Generate samples
 unique_combinations = {}
@@ -51,18 +66,14 @@ for word in set(all_words):
         if key not in unique_combinations:
             unique_combinations[key] = (query, answer)
 
-# Use unique combinations, then sample with replacement to reach target
+# Only use unique combinations - NO sampling with replacement
 samples = list(unique_combinations.values())
-while len(samples) < target_count:
-    word = random.choice(list(set(all_words)))
-    clusters = get_hindi_grapheme_clusters(word)
-    cluster_count = len(clusters)
-    if cluster_count == 0:
-        continue
-    template = random.choice(TEMPLATES)
-    query = template.format(word=word)
-    answer = str(cluster_count)
-    samples.append((query, answer))
+unique_count = len(samples)
+
+if unique_count < target_count:
+    print(f"Warning: Only {unique_count} unique combinations (target: {target_count})")
+else:
+    samples = samples[:target_count]
 
 random.shuffle(samples)
 
@@ -71,4 +82,6 @@ with open(output_file, "w", encoding="utf-8") as f:
     for query, answer in samples:
         f.write(format_qa_pair_hindi(query, answer) + "\n")
 
-print(f"S4 Letter Count: Generated {len(samples)} samples")
+print(
+    f"S4 Letter Count: Generated {len(samples)} unique samples (target: {target_count})"
+)

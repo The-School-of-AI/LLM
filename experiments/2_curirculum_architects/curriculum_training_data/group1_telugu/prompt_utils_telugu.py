@@ -33,9 +33,9 @@ def count_tokens_telugu(text: str) -> int:
             continue
 
         # Check if character is Devanagari, Telugu, or Kannada
-        is_devanagari = "\u0900" <= ch <= "\u097F"
-        is_telugu = "\u0C00" <= ch <= "\u0C7F"
-        is_kannada = "\u0C80" <= ch <= "\u0CFF"
+        is_devanagari = "\u0900" <= ch <= "\u097f"
+        is_telugu = "\u0c00" <= ch <= "\u0c7f"
+        is_kannada = "\u0c80" <= ch <= "\u0cff"
 
         if is_devanagari or is_telugu or is_kannada:
             count += 1
@@ -49,9 +49,9 @@ def count_tokens_telugu(text: str) -> int:
             while i < n:
                 next_ch = text[i]
                 if (
-                    "\u0900" <= next_ch <= "\u097F"
-                    or "\u0C00" <= next_ch <= "\u0C7F"
-                    or "\u0C80" <= next_ch <= "\u0CFF"
+                    "\u0900" <= next_ch <= "\u097f"
+                    or "\u0c00" <= next_ch <= "\u0c7f"
+                    or "\u0c80" <= next_ch <= "\u0cff"
                 ):
                     break
                 if next_ch.isalnum():
@@ -137,10 +137,7 @@ def combine_qa_pairs_to_reach_min_tokens_telugu(
     if current_sample_parts:
         if samples:
             samples[-1] = (
-                samples[-1].rstrip("\n")
-                + " "
-                + " ".join(current_sample_parts)
-                + "\n"
+                samples[-1].rstrip("\n") + " " + " ".join(current_sample_parts) + "\n"
             )
         else:
             samples.append(" ".join(current_sample_parts) + "\n")

@@ -4,26 +4,57 @@ Generate Statement 11: Ottulu & Gunintalu (ఒత్తులు & గుణి�
 Teaches the internal structure of aksharas: consonant-vowel composition and conjuncts.
 Target: 8,000 pairs (4% of 208,000)
 """
+
 import os
 import random
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_telugu.generate_s1_spelling import get_telugu_grapheme_clusters  # noqa: E402
-from group1_telugu.telugu_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
+from group1_telugu.generate_s1_spelling import (  # noqa: E402
+    get_telugu_grapheme_clusters,
+)
 from group1_telugu.prompt_utils_telugu import format_qa_pair_telugu  # noqa: E402
+from group1_telugu.telugu_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
 
 # ─── Telugu Consonants (హల్లులు) ───
 # Full traditional alphabet including ఱ (hard ra) and క్ష (conjunct, but taught as part of alphabet)
 CONSONANTS = [
-    "క", "ఖ", "గ", "ఘ", "ఙ",
-    "చ", "ఛ", "జ", "ఝ", "ఞ",
-    "ట", "ఠ", "డ", "ఢ", "ణ",
-    "త", "థ", "ద", "ధ", "న",
-    "ప", "ఫ", "బ", "భ", "మ",
-    "య", "ర", "ల", "వ",
-    "శ", "ష", "స", "హ", "ళ",
-    "ఱ", "క్ష",
+    "క",
+    "ఖ",
+    "గ",
+    "ఘ",
+    "ఙ",
+    "చ",
+    "ఛ",
+    "జ",
+    "ఝ",
+    "ఞ",
+    "ట",
+    "ఠ",
+    "డ",
+    "ఢ",
+    "ణ",
+    "త",
+    "థ",
+    "ద",
+    "ధ",
+    "న",
+    "ప",
+    "ఫ",
+    "బ",
+    "భ",
+    "మ",
+    "య",
+    "ర",
+    "ల",
+    "వ",
+    "శ",
+    "ష",
+    "స",
+    "హ",
+    "ళ",
+    "ఱ",
+    "క్ష",
 ]
 
 # ─── Telugu Vowels & Vowel Signs (అచ్చులు & గుణింతాలు) ───
@@ -31,27 +62,44 @@ CONSONANTS = [
 # అ has no combining sign — the consonant's base form is itself the అ-కారం form
 VOWELS_WITH_SIGNS = [
     ("అ", "", "అ-కారం"),
-    ("ఆ", "\u0C3E", "ఆ-కారం"),
-    ("ఇ", "\u0C3F", "ఇ-కారం"),
-    ("ఈ", "\u0C40", "ఈ-కారం"),
-    ("ఉ", "\u0C41", "ఉ-కారం"),
-    ("ఊ", "\u0C42", "ఊ-కారం"),
-    ("ఋ", "\u0C43", "ఋ-కారం"),
-    ("ౠ", "\u0C44", "ౠ-కారం"),
-    ("ఎ", "\u0C46", "ఎ-కారం"),
-    ("ఏ", "\u0C47", "ఏ-కారం"),
-    ("ఐ", "\u0C48", "ఐ-కారం"),
-    ("ఒ", "\u0C4A", "ఒ-కారం"),
-    ("ఓ", "\u0C4B", "ఓ-కారం"),
-    ("ఔ", "\u0C4C", "ఔ-కారం"),
-    ("అం", "\u0C02", "అనుస్వారం"),
-    ("అః", "\u0C03", "విసర్గ"),
+    ("ఆ", "\u0c3e", "ఆ-కారం"),
+    ("ఇ", "\u0c3f", "ఇ-కారం"),
+    ("ఈ", "\u0c40", "ఈ-కారం"),
+    ("ఉ", "\u0c41", "ఉ-కారం"),
+    ("ఊ", "\u0c42", "ఊ-కారం"),
+    ("ఋ", "\u0c43", "ఋ-కారం"),
+    ("ౠ", "\u0c44", "ౠ-కారం"),
+    ("ఎ", "\u0c46", "ఎ-కారం"),
+    ("ఏ", "\u0c47", "ఏ-కారం"),
+    ("ఐ", "\u0c48", "ఐ-కారం"),
+    ("ఒ", "\u0c4a", "ఒ-కారం"),
+    ("ఓ", "\u0c4b", "ఓ-కారం"),
+    ("ఔ", "\u0c4c", "ఔ-కారం"),
+    ("అం", "\u0c02", "అనుస్వారం"),
+    ("అః", "\u0c03", "విసర్గ"),
 ]
 
 # Independent vowels for classification (including అయోగవాహాలు: అం, అః)
-INDEPENDENT_VOWELS = ["అ", "ఆ", "ఇ", "ఈ", "ఉ", "ఊ", "ఋ", "ౠ", "ఎ", "ఏ", "ఐ", "ఒ", "ఓ", "ఔ", "అం", "అః"]
+INDEPENDENT_VOWELS = [
+    "అ",
+    "ఆ",
+    "ఇ",
+    "ఈ",
+    "ఉ",
+    "ఊ",
+    "ఋ",
+    "ౠ",
+    "ఎ",
+    "ఏ",
+    "ఐ",
+    "ఒ",
+    "ఓ",
+    "ఔ",
+    "అం",
+    "అః",
+]
 
-TELUGU_VIRAMA = "\u0C4D"  # ్
+TELUGU_VIRAMA = "\u0c4d"  # ్
 
 
 def build_gunintam_chart(consonant: str) -> list[str]:
@@ -166,7 +214,9 @@ for cons in CONSONANTS:
 
 # 2. Gunintalu: identify base consonant
 for cons in CONSONANTS:
-    for vowel_indep, sign, vowel_name in random.sample(VOWELS_WITH_SIGNS, min(4, len(VOWELS_WITH_SIGNS))):
+    for vowel_indep, sign, vowel_name in random.sample(
+        VOWELS_WITH_SIGNS, min(4, len(VOWELS_WITH_SIGNS))
+    ):
         combined = cons + sign
         template = random.choice(TEMPLATES_GUNINTAM_BASE)
         q = template.format(combined=combined)
@@ -178,7 +228,9 @@ for cons in CONSONANTS:
 
 # 3. Gunintalu: identify vowel in combined form
 for cons in CONSONANTS:
-    for vowel_indep, sign, vowel_name in random.sample(VOWELS_WITH_SIGNS, min(4, len(VOWELS_WITH_SIGNS))):
+    for vowel_indep, sign, vowel_name in random.sample(
+        VOWELS_WITH_SIGNS, min(4, len(VOWELS_WITH_SIGNS))
+    ):
         combined = cons + sign
         template = random.choice(TEMPLATES_GUNINTAM_VOWEL)
         q = template.format(combined=combined)

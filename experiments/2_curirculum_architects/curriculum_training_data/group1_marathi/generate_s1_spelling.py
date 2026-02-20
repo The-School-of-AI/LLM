@@ -32,10 +32,10 @@ TEMPLATES = [
     '"{word}" शब्द कसा लिहिला जातो?',
     '"{word}" ची वर्तनी लिहा?',
     '"{word}" ची वर्तनी काय होते?',
-    '"{word}" शब्दाची वर्तनी काय आहे?',
+    '"{word}" शब्दाचा वर्णविच्छेद काय आहे?',
     '"{word}" कशी वर्तनी करायची?',
-    '"{word}" ची योग्य वर्तनी सांगा?',
-    '"{word}" ची वर्तनी काय आहे?',
+    '"{word}" ची अचूक वर्तनी सांगा?',
+    '"{word}" शब्दाचे स्पेलिंग काय आहे?',
     '"{word}" शब्दाची वर्तनी सांगा?',
     '"{word}" कसे लिहिले जाते?',
 ]
@@ -65,31 +65,30 @@ def generate_spelling_answer(word: str) -> str:
     return ", ".join(chars)
 
 
-all_words = EASY_WORDS + MEDIUM_WORDS + HARD_WORDS
+all_words_set = set(EASY_WORDS_UNIQUE + MEDIUM_WORDS_UNIQUE + HARD_WORDS_UNIQUE)
 samples = []
 target_count = 28600
 
-# Generate all unique combinations first
-unique_combinations = {}
-for word in set(all_words):  # Use unique words
-    for template_idx, template in enumerate(TEMPLATES):
-        query = template.format(word=word)
-        answer = generate_spelling_answer(word)
-        unique_combinations[(word, template_idx)] = (query, answer)
+# Generate all possible unique combinations
+unique_combinations = []
+all_words_list = list(all_words_set)
+random.shuffle(all_words_list)
 
-# If we have enough unique combinations, use them
-if len(unique_combinations) >= target_count:
-    samples = list(unique_combinations.values())[:target_count]
-else:
-    # Use all unique combinations, then randomly sample with replacement to reach target
-    samples = list(unique_combinations.values())
-    while len(samples) < target_count:
-        word = random.choice(list(set(all_words)))
-        template_idx = random.randint(0, len(TEMPLATES) - 1)
-        template = TEMPLATES[template_idx]
+for word in all_words_list:
+    # Shuffle templates for each word
+    current_templates = list(enumerate(TEMPLATES))
+    random.shuffle(current_templates)
+
+    for template_idx, template in current_templates:
         query = template.format(word=word)
         answer = generate_spelling_answer(word)
-        samples.append((query, answer))
+        unique_combinations.append((query, answer))
+        if len(unique_combinations) >= target_count:
+            break
+    if len(unique_combinations) >= target_count:
+        break
+
+samples = unique_combinations
 
 # Shuffle for randomness
 random.shuffle(samples)

@@ -8,11 +8,11 @@ import os
 import random
 import sys
 
+# Generate samples using algorithmic rhyming
+from collections import defaultdict
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from group1_marathi.marathi_vocabulary import (  # noqa: E402
-    ALL_WORDS_UNIQUE,
-    RHYMING_PAIRS,
-)
+from group1_marathi.marathi_vocabulary import ALL_WORDS_UNIQUE  # noqa: E402
 from prompt_utils import format_qa_pair_marathi  # noqa: E402
 
 # Expand word list
@@ -34,35 +34,62 @@ samples = []
 target_count = 20000
 unique_combinations = set()
 
-# Generate samples using rhyming pairs
-for word, rhyme_word in RHYMING_PAIRS.items():
-    # Find non-rhyming words
-    non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
 
-    if not non_rhyming_words:
+# Group words by rhyme suffix (last 2 chars approx rhyme)
+# In Marathi, words ending with same matra/char often rhyme
+rhyme_groups = defaultdict(list)
+
+# Use suffix length of 2 for better rhymes, fallback to 1 if needed
+for word in unique_words:
+    if len(word) >= 2:
+        suffix = word[-2:]
+        rhyme_groups[suffix].append(word)
+
+# Flatten into pairs
+generated_pairs = []
+for suffix, words in rhyme_groups.items():
+    if len(words) >= 2:
+        # Generate all pairs in this group
+        for i in range(len(words)):
+            for j in range(i + 1, len(words)):
+                generated_pairs.append((words[i], words[j]))
+
+# Shuffle pairs to get random selection
+random.shuffle(generated_pairs)
+
+print(f"Generated {len(generated_pairs)} rhyming pairs algorithmically")
+
+for word, rhyme_word in generated_pairs:
+    if len(samples) >= target_count:
+        break
+
+    # Find non-rhyming words (different suffix)
+    # Optimization: Pick random word and check suffix
+    non_rhyme = None
+    for _ in range(10):
+        candidate = random.choice(unique_words)
+        if len(candidate) >= 2 and candidate[-2:] != word[-2:]:
+            non_rhyme = candidate
+            break
+
+    if not non_rhyme:
         continue
 
-    for template_idx, template in enumerate(TEMPLATES):
-        non_rhyme = random.choice(non_rhyming_words)
-        query = template.format(word=word, rhyme=rhyme_word, non_rhyme=non_rhyme)
-        answer = rhyme_word
-        key = (word, rhyme_word, non_rhyme, template_idx)
-        if key not in unique_combinations:
-            unique_combinations.add(key)
-            samples.append((query, answer))
+    # Forward direction
+    template = random.choice(TEMPLATES)
+    query = template.format(word=word, rhyme=rhyme_word, non_rhyme=non_rhyme)
+    answer = rhyme_word
+    key = (word, rhyme_word, non_rhyme)
+    if key not in unique_combinations:
+        unique_combinations.add(key)
+        samples.append((query, answer))
 
-# Also generate reverse (rhyme_word -> word)
-for rhyme_word, word in RHYMING_PAIRS.items():
-    non_rhyming_words = [w for w in unique_words if w != word and w != rhyme_word]
-
-    if not non_rhyming_words:
-        continue
-
-    for template_idx, template in enumerate(TEMPLATES):
-        non_rhyme = random.choice(non_rhyming_words)
+    # Reverse direction
+    if len(samples) < target_count:
+        template = random.choice(TEMPLATES)
         query = template.format(word=rhyme_word, rhyme=word, non_rhyme=non_rhyme)
         answer = word
-        key = (rhyme_word, word, non_rhyme, template_idx)
+        key = (rhyme_word, word, non_rhyme)
         if key not in unique_combinations:
             unique_combinations.add(key)
             samples.append((query, answer))
