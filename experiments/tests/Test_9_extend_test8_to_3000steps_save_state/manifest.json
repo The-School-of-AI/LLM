@@ -1,0 +1,41 @@
+{
+  "test_id": "Test_9_extend_test8_to_3000steps_save_state",
+  "model_variant": "reversible",
+  "created_at_utc": "2026-02-20T08:23:35Z",
+  "self_contained": true,
+  "continuation_from": "Test_8_additional_fused_kernels_1000steps",
+  "resume_tag_default": "epoch0_step1000",
+  "artifacts": {
+    "main_py_sha256": "c04d44e455f3195e7e3c3d52cb44debce6e1c53b21d132d71e5650a6e7f03b2c",
+    "train_py_sha256": "49a360804d9ea8554c52b645109722088b233a3419ed978ba5ab1cdd7b27392f",
+    "model_sha256": "3403f0f0741a0819a7bf8d240fd877e5ebf8a4ede89165d027798f4e45bc3f6b",
+    "reversible_ops_sha256": "640d4b3a05a8ac037da4f397dd222e629ec0cd859cc3e6597b6cc8a703183944",
+    "liger_ops_sha256": "65bc6e700ffe51ab91bdc9c8a3fd0408660bf900ca4d591c692b7965bc10d939",
+    "config_sha256": "f1b8d08db2b001baeb976d19fa2fccb8860a1806ae2f931fc5b4f46d42ef466d",
+    "deepspeed_sha256": "781390bc44b5f550e41378ee38c8e183c397bf5d7c84df10d27115ce2bdae424",
+    "save_init_script_sha256": "de8f31bf5fd301fce81443180ac23a4790f83ecd09d53ff4d47446bbd4b0492c",
+    "run_sh_sha256": "5cac31c40cb1ab0730ab9c257aac0e476a2ccbce694e33a2e8a49123eaf289db"
+  },
+  "controls": {
+    "seed": 42,
+    "dataset": "wikitext-103-raw-v1",
+    "max_length": 512,
+    "global_batch_size": 32,
+    "embedding_type": "kronecker",
+    "model_variant": "reversible",
+    "max_train_steps": 2999,
+    "target_global_step": 3000,
+    "log_interval": 1,
+    "require_gsa_triton": true,
+    "require_deltanet_fused": true,
+    "require_fused_kernels": true,
+    "use_fused_ce": true,
+    "require_additional_fused_kernels": true,
+    "resume_from_checkpoint": "epoch0_step1000"
+  },
+  "expected_outputs": [
+    "results/run/checkpoints/final",
+    "results/run/train.log",
+    "results/run/metrics.jsonl"
+  ]
+}

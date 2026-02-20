@@ -1,0 +1,51 @@
+{
+  "test_id": "Test 1",
+  "title": "Short comparative run to pick recurrence winner",
+  "created_at_utc": "2026-02-20T06:59:02Z",
+  "workspace": "/Users/rohanshravan/Downloads/LLM-code-20260219-1351_rohan_patch_v3",
+  "self_contained": true,
+  "code_snapshot": {
+    "main_py_sha256": "4ba8bf04c89bdc10baaa6aace6cc90f75faea7741353c38dae9a36a063a36be7",
+    "train_py_sha256": "f9be07298c0053bb3bc74c95d153e0a14467005afd9995a1d323eb84bf4f9ae6",
+    "lead_model_sha256": "8903b1d6feef1cdc7f0bd3c8b2e196d0c740face3f17df80f6097406cb1ce32f",
+    "diff_rec_model_sha256": "28af3c47b5862e8c7d5fcdc11081e36b5cab5e44aba4e562a890046e52ef5a07"
+  },
+  "configs": {
+    "lead_config": "configs/test1_lead_wo_rev.yaml",
+    "lead_config_sha256": "098a22dff848142789662bfd844709a433fada4781ded7083aff28584924c2b3",
+    "diff_config": "configs/test1_diff_rec.yaml",
+    "diff_config_sha256": "13b250b13ccead54e79ed12ed3b42091cff603176840030b2f6b5fc821d4e79c",
+    "deepspeed_config": "deepspeed/zero-2-dense-bf16-test1-100steps.json",
+    "deepspeed_config_sha256": "0a04f4609d57d7bf7256c6469488caedbb25bb5cf181130afb0cf714a7903a87"
+  },
+  "determinism_controls": {
+    "seed": 42,
+    "dataset_name": "wikitext",
+    "dataset_config": "wikitext-103-raw-v1",
+    "max_length": 512,
+    "embedding_type": "standard",
+    "max_train_steps": 100
+  },
+  "runs": [
+    {
+      "name": "lead_wo_rev",
+      "model_variant": "lead_wo_rev",
+      "command": "deepspeed --num_gpus=<N> main.py --config ../configs/test1_lead_wo_rev.yaml",
+      "outputs": {
+        "log": "results/lead_wo_rev/train.log",
+        "metrics": "results/lead_wo_rev/metrics.jsonl",
+        "checkpoints_dir": "results/lead_wo_rev/checkpoints"
+      }
+    },
+    {
+      "name": "diff_rec",
+      "model_variant": "diff_rec",
+      "command": "deepspeed --num_gpus=<N> main.py --config ../configs/test1_diff_rec.yaml",
+      "outputs": {
+        "log": "results/diff_rec/train.log",
+        "metrics": "results/diff_rec/metrics.jsonl",
+        "checkpoints_dir": "results/diff_rec/checkpoints"
+      }
+    }
+  ]
+}

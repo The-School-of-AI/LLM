@@ -1,0 +1,2 @@
+V3
+GSA in backprop was not training. Added Patch for that. Still need to find FUSED GSA backprop kernel, only forward has fused path. 

@@ -1,0 +1,56 @@
+{
+  "test_id": "Test_11_add_fused_moe_to_3B_1000steps",
+  "model_variant": "reversible",
+  "created_at_utc": "2026-02-20T09:04:53Z",
+  "self_contained": true,
+  "based_on": "Test_10_convert_to_3B_MoE_100steps",
+  "artifacts": {
+    "main_py_sha256": "d3bbf8fcd013d9a8bd926e94c88e9470a0921690f486b127e51b79429b9f72e6",
+    "train_py_sha256": "49a360804d9ea8554c52b645109722088b233a3419ed978ba5ab1cdd7b27392f",
+    "model_sha256": "155e2a638a95e931d3809ead84e2326b5fca6ae35904218531143b248825eda5",
+    "reversible_ops_sha256": "640d4b3a05a8ac037da4f397dd222e629ec0cd859cc3e6597b6cc8a703183944",
+    "liger_ops_sha256": "56b8668f5080beb10e5328e29efa957a96e57648fb5614bc61856d1c12164421",
+    "config_sha256": "0be72277db3f8ccb9ccfa993154a9a524e1329a39db6de33013f515467720ab9",
+    "deepspeed_sha256": "781390bc44b5f550e41378ee38c8e183c397bf5d7c84df10d27115ce2bdae424",
+    "save_init_script_sha256": "943980faf7715240f6b6ed058c55e3339d1c1502b229b7e84eb13090cd2b6514",
+    "run_sh_sha256": "facafc3418e209d2e30ce3df387a88205e2c9dccf12c3a53cb1189dcdfa9f4b9"
+  },
+  "controls": {
+    "seed": 42,
+    "dataset": "wikitext-103-raw-v1",
+    "max_length": 512,
+    "global_batch_size": 32,
+    "embedding_type": "kronecker",
+    "model_variant": "reversible",
+    "max_train_steps": 1000,
+    "log_interval": 1,
+    "require_gsa_triton": true,
+    "require_deltanet_fused": true,
+    "require_fused_kernels": true,
+    "use_fused_ce": true,
+    "require_additional_fused_kernels": true,
+    "require_fused_moe": true,
+    "resume_from_checkpoint": null,
+    "moe_profile": {
+      "hidden_size": 4096,
+      "num_layers": 8,
+      "num_deltanet_layers": 6,
+      "num_gsa_layers": 2,
+      "num_real_experts": 20,
+      "num_null_experts": 20,
+      "total_expert_slots": 40,
+      "top_k": 2,
+      "expert_intermediate_size": 1024,
+      "shared_expert_intermediate_size": 2048,
+      "data_sparsity": 0.5,
+      "moe_backend": "grouped_gemm",
+      "require_fused_moe_kernel": true
+    }
+  },
+  "expected_outputs": [
+    "results/init/model_init.pt",
+    "results/init/model_init_meta.json",
+    "results/run/train.log",
+    "results/run/metrics.jsonl"
+  ]
+}

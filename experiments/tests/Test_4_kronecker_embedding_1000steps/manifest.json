@@ -1,0 +1,33 @@
+{
+  "test_id": "Test_4_kronecker_embedding_1000steps",
+  "winner_model_variant": "diff_rec",
+  "created_at_utc": "2026-02-20T08:07:01Z",
+  "self_contained": true,
+  "models_folder_policy": "winner-only",
+  "artifacts": {
+    "main_py_sha256": "09cae2355f1c31f394f4f5c438539953e189447a33bee9504efd19a8321ff4e8",
+    "train_py_sha256": "f9be07298c0053bb3bc74c95d153e0a14467005afd9995a1d323eb84bf4f9ae6",
+    "winner_model_sha256": "28af3c47b5862e8c7d5fcdc11081e36b5cab5e44aba4e562a890046e52ef5a07",
+    "liger_ops_sha256": "65bc6e700ffe51ab91bdc9c8a3fd0408660bf900ca4d591c692b7965bc10d939",
+    "config_sha256": "ea04dd26fd58aa417cbdf98c38f4c1bc36afb62a07811ec4e7469886b038dcad",
+    "deepspeed_sha256": "781390bc44b5f550e41378ee38c8e183c397bf5d7c84df10d27115ce2bdae424",
+    "save_init_script_sha256": "80c9e42313743f85e9aca556161cdf55ae0ab6e6268d28b90ba6c28e46758075",
+    "run_sh_sha256": "52a50b2a28ff7051526dc88917e5466517c78aa17c9c97df82e0b8d844a803f8"
+  },
+  "controls": {
+    "seed": 42,
+    "dataset": "wikitext-103-raw-v1",
+    "max_length": 512,
+    "global_batch_size": 32,
+    "embedding_type": "kronecker",
+    "steps": 1000,
+    "log_interval": 1,
+    "init_model_path": "../results/init/model_init.pt"
+  },
+  "expected_outputs": [
+    "results/init/model_init.pt",
+    "results/init/model_init_meta.json",
+    "results/run/train.log",
+    "results/run/metrics.jsonl"
+  ]
+}

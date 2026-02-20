@@ -1,0 +1,53 @@
+{
+  "test_id": "Test_10_convert_to_3B_MoE_100steps",
+  "model_variant": "reversible",
+  "created_at_utc": "2026-02-20T09:04:53Z",
+  "self_contained": true,
+  "based_on": "Test_9_extend_test8_to_3000steps_save_state",
+  "artifacts": {
+    "main_py_sha256": "d3bbf8fcd013d9a8bd926e94c88e9470a0921690f486b127e51b79429b9f72e6",
+    "train_py_sha256": "49a360804d9ea8554c52b645109722088b233a3419ed978ba5ab1cdd7b27392f",
+    "model_sha256": "2375b28ecef7a6f61ae2efc479c3ce4df4073e194bb2131ed873bb5b7e00861c",
+    "reversible_ops_sha256": "640d4b3a05a8ac037da4f397dd222e629ec0cd859cc3e6597b6cc8a703183944",
+    "liger_ops_sha256": "56b8668f5080beb10e5328e29efa957a96e57648fb5614bc61856d1c12164421",
+    "config_sha256": "1bcaf8ffb9c96c59e8c7cd7a63e2e5a34eff5437008a07d5804b56d20c97d77a",
+    "deepspeed_sha256": "515f132ea9c7ddd91d582d6827a1939a0cd16ae804392f3e64c767bfaa4ac263",
+    "save_init_script_sha256": "6df9d1f4ca9b098c779c932f6a94cc65587033e31dbc666e5bca0deb1cdda456",
+    "run_sh_sha256": "f1027ebb3c3c0b3bb063544dc8efc86f1979bb8d275fbe37d5cc2c3dd8f5f9b8"
+  },
+  "controls": {
+    "seed": 42,
+    "dataset": "wikitext-103-raw-v1",
+    "max_length": 512,
+    "global_batch_size": 32,
+    "embedding_type": "kronecker",
+    "model_variant": "reversible",
+    "max_train_steps": 100,
+    "log_interval": 1,
+    "require_gsa_triton": true,
+    "require_deltanet_fused": true,
+    "require_fused_kernels": true,
+    "use_fused_ce": true,
+    "require_additional_fused_kernels": true,
+    "resume_from_checkpoint": null,
+    "moe_profile": {
+      "hidden_size": 4096,
+      "num_layers": 8,
+      "num_deltanet_layers": 6,
+      "num_gsa_layers": 2,
+      "num_real_experts": 20,
+      "num_null_experts": 20,
+      "total_expert_slots": 40,
+      "top_k": 2,
+      "expert_intermediate_size": 1024,
+      "shared_expert_intermediate_size": 2048,
+      "data_sparsity": 0.5
+    }
+  },
+  "expected_outputs": [
+    "results/init/model_init.pt",
+    "results/init/model_init_meta.json",
+    "results/run/train.log",
+    "results/run/metrics.jsonl"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "test_id": "Test_7_triton_gsa_triton_deltanet_1000steps",
+  "model_variant": "reversible",
+  "created_at_utc": "2026-02-20T08:15:53Z",
+  "self_contained": true,
+  "models_folder_policy": "test-model-only",
+  "artifacts": {
+    "main_py_sha256": "8ceef25a7d307d1eaf2d031c25b53c485d8472f5f540d5b149c3446d593b850c",
+    "train_py_sha256": "f9be07298c0053bb3bc74c95d153e0a14467005afd9995a1d323eb84bf4f9ae6",
+    "model_sha256": "3403f0f0741a0819a7bf8d240fd877e5ebf8a4ede89165d027798f4e45bc3f6b",
+    "reversible_ops_sha256": "640d4b3a05a8ac037da4f397dd222e629ec0cd859cc3e6597b6cc8a703183944",
+    "liger_ops_sha256": "65bc6e700ffe51ab91bdc9c8a3fd0408660bf900ca4d591c692b7965bc10d939",
+    "config_sha256": "da94a95c8197065bb9621823fb849f3de9308df04bea4c151988dc16285c9c68",
+    "deepspeed_sha256": "781390bc44b5f550e41378ee38c8e183c397bf5d7c84df10d27115ce2bdae424",
+    "save_init_script_sha256": "8ae470d0e9c45fc3087c0550d6be6276bf372f22c337e587d43ab5c8f1919940",
+    "run_sh_sha256": "fc6d5458c9bc2aac4d3938a184f597bc9bbab916e00b66d9762d9b3765a8ed1e"
+  },
+  "controls": {
+    "seed": 42,
+    "dataset": "wikitext-103-raw-v1",
+    "max_length": 512,
+    "global_batch_size": 32,
+    "embedding_type": "kronecker",
+    "model_variant": "reversible",
+    "steps": 1000,
+    "log_interval": 1,
+    "require_gsa_triton": true,
+    "require_deltanet_fused": true,
+    "require_fused_kernels": true,
+    "init_model_path": "../results/init/model_init.pt"
+  },
+  "expected_outputs": [
+    "results/init/model_init.pt",
+    "results/init/model_init_meta.json",
+    "results/run/train.log",
+    "results/run/metrics.jsonl"
+  ]
+}

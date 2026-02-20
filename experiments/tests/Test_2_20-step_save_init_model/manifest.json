@@ -1,0 +1,30 @@
+{
+  "test_id": "Test_2_20-step_save_init_model",
+  "winner_model_variant": "diff_rec",
+  "created_at_utc": "2026-02-20T07:49:43Z",
+  "self_contained": true,
+  "models_folder_policy": "winner-only",
+  "artifacts": {
+    "main_py_sha256": "dcf42094da4ef55f24d01723ab9c5c9c82615de52bd49fa59826ed77d1a6443b",
+    "train_py_sha256": "f9be07298c0053bb3bc74c95d153e0a14467005afd9995a1d323eb84bf4f9ae6",
+    "winner_model_sha256": "28af3c47b5862e8c7d5fcdc11081e36b5cab5e44aba4e562a890046e52ef5a07",
+    "liger_ops_sha256": "65bc6e700ffe51ab91bdc9c8a3fd0408660bf900ca4d591c692b7965bc10d939",
+    "config_sha256": "b717cc4e8b1cdc4b15c4f0ecfd5bb3acef1c9397626cc9dd82ea66198f6db683",
+    "deepspeed_sha256": "310d38f0861e5ecd14886b316b6d8481b981e7507d8d9408eb40645d1cb65c97",
+    "save_init_script_sha256": "f1571a869acaacf1988e25805fed5c7c2c7ad6c7f733949a1ab550f5a7412587"
+  },
+  "controls": {
+    "seed": 42,
+    "dataset": "wikitext-103-raw-v1",
+    "max_length": 512,
+    "global_batch_size": 32,
+    "embedding_type": "standard",
+    "steps": 20
+  },
+  "expected_outputs": [
+    "results/init/model_init.pt",
+    "results/init/model_init_meta.json",
+    "results/run/train.log",
+    "results/run/metrics.jsonl"
+  ]
+}

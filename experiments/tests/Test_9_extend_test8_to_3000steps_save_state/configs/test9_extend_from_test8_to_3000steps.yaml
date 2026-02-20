@@ -1,0 +1,59 @@
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-103-raw-v1"
+  tokenize_num_proc: 8
+  max_length: 512
+  num_workers: 16
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes: [512]
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+
+training:
+  num_epochs: 1
+  max_train_steps: 2999
+  max_eval_steps: null
+  log_interval: 1
+  seed: 42
+  init_model_path: "../results/init/model_init.pt"
+  require_gsa_triton: true
+  require_deltanet_fused: true
+  require_fused_kernels: true
+  use_fused_ce: true
+  require_additional_fused_kernels: true
+  metrics_jsonl_path: "../results/run/metrics.jsonl"
+
+deepspeed:
+  config_path: "../deepspeed/zero-2-dense-bf16-test9-extend-3000.json"
+  local_rank: -1
+
+model:
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"
+  embedding_type: "kronecker"
+  model_variant: "reversible"
+  require_fused_deltanet_kernel: true
+
+checkpoint:
+  output_dir: "../results/run/checkpoints"
+  save_checkpoint: true
+  checkpoint_interval: 250
+  keep_last_n_checkpoints: 2
+  resume_from_checkpoint: "epoch0_step1000"
+  resume_step: 1000
+
+s3:
+  enabled: false
+  bucket: null
+  prefix: "training/checkpoints"
+  region: "us-east-1"
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: "The history of artificial intelligence begins with"
