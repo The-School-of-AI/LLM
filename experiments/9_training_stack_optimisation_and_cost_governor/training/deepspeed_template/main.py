@@ -1,10 +1,15 @@
 """
-Main entry point for DeepSpeed training.
+Main entry point for DeepSpeed training with 1B Model.
 
-This script initializes the model, loads data, and runs training with DeepSpeed.
-Supports both ZeRO Stage 2 and Stage 3 configurations, S3 checkpointing, and resume.
+This script trains a 1.513B parameter dense model with:
+- TSAI 131K Tokenizer (2^17 vocab, byte-level Kronecker embeddings)
+- Hybrid Gated DeltaNet + Gated Sparse Attention architecture
+- Reversible midpoint integration for memory efficiency
+- Dense FFN (no MoE)
+- 256k context length target with YARN RoPE scaling
+- Memory Stream Recurrence for infinite-length documents
 
-All configuration is loaded from config.yaml by default.
+Supports ZeRO Stage 2/3, S3 checkpointing, and resume from checkpoint.
 
 Usage:
     # Run with default config.yaml
@@ -18,8 +23,8 @@ Usage:
 
 Configuration:
     Edit config.yaml to customize:
-    - Dataset, batch size, epochs
-    - Model and tokenizer selection
+    - Dataset, batch size, epochs, max sequence length
+    - Embedding type (kronecker or standard)
     - Checkpoint intervals and S3 settings
     - DeepSpeed configuration file path
     - Resume from checkpoint settings
@@ -27,21 +32,14 @@ Configuration:
 
 import argparse
 import os
-<<<<<<< HEAD
-import sys
 import warnings
 from typing import Any, Dict
 
-# Add experiment root so that `data_loader` package can be imported
-_EXPERIMENT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if _EXPERIMENT_ROOT not in sys.path:
-    sys.path.insert(0, _EXPERIMENT_ROOT)
+# Set CUDA allocator to use expandable segments (reduces fragmentation)
+# Must be set before any CUDA operations. Prevents spurious OOM when
+# reserved-but-fragmented VRAM can't satisfy large contiguous allocations.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-=======
-import warnings
-from typing import Any, Dict
-
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 # Suppress deprecated pynvml FutureWarning emitted inside torch.cuda
 warnings.filterwarnings(
     "ignore",
@@ -50,34 +48,46 @@ warnings.filterwarnings(
 )
 
 import deepspeed
+import json
 import torch
-<<<<<<< HEAD
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
-import yaml
-from aws.config import S3Config
-from src.checkpoint import S3CheckpointManager
-from src.data import get_tokenizer
-from data_loader import (
-    PrefetchDataLoader,
-    S3Stager,
-    StreamingTokenDataset,
-)
-=======
 import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
-from src.model import get_qwen2_moe_model
+from src.models.recurrence_model_1b import Model1B, ModelConfig, KroneckerConfig, KroneckerEmbeddings
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
 
-<<<<<<< HEAD
+def validate_precision_policy(ds_config: dict, model_dtype: torch.dtype):
+    """Validate that DeepSpeed precision config is compatible with model dtype.
 
-=======
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
+    The reversible midpoint backward recomputes forward outside any autocast
+    context.  If DeepSpeed bf16/fp16 is enabled *and* the model is already
+    pre-cast, the double-cast causes dtype mismatches and silent correctness bugs.
+    """
+    bf16_enabled = ds_config.get("bf16", {}).get("enabled", False)
+    fp16_enabled = ds_config.get("fp16", {}).get("enabled", False)
+
+    if model_dtype == torch.bfloat16 and bf16_enabled:
+        raise ValueError(
+            "Precision mismatch: model is pre-cast to bf16 but DeepSpeed bf16.enabled=true. "
+            "This wraps forward in autocast which breaks reversible backward. "
+            "Set bf16.enabled=false in your DeepSpeed config."
+        )
+    if model_dtype == torch.bfloat16 and fp16_enabled:
+        raise ValueError(
+            "Precision mismatch: model is pre-cast to bf16 but DeepSpeed fp16.enabled=true. "
+            "Mixed fp16/bf16 will cause dtype errors. "
+            "Set fp16.enabled=false in your DeepSpeed config."
+        )
+    if model_dtype == torch.float16 and bf16_enabled:
+        raise ValueError(
+            "Precision mismatch: model is fp16 but DeepSpeed bf16.enabled=true. "
+            "Set bf16.enabled=false or cast model to bf16."
+        )
+
+
 class Config:
     """Configuration object that mimics argparse Namespace for compatibility."""
 
@@ -86,8 +96,14 @@ class Config:
         # Data configuration
         self.dataset_name = config_dict["data"]["dataset_name"]
         self.dataset_config = config_dict["data"]["dataset_config"]
-        self.batch_size = config_dict["data"]["batch_size"]
         self.max_length = config_dict["data"]["max_length"]
+        self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
+        self.streaming = config_dict["data"].get("streaming", False)  # Enable HF streaming for large datasets
+        self.tokenized_dataset_path = config_dict["data"].get("tokenized_dataset_path", None)
+        
+        # SPDL Configuration
+        self.use_dataloader = config_dict["data"].get("use_dataloader", False)
+        self.shard_dir = config_dict["data"].get("shard_dir", None)
 
         # Training configuration
         self.num_epochs = config_dict["training"]["num_epochs"]
@@ -98,16 +114,22 @@ class Config:
         self.enable_system_metrics = config_dict["training"].get(
             "enable_system_metrics", False
         )
+        self.require_fused_kernels = config_dict["training"].get(
+            "require_fused_kernels", False
+        )
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
         self.local_rank = config_dict["deepspeed"]["local_rank"]
+        
+        # Load batch size from DeepSpeed config
+        with open(self.deepspeed_config, 'r') as f:
+            deepspeed_cfg = json.load(f)
+        self.batch_size = deepspeed_cfg.get('train_micro_batch_size_per_gpu', 1)
 
         # Model configuration
-        self.tokenizer_name = config_dict["model"].get(
-            "tokenizer_name", "Qwen/Qwen2.5-0.5B"
-        )
-        self.model_name = config_dict["model"].get("model_name", "distilgpt2")
+        self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
+        self._model_overrides = config_dict.get("model", {})  # Store full model dict for ModelConfig overrides
 
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
@@ -132,21 +154,6 @@ class Config:
         self.test_generation = config_dict["generation"]["test_generation"]
         self.generation_prompt = config_dict["generation"]["generation_prompt"]
 
-<<<<<<< HEAD
-        # Data pipeline configuration
-        dp = config_dict.get("data_pipeline", {})
-        self.dp_s3_data_prefix = dp.get("s3_data_prefix", "dolmo-tokenized/")
-        self.dp_local_data_dir = dp.get("local_data_dir", "/data/dolmo")
-        self.dp_initial_shards = dp.get("initial_shards", 16)
-        self.dp_prefetch_shards = dp.get("prefetch_shards", 8)
-        self.dp_download_workers = dp.get("download_workers", 8)
-        self.dp_seq_length = dp.get("seq_length", 4096)
-        self.dp_num_workers = dp.get("num_workers", 8)
-        self.dp_prefetch_factor = dp.get("prefetch_factor", 3)
-        self.dp_pin_memory = dp.get("pin_memory", True)
-
-=======
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
 
 def load_config(config_path: str = "config.yaml") -> Config:
     """
@@ -203,7 +210,7 @@ def main():
     set_seed(args.seed)
 
     print_rank_0("=" * 80)
-    print_rank_0("DeepSpeed Training Template")
+    print_rank_0("1B Dense Model Training - DeepSpeed + Reversible Architecture")
     print_rank_0("=" * 80)
     print_rank_0(f"Configuration File: {cmd_args.config}")
     print_rank_0(f"DeepSpeed Version: {deepspeed.__version__}")
@@ -212,10 +219,14 @@ def main():
     if torch.cuda.is_available():
         print_rank_0(f"CUDA Devices: {torch.cuda.device_count()}")
     print_rank_0("\nConfiguration:")
+    print_rank_0(f"  Model: 1B Dense (1.513B params, 100% active)")
+    print_rank_0(f"  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
+    print_rank_0(f"  Embedding Type: {args.embedding_type}")
     print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  Batch Size: {args.batch_size}")
     print_rank_0(f"  Max Length: {args.max_length}")
+    print_rank_0(f"  DataLoader Workers: {args.num_workers} per GPU")
     print_rank_0(f"  Epochs: {args.num_epochs}")
     print_rank_0(f"  Checkpoint Interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"  Output Directory: {args.output_dir}")
@@ -229,70 +240,168 @@ def main():
     print_rank_0("=" * 80)
 
     # ========================================
-    # Step 1: Load Data
+    # Step 0.5: Read DeepSpeed Config to Get Batch Size
     # ========================================
-    print_rank_0("\n[1/5] Loading data...")
-<<<<<<< HEAD
+    print_rank_0("\n[0.5/5] Reading DeepSpeed configuration...")
+    with open(args.deepspeed_config, 'r') as f:
+        deepspeed_config = json.load(f)
+    
+    # Extract batch size from DeepSpeed config
+    micro_batch_size = deepspeed_config.get('train_micro_batch_size_per_gpu', 1)
+    gradient_accumulation_steps = deepspeed_config.get('gradient_accumulation_steps', 1)
+    
+    print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
+    print_rank_0(f"  train_micro_batch_size_per_gpu: {micro_batch_size}")
+    print_rank_0(f"  gradient_accumulation_steps: {gradient_accumulation_steps}")
+    
+    # Do NOT inject train_batch_size here — distributed is not initialized yet,
+    # Let DeepSpeed auto-compute it:
+    #   train_batch_size = micro_batch × grad_accum × world_size
+    # by ensuring train_batch_size is absent from the config.
+    if 'train_batch_size' in deepspeed_config:
+        print_rank_0(f"  Removing explicit train_batch_size={deepspeed_config['train_batch_size']} "
+                     f"from config — DeepSpeed will auto-compute it after dist init.")
+        del deepspeed_config['train_batch_size']
 
-    # Streaming data pipeline: S3 → NVMe → mmap → GPU prefetch
-    if not args.s3_bucket:
-        raise ValueError("s3.bucket is required for the data pipeline")
+    print_rank_0(f"  Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
 
-    # Determine resume position (GPU-count-agnostic)
-    total_samples_consumed = 0
-
-    print_rank_0("  Pipeline: S3 → NVMe → mmap → GPU prefetch")
-    print_rank_0(f"  S3 source: s3://{args.s3_bucket}/{args.dp_s3_data_prefix}")
-    print_rank_0(f"  Local dir: {args.dp_local_data_dir}")
-    print_rank_0(f"  Seq length: {args.dp_seq_length}")
-
-    # Discover all shards in S3 (deterministic sorted order)
-    stager = S3Stager(
-        bucket=args.s3_bucket,
-        prefix=args.dp_s3_data_prefix,
-        local_dir=args.dp_local_data_dir,
-        region=args.s3_region,
-        download_workers=args.dp_download_workers,
-    )
-    all_shard_keys = stager.discover_shards()
-    print_rank_0(f"  Total shards in S3: {len(all_shard_keys)}")
-
-    # Start staging initial shards in background (overlaps with model init)
-    staging_thread = stager.stage_initial_async(
-        all_shard_keys, start_idx=0, num_shards=args.dp_initial_shards
-    )
-    print_rank_0(f"  Staging first {args.dp_initial_shards} shards (async)...")
-
-    # Tokenizer still needed for vocab_size (model config)
-    tokenizer = get_tokenizer(args.tokenizer_name)
-=======
-    tokenizer = get_tokenizer(args.tokenizer_name)
-    train_loader, eval_loader, test_loader, _ = get_dataloaders(
+    # ========================================
+    # Step 1: Load Tokenizer & Data
+    # ========================================
+    print_rank_0("\n[1/5] Loading tokenizer and data...")
+    print_rank_0("  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)")
+    tokenizer = get_tokenizer()  # Loads from src/tokenizer/
+    train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
         tokenizer=tokenizer,
-        batch_size=args.batch_size,
+        batch_size=micro_batch_size,
         max_length=args.max_length,
+        num_workers=args.num_workers,
+        tokenized_dataset_path=args.tokenized_dataset_path,
+        streaming=args.streaming,
+        # New SPDL args
+        use_dataloader=args.use_dataloader,
+        shard_dir=args.shard_dir,
     )
-    print_rank_0(f"  Train batches: {len(train_loader)}")
-    print_rank_0(f"  Eval batches: {len(eval_loader)}")
-    print_rank_0(f"  Test batches: {len(test_loader)}")
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
+    is_streaming = dataset_info.get("streaming", False)
+    if is_streaming:
+        print_rank_0("  Streaming mode: dataset size unknown (infinite iterator)")
+    else:
+        print_rank_0(f"  Train batches: {len(train_loader)}")
+        print_rank_0(f"  Eval batches: {len(eval_loader)}")
+        print_rank_0(f"  Test batches: {len(test_loader)}")
 
     # ========================================
-    # Step 2: Load Model
+    # Step 2: Load Model (1B Dense Model)
     # ========================================
     print_rank_0("\n[2/5] Loading model...")
-    model = get_qwen2_moe_model(print_info=True)
-    # model = get_model(args.model_name, print_info=True)
+    print_rank_0("  Creating 1B Dense Model with memory-efficient reversible architecture...")
+    
+    # Create model configuration
+    config = ModelConfig()
+    
+    # ── Apply YAML model overrides to ModelConfig ─────────────────────────
+    # This lets YAML presets (config_4k_throughput.yaml, etc.) control
+    # model behavior: GSA sparsity budget, sequence length, etc.
+    _model_override_keys = [
+        'max_seq_len', 'gsa_k_base', 'gsa_k_min', 'gsa_k_max',
+    ]
+    for key in _model_override_keys:
+        yaml_val = args._model_overrides.get(key)
+        if yaml_val is not None:
+            old_val = getattr(config, key, None)
+            setattr(config, key, yaml_val)
+            print_rank_0(f"  Model override: {key} = {old_val} → {yaml_val}")
+    
+    # Update vocab size to match tokenizer
+    # Use len(tokenizer) to include special tokens (pad, eos, etc.)
+    vocab_size = len(tokenizer)
+    config.vocab_size = vocab_size
+    print_rank_0(f"  Updated model vocab_size to match tokenizer: {vocab_size:,}")
+    print_rank_0(f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})")
+    
+    # Prepare vocabulary for Kronecker embeddings if needed
+    bpe_vocab = None
+    pf_codec = None
+    
+    if args.embedding_type == "kronecker":
+        print_rank_0("  Setting up Kronecker Product Embeddings (byte-level)...")
+        
+        # Extract vocabulary words from tokenizer
+        bpe_vocab = []
+        for i in range(vocab_size):
+            try:
+                token = tokenizer.decode([i])
+                bpe_vocab.append(token if token else f"<unk_{i}>")
+            except:
+                bpe_vocab.append(f"<unk_{i}>")
+        
+        # Create Kronecker codec
+        pf_config = KroneckerConfig(
+            CHAR_DIM=256,
+            POS_DIM=32,
+            D=8192,
+            length_normalize=True,
+            truncate_long_words=True
+        )
+        pf_codec = KroneckerEmbeddings(pf_config)
+        
+        print_rank_0(f"  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192")
+    else:
+        print_rank_0("  Using Standard Embeddings")
+    
+    # Create the 1B model
+    model = Model1B(
+        config=config,
+        embedding_type=args.embedding_type,
+        bpe_vocab=bpe_vocab,
+        pf_codec=pf_codec
+    )
+
+    print_rank_0("  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...")
+    model = model.to(dtype=torch.bfloat16)
+    # ----------------------
+    
+    print_rank_0(f"  Model cast to bfloat16")
+    print_rank_0(f"  Model created successfully")
+
+    # ========================================
+    # Step 2.5: Preflight checks
+    # ========================================
+    # Precision policy validation — hard-fail on mismatch
+    model_dtype = next(model.parameters()).dtype
+    validate_precision_policy(deepspeed_config, model_dtype)
+    print_rank_0("  Precision policy validated (no autocast conflict)")
+
+    # Kernel fail-fast — abort if required fused kernels are missing
+    if args.require_fused_kernels:
+        from src.models.recurrence_model_1b import HAS_TRITON, HAS_FLA
+        missing = []
+        if not HAS_TRITON:
+            missing.append("Triton")
+        if not HAS_FLA:
+            missing.append("fla (flash-linear-attention)")
+        if missing:
+            raise RuntimeError(
+                f"require_fused_kernels=true but missing: {', '.join(missing)}. "
+                f"Install the required packages or set require_fused_kernels: false."
+            )
+        print_rank_0("  Kernel fail-fast passed: Triton and fla available")
 
     # ========================================
     # Step 3: Initialize DeepSpeed
     # ========================================
     print_rank_0("\n[3/5] Initializing DeepSpeed...")
+
+    # Use the deepspeed_config dict we already loaded and patched (with computed train_batch_size)
     model_engine, optimizer, _, _ = deepspeed.initialize(
-        args=args, model=model, model_parameters=model.parameters()
+        config_params=deepspeed_config,
+        model=model,
+        model_parameters=model.parameters(),
     )
+
+    print_rank_0(f"ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
     # ========================================
     # Step 3.5: Initialize Checkpoint Manager
@@ -346,16 +455,6 @@ def main():
                 print_rank_0(
                     f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}"
                 )
-<<<<<<< HEAD
-                # Restore data pipeline resume position
-                total_samples_consumed = client_state.get(
-                    "total_samples_consumed", 0
-                )
-                print_rank_0(
-                    f"  ✓ Data pipeline: resuming after {total_samples_consumed} samples consumed"
-                )
-=======
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
             else:
                 print_rank_0("  ⚠️  No client state found, starting fresh")
         except Exception as e:
@@ -369,60 +468,14 @@ def main():
     print_rank_0(f"Checkpoint interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"Starting from epoch {start_epoch}, global step {global_step}")
 
-<<<<<<< HEAD
-    # Finalize streaming data pipeline (after checkpoint resume position is known)
-
-    # Wait for initial staging to complete (likely already done during model init)
-    staging_thread.join()
-    staged_paths = stager.get_staged_shards()
-    print_rank_0(f"  Initial staging complete: {len(staged_paths)} shards")
-
-    # Create streaming dataset with resume skip
-    streaming_dataset = StreamingTokenDataset(
-        shard_paths=staged_paths,
-        seq_length=args.dp_seq_length,
-        skip_samples=total_samples_consumed,
-    )
-    print_rank_0(f"  Dataset: {len(streaming_dataset)} sequences remaining")
-
-    # Distributed sampler for multi-GPU
-    world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
-    rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
-    sampler = DistributedSampler(
-        streaming_dataset,
-        num_replicas=world_size,
-        rank=rank,
-        shuffle=False,  # Deterministic ordering
-    )
-
-    train_loader = PrefetchDataLoader(
-        DataLoader(
-            streaming_dataset,
-            batch_size=args.batch_size,
-            sampler=sampler,
-            num_workers=args.dp_num_workers,
-            pin_memory=args.dp_pin_memory,
-            drop_last=True,
-        ),
-        device=model_engine.device,
-        prefetch_depth=args.dp_prefetch_factor,
-    )
-    print_rank_0(f"  Train batches per GPU: {len(train_loader)}")
-
-    # Start background staging of remaining shards
-    start_bg_idx = args.dp_initial_shards
-    if len(all_shard_keys) > start_bg_idx:
-        stager.stage_background(all_shard_keys[start_bg_idx:])
-        print_rank_0(
-            f"  Background staging: {len(all_shard_keys) - start_bg_idx} remaining shards"
-        )
-
-=======
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
     for epoch in range(start_epoch, args.num_epochs):
         print_rank_0(f"\n{'=' * 80}")
         print_rank_0(f"Epoch {epoch + 1}/{args.num_epochs}")
         print_rank_0(f"{'=' * 80}")
+
+        # Set epoch on DistributedSampler for deterministic shuffling per epoch
+        if hasattr(train_loader.sampler, "set_epoch"):
+            train_loader.sampler.set_epoch(epoch)
 
         # Determine if we need to skip steps (only for first resumed epoch)
         epoch_start_step = start_step if epoch == start_epoch else 0
@@ -462,19 +515,6 @@ def main():
                 "eval_perplexity": eval_perplexity,
             }
 
-<<<<<<< HEAD
-            # Save data pipeline progress for GPU-count-agnostic resume
-            world_size = (
-                torch.distributed.get_world_size()
-                if torch.distributed.is_initialized()
-                else 1
-            )
-            client_state["total_samples_consumed"] = (
-                global_step * args.batch_size * world_size
-            )
-
-=======
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
             if checkpoint_manager:
                 checkpoint_manager.save_checkpoint(
                     model_engine,
@@ -516,19 +556,6 @@ def main():
             "training_complete": True,
         }
 
-<<<<<<< HEAD
-        # Save data pipeline progress for GPU-count-agnostic resume
-        world_size = (
-            torch.distributed.get_world_size()
-            if torch.distributed.is_initialized()
-            else 1
-        )
-        client_state["total_samples_consumed"] = (
-            global_step * args.batch_size * world_size
-        )
-
-=======
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         if checkpoint_manager:
             checkpoint_manager.save_checkpoint(
                 model_engine, step=global_step, tag="final", client_state=client_state

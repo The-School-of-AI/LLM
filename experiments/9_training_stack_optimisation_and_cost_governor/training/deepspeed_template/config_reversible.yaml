@@ -1,14 +1,11 @@
-# DeepSpeed Training Configuration
-# All training parameters are defined here - no command line arguments needed
+# DeepSpeed Training Configuration for Reversible Model
+# This configuration is optimized for memory-efficient training with reversible architectures
 
 # Data Configuration
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  max_length: 4096
-  # SPDL Dataloader Settings
-  use_dataloader: false          # If true, use SPDL pipeline reading .bin/.idx shards
-  shard_dir: null                # Required if use_dataloader=true
+  max_length: 64  # Reduced to conserve memory
 
 # Training Configuration
 training:
@@ -20,18 +17,18 @@ training:
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-dense.json"
+  config_path: "deepspeed/zero-2-dense-reversible.json"
   local_rank: -1
 
 # Model Configuration
 model:
-  tokenizer_name: "Qwen/Qwen2.5-0.5B"  # or "distilgpt2"
-  # model_name: "distilgpt2"  # Uncomment if using different model
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"
+  embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
 
 # Checkpoint Configuration
 checkpoint:
-  output_dir: "./checkpoints"
-  save_checkpoint: false
+  output_dir: "./checkpoints_reversible"
+  save_checkpoint: true
   checkpoint_interval: 100  # Save checkpoint every N steps
   keep_last_n_checkpoints: 3
   
@@ -43,11 +40,19 @@ checkpoint:
 s3:
   enabled: false
   bucket: null                    # Set your S3 bucket name (required if enabled=true)
-  prefix: "training/checkpoints"  # S3 folder path for checkpoints
+  prefix: "training/reversible/checkpoints"
   region: "us-east-1"
   cleanup_after_upload: false     # Delete local checkpoints after S3 upload
   
 # Generation Configuration
 generation:
-  test_generation: false
+  test_generation: true
   generation_prompt: "The history of artificial intelligence begins with"
+
+# Notes:
+# - Reversible models use ~10x less memory for activations
+# - Activation checkpointing is DISABLED (handled by reversible architecture)
+# - Dropout is set to 0.0 in model config (required for reversibility)
+# - Current settings optimized for 4x L4 (15GB) GPUs
+# - Memory breakdown: ~10GB model params + ~4-5GB activations/optimizer states
+# - For larger batches/sequences, use g5.12xlarge (4x A10G, 24GB each)

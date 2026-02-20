@@ -20,7 +20,7 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         # Ensure deterministic behavior for CUDA operations
-        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.deterministic = False
         torch.backends.cudnn.benchmark = False
 
 

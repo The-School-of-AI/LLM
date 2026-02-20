@@ -666,29 +666,9 @@ class TrainingStage:
         total_mhc_params = layers * mhc_params_per_layer
 
         # =========================================================================
-<<<<<<< HEAD
         # MTP Block Parameters (Multi-Token Prediction)
         # MTP block contains: fusion projection + DeltaNet layer + FFN/MoE + mHC + norms
         # This is a full transformer layer plus fusion projection
-=======
-        # Memory Stream Recurrence Parameters
-        # Used for infinite-length document processing via chunking
-        # Components: lambda_r_raw (1), memory_ln LayerNorm(H), memory_gate_proj Linear(H,1)
-        # =========================================================================
-        recurrence_cfg = arch.get("recurrence", {})
-        recurrence_enabled = recurrence_cfg.get("enabled", False)
-        recurrence_params = 0
-        if recurrence_enabled:
-            # lambda_r_raw: 1 scalar parameter (learnable recurrence strength)
-            # memory_ln: LayerNorm(hidden) = 2*hidden params (weight + bias)
-            # memory_gate_proj: Linear(hidden, 1, bias=True) = hidden + 1 params
-            recurrence_params = 1 + (2 * hidden) + (hidden + 1)
-
-        # =========================================================================
-        # MTP Block Parameters (Multi-Token Prediction)
-        # MTP block contains: fusion projection + attention layer + FFN/MoE + mHC + norms
-        # Attention type is configurable: 'gsa' or 'deltanet' (default: deltanet)
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         # =========================================================================
         mtp_cfg = arch.get("mtp", head_cfg)
         mtp_enabled = mtp_cfg.get("enabled", use_mtp)
@@ -705,17 +685,8 @@ class TrainingStage:
         if mtp_enabled and mtp_num_predictions > 0:
             # Fusion projection: (d * 2) * d (combines current and previous hidden states)
             mtp_fusion_params = (hidden * 2) * hidden
-<<<<<<< HEAD
             # DeltaNet layer (same as regular DeltaNet layer)
             mtp_deltanet_params = deltanet_attn_per_layer
-=======
-            # MTP attention type: configurable (model may use GSA for better gradient quality)
-            mtp_attn_type = arch.get("mtp_attention_type", "deltanet")
-            if mtp_attn_type == "gsa" and gsa_enabled:
-                mtp_attn_params = gsa_attn_per_layer
-            else:
-                mtp_attn_params = deltanet_attn_per_layer
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
             # FFN layer (MoE or dense)
             mtp_ffn_total = total_ffn_params_moe if num_moe_layers > 0 else ffn_params_dense
             mtp_ffn_active = active_ffn_params_moe if num_moe_layers > 0 else ffn_params_dense
@@ -724,13 +695,8 @@ class TrainingStage:
             # Norms (2 per layer)
             mtp_norms = 2 * hidden
             
-<<<<<<< HEAD
             mtp_block_params = mtp_fusion_params + mtp_deltanet_params + mtp_ffn_total + mtp_mhc_params + mtp_norms
             mtp_block_active_params = mtp_fusion_params + mtp_deltanet_params + mtp_ffn_active + mtp_mhc_params + mtp_norms
-=======
-            mtp_block_params = mtp_fusion_params + mtp_attn_params + mtp_ffn_total + mtp_mhc_params + mtp_norms
-            mtp_block_active_params = mtp_fusion_params + mtp_attn_params + mtp_ffn_active + mtp_mhc_params + mtp_norms
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         
         # Number of GSA layers in hybrid mode
         num_gsa_layers_in_model = num_gsa_layers_hybrid if deltanet_in_hybrid else (
@@ -755,10 +721,6 @@ class TrainingStage:
             + norm_params
             + total_mhc_params  # mHC params
             + mtp_block_params  # MTP block (full layer + fusion)
-<<<<<<< HEAD
-=======
-            + recurrence_params  # Memory Stream Recurrence
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         )
 
         active_non_embed_params = (
@@ -769,10 +731,6 @@ class TrainingStage:
             + norm_params
             + total_mhc_params  # mHC params
             + mtp_block_active_params  # MTP block active params
-<<<<<<< HEAD
-=======
-            + recurrence_params  # Memory Stream Recurrence
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         )
         active_linear_params = (
             total_attn_params  # Layer-type-specific attention params
@@ -782,10 +740,6 @@ class TrainingStage:
             + norm_params
             + total_mhc_params  # mHC params
             + mtp_block_active_params  # MTP block active params
-<<<<<<< HEAD
-=======
-            + recurrence_params  # Memory Stream Recurrence
->>>>>>> 8073e5d9cfdf80f7531af2f2af5626e91a480bd7
         )
         active_params_base = embedding_params + active_non_embed_params
 

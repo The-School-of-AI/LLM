@@ -1,0 +1,57 @@
+{
+    "train_micro_batch_size_per_gpu": 2,
+    "gradient_accumulation_steps": 4,
+    
+    "optimizer": {
+        "type": "AdamW",
+        "params": {
+            "lr": 3e-4,
+            "betas": [0.9, 0.95],
+            "eps": 1e-8,
+            "weight_decay": 0.1
+        }
+    },
+    
+    "scheduler": {
+        "type": "WarmupDecayLR",
+        "params": {
+            "warmup_min_lr": 0,
+            "warmup_max_lr": 3e-4,
+            "warmup_num_steps": 100,
+            "total_num_steps": 1000
+        }
+    },
+    
+    "zero_optimization": {
+        "stage": 2,
+        "contiguous_gradients": true,
+        "overlap_comm": true,
+        "reduce_scatter": true,
+        "reduce_bucket_size": 2e8,
+        "allgather_partitions": true,
+        "allgather_bucket_size": 2e8
+    },
+    "_comment_offload": "CPU offload REMOVED: A100 80GB has plenty of memory. Offload adds 5-10x latency per optimizer step via PCIe transfers.",
+    
+    "activation_checkpointing": {
+        "partition_activations": false,
+        "cpu_checkpointing": false,
+        "contiguous_memory_optimization": false,
+        "synchronize_checkpoint_boundary": false,
+        "_comment": "DISABLED - Reversible models handle activation memory through midpoint integration"
+    },
+    
+    "bf16": {
+        "enabled": false
+    },
+    "_comment_bf16": "DISABLED: Model is pre-cast to bf16 in main.py. DeepSpeed bf16 wraps forward in autocast which breaks reversible midpoint backward.",
+    
+    "gradient_clipping": 1.0,
+    "steps_per_print": 10,
+    "wall_clock_breakdown": false,
+    "dump_state": false,
+    "_comment_batch_size": "Reduced for 4x L4 (15GB) GPUs - effective batch size 16 via gradient accumulation",
+    "_comment_micro_batch": "Set to 1 to minimize per-GPU memory usage",
+    "_comment_dropout": "Model has dropout=0.0 set in config (required for reversibility)",
+    "_comment_memory": "For 4x A10G (24GB), can increase to micro_batch=2-4 and max_length=256"
+}

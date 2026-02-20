@@ -5,8 +5,8 @@
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  batch_size: 32
-  max_length: 128
+  max_length: 4096  # Restored to original - reversibility fix allows this!
+  num_workers: 12  # DataLoader workers per GPU (12 workers × 8 GPUs = 96 total, uses all CPUs)
 
 # Training Configuration
 training:
@@ -19,13 +19,12 @@ training:
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-moe.json"
+  config_path: "deepspeed/zero-2-dense-oom-fixed.json"
   local_rank: -1
 
 # Model Configuration
 model:
-  tokenizer_name: "Qwen/Qwen2.5-0.5B"  # or "distilgpt2"
-  # model_name: "distilgpt2"  # Uncomment if using different model
+  embedding_type: "kronecker"  # "kronecker" or "standard" (for reversible models)
 
 # Checkpoint Configuration
 checkpoint:
