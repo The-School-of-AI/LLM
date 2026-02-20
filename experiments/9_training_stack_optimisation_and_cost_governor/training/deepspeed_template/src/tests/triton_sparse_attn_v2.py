@@ -1,19 +1,13 @@
 """
-Triton Sparse Attention Kernel — V2 (Tensor Core Optimized)
-===========================================================
+Triton Sparse Attention Kernel — V2 (Native Precision)
+======================================================
 
-Based on V1 (Rohan's baseline) with the following optimizations:
-- tl.dot with NATIVE precision inputs (bf16/fp16) + fp32 accumulation
-  → Uses Tensor Cores on ALL GPUs (T4, A100, H100)
-- fp16 tiles are 2 bytes (not 4), halving shared memory → BLOCK_K=64 fits on T4
-- num_warps=8 for D>64, num_stages=2 for pipeline depth
-- Conditional fallback to tl.sum for BLOCK_K < 16 (small test dims)
+Identical to V1 with ONE optimization:
+- K, V, Q, dO loaded in native precision (bf16/fp16) instead of casting to fp32
+- Reduces global memory bandwidth by 50% (2 bytes per element instead of 4)
+- Softmax accumulators and scalar math remain in fp32 for numerical stability
 
-All V1 safety features preserved:
-- NaN-safe softmax (handles fully-masked rows)
-- Index bounds checking (qi_indices < seq_kv)
-- Input sanitization (clamping masked-out indices)
-- Separate seq_kv parameter
+This matches production training which uses bf16.
 """
 
 import torch
@@ -31,7 +25,7 @@ except ImportError:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Forward kernel — V2 with native-precision tl.dot
+# Forward kernel — native precision
 # ═══════════════════════════════════════════════════════════════════════
 
 if HAS_TRITON:
@@ -51,12 +45,6 @@ if HAS_TRITON:
         BLOCK_K: tl.constexpr,
         BLOCK_D: tl.constexpr,
     ):
-        """
-        Sparse attention forward — V2.
-        tl.dot uses native input precision (bf16/fp16) for Tensor Cores,
-        with fp32 accumulation for numerical stability.
-        Grid: (batch_size * n_heads, seq_q)
-        """
         pid_bh = tl.program_id(0)
         pid_q  = tl.program_id(1)
 
@@ -66,16 +54,15 @@ if HAS_TRITON:
         d_offs = tl.arange(0, BLOCK_D)
         k_offs = tl.arange(0, BLOCK_K)
 
-        # Load query — keep in native precision for tl.dot, fp32 copy for scalar ops
+        # V2 CHANGE: load Q in native precision (no .to(tl.float32))
         q_row_ptr = (Q_ptr
                      + pid_b * stride_qb
                      + pid_q * stride_qq
                      + pid_h * stride_qh)
-        q_native = tl.load(q_row_ptr + d_offs * stride_qd,
-                           mask=d_offs < d_head, other=0.0)
-        q_fp32 = q_native.to(tl.float32)
+        q_i = tl.load(q_row_ptr + d_offs * stride_qd,
+                       mask=d_offs < d_head, other=0.0)
 
-        # online softmax accumulators (always fp32)
+        # Accumulators stay fp32
         m_i = tl.full((1,), float('-inf'), dtype=tl.float32)
         l_i = tl.full((1,), 0.0,          dtype=tl.float32)
         acc = tl.zeros((BLOCK_D,),         dtype=tl.float32)
@@ -95,48 +82,32 @@ if HAS_TRITON:
                                   mask=idx_load_mask, other=0.0)
             qi_mask = (qi_mask_val > 0.5) & (qi_indices < seq_kv)
 
-            # Gather K, V — keep in native precision (bf16/fp16)
             k_ptrs = k_base + qi_indices[:, None] * stride_kk + d_offs[None, :] * stride_kd
             v_ptrs = v_base + qi_indices[:, None] * stride_vk + d_offs[None, :] * stride_vd
             kv_load_mask = qi_mask[:, None] & (d_offs[None, :] < d_head)
-            k_native = tl.load(k_ptrs, mask=kv_load_mask, other=0.0)
-            v_native = tl.load(v_ptrs, mask=kv_load_mask, other=0.0)
 
-            # ── V2: tl.dot with native precision → Tensor Cores ──
-            if BLOCK_K >= 16 and BLOCK_D >= 16:
-                q_2d = tl.reshape(q_native, (1, BLOCK_D))
-                scores_2d = tl.dot(q_2d, tl.trans(k_native)).to(tl.float32)  # [1, BLOCK_K]
-                scores = tl.reshape(scores_2d, (BLOCK_K,)) * scale
-            else:
-                scores = tl.sum(q_fp32[None, :] * k_native.to(tl.float32), axis=1) * scale
+            # V2 CHANGE: load K, V in native precision (no .to(tl.float32))
+            k_vals = tl.load(k_ptrs, mask=kv_load_mask, other=0.0)
+            v_vals = tl.load(v_ptrs, mask=kv_load_mask, other=0.0)
 
+            # dot-product scores (result auto-promoted to fp32 by tl.sum)
+            scores = tl.sum(q_i[None, :] * k_vals, axis=1) * scale
             valid = idx_load_mask & qi_mask
             scores = tl.where(valid, scores, float('-inf'))
 
-            # online softmax update (NaN-safe, always fp32)
+            # online softmax (fp32)
             block_max = tl.max(scores, axis=0)
             m_new = tl.maximum(m_i, block_max)
             alpha = tl.where(m_new == float('-inf'), 0.0, tl.exp(m_i - m_new))
             beta  = tl.where(m_new == float('-inf'), 0.0, tl.exp(scores - m_new))
 
             l_i = alpha * l_i + tl.sum(beta, axis=0)
-
-            # ── V2: tl.dot for PV with native precision ──
-            if BLOCK_K >= 16 and BLOCK_D >= 16:
-                beta_row = tl.reshape(beta, (1, BLOCK_K)).to(v_native.dtype)
-                pv_2d = tl.dot(beta_row, v_native).to(tl.float32)  # [1, BLOCK_D]
-                pv = tl.reshape(pv_2d, (BLOCK_D,))
-                acc = alpha * acc + pv
-            else:
-                acc = alpha * acc + tl.sum(beta[:, None] * v_native.to(tl.float32), axis=0)
-
+            acc = alpha * acc + tl.sum(beta[:, None] * v_vals, axis=0)
             m_i = m_new
 
-        # normalise
         l_i_safe = tl.where(l_i == 0.0, 1.0, l_i)
         acc = acc / l_i_safe
 
-        # store output
         out_row_ptr = (OUT_ptr
                        + pid_b * stride_ob
                        + pid_q * stride_oq
@@ -144,13 +115,12 @@ if HAS_TRITON:
         tl.store(out_row_ptr + d_offs * stride_od, acc,
                  mask=d_offs < d_head)
 
-        # store LSE
         lse_ptr = LSE_ptr + pid_b * n_heads * seq_q + pid_h * seq_q + pid_q
         tl.store(lse_ptr + tl.arange(0, 1), m_i + tl.log(l_i))
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Backward kernels — V2 with native-precision tl.dot
+# Backward kernels — native precision
 # ═══════════════════════════════════════════════════════════════════════
 
 if HAS_TRITON:
@@ -162,7 +132,6 @@ if HAS_TRITON:
         stride_dob, stride_doq, stride_doh, stride_dod,
         BLOCK_D: tl.constexpr,
     ):
-        """delta[b,h,q] = sum_d( O * dO ). Grid: (B*H, T)"""
         pid_bh = tl.program_id(0)
         pid_q = tl.program_id(1)
         pid_b = pid_bh // n_heads
@@ -174,6 +143,7 @@ if HAS_TRITON:
         o_base = O_ptr + pid_b * stride_ob + pid_q * stride_oq + pid_h * stride_oh
         do_base = DO_ptr + pid_b * stride_dob + pid_q * stride_doq + pid_h * stride_doh
 
+        # Preprocess always needs fp32 for delta
         o_vals = tl.load(o_base + d_offs * stride_od, mask=d_mask, other=0.0).to(tl.float32)
         do_vals = tl.load(do_base + d_offs * stride_dod, mask=d_mask, other=0.0).to(tl.float32)
 
@@ -199,7 +169,6 @@ if HAS_TRITON:
         BLOCK_K: tl.constexpr,
         BLOCK_D: tl.constexpr,
     ):
-        """dQ kernel — V2 with native-precision tl.dot. Grid: (B*H, T)"""
         pid_bh = tl.program_id(0)
         pid_q = tl.program_id(1)
         pid_b = pid_bh // n_heads
@@ -209,15 +178,12 @@ if HAS_TRITON:
         k_offs = tl.arange(0, BLOCK_K)
         d_mask = d_offs < d_head
 
-        # Load Q in native + fp32
+        # V2 CHANGE: load Q, dO in native precision
         q_base = Q_ptr + pid_b * stride_qb + pid_q * stride_qq + pid_h * stride_qh
-        q_native = tl.load(q_base + d_offs * stride_qd, mask=d_mask, other=0.0)
-        q_fp32 = q_native.to(tl.float32)
+        q_i = tl.load(q_base + d_offs * stride_qd, mask=d_mask, other=0.0)
 
-        # Load dO in native + fp32
         do_base = DO_ptr + pid_b * stride_dob + pid_q * stride_doq + pid_h * stride_doh
-        do_native = tl.load(do_base + d_offs * stride_dod, mask=d_mask, other=0.0)
-        do_fp32 = do_native.to(tl.float32)
+        do_i = tl.load(do_base + d_offs * stride_dod, mask=d_mask, other=0.0)
 
         ld_offset = pid_b * n_heads * seq_len + pid_h * seq_len + pid_q
         lse_i = tl.load(LSE_ptr + ld_offset)
@@ -225,7 +191,6 @@ if HAS_TRITON:
 
         idx_row = IDX_ptr + pid_b * stride_ib + pid_h * stride_ih + pid_q * stride_iq
         mask_row = MASK_ptr + pid_b * stride_mb + pid_h * stride_mh + pid_q * stride_mq
-
         k_base = K_ptr + pid_b * stride_kb + pid_h * stride_kh
         v_base = V_ptr + pid_b * stride_vb + pid_h * stride_vh
 
@@ -245,38 +210,18 @@ if HAS_TRITON:
             v_ptrs = v_base + qi_indices[:, None] * stride_vk + d_offs[None, :] * stride_vd
             kv_mask = valid[:, None] & d_mask[None, :]
 
-            k_native = tl.load(k_ptrs, mask=kv_mask, other=0.0)
-            v_native = tl.load(v_ptrs, mask=kv_mask, other=0.0)
+            # V2 CHANGE: load K, V in native precision
+            k_vals = tl.load(k_ptrs, mask=kv_mask, other=0.0)
+            v_vals = tl.load(v_ptrs, mask=kv_mask, other=0.0)
 
-            # ── tl.dot for QK scores (native precision) ──
-            if BLOCK_K >= 16 and BLOCK_D >= 16:
-                q_2d = tl.reshape(q_native, (1, BLOCK_D))
-                scores_2d = tl.dot(q_2d, tl.trans(k_native)).to(tl.float32)
-                scores = tl.reshape(scores_2d, (BLOCK_K,)) * scale
-            else:
-                scores = tl.sum(q_fp32[None, :] * k_native.to(tl.float32), axis=1) * scale
-
+            scores = tl.sum(q_i[None, :] * k_vals, axis=1) * scale
             scores = tl.where(valid, scores, float('-inf'))
             p_i = tl.exp(scores - lse_i)
             p_i = tl.where(valid, p_i, 0.0)
 
-            # ── tl.dot for dO·V (native precision) ──
-            if BLOCK_K >= 16 and BLOCK_D >= 16:
-                do_2d = tl.reshape(do_native, (1, BLOCK_D))
-                do_v_2d = tl.dot(do_2d, tl.trans(v_native)).to(tl.float32)
-                do_v = tl.reshape(do_v_2d, (BLOCK_K,))
-            else:
-                do_v = tl.sum(do_fp32[None, :] * v_native.to(tl.float32), axis=1)
-
+            do_v = tl.sum(do_i[None, :] * v_vals, axis=1)
             ds_i = p_i * (do_v - delta_i)
-
-            # ── tl.dot for dS·K (native precision) ──
-            if BLOCK_K >= 16 and BLOCK_D >= 16:
-                ds_row = tl.reshape(ds_i, (1, BLOCK_K)).to(k_native.dtype)
-                dq_2d = tl.dot(ds_row, k_native).to(tl.float32)
-                dq_acc += tl.reshape(dq_2d, (BLOCK_D,)) * scale
-            else:
-                dq_acc += tl.sum(ds_i[:, None] * k_native.to(tl.float32), axis=0) * scale
+            dq_acc += tl.sum(ds_i[:, None] * k_vals, axis=0) * scale
 
         dq_base = DQ_ptr + pid_b * stride_dqb + pid_q * stride_dqq + pid_h * stride_dqh
         tl.store(dq_base + d_offs * stride_dqd, dq_acc, mask=d_mask)
@@ -300,7 +245,6 @@ if HAS_TRITON:
         BLOCK_K: tl.constexpr,
         BLOCK_D: tl.constexpr,
     ):
-        """dK/dV kernel — V2 with native-precision tl.dot. Atomics kept. Grid: (B*H, T)"""
         pid_bh = tl.program_id(0)
         pid_q = tl.program_id(1)
         pid_b = pid_bh // n_heads
@@ -310,13 +254,12 @@ if HAS_TRITON:
         k_offs = tl.arange(0, BLOCK_K)
         d_mask = d_offs < d_head
 
+        # V2 CHANGE: load Q, dO in native precision
         q_base = Q_ptr + pid_b * stride_qb + pid_q * stride_qq + pid_h * stride_qh
-        q_native = tl.load(q_base + d_offs * stride_qd, mask=d_mask, other=0.0)
-        q_fp32 = q_native.to(tl.float32)
+        q_i = tl.load(q_base + d_offs * stride_qd, mask=d_mask, other=0.0)
 
         do_base = DO_ptr + pid_b * stride_dob + pid_q * stride_doq + pid_h * stride_doh
-        do_native = tl.load(do_base + d_offs * stride_dod, mask=d_mask, other=0.0)
-        do_fp32 = do_native.to(tl.float32)
+        do_i = tl.load(do_base + d_offs * stride_dod, mask=d_mask, other=0.0)
 
         ld_offset = pid_b * n_heads * seq_len + pid_h * seq_len + pid_q
         lse_i = tl.load(LSE_ptr + ld_offset)
@@ -324,7 +267,6 @@ if HAS_TRITON:
 
         idx_row = IDX_ptr + pid_b * stride_ib + pid_h * stride_ih + pid_q * stride_iq
         mask_row = MASK_ptr + pid_b * stride_mb + pid_h * stride_mh + pid_q * stride_mq
-
         k_base = K_ptr + pid_b * stride_kb + pid_h * stride_kh
         v_base = V_ptr + pid_b * stride_vb + pid_h * stride_vh
         dk_base = DK_ptr + pid_b * stride_dkb + pid_h * stride_dkh
@@ -344,38 +286,25 @@ if HAS_TRITON:
             v_ptrs = v_base + qi_indices[:, None] * stride_vk + d_offs[None, :] * stride_vd
             kv_mask = valid[:, None] & d_mask[None, :]
 
-            k_native = tl.load(k_ptrs, mask=kv_mask, other=0.0)
-            v_native = tl.load(v_ptrs, mask=kv_mask, other=0.0)
+            # V2 CHANGE: load K, V in native precision
+            k_vals = tl.load(k_ptrs, mask=kv_mask, other=0.0)
+            v_vals = tl.load(v_ptrs, mask=kv_mask, other=0.0)
 
-            # ── tl.dot for QK scores (native precision) ──
-            if BLOCK_K >= 16 and BLOCK_D >= 16:
-                q_2d = tl.reshape(q_native, (1, BLOCK_D))
-                scores_2d = tl.dot(q_2d, tl.trans(k_native)).to(tl.float32)
-                scores = tl.reshape(scores_2d, (BLOCK_K,)) * scale
-            else:
-                scores = tl.sum(q_fp32[None, :] * k_native.to(tl.float32), axis=1) * scale
-
+            scores = tl.sum(q_i[None, :] * k_vals, axis=1) * scale
             scores = tl.where(valid, scores, float('-inf'))
             p_i = tl.exp(scores - lse_i)
             p_i = tl.where(valid, p_i, 0.0)
 
-            # ── tl.dot for dO·V (native precision) ──
-            if BLOCK_K >= 16 and BLOCK_D >= 16:
-                do_2d = tl.reshape(do_native, (1, BLOCK_D))
-                do_v_2d = tl.dot(do_2d, tl.trans(v_native)).to(tl.float32)
-                do_v = tl.reshape(do_v_2d, (BLOCK_K,))
-            else:
-                do_v = tl.sum(do_fp32[None, :] * v_native.to(tl.float32), axis=1)
-
+            do_v = tl.sum(do_i[None, :] * v_vals, axis=1)
             ds_i = p_i * (do_v - delta_i)
 
-            # ── Atomic scatter (same as V1, fp32) ──
-            dk_contrib = (ds_i[:, None] * q_fp32[None, :]) * scale
+            # Atomic scatter — cast to fp32 for accumulation
+            dk_contrib = (ds_i[:, None] * q_i[None, :]).to(tl.float32) * scale
             dk_ptrs = dk_base + qi_indices[:, None] * stride_dkk + d_offs[None, :] * stride_dkd
             scatter_mask = valid[:, None] & d_mask[None, :]
             tl.atomic_add(dk_ptrs, dk_contrib, mask=scatter_mask)
 
-            dv_contrib = p_i[:, None] * do_fp32[None, :]
+            dv_contrib = (p_i[:, None] * do_i[None, :]).to(tl.float32)
             dv_ptrs = dv_base + qi_indices[:, None] * stride_dvk + d_offs[None, :] * stride_dvd
             tl.atomic_add(dv_ptrs, dv_contrib, mask=scatter_mask)
 
@@ -415,8 +344,6 @@ if HAS_TRITON:
                 out.stride(0), out.stride(1), out.stride(2), out.stride(3),
                 scale,
                 BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
-                num_warps=4 if BLOCK_D <= 64 else 8,
-                num_stages=2,
             )
 
             out_typed = out.to(q.dtype)
@@ -440,11 +367,11 @@ if HAS_TRITON:
             k_sel = indices.size(-1)
             grid = (B * H, T)
 
+            # V2 CHANGE: keep grad_output in native precision for kernels
             do_native = grad_output.contiguous()
             do_fp32 = do_native.to(torch.float32)
-            num_warps_bwd = 4 if BLOCK_D <= 64 else 8
 
-            # Step 1: delta (needs fp32)
+            # Step 1: delta (needs fp32 inputs)
             delta = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
             _sparse_attn_bwd_preprocess_v2[grid](
                 out_fp32, do_fp32, delta,
@@ -454,7 +381,7 @@ if HAS_TRITON:
                 BLOCK_D=BLOCK_D,
             )
 
-            # Step 2: dQ (native precision do for tl.dot)
+            # Step 2: dQ (native precision loading)
             dq = torch.empty_like(q, dtype=torch.float32)
             _sparse_attn_bwd_dq_kernel_v2[grid](
                 q, k, v, do_native,
@@ -471,11 +398,9 @@ if HAS_TRITON:
                 dq.stride(0), dq.stride(1), dq.stride(2), dq.stride(3),
                 scale,
                 BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
-                num_warps=num_warps_bwd,
-                num_stages=2,
             )
 
-            # Step 3: dK/dV (native precision do for tl.dot)
+            # Step 3: dK/dV (native precision loading)
             dk = torch.zeros_like(k, dtype=torch.float32)
             dv = torch.zeros_like(v, dtype=torch.float32)
             _sparse_attn_bwd_dkdv_kernel_v2[grid](
@@ -494,8 +419,6 @@ if HAS_TRITON:
                 dv.stride(0), dv.stride(1), dv.stride(2), dv.stride(3),
                 scale,
                 BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
-                num_warps=num_warps_bwd,
-                num_stages=2,
             )
 
             return dq.to(q.dtype), dk.to(k.dtype), dv.to(v.dtype), None, None, None
@@ -516,7 +439,7 @@ def triton_sparse_attention_v2(
     scale: float,
     use_triton_backward: bool = None,
 ) -> torch.Tensor:
-    """V2 sparse attention with native-precision tl.dot for Tensor Cores."""
+    """V2 sparse attention — native precision for reduced memory bandwidth."""
     if not HAS_TRITON:
         raise ImportError("Triton is required")
 
@@ -525,7 +448,6 @@ def triton_sparse_attention_v2(
     if mask.dtype != torch.float32:
         mask = mask.to(torch.float32)
 
-    # Sanitization (from Rohan's V1)
     T_kv = k.shape[1]
     bool_mask = mask > 0.5
     bad = ((indices < 0) | (indices >= T_kv)) & bool_mask
