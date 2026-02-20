@@ -31,19 +31,31 @@ class MidpointFunction(torch.autograd.Function):
         - a<1 adds a stabilizing blend toward p_cur (still reversible if a!=0)
         """
         n_params = len(param_keys)
+        n_buffers = len(buffer_keys)
 
         # IMPORTANT: module is a _ForceWrapper, so param/buffer names must be prefixed with "layer."
         params = {f"layer.{k}": v for k, v in zip(param_keys, flat_tensors[:n_params])}
-        buffers = {f"layer.{k}": v for k, v in zip(buffer_keys, flat_tensors[n_params:])}
+
+        # CRITICAL FIX: Clone buffers so backward recompute sees the ORIGINAL
+        # values from forward time. Without cloning, NCCL all_reduce can mutate
+        # buffer tensors (e.g. variance_ema) between forward and backward,
+        # causing the backward recompute to produce different results and
+        # breaking the reversibility guarantee.
+        buffer_tensors_orig = flat_tensors[n_params:]
+        buffer_clones = [b.clone() for b in buffer_tensors_orig]
+        buffers = {f"layer.{k}": v for k, v in zip(buffer_keys, buffer_clones)}
 
         # Save what we truly need for backward
-        ctx.save_for_backward(p_prev, p_cur, *flat_tensors[:n_params])
+        # Params are saved for gradient computation; buffer clones are saved
+        # so backward recompute uses forward-time buffer values (not NCCL-mutated ones)
+        ctx.save_for_backward(p_prev, p_cur, *flat_tensors[:n_params], *buffer_clones)
         ctx.two_h = float(two_h)
         ctx.a = float(a)
         ctx.module = module
         ctx.param_keys = param_keys
         ctx.buffer_keys = buffer_keys
         ctx.n_params = n_params
+        ctx.n_buffers = n_buffers
         ctx.attention_mask = attention_mask
 
         with torch.no_grad():
@@ -54,18 +66,21 @@ class MidpointFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_p_next, grad_aux):
-        p_prev, p_cur, *param_tensors = ctx.saved_tensors
+        p_prev, p_cur, *saved_tensors = ctx.saved_tensors
         n_params = ctx.n_params
+        n_buffers = ctx.n_buffers
+
+        param_tensors = saved_tensors[:n_params]
+        buffer_clones = saved_tensors[n_params:n_params + n_buffers]
 
         # Rebuild params/buffers for functional_call
         params = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_tensors)}
-        # buffers are non-diff; we still need them for correct forward recompute
-        # they come from the original module at runtime via named_buffers
-        # so we recreate them here from the live module's buffers:
-        live_buffers = dict(ctx.module.named_buffers())
-        buffers = {f"layer.{k}": live_buffers.get(f"layer.{k}", None) for k in ctx.buffer_keys}
-        # Remove None entries (some layers may have no buffers)
-        buffers = {k: v for k, v in buffers.items() if v is not None}
+
+        # Use the CLONED buffers saved during forward, NOT the live module buffers.
+        # This is critical for correctness: NCCL all_reduce may have mutated the
+        # live buffers between forward and backward. Using clones guarantees the
+        # backward recompute produces the same result as the original forward.
+        buffers = {f"layer.{k}": v for k, v in zip(ctx.buffer_keys, buffer_clones)}
 
         # Direct paths:
         # p_next = a*p_prev + (1-a)*p_cur + two_h*delta(p_cur)
