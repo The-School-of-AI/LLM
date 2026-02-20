@@ -8,12 +8,12 @@ excluded = {"zh", "ja", "ko", "fr", "de", "es"}
 total = 0
 allowed = 0
 
-with open('data/datasets/large_sample_chunks.jsonl') as f:
+with open("data/datasets/large_sample_chunks.jsonl") as f:
     for line in f:
         chunk = json.loads(line)
-        lang = chunk.get('language', 'en')
+        lang = chunk.get("language", "en")
         total += 1
-        
+
         if lang not in excluded:
             allowed += 1
             lang_dist[lang] += 1

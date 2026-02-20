@@ -21,11 +21,10 @@ Notes:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence
-
 
 DEFAULT_COLUMNS: List[str] = [
     "chunk_id",
@@ -76,14 +75,18 @@ def export_parquet_to_jsonl(
     if not parquet_path.exists():
         raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
     if jsonl_path.exists() and not overwrite:
-        raise FileExistsError(f"Refusing to overwrite existing {jsonl_path} (use --overwrite-jsonl)")
+        raise FileExistsError(
+            f"Refusing to overwrite existing {jsonl_path} (use --overwrite-jsonl)"
+        )
 
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
 
     pf = pq.ParquetFile(str(parquet_path))
     rows_written = 0
     with open(jsonl_path, "w", encoding="utf-8") as f:
-        for batch in pf.iter_batches(batch_size=int(batch_rows), columns=list(columns) if columns else None):
+        for batch in pf.iter_batches(
+            batch_size=int(batch_rows), columns=list(columns) if columns else None
+        ):
             table = batch.to_pydict()
             if not table:
                 continue
@@ -129,7 +132,9 @@ def merge_stage_parts(
 
     output_path = stage_dir / output_name
     if output_path.exists() and not overwrite:
-        raise FileExistsError(f"Refusing to overwrite existing {output_path} (use --overwrite)")
+        raise FileExistsError(
+            f"Refusing to overwrite existing {output_path} (use --overwrite)"
+        )
 
     use_columns = list(columns) if columns is not None else None
     if use_columns is None:
@@ -137,7 +142,11 @@ def merge_stage_parts(
         pf = pq.ParquetFile(str(part_files[0]))
         available = set(pf.schema.names)
         use_columns = [c for c in DEFAULT_COLUMNS if c in available]
-        if ("token_count" not in available) and (LEGACY_TOKEN_COLUMN in available) and (LEGACY_TOKEN_COLUMN not in use_columns):
+        if (
+            ("token_count" not in available)
+            and (LEGACY_TOKEN_COLUMN in available)
+            and (LEGACY_TOKEN_COLUMN not in use_columns)
+        ):
             use_columns.append(LEGACY_TOKEN_COLUMN)
 
     first = pq.read_table(part_files[0], columns=use_columns)
@@ -206,7 +215,9 @@ def merge_coreset_root(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Merge selected_indices Parquet part files per stage")
+    parser = argparse.ArgumentParser(
+        description="Merge selected_indices Parquet part files per stage"
+    )
     parser.add_argument(
         "--coreset-root",
         type=str,
@@ -216,7 +227,9 @@ def main() -> int:
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--stage", type=str, help="Single stage to merge (e.g., 1B)")
-    group.add_argument("--stages", type=str, nargs="+", help="Stages to merge (e.g., 1B 3B 8B 70B)")
+    group.add_argument(
+        "--stages", type=str, nargs="+", help="Stages to merge (e.g., 1B 3B 8B 70B)"
+    )
 
     parser.add_argument(
         "--output-name",
@@ -285,9 +298,13 @@ def main() -> int:
     )
 
     for r in results:
-        print(f"{r.stage}: merged {r.part_files} parts -> {r.rows_written} rows at {r.output_path}")
+        print(
+            f"{r.stage}: merged {r.part_files} parts -> {r.rows_written} rows at {r.output_path}"
+        )
         if args.export_jsonl:
-            print(f"{r.stage}: exported jsonl -> {Path(args.coreset_root) / r.stage / args.jsonl_name}")
+            print(
+                f"{r.stage}: exported jsonl -> {Path(args.coreset_root) / r.stage / args.jsonl_name}"
+            )
 
     return 0
 

@@ -82,7 +82,9 @@ def scan_outputv2(base: Path, *, bands: Iterable[str], limits: ScanLimits) -> No
     rows_scanned = 0
 
     for band_prefix in bands:
-        shard_paths = _glob_sorted(base, f"{band_prefix}_shard_*.jsonl", max_files=limits.max_files)
+        shard_paths = _glob_sorted(
+            base, f"{band_prefix}_shard_*.jsonl", max_files=limits.max_files
+        )
         for p in shard_paths:
             files_scanned += 1
             fallback = band_prefix.upper().replace("B", "B")
@@ -122,7 +124,9 @@ def scan_outputv2(base: Path, *, bands: Iterable[str], limits: ScanLimits) -> No
         print(f"  {lang_disp}: {tok:,}")
 
     # B0 domain breakdown is usually the first thing that exposes curriculum/domain mismatches.
-    b0_domains = [(dom, tok) for (band, dom), tok in tokens_by_band_domain.items() if band == "B0"]
+    b0_domains = [
+        (dom, tok) for (band, dom), tok in tokens_by_band_domain.items() if band == "B0"
+    ]
     b0_domains.sort(key=lambda x: x[1], reverse=True)
     if b0_domains:
         print("\nB0 domains by tokens:")
@@ -139,8 +143,12 @@ def scan_outputv2(base: Path, *, bands: Iterable[str], limits: ScanLimits) -> No
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Analyze data/outputv2 shards for band/domain/language/token availability")
-    ap.add_argument("--path", type=str, default="data/outputv2", help="Path to outputv2 directory")
+    ap = argparse.ArgumentParser(
+        description="Analyze data/outputv2 shards for band/domain/language/token availability"
+    )
+    ap.add_argument(
+        "--path", type=str, default="data/outputv2", help="Path to outputv2 directory"
+    )
     ap.add_argument(
         "--bands",
         type=str,
@@ -148,8 +156,18 @@ def main() -> int:
         default=["b0", "b1", "b2", "b3", "b4", "b5"],
         help="Shard prefixes to scan (e.g., b0 b1 ...)",
     )
-    ap.add_argument("--max-files", type=int, default=30, help="Max shard files per band to scan (sample). Use 0 for none.")
-    ap.add_argument("--max-lines", type=int, default=5000, help="Max JSONL lines per file to scan (sample).")
+    ap.add_argument(
+        "--max-files",
+        type=int,
+        default=30,
+        help="Max shard files per band to scan (sample). Use 0 for none.",
+    )
+    ap.add_argument(
+        "--max-lines",
+        type=int,
+        default=5000,
+        help="Max JSONL lines per file to scan (sample).",
+    )
 
     args = ap.parse_args()
     base = Path(args.path)

@@ -100,7 +100,9 @@ class _DuplicateCounter:
     def add(self, chunk_id: Optional[str]) -> None:  # pragma: no cover
         raise NotImplementedError
 
-    def finalize(self, top_n: int) -> Tuple[int, int, List[Tuple[str, int]]]:  # pragma: no cover
+    def finalize(
+        self, top_n: int
+    ) -> Tuple[int, int, List[Tuple[str, int]]]:  # pragma: no cover
         """Returns (duplicates_total_extra_rows, duplicated_ids_count, top_duplicates)."""
         raise NotImplementedError
 
@@ -172,10 +174,14 @@ class _SqliteDuplicateCounter(_DuplicateCounter):
     def finalize(self, top_n: int) -> Tuple[int, int, List[Tuple[str, int]]]:
         self._flush()
         duplicated_ids_count = int(
-            self._con.execute(f"SELECT COUNT(*) FROM {self._table} WHERE c > 1").fetchone()[0]
+            self._con.execute(
+                f"SELECT COUNT(*) FROM {self._table} WHERE c > 1"
+            ).fetchone()[0]
         )
         duplicates_total_extra_rows = int(
-            self._con.execute(f"SELECT COALESCE(SUM(c - 1), 0) FROM {self._table} WHERE c > 1").fetchone()[0]
+            self._con.execute(
+                f"SELECT COALESCE(SUM(c - 1), 0) FROM {self._table} WHERE c > 1"
+            ).fetchone()[0]
         )
         rows = self._con.execute(
             f"SELECT chunk_id, c FROM {self._table} WHERE c > 1 ORDER BY c DESC, chunk_id ASC LIMIT ?",
@@ -271,7 +277,9 @@ def _summarize_jsonl(
         duplicated_ids_count = 0
         top_dups: List[Tuple[str, int]] = []
         if dup_counter is not None:
-            duplicates_total_extra_rows, duplicated_ids_count, top_dups = dup_counter.finalize(top_duplicates)
+            duplicates_total_extra_rows, duplicated_ids_count, top_dups = (
+                dup_counter.finalize(top_duplicates)
+            )
 
         return Summary(
             total_rows=total_rows,
@@ -298,7 +306,9 @@ def _summarize_parquet(
     try:
         import pyarrow.parquet as pq
     except Exception as e:  # pragma: no cover
-        raise RuntimeError("pyarrow is required for parquet summarization (pip install pyarrow)") from e
+        raise RuntimeError(
+            "pyarrow is required for parquet summarization (pip install pyarrow)"
+        ) from e
 
     total_rows = 0
     bad_rows = 0
@@ -324,7 +334,9 @@ def _summarize_parquet(
                 try:
                     table = pf.read_row_group(rg, columns=cols)
                 except Exception:
-                    bad_rows += int(pf.metadata.row_group(rg).num_rows if pf.metadata else 0)
+                    bad_rows += int(
+                        pf.metadata.row_group(rg).num_rows if pf.metadata else 0
+                    )
                     continue
 
                 num = int(table.num_rows)
@@ -371,7 +383,9 @@ def _summarize_parquet(
         duplicated_ids_count = 0
         top_dups: List[Tuple[str, int]] = []
         if dup_counter is not None:
-            duplicates_total_extra_rows, duplicated_ids_count, top_dups = dup_counter.finalize(top_duplicates)
+            duplicates_total_extra_rows, duplicated_ids_count, top_dups = (
+                dup_counter.finalize(top_duplicates)
+            )
 
         return Summary(
             total_rows=total_rows,
@@ -388,7 +402,9 @@ def _summarize_parquet(
 
 
 def _print_summary(summary: Summary, group_fields: Sequence[str]) -> None:
-    print(f"total_rows={summary.total_rows:,} bad_rows={summary.bad_rows:,} missing_id_rows={summary.missing_id_rows:,}")
+    print(
+        f"total_rows={summary.total_rows:,} bad_rows={summary.bad_rows:,} missing_id_rows={summary.missing_id_rows:,}"
+    )
     print(
         "duplicates: "
         f"duplicated_ids={summary.duplicated_ids_count:,} "
@@ -409,7 +425,9 @@ def _print_summary(summary: Summary, group_fields: Sequence[str]) -> None:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Summarize selected_indices outputs (JSONL/Parquet)")
+    parser = argparse.ArgumentParser(
+        description="Summarize selected_indices outputs (JSONL/Parquet)"
+    )
     parser.add_argument(
         "--input-path",
         type=str,

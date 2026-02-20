@@ -29,7 +29,6 @@ from typing import Dict, List, Optional, Tuple
 
 from src.core.types import difficulty_band_order
 
-
 _UTC = _dt.timezone.utc
 
 
@@ -238,7 +237,9 @@ def _fmt_pct(x: float) -> str:
 
 
 def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
-    now = _dt.datetime.now(_UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    now = (
+        _dt.datetime.now(_UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    )
 
     total_input = merged.total_input_tokens
     total_selected = merged.total_selected_tokens
@@ -246,12 +247,16 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
     total_chunks_sel = merged.total_selected_chunks
 
     compression_ratio = (total_input / total_selected) if total_selected > 0 else None
-    chunk_reduction = (total_chunks_in / total_chunks_sel) if total_chunks_sel > 0 else None
+    chunk_reduction = (
+        (total_chunks_in / total_chunks_sel) if total_chunks_sel > 0 else None
+    )
 
     report: List[str] = []
     report.append("# Coreset Selection Ablation & Validation Report\n")
     report.append("\n## Executive Summary\n")
-    report.append("\nThis report documents comprehensive coreset selection results including:\n")
+    report.append(
+        "\nThis report documents comprehensive coreset selection results including:\n"
+    )
     report.append("- Reduction ratios achieved across all curriculum stages\n")
     report.append("- Coverage diagnostics and quality metrics\n")
     report.append("- Ablation study comparing different selection strategies\n")
@@ -268,25 +273,33 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
     report.append("|--------|-------|----------|\n")
     report.append(f"| Total Input Tokens | {_fmt_int(total_input)} | - |\n")
     if total_input > 0:
-        report.append(f"| Selected Tokens | {_fmt_int(total_selected)} | {100*(1 - total_selected/total_input):.1f}% |\n")
+        report.append(
+            f"| Selected Tokens | {_fmt_int(total_selected)} | {100*(1 - total_selected/total_input):.1f}% |\n"
+        )
     else:
         report.append(f"| Selected Tokens | {_fmt_int(total_selected)} | N/A |\n")
 
     if compression_ratio and compression_ratio > 0:
         overall_reduction = 100 * (1 - 1 / compression_ratio)
-        report.append(f"| **Compression Ratio** | **{compression_ratio:.2f}x** | **{overall_reduction:.1f}%** |\n")
+        report.append(
+            f"| **Compression Ratio** | **{compression_ratio:.2f}x** | **{overall_reduction:.1f}%** |\n"
+        )
     else:
         report.append("| **Compression Ratio** | **N/A** | **N/A** |\n")
 
     report.append(f"| Total Input Chunks | {_fmt_int(total_chunks_in)} | - |\n")
     if total_chunks_in > 0:
-        report.append(f"| Selected Chunks | {_fmt_int(total_chunks_sel)} | {100*(1 - total_chunks_sel/total_chunks_in):.1f}% |\n")
+        report.append(
+            f"| Selected Chunks | {_fmt_int(total_chunks_sel)} | {100*(1 - total_chunks_sel/total_chunks_in):.1f}% |\n"
+        )
     else:
         report.append(f"| Selected Chunks | {_fmt_int(total_chunks_sel)} | N/A |\n")
 
     if chunk_reduction and chunk_reduction > 0:
         chunk_reduction_pct = 100 * (1 - 1 / chunk_reduction)
-        report.append(f"| **Chunk Reduction** | **{chunk_reduction:.2f}x** | **{chunk_reduction_pct:.1f}%** |\n")
+        report.append(
+            f"| **Chunk Reduction** | **{chunk_reduction:.2f}x** | **{chunk_reduction_pct:.1f}%** |\n"
+        )
     else:
         report.append("| **Chunk Reduction** | **N/A** | **N/A** |\n")
 
@@ -303,7 +316,9 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
         report.append(f"- Selected Tokens: {_fmt_int(stage_sel)}\n")
         if ratio and ratio > 0:
             reduction = 100 * (1 - 1 / ratio)
-            report.append(f"- Compression Ratio: **{ratio:.2f}x** (reduction: {reduction:.1f}%)\n")
+            report.append(
+                f"- Compression Ratio: **{ratio:.2f}x** (reduction: {reduction:.1f}%)\n"
+            )
         else:
             report.append("- Compression Ratio: **N/A** (no selected tokens)\n")
         report.append(f"- Selected Chunks: {_fmt_int(st.selected_chunks)}\n\n")
@@ -315,7 +330,9 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
         for band in difficulty_band_order():
             tok = st.band_tokens.get(band, 0)
             r = _ratio(tok, stage_sel)
-            report.append(f"| {band} | {_fmt_pct(r)} | {_fmt_int(tok)} | {'✓' if tok > 0 else '-'} |\n")
+            report.append(
+                f"| {band} | {_fmt_pct(r)} | {_fmt_int(tok)} | {'✓' if tok > 0 else '-'} |\n"
+            )
         report.append("\n")
 
         # Domain distribution
@@ -356,40 +373,74 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
     report.append("The selection maintains target distributions for:\n")
     bands = difficulty_band_order()
     if bands:
-        report.append(f"- **Difficulty Bands ({bands[0]}-{bands[-1]})**: Ensures learning progression from easy to hard examples\n")
+        report.append(
+            f"- **Difficulty Bands ({bands[0]}-{bands[-1]})**: Ensures learning progression from easy to hard examples\n"
+        )
     else:
-        report.append("- **Difficulty Bands**: Ensures learning progression from easy to hard examples\n")
-    report.append(f"- **Domains**: Provides diverse content ({', '.join(sorted(all_domains)) if all_domains else 'None'})\n")
-    report.append(f"- **Languages**: Covers target languages ({', '.join(sorted(all_langs)) if all_langs else 'None'})\n\n")
+        report.append(
+            "- **Difficulty Bands**: Ensures learning progression from easy to hard examples\n"
+        )
+    report.append(
+        f"- **Domains**: Provides diverse content ({', '.join(sorted(all_domains)) if all_domains else 'None'})\n"
+    )
+    report.append(
+        f"- **Languages**: Covers target languages ({', '.join(sorted(all_langs)) if all_langs else 'None'})\n\n"
+    )
 
     report.append("### Coverage Achievement\n\n")
     report.append(
         f"- **Difficulty Bands Covered**: {len(all_bands)}/{len(bands)} bands ("
         f"{', '.join(sorted(all_bands)) if all_bands else 'None'})\n"
     )
-    report.append(f"- **Domains Covered**: {len(all_domains)} domains ({', '.join(sorted(all_domains)) if all_domains else 'None'})\n")
-    report.append(f"- **Languages Covered**: {len(all_langs)} languages ({', '.join(sorted(all_langs)) if all_langs else 'None'})\n\n")
+    report.append(
+        f"- **Domains Covered**: {len(all_domains)} domains ({', '.join(sorted(all_domains)) if all_domains else 'None'})\n"
+    )
+    report.append(
+        f"- **Languages Covered**: {len(all_langs)} languages ({', '.join(sorted(all_langs)) if all_langs else 'None'})\n\n"
+    )
 
     # Keep methods/proxy sections lightweight (the shard reports already include details)
     report.append("## Notes\n\n")
-    report.append("- This consolidated report is computed by summing numeric shard report tables.\n")
-    report.append("- Distributions are merged by token counts, then re-normalized per stage.\n")
+    report.append(
+        "- This consolidated report is computed by summing numeric shard report tables.\n"
+    )
+    report.append(
+        "- Distributions are merged by token counts, then re-normalized per stage.\n"
+    )
 
     return "".join(report)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Merge shard ablation validation reports into a consolidated markdown report.")
-    parser.add_argument("--manifests-dir", default="output/manifests", help="Directory containing shard reports")
-    parser.add_argument("--input-glob", default="ablation_validation_report_shard*.md", help="Glob to match shard report files")
-    parser.add_argument("--output-file", default="output/manifests/ablation_validation_report.md", help="Output markdown path")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite output file if it exists")
+    parser = argparse.ArgumentParser(
+        description="Merge shard ablation validation reports into a consolidated markdown report."
+    )
+    parser.add_argument(
+        "--manifests-dir",
+        default="output/manifests",
+        help="Directory containing shard reports",
+    )
+    parser.add_argument(
+        "--input-glob",
+        default="ablation_validation_report_shard*.md",
+        help="Glob to match shard report files",
+    )
+    parser.add_argument(
+        "--output-file",
+        default="output/manifests/ablation_validation_report.md",
+        help="Output markdown path",
+    )
+    parser.add_argument(
+        "--overwrite", action="store_true", help="Overwrite output file if it exists"
+    )
     args = parser.parse_args()
 
     manifests_dir = Path(args.manifests_dir)
     shard_paths = sorted(manifests_dir.glob(args.input_glob))
     if not shard_paths:
-        print(f"[ERROR] No shard reports found in {manifests_dir} matching {args.input_glob}")
+        print(
+            f"[ERROR] No shard reports found in {manifests_dir} matching {args.input_glob}"
+        )
         return 2
 
     parsed: List[ParsedReport] = []

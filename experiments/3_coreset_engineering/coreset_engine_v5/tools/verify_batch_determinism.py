@@ -35,9 +35,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.io.batch_processor import BatchProcessor
-
 import xxhash
+from src.io.batch_processor import BatchProcessor
 
 
 @dataclass
@@ -77,7 +76,11 @@ def _iter_selected_indices_rows(stage_dir: Path) -> Iterator[Dict[str, Any]]:
     part_files = sorted(stage_dir.glob("selected_indices_part_*"))
     if not part_files:
         # Legacy single-file layout
-        for legacy_name in ("selected_indices.parquet", "selected_indices.jsonl", "selected_indices.csv"):
+        for legacy_name in (
+            "selected_indices.parquet",
+            "selected_indices.jsonl",
+            "selected_indices.csv",
+        ):
             p = stage_dir / legacy_name
             if p.exists():
                 part_files = [p]
@@ -173,7 +176,8 @@ def _stable_manifest_subset(m: Optional[Dict[str, Any]]) -> Optional[Dict[str, A
         "stage_name": m.get("stage_name") or m.get("stage"),
         "target_tokens": m.get("target_tokens"),
         "actual_tokens": m.get("actual_tokens") or m.get("selected_tokens"),
-        "selected_chunks_count": m.get("selected_chunks_count") or m.get("selected_chunks"),
+        "selected_chunks_count": m.get("selected_chunks_count")
+        or m.get("selected_chunks"),
         "shard_id": m.get("shard_id"),
         "num_shards": m.get("num_shards"),
         "config_hash": m.get("config_hash"),
@@ -181,7 +185,9 @@ def _stable_manifest_subset(m: Optional[Dict[str, Any]]) -> Optional[Dict[str, A
         "composition": {
             "band_distribution": (comp.get("band_distribution") if comp else None),
             "domain_distribution": (comp.get("domain_distribution") if comp else None),
-            "language_distribution": (comp.get("language_distribution") if comp else None),
+            "language_distribution": (
+                comp.get("language_distribution") if comp else None
+            ),
         },
     }
     return out
@@ -215,21 +221,41 @@ def compare_output_dirs(
         a_stage = a_root / stage
         b_stage = b_root / stage
 
-        a_fp = fingerprint_stage_outputs(a_stage) if a_stage.exists() else {"has_indices": False}
-        b_fp = fingerprint_stage_outputs(b_stage) if b_stage.exists() else {"has_indices": False}
+        a_fp = (
+            fingerprint_stage_outputs(a_stage)
+            if a_stage.exists()
+            else {"has_indices": False}
+        )
+        b_fp = (
+            fingerprint_stage_outputs(b_stage)
+            if b_stage.exists()
+            else {"has_indices": False}
+        )
 
-        a_manifest = _stable_manifest_subset(_load_manifest_json(a_stage / "manifest.json")) if a_stage.exists() else None
-        b_manifest = _stable_manifest_subset(_load_manifest_json(b_stage / "manifest.json")) if b_stage.exists() else None
+        a_manifest = (
+            _stable_manifest_subset(_load_manifest_json(a_stage / "manifest.json"))
+            if a_stage.exists()
+            else None
+        )
+        b_manifest = (
+            _stable_manifest_subset(_load_manifest_json(b_stage / "manifest.json"))
+            if b_stage.exists()
+            else None
+        )
 
         shard_manifests_a = {}
         shard_manifests_b = {}
         if include_shard_manifests:
             if a_stage.exists():
                 for p in sorted(a_stage.glob("manifest_shard*.json")):
-                    shard_manifests_a[p.name] = _stable_manifest_subset(_load_manifest_json(p))
+                    shard_manifests_a[p.name] = _stable_manifest_subset(
+                        _load_manifest_json(p)
+                    )
             if b_stage.exists():
                 for p in sorted(b_stage.glob("manifest_shard*.json")):
-                    shard_manifests_b[p.name] = _stable_manifest_subset(_load_manifest_json(p))
+                    shard_manifests_b[p.name] = _stable_manifest_subset(
+                        _load_manifest_json(p)
+                    )
 
         match = True
         reasons: List[str] = []
@@ -306,12 +332,7 @@ def _sha256_of_chunk_ids(chunk_ids: List[str]) -> str:
 def _normalize_chunk_id_from_mapping(data: Dict[str, Any]) -> Optional[str]:
     if not isinstance(data, dict):
         return None
-    return (
-        data.get("chunk_id")
-        or data.get("uid")
-        or data.get("guid")
-        or data.get("id")
-    )
+    return data.get("chunk_id") or data.get("uid") or data.get("guid") or data.get("id")
 
 
 def _iter_parquet_rows(
@@ -373,7 +394,7 @@ def _iter_batches_from_parquet_like_pipeline(
     if not files:
         raise SystemExit(f"No Parquet files found under: {input_path}")
 
-    row_level_shard = (int(num_shards) > 1 and len(files) == 1)
+    row_level_shard = int(num_shards) > 1 and len(files) == 1
     if not row_level_shard:
         files = bp.shard_files(files, int(shard_id), int(num_shards))
 
@@ -382,7 +403,9 @@ def _iter_batches_from_parquet_like_pipeline(
     batch: List[Tuple[str, Dict[str, Any]]] = []
 
     for f in files:
-        for row in _iter_parquet_rows(f, max_rows=(None if max_rows is None else int(max_rows) - emitted)):
+        for row in _iter_parquet_rows(
+            f, max_rows=(None if max_rows is None else int(max_rows) - emitted)
+        ):
             if max_rows is not None and emitted >= int(max_rows):
                 break
 
@@ -454,7 +477,7 @@ def iter_batches_like_pipeline(
         if not files:
             raise SystemExit(f"No JSONL files found under: {input_path}")
 
-        row_level_shard = (int(num_shards) > 1 and len(files) == 1)
+        row_level_shard = int(num_shards) > 1 and len(files) == 1
         if not row_level_shard:
             files = bp.shard_files(files, int(shard_id), int(num_shards))
 
@@ -590,7 +613,9 @@ def render_stage_wise_markdown(report: Dict[str, Any]) -> str:
         lines.append("- " + ", ".join(stages) + "\n")
 
     lines.append("\n## Batches\n")
-    lines.append("| batch_idx | num_chunks | first_chunk_id | last_chunk_id | sha256 |\n")
+    lines.append(
+        "| batch_idx | num_chunks | first_chunk_id | last_chunk_id | sha256 |\n"
+    )
     lines.append("|---:|---:|---|---|---|\n")
     for b in batches:
         lines.append(
@@ -639,8 +664,8 @@ def render_output_compare_markdown(report: Dict[str, Any]) -> str:
         if reasons:
             lines.append(f"- reasons: {', '.join(reasons)}\n")
 
-        a_idx = ((s.get("a") or {}).get("indices") or {})
-        b_idx = ((s.get("b") or {}).get("indices") or {})
+        a_idx = (s.get("a") or {}).get("indices") or {}
+        b_idx = (s.get("b") or {}).get("indices") or {}
         if a_idx.get("has_indices") or b_idx.get("has_indices"):
             lines.append("- indices:\n")
             lines.append(
@@ -713,7 +738,9 @@ def main() -> int:
     ap.add_argument("--max-rows", type=int, default=None, help="Limit rows processed.")
     ap.add_argument("--shard-id", type=int, default=0, help="Shard id.")
     ap.add_argument("--num-shards", type=int, default=1, help="Num shards.")
-    ap.add_argument("--shard-key", default="chunk_id", help="Shard key for row-level sharding.")
+    ap.add_argument(
+        "--shard-key", default="chunk_id", help="Shard key for row-level sharding."
+    )
 
     ap.add_argument(
         "--stages",
@@ -734,7 +761,9 @@ def main() -> int:
     )
 
     ap.add_argument("--out", default=None, help="Write signatures JSON to this path.")
-    ap.add_argument("--baseline", default=None, help="Baseline signatures JSON to compare against.")
+    ap.add_argument(
+        "--baseline", default=None, help="Baseline signatures JSON to compare against."
+    )
 
     args = ap.parse_args()
 
@@ -752,7 +781,9 @@ def main() -> int:
         if args.out:
             out_path = Path(args.out)
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+            out_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True), encoding="utf-8"
+            )
 
         if args.outputs_report_md:
             md_path = Path(args.outputs_report_md)
@@ -786,7 +817,9 @@ def main() -> int:
     if args.out:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(current, indent=2, sort_keys=True), encoding="utf-8")
+        out_path.write_text(
+            json.dumps(current, indent=2, sort_keys=True), encoding="utf-8"
+        )
 
     if args.baseline:
         baseline = json.loads(Path(args.baseline).read_text(encoding="utf-8"))

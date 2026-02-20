@@ -119,7 +119,9 @@ def _load_stage_ids(stage_dir: Path, id_fields: Sequence[str]) -> List[str]:
     return []
 
 
-def _pairwise_overlap_counts(stage_sets: Dict[str, Set[str]]) -> Dict[Tuple[str, str], int]:
+def _pairwise_overlap_counts(
+    stage_sets: Dict[str, Set[str]]
+) -> Dict[Tuple[str, str], int]:
     stages = sorted(stage_sets.keys())
     pair_counts: Dict[Tuple[str, str], int] = {}
     for i in range(len(stages)):
@@ -129,7 +131,9 @@ def _pairwise_overlap_counts(stage_sets: Dict[str, Set[str]]) -> Dict[Tuple[str,
     return pair_counts
 
 
-def _format_validator_summary(curriculum_path: Path, output_dir: Path, stages: Sequence[str]) -> str:
+def _format_validator_summary(
+    curriculum_path: Path, output_dir: Path, stages: Sequence[str]
+) -> str:
     from tools.validate_coreset_outputs import CoresetValidator
 
     validator = CoresetValidator(str(curriculum_path), output_base_dir=str(output_dir))
@@ -162,10 +166,25 @@ def _format_validator_summary(curriculum_path: Path, output_dir: Path, stages: S
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate verification artifacts for coreset outputs")
-    parser.add_argument("--curriculum", type=str, required=True, help="Path to curriculum.yaml")
-    parser.add_argument("--output-dir", type=str, default="output/coresets", help="Base output directory")
-    parser.add_argument("--stages", type=str, nargs="+", default=["1B", "3B", "8B", "70B"], help="Stages to check")
+    parser = argparse.ArgumentParser(
+        description="Generate verification artifacts for coreset outputs"
+    )
+    parser.add_argument(
+        "--curriculum", type=str, required=True, help="Path to curriculum.yaml"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="output/coresets",
+        help="Base output directory",
+    )
+    parser.add_argument(
+        "--stages",
+        type=str,
+        nargs="+",
+        default=["1B", "3B", "8B", "70B"],
+        help="Stages to check",
+    )
     parser.add_argument(
         "--report-path",
         type=str,
@@ -218,7 +237,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     md.append("## Selected Indices Counts\n\n")
     for stage in stages:
-        md.append(f"- {stage}: rows={len(stage_ids.get(stage, [])):,} unique_ids={len(stage_sets.get(stage, set())):,}\n")
+        md.append(
+            f"- {stage}: rows={len(stage_ids.get(stage, [])):,} unique_ids={len(stage_sets.get(stage, set())):,}\n"
+        )
     md.append("\n")
 
     md.append("## Cross-stage Overlap Check\n\n")
@@ -227,7 +248,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if multi:
         md.append("Pairwise overlaps:\n\n")
-        for (a, b), c in sorted(pair_counts.items(), key=lambda x: (-x[1], x[0][0], x[0][1])):
+        for (a, b), c in sorted(
+            pair_counts.items(), key=lambda x: (-x[1], x[0][0], x[0][1])
+        ):
             if c > 0:
                 md.append(f"- {a} ∩ {b}: {c}\n")
         md.append("\nTop duplicated ids (up to 20):\n\n")
