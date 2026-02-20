@@ -56,7 +56,9 @@ class MidpointFunction(torch.autograd.Function):
         ctx.buffer_keys = buffer_keys
         ctx.n_params = n_params
         ctx.n_buffers = n_buffers
-        ctx.attention_mask = attention_mask
+        # BUG FIX #13: clone attention_mask so backward is safe even if the
+        # original tensor is freed or mutated before backward runs
+        ctx.attention_mask = attention_mask.detach().clone() if attention_mask is not None else None
 
         with torch.no_grad():
             delta, aux = functional_call(module, (params, buffers), (p_cur, attention_mask), tie_weights=True)

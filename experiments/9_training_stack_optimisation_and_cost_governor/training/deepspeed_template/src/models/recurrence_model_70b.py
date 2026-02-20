@@ -903,7 +903,8 @@ class GatedDeltaNet(nn.Module):
 
         # Alpha decay parameters (per-head)
         # Paper: A initialized uniform(0, 16), then log for exponential parameterization
-        A_init = torch.empty(num_heads).uniform_(0, 16)
+        # BUG FIX #1: uniform_(0, 16) can produce 0 → log(0) = -inf → dead head
+        A_init = torch.empty(num_heads).uniform_(1e-4, 16)
         self.A_log = nn.Parameter(torch.log(A_init))  # log(A) for stability
 
         # D parameter for residual connection (per-head)
@@ -1202,7 +1203,8 @@ class GatedSparseAttention(nn.Module):
             k_min=self.k_min,
             k_max=self.k_max,
             variance_ema=ema_for_indexer,
-            is_training=False,
+            # BUG FIX #6: was hardcoded False → EMA never updated
+            is_training=self.training and is_reversible_forward,
             sink_size=4,
         )
 
@@ -1379,7 +1381,8 @@ class MoEGate(nn.Module):
         is_null_flat = (idx_flat >= self.num_experts)
         idx_real = torch.where(is_null_flat, torch.tensor(0, device=idx_flat.device), idx_flat)
         counts_real = torch.bincount(idx_real, minlength=self.num_experts).float()
-        counts_real[0] -= is_null_flat.sum().float()  # Remove null selections from bin 0
+        # BUG FIX #5: clamp to 0 — if all tokens select null, subtraction can go negative
+        counts_real[0] = (counts_real[0] - is_null_flat.sum().float()).clamp(min=0)
         # FIX #34: Normalize by actual real assignments, not total slots (prevents router collapse)
         total_real_assignments = counts_real.sum()  # Total actual real expert selections
         f_real = counts_real / total_real_assignments.clamp(min=1e-6)  # Per-expert frequency among real selections
