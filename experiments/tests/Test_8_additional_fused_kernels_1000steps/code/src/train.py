@@ -117,6 +117,7 @@ def train_epoch(
     start_step=0,
     global_step=0,
     metrics_jsonl_path=None,
+    use_fused_ce=False,
 ):
     """
     Train the model for one epoch.
@@ -178,7 +179,7 @@ def train_epoch(
         loss_ntp_value = None
         loss_mtp_value = None
         loss_aux_value = None
-        use_fused_ce = bool(getattr(args, "use_fused_ce", False))
+        # use_fused_ce = bool(getattr(args, "use_fused_ce", False))
 
         if uses_custom_forward:
             # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)

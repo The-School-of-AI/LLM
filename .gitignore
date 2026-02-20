@@ -1,0 +1,3 @@
+experiments/tests/*/results/
+LLM/experiments/tests/*/results/
+**/results/

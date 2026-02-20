@@ -106,8 +106,11 @@ def main() -> None:
             raise RuntimeError("Expected model.liger_fused_ce to be LigerFusedLinearCrossEntropyLoss")
         if not hasattr(model, "_fused_linear_cross_entropy"):
             raise RuntimeError("Expected model._fused_linear_cross_entropy to exist")
-        first_mlp = getattr(model.layers[0].ffn_block.sublayer, "mlp", None)
-        if first_mlp is None or not isinstance(first_mlp, LigerSwiGLUMLP):
+        # Path: layers[0].mlp_block.sublayer (LightningMLP) -> .mlp (DenseMLP) -> .mlp (LigerSwiGLUMLP)
+        layer0_mlp_sublayer = getattr(model.layers[0].mlp_block, "sublayer", None)
+        first_mlp = getattr(layer0_mlp_sublayer, "mlp", None) if layer0_mlp_sublayer is not None else None
+        first_liger = getattr(first_mlp, "mlp", None) if first_mlp is not None else None
+        if first_liger is None or not isinstance(first_liger, LigerSwiGLUMLP):
             raise RuntimeError("Expected first layer MLP to use LigerSwiGLUMLP")
 
     if embedding_type == "kronecker":
