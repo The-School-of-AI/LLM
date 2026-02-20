@@ -725,6 +725,17 @@ def _pack_dataset_dict(
 
 def _build_causal_lm_collate_fn(pad_token_id: int):
     def _collate(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+        # Fast path for batches with uniform sequence lengths
+        first_len = int(batch[0]["input_ids"].shape[0])
+        is_uniform = all(int(item["input_ids"].shape[0]) == first_len for item in batch)
+
+        if is_uniform:
+            return {
+                "input_ids": torch.stack([item["input_ids"] for item in batch]),
+                "attention_mask": torch.stack([item["attention_mask"] for item in batch]),
+                "labels": torch.stack([item["labels"] for item in batch]),
+            }
+
         max_len = max(int(item["input_ids"].shape[0]) for item in batch)
         bsz = len(batch)
 
