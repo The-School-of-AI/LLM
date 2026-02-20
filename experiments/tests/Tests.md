@@ -1,5 +1,7 @@
 # Test Configurations Summary
 
+Note: `tokenizer.json` is intentionally omitted from each test folder to keep bundle size manageable. Use the shared tokenizer assets from your base environment/repo when running these tests.
+
 **Test 2: 20-step Initialization Setup**
 This is a short 20-step training run designed strictly to establish a deterministic checkpoint and save an initial model state (`model_init.pt`). This checkpoint serves as the starting weight reference for all subsequent experiments.
 
@@ -12,8 +14,8 @@ This test modifies the model from Test 3 by replacing the standard embeddings wi
 **Test 5: Reversible Architecture Activation**
 This test preserves the Kronecker embeddings from Test 4 but swaps the core backbone to use the memory-saving Reversible Activation (`ReversibleMidpointStack`). It runs for 1000 steps to baseline the reversible model performance.
 
-**Test 6: Fused Triton GSA Kernel**
-This test takes the Reversible+Kronecker setup from Test 5 and introduces a highly optimized Triton kernel for the Gated Sparse Attention (GSA) layer. Since this represents a significant architectural change, it runs for a shorter 500-step validation.
+**Test 6: Fused Triton GSA Kernel (Forward + Backward)**
+This test takes the Reversible+Kronecker setup from Test 5 and introduces the Triton Gated Sparse Attention (GSA) kernel for both forward and backward during training (no PyTorch sparse-attention fallback in this test line). Since this is a significant kernel-path change, it runs for a shorter 500-step validation.
 
 **Test 7: Fused Triton GSA + DeltaNet (FLA)**
 Building on Test 6, this test adds a second fused optimization path for the DeltaNet layers using the `fla_gated_delta_rule` from the Fast Linear Attention (FLA) package. The duration is increased back to 1000 steps to baseline total combined throughput. 
