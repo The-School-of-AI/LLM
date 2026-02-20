@@ -140,6 +140,52 @@ def test_backward_sizes():
         print(f"    ✅ OK")
 
 
+def test_backward_production_dims():
+    """Test at production dimensions: D=256, H=16 (matches all model configs).
+
+    This is critical because tl.dot takes a different code path than tl.sum
+    for BLOCK_K >= 16 and BLOCK_D >= 16. Production uses D=256, BLOCK_K=64.
+    """
+    configs = [
+        (1, 64,  16, 256, 32),   # production head dim, small T
+        (1, 128, 16, 256, 64),   # production head dim, typical k_sel
+        (2, 128, 16, 256, 128),  # production head dim, larger batch
+        (1, 256, 16, 256, 256),  # production head dim, large k_sel
+        (1, 64,  16, 128, 32),   # D=128 (DeltaNet head dim, in case used)
+    ]
+    for B, T, H, D, k_sel in configs:
+        print(f"  Config: B={B}, T={T}, H={H}, D={D}, k_sel={k_sel}")
+        q, k, v, indices, mask, scale = make_test_data(B, T, H, D, k_sel)
+
+        q2 = q.detach().clone().requires_grad_(True)
+        k2 = k.detach().clone().requires_grad_(True)
+        v2 = v.detach().clone().requires_grad_(True)
+
+        out_ref = pytorch_sparse_attention(q, k, v, indices, mask, scale)
+        grad_out = torch.randn_like(out_ref)
+        out_ref.backward(grad_out)
+
+        out_tri = triton_sparse_attention(q2, k2, v2, indices, mask, scale)
+
+        # Check forward match first
+        with torch.no_grad():
+            fwd_diff = (out_ref.detach() - out_tri.detach()).abs().max().item()
+            print(f"    Forward max_diff: {fwd_diff:.2e}")
+            assert fwd_diff < 1e-2, f"Forward mismatch at D={D}: {fwd_diff}"
+
+        out_tri.backward(grad_out)
+
+        for name, ref_g, tri_g in [("dQ", q.grad, q2.grad), ("dK", k.grad, k2.grad), ("dV", v.grad, v2.grad)]:
+            max_diff = (ref_g - tri_g).abs().max().item()
+            mean_diff = (ref_g - tri_g).abs().mean().item()
+            ref_norm = ref_g.abs().mean().item()
+            rel_diff = mean_diff / max(ref_norm, 1e-8)
+            print(f"    {name}: max_diff={max_diff:.2e}, rel_diff={rel_diff:.2e}")
+            assert max_diff < 5e-2, f"{name} mismatch at D={D}: max_diff={max_diff}"
+
+        print(f"    ✅ OK")
+
+
 if __name__ == '__main__':
     if not torch.cuda.is_available():
         print("⚠️  CUDA not available — cannot run Triton kernel tests.")
@@ -151,7 +197,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     print("=" * 60)
-    print("Triton Sparse Attention Backward — Correctness Tests")
+    print("Triton Sparse Attention — Correctness Tests")
     print("=" * 60)
 
     print("\n1. Forward match test:")
@@ -162,6 +208,9 @@ if __name__ == '__main__':
 
     print("\n3. Multi-size backward test:")
     test_backward_sizes()
+
+    print("\n4. Production dimensions test (D=256, H=16):")
+    test_backward_production_dims()
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED ✅")
