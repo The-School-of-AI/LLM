@@ -1,149 +1,164 @@
-"""
-Benchmark: Triton Sparse Attention — Forward & Backward Timing
-==============================================================
-
-Compares:
-  - PyTorch reference (autograd backward)
-  - Triton optimized (custom forward + backward with tl.dot)
-
-Run on a CUDA GPU:
-    python tests/benchmark_sparse_attn.py
-"""
-
 import torch
+import triton
+from triton_sparse_attn import pytorch_sparse_attention, triton_sparse_attention
+from triton_sparse_attn_v2 import triton_sparse_attention_v2, triton_sparse_attention_v2_fwd_bwd
 import time
-import sys
-import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+def run_benchmark_for_config(B, H, T_q, T_kv, D, k_sel, correlated=False):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if not torch.cuda.is_available():
+        print("CUDA not available. This script is intended to benchmark on a GPU (like T4).")
+        return
 
-from kernels.triton_sparse_attn import (
-    triton_sparse_attention,
-    pytorch_sparse_attention,
-    HAS_TRITON,
-)
+    print(f"\n[{torch.cuda.get_device_name(0)}] Benchmarking: B={B}, H={H}, T={T_q}, D={D}, K_sel={k_sel} (Correlated={correlated})")
+    print("-" * 110)
+    print(f"{'Method':<22} | {'FWD Time':<10} | {'BWD Time':<10} | {'Total Time':<10} | {'FWD Mem (MB)':<14} | {'BWD Mem (MB)':<14}")
+    print("-" * 110)
 
+    # 1. Initialize Tensors
+    q = torch.randn(B, T_q, H, D, device=device, dtype=torch.float16, requires_grad=True)
+    k = torch.randn(B, T_kv, H, D, device=device, dtype=torch.float16, requires_grad=True)
+    v = torch.randn(B, T_kv, H, D, device=device, dtype=torch.float16, requires_grad=True)
+    
+    if correlated:
+        BLOCK_Q = 64
+        num_q_blocks = max(1, T_q // BLOCK_Q)
+        base_indices = torch.randint(0, T_kv, (B, H, num_q_blocks, k_sel), device=device, dtype=torch.int64)
+        indices = base_indices.repeat_interleave(BLOCK_Q, dim=2)
+        indices = indices[:, :, :T_q, :]
+    else:
+        indices = torch.randint(0, T_kv, (B, H, T_q, k_sel), device=device, dtype=torch.int64)
 
-def make_bench_data(B, T, H, D, k_sel, device='cuda'):
-    """Generate benchmark data with random sparse indices."""
-    torch.manual_seed(42)
-
-    q = torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True)
-    k = torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True)
-    v = torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True)
-
-    # Random sparse indices (causal)
-    indices = torch.zeros(B, H, T, k_sel, dtype=torch.int64, device=device)
-    for b in range(B):
-        for t in range(T):
-            valid_range = t + 1
-            if valid_range >= k_sel:
-                idx = torch.randperm(valid_range, device=device)[:k_sel].sort().values
-            else:
-                idx = torch.arange(valid_range, device=device)
-                idx = torch.cat([idx, torch.zeros(k_sel - valid_range, dtype=torch.long, device=device)])
-            indices[b, :, t, :] = idx
-
-    mask = torch.ones(B, H, T, k_sel, dtype=torch.float32, device=device)
-    for t in range(T):
-        valid_range = t + 1
-        if valid_range < k_sel:
-            mask[:, :, t, valid_range:] = 0.0
-
+    mask = (torch.rand(B, H, T_q, k_sel, device=device) < 0.9).float()
     scale = 1.0 / (D ** 0.5)
-    return q, k, v, indices, mask, scale
 
-
-def bench_forward_backward(fn_name, fn, q, k, v, indices, mask, scale, n_warmup=5, n_iters=20):
-    """Time forward and backward passes separately."""
     grad_out = torch.randn_like(q)
 
-    # Warmup
-    for _ in range(n_warmup):
-        q_ = q.detach().clone().requires_grad_(True)
-        k_ = k.detach().clone().requires_grad_(True)
-        v_ = v.detach().clone().requires_grad_(True)
-        out = fn(q_, k_, v_, indices, mask, scale)
+    def profile_func(name, fwd_func):
+        q.grad, k.grad, v.grad = None, None, None
+        
+        # Warmup
+        for _ in range(3):
+            out = fwd_func()
+            out.backward(grad_out, retain_graph=True)
+            
+        # Time and Mem FWD Only
         torch.cuda.synchronize()
-        out.backward(grad_out)
+        torch.cuda.reset_peak_memory_stats()
+        start_fwd = time.time()
+        for _ in range(10):
+            out = fwd_func()
         torch.cuda.synchronize()
+        fwd_time = (time.time() - start_fwd) / 10.0 * 1000
+        fwd_mem_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
 
-    # Timed: forward only
-    fwd_times = []
-    for _ in range(n_iters):
-        q_ = q.detach().clone().requires_grad_(True)
-        k_ = k.detach().clone().requires_grad_(True)
-        v_ = v.detach().clone().requires_grad_(True)
+        # Time and Mem BWD Only
+        out = fwd_func()
         torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        out = fn(q_, k_, v_, indices, mask, scale)
+        torch.cuda.reset_peak_memory_stats()
+        start_bwd = time.time()
+        for _ in range(10):
+            out.backward(grad_out, retain_graph=True)
         torch.cuda.synchronize()
-        fwd_times.append((time.perf_counter() - t0) * 1000)
+        bwd_time = (time.time() - start_bwd) / 10.0 * 1000
+        bwd_mem_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
 
-    # Timed: backward only (forward done, then time backward)
-    bwd_times = []
-    for _ in range(n_iters):
-        q_ = q.detach().clone().requires_grad_(True)
-        k_ = k.detach().clone().requires_grad_(True)
-        v_ = v.detach().clone().requires_grad_(True)
-        out = fn(q_, k_, v_, indices, mask, scale)
+        # Time Total
         torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        out.backward(grad_out)
+        start_tot = time.time()
+        for _ in range(10):
+            out = fwd_func()
+            out.backward(grad_out, retain_graph=True)
         torch.cuda.synchronize()
-        bwd_times.append((time.perf_counter() - t0) * 1000)
-
-    fwd_avg = sum(fwd_times) / len(fwd_times)
-    bwd_avg = sum(bwd_times) / len(bwd_times)
-    print(f"  {fn_name:25s}  fwd: {fwd_avg:8.2f} ms  bwd: {bwd_avg:8.2f} ms  total: {fwd_avg+bwd_avg:8.2f} ms")
-    return fwd_avg, bwd_avg
+        tot_time = (time.time() - start_tot) / 10.0 * 1000
+        
+        print(f"{name:<22} | {fwd_time:>7.2f} ms | {bwd_time:>7.2f} ms | {tot_time:>7.2f} ms | {fwd_mem_mb:>12.2f} | {bwd_mem_mb:>12.2f}")
 
 
-if __name__ == '__main__':
-    if not torch.cuda.is_available():
-        print("⚠️  CUDA not available — cannot benchmark.")
-        sys.exit(0)
+    # ----------------------------------------------------
+    # Baseline: Dense PyTorch Attention (FlashAttention compatible)
+    # ----------------------------------------------------
+    try:
+        q_dense = q.permute(0, 2, 1, 3).clone().detach().requires_grad_(True)
+        k_dense = k.permute(0, 2, 1, 3).clone().detach().requires_grad_(True)
+        v_dense = v.permute(0, 2, 1, 3).clone().detach().requires_grad_(True)
+        grad_dense = grad_out.permute(0, 2, 1, 3)
+        
+        def run_dense_fwd():
+            with torch.nn.attention.sdpa_kernel([torch.nn.attention.SDPBackend.FLASH_ATTENTION, torch.nn.attention.SDPBackend.MATH]):
+                return torch.nn.functional.scaled_dot_product_attention(q_dense, k_dense, v_dense)
+                
+        # Need custom BWD profiling due to different tensor structure for Dense
+        q_dense.grad, k_dense.grad, v_dense.grad = None, None, None
+        for _ in range(3):
+            out = run_dense_fwd()
+            out.backward(grad_dense, retain_graph=True)
+            
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
+        start_fwd = time.time()
+        for _ in range(10): run_dense_fwd()
+        torch.cuda.synchronize()
+        dense_fwd_time = (time.time() - start_fwd) / 10.0 * 1000
+        dense_fwd_mem_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
 
-    if not HAS_TRITON:
-        print("⚠️  Triton not installed — cannot benchmark Triton kernels.")
-        sys.exit(0)
+        out = run_dense_fwd()
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
+        start_bwd = time.time()
+        for _ in range(10): out.backward(grad_dense, retain_graph=True)
+        torch.cuda.synchronize()
+        dense_bwd_time = (time.time() - start_bwd) / 10.0 * 1000
+        dense_bwd_mem_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
 
-    print("=" * 75)
-    print("Triton Sparse Attention — Forward & Backward Benchmark")
-    print("=" * 75)
+        torch.cuda.synchronize()
+        start_tot = time.time()
+        for _ in range(10):
+            out = run_dense_fwd()
+            out.backward(grad_dense, retain_graph=True)
+        torch.cuda.synchronize()
+        dense_tot_time = (time.time() - start_tot) / 10.0 * 1000
+        
+        print(f"{'Dense PyTorch':<22} | {dense_fwd_time:>7.2f} ms | {dense_bwd_time:>7.2f} ms | {dense_tot_time:>7.2f} ms | {dense_fwd_mem_mb:>12.2f} | {dense_bwd_mem_mb:>12.2f}")
+    except torch.cuda.OutOfMemoryError:
+        print(f"{'Dense PyTorch':<22} | {'OOM':>10} | {'OOM':>10} | {'OOM':>10} | {'OOM':>14} | {'OOM':>14}")
+        torch.cuda.empty_cache()
 
-    configs = [
-        # (B, T, H, D, k_sel, label)
-        (2, 512,  16, 256, 128,  "Production (small T)"),
-        (2, 1024, 16, 256, 256,  "Production (mid T)"),
-        (2, 2048, 16, 256, 512,  "Production (large T)"),
-        (1, 4096, 16, 256, 512,  "Production (very large T)"),
-        (2, 512,  4,  32,  64,   "Test dims (small D)"),
-    ]
+    # ----------------------------------------------------
+    # Baseline: PyTorch Sparse Gather
+    # ----------------------------------------------------
+    try:
+        def run_py_sparse_fwd():
+            return pytorch_sparse_attention(q, k, v, indices, mask, scale, chunk_size=32)
+        profile_func("PyTorch Sparse", run_py_sparse_fwd)
+    except torch.cuda.OutOfMemoryError:
+        print(f"{'PyTorch Sparse':<25} | {'OOM':>10} | {'OOM':>10} | {'OOM':>10}")
+        torch.cuda.empty_cache()
 
-    for B, T, H, D, k_sel, label in configs:
-        print(f"\n{'─' * 75}")
-        print(f"Config: {label}")
-        print(f"  B={B}, T={T}, H={H}, D={D}, k_sel={k_sel}")
-        print(f"{'─' * 75}")
+    # ----------------------------------------------------
+    # V1: Triton Sparse
+    # ----------------------------------------------------
+    def run_triton_v1_fwd():
+        return triton_sparse_attention(q, k, v, indices, mask, scale, use_triton_backward=True)
+    profile_func("Triton Sparse V1", run_triton_v1_fwd)
 
-        q, k, v, indices, mask, scale = make_bench_data(B, T, H, D, k_sel)
+    # ----------------------------------------------------
+    # V2: Triton Block-Tiled
+    # ----------------------------------------------------
+    def run_triton_v2_fwd():
+        return triton_sparse_attention_v2_fwd_bwd(q, k, v, indices, mask, scale)
+    profile_func("Triton Block-Tiled V2", run_triton_v2_fwd)
 
-        fwd_pt, bwd_pt = bench_forward_backward(
-            "PyTorch reference", pytorch_sparse_attention,
-            q, k, v, indices, mask, scale
-        )
 
-        fwd_tr, bwd_tr = bench_forward_backward(
-            "Triton optimized", triton_sparse_attention,
-            q, k, v, indices, mask, scale
-        )
+def benchmark_attention():
+    # Test 1: Standard Config (Random Indices)
+    run_benchmark_for_config(B=2, H=8, T_q=4096, T_kv=4096, D=128, k_sel=128, correlated=False)
+    
+    # Test 2: Standard Config (Correlated Indices mimicking real Attention)
+    run_benchmark_for_config(B=2, H=8, T_q=4096, T_kv=4096, D=128, k_sel=128, correlated=True)
+    
+    # Test 3: High Batch Config (Simulating production inference/training depth)
+    run_benchmark_for_config(B=8, H=8, T_q=4096, T_kv=4096, D=128, k_sel=128, correlated=False)
 
-        fwd_speedup = fwd_pt / max(fwd_tr, 1e-6)
-        bwd_speedup = bwd_pt / max(bwd_tr, 1e-6)
-        total_speedup = (fwd_pt + bwd_pt) / max(fwd_tr + bwd_tr, 1e-6)
-        print(f"  Speedup:  fwd: {fwd_speedup:.2f}×  bwd: {bwd_speedup:.2f}×  total: {total_speedup:.2f}×")
-
-    print(f"\n{'=' * 75}")
-    print("Benchmark complete.")
-    print("=" * 75)
+if __name__ == "__main__":
+    benchmark_attention()
