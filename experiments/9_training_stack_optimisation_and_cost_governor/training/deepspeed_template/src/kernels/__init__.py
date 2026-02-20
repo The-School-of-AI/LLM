@@ -65,6 +65,7 @@ from .triton_sinkhorn import (
 # ── RMSNorm ───────────────────────────────────────────────────────────
 from .triton_rmsnorm import (
     triton_rmsnorm,
+    triton_rmsnorm_fwd_only,
     pytorch_rmsnorm,
     TritonRMSNorm,
 )
