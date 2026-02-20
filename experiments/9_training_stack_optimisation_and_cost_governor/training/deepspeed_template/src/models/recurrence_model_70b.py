@@ -727,12 +727,16 @@ class RMSNorm(nn.Module):
         # Triton path: fused forward + backward kernel (Liger-style)
         # Now safe with grad enabled — the new kernel wraps torch.autograd.Function
         if self._use_triton and x.is_cuda:
-            try:
-                return triton_rmsnorm(x, self.weight, self.eps)
-            except Exception:
-                pass  # Fall through to PyTorch path
+            return triton_rmsnorm(x, self.weight, self.eps)
 
-        # PyTorch fallback (FIX #43: fp32 variance for stability)
+        if x.is_cuda:
+            raise RuntimeError(
+                "Triton RMSNorm kernel is required on CUDA but unavailable. "
+                f"HAS_TRITON={HAS_TRITON}, triton_rmsnorm={triton_rmsnorm is not None}. "
+                "Install triton: pip install triton"
+            )
+
+        # CPU-only fallback (for testing/debugging, never in production training)
         x_f = x.float()
         norm = x_f.pow(2).mean(dim=-1, keepdim=True)
         x = x * torch.rsqrt(norm.to(x.dtype) + self.eps)
@@ -1576,14 +1580,20 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6) -> 
     Triton acceleration: When available, fuses all iterations into a single
     kernel launch (eliminates 2*iters kernel launches).
     """
+    # Triton path: fused kernel (all iterations in one launch, zero extra memory traffic)
+    # Sinkhorn is forward-only Triton (no autograd.Function), so skip when grad enabled.
     if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda and not torch.is_grad_enabled():
-        try:
-            logits_stable = logits - logits.amax(dim=-1, keepdim=True)
-            return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
-        except Exception:
-            pass  # Fall through to PyTorch path
+        logits_stable = logits - logits.amax(dim=-1, keepdim=True)
+        return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
 
-    # CRITICAL FIX: Log-sum-exp trick prevents overflow when logits are large
+    if logits.is_cuda and not torch.is_grad_enabled():
+        raise RuntimeError(
+            "Triton Sinkhorn kernel is required on CUDA (inference) but unavailable. "
+            f"HAS_TRITON={HAS_TRITON}, triton_sinkhorn_knopp={triton_sinkhorn_knopp is not None}. "
+            "Install triton: pip install triton"
+        )
+
+    # PyTorch fallback — only used when grad is enabled (training backward recompute)
     logits = logits - logits.amax(dim=-1, keepdim=True)
     M = torch.exp(logits).clamp_min(eps)
     for _ in range(iters):
