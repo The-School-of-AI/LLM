@@ -28,9 +28,9 @@ baselines:
 buckets:
   english: ["core_9mcqa::olmes", "mmlu::olmes", "olmo3:base:stem_qa_mc", "olmo3:base:nonstem_qa_mc", "olmo3:base:gen",
             "olmo3:base_easy:qa_rc", "olmo3:base_easy:qa_bpb"]
-  indic:   ["indic_glue", "indic_qa", "indic_bias"]
-  cot:     ["olmo3:base:math", "olmo3:base_easy:math_bpb", "bbh:cot::olmes"]
-  coding:  ["olmo3:base:code_fim", "olmo3:base_easy:code_bpb"]
+  indic: ["indic_glue", "indic_qa", "indic_bias"]
+  cot: ["olmo3:base:math", "olmo3:base_easy:math_bpb", "bbh:cot::olmes"]
+  coding: ["olmo3:base:code_fim", "olmo3:base_easy:code_bpb"]
   agentic: ["olmo3:adapt"]
 
 stages:
@@ -59,7 +59,7 @@ stages:
           - "indic_glue"
       - name: "context_window"
         tasks:
-          - "niah_4k" # Boundary check only
+          - "niah_4k"  # Boundary check only
     gating:
       enabled: true
       compare_mode: "best_baseline"   # or "fixed_baseline"
@@ -136,7 +136,7 @@ stages:
           - "indic_qa"
       - name: "context_window"
         tasks:
-          - "niah_16k" # Boundary check only
+          - "niah_16k"  # Boundary check only
     gating:
       enabled: true
       compare_mode: "best_baseline"
@@ -251,7 +251,7 @@ stages:
         tasks:
           - "olmo3:base_easy:qa_rc"    # English / RC (OLMES)
           - "bbh:cot::olmes"           # Reasoning (OLMES)
-          - "olmo3:base_easy:code_bpb" # Coding (OLMES)
+          - "olmo3:base_easy:code_bpb"  # Coding (OLMES)
           - "indic_glue"               # Multilingual (Custom)
           - "niah_4k"                  # Context Length (Custom)
-          #- "olmo3:adapt"          # Agentic
+          # - "olmo3:adapt"  # Agentic

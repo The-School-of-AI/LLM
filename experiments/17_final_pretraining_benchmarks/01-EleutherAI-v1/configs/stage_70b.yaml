@@ -9,7 +9,7 @@ benchmarks:
 
   - name: "MMLU-Pro"
     limit: 250
-    shots: 8 # Scale few-shot reasoning for frontier models
+    shots: 8  # Scale few-shot reasoning for frontier models
 
   - name: "TriviaQA"
     limit: 250
