@@ -1,0 +1,39 @@
+# Storage configuration
+storage:
+  mode: s3          # local | s3 | both
+  local_dir: ./data/downloaded_datasets
+  
+aws:
+  region: us-east-1
+  s3_bucket: my-llm-datasets      # CHANGE THIS to your S3 bucket name
+  s3_prefix: s3
+
+# Mode: 'test' applies limits below, 'full' downloads entire datasets
+mode: test        # test | full
+
+datasets:
+
+  # AI4Bharat Sangraha - Synthetic Indic language dataset
+  sangraha:
+    repo: ai4bharat/sangraha
+    subset: synthetic
+    languages:
+      - hin_Deva
+      - hin_Latn
+      - tam_Taml
+    test_limit:
+      type: rows
+      value: 10000
+    s3_path: sangraha
+    local_path: sangraha
+
+  # IndicCorp V2 - Hindi corpus
+  indiccorp_v2:
+    repo: ai4bharat/IndicCorpV2
+    name: indiccorp_v2
+    split: hin_Deva      # Language code is the split name
+    test_limit:
+      type: rows
+      value: 50000
+    s3_path: indiccorp_v2/hin
+    local_path: indiccorp_v2/hin

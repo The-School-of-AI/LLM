@@ -1,0 +1,15 @@
+[project]
+name = "template"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=4.5.0",
+    "deepspeed>=0.18.4",
+    "mpi4py>=4.1.1",
+    "pytest>=9.0.2",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+    "transformers>=5.0.0",
+]

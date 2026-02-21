@@ -21,9 +21,15 @@ repos:
     rev: v4.6.0
     hooks:
       - id: check-json
+        exclude: tsconfig.*\.json$
   
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.35.1
     hooks:
       - id: yamllint
         args: [-c, .yamllint]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
