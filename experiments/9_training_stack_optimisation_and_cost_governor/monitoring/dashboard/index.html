@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="header-left">
+            <!-- Mobile hamburger (hidden on desktop) -->
+            <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open sidebar">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                </svg>
+            </button>
+            <div class="logo">train<span>/</span>watch</div>
+            <div class="live-status">
+                <div class="pulse off" id="liveDot"></div>
+                <span id="liveLabel">live off</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="refresh-bar">
+                <span class="refresh-label">auto-refresh</span>
+                <select class="refresh-select" id="refreshInterval">
+                    <option value="0">off</option>
+                    <option value="5000">5s</option>
+                    <option value="10000">10s</option>
+                    <option value="30000" selected>30s</option>
+                    <option value="60000">1m</option>
+                </select>
+            </div>
+            <button class="btn" id="refreshBtn">&#8634; <span class="refresh-btn-label">Refresh</span></button>
+        </div>
+    </div>
+
+    <!-- Mobile backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <div class="layout" id="layout">
+        <!-- SIDEBAR -->
+        <div class="sidebar" id="sidebar">
+            <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                </svg>
+            </button>
+            <div class="sidebar-inner" id="sidebarInner">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Training Runs</div>
+                <div class="run-dropdown-wrap">
+                    <button class="run-dropdown-btn" id="runDropdownBtn">
+                        <span id="runDropdownText">Select runs...</span>
+                        <span class="run-dropdown-arrow">&#9662;</span>
+                    </button>
+                    <div class="run-dropdown-panel" id="runDropdownPanel"></div>
+                </div>
+                <div class="run-chips" id="runChips"></div>
+            </div>
+
+            <div class="metric-search-wrap">
+                <div class="sidebar-title" style="margin-bottom:0.5rem">Metrics</div>
+                <input class="metric-search" id="metricSearch" placeholder="Search metrics...">
+            </div>
+            <div class="metric-scroll" id="metricScroll">
+                <div class="empty" style="padding:1rem"><span style="font-size:0.72rem">Select a run first</span></div>
+            </div>
+            </div><!-- /.sidebar-inner -->
+        </div>
+
+        <!-- MAIN -->
+        <div class="main">
+            <div class="tabs">
+                <div class="tab active" id="tab-charts">Charts</div>
+                <div class="tab" id="tab-summary">Summary</div>
+                <div class="tab" id="tab-events">Events</div>
+            </div>
+            <div class="panel active" id="panel-charts">
+                <div id="chartsContent">
+                    <div class="empty">
+                        <div class="empty-icon">&#11041;</div>
+                        <div class="empty-title">Nothing selected</div>
+                        <div class="empty-sub">Pick runs from the sidebar, then check metrics to chart</div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel" id="panel-summary">
+                <div id="summaryContent">
+                    <div class="empty">
+                        <div class="empty-icon">&#9638;</div>
+                        <div class="empty-title">No run selected</div>
+                        <div class="empty-sub">Select a run to see the summary dashboard</div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel" id="panel-events">
+                <div id="eventsContent">
+                    <div class="empty">
+                        <div class="empty-icon">&#9672;</div>
+                        <div class="empty-title">No run selected</div>
+                        <div class="empty-sub">Select a run to see its event log</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>

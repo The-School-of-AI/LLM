@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training Dashboard — Plotly</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #080c14;
+            --surface: #0d1117;
+            --card: #111820;
+            --border: #1e2a38;
+            --border2: #2a3a50;
+            --text: #c9d8e8;
+            --muted: #4a6080;
+            --accent: #00d4ff;
+            --accent2: #7c3aed;
+            --green: #00e5a0;
+            --yellow: #f5a623;
+            --red: #ff4d6a;
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'DM Sans', sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.9rem 1.75rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 1rem; }
+        .logo { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--accent); letter-spacing: -0.03em; }
+        .logo span { color: var(--muted); }
+        .logo .plotly-tag { font-size: 0.6rem; background: rgba(124,58,237,0.15); color: #a78bfa; padding: 0.1rem 0.4rem; border-radius: 0.25rem; margin-left: 0.4rem; vertical-align: middle; }
+
+        .live-status { display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.68rem; color: var(--muted); }
+        .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+        .pulse.off { background: var(--muted); box-shadow: none; animation: none; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        .header-right { display: flex; align-items: center; gap: 0.6rem; }
+        .refresh-bar { display: flex; align-items: center; gap: 0.4rem; background: var(--card); border: 1px solid var(--border); border-radius: 0.45rem; padding: 0.3rem 0.65rem; }
+        .refresh-label { font-size: 0.68rem; color: var(--muted); font-family: var(--mono); }
+        .refresh-select { background: transparent; border: none; color: var(--accent); font-family: var(--mono); font-size: 0.68rem; cursor: pointer; outline: none; }
+        .refresh-select option { background: var(--card); }
+
+        .btn { display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.8rem; border-radius: 0.4rem; border: 1px solid var(--border2); background: var(--card); color: var(--text); font-family: var(--mono); font-size: 0.68rem; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .layout { display: grid; grid-template-columns: 270px 1fr; height: calc(100vh - 53px); }
+
+        /* SIDEBAR */
+        .sidebar { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+        .sidebar-section { border-bottom: 1px solid var(--border); padding: 0.9rem; }
+        .sidebar-title { font-family: var(--mono); font-size: 0.6rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.6rem; }
+
+        /* RUN DROPDOWN */
+        .run-dropdown-wrap { position: relative; }
+        .run-dropdown-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: var(--card); border: 1px solid var(--border); border-radius: 0.4rem; color: var(--text); font-family: var(--mono); font-size: 0.68rem; cursor: pointer; transition: border-color 0.15s; }
+        .run-dropdown-btn:hover, .run-dropdown-btn.open { border-color: var(--accent); }
+        .run-dropdown-arrow { font-size: 0.6rem; color: var(--muted); transition: transform 0.15s; }
+        .run-dropdown-btn.open .run-dropdown-arrow { transform: rotate(180deg); }
+        .run-dropdown-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--card); border: 1px solid var(--border2); border-radius: 0.45rem; max-height: 280px; overflow-y: auto; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .run-dropdown-panel.open { display: block; }
+        .run-dropdown-item { display: flex; align-items: center; gap: 0.45rem; padding: 0.45rem 0.6rem; cursor: pointer; transition: background 0.1s; }
+        .run-dropdown-item:hover { background: rgba(0,212,255,0.05); }
+        .run-dropdown-item input { cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+        .run-dropdown-label { flex: 1; min-width: 0; }
+        .run-dropdown-name { font-family: var(--mono); font-size: 0.65rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .run-dropdown-meta { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.1rem; }
+
+        .run-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.55rem; }
+        .run-chip { display: flex; align-items: center; gap: 0.3rem; padding: 0.18rem 0.5rem; border-radius: 1rem; font-family: var(--mono); font-size: 0.58rem; font-weight: 600; border: 1px solid; max-width: 100%; }
+        .run-chip-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+        .run-chip-x { background: none; border: none; cursor: pointer; font-size: 0.65rem; line-height: 1; padding: 0; flex-shrink: 0; opacity: 0.6; transition: opacity 0.1s; }
+        .run-chip-x:hover { opacity: 1; }
+
+        .badge { font-family: var(--mono); font-size: 0.58rem; padding: 0.08rem 0.35rem; border-radius: 0.2rem; font-weight: 600; }
+        .badge-running { background: rgba(0,229,160,0.12); color: var(--green); }
+        .badge-done, .badge-completed { background: rgba(74,96,128,0.18); color: var(--muted); }
+        .badge-failed { background: rgba(255,77,106,0.12); color: var(--red); }
+        .badge-unknown { background: rgba(74,96,128,0.18); color: var(--muted); }
+        .run-model { font-size: 0.58rem; color: var(--muted); }
+
+        /* METRIC SELECTOR */
+        .metric-search-wrap { padding: 0.9rem 0.9rem 0.5rem; border-bottom: 1px solid var(--border); }
+        .metric-search { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 0.4rem; padding: 0.38rem 0.6rem; color: var(--text); font-family: var(--mono); font-size: 0.68rem; outline: none; }
+        .metric-search:focus { border-color: var(--accent); }
+        .metric-search::placeholder { color: var(--muted); }
+        .metric-scroll { overflow-y: auto; flex: 1; padding: 0.75rem; }
+        .metric-category { margin-bottom: 0.9rem; }
+        .cat-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; }
+        .cat-name { font-family: var(--mono); font-size: 0.62rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+        .cat-actions { display: flex; gap: 0.2rem; }
+        .cat-btn { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0.1rem 0.3rem; border-radius: 0.2rem; }
+        .cat-btn:hover { color: var(--accent); background: rgba(0,212,255,0.07); }
+        .metric-item { display: flex; align-items: center; gap: 0.45rem; padding: 0.28rem 0.35rem; border-radius: 0.3rem; cursor: pointer; }
+        .metric-item:hover { background: var(--card); }
+        .metric-item input { cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+        .metric-item label { font-family: var(--mono); font-size: 0.67rem; color: var(--text); cursor: pointer; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kind-badge { font-size: 0.53rem; padding: 0.05rem 0.28rem; border-radius: 0.2rem; font-family: var(--mono); flex-shrink: 0; }
+        .kind-scalar { background: rgba(0,212,255,0.08); color: var(--accent); }
+        .kind-array { background: rgba(124,58,237,0.12); color: #a78bfa; }
+
+        /* MAIN */
+        .main { display: flex; flex-direction: column; overflow: hidden; }
+        .tabs { display: flex; align-items: center; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 1.5rem; }
+        .tab { font-family: var(--mono); font-size: 0.68rem; font-weight: 600; padding: 0.8rem 1.1rem; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .panel { display: none; flex: 1; overflow-y: auto; padding: 1.25rem; }
+        .panel.active { display: block; }
+
+        /* CHARTS */
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); gap: 1rem; }
+        .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 0.6rem; padding: 1.1rem; transition: border-color 0.2s; }
+        .chart-card:hover { border-color: var(--border2); }
+        .chart-name { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; color: var(--text); margin-bottom: 0.55rem; }
+        .chart-stats-row { display: flex; gap: 1.1rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+        .cstat { display: flex; flex-direction: column; }
+        .cstat-label { font-family: var(--mono); font-size: 0.55rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+        .cstat-value { font-family: var(--mono); font-size: 0.78rem; font-weight: 600; color: var(--text); }
+        .chart-wrapper { position: relative; height: 260px; }
+
+        /* Plotly overrides for dark theme */
+        .chart-wrapper .modebar { right: 8px !important; top: 0 !important; }
+        .chart-wrapper .modebar-btn path { fill: var(--muted) !important; }
+        .chart-wrapper .modebar-btn:hover path { fill: var(--accent) !important; }
+
+        /* EVENTS */
+        .events-header { display: grid; grid-template-columns: 150px 70px 110px 80px 1fr; gap: 0.6rem; padding: 0.35rem 0.65rem; font-family: var(--mono); font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+        .events-list { display: flex; flex-direction: column; gap: 0.3rem; }
+        .event-row { display: grid; grid-template-columns: 150px 70px 110px 80px 1fr; gap: 0.6rem; align-items: center; padding: 0.55rem 0.65rem; background: var(--card); border: 1px solid var(--border); border-radius: 0.4rem; font-family: var(--mono); font-size: 0.67rem; }
+        .event-time { color: var(--muted); }
+        .event-step { color: var(--accent); }
+        .event-type { color: var(--text); font-weight: 600; }
+        .sev-info { color: var(--green); }
+        .sev-warning { color: var(--yellow); }
+        .sev-error { color: var(--red); }
+        .event-msg { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3.5rem; color: var(--muted); gap: 0.6rem; text-align: center; }
+        .empty-icon { font-size: 2rem; opacity: 0.35; }
+        .empty-title { font-family: var(--mono); font-size: 0.8rem; color: var(--text); }
+        .empty-sub { font-size: 0.75rem; max-width: 280px; line-height: 1.6; }
+        .spinner { width: 26px; height: 26px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.75s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg) } }
+
+        .toast { position: fixed; bottom: 1.25rem; right: 1.25rem; background: var(--card); border: 1px solid var(--border2); border-radius: 0.45rem; padding: 0.5rem 0.9rem; font-family: var(--mono); font-size: 0.68rem; color: var(--text); z-index: 999; transform: translateY(80px); opacity: 0; transition: all 0.22s; pointer-events: none; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+        @media(max-width:860px) {
+            .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+            .sidebar { max-height: 45vh; }
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">train<span>/</span>watch<span class="plotly-tag">PLOTLY</span></div>
+            <div class="live-status">
+                <div class="pulse off" id="liveDot"></div>
+                <span id="liveLabel">live off</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="refresh-bar">
+                <span class="refresh-label">auto-refresh</span>
+                <select class="refresh-select" id="refreshInterval" onchange="setAutoRefresh()">
+                    <option value="0">off</option>
+                    <option value="5000">5s</option>
+                    <option value="10000">10s</option>
+                    <option value="30000" selected>30s</option>
+                    <option value="60000">1m</option>
+                </select>
+            </div>
+            <button class="btn" onclick="manualRefresh()">&#8634; Refresh</button>
+        </div>
+    </div>
+
+    <div class="layout">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Training Runs</div>
+                <div class="run-dropdown-wrap">
+                    <button class="run-dropdown-btn" id="runDropdownBtn" onclick="toggleRunDropdown()">
+                        <span id="runDropdownText">Select runs...</span>
+                        <span class="run-dropdown-arrow">&#9662;</span>
+                    </button>
+                    <div class="run-dropdown-panel" id="runDropdownPanel"></div>
+                </div>
+                <div class="run-chips" id="runChips"></div>
+            </div>
+
+            <div class="metric-search-wrap">
+                <div class="sidebar-title" style="margin-bottom:0.5rem">Metrics</div>
+                <input class="metric-search" id="metricSearch" placeholder="Search metrics..." oninput="filterMetrics()">
+            </div>
+            <div class="metric-scroll" id="metricScroll">
+                <div class="empty" style="padding:1rem"><span style="font-size:0.72rem">Select a run first</span></div>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="tabs">
+                <div class="tab active" id="tab-charts" onclick="switchTab('charts')">Charts</div>
+                <div class="tab" id="tab-events" onclick="switchTab('events')">Events</div>
+            </div>
+            <div class="panel active" id="panel-charts">
+                <div id="chartsContent">
+                    <div class="empty">
+                        <div class="empty-icon">&#11041;</div>
+                        <div class="empty-title">Nothing selected</div>
+                        <div class="empty-sub">Pick runs from the sidebar, then check metrics to chart</div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel" id="panel-events">
+                <div id="eventsContent">
+                    <div class="empty">
+                        <div class="empty-icon">&#9672;</div>
+                        <div class="empty-title">No run selected</div>
+                        <div class="empty-sub">Select a run to see its event log</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '';
+        const RUN_COLORS = ['#00d4ff', '#00e5a0', '#f5a623', '#ff4d6a', '#a78bfa', '#34d399', '#fb923c', '#38bdf8'];
+
+        let allRuns = [];
+        let selectedRuns = [];
+        let allMetrics = {};
+        let refreshTimer = null;
+        let dropdownOpen = false;
+
+        // Plotly dark theme layout defaults
+        const PLOTLY_LAYOUT = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'JetBrains Mono, monospace', size: 11, color: '#4a6080' },
+            margin: { l: 50, r: 20, t: 10, b: 40 },
+            xaxis: {
+                gridcolor: '#1e2a38', linecolor: '#1e2a38', zerolinecolor: '#1e2a38',
+                title: { text: 'Step', font: { size: 10, color: '#4a6080' } },
+                tickfont: { size: 10 }
+            },
+            yaxis: {
+                gridcolor: '#1e2a38', linecolor: '#1e2a38', zerolinecolor: '#1e2a38',
+                tickfont: { size: 10 }
+            },
+            legend: {
+                font: { size: 10, color: '#4a6080' },
+                bgcolor: 'rgba(0,0,0,0)',
+                borderwidth: 0,
+                orientation: 'h',
+                y: 1.12
+            },
+            hovermode: 'x unified',
+            hoverlabel: {
+                bgcolor: 'rgba(13,17,23,0.97)',
+                bordercolor: '#1e2a38',
+                font: { family: 'JetBrains Mono', size: 11, color: '#c9d8e8' }
+            }
+        };
+
+        const PLOTLY_CONFIG = {
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
+            displaylogo: false,
+            responsive: true,
+            scrollZoom: true
+        };
+
+        async function init() { await loadRuns(); setAutoRefresh(); }
+
+        document.addEventListener('click', (e) => {
+            if (dropdownOpen && !e.target.closest('.run-dropdown-wrap')) {
+                dropdownOpen = false;
+                document.getElementById('runDropdownBtn').classList.remove('open');
+                document.getElementById('runDropdownPanel').classList.remove('open');
+            }
+        });
+
+        // ─── RUNS ───
+        async function loadRuns() {
+            try {
+                const data = await fetch(`${API}/api/runs`).then(r => r.json());
+                allRuns = data.runs || [];
+                renderRunDropdown();
+            } catch (e) { showToast('Could not reach server'); }
+        }
+
+        function toggleRunDropdown() {
+            dropdownOpen = !dropdownOpen;
+            document.getElementById('runDropdownBtn').classList.toggle('open', dropdownOpen);
+            document.getElementById('runDropdownPanel').classList.toggle('open', dropdownOpen);
+        }
+
+        function renderRunDropdown() {
+            const panel = document.getElementById('runDropdownPanel');
+            const selIds = new Set(selectedRuns.map(r => r.run_id));
+            if (!allRuns.length) {
+                panel.innerHTML = '<div style="padding:0.75rem;text-align:center;font-size:0.68rem;color:var(--muted)">No runs found</div>';
+                updateDropdownBtnText();
+                return;
+            }
+            panel.innerHTML = allRuns.map(r => {
+                const checked = selIds.has(r.run_id) ? 'checked' : '';
+                const sc = {'running':'badge-running','done':'badge-done','completed':'badge-done','failed':'badge-failed'}[r.status] || 'badge-unknown';
+                return `<div class="run-dropdown-item" onclick="toggleRunSel('${r.run_id}', event)">
+                    <input type="checkbox" ${checked} tabindex="-1">
+                    <div class="run-dropdown-label">
+                        <div class="run-dropdown-name">${r.run_id}</div>
+                        <div class="run-dropdown-meta">
+                            <span class="badge ${sc}">${r.status || 'unknown'}</span>
+                            ${r.model_name ? `<span class="run-model">${r.model_name}${r.model_size ? ' &middot; ' + r.model_size : ''}</span>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            updateDropdownBtnText();
+        }
+
+        function updateDropdownBtnText() {
+            const txt = document.getElementById('runDropdownText');
+            if (!selectedRuns.length) { txt.textContent = 'Select runs...'; txt.style.color = 'var(--muted)'; }
+            else { txt.textContent = `${selectedRuns.length} run${selectedRuns.length > 1 ? 's' : ''} selected`; txt.style.color = 'var(--text)'; }
+        }
+
+        function toggleRunSel(runId, event) {
+            if (event) event.stopPropagation();
+            const idx = selectedRuns.findIndex(r => r.run_id === runId);
+            const wasFirst = idx === 0;
+            if (idx >= 0) { selectedRuns.splice(idx, 1); }
+            else { const run = allRuns.find(r => r.run_id === runId); if (run) selectedRuns.push(run); }
+            renderRunDropdown();
+            renderRunChips();
+            const newFirst = selectedRuns[0]?.run_id;
+            if (selectedRuns.length && (wasFirst || idx < 0 && selectedRuns.length === 1)) { discoverMetrics(); }
+            else { generateCharts(); }
+        }
+
+        function removeRun(runId) {
+            const idx = selectedRuns.findIndex(r => r.run_id === runId);
+            if (idx < 0) return;
+            const wasFirst = idx === 0;
+            selectedRuns.splice(idx, 1);
+            renderRunDropdown();
+            renderRunChips();
+            if (!selectedRuns.length) {
+                document.getElementById('metricScroll').innerHTML = '<div class="empty" style="padding:1rem"><span style="font-size:0.72rem">Select a run first</span></div>';
+                document.getElementById('chartsContent').innerHTML = '<div class="empty"><div class="empty-icon">&#11041;</div><div class="empty-title">Nothing selected</div><div class="empty-sub">Pick runs from the sidebar, then check metrics to chart</div></div>';
+                return;
+            }
+            if (wasFirst) { discoverMetrics(); } else { generateCharts(); }
+        }
+
+        function renderRunChips() {
+            const el = document.getElementById('runChips');
+            if (!selectedRuns.length) { el.innerHTML = ''; return; }
+            el.innerHTML = selectedRuns.map((r, i) => {
+                const col = RUN_COLORS[i % RUN_COLORS.length];
+                return `<div class="run-chip" style="color:${col};border-color:${col}40;background:${col}10">
+                    <span class="run-chip-label">${r.run_id.substring(0, 22)}</span>
+                    <button class="run-chip-x" style="color:${col}" onclick="removeRun('${r.run_id}')">&times;</button>
+                </div>`;
+            }).join('');
+        }
+
+        // ─── METRICS ───
+        async function discoverMetrics() {
+            const primary = selectedRuns[0];
+            if (!primary) return;
+            document.getElementById('metricScroll').innerHTML = '<div class="empty" style="padding:1.5rem"><div class="spinner"></div></div>';
+            try {
+                const data = await fetch(`${API}/api/runs/${primary.run_id}/metrics`).then(r => r.json());
+                allMetrics = data.metrics || {};
+                renderMetricSelector(allMetrics);
+                loadEvents();
+                showToast(`Loaded: ${primary.run_id.substring(0, 24)}`);
+            } catch (e) { showToast('Failed to load metrics'); }
+        }
+
+        function renderMetricSelector(metrics, filter = '') {
+            const el = document.getElementById('metricScroll');
+            const low = filter.toLowerCase();
+            let html = '', any = false;
+            for (const [cat, items] of Object.entries(metrics)) {
+                const vis = items.filter(m => { const n = typeof m === 'object' ? m.name : m; return !low || n.toLowerCase().includes(low); });
+                if (!vis.length) continue;
+                any = true;
+                html += `<div class="metric-category"><div class="cat-header"><span class="cat-name">${cat}</span><div class="cat-actions"><button class="cat-btn" onclick="selCat('${cat}',true)">all</button><button class="cat-btn" onclick="selCat('${cat}',false)">none</button></div></div>`;
+                vis.forEach(m => {
+                    const name = typeof m === 'object' ? m.name : m;
+                    const kind = typeof m === 'object' ? m.kind : 'scalar';
+                    const id = `m-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const prev = document.getElementById(id);
+                    const chk = prev?.checked ? 'checked' : '';
+                    html += `<div class="metric-item"><input type="checkbox" id="${id}" value="${name}" data-cat="${cat}" ${chk} onchange="generateCharts()"><label for="${id}">${name}</label><span class="kind-badge kind-${kind}">${kind === 'array' ? 'hist' : 'val'}</span></div>`;
+                });
+                html += '</div>';
+            }
+            el.innerHTML = any ? html : '<div class="empty" style="padding:1rem"><span style="font-size:0.7rem;color:var(--muted)">No metrics match</span></div>';
+        }
+
+        function filterMetrics() { renderMetricSelector(allMetrics, document.getElementById('metricSearch').value); }
+        function selCat(cat, on) { document.querySelectorAll(`[data-cat="${cat}"]`).forEach(cb => cb.checked = on); generateCharts(); }
+
+        // ─── CHARTS ───
+        async function generateCharts() {
+            const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
+            const el = document.getElementById('chartsContent');
+
+            if (!sel.length || !selectedRuns.length) {
+                el.innerHTML = '<div class="empty"><div class="empty-icon">&#11041;</div><div class="empty-title">No metrics selected</div><div class="empty-sub">Check metrics in the sidebar</div></div>';
+                return;
+            }
+
+            el.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+
+            const runDataMap = {};
+            const results = await Promise.all(
+                selectedRuns.map(r => fetchData(r.run_id, sel).then(d => ({ runId: r.run_id, data: d })))
+            );
+            results.forEach(r => runDataMap[r.runId] = r.data);
+
+            el.innerHTML = '';
+            const grid = document.createElement('div');
+            grid.className = 'charts-grid';
+            el.appendChild(grid);
+
+            sel.forEach((metric, i) => {
+                const hasData = selectedRuns.some(r => (runDataMap[r.run_id]?.[metric] || []).length > 0);
+                if (hasData) createPlotlyChart(grid, metric, runDataMap, i);
+            });
+        }
+
+        async function fetchData(runId, metrics) {
+            return fetch(`${API}/api/runs/${runId}/data?metrics=${encodeURIComponent(metrics.join(','))}`).then(r => r.json());
+        }
+
+        function stats(data) {
+            if (!data.length) return null;
+            const isHist = Array.isArray(data[0]?.value);
+            if (isHist) {
+                const last = data[data.length - 1]?.value || [];
+                if (!last.length) return null;
+                const min = Math.min(...last), max = Math.max(...last);
+                return { min, max, mean: last.reduce((a, b) => a + b, 0) / last.length, latest: max, count: data.length };
+            }
+            const v = data.map(d => d.y ?? d.value ?? 0);
+            const min = Math.min(...v), max = Math.max(...v);
+            return { min, max, mean: v.reduce((a, b) => a + b, 0) / v.length, latest: v[v.length - 1], count: v.length };
+        }
+
+        function fmt(v) {
+            if (v == null) return '\u2014';
+            return Math.abs(v) >= 1000 ? v.toFixed(1) : Math.abs(v) >= 1 ? v.toFixed(4) : v.toExponential(3);
+        }
+
+        function createPlotlyChart(container, metric, runDataMap, idx) {
+            const firstData = runDataMap[selectedRuns[0].run_id]?.[metric] || [];
+            const isHist = firstData.length > 0 && Array.isArray(firstData[0]?.value);
+            const multiRun = selectedRuns.length > 1;
+
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            const ps = stats(firstData);
+
+            const plotId = `plot${idx}`;
+            card.innerHTML = `
+                <div class="chart-name">${metric}</div>
+                <div class="chart-stats-row">
+                    <div class="cstat"><span class="cstat-label">current</span><span class="cstat-value" style="color:${RUN_COLORS[0]}">${ps ? fmt(ps.latest) : '\u2014'}</span></div>
+                    <div class="cstat"><span class="cstat-label">min</span><span class="cstat-value">${ps ? fmt(ps.min) : '\u2014'}</span></div>
+                    <div class="cstat"><span class="cstat-label">max</span><span class="cstat-value">${ps ? fmt(ps.max) : '\u2014'}</span></div>
+                    <div class="cstat"><span class="cstat-label">mean</span><span class="cstat-value">${ps ? fmt(ps.mean) : '\u2014'}</span></div>
+                </div>
+                <div class="chart-wrapper" id="${plotId}"></div>`;
+            container.appendChild(card);
+
+            try {
+                if (isHist) {
+                    // Bar chart for histogram/array data
+                    const traces = [];
+                    selectedRuns.forEach((r, ri) => {
+                        const d = runDataMap[r.run_id]?.[metric] || [];
+                        if (!d.length) return;
+                        const last = d[d.length - 1] || {};
+                        const vals = last.value || [];
+                        const keys = last.keys && last.keys.length ? last.keys : vals.map((_, i) => `${i}`);
+                        const col = RUN_COLORS[ri % RUN_COLORS.length];
+                        traces.push({
+                            type: 'bar',
+                            x: keys,
+                            y: vals,
+                            name: r.run_id.substring(0, 18),
+                            marker: { color: col + 'cc', line: { color: col, width: 1 } },
+                            hovertemplate: '%{x}: %{y:.4f}<extra>' + r.run_id.substring(0, 18) + '</extra>'
+                        });
+                    });
+
+                    const layout = {
+                        ...PLOTLY_LAYOUT,
+                        barmode: multiRun ? 'group' : 'overlay',
+                        showlegend: multiRun,
+                        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: { text: '', font: { size: 10 } }, type: 'category', tickangle: -45 },
+                        yaxis: { ...PLOTLY_LAYOUT.yaxis }
+                    };
+                    Plotly.newPlot(plotId, traces, layout, PLOTLY_CONFIG);
+                } else {
+                    // Line chart for scalar data
+                    const traces = selectedRuns.map((r, ri) => {
+                        const d = runDataMap[r.run_id]?.[metric] || [];
+                        const col = RUN_COLORS[ri % RUN_COLORS.length];
+                        return {
+                            type: 'scattergl',
+                            mode: 'lines',
+                            x: d.map(p => Number(p.x)),
+                            y: d.map(p => Number(p.y)),
+                            name: r.run_id.substring(0, 18),
+                            line: {
+                                color: col,
+                                width: 2,
+                                dash: ri === 0 ? 'solid' : 'dash'
+                            },
+                            fill: selectedRuns.length === 1 ? 'tozeroy' : 'none',
+                            fillcolor: selectedRuns.length === 1 ? col + '15' : undefined,
+                            hovertemplate: 'Step %{x:,}<br>%{y:.6f}<extra>' + r.run_id.substring(0, 18) + '</extra>'
+                        };
+                    }).filter(t => t.x.length > 0);
+
+                    const layout = {
+                        ...PLOTLY_LAYOUT,
+                        showlegend: multiRun,
+                        xaxis: { ...PLOTLY_LAYOUT.xaxis },
+                        yaxis: { ...PLOTLY_LAYOUT.yaxis }
+                    };
+                    Plotly.newPlot(plotId, traces, layout, PLOTLY_CONFIG);
+                }
+            } catch (e) { console.error('Plotly render error for', metric, e); }
+        }
+
+        // ─── EVENTS ───
+        async function loadEvents() {
+            const primary = selectedRuns[0];
+            if (!primary) return;
+            const el = document.getElementById('eventsContent');
+            el.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+            try {
+                const data = await fetch(`${API}/api/runs/${primary.run_id}/events`).then(r => r.json());
+                const evs = data.events || [];
+                if (!evs.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">&#9672;</div><div class="empty-title">No events</div><div class="empty-sub">No events logged for this run</div></div>'; return; }
+                el.innerHTML = `
+                <div class="events-header"><span>Time</span><span>Step</span><span>Type</span><span>Severity</span><span>Message</span></div>
+                <div class="events-list">${evs.map(e => `
+                <div class="event-row">
+                    <span class="event-time">${e.time}</span>
+                    <span class="event-step">${Number(e.step).toLocaleString()}</span>
+                    <span class="event-type">${e.event_type}</span>
+                    <span class="sev-${e.severity || 'info'}">${e.severity || 'info'}</span>
+                    <span class="event-msg" title="${e.message}">${e.message}</span>
+                </div>`).join('')}
+                </div>`;
+            } catch (e) { el.innerHTML = '<div class="empty"><span style="font-size:0.75rem;color:var(--muted)">Failed to load events</span></div>'; }
+        }
+
+        // ─── REFRESH ───
+        function setAutoRefresh() {
+            clearInterval(refreshTimer);
+            const ms = parseInt(document.getElementById('refreshInterval').value);
+            const dot = document.getElementById('liveDot'), lbl = document.getElementById('liveLabel');
+            if (ms > 0) {
+                dot.classList.remove('off');
+                lbl.textContent = `live \u00b7 ${ms >= 60000 ? ms / 60000 + 'm' : ms / 1000 + 's'}`;
+                refreshTimer = setInterval(autoRefresh, ms);
+            } else { dot.classList.add('off'); lbl.textContent = 'live off'; }
+        }
+
+        async function autoRefresh() {
+            if (!selectedRuns.length) return;
+            await loadRuns();
+            const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
+            if (sel.length) await generateCharts();
+            if (document.getElementById('panel-events').classList.contains('active')) await loadEvents();
+            showToast('\u21ba refreshed');
+        }
+
+        function manualRefresh() {
+            loadRuns();
+            if (selectedRuns.length) {
+                const sel = Array.from(document.querySelectorAll('#metricScroll input:checked')).map(c => c.value);
+                if (sel.length) generateCharts();
+            }
+            showToast('\u21ba refreshed');
+        }
+
+        // ─── TABS ───
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(`tab-${name}`).classList.add('active');
+            document.getElementById(`panel-${name}`).classList.add('active');
+            if (name === 'events' && selectedRuns.length) loadEvents();
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2200);
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
