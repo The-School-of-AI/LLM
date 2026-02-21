@@ -1,0 +1,34 @@
+# Core ML / Inference
+torch>=2.1.0
+transformers>=4.40.0
+accelerate>=0.28.0
+bitsandbytes>=0.43.0         # INT8/INT4 quantization via HuggingFace
+llama-cpp-python>=0.2.50     # GGUF INT4/INT8 via llama.cpp
+
+# Datasets
+datasets>=2.18.0
+huggingface-hub>=0.22.0
+
+# Evaluation utilities
+evaluate>=0.4.1
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Plotting & reporting
+matplotlib>=3.8.0
+plotly>=5.20.0
+pandas>=2.1.0
+jinja2>=3.1.3                # HTML report templating
+
+# Collector (optional Flask backend)
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Config & utilities
+pyyaml>=6.0.1
+tqdm>=4.66.0
+rich>=13.7.0                 # pretty terminal output
+jsonlines>=4.0.0
+
+# Reproducibility
+python-dotenv>=1.0.1

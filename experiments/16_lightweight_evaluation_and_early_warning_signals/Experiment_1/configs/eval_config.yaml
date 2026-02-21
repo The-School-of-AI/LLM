@@ -1,0 +1,217 @@
+# Early Warning Evaluation Suite Configuration
+# Team 16 - ERAV4 Final Project
+
+# === Reproducibility ===
+seed: 42
+
+# === MMLU Subset Configuration ===
+mmlu:
+  questions_per_category: 7          # stratified sample size per category — FROZEN after first build
+  subset_file: "data/mmlu_subset/mmlu_subset.json"
+
+  # Indian language extension via sarvamai/mmlu-indic
+  # Add language codes to include them in the frozen subset.
+  # Must be set BEFORE the first run of build_mmlu_subset.py.
+  # Supported codes: hi bn ta te mr gu kn ml pa or
+  # Romanized variants: hi_roman bn_roman ta_roman te_roman mr_roman gu_roman kn_roman ml_roman pa_roman or_roman
+  indic_languages: []                 # e.g. [hi, bn, ta, te, mr, gu, kn, ml, pa, or]
+  indic_dataset: "sarvamai/mmlu-indic"
+
+  # Domain taxonomy — every category is tagged with one of 5 domains.
+  # The evaluator uses this to compute per-domain accuracy in every report.
+  # Domain labels: math | reasoning | science | coding | general_knowledge
+  domain_map:
+    # ── MATH ──────────────────────────────────────────────────────────────
+    abstract_algebra:                    math
+    college_mathematics:                 math
+    elementary_mathematics:              math
+    high_school_mathematics:             math
+    high_school_statistics:              math
+    econometrics:                        math
+    # ── REASONING ─────────────────────────────────────────────────────────
+    formal_logic:                        reasoning
+    logical_fallacies:                   reasoning
+    moral_disputes:                      reasoning
+    moral_scenarios:                     reasoning
+    philosophy:                          reasoning
+    # ── SCIENCE ───────────────────────────────────────────────────────────
+    anatomy:                             science
+    astronomy:                           science
+    college_biology:                     science
+    college_chemistry:                   science
+    college_medicine:                    science
+    college_physics:                     science
+    conceptual_physics:                  science
+    electrical_engineering:              science
+    high_school_biology:                 science
+    high_school_chemistry:               science
+    high_school_physics:                 science
+    medical_genetics:                    science
+    nutrition:                           science
+    virology:                            science
+    clinical_knowledge:                  science
+    human_aging:                         science
+    human_sexuality:                     science
+    # ── CODING ────────────────────────────────────────────────────────────
+    college_computer_science:            coding
+    computer_security:                   coding
+    high_school_computer_science:        coding
+    machine_learning:                    coding
+    # ── GENERAL KNOWLEDGE ─────────────────────────────────────────────────
+    business_ethics:                     general_knowledge
+    global_facts:                        general_knowledge
+    high_school_european_history:        general_knowledge
+    high_school_geography:               general_knowledge
+    high_school_government_and_politics: general_knowledge
+    high_school_macroeconomics:          general_knowledge
+    high_school_microeconomics:          general_knowledge
+    high_school_psychology:              general_knowledge
+    high_school_us_history:              general_knowledge
+    high_school_world_history:           general_knowledge
+    international_law:                   general_knowledge
+    jurisprudence:                       general_knowledge
+    management:                          general_knowledge
+    marketing:                           general_knowledge
+    miscellaneous:                       general_knowledge
+    prehistory:                          general_knowledge
+    professional_accounting:             general_knowledge
+    professional_law:                    general_knowledge
+    professional_medicine:               general_knowledge
+    professional_psychology:             general_knowledge
+    public_relations:                    general_knowledge
+    security_studies:                    general_knowledge
+    sociology:                           general_knowledge
+    us_foreign_policy:                   general_knowledge
+    world_religions:                     general_knowledge
+
+  categories:                        # MMLU category groups to include (English)
+    - abstract_algebra
+    - anatomy
+    - astronomy
+    - business_ethics
+    - clinical_knowledge
+    - college_biology
+    - college_chemistry
+    - college_computer_science
+    - college_mathematics
+    - college_medicine
+    - college_physics
+    - computer_security
+    - conceptual_physics
+    - econometrics
+    - electrical_engineering
+    - elementary_mathematics
+    - formal_logic
+    - global_facts
+    - high_school_biology
+    - high_school_chemistry
+    - high_school_computer_science
+    - high_school_european_history
+    - high_school_geography
+    - high_school_government_and_politics
+    - high_school_macroeconomics
+    - high_school_mathematics
+    - high_school_microeconomics
+    - high_school_physics
+    - high_school_psychology
+    - high_school_statistics
+    - high_school_us_history
+    - high_school_world_history
+    - human_aging
+    - human_sexuality
+    - international_law
+    - jurisprudence
+    - logical_fallacies
+    - machine_learning
+    - management
+    - marketing
+    - medical_genetics
+    - miscellaneous
+    - moral_disputes
+    - moral_scenarios
+    - nutrition
+    - philosophy
+    - prehistory
+    - professional_accounting
+    - professional_law
+    - professional_medicine
+    - professional_psychology
+    - public_relations
+    - security_studies
+    - sociology
+    - us_foreign_policy
+    - virology
+    - world_religions
+
+# === Custom Probe Configuration ===
+probes:
+  language_modeling:
+    enabled: true
+    probes_file: "data/probes/language_modeling_probes.json"
+    metric: "perplexity"             # lower is better
+    batch_size: 4
+  code_continuation:
+    enabled: true
+    probes_file: "data/probes/code_probes.json"
+    metric: "pass_rate"             # fraction of sensible completions
+    batch_size: 4
+  math_prose:
+    enabled: true
+    probes_file: "data/probes/math_prose_probes.json"
+    metric: "accuracy"
+    batch_size: 4
+  consistency:
+    enabled: true
+    probes_file: "data/probes/consistency_probes.json"
+    metric: "agreement_rate"        # same answer across rephrasings
+    batch_size: 4
+
+# === Quantization Configuration ===
+quantization:
+  backend: "auto"                   # "llama_cpp", "bitsandbytes", or "auto"
+  modes:
+    - "int8"
+    - "int4"
+  llama_cpp:
+    n_ctx: 2048
+    n_threads: 8
+    n_gpu_layers: -1               # -1 = all layers on GPU if available
+  bitsandbytes:
+    load_in_4bit: true
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_quant_type: "nf4"
+    bnb_4bit_use_double_quant: true
+
+# === Evaluation Pipeline ===
+evaluation:
+  max_new_tokens: 256
+  temperature: 0.0                  # greedy for reproducibility
+  batch_size: 1
+  timeout_per_sample: 60            # seconds
+  output_dir: "results/raw"
+
+# === Trend Tracking ===
+trend_tracking:
+  results_db: "results/trend_db.json"
+  regression_threshold: -0.02       # flag if metric drops > 2%
+  plateau_window: 3                 # checkpoints to check for plateau
+  plateau_threshold: 0.005          # consider plateau if delta < 0.5%
+  instability_std_threshold: 0.05   # flag if std > 5% over window
+
+# === Early Warning ===
+early_warning:
+  output_dir: "results/reports"
+  notify_teams: ["Team_9", "Team_12"]
+  confidence_levels:                # thresholds for warning confidence
+    low: 0.3
+    medium: 0.6
+    high: 0.85
+
+# === Collector ===
+collector:
+  backend: "json"                   # "json" (file-based) or "flask"
+  results_dir: "results/raw"
+  aggregated_file: "results/aggregated_results.json"
+  flask:
+    host: "0.0.0.0"
+    port: 5001

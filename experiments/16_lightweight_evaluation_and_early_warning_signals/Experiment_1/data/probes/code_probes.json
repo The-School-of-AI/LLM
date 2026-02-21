@@ -1,0 +1,118 @@
+{
+  "metadata": {
+    "probe_type": "code_continuation",
+    "metric": "pass_rate",
+    "description": "Code snippets where the model must produce a sensible continuation. Evaluated by keyword/pattern presence and basic syntax checks.",
+    "version": 1
+  },
+  "probes": [
+    {
+      "id": "code_001",
+      "language": "python",
+      "category": "sorting",
+      "prompt": "def bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(0, n - i - 1):\n            if arr[j] > arr[j + 1]:",
+      "expected_keywords": ["arr[j], arr[j + 1]", "swap", "arr[j+1]", "arr[j],"],
+      "expected_patterns": ["arr\\[j\\s*\\+\\s*1\\]\\s*=|arr\\[j\\]\\s*,\\s*arr\\[j"],
+      "description": "Complete bubble sort swap logic"
+    },
+    {
+      "id": "code_002",
+      "language": "python",
+      "category": "recursion",
+      "prompt": "def fibonacci(n):\n    # Return the nth Fibonacci number\n    if n <= 1:\n        return n\n    return",
+      "expected_keywords": ["fibonacci", "n -", "n-"],
+      "expected_patterns": ["fibonacci\\(n\\s*-\\s*1\\)"],
+      "description": "Complete fibonacci recursive call"
+    },
+    {
+      "id": "code_003",
+      "language": "python",
+      "category": "data_structures",
+      "prompt": "class Stack:\n    def __init__(self):\n        self.items = []\n    \n    def push(self, item):\n        self.items.append(item)\n    \n    def pop(self):\n        if not self.is_empty():\n            return",
+      "expected_keywords": ["pop", "items", "return"],
+      "expected_patterns": ["self\\.items\\.pop|items\\[-1\\]"],
+      "description": "Complete stack pop method"
+    },
+    {
+      "id": "code_004",
+      "language": "python",
+      "category": "string_manipulation",
+      "prompt": "def is_palindrome(s):\n    # Check if a string is a palindrome\n    s = s.lower().replace(' ', '')\n    return",
+      "expected_keywords": ["==", "reverse", "[::-1]", "reversed"],
+      "expected_patterns": ["s\\s*==\\s*s\\[::-1\\]|s\\s*==\\s*''.join\\(reversed"],
+      "description": "Complete palindrome check"
+    },
+    {
+      "id": "code_005",
+      "language": "python",
+      "category": "file_io",
+      "prompt": "def read_lines(filepath):\n    \"\"\"Read all lines from a file and return as a list.\"\"\"\n    with open(filepath, 'r') as f:\n        return",
+      "expected_keywords": ["readlines", "read", "f.readlines", "lines"],
+      "expected_patterns": ["f\\.readlines\\(\\)|\\[line.*for line in f\\]"],
+      "description": "Complete file reading logic"
+    },
+    {
+      "id": "code_006",
+      "language": "python",
+      "category": "algorithms",
+      "prompt": "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left =",
+      "expected_keywords": ["mid", "+ 1", "mid+1", "mid + 1"],
+      "expected_patterns": ["mid\\s*\\+\\s*1"],
+      "description": "Complete binary search left update"
+    },
+    {
+      "id": "code_007",
+      "language": "python",
+      "category": "classes",
+      "prompt": "class BankAccount:\n    def __init__(self, balance=0):\n        self.balance = balance\n    \n    def deposit(self, amount):\n        if amount > 0:\n            self.balance += amount\n    \n    def withdraw(self, amount):\n        if amount > 0 and amount <= self.balance:\n            self.balance -=",
+      "expected_keywords": ["amount", "balance", "self.balance"],
+      "expected_patterns": ["self\\.balance\\s*-=\\s*amount|amount\\nreturn|amount\\n\\s*return"],
+      "description": "Complete withdrawal logic"
+    },
+    {
+      "id": "code_008",
+      "language": "python",
+      "category": "list_comprehension",
+      "prompt": "# Create a list of squares for even numbers from 0 to 20\neven_squares = [",
+      "expected_keywords": ["for", "if", "range", "**2", "* x", "* i"],
+      "expected_patterns": ["x\\s*\\*\\*\\s*2|x\\s*\\*\\s*x|i\\s*\\*\\s*i|i\\s*\\*\\*\\s*2"],
+      "description": "Complete list comprehension for even squares"
+    },
+    {
+      "id": "code_009",
+      "language": "python",
+      "category": "exception_handling",
+      "prompt": "def safe_divide(a, b):\n    try:\n        result = a / b\n        return result\n    except ZeroDivisionError:\n        return",
+      "expected_keywords": ["None", "0", "return", "infinity", "float"],
+      "expected_patterns": ["return\\s+(None|0|float\\('inf'\\)|'Error'|\\\"Error\\\"|math\\.inf)"],
+      "description": "Complete exception handler return"
+    },
+    {
+      "id": "code_010",
+      "language": "python",
+      "category": "generators",
+      "prompt": "def count_up(start, end):\n    \"\"\"Generator that yields integers from start to end inclusive.\"\"\"\n    current = start\n    while current <= end:\n        yield current\n        current",
+      "expected_keywords": ["+=", "+ 1", "current += 1", "current = current + 1"],
+      "expected_patterns": ["current\\s*\\+=\\s*1|current\\s*=\\s*current\\s*\\+\\s*1"],
+      "description": "Complete generator increment"
+    },
+    {
+      "id": "code_011",
+      "language": "python",
+      "category": "decorators",
+      "prompt": "import time\n\ndef timer(func):\n    \"\"\"Decorator that prints execution time of a function.\"\"\"\n    def wrapper(*args, **kwargs):\n        start = time.time()\n        result = func(*args, **kwargs)\n        end = time.time()\n        print(f\"Executed in {end - start:.4f} seconds\")\n        return",
+      "expected_keywords": ["result", "return result"],
+      "expected_patterns": ["return\\s+result"],
+      "description": "Complete decorator return statement"
+    },
+    {
+      "id": "code_012",
+      "language": "python",
+      "category": "dictionary_ops",
+      "prompt": "def word_frequency(text):\n    \"\"\"Count word frequencies in a string.\"\"\"\n    words = text.lower().split()\n    freq = {}\n    for word in words:\n        freq[word] = freq.get(word, 0)",
+      "expected_keywords": ["+ 1", "+= 1", "freq[word]", "1"],
+      "expected_patterns": ["\\+\\s*1|freq\\[word\\]\\s*\\+="],
+      "description": "Complete word frequency counter"
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "metadata": {
+    "probe_type": "consistency",
+    "metric": "agreement_rate",
+    "description": "Pairs of semantically equivalent questions — the model should give the same (correct) answer to all rephrasings.",
+    "version": 1
+  },
+  "probe_groups": [
+    {
+      "group_id": "cg_001",
+      "topic": "capital_france",
+      "expected_answer_keywords": ["Paris"],
+      "variants": [
+        {"id": "cg_001_a", "prompt": "What is the capital city of France?"},
+        {"id": "cg_001_b", "prompt": "Which city serves as the capital of France?"},
+        {"id": "cg_001_c", "prompt": "France's capital is which city?"},
+        {"id": "cg_001_d", "prompt": "Name the capital of France."}
+      ]
+    },
+    {
+      "group_id": "cg_002",
+      "topic": "water_boiling_point",
+      "expected_answer_keywords": ["100", "212"],
+      "variants": [
+        {"id": "cg_002_a", "prompt": "At what temperature does water boil at sea level in Celsius?"},
+        {"id": "cg_002_b", "prompt": "What is the boiling point of water at standard atmospheric pressure?"},
+        {"id": "cg_002_c", "prompt": "Water turns to steam at what Celsius temperature under normal conditions?"},
+        {"id": "cg_002_d", "prompt": "In degrees Celsius, when does water start to boil at sea level?"}
+      ]
+    },
+    {
+      "group_id": "cg_003",
+      "topic": "pythagorean_theorem",
+      "expected_answer_keywords": ["a² + b² = c²", "a^2 + b^2 = c^2", "a squared plus b squared"],
+      "variants": [
+        {"id": "cg_003_a", "prompt": "State the Pythagorean theorem."},
+        {"id": "cg_003_b", "prompt": "What does the Pythagorean theorem say about right triangles?"},
+        {"id": "cg_003_c", "prompt": "Describe the relationship between the sides of a right triangle according to Pythagoras."},
+        {"id": "cg_003_d", "prompt": "Write the formula that Pythagoras discovered for right-angled triangles."}
+      ]
+    },
+    {
+      "group_id": "cg_004",
+      "topic": "planet_count",
+      "expected_answer_keywords": ["8", "eight"],
+      "variants": [
+        {"id": "cg_004_a", "prompt": "How many planets are in our solar system?"},
+        {"id": "cg_004_b", "prompt": "How many planets orbit the Sun?"},
+        {"id": "cg_004_c", "prompt": "What is the number of planets in the Solar System?"},
+        {"id": "cg_004_d", "prompt": "Count the planets in our solar system."}
+      ]
+    },
+    {
+      "group_id": "cg_005",
+      "topic": "speed_of_light",
+      "expected_answer_keywords": ["299", "300", "3 × 10⁸", "3x10^8", "186,000"],
+      "variants": [
+        {"id": "cg_005_a", "prompt": "What is the speed of light in a vacuum?"},
+        {"id": "cg_005_b", "prompt": "How fast does light travel in empty space?"},
+        {"id": "cg_005_c", "prompt": "At what speed does light move through a vacuum?"},
+        {"id": "cg_005_d", "prompt": "What is the approximate speed of light?"}
+      ]
+    },
+    {
+      "group_id": "cg_006",
+      "topic": "authorship_hamlet",
+      "expected_answer_keywords": ["Shakespeare", "William Shakespeare"],
+      "variants": [
+        {"id": "cg_006_a", "prompt": "Who wrote Hamlet?"},
+        {"id": "cg_006_b", "prompt": "Who is the author of the play Hamlet?"},
+        {"id": "cg_006_c", "prompt": "Which playwright wrote Hamlet?"},
+        {"id": "cg_006_d", "prompt": "Hamlet was written by whom?"}
+      ]
+    },
+    {
+      "group_id": "cg_007",
+      "topic": "dna_bases",
+      "expected_answer_keywords": ["4", "four", "adenine", "guanine", "cytosine", "thymine"],
+      "variants": [
+        {"id": "cg_007_a", "prompt": "How many nitrogen bases are in DNA?"},
+        {"id": "cg_007_b", "prompt": "DNA contains how many types of nucleotide bases?"},
+        {"id": "cg_007_c", "prompt": "What is the number of distinct bases found in DNA?"},
+        {"id": "cg_007_d", "prompt": "How many different bases make up the DNA double helix?"}
+      ]
+    },
+    {
+      "group_id": "cg_008",
+      "topic": "gravity_earth",
+      "expected_answer_keywords": ["9.8", "9.81", "10", "9.8 m/s"],
+      "variants": [
+        {"id": "cg_008_a", "prompt": "What is the acceleration due to gravity on Earth's surface?"},
+        {"id": "cg_008_b", "prompt": "What is Earth's gravitational acceleration?"},
+        {"id": "cg_008_c", "prompt": "How strong is gravity on Earth's surface in m/s²?"},
+        {"id": "cg_008_d", "prompt": "What acceleration does gravity cause on the surface of Earth?"}
+      ]
+    },
+    {
+      "group_id": "cg_009",
+      "topic": "binary_15",
+      "expected_answer_keywords": ["1111", "15 in binary"],
+      "variants": [
+        {"id": "cg_009_a", "prompt": "What is 15 in binary?"},
+        {"id": "cg_009_b", "prompt": "Convert the decimal number 15 to binary."},
+        {"id": "cg_009_c", "prompt": "Express 15 as a binary number."},
+        {"id": "cg_009_d", "prompt": "What binary representation corresponds to the decimal 15?"}
+      ]
+    },
+    {
+      "group_id": "cg_010",
+      "topic": "first_computer",
+      "expected_answer_keywords": ["ENIAC", "Colossus", "ABC", "Atanasoff"],
+      "variants": [
+        {"id": "cg_010_a", "prompt": "What is considered one of the first electronic computers?"},
+        {"id": "cg_010_b", "prompt": "Name an early electronic computer from the 1940s."},
+        {"id": "cg_010_c", "prompt": "Which machine is often cited as an early electronic computing device?"},
+        {"id": "cg_010_d", "prompt": "What was one of the pioneering electronic computers built in the 1940s?"}
+      ]
+    }
+  ]
+}

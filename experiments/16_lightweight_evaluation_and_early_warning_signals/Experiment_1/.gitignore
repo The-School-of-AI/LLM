@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Results (large files — commit only when needed)
+results/raw/*.json
+results/plots/*.png
+results/plots/*.html
+results/trend_db.json
+results/aggregated_results.json
+
+# Keep report outputs tracked
+!results/reports/
+
+# Model checkpoints
+data/checkpoints/
+*.gguf
+*.bin
+*.safetensors
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Dotenv
+.env
+
+# Logs
+*.log

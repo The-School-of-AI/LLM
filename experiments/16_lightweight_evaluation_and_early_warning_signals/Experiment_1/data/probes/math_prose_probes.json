@@ -1,0 +1,190 @@
+{
+  "metadata": {
+    "probe_type": "math_prose",
+    "metric": "accuracy",
+    "description": "Natural-language math/reasoning questions. The model must answer with the correct value or reasoning step.",
+    "version": 1
+  },
+  "probes": [
+    {
+      "id": "math_001",
+      "category": "arithmetic",
+      "difficulty": "easy",
+      "prompt": "If a train travels at 60 miles per hour and needs to cover 150 miles, how many hours will the journey take? Answer with a number.",
+      "answer": "2.5",
+      "answer_alternatives": ["2.5", "2 and a half", "two and a half", "2½"],
+      "answer_keywords": ["2.5", "2½", "two and a half"]
+    },
+    {
+      "id": "math_002",
+      "category": "algebra",
+      "difficulty": "easy",
+      "prompt": "Solve for x: 3x + 7 = 22. What is x?",
+      "answer": "5",
+      "answer_alternatives": ["5", "x = 5", "x=5"],
+      "answer_keywords": ["5"]
+    },
+    {
+      "id": "math_003",
+      "category": "percentage",
+      "difficulty": "easy",
+      "prompt": "A shirt costs $80. It is on sale for 25% off. What is the sale price?",
+      "answer": "60",
+      "answer_alternatives": ["$60", "60 dollars", "60"],
+      "answer_keywords": ["60"]
+    },
+    {
+      "id": "math_004",
+      "category": "geometry",
+      "difficulty": "easy",
+      "prompt": "What is the area of a rectangle with length 12 meters and width 5 meters?",
+      "answer": "60",
+      "answer_alternatives": ["60 square meters", "60 m²", "60"],
+      "answer_keywords": ["60"]
+    },
+    {
+      "id": "math_005",
+      "category": "ratios",
+      "difficulty": "easy",
+      "prompt": "A recipe requires 3 cups of flour for every 2 cups of sugar. If you use 9 cups of flour, how many cups of sugar do you need?",
+      "answer": "6",
+      "answer_alternatives": ["6 cups", "6"],
+      "answer_keywords": ["6"]
+    },
+    {
+      "id": "math_006",
+      "category": "probability",
+      "difficulty": "medium",
+      "prompt": "A bag contains 4 red balls and 6 blue balls. What is the probability of randomly picking a red ball? Express as a decimal.",
+      "answer": "0.4",
+      "answer_alternatives": ["0.4", "2/5", "40%", "40 percent"],
+      "answer_keywords": ["0.4", "2/5", "40"]
+    },
+    {
+      "id": "math_007",
+      "category": "sequences",
+      "difficulty": "medium",
+      "prompt": "What is the next number in the sequence: 2, 6, 18, 54, ___?",
+      "answer": "162",
+      "answer_alternatives": ["162"],
+      "answer_keywords": ["162"]
+    },
+    {
+      "id": "math_008",
+      "category": "compound_interest",
+      "difficulty": "medium",
+      "prompt": "If you invest $1000 at an annual interest rate of 10%, compounded annually, what will be the total after 2 years?",
+      "answer": "1210",
+      "answer_alternatives": ["$1210", "1210 dollars", "1210"],
+      "answer_keywords": ["1210"]
+    },
+    {
+      "id": "math_009",
+      "category": "word_problem",
+      "difficulty": "medium",
+      "prompt": "Alice has twice as many apples as Bob. Bob has 5 more apples than Carol. Carol has 3 apples. How many apples does Alice have?",
+      "answer": "16",
+      "answer_alternatives": ["16 apples", "16"],
+      "answer_keywords": ["16"]
+    },
+    {
+      "id": "math_010",
+      "category": "logic",
+      "difficulty": "medium",
+      "prompt": "All mammals are warm-blooded. Dolphins are mammals. Are dolphins warm-blooded? Answer yes or no.",
+      "answer": "yes",
+      "answer_alternatives": ["yes", "Yes", "YES"],
+      "answer_keywords": ["yes"]
+    },
+    {
+      "id": "math_011",
+      "category": "geometry",
+      "difficulty": "medium",
+      "prompt": "A circle has a radius of 7 centimeters. What is its circumference? Use π ≈ 3.14159. Round to one decimal place.",
+      "answer": "44.0",
+      "answer_alternatives": ["43.98", "44.0", "44", "approximately 44"],
+      "answer_keywords": ["43.98", "43.9", "44"]
+    },
+    {
+      "id": "math_012",
+      "category": "fractions",
+      "difficulty": "easy",
+      "prompt": "What is 3/4 + 1/3? Express as a fraction in simplest form.",
+      "answer": "13/12",
+      "answer_alternatives": ["13/12", "1 and 1/12", "1 1/12"],
+      "answer_keywords": ["13/12", "1 1/12", "1 and 1"]
+    },
+    {
+      "id": "math_013",
+      "category": "algebra",
+      "difficulty": "medium",
+      "prompt": "The sum of two consecutive integers is 47. What are the two integers?",
+      "answer": "23 and 24",
+      "answer_alternatives": ["23 and 24", "23, 24"],
+      "answer_keywords": ["23", "24"]
+    },
+    {
+      "id": "math_014",
+      "category": "combinatorics",
+      "difficulty": "medium",
+      "prompt": "In how many ways can you arrange the letters in the word 'CAT'?",
+      "answer": "6",
+      "answer_alternatives": ["6 ways", "6"],
+      "answer_keywords": ["6"]
+    },
+    {
+      "id": "math_015",
+      "category": "speed_distance_time",
+      "difficulty": "medium",
+      "prompt": "Two cars start from the same point, driving in opposite directions. Car A travels at 50 km/h and Car B at 70 km/h. How far apart are they after 3 hours?",
+      "answer": "360",
+      "answer_alternatives": ["360 km", "360 kilometers", "360"],
+      "answer_keywords": ["360"]
+    },
+    {
+      "id": "math_016",
+      "category": "number_theory",
+      "difficulty": "easy",
+      "prompt": "What is the greatest common divisor (GCD) of 48 and 18?",
+      "answer": "6",
+      "answer_alternatives": ["6"],
+      "answer_keywords": ["6"]
+    },
+    {
+      "id": "math_017",
+      "category": "statistics",
+      "difficulty": "easy",
+      "prompt": "What is the mean of these numbers: 4, 8, 6, 10, 2?",
+      "answer": "6",
+      "answer_alternatives": ["6", "6.0"],
+      "answer_keywords": ["6"]
+    },
+    {
+      "id": "math_018",
+      "category": "algebra",
+      "difficulty": "hard",
+      "prompt": "If f(x) = 2x² - 3x + 1, what is f(3)?",
+      "answer": "10",
+      "answer_alternatives": ["10"],
+      "answer_keywords": ["10"]
+    },
+    {
+      "id": "math_019",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "prompt": "A store marks up its wholesale price by 40% to get the retail price. If the retail price is $70, what was the wholesale price? Round to the nearest cent.",
+      "answer": "50",
+      "answer_alternatives": ["$50", "50 dollars", "50.00", "50"],
+      "answer_keywords": ["50"]
+    },
+    {
+      "id": "math_020",
+      "category": "geometry",
+      "difficulty": "hard",
+      "prompt": "A right triangle has legs of length 5 and 12. What is the length of the hypotenuse?",
+      "answer": "13",
+      "answer_alternatives": ["13", "13 units"],
+      "answer_keywords": ["13"]
+    }
+  ]
+}

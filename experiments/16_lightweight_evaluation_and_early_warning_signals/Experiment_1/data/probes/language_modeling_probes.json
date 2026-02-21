@@ -1,0 +1,100 @@
+{
+  "metadata": {
+    "probe_type": "language_modeling",
+    "metric": "perplexity",
+    "description": "Curated passages for perplexity measurement. Lower perplexity = better language model.",
+    "version": 1
+  },
+  "probes": [
+    {
+      "id": "lm_001",
+      "category": "news",
+      "text": "Scientists have discovered a new species of deep-sea fish in the Pacific Ocean. The creature, found at depths exceeding 3,000 meters, exhibits bioluminescent properties that distinguish it from all previously known species. Researchers believe the discovery could shed light on the evolutionary adaptations of organisms living in extreme environments.",
+      "source": "synthetic_news"
+    },
+    {
+      "id": "lm_002",
+      "category": "literature",
+      "text": "The old man sat by the window, watching the rain fall in sheets across the empty street. He thought about the choices that had brought him to this small apartment at the edge of the city, far from the life he had once imagined for himself. Each drop on the glass seemed to mark the passage of another moment irretrievably lost.",
+      "source": "synthetic_fiction"
+    },
+    {
+      "id": "lm_003",
+      "category": "technical",
+      "text": "The transformer architecture relies on self-attention mechanisms to process input sequences. Each token attends to all other tokens in the sequence, computing attention weights based on query, key, and value projections. This allows the model to capture long-range dependencies without the sequential bottleneck of recurrent networks.",
+      "source": "synthetic_technical"
+    },
+    {
+      "id": "lm_004",
+      "category": "science",
+      "text": "Photosynthesis is the process by which plants convert light energy into chemical energy stored in glucose. Chlorophyll molecules in the chloroplasts absorb photons, initiating a series of reactions that split water molecules, release oxygen, and reduce carbon dioxide into organic compounds. This process forms the foundation of nearly all food chains on Earth.",
+      "source": "synthetic_science"
+    },
+    {
+      "id": "lm_005",
+      "category": "history",
+      "text": "The printing press, invented by Johannes Gutenberg around 1440, revolutionized the dissemination of knowledge in Europe. By enabling the mass production of books, it dramatically reduced the cost of written materials, accelerated literacy rates, and facilitated the spread of ideas that would fuel the Renaissance and the Reformation.",
+      "source": "synthetic_history"
+    },
+    {
+      "id": "lm_006",
+      "category": "economics",
+      "text": "Supply and demand form the cornerstone of market economics. When the price of a good rises, producers are incentivized to supply more while consumers tend to purchase less. The equilibrium price is reached where the quantity supplied equals the quantity demanded, allocating resources efficiently under ideal market conditions.",
+      "source": "synthetic_economics"
+    },
+    {
+      "id": "lm_007",
+      "category": "philosophy",
+      "text": "Descartes proposed his famous cogito ergo sum, or 'I think, therefore I am,' as an indubitable foundation for knowledge. By doubting everything that could possibly be doubted, he arrived at the one certainty that the very act of doubting proved his own existence as a thinking entity, providing a starting point for epistemology.",
+      "source": "synthetic_philosophy"
+    },
+    {
+      "id": "lm_008",
+      "category": "medicine",
+      "text": "Antibiotics are compounds that inhibit the growth or kill bacteria. They work through various mechanisms including disrupting cell wall synthesis, inhibiting protein production, or interfering with DNA replication. Overuse of antibiotics has led to the emergence of resistant strains, posing a significant public health challenge globally.",
+      "source": "synthetic_medicine"
+    },
+    {
+      "id": "lm_009",
+      "category": "mathematics",
+      "text": "A prime number is a natural number greater than one that has no positive divisors other than one and itself. The distribution of prime numbers among integers becomes sparser as numbers grow larger, yet they never cease to exist. This was proven by Euclid over two thousand years ago through a simple and elegant proof by contradiction.",
+      "source": "synthetic_mathematics"
+    },
+    {
+      "id": "lm_010",
+      "category": "geography",
+      "text": "The Amazon River basin contains the largest tropical rainforest on Earth, spanning approximately 5.5 million square kilometers across nine countries in South America. It houses an estimated 10% of all species on the planet and plays a critical role in regulating the global climate through carbon sequestration and the water cycle.",
+      "source": "synthetic_geography"
+    },
+    {
+      "id": "lm_011",
+      "category": "law",
+      "text": "Due process is a constitutional guarantee that the government must respect all legal rights owed to a person. It encompasses both procedural protections, such as the right to a fair hearing, and substantive limits on government action. The principle has its roots in the Magna Carta and has evolved significantly through judicial interpretation.",
+      "source": "synthetic_law"
+    },
+    {
+      "id": "lm_012",
+      "category": "psychology",
+      "text": "Cognitive dissonance occurs when a person holds two or more contradictory beliefs simultaneously. The mental discomfort this creates motivates individuals to reduce the inconsistency, either by changing one of their beliefs, acquiring new information that reconciles the conflict, or diminishing the importance of one of the competing cognitions.",
+      "source": "synthetic_psychology"
+    },
+    {
+      "id": "lm_013",
+      "category": "computer_science",
+      "text": "Binary search is an efficient algorithm for finding a target value in a sorted array. It repeatedly divides the search interval in half, comparing the middle element to the target and discarding the half where the target cannot lie. This yields a time complexity of O(log n), dramatically outperforming linear search for large datasets.",
+      "source": "synthetic_cs"
+    },
+    {
+      "id": "lm_014",
+      "category": "art",
+      "text": "The Impressionist movement, which emerged in France in the 1870s, rejected the formal academic style in favour of capturing fleeting moments through loose brushwork and an emphasis on light and colour. Artists like Monet, Renoir, and Pissarro sought to paint their immediate sensory impressions of landscapes and everyday scenes.",
+      "source": "synthetic_art"
+    },
+    {
+      "id": "lm_015",
+      "category": "environment",
+      "text": "Climate change refers to long-term shifts in global temperatures and weather patterns. While natural factors have historically influenced the climate, human activities—particularly the burning of fossil fuels—have become the dominant driver since the mid-twentieth century, leading to increased atmospheric concentrations of greenhouse gases.",
+      "source": "synthetic_environment"
+    }
+  ]
+}

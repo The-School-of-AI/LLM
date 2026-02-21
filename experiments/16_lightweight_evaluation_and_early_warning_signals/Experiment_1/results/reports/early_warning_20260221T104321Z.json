@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-02-21T10:43:21.153661Z",
+  "confidence": {
+    "label": "LOW",
+    "score": 0.15
+  },
+  "num_checkpoints": 1,
+  "checkpoints": [
+    "gpt2_baseline"
+  ],
+  "num_warnings": 0,
+  "warnings": [],
+  "notify_teams": [
+    "Team_9",
+    "Team_12"
+  ]
+}
