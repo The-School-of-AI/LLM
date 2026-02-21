@@ -1,0 +1,109 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Core Layout ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in, top=1.5in, bottom=1.2in]{geometry} % Adjusted top margin for larger header
+\usepackage{times} 
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{caption}
+\usepackage{fancyhdr} 
+\usepackage{hyperref}
+\usepackage{comment}
+\usepackage{float}
+
+
+% --- Header and Footer (Enhanced Lab Identity) ---
+\pagestyle{fancy}
+\fancyhf{} 
+\renewcommand{\headrulewidth}{0.5pt} 
+\renewcommand{\footrulewidth}{0.5pt} 
+
+% Left Header: Larger Logo and Lab Name
+\fancyhead[L]{
+    \begin{minipage}[b]{0.8\textwidth}
+        \includegraphics[height=1.2cm]{tsai-logo.png} \hspace{0.05cm} 
+        \raisebox{0.45cm}{\Large \textcolor[gray]{0.1}{The School of AI}}
+        \vspace{-0.2cm}
+    \end{minipage}
+}
+\fancyfoot[C]{\thepage} 
+
+
+% --- Hyperlink Style (Cyan Boxes) ---
+\hypersetup{
+    colorlinks=false,
+    urlbordercolor=cyan,
+    pdfborderstyle={/S/S/W 1}
+}
+
+% --- Caption Styling ---
+\DeclareCaptionLabelSeparator{bar}{ | }
+\captionsetup{
+    labelsep=bar,
+    font=small,
+    labelfont=bf,
+    justification=centering
+}
+
+\begin{document}
+
+% --- Custom Title Section (No Bold, Smaller Size) ---
+\begin{center}
+    \vspace*{1em}
+    {\huge Lightning LLM Technical Report} \\[1.2em]
+    {\large The School of AI} \\
+    \texttt{research@theschoolofai.com} \\[2.5em]
+    
+    \textbf{Abstract}
+\end{center}
+
+\begin{quote}
+\noindent Training modern large language models typically requires massive compute budgets, placing state-of-the-art models beyond the reach of most research groups. We investigate whether competitive LLMs can be trained under a severely limited budget by systematically redesigning the training pipeline for efficiency rather than scale. Using these methods, we train a 70B-parameter MoE language model grown from a 1B seed model over four stages and 400B tokens. In this work, we describe our modified model architecture, data mixing techniques on how we build our coreset, and training techniques which have helped us achieve an improved per-token efficiency.Despite the constrained budget, Our model sits at the pareto frontier of performance to training computation, often matching open weight models like while using fewer FLOPs for training and for inference. We release weights, checkpoints, training recipes, and logs to facilitate research on accessible large-scale language modeling.
+
+\vspace{0.5em}
+\noindent Training artifacts are available at \url{https://github.com/The-School-of-AI/LLM}.
+\end{quote}
+
+\vspace{2.5em}
+
+% --- Example Figure ---
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{image.png}
+    \caption{sample image from sarvam saaras}
+    \label{fig:placeholder}
+\end{figure}
+
+% --- next couple of lines ensure that the rule and the logo + TSAI doesnt appear on every page.
+\clearpage
+\pagestyle{plain}
+
+\begin{spacing}{0.9}
+\tableofcontents
+\end{spacing}
+\newpage
+
+% --- Modular sections ---
+\input{02_introduction}
+\newpage
+\input{03_architecture}
+\newpage
+\input{04_data_pipeline}
+\newpage
+\input{05_training_infrastructure}
+\newpage
+\input{06_scaling_stratergy}
+\newpage
+\input{07_MoE_behavior_analysis}
+\newpage
+\input{08_evaluation}
+\newpage
+\input{09_ablations}
+\newpage
+\input{10_lessons_learned}
+\newpage
+
+\end{document}

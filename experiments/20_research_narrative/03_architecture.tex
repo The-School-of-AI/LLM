@@ -1,0 +1,46 @@
+\section{Architecture}
+    \subsection{Design Philosophy}
+        \begin{itemize}
+            \item  Why these architectural choices?
+            \item Activation functions
+            \item Normalization strategy (LayerNorm/RMSNorm)
+            \item Vocabulary size and tokenizer choice
+        \end{itemize}
+    
+    \subsection{Dense Seed Architecture (1B)}
+        \begin{itemize}
+            \item Parameter count breakdown table
+            \item Context window size
+            \item Training sequence length
+        \end{itemize}
+
+    \subsection{Scaling to 3B}
+     \begin{itemize}
+         \item What changed?
+         \item Same hyperparameters?
+         \item Stability observations?
+         \item Scaling law predictions vs actual
+         \item  Why stop at 3B? (when did you know it was stable?)
+     \end{itemize}
+
+    \subsection{Transition to MoE (8B)}
+    \begin{itemize}
+        \item Why 8B as first MoE step?
+        \item Dense baseline comparison
+        \item Expert initialization strategy
+    \end{itemize}
+
+    \subsection{Final Architecture (70B MoE)}
+    \begin{itemize}
+        \item  Expert count
+        \item Top-k routing
+        \item Capacity factor
+        \item Router architecture
+        \item Auxiliary loss
+        \item Load balancing method
+        \item Gating temperature
+        \item Expert parallelism strategy
+        \item Total parameters vs active parameters
+        \item Memory footprint comparison
+        \item Theoretical FLOPs analysis
+    \end{itemize}

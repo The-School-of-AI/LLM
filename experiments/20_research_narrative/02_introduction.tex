@@ -1,0 +1,23 @@
+\section{Introduction}
+
+In recent years, Large Language Models (LLMs) have undergone rapid iteration and evolution, progressively diminishing the gap towards Artificial General Intelligence (AGI) \cite{OpenAI2024, Google2024}. While closed-source models continue to set benchmarks, the open-source community has made significant strides in closing this performance chasm \cite{Meta2024, Jiang2023}. However, the prohibitive computational cost of training competitive models remains a formidable barrier for most. To democratize the development of high-performance LLMs, we aim to enable small research groups with minimal budgets to train their own state-of-the-art models. 
+
+In this work, we introduce a series of architectural and procedural innovations designed for maximum efficiency, culminating in a 70B Mixture-of-Experts (MoE) model that achieves high-tier performance with only 4B active parameters.
+
+Efficiency and economic viability are the core tenets of our approach. Consequently, we adopt a hybrid architecture combining \textbf{GatedDeltaNet} and the \textbf{DeepSeek Sparse Attention} framework. By integrating \textbf{NULL routers} to manage expert activation, we significantly conserve floating-point operations ($FLOPs$) during both training and inference while maintaining the structural stability required for large-scale optimization. These architectural choices have been previously validated for their ability to maintain robust performance under strict computational constraints \cite{RefA2024, RefB2024}, ensuring that our model remains competitive even at a fraction of the traditional training cost.
+
+
+
+Beyond basic structural innovations, we rethink the fundamental representation of language by introducing \textbf{Kronecker embeddings}. Traditionally, LLMs rely on static Byte Pair Encoding (BPE) lookups, which often lack a clear mathematical inductive bias and leave the embedding layer under-optimized. Our approach utilizes a product of byte and position one-hot encodings to construct fixed, structured token representations. By replacing BPE lookups with this byte-aware, compositional encoding and a small learned projection, we provide the model with a superior inductive bias and stronger empirical grounding from the first layer.
+
+To facilitate the growth of these models under a limited budget, we utilize a curated dataset of 400B tokens, primarily sourced from a mixture of the \textit{Dolma} pre-training corpus and the \textit{Sangraha} Indic dataset. Rather than training a static dense model, we implement a ``growth-based'' training strategy. We partition our data into four strategic stages to progressively scale our architecture:
+\begin{itemize}
+    \item \textbf{20B tokens:} Grow from 1B Dense to 3B MoE
+    \item \textbf{40B tokens:} Scale to 8B MoE 
+    \item \textbf{100B tokens:} Transition toward flagship scaling
+    \item \textbf{240B tokens:} Final 70B MoE convergence
+\end{itemize}
+
+
+
+This curriculum-style scaling, supported by established growth techniques \cite{RefC2023, RefD2024}, ensures that each stage of the model benefits from the representations learned in the previous, smaller iterations, drastically reducing the total $TFLOPS$ required to reach convergence.
