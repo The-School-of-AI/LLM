@@ -156,3 +156,6 @@ experiments/3_coreset_engineering/notebooks/data/
 # Translations
 *.mo
 *.pot
+
+# ruff cache
+.ruff_cache

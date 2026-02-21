@@ -37,7 +37,7 @@ fi
 # These can be overridden by environment variables (e.g. for CI/CD)
 BRANCH_NAME="${BRANCH_NAME:-p3/feat/stage-wise-coreset-selection_v2}"
 S3_BUCKET="${S3_BUCKET:?ERROR: S3_BUCKET is not set. Export it before running: export S3_BUCKET=your-bucket-name}"
-S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/source=ncert/}"
+S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/}"
 NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"
 TOTAL_TOKENS="${TOTAL_TOKENS:-4523096944}"
