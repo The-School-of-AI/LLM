@@ -187,8 +187,8 @@ def pytorch_lucid_precondition_blockwise(
         exp_ii = exp_ii.masked_fill(~diag_mask, 0.0)
 
         Y[:, i:i_end, :] = torch.linalg.solve_triangular(
-            exp_ii, rhs, upper=False, unit_diagonal=True
-        )
+            exp_ii, rhs, upper=False)
+
 
     if multi_head:
         actual_B = Y.shape[0] // H
@@ -319,8 +319,8 @@ def triton_lucid_precondition(
         exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
 
         Y[:, i:i_end, :] = torch.linalg.solve_triangular(
-            exp_ii, rhs, upper=False, unit_diagonal=True
-        )
+            exp_ii, rhs, upper=False)
+
 
     if multi_head:
         Y = Y.reshape(B, H, T, D).permute(0, 2, 1, 3).contiguous()
