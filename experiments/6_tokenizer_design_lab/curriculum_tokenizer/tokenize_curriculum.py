@@ -26,10 +26,10 @@ import struct
 import sys
 import tempfile
 import time
+import shutil
 from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
 import numpy as np
 import pandas as pd
 from datasets import Dataset, load_dataset
@@ -48,8 +48,11 @@ SPDL_IDX_HEADER_FMT = "<II"  # version + dtype_size = 8 bytes
 
 
 # ---------------------------------------------------------------------------
-# S3 Helpers
+# S3 / Local File Helpers
 # ---------------------------------------------------------------------------
+
+def is_s3_uri(uri: str) -> bool:
+    return uri.startswith("s3://")
 
 def parse_s3_url(url: str) -> Tuple[str, str]:
     """Parse s3://bucket/key -> (bucket, key)."""
@@ -58,38 +61,67 @@ def parse_s3_url(url: str) -> Tuple[str, str]:
         raise ValueError(f"Invalid S3 URL: {url}")
     return parsed.netloc, parsed.path.lstrip("/")
 
+def download_to_temp(s3, uri: str, tmp_dir: str) -> str:
+    """Download an S3 object to a local temp file, or return local path if already local."""
+    if is_s3_uri(uri):
+        if s3 is None:
+            import boto3
+            s3 = boto3.client("s3")
+        bucket, key = parse_s3_url(uri)
+        basename = os.path.basename(key)
+        local_path = os.path.join(tmp_dir, basename)
+        s3.download_file(bucket, key, local_path)
+        return local_path
+    return uri
 
-def s3_download_to_temp(s3, bucket: str, key: str, tmp_dir: str) -> str:
-    """Download an S3 object to a local temp file, return local path."""
-    basename = os.path.basename(key)
-    local_path = os.path.join(tmp_dir, basename)
-    s3.download_file(bucket, key, local_path)
-    return local_path
+def upload_file(s3, local_path: str, dst_uri: str) -> None:
+    """Upload a local file to S3 or copy to local destination."""
+    if is_s3_uri(dst_uri):
+        if s3 is None:
+            import boto3
+            s3 = boto3.client("s3")
+        bucket, key = parse_s3_url(dst_uri)
+        s3.upload_file(local_path, bucket, key)
+    else:
+        os.makedirs(os.path.dirname(dst_uri), exist_ok=True)
+        shutil.copy2(local_path, dst_uri)
 
+def key_exists(s3, uri: str) -> bool:
+    """Check if an S3 key or local file/dir exists."""
+    if is_s3_uri(uri):
+        if s3 is None:
+            import boto3
+            s3 = boto3.client("s3")
+        bucket, key = parse_s3_url(uri)
+        try:
+            s3.head_object(Bucket=bucket, Key=key)
+            return True
+        except s3.exceptions.ClientError:
+            return False
+    return os.path.exists(uri)
 
-def s3_upload_file(s3, local_path: str, bucket: str, key: str) -> None:
-    """Upload a local file to S3."""
-    s3.upload_file(local_path, bucket, key)
-
-
-def s3_key_exists(s3, bucket: str, key: str) -> bool:
-    """Check if an S3 key exists."""
-    try:
-        s3.head_object(Bucket=bucket, Key=key)
-        return True
-    except s3.exceptions.ClientError:
-        return False
-
-
-def s3_list_parquet_files(s3, bucket: str, prefix: str) -> List[str]:
-    """List all .parquet files under a prefix."""
-    paginator = s3.get_paginator("list_objects_v2")
+def list_parquet_files(s3, uri: str) -> List[str]:
+    """List all .parquet files under an S3 prefix or a local folder."""
     files = []
-    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith(".parquet"):
-                files.append(f"s3://{bucket}/{key}")
+    if is_s3_uri(uri):
+        if s3 is None:
+            import boto3
+            s3 = boto3.client("s3")
+        bucket, prefix = parse_s3_url(uri)
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key.endswith(".parquet"):
+                    files.append(f"s3://{bucket}/{key}")
+    else:
+        if os.path.isfile(uri) and uri.endswith(".parquet"):
+            files.append(uri)
+        elif os.path.isdir(uri):
+            for root, _, filenames in os.walk(uri):
+                for filename in filenames:
+                    if filename.endswith(".parquet"):
+                        files.append(os.path.join(root, filename).replace("\\", "/"))
     return files
 
 
@@ -137,8 +169,7 @@ class ShardWriter:
     def __init__(
         self,
         s3_client,
-        dst_bucket: str,
-        domain_prefix: str,
+        dst_uri: str,
         block_size: int,
         shard_size_mb: int,
         tmp_dir: str,
@@ -147,8 +178,7 @@ class ShardWriter:
         eos_token_id: int,
     ):
         self.s3 = s3_client
-        self.dst_bucket = dst_bucket
-        self.domain_prefix = domain_prefix.rstrip("/")
+        self.dst_uri = dst_uri.rstrip("/")
         self.block_size = block_size
         self.tmp_dir = tmp_dir
         self.vocab_size = vocab_size
@@ -177,12 +207,12 @@ class ShardWriter:
             return None
 
         shard_name = f"shard_{self.shard_idx:03d}"
-        s3_prefix = f"{self.domain_prefix}/{shard_name}"
+        target_prefix = f"{self.dst_uri}/{shard_name}"
         num_blocks = len(self.accumulated_blocks)
 
         # Skip if shard already exists (resumability)
-        meta_key = f"{s3_prefix}/metadata.json"
-        if s3_key_exists(self.s3, self.dst_bucket, meta_key):
+        meta_key = f"{target_prefix}/metadata.json"
+        if key_exists(self.s3, meta_key):
             print(f"    [SKIP] {shard_name} already exists in S3")
             self.shard_idx += 1
             self.accumulated_blocks = []
@@ -233,10 +263,10 @@ class ShardWriter:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
-        # Upload to S3
-        s3_upload_file(self.s3, bin_path, self.dst_bucket, f"{s3_prefix}/tokens.bin")
-        s3_upload_file(self.s3, idx_path, self.dst_bucket, f"{s3_prefix}/tokens.idx")
-        s3_upload_file(self.s3, meta_path, self.dst_bucket, f"{s3_prefix}/metadata.json")
+        # Upload to S3 or copy locally
+        upload_file(self.s3, bin_path, f"{target_prefix}/tokens.bin")
+        upload_file(self.s3, idx_path, f"{target_prefix}/tokens.idx")
+        upload_file(self.s3, meta_path, f"{target_prefix}/metadata.json")
 
         # Cleanup temp files
         for p in (bin_path, idx_path, meta_path):
@@ -272,24 +302,22 @@ class ShardWriter:
 def process_coreset_file(
     s3_client,
     coreset_uri: str,
-    dst_bucket: str,
-    dst_prefix: str,
+    dst_base_uri: str,
     tokenizer: Any,
     args: argparse.Namespace,
     tmp_dir: str,
 ) -> dict:
     """Process a single coreset parquet file."""
     
-    filename = os.path.basename(urlparse(coreset_uri).path)
+    filename = os.path.basename(urlparse(coreset_uri).path) if is_s3_uri(coreset_uri) else os.path.basename(coreset_uri)
     # Output folder = filename without extension (e.g. "batch001")
     coreset_name = os.path.splitext(filename)[0]
     
     print(f"\nProcessing Coreset: {filename}")
-    print(f"Output folder: s3://{dst_bucket}/{dst_prefix}/{coreset_name}/")
+    print(f"Output folder: {dst_base_uri.rstrip('/')}/{coreset_name}/")
 
-    # Download Coreset
-    bucket, key = parse_s3_url(coreset_uri)
-    local_path = s3_download_to_temp(s3_client, bucket, key, tmp_dir)
+    # Download Coreset (or use locally)
+    local_path = download_to_temp(s3_client, coreset_uri, tmp_dir)
     
     try:
         df = pd.read_parquet(local_path)
@@ -297,7 +325,7 @@ def process_coreset_file(
         print(f"ERROR: Failed to read parquet {filename}: {e}")
         return {}
     finally:
-        if os.path.exists(local_path):
+        if is_s3_uri(coreset_uri) and os.path.exists(local_path):
             os.remove(local_path)
 
     # Verify columns
@@ -311,8 +339,7 @@ def process_coreset_file(
     # Initialize Writer for this coreset file
     writer = ShardWriter(
         s3_client=s3_client,
-        dst_bucket=dst_bucket,
-        domain_prefix=f"{dst_prefix.rstrip('/')}/{coreset_name}",
+        dst_uri=f"{dst_base_uri.rstrip('/')}/{coreset_name}",
         block_size=args.block_size,
         shard_size_mb=args.shard_size_mb,
         tmp_dir=tmp_dir,
@@ -332,16 +359,20 @@ def process_coreset_file(
     
     for src_url, group in grouped_sources:
         try:
-            src_bucket, src_key = parse_s3_url(src_url)
+            if is_s3_uri(src_url):
+                src_bucket, src_key = parse_s3_url(src_url)
+                basename = os.path.basename(src_key)
+            else:
+                basename = os.path.basename(src_url)
         except ValueError:
             print(f"  [WARN] Skipping invalid source URL: {src_url}")
             continue
 
         valid_ids = set(group[args.coreset_id_col].unique())
-        print(f"  Fetching {os.path.basename(src_key)} ({len(valid_ids)} target chunks)... ", end="", flush=True)
+        print(f"  Fetching {basename} ({len(valid_ids)} target chunks)... ", end="", flush=True)
 
         # Download source parquet
-        local_src = s3_download_to_temp(s3_client, src_bucket, src_key, tmp_dir)
+        local_src = download_to_temp(s3_client, src_url, tmp_dir)
         t0 = time.perf_counter()
 
         try:
@@ -395,7 +426,7 @@ def process_coreset_file(
         except Exception as e:
             print(f"ERROR: {e}")
         finally:
-            if os.path.exists(local_src):
+            if is_s3_uri(src_url) and os.path.exists(local_src):
                 os.remove(local_src)
 
     if buffer:
@@ -437,9 +468,8 @@ def parse_args():
     p = argparse.ArgumentParser(description="S3 Curriculum Tokenizer")
     
     # Paths
-    p.add_argument("--coreset-uri", required=True, help="S3 URI to coreset parquet file OR folder prefix")
-    p.add_argument("--dst-bucket", required=True, help="Destination bucket")
-    p.add_argument("--dst-prefix", required=True, help="Destination prefix")
+    p.add_argument("--coreset-uri", required=True, help="S3 URI or local path to coreset parquet file OR folder prefix")
+    p.add_argument("--dst-uri", required=True, help="Destination S3 URI or local prefix")
     p.add_argument("--tokenizer-path", default=None, help="Tokenizer path")
     
     # Column mappings
@@ -463,15 +493,22 @@ def main():
     args = parse_args()
     
     # Setup
-    s3 = boto3.client("s3")
+    s3 = None
+    if is_s3_uri(args.coreset_uri) or getattr(args, "dst_uri", "").startswith("s3://"):
+        try:
+            import boto3
+            s3 = boto3.client("s3")
+        except Exception as e:
+            print(f"S3 setup warn: {e}")
+
     tmp_base = args.tmp_dir or tempfile.gettempdir()
     tmp_dir = os.path.join(tmp_base, "tokenize_curriculum_tmp")
     os.makedirs(tmp_dir, exist_ok=True)
     
     print("="*70)
-    print("S3 Curriculum Tokenizer (Multi-File)")
+    print("Curriculum Tokenizer (Multi-File)")
     print(f"Coreset Input: {args.coreset_uri}")
-    print(f"Output Base:   s3://{args.dst_bucket}/{args.dst_prefix}")
+    print(f"Output Base:   {args.dst_uri}")
     print("="*70)
 
     # Load Tokenizer
@@ -479,16 +516,12 @@ def main():
     print(f"Vocab size: {len(tokenizer):,}")
 
     # Determine Input Files (Single File vs Directory)
-    bucket, key = parse_s3_url(args.coreset_uri)
-    target_files = []
-    
-    # Check if key ends in .parquet -> single file
-    if key.endswith(".parquet"):
-        target_files.append(args.coreset_uri)
+    if args.coreset_uri.endswith(".parquet"):
+        target_files = [args.coreset_uri]
     else:
-        # Assume prefix -> list files
-        print(f"Listing parquet files under s3://{bucket}/{key} ...")
-        target_files = s3_list_parquet_files(s3, bucket, key)
+        # Assume prefix/folder -> list files
+        print(f"Listing parquet files under {args.coreset_uri} ...")
+        target_files = list_parquet_files(s3, args.coreset_uri)
     
     print(f"Found {len(target_files)} coreset files to process.")
     
@@ -498,7 +531,7 @@ def main():
         for idx, uri in enumerate(target_files):
             print(f"\n--- File {idx+1}/{len(target_files)} ---")
             stats = process_coreset_file(
-                s3, uri, args.dst_bucket, args.dst_prefix,
+                s3, uri, args.dst_uri,
                 tokenizer, args, tmp_dir
             )
             if stats:
@@ -521,10 +554,10 @@ def main():
         with open(manifest_path, "w") as f:
             json.dump(manifest, f, indent=2)
             
-        manifest_key = os.path.join(args.dst_prefix, "manifest.json").replace("\\", "/")
-        s3_upload_file(s3, manifest_path, args.dst_bucket, manifest_key)
+        manifest_uri = f"{args.dst_uri.rstrip('/')}/manifest.json"
+        upload_file(s3, manifest_path, manifest_uri)
         
-        print(f"\nSaved global manifest to s3://{args.dst_bucket}/{manifest_key}")
+        print(f"\nSaved global manifest to {manifest_uri}")
         print("Done.")
 
     finally:
