@@ -195,13 +195,13 @@ Run these on 8 separate machines/processes, changing only `--shard-id` and `--ch
 python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
   --input-path /path/to/data.jsonl --input-format jsonl --stages 1B \
   --num-shards 8 --shard-id 0 --checkpoint-dir output/checkpoints_1B/shard000 \
-  --batch-size 10000 --total-input-tokens-estimate <TOTAL_TOKENS>
+  --batch-size 30000 --total-input-tokens-estimate <TOTAL_TOKENS>
 
 # shard 1
 python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
   --input-path /path/to/data.jsonl --input-format jsonl --stages 1B \
   --num-shards 8 --shard-id 1 --checkpoint-dir output/checkpoints_1B/shard001 \
-  --batch-size 10000 --total-input-tokens-estimate <TOTAL_TOKENS>
+  --batch-size 30000 --total-input-tokens-estimate <TOTAL_TOKENS>
 
 # ... repeat for shard-id 2..7 with distinct checkpoint-dir
 ```
@@ -220,6 +220,7 @@ Use this if it is your first time running the job or if you want to wipe previou
 bash shard.sh \
   --num-shards 8 \
   --input-path "data/combined/bands/" \
+  --batch-size 30000 \
   --total-tokens 4523096944 \
   --checkpoint-every-n-batches 10
 ```
@@ -232,6 +233,7 @@ Use this if your job was interrupted (e.g., manual kill or crash). It will **kee
 bash shard.sh \
   --num-shards 8 \
   --input-path "data/combined/bands/" \
+  --batch-size 30000 \
   --total-tokens 4523096944 \
   --checkpoint-every-n-batches 10 \
   --resume
@@ -241,9 +243,17 @@ bash shard.sh \
 
 - `--resume`: Skips cleaning `output/` and tells the builder to jump to the last saved checkpoint.
 - `--num-shards`: Controls how many background processes to spawn.
+- `--batch-size`: Pass-through batch size for `coreset_builder.py` (default: `30000`).
+  - **What it does**: Number of rows/chunks read and processed per selection batch.
+  - **Why tune it**: Controls memory pressure vs throughput; larger batches reduce loop overhead but increase RAM usage.
 - `--checkpoint-every-n-batches`: Pass-through checkpoint cadence for `coreset_builder.py` (default: `1`).
+  - **What it does**: Writes a checkpoint every N successful batches (and always writes one at stage end).
+  - **Why tune it**: Reduces checkpoint write amplification on long runs while preserving resumability.
 
-For most local/manual runs via `shard.sh`, set this explicitly (for example `5` or `10`) to reduce checkpoint write overhead while preserving resumability.
+For most local/manual runs via `shard.sh`, set both explicitly:
+
+- `--batch-size` based on memory headroom (e.g., `30000` start; increase only if RAM allows).
+- `--checkpoint-every-n-batches` to reduce checkpoint churn (e.g., `5` or `10`).
 
 ### Optional: Band Inference for Curriculum Eligibility
 
@@ -333,6 +343,7 @@ All parameters are configured via environment variables (with defaults):
 | `NUM_SHARDS` | `8` | Number of parallel shards |
 | `STAGES` | `1B` | Space-separated stage list (e.g., `"1B 3B 8B 70B"`) |
 | `TOTAL_TOKENS` | `4523096944` | Total token count of the input dataset (must match `S3_INPUT_PATH`) |
+| `BATCH_SIZE` | `30000` | Passed to `shard.sh --batch-size`; controls rows/chunks processed per batch |
 | `CHECKPOINT_EVERY_N_BATCHES` | `1` | Streaming checkpoint cadence (`1` = every batch; `N>1` = every N batches) |
 | `RESUME` | `false` | Set to `true` to resume from last checkpoint (skips output cleanup) |
 | `BRANCH_NAME` | `p3/feat/stage-wise-coreset-selection_v2` | Git branch to clone (only used when repo setup is not skipped) |
@@ -348,6 +359,7 @@ S3_BUCKET=t2-datacurriculum-353 \
 NUM_SHARDS=8 \
 STAGES="1B" \
 TOTAL_TOKENS=4523096944 \
+BATCH_SIZE=30000 \
 CHECKPOINT_EVERY_N_BATCHES=10 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=false \
@@ -361,6 +373,7 @@ S3_BUCKET=t2-datacurriculum-353 \
 NUM_SHARDS=16 \
 STAGES="1B 3B 8B 70B" \
 TOTAL_TOKENS=4523096944 \
+BATCH_SIZE=30000 \
 CHECKPOINT_EVERY_N_BATCHES=5 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=true \
@@ -381,6 +394,7 @@ export S3_BUCKET=t2-datacurriculum-353
 export NUM_SHARDS=8
 export STAGES="1B 3B 8B 70B"
 export TOTAL_TOKENS=4523096944
+export BATCH_SIZE=30000
 export CHECKPOINT_EVERY_N_BATCHES=10
 ./commands.sh
 # Pipeline runs in background via nohup. Check output/logs for progress.
@@ -418,7 +432,7 @@ Common environment variables:
 python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
   --input-path s3://my-bucket/datasets/chunks.jsonl --input-format jsonl \
   --checkpoint-dir output/checkpoints_s3 \
-  --batch-size 10000 --total-input-tokens-estimate <TOTAL_TOKENS>
+  --batch-size 30000 --total-input-tokens-estimate <TOTAL_TOKENS>
 ```
 
 - Prefix containing many `*.jsonl` objects (recommended for throughput + file-level sharding):
@@ -427,7 +441,7 @@ python coreset_builder.py --config config/pipeline.yaml --curriculum config/curr
 python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
   --input-path s3://my-bucket/datasets/jsonl/ --input-format jsonl \
   --num-shards 8 --shard-id 0 --checkpoint-dir output/checkpoints_1B/shard000 \
-  --batch-size 10000 --total-input-tokens-estimate <TOTAL_TOKENS>
+  --batch-size 30000 --total-input-tokens-estimate <TOTAL_TOKENS>
 ```
 
 Note: JSONL S3 streaming requires `boto3`.
@@ -443,7 +457,7 @@ Parquet streaming uses `pyarrow.dataset` and can read from:
 python coreset_builder.py --config config/pipeline.yaml --curriculum config/curriculum.yaml \
   --input-path s3://my-bucket/datasets/parquet/ --input-format parquet \
   --num-shards 8 --shard-id 0 --checkpoint-dir output/checkpoints_1B/shard000 \
-  --batch-size 10000 --total-input-tokens-estimate <TOTAL_TOKENS>
+  --batch-size 30000 --total-input-tokens-estimate <TOTAL_TOKENS>
 ```
 
 For very large datasets (hundreds of GB to TB+), prefer many S3 objects under a prefix rather than a single huge file so workers can shard by file and avoid redundant reads.
