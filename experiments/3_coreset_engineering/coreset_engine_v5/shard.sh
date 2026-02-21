@@ -25,6 +25,7 @@ CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
 BAND_SCORE_SOURCE="auto"
+BATCH_SIZE=80000
 CHECKPOINT_EVERY_N_BATCHES=1
 TOTAL_TOKENS=""
 RESUME=false
@@ -47,6 +48,7 @@ usage() {
   echo "                     Values: none | infer_if_missing | infer_if_ineligible | force"
   echo "  --band-score-source Band score source (default: auto)"
   echo "                     Values: auto | band_score | difficulty_score | band_p_max | band_p_argmax | band_p_B0..band_p_B5"
+  echo "  --batch-size        Rows/chunks per batch in streaming mode (default: 80000)"
   echo "  --checkpoint-every-n-batches  Checkpoint cadence passed to coreset_builder (default: 1)"
   echo "  --resume            Resume from last checkpoints (don't clean output dirs)"
   exit 1
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --checkpoint-base)  CHECKPOINT_BASE="$2";  shift 2 ;;
     --band-inference)   BAND_INFERENCE="$2";   shift 2 ;;
     --band-score-source) BAND_SCORE_SOURCE="$2"; shift 2 ;;
+    --batch-size)       BATCH_SIZE="$2";       shift 2 ;;
     --checkpoint-every-n-batches) CHECKPOINT_EVERY_N_BATCHES="$2"; shift 2 ;;
     --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
     --resume)           RESUME=true;           shift 1 ;;
@@ -85,6 +88,7 @@ echo "  Input        : $INPUT_PATH ($INPUT_FORMAT)"
 echo "  Config       : $CONFIG"
 echo "  Curriculum   : $CURRICULUM"
 echo "  Checkpoints  : $CHECKPOINT_BASE"
+echo "  Batch Size   : $BATCH_SIZE"
 echo "  Band Infer   : $BAND_INFERENCE"
 echo "  Band Score   : $BAND_SCORE_SOURCE"
 echo "  Ckpt Every N : $CHECKPOINT_EVERY_N_BATCHES"
@@ -177,6 +181,7 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
       --curriculum "$CURRICULUM" \
       --input-path "$INPUT_PATH" \
       --input-format "$INPUT_FORMAT" \
+      --batch-size "$BATCH_SIZE" \
       --stages $STAGES \
       --num-shards "$NUM_SHARDS" \
       --shard-id "$SHARD_ID" \

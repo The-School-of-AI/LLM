@@ -359,7 +359,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
         *,
         input_path: str,
         input_format: str,
-        batch_size: int = 10_000,
+        batch_size: int = 80000,
         checkpoint_dir: Optional[str] = None,
         checkpoint_every_n_batches: int = 1,
         total_input_tokens_estimate: Optional[int] = None,
@@ -1495,7 +1495,7 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=10_000,
+        default=80000,
         help="Rows/chunks per batch in streaming mode",
     )
     parser.add_argument(
