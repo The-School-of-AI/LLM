@@ -8,6 +8,40 @@ export interface RunInfo {
   last_event_time: number;
   latest_step: number;
   is_active: boolean;
+  status?: string;
+  model_name?: string;
+  model_size?: string;
+  source?: string;
+  cluster?: string;
+}
+
+export interface CheckpointRecord {
+  step: number;
+  s3_key: string;
+  loss: number | null;
+  tag: string;
+  is_protected: boolean;
+  status: string;
+  duration_s: number | null;
+  size_bytes: number | null;
+  host: string;
+  timestamp: number;
+}
+
+export interface TrainingEvent {
+  step: number;
+  event_type: string;
+  severity: string;
+  message: string;
+  host: string;
+  rank: number;
+  timestamp: number;
+}
+
+export interface MetricArrayLatest {
+  step: number;
+  keys: string[];
+  values: number[];
 }
 
 /** Time range filter */

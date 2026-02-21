@@ -1,5 +1,6 @@
-from cache import cache
 from fastapi import APIRouter
+
+from cache import cache
 
 router = APIRouter()
 

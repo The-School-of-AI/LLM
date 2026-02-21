@@ -2,11 +2,12 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from db import close_client
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from db import close_client
 from poller import poll_loop, runs_meta_loop
-from routes import checkpoints, metrics, runs, stream
+from routes import checkpoints, events, metrics, runs, stream
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +43,7 @@ app.include_router(stream.router)
 app.include_router(runs.router)
 app.include_router(metrics.router)
 app.include_router(checkpoints.router)
+app.include_router(events.router)
 
 
 @app.get("/health")

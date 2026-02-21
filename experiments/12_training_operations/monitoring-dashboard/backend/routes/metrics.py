@@ -1,9 +1,45 @@
 from typing import Optional
 
-from db import get_client
 from fastapi import APIRouter, Query
 
+from db import get_client
+
 router = APIRouter()
+
+
+@router.get("/metric_arrays/{run_id}")
+async def get_metric_array(
+    run_id: str,
+    metric: str = Query(..., description="Metric name"),
+    from_step: int = Query(0, description="Start step"),
+    to_step: int = Query(10_000_000, description="End step"),
+):
+    client = get_client()
+    result = client.query(
+        "SELECT step, keys, values, event_time "
+        "FROM metric_arrays "
+        "WHERE run_id = %(run_id)s AND metric = %(metric)s "
+        "  AND step >= %(from_step)s AND step <= %(to_step)s "
+        "ORDER BY step DESC LIMIT 1",
+        parameters={
+            "run_id": run_id,
+            "metric": metric,
+            "from_step": from_step,
+            "to_step": to_step,
+        },
+    )
+    if not result.result_rows:
+        return {"run_id": run_id, "metric": metric, "latest": None}
+    row = result.result_rows[0]
+    return {
+        "run_id": run_id,
+        "metric": metric,
+        "latest": {
+            "step": row[0],
+            "keys": list(row[1]),
+            "values": [float(v) for v in row[2]],
+        },
+    }
 
 
 @router.get("/metrics/{run_id}")
@@ -45,11 +81,7 @@ async def get_metrics(
         "run_id": run_id,
         "metric": metric,
         "points": [
-            [
-                row[0],
-                float(row[1]),
-                row[2].timestamp() if hasattr(row[2], "timestamp") else float(row[2]),
-            ]
+            [row[0], float(row[1]), row[2].timestamp() if hasattr(row[2], "timestamp") else float(row[2])]
             for row in result.result_rows
         ],
     }

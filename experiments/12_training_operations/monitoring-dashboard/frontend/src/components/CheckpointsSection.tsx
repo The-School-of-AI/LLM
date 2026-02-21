@@ -1,28 +1,14 @@
-import { useMemo } from 'react'
-import { useCheckpointMetrics, useMetricsByPrefix, useLatestMetric } from '../hooks/useMetricData'
+import { useMetricsByPrefix } from '../hooks/useMetricData'
+import { useCheckpoints } from '../hooks/useMetricData'
+import { useMetricsStore } from '../stores/metricsStore'
 import { InfoBadge } from './InfoBadge'
+import { useMemo } from 'react'
 
 export function CheckpointsSection() {
-  const checkpoints = useCheckpointMetrics()
+  const selectedRuns = useMetricsStore(s => s.selectedRuns)
+  const checkpoints = useCheckpoints(selectedRuns)
 
-  const ckptTable = useMemo(() => {
-    const byStep: Record<number, Record<string, number>> = {}
-    for (const cp of checkpoints) {
-      if (!byStep[cp.step]) byStep[cp.step] = {}
-      byStep[cp.step][cp.metric] = cp.value
-    }
-    return Object.entries(byStep)
-      .map(([step, metrics]) => ({ step: parseInt(step), metrics }))
-      .sort((a, b) => b.step - a.step)
-  }, [checkpoints])
-
-  const ckptValLoss = useLatestMetric('checkpoint_val_loss')
-  const ckptGradNorm = useLatestMetric('checkpoint_grad_norm')
-  const ckptLR = useLatestMetric('checkpoint_lr')
-  const ckptPerplexity = useLatestMetric('checkpoint_perplexity')
-  const ckptSaveDuration = useLatestMetric('checkpoint_save_duration')
-  const ckptDiskUsage = useLatestMetric('checkpoint_disk_usage')
-  const ckptTokensSeen = useLatestMetric('checkpoint_tokens_seen')
+  const latest = checkpoints[0] ?? null
 
   const benchmarkMetrics = useMetricsByPrefix('checkpoint_benchmark_')
 
@@ -31,14 +17,15 @@ export function CheckpointsSection() {
     return names.map(name => {
       const data = benchmarkMetrics[`checkpoint_benchmark_${name}`]
       return {
-        name: name.replace('_', '-').toUpperCase().replace('ARC-C', 'ARC-C').replace('HELLASWAG', 'HellaSwag').replace('WINOGRANDE', 'WinoGrande').replace('TRUTHFULQA', 'TruthfulQA').replace('HUMANEVAL', 'HumanEval').replace('GSM8K', 'GSM8K').replace('MMLU', 'MMLU'),
+        name: name.replace('_', '-').toUpperCase()
+          .replace('ARC-C', 'ARC-C').replace('HELLASWAG', 'HellaSwag')
+          .replace('WINOGRANDE', 'WinoGrande').replace('TRUTHFULQA', 'TruthfulQA')
+          .replace('HUMANEVAL', 'HumanEval').replace('GSM8K', 'GSM8K').replace('MMLU', 'MMLU'),
         value: data?.value ?? null,
         step: data?.step ?? null,
       }
     }).filter(b => b.value !== null)
   }, [benchmarkMetrics])
-
-  const latestStep = ckptTable.length > 0 ? ckptTable[0].step : null
 
   return (
     <>
@@ -53,27 +40,40 @@ export function CheckpointsSection() {
             <span className="pt">Checkpoint List</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="tag tc">REGISTRY</span>
-              <InfoBadge text="All saved checkpoints with their metrics. Shows run, metric name, step, value, and save time." />
+              <InfoBadge text="All saved checkpoints. Shows step, S3 key, loss, tag, status, duration, and size." />
             </div>
           </div>
           <div className="pb np">
             <div className="tscr">
               <table className="dt">
                 <thead>
-                  <tr><th>Run</th><th>Metric</th><th>Step</th><th>Value</th><th>Time</th></tr>
+                  <tr>
+                    <th>Step</th><th>S3 Key</th><th>Loss</th><th>Tag</th>
+                    <th>Status</th><th>Duration</th><th>Size</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {checkpoints.length > 0 ? checkpoints.slice(0, 50).map((cp, i) => (
                     <tr key={i}>
-                      <td style={{ color: 'var(--g)' }}>{cp.runId.slice(0, 12)}</td>
-                      <td>{cp.metric.replace('checkpoint_', '')}</td>
                       <td>{cp.step.toLocaleString()}</td>
-                      <td>{cp.value.toFixed(4)}</td>
-                      <td>{new Date(cp.timestamp * 1000).toLocaleTimeString()}</td>
+                      <td style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                        {cp.s3_key ? '…' + cp.s3_key.slice(-30) : '—'}
+                      </td>
+                      <td>{cp.loss != null ? cp.loss.toFixed(4) : '—'}</td>
+                      <td>{cp.tag || '—'}</td>
+                      <td style={{ color: cp.status === 'saved' ? 'var(--g)' : 'var(--o)' }}>{cp.status}</td>
+                      <td>{cp.duration_s != null ? `${cp.duration_s.toFixed(1)}s` : '—'}</td>
+                      <td>
+                        {cp.size_bytes != null
+                          ? cp.size_bytes >= 1e9
+                            ? `${(cp.size_bytes / 1e9).toFixed(1)} GB`
+                            : `${(cp.size_bytes / 1e6).toFixed(1)} MB`
+                          : '—'}
+                      </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                         Awaiting checkpoint data
                       </td>
                     </tr>
@@ -87,27 +87,52 @@ export function CheckpointsSection() {
         <div className="pnl">
           <div className="ph">
             <span className="pt">
-              Checkpoint Stats{latestStep ? ` — step ${latestStep.toLocaleString()}` : ''}
+              Checkpoint Stats{latest ? ` — step ${latest.step.toLocaleString()}` : ''}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="tag tg">LATEST</span>
-              <InfoBadge text="Key metrics from the most recent checkpoint: save time, disk usage, grad norm, LR, perplexity, and more." />
+              <InfoBadge text="Key metrics from the most recent checkpoint: loss, save duration, and size." />
             </div>
           </div>
           <div className="pb">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { lbl: 'Save Duration', data: ckptSaveDuration, fmt: (v: number) => `${v.toFixed(1)}s` },
-                { lbl: 'Disk Usage', data: ckptDiskUsage, fmt: (v: number) => v >= 1e9 ? `${(v / 1e9).toFixed(1)} GB` : `${(v / 1e6).toFixed(1)} MB` },
-                { lbl: 'Grad Norm', data: ckptGradNorm, fmt: (v: number) => v.toFixed(2) },
-                { lbl: 'Learning Rate', data: ckptLR, fmt: (v: number) => v.toExponential(1) },
-                { lbl: 'Tokens Seen', data: ckptTokensSeen, fmt: (v: number) => v >= 1e12 ? `${(v / 1e12).toFixed(2)}T` : v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : `${(v / 1e6).toFixed(1)}M` },
-                { lbl: 'Perplexity', data: ckptPerplexity, fmt: (v: number) => v.toFixed(2) },
-                { lbl: 'Val Loss', data: ckptValLoss, fmt: (v: number) => v.toFixed(3) },
+                {
+                  lbl: 'Loss',
+                  val: latest?.loss != null ? latest.loss.toFixed(4) : '—',
+                },
+                {
+                  lbl: 'Duration',
+                  val: latest?.duration_s != null ? `${latest.duration_s.toFixed(1)}s` : '—',
+                },
+                {
+                  lbl: 'Size',
+                  val: latest?.size_bytes != null
+                    ? latest.size_bytes >= 1e9
+                      ? `${(latest.size_bytes / 1e9).toFixed(1)} GB`
+                      : `${(latest.size_bytes / 1e6).toFixed(1)} MB`
+                    : '—',
+                },
+                {
+                  lbl: 'Status',
+                  val: latest?.status ?? '—',
+                },
+                {
+                  lbl: 'Tag',
+                  val: latest?.tag || '—',
+                },
+                {
+                  lbl: 'Protected',
+                  val: latest != null ? (latest.is_protected ? 'Yes' : 'No') : '—',
+                },
+                {
+                  lbl: 'Host',
+                  val: latest?.host || '—',
+                },
               ].map(s => (
                 <div className="info-box" key={s.lbl}>
                   <div className="lbl">{s.lbl}</div>
-                  <div className="val">{s.data ? s.fmt(s.data.value) : '—'}</div>
+                  <div className="val">{s.val}</div>
                 </div>
               ))}
             </div>

@@ -1,5 +1,4 @@
-import { useMemo } from 'react'
-import { useLatestMetric } from '../hooks/useMetricData'
+import { useLatestMetric, useEvents } from '../hooks/useMetricData'
 import { useMetricsStore } from '../stores/metricsStore'
 import { InfoBadge } from './InfoBadge'
 
@@ -11,8 +10,8 @@ export function TimelineSection() {
   const timeTo70B = useLatestMetric('time_to_70b')
   const timeToSFT = useLatestMetric('time_to_sft')
 
-  const allRuns = useMetricsStore(s => s.allRuns)
   const selectedRuns = useMetricsStore(s => s.selectedRuns)
+  const events = useEvents(selectedRuns, 50)
 
   const b1Done = timeToB1 && timeToB1.value >= 1
   const b1Pct = timeToB1 ? Math.min(timeToB1.value * 100, 100) : 0
@@ -25,20 +24,11 @@ export function TimelineSection() {
     { label: '\u2192 SFT', data: timeToSFT, bg: 'var(--pk)', color: 'var(--pk)' },
   ]
 
-  const events = useMemo(() => {
-    const evts: Array<{ color: string; time: string; text: string }> = []
-    for (const run of allRuns) {
-      if (selectedRuns.includes(run.run_id)) {
-        evts.push({
-          color: run.is_active ? 'var(--g)' : 'var(--text-muted)',
-          time: new Date(run.last_event_time * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC',
-          text: `Run ${run.run_id} ${run.is_active ? 'active' : 'inactive'} at step ${run.latest_step.toLocaleString()}`,
-        })
-      }
-    }
-    evts.sort((a, b) => b.time.localeCompare(a.time))
-    return evts.slice(0, 20)
-  }, [allRuns, selectedRuns])
+  function severityColor(severity: string): string {
+    if (severity === 'error') return 'var(--r)'
+    if (severity === 'warning') return 'var(--o)'
+    return 'var(--b)'
+  }
 
   return (
     <>
@@ -108,16 +98,29 @@ export function TimelineSection() {
             <span className="pt">Training Event Log</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="tag tb">TIMELINE</span>
-              <InfoBadge text="Chronological log of training events, run starts, and status changes from selected runs." />
+              <InfoBadge text="Chronological log of training events from the events table, with severity and message." />
             </div>
           </div>
           <div className="pb" style={{ overflowY: 'auto', maxHeight: 360 }}>
             {events.length > 0 ? events.map((e, i) => (
               <div className="tl-i" key={i}>
-                <div className="tl-d" style={{ background: e.color }} />
+                <div className="tl-d" style={{ background: severityColor(e.severity) }} />
                 <div>
-                  <div className="tl-t">{e.time}</div>
-                  <div className="tl-x">{e.text}</div>
+                  <div className="tl-t">
+                    {new Date(e.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19)} UTC
+                    {' '}
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 2,
+                      background: severityColor(e.severity) + '22',
+                      color: severityColor(e.severity),
+                      textTransform: 'uppercase',
+                    }}>
+                      {e.severity}
+                    </span>
+                    {' '}
+                    <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>{e.event_type}</span>
+                  </div>
+                  <div className="tl-x">{e.message}</div>
                 </div>
               </div>
             )) : (

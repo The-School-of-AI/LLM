@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMetricsStore } from '../stores/metricsStore'
-import type { Series } from '../types/metrics'
+import type { CheckpointRecord, MetricArrayLatest, Series, TrainingEvent } from '../types/metrics'
 
 /**
  * Get the latest value for a metric across all selected runs.
@@ -107,6 +107,97 @@ export function useCheckpointMetrics() {
     }
     return checkpoints.sort((a, b) => b.step - a.step)
   }, [runs, selectedRuns])
+}
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+
+/**
+ * Fetch checkpoint records for each selected run from the checkpoints table.
+ * Polls every 30 s.
+ */
+export function useCheckpoints(runIds: string[]): CheckpointRecord[] {
+  const [records, setRecords] = useState<CheckpointRecord[]>([])
+  const key = runIds.join(',')
+
+  useEffect(() => {
+    if (runIds.length === 0) { setRecords([]); return }
+    const fetch_ = async () => {
+      const results = await Promise.allSettled(
+        runIds.map(id => fetch(`${API_BASE}/checkpoints/${id}`).then(r => r.json()))
+      )
+      const all: CheckpointRecord[] = []
+      for (const r of results) {
+        if (r.status === 'fulfilled') all.push(...(r.value.checkpoints ?? []))
+      }
+      all.sort((a, b) => b.step - a.step)
+      setRecords(all)
+    }
+    fetch_()
+    const id = setInterval(fetch_, 30_000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  return records
+}
+
+/**
+ * Fetch training events for each selected run from the events table.
+ * Polls every 10 s.
+ */
+export function useEvents(runIds: string[], limit = 50): TrainingEvent[] {
+  const [events, setEvents] = useState<TrainingEvent[]>([])
+  const key = runIds.join(',')
+
+  useEffect(() => {
+    if (runIds.length === 0) { setEvents([]); return }
+    const fetch_ = async () => {
+      const results = await Promise.allSettled(
+        runIds.map(id =>
+          fetch(`${API_BASE}/events/${id}?limit=${limit}`).then(r => r.json())
+        )
+      )
+      const all: TrainingEvent[] = []
+      for (const r of results) {
+        if (r.status === 'fulfilled') all.push(...(r.value.events ?? []))
+      }
+      all.sort((a, b) => b.step - a.step)
+      setEvents(all.slice(0, limit))
+    }
+    fetch_()
+    const id = setInterval(fetch_, 10_000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, limit])
+
+  return events
+}
+
+/**
+ * Fetch the latest metric_array record for a single run + metric.
+ * Polls every 5 s.
+ */
+export function useMetricArray(runId: string, metric: string): MetricArrayLatest | null {
+  const [latest, setLatest] = useState<MetricArrayLatest | null>(null)
+
+  useEffect(() => {
+    if (!runId || !metric) { setLatest(null); return }
+    const fetch_ = async () => {
+      try {
+        const data = await fetch(
+          `${API_BASE}/metric_arrays/${runId}?metric=${encodeURIComponent(metric)}`
+        ).then(r => r.json())
+        setLatest(data.latest ?? null)
+      } catch {
+        // keep previous value on transient error
+      }
+    }
+    fetch_()
+    const id = setInterval(fetch_, 5_000)
+    return () => clearInterval(id)
+  }, [runId, metric])
+
+  return latest
 }
 
 /** Format a number for display */

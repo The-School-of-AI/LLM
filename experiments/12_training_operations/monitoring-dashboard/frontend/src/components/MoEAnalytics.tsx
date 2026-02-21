@@ -1,35 +1,66 @@
 import { useMemo } from 'react'
 import { MetricChart } from './PlotlyChart'
-import { useMetricsByPrefix } from '../hooks/useMetricData'
+import { useMetricsByPrefix, useMetricArray } from '../hooks/useMetricData'
+import { useMetricsStore } from '../stores/metricsStore'
 import { InfoBadge } from './InfoBadge'
 
 export function MoEAnalytics() {
-  const favouriteTokens = useMetricsByPrefix('moe_favourite_tokens')
+  const selectedRuns = useMetricsStore(s => s.selectedRuns)
+  const primaryRunId = selectedRuns[0] ?? ''
+
+  const favouriteTokensArray = useMetricArray(primaryRunId, 'moe_favourite_tokens')
+  const expertLoadArray = useMetricArray(primaryRunId, 'expert_load')
 
   const expertTokenData = useMemo(() => {
-    const defaultExperts = [
-      { n: 'Expert 0', c: '#a78bfa', t: [] as string[] },
-      { n: 'Expert 1', c: '#22d3ee', t: [] as string[] },
-      { n: 'Expert 2', c: '#f472b6', t: [] as string[] },
-      { n: 'Expert 3', c: '#3ecf8e', t: [] as string[] },
-      { n: 'Expert 4', c: '#f5a524', t: [] as string[] },
-      { n: 'Expert 5', c: '#4d9cf5', t: [] as string[] },
-      { n: 'Expert 6', c: '#fbbf24', t: [] as string[] },
-      { n: 'Expert 7', c: '#f55656', t: [] as string[] },
+    const experts = [
+      { n: 'Expert 0', c: '#a78bfa', t: [] as Array<{ token: string; weight: number }> },
+      { n: 'Expert 1', c: '#22d3ee', t: [] as Array<{ token: string; weight: number }> },
+      { n: 'Expert 2', c: '#f472b6', t: [] as Array<{ token: string; weight: number }> },
+      { n: 'Expert 3', c: '#3ecf8e', t: [] as Array<{ token: string; weight: number }> },
+      { n: 'Expert 4', c: '#f5a524', t: [] as Array<{ token: string; weight: number }> },
+      { n: 'Expert 5', c: '#4d9cf5', t: [] as Array<{ token: string; weight: number }> },
+      { n: 'Expert 6', c: '#fbbf24', t: [] as Array<{ token: string; weight: number }> },
+      { n: 'Expert 7', c: '#f55656', t: [] as Array<{ token: string; weight: number }> },
     ]
 
-    for (const [key, data] of Object.entries(favouriteTokens)) {
-      const match = key.match(/moe_favourite_tokens[._]expert[._](\d+)/)
-      if (match) {
-        const idx = parseInt(match[1])
-        if (idx < defaultExperts.length) {
-          defaultExperts[idx].t = [`val:${data.value.toFixed(2)}`]
+    if (favouriteTokensArray) {
+      const { keys, values } = favouriteTokensArray
+      // keys format: "expert_{idx}_{token}" or just use all keys mapped to experts by index grouping
+      // Distribute keys/values into per-expert top-5 lists
+      const expertMap: Record<number, Array<{ token: string; weight: number }>> = {}
+      for (let i = 0; i < keys.length; i++) {
+        const match = keys[i].match(/^expert[._](\d+)[._](.+)$/)
+        if (match) {
+          const idx = parseInt(match[1])
+          if (!expertMap[idx]) expertMap[idx] = []
+          expertMap[idx].push({ token: match[2], weight: values[i] })
+        } else {
+          // fallback: assign round-robin or just show token + weight
+          const idx = i % experts.length
+          if (!expertMap[idx]) expertMap[idx] = []
+          expertMap[idx].push({ token: keys[i], weight: values[i] })
+        }
+      }
+      for (const [idx, items] of Object.entries(expertMap)) {
+        const n = parseInt(idx)
+        if (n < experts.length) {
+          experts[n].t = items
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, 5)
         }
       }
     }
 
-    return defaultExperts
-  }, [favouriteTokens])
+    return experts
+  }, [favouriteTokensArray])
+
+  const expertLoadData = useMemo(() => {
+    if (!expertLoadArray) return []
+    return expertLoadArray.keys.map((name, i) => ({
+      name,
+      load: expertLoadArray.values[i] ?? 0,
+    }))
+  }, [expertLoadArray])
 
   const bucketMetrics = useMetricsByPrefix('current_bucket')
   const bucketData = useMemo(() => {
@@ -65,6 +96,7 @@ export function MoEAnalytics() {
   }, [bucketMetrics])
 
   const hasBucketData = bucketData.some(b => b.p > 0)
+  const maxLoad = expertLoadData.length > 0 ? Math.max(...expertLoadData.map(e => e.load), 1) : 1
 
   return (
     <>
@@ -90,11 +122,14 @@ export function MoEAnalytics() {
               <div key={e.n} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{ minWidth: 65, color: e.c, fontSize: 10, fontWeight: 600 }}>{e.n}</span>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                  {e.t.length > 0 ? e.t.map(t => (
-                    <span key={t} style={{
+                  {e.t.length > 0 ? e.t.map(tok => (
+                    <span key={tok.token} style={{
                       background: e.c + '18', color: e.c, padding: '2px 6px',
                       borderRadius: 3, fontSize: 10, border: `1px solid ${e.c}30`
-                    }}>{t}</span>
+                    }}>
+                      {tok.token}
+                      <span style={{ opacity: 0.7, marginLeft: 3 }}>{tok.weight.toFixed(2)}</span>
+                    </span>
                   )) : (
                     <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>awaiting data</span>
                   )}
@@ -158,6 +193,39 @@ export function MoEAnalytics() {
           </div>
         </div>
       </div>
+
+      {expertLoadData.length > 0 && (
+        <div className="grid g3">
+          <div className="pnl" style={{ gridColumn: '1 / -1' }}>
+            <div className="ph">
+              <span className="pt">Expert Load Distribution</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="tag tp">LOAD</span>
+                <InfoBadge text="Load percentage per expert from the expert_load metric array. Shows routing balance across experts." />
+              </div>
+            </div>
+            <div className="pb">
+              {expertLoadData.map((e, i) => {
+                const colors = ['#a78bfa', '#22d3ee', '#f472b6', '#3ecf8e', '#f5a524', '#4d9cf5', '#fbbf24', '#f55656']
+                const c = colors[i % colors.length]
+                return (
+                  <div className="bar-r" key={e.name}>
+                    <span className="bar-l" style={{ color: c }}>{e.name}</span>
+                    <div className="bar-t">
+                      <div className="bar-f" style={{
+                        width: `${(e.load / maxLoad) * 100}%`,
+                        background: c,
+                      }}>
+                        {e.load > 0 ? `${e.load.toFixed(1)}%` : ''}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -19,16 +19,28 @@ RUNS_META_INTERVAL = 30.0  # seconds between full run-metadata scans
 
 def _fetch_active_runs() -> list[str]:
     client = get_client()
+    # Primary: runs table with status = 'running'
     result = client.query(
+        "SELECT run_id FROM runs FINAL WHERE status = 'running'"
+    )
+    run_ids = {row[0] for row in result.result_rows}
+    # Fallback: any run_id with metric_points in the last 5 min
+    result2 = client.query(
         "SELECT DISTINCT run_id FROM metric_points "
         "WHERE event_time > now() - INTERVAL 5 MINUTE"
     )
-    return [row[0] for row in result.result_rows]
+    run_ids.update(row[0] for row in result2.result_rows)
+    return list(run_ids)
 
 
 def _fetch_all_run_ids() -> list[str]:
     client = get_client()
-    result = client.query("SELECT DISTINCT run_id FROM metric_points")
+    # Union both tables so we catch runs whether or not the runs table is populated
+    result = client.query(
+        "SELECT run_id FROM runs FINAL "
+        "UNION DISTINCT "
+        "SELECT DISTINCT run_id FROM metric_points"
+    )
     return [row[0] for row in result.result_rows]
 
 
@@ -45,27 +57,39 @@ def _fetch_metrics_since(run_id: str, since: datetime) -> list[tuple]:
 
 
 def _fetch_all_runs_meta() -> list[RunInfo]:
-    """Query aggregate metadata for every run in the DB."""
+    """Query aggregate metadata for every run. Drives from metric_points, enriches from runs table."""
     client = get_client()
     result = client.query(
-        "SELECT run_id, min(event_time), max(event_time), max(step) "
-        "FROM metric_points GROUP BY run_id ORDER BY max(event_time) DESC"
+        "SELECT mp.run_id, r.status, r.model_name, r.model_size, r.source, r.cluster, "
+        "       mp.mn, mp.mx, mp.ms "
+        "FROM ( "
+        "  SELECT run_id, min(event_time) AS mn, max(event_time) AS mx, max(step) AS ms "
+        "  FROM metric_points GROUP BY run_id "
+        ") mp "
+        "LEFT JOIN ( "
+        "  SELECT run_id, status, model_name, model_size, source, cluster FROM runs FINAL "
+        ") r ON mp.run_id = r.run_id "
+        "ORDER BY mp.mx DESC"
     )
     now_ts = time.time()
     runs: list[RunInfo] = []
-    for run_id, min_et, max_et, max_step in result.result_rows:
+    for run_id, status, model_name, model_size, source, cluster, min_et, max_et, max_step in result.result_rows:
         start_ts = min_et.timestamp() if hasattr(min_et, "timestamp") else float(min_et)
         last_ts = max_et.timestamp() if hasattr(max_et, "timestamp") else float(max_et)
-        is_active = (now_ts - last_ts) < 300  # active if data within 5 min
-        runs.append(
-            RunInfo(
-                run_id=run_id,
-                start_time=start_ts,
-                last_event_time=last_ts,
-                latest_step=int(max_step),
-                is_active=is_active,
-            )
-        )
+        latest_step = int(max_step) if max_step is not None else 0
+        is_active = (status == 'running') or ((now_ts - last_ts) < 300)
+        runs.append(RunInfo(
+            run_id=run_id,
+            start_time=start_ts,
+            last_event_time=last_ts,
+            latest_step=latest_step,
+            is_active=is_active,
+            status=status or 'unknown',
+            model_name=model_name or '',
+            model_size=model_size or '',
+            source=source or '',
+            cluster=cluster or '',
+        ))
     return runs
 
 
@@ -90,16 +114,10 @@ def _poll_once() -> AllRuns:
             continue
         run_data: dict[str, list[Point]] = {}
         for metric, step, value, event_time in rows:
-            ts = (
-                event_time.timestamp()
-                if hasattr(event_time, "timestamp")
-                else float(event_time)
-            )
+            ts = event_time.timestamp() if hasattr(event_time, "timestamp") else float(event_time)
             if metric not in run_data:
                 run_data[metric] = []
-            run_data[metric].append(
-                Point(step=int(step), value=float(value), timestamp=ts)
-            )
+            run_data[metric].append(Point(step=int(step), value=float(value), timestamp=ts))
         new_points[run_id] = run_data
 
     _last_poll_time = now
