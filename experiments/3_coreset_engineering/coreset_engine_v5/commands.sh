@@ -41,6 +41,7 @@ S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_p
 NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"
 TOTAL_TOKENS="${TOTAL_TOKENS:-4523096944}"
+CHECKPOINT_EVERY_N_BATCHES="${CHECKPOINT_EVERY_N_BATCHES:-1}"
 RESUME="${RESUME:-false}" 
 # ------------------------------------------------------------------------------
 
@@ -195,52 +196,55 @@ if [ "${RESUME}" = "true" ]; then
 fi
 
 if [ "${DRY_RUN}" = "true" ]; then
-    echo ""
-    echo "=========================================="
-    echo "  DRY RUN SUMMARY — Validation Complete"
-    echo "=========================================="
-    echo "  Branch:       ${BRANCH_NAME}"
-    echo "  S3 Input:     ${S3_INPUT_PATH}"
-    echo "  Num Shards:   ${NUM_SHARDS}"
-    echo "  Stages:       ${STAGES}"
-    echo "  Total Tokens: ${TOTAL_TOKENS}"
-    echo "  Resume:       ${RESUME}"
-    echo "  Foreground:   ${FOREGROUND}"
-    echo ""
-    echo "  Would execute:"
-    echo "    bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \\"
-    echo "      --num-shards ${NUM_SHARDS} --stages \"${STAGES}\" \\"
-    echo "      --input-path \"${S3_INPUT_PATH}\" \\"
-    echo "      --total-tokens ${TOTAL_TOKENS} ${RESUME_FLAG}"
-    echo "=========================================="
-    exit 0
+        echo ""
+        echo "=========================================="
+        echo "  DRY RUN SUMMARY — Validation Complete"
+        echo "=========================================="
+        echo "  Branch:       ${BRANCH_NAME}"
+        echo "  S3 Input:     ${S3_INPUT_PATH}"
+        echo "  Num Shards:   ${NUM_SHARDS}"
+        echo "  Stages:       ${STAGES}"
+        echo "  Total Tokens: ${TOTAL_TOKENS}"
+        echo "  Ckpt Every N: ${CHECKPOINT_EVERY_N_BATCHES}"
+        echo "  Resume:       ${RESUME}"
+        echo "  Foreground:   ${FOREGROUND}"
+        echo ""
+        echo "  Would execute:"
+        echo "    bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh"
+        echo "      --num-shards ${NUM_SHARDS} --stages \"${STAGES}\""
+        echo "      --input-path \"${S3_INPUT_PATH}\" --total-tokens ${TOTAL_TOKENS}"
+        echo "      --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} ${RESUME_FLAG}"
+        echo "=========================================="
+        exit 0
 fi
 
 if [ "${FOREGROUND}" = "true" ]; then
-    # Foreground: Used by CI/SSH so exit code is tracked
-    echo "Running shard.sh in foreground..."
-    bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
-      --num-shards ${NUM_SHARDS} \
-      --stages "${STAGES}" \
-      --input-path "${S3_INPUT_PATH}" \
-      --input-format jsonl \
-      --total-tokens ${TOTAL_TOKENS} \
-      ${RESUME_FLAG}
+        # Foreground: Used by CI/SSH so exit code is tracked
+        echo "Running shard.sh in foreground..."
+        bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
+            --num-shards ${NUM_SHARDS} \
+            --stages "${STAGES}" \
+            --input-path "${S3_INPUT_PATH}" \
+            --input-format jsonl \
+            --total-tokens ${TOTAL_TOKENS} \
+            --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
+            ${RESUME_FLAG}
 else
-    # Background: Used for manual EC2 runs with nohup for SSH disconnect safety
-    echo "Starting shard.sh in background via nohup..."
-    nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
-      --num-shards ${NUM_SHARDS} \
-      --stages "${STAGES}" \
-      --input-path "${S3_INPUT_PATH}" \
-      --input-format jsonl \
-      --total-tokens ${TOTAL_TOKENS} \
-      ${RESUME_FLAG} \
-      > shard_run.log 2>&1 &
+        # Background: Used for manual EC2 runs with nohup for SSH disconnect safety
+        echo "Starting shard.sh in background via nohup..."
+        nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
+            --num-shards ${NUM_SHARDS} \
+            --stages "${STAGES}" \
+            --input-path "${S3_INPUT_PATH}" \
+            --input-format jsonl \
+            --total-tokens ${TOTAL_TOKENS} \
+            --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
+            ${RESUME_FLAG} \
+            > shard_run.log 2>&1 &
 
-    echo "-----------------------------------------------------------------------"
-    echo "DEPLOYMENT COMPLETE"
-    echo "Monitor logs via: tail -f ${REPO_ROOT}/shard_run.log"
-    echo "Check process via: ps aux | grep shard.sh"
-    echo "-----------------------------------------------------------------------"
+        echo "-----------------------------------------------------------------------"
+        echo "DEPLOYMENT COMPLETE"
+        echo "Monitor logs via: tail -f ${REPO_ROOT}/shard_run.log"
+        echo "Check process via: ps aux | grep shard.sh"
+        echo "-----------------------------------------------------------------------"
 fi
