@@ -124,6 +124,42 @@ class RankResult:
 # Per-rank worker functions
 # ─────────────────────────────────────────────────────────────────────────────
 
+from torch.utils.data import IterableDataset
+
+class _BinIdxDataset(IterableDataset):
+    def __init__(self, shard_dir, seq_len, rank, world_size):
+        self.shard_dir = shard_dir
+        self.seq_len = seq_len
+        self.rank = rank
+        self.world_size = world_size
+
+    def __iter__(self):
+        # Report progress under the [Standard] label, not "SPDL source:"
+        bin_files = sorted(
+            f for f in os.listdir(self.shard_dir) if f.endswith(".bin")
+        )
+        my_files = bin_files[self.rank :: self.world_size]
+        print(
+            f"    [Standard] Rank {self.rank}/{self.world_size} "
+            f"scanning {len(my_files)} shards"
+        )
+        total = 0
+        from src.data import bin_idx_source
+        for seq in bin_idx_source(
+            self.shard_dir,
+            seq_len=self.seq_len,
+            rank=self.rank,
+            world_size=self.world_size,
+        ):
+            total += 1
+            input_ids = seq  # shape [seq_len]
+            yield {
+                "input_ids": input_ids,
+                "attention_mask": torch.ones_like(input_ids),
+                "labels": input_ids.clone(),
+            }
+        print(f"    [Standard] Rank {self.rank} yielded {total:,} sequences")
+
 
 def _run_standard_rank(
     rank: int,
@@ -137,47 +173,14 @@ def _run_standard_rank(
     Benchmark one rank using a plain PyTorch DataLoader backed by bin_idx_source.
     No SPDL -- this is the baseline.
     """
-    from torch.utils.data import DataLoader, IterableDataset
+    from torch.utils.data import DataLoader
 
     # bin_idx_source prints "SPDL source: ..." via print_rank_0 -- suppress those
     # log lines in the standard baseline so output is not misleading.
     data_module.print_rank_0 = lambda *a, **kw: None
 
-    class _BinIdxDataset(IterableDataset):
-        def __init__(self, shard_dir, seq_len, rank, world_size):
-            self.shard_dir = shard_dir
-            self.seq_len = seq_len
-            self.rank = rank
-            self.world_size = world_size
-
-        def __iter__(self):
-            # Report progress under the [Standard] label, not "SPDL source:"
-            bin_files = sorted(
-                f for f in os.listdir(self.shard_dir) if f.endswith(".bin")
-            )
-            my_files = bin_files[self.rank :: self.world_size]
-            print(
-                f"    [Standard] Rank {self.rank}/{self.world_size} "
-                f"scanning {len(my_files)} shards"
-            )
-            total = 0
-            for seq in bin_idx_source(
-                self.shard_dir,
-                seq_len=self.seq_len,
-                rank=self.rank,
-                world_size=self.world_size,
-            ):
-                total += 1
-                input_ids = seq  # shape [seq_len]
-                yield {
-                    "input_ids": input_ids,
-                    "attention_mask": torch.ones_like(input_ids),
-                    "labels": input_ids.clone(),
-                }
-            print(f"    [Standard] Rank {self.rank} yielded {total:,} sequences")
-
     dataset = _BinIdxDataset(tokens_dir, max_length, rank, world_size)
-    loader = DataLoader(dataset, batch_size=batch_size, num_workers=0)
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=2)
 
     t0 = time.perf_counter()
     num_tokens = 0
@@ -185,8 +188,9 @@ def _run_standard_rank(
     fetch_time = 0.0
     gpu_time = 0.0
 
+    it = iter(loader)
     t_fetch_start = time.perf_counter()
-    for batch in loader:
+    for batch in it:
         t_fetch_end = time.perf_counter()
         fetch_time += t_fetch_end - t_fetch_start
 
@@ -204,6 +208,8 @@ def _run_standard_rank(
     result = RankResult(rank, num_batches, num_tokens, elapsed, fetch_time, gpu_time)
     result_queue.put(result)
     sys.stdout.flush()
+
+    sys.stderr = open(os.devnull, "w")
     os._exit(0)
 
 
@@ -235,7 +241,7 @@ def _run_spdl_rank(
         num_threads=4,
         prefetch_buffer=16,
     )
-    loader = DataLoader(dataset, batch_size=None, num_workers=0, pin_memory=True)
+    loader = DataLoader(dataset, batch_size=None, num_workers=2, pin_memory=True)
 
     t0 = time.perf_counter()
     num_tokens = 0
@@ -243,8 +249,9 @@ def _run_spdl_rank(
     fetch_time = 0.0
     gpu_time = 0.0
 
+    it = iter(loader)
     t_fetch_start = time.perf_counter()
-    for batch in loader:
+    for batch in it:
         t_fetch_end = time.perf_counter()
         fetch_time += t_fetch_end - t_fetch_start
 
@@ -262,6 +269,8 @@ def _run_spdl_rank(
     result = RankResult(rank, num_batches, num_tokens, elapsed, fetch_time, gpu_time)
     result_queue.put(result)
     sys.stdout.flush()
+
+    sys.stderr = open(os.devnull, "w")
     os._exit(0)
 
 
@@ -504,6 +513,7 @@ def main():
     time.sleep(0.5)
     shutil.rmtree(nvme_dir, ignore_errors=True)
     sys.stdout.flush()
+    sys.stderr = open(os.devnull, "w")
     os._exit(0)
 
 
