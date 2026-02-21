@@ -377,13 +377,18 @@ domains:
     - id: "instruction"
     - id: "social"
     - id: "qa"
-    - id: "education"
-    - id: "conversation"
+    - id: "education"          # includes language literacy, phonics, K-12 content
+    - id: "conversation"       # everyday spoken/chat language (e.g. Samvaad)
+    - id: "language_literacy"  # sub-domain: spelling, phonics, script drills
+                               # treated as education for band routing
 
   band_domain_policy:
-    B0: ["web", "social", "qa"]
-    B1: ["web", "encyclopedia", "news", "social", "qa"]
-    B2: ["encyclopedia", "news", "education", "literature", "web", "qa","conversation"]
+    # B0: added "education" (language-literacy drills, student-gen spelling Q&A)
+    #      and "conversation" (everyday Hindi / Indic chat at foundational level)
+    B0: ["web", "social", "qa", "education", "language_literacy", "conversation"]
+    # B1: added "education" and "conversation" (Samvaad mid-difficulty, basic instruction)
+    B1: ["web", "encyclopedia", "news", "social", "qa", "education", "language_literacy", "conversation"]
+    B2: ["encyclopedia", "news", "education", "literature", "web", "qa", "conversation"]
     B3: ["science", "math", "education", "code", "literature", "conversation"]
     B4: ["science", "math", "code", "instruction"]
     B5: ["instruction", "science", "math", "code"]
