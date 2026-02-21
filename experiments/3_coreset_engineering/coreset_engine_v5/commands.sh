@@ -41,7 +41,7 @@ S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_p
 NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"
 TOTAL_TOKENS="${TOTAL_TOKENS:-4523096944}"
-BATCH_SIZE="${BATCH_SIZE:-30000}"
+BATCH_SIZE="${BATCH_SIZE:-80000}"
 CHECKPOINT_EVERY_N_BATCHES="${CHECKPOINT_EVERY_N_BATCHES:-1}"
 RESUME="${RESUME:-false}" 
 # ------------------------------------------------------------------------------

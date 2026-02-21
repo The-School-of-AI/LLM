@@ -25,7 +25,7 @@ CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
 BAND_SCORE_SOURCE="auto"
-BATCH_SIZE=30000
+BATCH_SIZE=80000
 CHECKPOINT_EVERY_N_BATCHES=1
 TOTAL_TOKENS=""
 RESUME=false
@@ -48,7 +48,7 @@ usage() {
   echo "                     Values: none | infer_if_missing | infer_if_ineligible | force"
   echo "  --band-score-source Band score source (default: auto)"
   echo "                     Values: auto | band_score | difficulty_score | band_p_max | band_p_argmax | band_p_B0..band_p_B5"
-  echo "  --batch-size        Rows/chunks per batch in streaming mode (default: 30000)"
+  echo "  --batch-size        Rows/chunks per batch in streaming mode (default: 80000)"
   echo "  --checkpoint-every-n-batches  Checkpoint cadence passed to coreset_builder (default: 1)"
   echo "  --resume            Resume from last checkpoints (don't clean output dirs)"
   exit 1
