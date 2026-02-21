@@ -362,11 +362,13 @@ class LucidPreconditionFunction(torch.autograd.Function):
     def backward(ctx, grad_Y):
         K, V = ctx.saved_tensors
 
-        # Re-run with autograd enabled to get gradients
+        # Use the full-matrix solver for backward — it uses solve_triangular
+        # which is autograd-safe (no inplace ops). The blockwise version does
+        # Y[:, i:i_end, :] = ... which is inplace and breaks autograd.
         with torch.enable_grad():
             K_ag = K.detach().requires_grad_(True)
             V_ag = V.detach().requires_grad_(True)
-            Y_ag = pytorch_lucid_precondition_blockwise(K_ag, V_ag, ctx.block_size)
+            Y_ag = pytorch_lucid_precondition(K_ag, V_ag)
             Y_ag.backward(grad_Y)
 
         return K_ag.grad, V_ag.grad, None
