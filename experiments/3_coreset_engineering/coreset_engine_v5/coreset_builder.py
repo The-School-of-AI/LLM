@@ -451,9 +451,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
             batch_prefetch_auto_max_shard_cpu_ratio
         )
         if self.batch_prefetch_auto_max_shard_cpu_ratio <= 0:
-            raise ValueError(
-                "--batch-prefetch-auto-max-shard-cpu-ratio must be > 0"
-            )
+            raise ValueError("--batch-prefetch-auto-max-shard-cpu-ratio must be > 0")
         self.batch_prefetch_auto_min_wait_ms = float(batch_prefetch_auto_min_wait_ms)
         if self.batch_prefetch_auto_min_wait_ms < 0:
             raise ValueError("--batch-prefetch-auto-min-wait-ms must be >= 0")
@@ -560,8 +558,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                     and metrics["consumed"] == self.batch_prefetch_auto_warmup_batches
                 ):
                     avg_wait_ms = (
-                        metrics["consumer_wait_s"]
-                        / float(max(1, metrics["consumed"]))
+                        metrics["consumer_wait_s"] / float(max(1, metrics["consumed"]))
                     ) * 1000.0
                     if avg_wait_ms < self.batch_prefetch_auto_min_wait_ms:
                         logger.info(
@@ -817,7 +814,9 @@ class StreamingCoresetBuilder(CoresetBuilder):
     def _iter_batches(self) -> Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]]:
         """Yield (batch_idx, batch_rows) where batch_rows is [(chunk_id, row_dict), ...]."""
 
-        def _base_iter_batches() -> Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]]:
+        def _base_iter_batches() -> (
+            Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]]
+        ):
 
             if self.input_format == "jsonl":
                 files = self.batch_processor.list_input_files(self.input_path, "jsonl")
@@ -856,7 +855,9 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 return
 
             if self.input_format == "parquet":
-                files = self.batch_processor.list_input_files(self.input_path, "parquet")
+                files = self.batch_processor.list_input_files(
+                    self.input_path, "parquet"
+                )
                 if files:
                     files = self.batch_processor.shard_files(
                         files, self.shard_id, self.num_shards
