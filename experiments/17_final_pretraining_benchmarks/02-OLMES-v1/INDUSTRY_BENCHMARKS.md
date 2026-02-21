@@ -36,13 +36,12 @@ Tiered evaluation strategy based on industry gold standards (Llama 3.1/3.2, Qwen
 | Group | Tasks | Notes |
 | :--- | :--- | :--- |
 | `world_knowledge` | `mmlu::olmes`, `mmlu_pro:mc::none`, `mmlu_pro:cot::none`, `triviaqa::olmes`, `arc_challenge::olmes` | |
-| `mathematical_reasoning` | `gsm8k::olmes`, `minerva_math::olmes` | |
+| `mathematical_reasoning` | `gsm8k::olmes` | |
 | `expert_reasoning` | `bbh:cot::olmes`, `gpqa_diamond::olmes` | |
 | `linguistic_diagnostics` | `blimp` | |
 | `factuality` | `truthfulqa::olmes` | |
 | `multilingual_indic` | `indic_glue`, `indic_qa` | |
-| `indic_bias` | `indic_bias` | ⚠️ `enabled: false` – gated dataset |
-| `context_window` | `niah_8k` → `niah_256k`, `niah_multikey_1`, `ruler_vt`, `ruler_cwe`, `longbench_narrativeqa`, `longbench_qasper`, `longbench_hotpotqa` | |
+| `context_window` | `ruler_vt`, `ruler_cwe` | |
 | `l_eval` | `l_eval` | ⚠️ `enabled: false` – needs registration |
 | `aime_2025` | `aime_2025` | ⚠️ `enabled: false` – needs registration |
 | `apps` | `apps` | ⚠️ `enabled: false` – needs custom script |

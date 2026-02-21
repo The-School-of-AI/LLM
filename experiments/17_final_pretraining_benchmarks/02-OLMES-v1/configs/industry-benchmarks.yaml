@@ -91,7 +91,6 @@ stages:
       - name: "mathematical_reasoning"
         tasks:
           - "gsm8k::olmes"            # GSM8K
-          - "minerva_math::olmes"     # MATH / Minerva
       - name: "expert_reasoning"
         tasks:
           - "bbh:cot::olmes"          # BBH (Big Bench Hard)
@@ -106,26 +105,12 @@ stages:
         tasks:
           - "indic_glue"              # IndicGLUE
           - "indic_qa"                # IndicQA
-      - name: "indic_bias"
-        enabled: false                # Gated dataset – enable after access granted
-        tasks:
-          - "indic_bias"              # Indic-Bias / FairITales
+
       - name: "context_window"
         tasks:
-          - "niah_8k"
-          - "niah_16k"
-          - "niah_32k"
-          - "niah_64k"
-          - "niah_128k"
-          - "niah_256k"
           # RULER (Robustness/Aggregation)
-          - "niah_multikey_1"
           - "ruler_vt"
           - "ruler_cwe"
-          # LongBench (Reasoning over Long Context)
-          - "longbench_narrativeqa"
-          - "longbench_qasper"
-          - "longbench_hotpotqa"
       # L-Eval – enable once task is registered
       - name: "l_eval"
         enabled: false                # TODO: register L-Eval task suite
