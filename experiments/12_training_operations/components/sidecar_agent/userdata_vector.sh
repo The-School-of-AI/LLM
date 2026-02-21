@@ -38,6 +38,8 @@ SECRETS_ROLE_ARN="arn:aws:iam::205991465724:role/t12-secrets-reader" # cross-acc
 # ---- 2. Install Vector ----
 echo "[2/9] Installing Vector..."
 if ! command -v vector &>/dev/null; then
+  # Set HOME for the installer if not defined (EC2 user data runs without it)
+  export HOME="${HOME:-/root}"
   curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y --prefix /usr/local
 fi
 /usr/local/bin/vector --version
