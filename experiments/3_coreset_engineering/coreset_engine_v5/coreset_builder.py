@@ -856,6 +856,22 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 self.curriculum.get_allowed_languages_for_stage(stage_name)
             )
 
+        # Pre-compute stage-gating lookups for hot row loop.
+        band_enabled_by_name: Dict[str, bool] = {
+            band.value: True for band in DifficultyBand
+        }
+        if stage_bands:
+            band_enabled_by_name = {
+                band.value: (getattr(stage_bands.band_ratios, band.value, 0.0) > 0.0)
+                for band in DifficultyBand
+            }
+
+        # None => no domain restrictions for this band (preserves existing behavior).
+        allowed_domains_by_band: Dict[str, Optional[set]] = {}
+        for band in DifficultyBand:
+            allowed = self.curriculum.get_allowed_domains_for_band(band)
+            allowed_domains_by_band[band.value] = set(allowed) if allowed else None
+
         if last_batch is not None and last_batch >= 0:
             loaded = self.batch_processor.load_checkpoint(stage_name, last_batch)
             if loaded is not None:
@@ -996,16 +1012,14 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             and final_band is not None
                             and band_score_val is not None
                         ):
-                            allowed_domains = (
-                                self.curriculum.get_allowed_domains_for_band(final_band)
+                            allowed_domains = allowed_domains_by_band.get(
+                                final_band.value
                             )
                             if allowed_domains and domain_raw not in allowed_domains:
                                 # First preference (when configured): choose argmax band_p_Bx.
                                 if band_from_p is not None:
-                                    inferred_allowed = (
-                                        self.curriculum.get_allowed_domains_for_band(
-                                            band_from_p
-                                        )
+                                    inferred_allowed = allowed_domains_by_band.get(
+                                        band_from_p.value
                                     )
                                     if (not inferred_allowed) or (
                                         domain_raw in inferred_allowed
@@ -1015,10 +1029,8 @@ class StreamingCoresetBuilder(CoresetBuilder):
                                     inferred = self._infer_band_from_score(
                                         band_score_val
                                     )
-                                    inferred_allowed = (
-                                        self.curriculum.get_allowed_domains_for_band(
-                                            inferred
-                                        )
+                                    inferred_allowed = allowed_domains_by_band.get(
+                                        inferred.value
                                     )
                                     if (not inferred_allowed) or (
                                         domain_raw in inferred_allowed
@@ -1085,15 +1097,8 @@ class StreamingCoresetBuilder(CoresetBuilder):
                         # Availability accounting: only count chunks that are eligible for selection
                         # given stage band ratios, allowed_domains, and language gating.
                         band_name = meta.band.value
-                        band_ratio = (
-                            getattr(stage_bands.band_ratios, band_name, 0.0)
-                            if stage_bands
-                            else 0.0
-                        )
-                        band_in_stage = (band_ratio > 0.0) if stage_bands else True
-                        allowed_domains = self.curriculum.get_allowed_domains_for_band(
-                            meta.band
-                        )
+                        band_in_stage = band_enabled_by_name.get(band_name, True)
+                        allowed_domains = allowed_domains_by_band.get(band_name)
                         domain_allowed = (
                             (meta.domain in allowed_domains)
                             if allowed_domains
