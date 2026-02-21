@@ -136,7 +136,9 @@ class PrefetchDataLoader:
                     event = stream.record_event()
                     with condition:
                         # Block if the queue is full
-                        while len(queue) >= self.prefetch_depth and not finished.is_set():
+                        while (
+                            len(queue) >= self.prefetch_depth and not finished.is_set()
+                        ):
                             condition.wait(timeout=0.1)
                         queue.append((moved, event))
                         condition.notify()

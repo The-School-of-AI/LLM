@@ -837,7 +837,9 @@ def _build_causal_lm_collate_fn(pad_token_id: int):
         if is_uniform:
             return {
                 "input_ids": torch.stack([item["input_ids"] for item in batch]),
-                "attention_mask": torch.stack([item["attention_mask"] for item in batch]),
+                "attention_mask": torch.stack(
+                    [item["attention_mask"] for item in batch]
+                ),
                 "labels": torch.stack([item["labels"] for item in batch]),
             }
 

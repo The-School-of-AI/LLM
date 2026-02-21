@@ -138,9 +138,9 @@ Before deploying this model at 256k context, the following MUST be addressed:
 ═══════════════════════════════════════════════════════════════════════════════
 """
 
+import importlib
 import logging
 import math
-import importlib
 import sys
 from dataclasses import dataclass
 from pathlib import Path

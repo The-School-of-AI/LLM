@@ -504,9 +504,15 @@ def main():
             f"\n[3.7/5] Wrapping DataLoaders with PrefetchDataLoader "
             f"(device={device}, depth={depth})..."
         )
-        train_loader = PrefetchDataLoader(train_loader, device=device, prefetch_depth=depth)
-        eval_loader = PrefetchDataLoader(eval_loader, device=device, prefetch_depth=depth)
-        test_loader = PrefetchDataLoader(test_loader, device=device, prefetch_depth=depth)
+        train_loader = PrefetchDataLoader(
+            train_loader, device=device, prefetch_depth=depth
+        )
+        eval_loader = PrefetchDataLoader(
+            eval_loader, device=device, prefetch_depth=depth
+        )
+        test_loader = PrefetchDataLoader(
+            test_loader, device=device, prefetch_depth=depth
+        )
 
     # ========================================
     # Step 4: Training
