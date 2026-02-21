@@ -126,6 +126,7 @@ class RankResult:
 
 from torch.utils.data import IterableDataset
 
+
 class _BinIdxDataset(IterableDataset):
     def __init__(self, shard_dir, seq_len, rank, world_size):
         self.shard_dir = shard_dir
@@ -135,9 +136,7 @@ class _BinIdxDataset(IterableDataset):
 
     def __iter__(self):
         # Report progress under the [Standard] label, not "SPDL source:"
-        bin_files = sorted(
-            f for f in os.listdir(self.shard_dir) if f.endswith(".bin")
-        )
+        bin_files = sorted(f for f in os.listdir(self.shard_dir) if f.endswith(".bin"))
         my_files = bin_files[self.rank :: self.world_size]
         print(
             f"    [Standard] Rank {self.rank}/{self.world_size} "
@@ -145,6 +144,7 @@ class _BinIdxDataset(IterableDataset):
         )
         total = 0
         from src.data import bin_idx_source
+
         for seq in bin_idx_source(
             self.shard_dir,
             seq_len=self.seq_len,

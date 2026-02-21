@@ -1,18 +1,32 @@
 """
-Data loading utilities for DeepSpeed training.
+Data loading utilities for DeepSpeed LLM training.
 
-This module provides functions for loading tokenizers and creating dataloaders
-for training language models.
+Provides tokenizer loading, dataset preparation, and dataloader creation
+for causal language model pre-training.
 
-Supports three modes:
-1. Offline: load_from_disk for pre-tokenized datasets (preferred for production)
-2. Online: download + tokenize on-the-fly (fallback for dev/testing)
-3. Streaming: HuggingFace streaming for very large datasets like FineWeb
-   (no disk download, tokenizes on-the-fly)
+Supports four data-loading modes:
+  1. **SPDL** (``use_spdl=True``): Streams pre-tokenized ``.bin/.idx`` shards
+     via Meta's SPDL pipeline with memory-mapped I/O, async prefetching, and
+     file-level distributed sharding. Preferred for production training.
+  2. **Offline** (``tokenized_dataset_path``): Loads a pre-tokenized
+     HuggingFace ``DatasetDict`` from disk via ``load_from_disk``.
+  3. **Online** (default): Downloads a HuggingFace dataset and tokenizes
+     on-the-fly. Fallback for dev/testing.
+  4. **Streaming** (``streaming=True``): HuggingFace streaming for very
+     large datasets (e.g. FineWeb) — no disk download, tokenizes on-the-fly.
 
-Uses the standard LLM pre-training approach: concatenate all text, tokenize,
-then chunk into fixed-length sequences. Every token is a real token — no
-padding waste.
+Key features:
+  - **S3 → NVMe staging**: Transparently downloads S3 datasets to local
+    instance store with a completion marker to avoid re-downloading.
+  - **Block packing**: Concatenates tokenized documents and chunks into
+    fixed-length sequences with optional multi-size support and domain-aware
+    packing (no padding waste).
+  - **Distributed sampling**: Automatic ``DistributedSampler`` when
+    ``torch.distributed`` is initialized or ``WORLD_SIZE > 1``.
+  - **Shard tracking**: ``ShardTracker`` integration for deterministic
+    checkpoint-based resume (SPDL mode only).
+  - **Collation**: Custom collate function with a fast path for uniform
+    sequence lengths and dynamic padding for mixed-length batches.
 """
 
 import logging
@@ -37,13 +51,22 @@ from .utils import print_rank_0
 
 class StreamingTextDataset(IterableDataset):
     """
-    Streaming dataset that tokenizes + chunks text on-the-fly.
+    Streaming dataset that tokenizes and chunks text on-the-fly.
 
-    For use with very large datasets (e.g., FineWeb) where downloading
-    would be impractical. Tokenizes each example, maintains a token buffer,
-    and yields fixed-length chunks.
+    Designed for very large datasets (e.g. FineWeb) where full download
+    is impractical. Maintains an internal token buffer and yields
+    fixed-length ``(input_ids, attention_mask, labels)`` dicts once
+    enough tokens have accumulated.
 
-    Multi-GPU: uses worker_info + distributed rank to shard the stream.
+    Args:
+        hf_dataset_iter: A HuggingFace streaming dataset iterator.
+        tokenizer: Tokenizer instance used to encode each text example.
+        max_length: Fixed sequence length for each yielded chunk.
+        split_name: Identifier for the split (used for logging only).
+
+    Yields:
+        dict with ``input_ids``, ``attention_mask``, ``labels`` — each
+        a ``torch.LongTensor`` of shape ``(max_length,)``.
     """
 
     def __init__(self, hf_dataset_iter, tokenizer, max_length, split_name="train"):
@@ -76,7 +99,7 @@ class StreamingTextDataset(IterableDataset):
 
 
 # ============================================================================
-# SPDL pipeline
+# SPDL pipeline — .bin/.idx shard streaming with mmap and async prefetch
 # ============================================================================
 
 
@@ -325,16 +348,26 @@ def build_spdl_pipeline(
     Build an SPDL pipeline for streaming .bin/.idx shards.
 
     Pipeline stages:
-      1. bin_idx_source: yields individual sequences as torch tensors
-      2. aggregate: collects batch_size sequences
-      3. sink: prefetch buffer for async consumption
+      1. ``bin_idx_source``: yields individual ``torch.LongTensor(seq_len,)``
+         from ``.bin`` files using mmap (or sequential I/O as fallback).
+      2. ``aggregate``: collects ``batch_size`` tensors into a list.
+      3. ``sink``: prefetch buffer of ``prefetch_buffer`` batches for
+         async consumption by the training loop.
 
     Args:
+        shard_dir: Directory containing ``.bin/.idx`` shard files.
+        seq_len: Sequence length for each yielded tensor.
+        batch_size: Number of sequences per aggregated batch.
+        dtype: NumPy dtype of token IDs in ``.bin`` files (default: uint32).
+        rank: Current distributed rank (for file-level sharding).
+        world_size: Total number of distributed ranks.
+        num_threads: SPDL thread pool size for I/O and processing.
+        prefetch_buffer: Number of batches to prefetch asynchronously.
         exclude_files: Set of shard basenames to skip (already processed).
         on_shard_complete: Callback invoked after each shard is fully consumed.
 
     Returns:
-        SPDL Pipeline object (context manager, iterable)
+        SPDL Pipeline object (context manager, iterable).
     """
 
     source = bin_idx_source(
@@ -429,7 +462,7 @@ class SPDLIterableDataset(IterableDataset):
 
 
 # ============================================================================
-# Dataloader
+# Tokenizer, tokenization, and dataloader construction
 # ============================================================================
 
 
@@ -525,7 +558,22 @@ def _parse_s3_uri(s3_uri: str) -> Tuple[str, str]:
 
 def _stage_s3_dataset_to_local_nvme(s3_uri: str, local_nvme_cache_dir: str) -> str:
     """
-    Download a dataset directory from S3 to local NVMe and return local path.
+    Download a dataset directory from S3 to local NVMe and return the local path.
+
+    Uses a ``_STAGED_COMPLETE`` marker file to skip re-downloading on
+    subsequent calls. All files under the S3 prefix are mirrored to
+    ``<local_nvme_cache_dir>/<bucket>/<prefix>/``.
+
+    Args:
+        s3_uri: S3 URI (e.g. ``s3://bucket/path/to/dataset``).
+        local_nvme_cache_dir: Root directory on local NVMe instance store.
+
+    Returns:
+        Absolute path to the staged dataset directory on local disk.
+
+    Raises:
+        RuntimeError: If ``boto3`` is not installed.
+        FileNotFoundError: If no files exist under the S3 prefix.
     """
     try:
         import boto3
@@ -576,7 +624,13 @@ def _stage_s3_dataset_to_local_nvme(s3_uri: str, local_nvme_cache_dir: str) -> s
 
 def _resolve_distributed_context() -> Tuple[bool, int, int]:
     """
-    Resolve distributed world-size/rank even before torch.distributed is initialized.
+    Resolve distributed world-size and rank.
+
+    Checks ``torch.distributed`` first; falls back to ``WORLD_SIZE`` /
+    ``RANK`` environment variables (set by ``torchrun`` / ``deepspeed``).
+
+    Returns:
+        Tuple of ``(is_distributed, world_size, rank)``.
     """
     if dist.is_available() and dist.is_initialized():
         world_size = dist.get_world_size()
@@ -682,10 +736,31 @@ def _pack_split_to_fixed_blocks(
     drop_remainder: bool,
 ) -> Dataset:
     """
-    Concatenate tokenized docs and cut fixed-size training blocks.
+    Concatenate tokenized documents and cut fixed-size training blocks.
 
-    If block_size_counts is provided, that defines exactly how many blocks
-    of each size to emit (best for explicit 4k/8k/16k budgeting).
+    Iterates over ``split_dataset`` rows, appends their ``input_ids`` into
+    per-domain (or global) token buffers, and emits blocks as soon as
+    enough tokens accumulate.
+
+    When ``block_size_counts`` is provided, it defines exactly how many
+    blocks of each size to emit (useful for explicit 4k/8k/16k budgeting).
+    Otherwise, all available tokens are consumed.
+
+    Args:
+        split_dataset: HuggingFace ``Dataset`` with an ``input_ids`` column.
+        block_sizes: Sorted list of target block sizes.
+        block_size_counts: Optional per-size quotas ``{size: count}``.
+        eos_token_id: If set, appended between concatenated documents.
+        pad_token_id: Token used to pad undersized tail blocks.
+        domain_column: Column name for domain-aware packing.
+        concat_across_domains: If False and ``domain_column`` is set,
+            maintain separate buffers per domain.
+        drop_remainder: If True, discard tail blocks shorter than the
+            smallest block size.
+
+    Returns:
+        A new ``Dataset`` with columns ``input_ids``, ``attention_mask``,
+        ``labels``, and ``sequence_length``.
     """
     if "input_ids" not in split_dataset.column_names:
         raise ValueError("Packing requires 'input_ids' column")
@@ -808,6 +883,7 @@ def _pack_dataset_dict(
     concat_across_domains: bool,
     drop_remainder: bool,
 ) -> DatasetDict:
+    """Apply ``_pack_split_to_fixed_blocks`` to every split in a DatasetDict."""
     packed = {}
     eos_token_id = tokenizer.eos_token_id
     pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
@@ -829,6 +905,14 @@ def _pack_dataset_dict(
 
 
 def _build_causal_lm_collate_fn(pad_token_id: int):
+    """Build a collate function for causal LM training.
+
+    Returns a callable that collates a list of dicts into a batched dict.
+    Uses ``torch.stack`` when all sequences are the same length (fast path),
+    otherwise pads to the longest sequence in the batch with ``pad_token_id``
+    for ``input_ids``, ``0`` for ``attention_mask``, and ``-100`` for ``labels``.
+    """
+
     def _collate(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         # Fast path for batches with uniform sequence lengths
         first_len = int(batch[0]["input_ids"].shape[0])
@@ -887,20 +971,60 @@ def get_dataloaders(
     shard_manifest_path: Optional[str] = None,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, dict]:
     """
-    Load dataset and create dataloaders for training, validation, and testing.
+    Build train / eval / test ``DataLoader`` instances.
+
+    Dispatches to one of four data-loading paths based on the arguments:
+
+    1. **Streaming** (``streaming=True``): HuggingFace streaming — tokenizes
+       on-the-fly, no download. Eval/test reuse the train loader.
+    2. **SPDL** (``use_spdl=True``): Streams ``.bin/.idx`` shards with
+       memory-mapped I/O, file-level distributed sharding, and async
+       prefetch. Requires ``tokenized_dataset_path``.
+    3. **Offline** (``tokenized_dataset_path`` without ``use_spdl``):
+       ``load_from_disk`` for a pre-tokenized ``DatasetDict``.
+    4. **Online** (default): Downloads from HuggingFace Hub, tokenizes,
+       and optionally packs into fixed-size blocks.
+
+    S3 URIs in ``tokenized_dataset_path`` are automatically staged to
+    ``local_nvme_cache_dir`` before use.
 
     Args:
-        shard_manifest_path: Path to ``consumed_shards.json``. When provided,
-            a :class:`ShardTracker` is created to exclude already-processed
-            shards and to track newly consumed ones.  The tracker is returned
-            in ``dataset_info["shard_tracker"]`` so the training loop can
-            persist it alongside checkpoints.
+        dataset_name: HuggingFace dataset identifier (online mode).
+        dataset_config: Dataset config name (e.g. ``wikitext-2-raw-v1``).
+        tokenizer: Tokenizer instance (required).
+        batch_size: Batch size for all dataloaders.
+        max_length: Sequence length (also used as default block size).
+        num_workers: Number of DataLoader workers (0 for SPDL/streaming).
+        tokenized_dataset_path: Local path or S3 URI to a pre-tokenized
+            dataset. Enables offline or SPDL mode.
+        dataset_cache_dir: HuggingFace cache directory (online mode).
+        local_nvme_cache_dir: Root path for S3 → NVMe staging.
+        require_local_nvme: If True, assert that the resolved dataset
+            path is on the NVMe mount.
+        pack_into_blocks: If True, concatenate + chunk tokens into
+            fixed-size blocks (online mode only).
+        block_sizes: List of target block sizes for packing.
+        block_size_counts: Per-size quotas ``{size: count}`` for packing.
+        domain_column: Column name for domain-aware packing.
+        concat_across_domains: Allow cross-domain token concatenation.
+        drop_remainder: Discard tail blocks shorter than the smallest size.
+        streaming: Enable HuggingFace streaming mode.
+        use_spdl: Enable SPDL ``.bin/.idx`` pipeline mode.
+        shard_manifest_path: Path to ``consumed_shards.json``. When
+            provided, a ``ShardTracker`` is created to exclude already
+            processed shards and track newly consumed ones. Returned
+            in ``dataset_info["shard_tracker"]``.
+
+    Returns:
+        ``(train_loader, eval_loader, test_loader, dataset_info)`` where
+        ``dataset_info`` is a dict containing split sizes, vocab size,
+        samplers, worker config, and (for SPDL) the shard tracker.
     """
     if tokenizer is None:
         raise ValueError("tokenizer must be provided")
 
     if streaming:
-        # Streaming mode : to test until the tokenization is complete
+        # Streaming mode: tokenize on-the-fly from HuggingFace streaming
         print_rank_0(
             f"Loading dataset in STREAMING mode: {dataset_name} ({dataset_config})"
         )
@@ -932,7 +1056,7 @@ def get_dataloaders(
         }
         return train_loader, eval_loader, test_loader, dataset_info
 
-    # Use the pre tokenized dataset from S3
+    # ---- Offline / SPDL: resolve pre-tokenized dataset path ----
     resolved_tokenized_path = tokenized_dataset_path
     if tokenized_dataset_path:
         if _is_s3_uri(tokenized_dataset_path):
