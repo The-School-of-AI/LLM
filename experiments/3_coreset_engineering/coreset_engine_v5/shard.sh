@@ -29,6 +29,12 @@ BATCH_SIZE=80000
 CHECKPOINT_EVERY_N_BATCHES=3
 USED_CACHE_MAX_ENTRIES=0
 USED_CACHE_STATS_EVERY=0
+BATCH_PREFETCH_MODE="auto"
+BATCH_PREFETCH_QUEUE_SIZE=1
+BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE=50000
+BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO=1.0
+BATCH_PREFETCH_AUTO_MIN_WAIT_MS=2.0
+BATCH_PREFETCH_AUTO_WARMUP_BATCHES=5
 TOTAL_TOKENS=""
 RESUME=false
 
@@ -54,6 +60,13 @@ usage() {
   echo "  --checkpoint-every-n-batches  Checkpoint cadence passed to coreset_builder (default: 3)"
   echo "  --used-cache-max-entries   Optional in-memory LRU size for used-chunk checks (default: 0=off)"
   echo "  --used-cache-stats-every   Log used-cache hit-rate every N batches (default: 0=off)"
+  echo "  --batch-prefetch-mode      Batch prefetch mode (default: auto)"
+  echo "                     Values: off | on | auto"
+  echo "  --batch-prefetch-queue-size  Prefetch queue size (default: 1)"
+  echo "  --batch-prefetch-auto-min-batch-size  Auto mode min batch size (default: 50000)"
+  echo "  --batch-prefetch-auto-max-shard-cpu-ratio  Auto mode max shard/cpu ratio (default: 1.0)"
+  echo "  --batch-prefetch-auto-min-wait-ms  Auto mode warmup wait threshold in ms (default: 2.0)"
+  echo "  --batch-prefetch-auto-warmup-batches  Auto mode warmup batch count (default: 5)"
   echo "  --resume            Resume from last checkpoints (don't clean output dirs)"
   exit 1
 }
@@ -73,6 +86,12 @@ while [[ $# -gt 0 ]]; do
     --checkpoint-every-n-batches) CHECKPOINT_EVERY_N_BATCHES="$2"; shift 2 ;;
     --used-cache-max-entries) USED_CACHE_MAX_ENTRIES="$2"; shift 2 ;;
     --used-cache-stats-every) USED_CACHE_STATS_EVERY="$2"; shift 2 ;;
+    --batch-prefetch-mode) BATCH_PREFETCH_MODE="$2"; shift 2 ;;
+    --batch-prefetch-queue-size) BATCH_PREFETCH_QUEUE_SIZE="$2"; shift 2 ;;
+    --batch-prefetch-auto-min-batch-size) BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE="$2"; shift 2 ;;
+    --batch-prefetch-auto-max-shard-cpu-ratio) BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO="$2"; shift 2 ;;
+    --batch-prefetch-auto-min-wait-ms) BATCH_PREFETCH_AUTO_MIN_WAIT_MS="$2"; shift 2 ;;
+    --batch-prefetch-auto-warmup-batches) BATCH_PREFETCH_AUTO_WARMUP_BATCHES="$2"; shift 2 ;;
     --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
     --resume)           RESUME=true;           shift 1 ;;
     -h|--help)          usage ;;
@@ -99,6 +118,7 @@ echo "  Band Infer   : $BAND_INFERENCE"
 echo "  Band Score   : $BAND_SCORE_SOURCE"
 echo "  Ckpt Every N : $CHECKPOINT_EVERY_N_BATCHES"
 echo "  Used Cache   : max=$USED_CACHE_MAX_ENTRIES stats_every=$USED_CACHE_STATS_EVERY"
+echo "  Prefetch     : mode=$BATCH_PREFETCH_MODE queue=$BATCH_PREFETCH_QUEUE_SIZE auto_min_batch=$BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE auto_max_ratio=$BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO auto_min_wait_ms=$BATCH_PREFETCH_AUTO_MIN_WAIT_MS auto_warmup=$BATCH_PREFETCH_AUTO_WARMUP_BATCHES"
 echo "============================================================"
 
 # --------------- PYTHON DETECTION (WINDOWS/GIT-BASH FRIENDLY) ---------------
@@ -196,6 +216,12 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
       --checkpoint-every-n-batches "$CHECKPOINT_EVERY_N_BATCHES" \
       --used-cache-max-entries "$USED_CACHE_MAX_ENTRIES" \
       --used-cache-stats-every "$USED_CACHE_STATS_EVERY" \
+      --batch-prefetch-mode "$BATCH_PREFETCH_MODE" \
+      --batch-prefetch-queue-size "$BATCH_PREFETCH_QUEUE_SIZE" \
+      --batch-prefetch-auto-min-batch-size "$BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE" \
+      --batch-prefetch-auto-max-shard-cpu-ratio "$BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO" \
+      --batch-prefetch-auto-min-wait-ms "$BATCH_PREFETCH_AUTO_MIN_WAIT_MS" \
+      --batch-prefetch-auto-warmup-batches "$BATCH_PREFETCH_AUTO_WARMUP_BATCHES" \
       --band-inference "$BAND_INFERENCE" \
       --band-score-source "$BAND_SCORE_SOURCE" \
       ${TOTAL_TOKENS:+--total-input-tokens-estimate "$TOTAL_TOKENS"} \
