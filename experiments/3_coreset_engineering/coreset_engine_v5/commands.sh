@@ -42,7 +42,9 @@ NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"
 TOTAL_TOKENS="${TOTAL_TOKENS:-4523096944}"
 BATCH_SIZE="${BATCH_SIZE:-80000}"
-CHECKPOINT_EVERY_N_BATCHES="${CHECKPOINT_EVERY_N_BATCHES:-1}"
+CHECKPOINT_EVERY_N_BATCHES="${CHECKPOINT_EVERY_N_BATCHES:-3}"
+USED_CACHE_MAX_ENTRIES="${USED_CACHE_MAX_ENTRIES:-0}"
+USED_CACHE_STATS_EVERY="${USED_CACHE_STATS_EVERY:-0}"
 RESUME="${RESUME:-false}" 
 # ------------------------------------------------------------------------------
 
@@ -208,6 +210,7 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "  Total Tokens: ${TOTAL_TOKENS}"
         echo "  Batch Size:   ${BATCH_SIZE}"
         echo "  Ckpt Every N: ${CHECKPOINT_EVERY_N_BATCHES}"
+        echo "  Used Cache:   max=${USED_CACHE_MAX_ENTRIES} stats_every=${USED_CACHE_STATS_EVERY}"
         echo "  Resume:       ${RESUME}"
         echo "  Foreground:   ${FOREGROUND}"
         echo ""
@@ -216,6 +219,7 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "      --num-shards ${NUM_SHARDS} --stages \"${STAGES}\""
         echo "      --input-path \"${S3_INPUT_PATH}\" --total-tokens ${TOTAL_TOKENS} --batch-size ${BATCH_SIZE}"
         echo "      --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} ${RESUME_FLAG}"
+        echo "      --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} --used-cache-stats-every ${USED_CACHE_STATS_EVERY}"
         echo "=========================================="
         exit 0
 fi
@@ -231,6 +235,8 @@ if [ "${FOREGROUND}" = "true" ]; then
             --total-tokens ${TOTAL_TOKENS} \
             --batch-size ${BATCH_SIZE} \
             --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
+            --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} \
+            --used-cache-stats-every ${USED_CACHE_STATS_EVERY} \
             ${RESUME_FLAG}
 else
         # Background: Used for manual EC2 runs with nohup for SSH disconnect safety
@@ -243,6 +249,8 @@ else
             --total-tokens ${TOTAL_TOKENS} \
             --batch-size ${BATCH_SIZE} \
             --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
+            --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} \
+            --used-cache-stats-every ${USED_CACHE_STATS_EVERY} \
             ${RESUME_FLAG} \
             > shard_run.log 2>&1 &
 
