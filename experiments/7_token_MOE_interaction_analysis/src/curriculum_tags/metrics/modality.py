@@ -174,9 +174,6 @@ class ModalityMetric(MetricPlugin):
             "agentic_density": round(agentic_density, 6),
         }
 
-        # Apply Tag Overrides
-        return self._check_dataset_tags(sample, result)
-
     def _check_dataset_tags(self, sample, result):
         """Refine modality based on explicit dataset tags."""
         domain_tag = sample.get("domain", "").lower()
