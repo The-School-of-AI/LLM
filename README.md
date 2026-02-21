@@ -596,7 +596,7 @@ Data loading and tokenization utilities:
 ```
 cd LLM
 for d in experiments/tests/*/code/src/tokenizer/; do
-  rm -i tokenizer.json "$d"    # -i = interactive prompt
+  cp -i tokenizer.json "$d"    # -i = interactive prompt
 done
 ```
 
