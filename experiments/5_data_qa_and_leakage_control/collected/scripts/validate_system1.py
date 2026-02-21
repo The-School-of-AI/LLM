@@ -8,7 +8,7 @@ print("Building validation dataset...\n")
 
 # Load EXACT benchmark questions from registry
 mmlu_benchmark = []
-with open('benchmark_registry/mmlu_test.jsonl', 'r') as f:
+with open('benchmarks/mmlu_test.jsonl', 'r') as f:
     for line in f:
         mmlu_benchmark.append(json.loads(line))
 
