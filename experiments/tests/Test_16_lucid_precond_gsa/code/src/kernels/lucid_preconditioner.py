@@ -9,14 +9,23 @@ where P = M ⊙ exp(K_RN · K_RN⊤ / √d − √d)
 The preconditioned values Y replace raw values V in the attention
 computation, sharpening retrieval without lowering softmax temperature.
 
-Provides:
-    1. pytorch_lucid_precondition()      — full-matrix reference (for testing)
-    2. pytorch_lucid_precondition_blockwise() — memory-efficient block solver
-    3. triton_lucid_precondition()        — fused Triton kernel (forward only)
-    4. lucid_precondition()              — dispatch: Triton if available, else PyTorch
+Architecture:
+    - Forward:  Triton-fused RMS norm → block-wise forward substitution (cuBLAS TRSM)
+    - Backward: Triton-fused grad computation → block-wise backward substitution
+    - Reversibility: Deterministic, stateless — safe for ReversibleMidpointStack
 
-All functions operate per-head: inputs are [B, T, D] for a single head,
-or [B, T, H, D] with head dimension handled internally.
+Provides:
+    1. pytorch_lucid_precondition()           — full-matrix reference (testing)
+    2. pytorch_lucid_precondition_blockwise() — memory-efficient block solver
+    3. triton_lucid_precondition()            — fused Triton fwd kernel
+    4. lucid_precondition()                   — dispatch (main entry point)
+
+All functions operate per-head: inputs [B, T, H, D] handled internally.
+
+Backward math (gradient of triangular solve P·Y = V):
+    Given grad_Y (dL/dY), we need dL/dV and dL/dK.
+    dL/dV = P⁻ᵀ · grad_Y  (backward substitution on Pᵀ)
+    dL/dK = f(grad_Y, Y, K)  (chain rule through P's dependence on K)
 """
 
 import math
@@ -44,11 +53,10 @@ def _rms_normalize_keys(K: torch.Tensor) -> torch.Tensor:
     """
     RMS-normalize keys: K_RN = √d · K / ‖K‖₂
 
-    This ensures the preconditioner matrix has unit diagonal (self-similarity = 1)
-    and controlled off-diagonal magnitudes for numerical stability.
+    Ensures unit diagonal in preconditioner matrix (self-similarity = 1).
 
     Args:
-        K: [B, T, D] or [B, T, H, D] key tensor
+        K: [..., D] key tensor
 
     Returns:
         K_RN: same shape, RMS-normalized
@@ -56,6 +64,117 @@ def _rms_normalize_keys(K: torch.Tensor) -> torch.Tensor:
     d = K.shape[-1]
     norm = K.norm(dim=-1, keepdim=True).clamp(min=1e-8)
     return math.sqrt(d) * K / norm
+
+
+# =====================================================================
+# Block-wise triangular solve (shared by forward and backward)
+# =====================================================================
+
+def _blockwise_forward_substitution(K_RN, V, sqrt_d, block_size, device):
+    """
+    Block-wise forward substitution: solve P·Y = V.
+
+    P = causal ⊙ exp(K_RN · K_RN⊤ / √d − √d), lower-triangular, unit diagonal.
+    Never materializes full [T, T] matrix — only [BS, BS] tiles.
+
+    Args:
+        K_RN: [BH, T, D] RMS-normalized keys
+        V:    [BH, T, D] values (or gradient)
+        sqrt_d: √D scalar
+        block_size: tile size
+        device: torch device
+
+    Returns:
+        Y: [BH, T, D] solution
+    """
+    BH, T, D = K_RN.shape
+    BS = min(block_size, T)
+    Y = torch.zeros_like(V)
+
+    for i in range(0, T, BS):
+        i_end = min(i + BS, T)
+        K_RN_i = K_RN[:, i:i_end, :]
+        rhs = V[:, i:i_end, :].clone()
+
+        # Subtract contributions from all previous blocks
+        for j in range(0, i, BS):
+            j_end = min(j + BS, T)
+            K_RN_j = K_RN[:, j:j_end, :]
+            exp_ij = torch.exp(
+                torch.bmm(K_RN_i, K_RN_j.transpose(-2, -1)) / sqrt_d - sqrt_d
+            )
+            rhs = rhs - torch.bmm(exp_ij, Y[:, j:j_end, :])
+
+        # Diagonal block solve
+        exp_ii_scores = torch.bmm(K_RN_i, K_RN_i.transpose(-2, -1)) / sqrt_d - sqrt_d
+        bs_actual = i_end - i
+        causal = torch.tril(torch.ones(bs_actual, bs_actual, device=device, dtype=torch.bool))
+        exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
+
+        Y[:, i:i_end, :] = torch.linalg.solve_triangular(exp_ii, rhs, upper=False)
+
+    return Y
+
+
+def _blockwise_backward_substitution(K_RN, grad_Y, sqrt_d, block_size, device):
+    """
+    Block-wise backward substitution: solve Pᵀ · dV = grad_Y.
+
+    This computes dL/dV = P⁻ᵀ · grad_Y by solving the upper-triangular
+    system Pᵀ · dV = grad_Y, processing blocks from last to first.
+
+    Args:
+        K_RN:   [BH, T, D] RMS-normalized keys
+        grad_Y: [BH, T, D] gradient w.r.t. output Y
+        sqrt_d: √D scalar
+        block_size: tile size
+        device: torch device
+
+    Returns:
+        dV: [BH, T, D] gradient w.r.t. values V
+    """
+    BH, T, D = K_RN.shape
+    BS = min(block_size, T)
+    dV = torch.zeros_like(grad_Y)
+
+    # Process blocks from last to first (backward substitution)
+    block_starts = list(range(0, T, BS))
+    for idx in reversed(range(len(block_starts))):
+        i = block_starts[idx]
+        i_end = min(i + BS, T)
+        K_RN_i = K_RN[:, i:i_end, :]
+        rhs = grad_Y[:, i:i_end, :].clone()
+
+        # Subtract contributions from all later blocks
+        for jdx in range(idx + 1, len(block_starts)):
+            j = block_starts[jdx]
+            j_end = min(j + BS, T)
+            K_RN_j = K_RN[:, j:j_end, :]
+
+            # P[j, i]ᵀ = P[i, j] — note the transposition
+            # P[j, i] = exp(K_RN_j · K_RN_i⊤ / √d − √d)
+            exp_ji_T = torch.exp(
+                torch.bmm(K_RN_i, K_RN_j.transpose(-2, -1)) / sqrt_d - sqrt_d
+            ).transpose(-2, -1)  # [BH, BS_j, BS_i] → transposed for Pᵀ
+            # Actually we need Pᵀ[i,j] = P[j,i]
+            # P[j,i] = exp(K_RN_j · K_RN_i⊤ / √d − √d) — shape [BH, BS_j, BS_i]
+            # We want to compute Pᵀ[i_block, j_block] @ dV[j_block]
+            # Pᵀ[i,j] = P[j,i]ᵀ
+            P_ji = torch.exp(
+                torch.bmm(K_RN_j, K_RN_i.transpose(-2, -1)) / sqrt_d - sqrt_d
+            )  # [BH, BS_j, BS_i]
+            # Pᵀ contribution: Pᵀ[i, j] @ dV[j] = P[j, i]ᵀ @ dV[j]
+            rhs = rhs - torch.bmm(P_ji.transpose(-2, -1), dV[:, j:j_end, :])
+
+        # Diagonal block: solve Pᵀ[i,i] · dV[i] = rhs
+        exp_ii_scores = torch.bmm(K_RN_i, K_RN_i.transpose(-2, -1)) / sqrt_d - sqrt_d
+        bs_actual = i_end - i
+        causal = torch.tril(torch.ones(bs_actual, bs_actual, device=device, dtype=torch.bool))
+        exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
+        # P[i,i]ᵀ is upper-triangular
+        dV[:, i:i_end, :] = torch.linalg.solve_triangular(exp_ii.transpose(-2, -1), rhs, upper=True)
+
+    return dV
 
 
 # =====================================================================
@@ -68,16 +187,11 @@ def pytorch_lucid_precondition(
 ) -> torch.Tensor:
     """
     LUCID preconditioning via full-matrix triangular solve.
-
-    Computes Y such that P · Y = V, where:
-        P = causal_mask ⊙ exp(K_RN · K_RN⊤ / √d − √d)
-
-    This materializes the full [T, T] preconditioner — use only for
-    testing or short sequences (T ≤ 1024).
+    Use only for testing or short sequences (T ≤ 1024).
 
     Args:
-        K: [B, T, D] keys (single head) or [B, T, H, D] (multi-head)
-        V: [B, T, D] values (single head) or [B, T, H, D] (multi-head)
+        K: [B, T, D] or [B, T, H, D] keys
+        V: [B, T, D] or [B, T, H, D] values
 
     Returns:
         Y: same shape as V, preconditioned values
@@ -85,34 +199,23 @@ def pytorch_lucid_precondition(
     multi_head = K.dim() == 4
     if multi_head:
         B, T, H, D = K.shape
-        # Process each head independently — reshape to [B*H, T, D]
         K = K.permute(0, 2, 1, 3).reshape(B * H, T, D)
         V = V.permute(0, 2, 1, 3).reshape(B * H, T, D)
     else:
         B, T, D = K.shape
 
     sqrt_d = math.sqrt(D)
+    K_RN = _rms_normalize_keys(K)
 
-    # Step 1: RMS-normalize keys
-    K_RN = _rms_normalize_keys(K)  # [BH, T, D]
-
-    # Step 2: Build preconditioner matrix P
-    # P_ij = exp(K_RN_i · K_RN_j / √d − √d) for i >= j, else 0
-    # Diagonal: exp(K_RN_i · K_RN_i / √d − √d) = exp(d/√d − √d) = exp(0) = 1
-    # (since ‖K_RN‖² = d after RMS normalization)
-    scores = torch.bmm(K_RN, K_RN.transpose(-2, -1)) / sqrt_d - sqrt_d  # [BH, T, T]
-
-    # Apply causal mask (lower triangular)
+    scores = torch.bmm(K_RN, K_RN.transpose(-2, -1)) / sqrt_d - sqrt_d
     causal_mask = torch.tril(torch.ones(T, T, device=K.device, dtype=torch.bool))
     scores = scores.masked_fill(~causal_mask, float('-inf'))
-    P = torch.exp(scores)  # [BH, T, T], lower triangular, unit diagonal
+    P = torch.exp(scores)
 
-    # Step 3: Solve P · Y = V via triangular solve
-    # P is lower-triangular with unit diagonal
     Y = torch.linalg.solve_triangular(P, V, upper=False)
 
     if multi_head:
-        Y = Y.reshape(B, H, T, D).permute(0, 2, 1, 3)  # [B, T, H, D]
+        Y = Y.reshape(B, H, T, D).permute(0, 2, 1, 3)
 
     return Y
 
@@ -128,14 +231,12 @@ def pytorch_lucid_precondition_blockwise(
 ) -> torch.Tensor:
     """
     Memory-efficient LUCID preconditioning via block-wise forward substitution.
-
-    Implements Algorithm 2 from the LUCID paper. Never materializes the full
-    [T, T] preconditioner — only [BS, BS] blocks at a time.
+    Never materializes full [T, T] matrix.
 
     Args:
-        K: [B, T, D] keys (single head) or [B, T, H, D] (multi-head)
-        V: [B, T, D] values (single head) or [B, T, H, D] (multi-head)
-        block_size: Block size for the solver (default 64)
+        K: [B, T, D] or [B, T, H, D] keys
+        V: [B, T, D] or [B, T, H, D] values
+        block_size: tile size (default 64)
 
     Returns:
         Y: same shape as V, preconditioned values
@@ -147,48 +248,11 @@ def pytorch_lucid_precondition_blockwise(
         V = V.permute(0, 2, 1, 3).reshape(B * H, T, D)
     else:
         B, T, D = K.shape
+        H = 1
 
     sqrt_d = math.sqrt(D)
-    BS = min(block_size, T)
-
-    # Step 1: RMS-normalize keys
-    K_RN = _rms_normalize_keys(K)  # [BH, T, D]
-
-    # Step 2: Block-wise forward substitution
-    Y = torch.zeros_like(V)
-
-    for i in range(0, T, BS):
-        i_end = min(i + BS, T)
-        K_RN_i = K_RN[:, i:i_end, :]     # [BH, BS_i, D]
-        rhs = V[:, i:i_end, :].clone()     # [BH, BS_i, D]
-
-        # Subtract contributions from all previous blocks
-        for j in range(0, i, BS):
-            j_end = min(j + BS, T)
-            K_RN_j = K_RN[:, j:j_end, :]  # [BH, BS_j, D]
-
-            # exp(K_RN_i · K_RN_j⊤ / √d − √d) — always lower-triangular
-            # since i > j, ALL entries in this off-diagonal block are valid
-            exp_ij = torch.exp(
-                torch.bmm(K_RN_i, K_RN_j.transpose(-2, -1)) / sqrt_d - sqrt_d
-            )  # [BH, BS_i, BS_j]
-
-            rhs = rhs - torch.bmm(exp_ij, Y[:, j:j_end, :])
-
-        # Solve diagonal block
-        # exp(K_RN_i · K_RN_i⊤ / √d − √d) — lower triangular within block
-        exp_ii = torch.exp(
-            torch.bmm(K_RN_i, K_RN_i.transpose(-2, -1)) / sqrt_d - sqrt_d
-        )  # [BH, BS_i, BS_i]
-
-        # Apply causal mask to diagonal block
-        bs_actual = i_end - i
-        diag_mask = torch.tril(torch.ones(bs_actual, bs_actual, device=K.device, dtype=torch.bool))
-        exp_ii = exp_ii.masked_fill(~diag_mask, 0.0)
-
-        Y[:, i:i_end, :] = torch.linalg.solve_triangular(
-            exp_ii, rhs, upper=False)
-
+    K_RN = _rms_normalize_keys(K)
+    Y = _blockwise_forward_substitution(K_RN, V, sqrt_d, block_size, K.device)
 
     if multi_head:
         actual_B = Y.shape[0] // H
@@ -198,19 +262,23 @@ def pytorch_lucid_precondition_blockwise(
 
 
 # =====================================================================
-# Triton Kernel: Fused block-wise forward substitution
+# Triton Kernel: Fused RMS normalization
 # =====================================================================
 
 if HAS_TRITON:
 
     @triton.jit
-    def _lucid_rms_norm_kernel(
-        K_ptr, K_RN_ptr,
+    def _lucid_rms_norm_fwd_kernel(
+        K_ptr, K_RN_ptr, Norm_ptr,
         T_val, D_val: tl.constexpr,
         stride_kb, stride_kt, stride_kd,
         stride_ob, stride_ot, stride_od,
+        stride_nb,
     ):
-        """Fused RMS normalization: K_RN = √D · K / ‖K‖₂"""
+        """
+        Fused forward RMS norm: K_RN = √D · K / ‖K‖₂
+        Also saves the norm for backward reuse.
+        """
         batch_idx = tl.program_id(0)
         token_idx = tl.program_id(1)
 
@@ -227,6 +295,9 @@ if HAS_TRITON:
         norm = tl.sqrt(norm_sq + 1e-16)
         sqrt_d = tl.sqrt(float(D_val))
 
+        # Save norm for backward
+        tl.store(Norm_ptr + batch_idx * stride_nb + token_idx, norm)
+
         # Normalize
         k_rn = sqrt_d * k_vals / norm
 
@@ -234,6 +305,245 @@ if HAS_TRITON:
         o_ptr = K_RN_ptr + batch_idx * stride_ob + token_idx * stride_ot
         tl.store(o_ptr + d_offsets * stride_od, k_rn, mask=mask)
 
+    @triton.jit
+    def _lucid_rms_norm_bwd_kernel(
+        grad_K_RN_ptr, grad_K_ptr,
+        K_ptr, Norm_ptr,
+        T_val, D_val: tl.constexpr,
+        stride_gb, stride_gt, stride_gd,
+        stride_kb, stride_kt, stride_kd,
+        stride_ob, stride_ot, stride_od,
+        stride_nb,
+    ):
+        """
+        Backward of RMS norm: given dL/dK_RN, compute dL/dK.
+
+        K_RN = √D · K / ‖K‖
+        dK_RN/dK = √D · (I - K·Kᵀ/‖K‖²) / ‖K‖
+        dL/dK = dL/dK_RN · dK_RN/dK
+        """
+        batch_idx = tl.program_id(0)
+        token_idx = tl.program_id(1)
+
+        d_offsets = tl.arange(0, D_val)
+        mask = d_offsets < D_val
+
+        # Load grad_K_RN, K, norm
+        g_ptr = grad_K_RN_ptr + batch_idx * stride_gb + token_idx * stride_gt
+        k_ptr = K_ptr + batch_idx * stride_kb + token_idx * stride_kt
+        grad_krn = tl.load(g_ptr + d_offsets * stride_gd, mask=mask, other=0.0).to(tl.float32)
+        k_vals = tl.load(k_ptr + d_offsets * stride_kd, mask=mask, other=0.0).to(tl.float32)
+        norm = tl.load(Norm_ptr + batch_idx * stride_nb + token_idx)
+
+        sqrt_d = tl.sqrt(float(D_val))
+
+        # dK = √D / ‖K‖ · (grad_krn - (grad_krn · K̂) · K̂)
+        # where K̂ = K / ‖K‖
+        inv_norm = 1.0 / (norm + 1e-16)
+        k_hat = k_vals * inv_norm
+        dot = tl.sum(grad_krn * k_hat, axis=0)
+        grad_k = sqrt_d * inv_norm * (grad_krn - dot * k_hat)
+
+        # Store
+        o_ptr = grad_K_ptr + batch_idx * stride_ob + token_idx * stride_ot
+        tl.store(o_ptr + d_offsets * stride_od, grad_k.to(k_vals.dtype), mask=mask)
+
+
+# =====================================================================
+# torch.autograd.Function — Fused Forward + Backward
+# =====================================================================
+
+class LucidPreconditionFunction(torch.autograd.Function):
+    """
+    Fused LUCID preconditioning with Triton-accelerated forward + backward.
+
+    Forward:  Triton RMS norm → block-wise forward substitution (cuBLAS TRSM)
+    Backward: block-wise backward substitution (Pᵀ solve) → Triton RMS norm bwd
+
+    Saves K_RN and Y (not the full [T,T] matrix P) for backward — O(BHT D) memory.
+    Deterministic and stateless — safe for ReversibleMidpointStack.
+    """
+
+    @staticmethod
+    def forward(ctx, K, V, block_size):
+        multi_head = K.dim() == 4
+        if multi_head:
+            B, T, H, D = K.shape
+            K_flat = K.permute(0, 2, 1, 3).reshape(B * H, T, D).contiguous()
+            V_flat = V.permute(0, 2, 1, 3).reshape(B * H, T, D).contiguous()
+        else:
+            B, T, D = K.shape
+            K_flat = K.contiguous()
+            V_flat = V.contiguous()
+            H = 1
+
+        sqrt_d = math.sqrt(D)
+        BH = K_flat.shape[0]
+
+        # Step 1: RMS normalize keys (Triton if available)
+        K_RN = torch.empty_like(K_flat)
+        K_norms = torch.empty(BH, T, device=K.device, dtype=torch.float32)
+
+        if HAS_TRITON and K.is_cuda:
+            D_pow2 = triton.next_power_of_2(D)
+            if D_pow2 <= 1024:
+                grid = (BH, T)
+                _lucid_rms_norm_fwd_kernel[grid](
+                    K_flat, K_RN, K_norms,
+                    T, D_pow2,
+                    K_flat.stride(0), K_flat.stride(1), K_flat.stride(2),
+                    K_RN.stride(0), K_RN.stride(1), K_RN.stride(2),
+                    K_norms.stride(0),
+                )
+            else:
+                K_RN = _rms_normalize_keys(K_flat)
+                K_norms = K_flat.norm(dim=-1).clamp(min=1e-8)
+        else:
+            K_RN = _rms_normalize_keys(K_flat)
+            K_norms = K_flat.norm(dim=-1).clamp(min=1e-8)
+
+        # Step 2: Block-wise forward substitution
+        Y_flat = _blockwise_forward_substitution(K_RN, V_flat, sqrt_d, block_size, K.device)
+
+        # Save for backward (O(BH·T·D) each — no [T,T] matrices)
+        ctx.save_for_backward(K_flat, K_RN, K_norms, Y_flat)
+        ctx.block_size = block_size
+        ctx.multi_head = multi_head
+        ctx.sqrt_d = sqrt_d
+        if multi_head:
+            ctx.B, ctx.H = B, H
+
+        # Reshape output
+        if multi_head:
+            Y = Y_flat.reshape(B, H, T, D).permute(0, 2, 1, 3).contiguous()
+        else:
+            Y = Y_flat
+
+        return Y
+
+    @staticmethod
+    def backward(ctx, grad_Y):
+        K_flat, K_RN, K_norms, Y_flat = ctx.saved_tensors
+        block_size = ctx.block_size
+        sqrt_d = ctx.sqrt_d
+        multi_head = ctx.multi_head
+
+        BH, T, D = K_RN.shape
+
+        # Reshape grad_Y to [BH, T, D]
+        if multi_head:
+            B, H = ctx.B, ctx.H
+            grad_Y_flat = grad_Y.permute(0, 2, 1, 3).reshape(BH, T, D).contiguous()
+        else:
+            grad_Y_flat = grad_Y.contiguous()
+
+        # ── Step 1: dL/dV via backward substitution on Pᵀ ──
+        # P·Y = V → dL/dV = P⁻ᵀ · dL/dY
+        dV_flat = _blockwise_backward_substitution(
+            K_RN, grad_Y_flat, sqrt_d, block_size, K_flat.device
+        )
+
+        # ── Step 2: dL/dK_RN via chain rule ──
+        # P_ij = exp(K_RN_i · K_RN_j / √d − √d) for causal i >= j
+        # dL/dK_RN comes from dL/dP · dP/dK_RN
+        # dL/dP_ij = -dV_i · Y_j  (from the solve: Y = P⁻¹V)
+        #            where dV = P⁻ᵀ grad_Y (already computed)
+        # dP/dK_RN_i from row i: sum_j P_ij · (K_RN_j / √d)
+        # Full: dL/dK_RN_i = (1/√d) · sum_j dL/dP_ij · P_ij · K_RN_j
+        #                   = -(1/√d) · sum_j (dV_i · Y_j⊤) ⊙ P_ij · K_RN_j
+
+        # Compute dL/dK_RN blockwise (same tiling as forward)
+        BS = min(block_size, T)
+        dK_RN = torch.zeros_like(K_RN)
+
+        for i in range(0, T, BS):
+            i_end = min(i + BS, T)
+            K_RN_i = K_RN[:, i:i_end, :]
+            dV_i = dV_flat[:, i:i_end, :]
+
+            for j in range(0, i_end, BS):
+                j_end = min(j + BS, T)
+                K_RN_j = K_RN[:, j:j_end, :]
+                Y_j = Y_flat[:, j:j_end, :]
+
+                # Compute P_ij tile
+                scores_ij = torch.bmm(K_RN_i, K_RN_j.transpose(-2, -1)) / sqrt_d - sqrt_d
+
+                # Apply causal mask
+                if i == j:
+                    bs_i = i_end - i
+                    bs_j = j_end - j
+                    causal = torch.tril(torch.ones(bs_i, bs_j, device=K_flat.device, dtype=torch.bool))
+                    scores_ij = scores_ij.masked_fill(~causal, float('-inf'))
+                elif i < j:
+                    continue  # upper triangle — skip
+
+                P_ij = torch.exp(scores_ij)  # [BH, BS_i, BS_j]
+
+                # dL/dP_ij = -(dV_i · Y_j⊤) = -dV_i @ Y_j⊤
+                dL_dP = -torch.bmm(dV_i, Y_j.transpose(-2, -1))  # [BH, BS_i, BS_j]
+
+                # dL/dK_RN_i += (1/√d) · (dL_dP ⊙ P_ij) @ K_RN_j
+                dK_RN[:, i:i_end, :] += (1.0 / sqrt_d) * torch.bmm(dL_dP * P_ij, K_RN_j)
+
+                # dL/dK_RN_j += (1/√d) · (dL_dP ⊙ P_ij)ᵀ @ K_RN_i
+                if j < i:  # off-diagonal: also contributes to K_RN_j
+                    dK_RN[:, j:j_end, :] += (1.0 / sqrt_d) * torch.bmm((dL_dP * P_ij).transpose(-2, -1), K_RN_i)
+                elif i == j:  # diagonal: symmetric contribution
+                    dL_dP_sym = dL_dP + dL_dP.transpose(-2, -1)
+                    # Subtract diagonal to avoid double-counting
+                    diag_mask = torch.eye(i_end - i, device=K_flat.device).unsqueeze(0)
+                    dL_dP_sym = dL_dP_sym - dL_dP * diag_mask
+                    dK_RN[:, i:i_end, :] += (1.0 / sqrt_d) * torch.bmm(dL_dP_sym * P_ij, K_RN_i) * 0.5
+                    # Revert to simpler approach for diagonal
+                    dK_RN[:, i:i_end, :] -= (1.0 / sqrt_d) * torch.bmm(dL_dP_sym * P_ij, K_RN_i) * 0.5
+                    # Just use the standard formula for both i and j contributions combined
+                    dK_RN_diag = (1.0 / sqrt_d) * torch.bmm(dL_dP * P_ij, K_RN_i)
+                    dK_RN_diag_T = (1.0 / sqrt_d) * torch.bmm((dL_dP * P_ij).transpose(-2, -1), K_RN_i)
+                    dK_RN[:, i:i_end, :] += dK_RN_diag_T  # from j's perspective
+
+        # ── Step 3: dL/dK from dL/dK_RN via chain rule through RMS norm ──
+        if HAS_TRITON and K_flat.is_cuda:
+            D_pow2 = triton.next_power_of_2(D)
+            if D_pow2 <= 1024:
+                grad_K = torch.empty_like(K_flat)
+                grid = (BH, T)
+                _lucid_rms_norm_bwd_kernel[grid](
+                    dK_RN, grad_K,
+                    K_flat, K_norms,
+                    T, D_pow2,
+                    dK_RN.stride(0), dK_RN.stride(1), dK_RN.stride(2),
+                    K_flat.stride(0), K_flat.stride(1), K_flat.stride(2),
+                    grad_K.stride(0), grad_K.stride(1), grad_K.stride(2),
+                    K_norms.stride(0),
+                )
+            else:
+                grad_K = _rms_norm_bwd_pytorch(dK_RN, K_flat, K_norms, D)
+        else:
+            grad_K = _rms_norm_bwd_pytorch(dK_RN, K_flat, K_norms, D)
+
+        # Reshape outputs
+        if multi_head:
+            grad_K = grad_K.reshape(B, H, T, D).permute(0, 2, 1, 3).contiguous()
+            dV = dV_flat.reshape(B, H, T, D).permute(0, 2, 1, 3).contiguous()
+        else:
+            dV = dV_flat
+
+        return grad_K, dV, None
+
+
+def _rms_norm_bwd_pytorch(dK_RN, K, K_norms, D):
+    """PyTorch fallback for RMS norm backward."""
+    sqrt_d = math.sqrt(D)
+    inv_norm = 1.0 / (K_norms.unsqueeze(-1) + 1e-16)
+    k_hat = K * inv_norm
+    dot = (dK_RN * k_hat).sum(dim=-1, keepdim=True)
+    return sqrt_d * inv_norm * (dK_RN - dot * k_hat)
+
+
+# =====================================================================
+# Triton-accelerated dispatch (forward uses Triton RMS + cuBLAS TRSM)
+# =====================================================================
 
 def triton_lucid_precondition(
     K: torch.Tensor,
@@ -241,26 +551,9 @@ def triton_lucid_precondition(
     block_size: int = 64,
 ) -> torch.Tensor:
     """
-    LUCID preconditioning via Triton-accelerated block-wise forward substitution.
-
-    Uses Triton for RMS normalization, then falls back to PyTorch's
-    solve_triangular for the block solves (cuBLAS TRSM is already highly
-    optimized and hard to beat with Triton for small block sizes).
-
-    The key optimization: RMS norm + block score computation is fused,
-    and we never materialize the full [T, T] matrix.
-
-    Args:
-        K: [B, T, D] or [B, T, H, D] keys
-        V: [B, T, D] or [B, T, H, D] values
-        block_size: Block size for solver
-
-    Returns:
-        Y: same shape as V, preconditioned values
+    LUCID preconditioning with Triton-fused RMS norm + cuBLAS block solver.
+    No autograd — for inference / no-grad contexts.
     """
-    if not HAS_TRITON:
-        return pytorch_lucid_precondition_blockwise(K, V, block_size)
-
     multi_head = K.dim() == 4
     if multi_head:
         B, T, H, D = K.shape
@@ -273,109 +566,35 @@ def triton_lucid_precondition(
         H = 1
 
     sqrt_d = math.sqrt(D)
-    BS = min(block_size, T)
     BH = K_flat.shape[0]
 
-    # Step 1: Triton-fused RMS normalization
+    # Triton RMS norm
     K_RN = torch.empty_like(K_flat)
+    K_norms = torch.empty(BH, T, device=K.device, dtype=torch.float32)
     D_pow2 = triton.next_power_of_2(D)
 
-    if D_pow2 <= 1024:  # Triton path for reasonable head dims
+    if D_pow2 <= 1024:
         grid = (BH, T)
-        _lucid_rms_norm_kernel[grid](
-            K_flat, K_RN,
+        _lucid_rms_norm_fwd_kernel[grid](
+            K_flat, K_RN, K_norms,
             T, D_pow2,
             K_flat.stride(0), K_flat.stride(1), K_flat.stride(2),
             K_RN.stride(0), K_RN.stride(1), K_RN.stride(2),
+            K_norms.stride(0),
         )
     else:
-        # Fallback for large D
         K_RN = _rms_normalize_keys(K_flat)
 
-    # Step 2: Block-wise forward substitution using cuBLAS TRSM
-    # (cuBLAS TRSM is already batched and optimized — Triton doesn't
-    # beat it for dense triangular solves at typical block sizes)
-    Y = torch.zeros_like(V_flat)
-
-    for i in range(0, T, BS):
-        i_end = min(i + BS, T)
-        K_RN_i = K_RN[:, i:i_end, :]
-        rhs = V_flat[:, i:i_end, :].clone()
-
-        # Subtract contributions from previous blocks
-        for j in range(0, i, BS):
-            j_end = min(j + BS, T)
-            K_RN_j = K_RN[:, j:j_end, :]
-
-            exp_ij = torch.exp(
-                torch.bmm(K_RN_i, K_RN_j.transpose(-2, -1)) / sqrt_d - sqrt_d
-            )
-            rhs = rhs - torch.bmm(exp_ij, Y[:, j:j_end, :])
-
-        # Diagonal block solve
-        exp_ii_scores = torch.bmm(K_RN_i, K_RN_i.transpose(-2, -1)) / sqrt_d - sqrt_d
-        bs_actual = i_end - i
-        causal = torch.tril(torch.ones(bs_actual, bs_actual, device=K.device, dtype=torch.bool))
-        exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
-
-        Y[:, i:i_end, :] = torch.linalg.solve_triangular(
-            exp_ii, rhs, upper=False)
-
+    # Block solver
+    Y_flat = _blockwise_forward_substitution(K_RN, V_flat, sqrt_d, block_size, K.device)
 
     if multi_head:
-        Y = Y.reshape(B, H, T, D).permute(0, 2, 1, 3).contiguous()
-
-    return Y
-
-
-# =====================================================================
-# Autograd wrapper for training (forward: fast, backward: PyTorch)
-# =====================================================================
-
-class LucidPreconditionFunction(torch.autograd.Function):
-    """
-    Custom autograd function for LUCID preconditioning.
-
-    Forward: uses Triton-accelerated path (or blockwise PyTorch)
-    Backward: lets PyTorch autograd handle gradients naturally
-
-    Since we want gradients to flow through the preconditioner during
-    training, we use a simple wrapper that re-runs the PyTorch version
-    in the backward pass rather than implementing a custom backward kernel.
-    """
-
-    @staticmethod
-    def forward(ctx, K, V, block_size):
-        # Save for backward
-        ctx.save_for_backward(K, V)
-        ctx.block_size = block_size
-
-        # Use the fastest available path
-        if HAS_TRITON and K.is_cuda:
-            Y = triton_lucid_precondition(K, V, block_size)
-        else:
-            Y = pytorch_lucid_precondition_blockwise(K, V, block_size)
-
-        return Y
-
-    @staticmethod
-    def backward(ctx, grad_Y):
-        K, V = ctx.saved_tensors
-
-        # Use the full-matrix solver for backward — it uses solve_triangular
-        # which is autograd-safe (no inplace ops). The blockwise version does
-        # Y[:, i:i_end, :] = ... which is inplace and breaks autograd.
-        with torch.enable_grad():
-            K_ag = K.detach().requires_grad_(True)
-            V_ag = V.detach().requires_grad_(True)
-            Y_ag = pytorch_lucid_precondition(K_ag, V_ag)
-            Y_ag.backward(grad_Y)
-
-        return K_ag.grad, V_ag.grad, None
+        return Y_flat.reshape(B, H, T, D).permute(0, 2, 1, 3).contiguous()
+    return Y_flat
 
 
 # =====================================================================
-# Dispatch function (main entry point)
+# Dispatch function (main entry point for model)
 # =====================================================================
 
 def lucid_precondition(
@@ -389,15 +608,15 @@ def lucid_precondition(
 
     Decorrelates keys in RKHS by solving:
         P · Y = V
-    where P = causal_mask ⊙ exp(K_RN · K_RN⊤ / √d − √d)
+    where P = causal ⊙ exp(K_RN · K_RN⊤ / √d − √d)
 
-    This is the main entry point used by GatedSparseAttention.
+    Main entry point used by GatedSparseAttention.
 
     Args:
-        K: [B, T, H, D] attention keys (after RoPE)
+        K: [B, T, H, D] attention keys
         V: [B, T, H, D] gated values
-        block_size: Block size for memory-efficient solver
-        training: If True, use autograd wrapper for gradient flow
+        block_size: tile size for memory-efficient solver
+        training: if True, use autograd Function for gradient flow
 
     Returns:
         Y: [B, T, H, D] preconditioned values
