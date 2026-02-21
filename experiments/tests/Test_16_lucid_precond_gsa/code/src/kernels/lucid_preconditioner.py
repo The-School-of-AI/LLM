@@ -102,6 +102,11 @@ def _blockwise_forward_substitution(K_RN, V, sqrt_d, block_size, device):
     """
     BH, T, D = K_RN.shape
     BS = min(block_size, T)
+    orig_dtype = V.dtype
+
+    # Compute in fp32 for numerical stability (bf16 bmm accumulates errors)
+    K_RN = K_RN.float()
+    V = V.float()
     Y = torch.zeros_like(V)
 
     for i in range(0, T, BS):
@@ -124,9 +129,9 @@ def _blockwise_forward_substitution(K_RN, V, sqrt_d, block_size, device):
         causal = torch.tril(torch.ones(bs_actual, bs_actual, device=device, dtype=torch.bool))
         exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
 
-        Y[:, i:i_end, :] = _solve_triangular(exp_ii, rhs, upper=False)
+        Y[:, i:i_end, :] = torch.linalg.solve_triangular(exp_ii, rhs, upper=False)
 
-    return Y
+    return Y.to(orig_dtype)
 
 
 def _blockwise_backward_substitution(K_RN, grad_Y, sqrt_d, block_size, device):
@@ -148,7 +153,12 @@ def _blockwise_backward_substitution(K_RN, grad_Y, sqrt_d, block_size, device):
     """
     BH, T, D = K_RN.shape
     BS = min(block_size, T)
-    dV = torch.zeros_like(grad_Y)
+    orig_dtype = grad_Y.dtype
+
+    # Compute in fp32
+    K_RN = K_RN.float()
+    grad_Y = grad_Y.float()
+    dV = torch.zeros(BH, T, D, device=device, dtype=torch.float32)
 
     # Process blocks from last to first (backward substitution)
     block_starts = list(range(0, T, BS))
@@ -164,19 +174,9 @@ def _blockwise_backward_substitution(K_RN, grad_Y, sqrt_d, block_size, device):
             j_end = min(j + BS, T)
             K_RN_j = K_RN[:, j:j_end, :]
 
-            # P[j, i]ᵀ = P[i, j] — note the transposition
-            # P[j, i] = exp(K_RN_j · K_RN_i⊤ / √d − √d)
-            exp_ji_T = torch.exp(
-                torch.bmm(K_RN_i, K_RN_j.transpose(-2, -1)) / sqrt_d - sqrt_d
-            ).transpose(-2, -1)  # [BH, BS_j, BS_i] → transposed for Pᵀ
-            # Actually we need Pᵀ[i,j] = P[j,i]
-            # P[j,i] = exp(K_RN_j · K_RN_i⊤ / √d − √d) — shape [BH, BS_j, BS_i]
-            # We want to compute Pᵀ[i_block, j_block] @ dV[j_block]
-            # Pᵀ[i,j] = P[j,i]ᵀ
             P_ji = torch.exp(
                 torch.bmm(K_RN_j, K_RN_i.transpose(-2, -1)) / sqrt_d - sqrt_d
-            )  # [BH, BS_j, BS_i]
-            # Pᵀ contribution: Pᵀ[i, j] @ dV[j] = P[j, i]ᵀ @ dV[j]
+            )
             rhs = rhs - torch.bmm(P_ji.transpose(-2, -1), dV[:, j:j_end, :])
 
         # Diagonal block: solve Pᵀ[i,i] · dV[i] = rhs
@@ -184,10 +184,9 @@ def _blockwise_backward_substitution(K_RN, grad_Y, sqrt_d, block_size, device):
         bs_actual = i_end - i
         causal = torch.tril(torch.ones(bs_actual, bs_actual, device=device, dtype=torch.bool))
         exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
-        # P[i,i]ᵀ is upper-triangular
-        dV[:, i:i_end, :] = _solve_triangular(exp_ii.transpose(-2, -1), rhs, upper=True)
+        dV[:, i:i_end, :] = torch.linalg.solve_triangular(exp_ii.transpose(-2, -1), rhs, upper=True)
 
-    return dV
+    return dV.to(orig_dtype)
 
 
 # =====================================================================
@@ -466,18 +465,22 @@ class LucidPreconditionFunction(torch.autograd.Function):
         #                   = -(1/√d) · sum_j (dV_i · Y_j⊤) ⊙ P_ij · K_RN_j
 
         # Compute dL/dK_RN blockwise (same tiling as forward)
+        # All computation in fp32 for numerical stability
         BS = min(block_size, T)
-        dK_RN = torch.zeros_like(K_RN)
+        K_RN_f = K_RN.float()
+        Y_flat_f = Y_flat.float()
+        dV_flat_f = dV_flat.float()
+        dK_RN = torch.zeros(BH, T, D, device=K_flat.device, dtype=torch.float32)
 
         for i in range(0, T, BS):
             i_end = min(i + BS, T)
-            K_RN_i = K_RN[:, i:i_end, :]
-            dV_i = dV_flat[:, i:i_end, :]
+            K_RN_i = K_RN_f[:, i:i_end, :]
+            dV_i = dV_flat_f[:, i:i_end, :]
 
             for j in range(0, i_end, BS):
                 j_end = min(j + BS, T)
-                K_RN_j = K_RN[:, j:j_end, :]
-                Y_j = Y_flat[:, j:j_end, :]
+                K_RN_j = K_RN_f[:, j:j_end, :]
+                Y_j = Y_flat_f[:, j:j_end, :]
 
                 # Compute P_ij tile
                 scores_ij = torch.bmm(K_RN_i, K_RN_j.transpose(-2, -1)) / sqrt_d - sqrt_d
@@ -493,27 +496,17 @@ class LucidPreconditionFunction(torch.autograd.Function):
 
                 P_ij = torch.exp(scores_ij)  # [BH, BS_i, BS_j]
 
-                # dL/dP_ij = -(dV_i · Y_j⊤) = -dV_i @ Y_j⊤
+                # dL/dP_ij = -(dV_i · Y_j⊤)
                 dL_dP = -torch.bmm(dV_i, Y_j.transpose(-2, -1))  # [BH, BS_i, BS_j]
 
                 # dL/dK_RN_i += (1/√d) · (dL_dP ⊙ P_ij) @ K_RN_j
                 dK_RN[:, i:i_end, :] += (1.0 / sqrt_d) * torch.bmm(dL_dP * P_ij, K_RN_j)
 
-                # dL/dK_RN_j += (1/√d) · (dL_dP ⊙ P_ij)ᵀ @ K_RN_i
-                if j < i:  # off-diagonal: also contributes to K_RN_j
+                # dL/dK_RN_j contribution
+                if j < i:  # off-diagonal
                     dK_RN[:, j:j_end, :] += (1.0 / sqrt_d) * torch.bmm((dL_dP * P_ij).transpose(-2, -1), K_RN_i)
-                elif i == j:  # diagonal: symmetric contribution
-                    dL_dP_sym = dL_dP + dL_dP.transpose(-2, -1)
-                    # Subtract diagonal to avoid double-counting
-                    diag_mask = torch.eye(i_end - i, device=K_flat.device).unsqueeze(0)
-                    dL_dP_sym = dL_dP_sym - dL_dP * diag_mask
-                    dK_RN[:, i:i_end, :] += (1.0 / sqrt_d) * torch.bmm(dL_dP_sym * P_ij, K_RN_i) * 0.5
-                    # Revert to simpler approach for diagonal
-                    dK_RN[:, i:i_end, :] -= (1.0 / sqrt_d) * torch.bmm(dL_dP_sym * P_ij, K_RN_i) * 0.5
-                    # Just use the standard formula for both i and j contributions combined
-                    dK_RN_diag = (1.0 / sqrt_d) * torch.bmm(dL_dP * P_ij, K_RN_i)
-                    dK_RN_diag_T = (1.0 / sqrt_d) * torch.bmm((dL_dP * P_ij).transpose(-2, -1), K_RN_i)
-                    dK_RN[:, i:i_end, :] += dK_RN_diag_T  # from j's perspective
+                elif i == j:  # diagonal: j=i, both contribute to same slice
+                    dK_RN[:, i:i_end, :] += (1.0 / sqrt_d) * torch.bmm((dL_dP * P_ij).transpose(-2, -1), K_RN_i)
 
         # ── Step 3: dL/dK from dL/dK_RN via chain rule through RMS norm ──
         if HAS_TRITON and K_flat.is_cuda:
