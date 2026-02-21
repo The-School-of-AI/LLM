@@ -12,7 +12,7 @@ Tiered evaluation strategy based on industry gold standards (Llama 3.1/3.2, Qwen
 | `world_knowledge` | `mmlu::olmes`, `triviaqa::olmes`, `arc_challenge::olmes` |
 | `linguistic_diagnostics` | `blimp` |
 | `multilingual_indic` | `indic_glue` |
-| `context_window` | `niah_4k`, `niah_8k` |
+
 
 ---
 
@@ -22,11 +22,11 @@ Tiered evaluation strategy based on industry gold standards (Llama 3.1/3.2, Qwen
 | Group | Tasks |
 | :--- | :--- |
 | `world_knowledge` | `mmlu::olmes`, `mmlu_pro:mc::none`, `triviaqa::olmes`, `arc_challenge::olmes` |
-| `mathematical_reasoning` | `gsm8k::olmes`, `minerva_math::olmes` |
+| `mathematical_reasoning` | `gsm8k::olmes` |
 | `linguistic_diagnostics` | `blimp` |
 | `factuality` | `truthfulqa:::olmo1` |
 | `multilingual_indic` | `indic_glue`, `indic_qa` |
-| `context_window` | `niah_8k`, `niah_16k`, `niah_multikey_1`, `ruler_vt`, `ruler_cwe` |
+| `context_window` | `ruler_vt`, `ruler_cwe` |
 
 ---
 
@@ -71,7 +71,7 @@ Tiered evaluation strategy based on industry gold standards (Llama 3.1/3.2, Qwen
 | TriviaQA | — | ~75% | ~87% |
 | ARC-Challenge | 46–69% | 80% (OLMo 2) | 94% (Llama 3.1) |
 | GSM8K | 30–78% | 85% (Llama 3.1) | 95% (Llama 3.1) |
-| MATH (Minerva) | — | ~20% | ~50% |
+
 | BBH (CoT) | — | ~67% | ~87% |
 | GPQA Diamond | — | ~30% | ~50% |
 | TruthfulQA | — | ~50% | ~60% |
