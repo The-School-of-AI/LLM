@@ -109,7 +109,7 @@ def pytorch_lucid_precondition(
 
     # Step 3: Solve P · Y = V via triangular solve
     # P is lower-triangular with unit diagonal
-    Y = torch.linalg.solve_triangular(P, V, upper=False, unitdiagonal=True)
+    Y = torch.linalg.solve_triangular(P, V, upper=False, unit_diagonal=True)
 
     if multi_head:
         Y = Y.reshape(B, H, T, D).permute(0, 2, 1, 3)  # [B, T, H, D]
@@ -187,7 +187,7 @@ def pytorch_lucid_precondition_blockwise(
         exp_ii = exp_ii.masked_fill(~diag_mask, 0.0)
 
         Y[:, i:i_end, :] = torch.linalg.solve_triangular(
-            exp_ii, rhs, upper=False, unitdiagonal=True
+            exp_ii, rhs, upper=False, unit_diagonal=True
         )
 
     if multi_head:
@@ -225,7 +225,7 @@ if HAS_TRITON:
         k_sq = k_vals * k_vals
         norm_sq = tl.sum(k_sq, axis=0)
         norm = tl.sqrt(norm_sq + 1e-16)
-        sqrt_d = tl.sqrt(D_val.to(tl.float32))
+        sqrt_d = tl.sqrt(float(D_val))
 
         # Normalize
         k_rn = sqrt_d * k_vals / norm
@@ -319,7 +319,7 @@ def triton_lucid_precondition(
         exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
 
         Y[:, i:i_end, :] = torch.linalg.solve_triangular(
-            exp_ii, rhs, upper=False, unitdiagonal=True
+            exp_ii, rhs, upper=False, unit_diagonal=True
         )
 
     if multi_head:
