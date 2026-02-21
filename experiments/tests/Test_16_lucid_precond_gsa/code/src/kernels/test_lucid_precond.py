@@ -365,19 +365,14 @@ def run_benchmarks():
     """
     Overhead benchmark: how much compute and memory does LUCID add?
 
-    Three methods compared:
-    1. Full-Matrix:  Build entire T×T matrix, single cuBLAS TRSM
-                     Fast but O(T²) memory — IMPOSSIBLE at 256K+ context
-    2. PyTorch Block: PyTorch RMS norm + cuBLAS block TRSM in tiles
-                     Slightly slower but O(T × block_size) memory
-    3. Triton Block:  Triton RMS norm + cuBLAS block TRSM in tiles
-                     Same block solver, slightly faster RMS norm step
+    Two methods:
+    1. Pure PyTorch:  Full T×T matrix solve (reference only, OOMs at long context)
+    2. Triton RMSNorm + cuBLAS Block Solve:  Production path used during training
     """
-    print("\n8. Overhead Benchmark (LUCID adds accuracy, costs compute)")
+    print("\n8. Overhead Benchmark")
     print("   " + "=" * 76)
-    print("   NOTE: Full-matrix is faster at small T but OOMs at long context.")
-    print("         Block methods (PyTorch/Triton) are what we actually use.")
-    print("         Triton only accelerates RMS norm (~5% of work).")
+    print("   Pure PyTorch = full T×T matrix (fast but OOMs at 256K+ context)")
+    print("   Triton + cuBLAS = Triton RMS norm + cuBLAS block solve (production)")
 
     configs = [
         # (B, T, H, D, block_size, dtype_name)
@@ -391,12 +386,12 @@ def run_benchmarks():
     for B, T, H, D, bs, dtype_name in configs:
         dtype = torch.bfloat16 if dtype_name == "bf16" else torch.float32
         print(f"\n   Config: B={B}, T={T}, H={H}, D={D}, bs={bs}, {dtype_name}")
-        print(f"   {'Method':<36} {'FWD (ms)':>10} {'BWD (ms)':>10} {'Total':>10} {'Peak MB':>10}")
-        print(f"   {'-'*76}")
+        print(f"   {'Method':<40} {'FWD (ms)':>10} {'BWD (ms)':>10} {'Total':>10} {'Peak MB':>10}")
+        print(f"   {'-'*80}")
 
         grad_out = torch.randn(B, T, H, D, device='cuda', dtype=dtype)
 
-        # ── Full-Matrix (reference, not usable at long context) ──
+        # ── Pure PyTorch (full-matrix, reference only) ──
         K_pt, V_pt = make_test_data(B, T, H, D, dtype=dtype)
         try:
             fwd_time, _ = benchmark_fn(pytorch_lucid_precondition, K_pt, V_pt)
@@ -405,45 +400,39 @@ def run_benchmarks():
                 backward=True, grad_output=grad_out
             )
             bwd_time = total_time - fwd_time
-            print(f"   {'Full-Matrix (O(T²) mem, ref only)':<36} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}")
-            pt_total = total_time
+            print(f"   {'Pure PyTorch (ref, OOMs at long T)':<40} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}")
+            pt_fwd, pt_bwd, pt_total, pt_mem = fwd_time, bwd_time, total_time, peak_mem
         except Exception as e:
-            print(f"   {'Full-Matrix (O(T²) mem, ref only)':<36} SKIP ({e})")
-            pt_total = None
+            print(f"   {'Pure PyTorch (ref, OOMs at long T)':<40} SKIP ({e})")
+            pt_fwd, pt_bwd, pt_total, pt_mem = None, None, None, None
 
-        # ── PyTorch RMS norm + cuBLAS Block Solve ──
-        K_bw, V_bw = make_test_data(B, T, H, D, dtype=dtype)
-        fwd_time, _ = benchmark_fn(
-            lambda k, v: pytorch_lucid_precondition_blockwise(k, v, bs), K_bw, V_bw
-        )
+        # ── Triton RMSNorm + cuBLAS Block Solve (production) ──
+        K_tri, V_tri = make_test_data(B, T, H, D, dtype=dtype)
+        if HAS_TRITON:
+            fwd_fn = lambda k, v: triton_lucid_precondition(k, v, bs)
+        else:
+            fwd_fn = lambda k, v: pytorch_lucid_precondition_blockwise(k, v, bs)
+
+        fwd_time, _ = benchmark_fn(fwd_fn, K_tri, V_tri)
         total_time, peak_mem = benchmark_fn(
-            lambda k, v: lucid_precondition(k, v, block_size=bs, training=True), K_bw, V_bw,
+            lambda k, v: lucid_precondition(k, v, block_size=bs, training=True), K_tri, V_tri,
             backward=True, grad_output=grad_out
         )
         bwd_time = total_time - fwd_time
-        print(f"   {'PyTorch RMSNorm + cuBLAS Block':<36} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}")
-        bw_fwd = fwd_time
+        label = "Triton RMSNorm + cuBLAS Block" if HAS_TRITON else "PyTorch Block (no Triton)"
+        print(f"   {f'{label} (production)':<40} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}")
 
-        # ── Triton RMS norm + cuBLAS Block Solve ──
-        if HAS_TRITON:
-            K_tri, V_tri = make_test_data(B, T, H, D, dtype=dtype)
-            fwd_time, _ = benchmark_fn(
-                lambda k, v: triton_lucid_precondition(k, v, bs), K_tri, V_tri
-            )
-            total_time, peak_mem = benchmark_fn(
-                lambda k, v: lucid_precondition(k, v, block_size=bs, training=True), K_tri, V_tri,
-                backward=True, grad_output=grad_out
-            )
-            bwd_time = total_time - fwd_time
-            print(f"   {'Triton RMSNorm + cuBLAS Block':<36} {fwd_time:>9.3f}  {bwd_time:>9.3f}  {total_time:>9.3f}  {peak_mem:>9.1f}")
-            tri_fwd, tri_total = fwd_time, total_time
-
-            # Summary
-            print(f"   {'-'*76}")
-            if bw_fwd > 0:
-                print(f"   {'Triton vs PyTorch RMSNorm (fwd)':<36} {bw_fwd/tri_fwd:>9.2f}x")
-            if pt_total and pt_total > 0:
-                print(f"   {'Block vs Full-Matrix (total)':<36} {pt_total/tri_total:>9.2f}x  (Full is faster but OOMs at long T)")
+        # ── Overhead summary ──
+        print(f"   {'-'*80}")
+        if pt_total and pt_total > 0:
+            overhead_fwd = fwd_time - pt_fwd
+            overhead_bwd = bwd_time - pt_bwd
+            overhead_total = total_time - pt_total
+            overhead_mem = peak_mem - pt_mem
+            print(f"   {'Block overhead vs full-matrix:':<40} "
+                  f"{overhead_fwd:>+8.1f}ms {overhead_bwd:>+8.1f}ms {overhead_total:>+8.1f}ms {overhead_mem:>+8.1f}MB")
+        print(f"   {'LUCID cost per GSA layer:':<40} "
+              f"{fwd_time:>8.1f}ms  {bwd_time:>8.1f}ms  {total_time:>8.1f}ms  {peak_mem:>8.1f}MB")
 
 
 # ═══════════════════════════════════════════════════════════════════════
