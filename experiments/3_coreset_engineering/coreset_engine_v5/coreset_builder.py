@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import sys
 from collections import OrderedDict
 from datetime import datetime
@@ -373,6 +374,12 @@ class StreamingCoresetBuilder(CoresetBuilder):
         stage_target_scale: float = 1.0,
         band_inference: str = "none",
         band_score_source: str = "auto",
+        batch_prefetch_mode: str = "auto",
+        batch_prefetch_queue_size: int = 1,
+        batch_prefetch_auto_min_batch_size: int = 50_000,
+        batch_prefetch_auto_max_shard_cpu_ratio: float = 1.0,
+        batch_prefetch_auto_min_wait_ms: float = 2.0,
+        batch_prefetch_auto_warmup_batches: int = 5,
     ):
         super().__init__(config_path, curriculum_path)
         self.input_path = input_path
@@ -427,6 +434,33 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 + ", ".join(sorted(valid_sources))
             )
 
+        self.batch_prefetch_mode = str(batch_prefetch_mode or "auto").lower().strip()
+        if self.batch_prefetch_mode not in {"off", "on", "auto"}:
+            raise ValueError(
+                "Invalid --batch-prefetch-mode. Choose one of: off, on, auto"
+            )
+        self.batch_prefetch_queue_size = int(batch_prefetch_queue_size)
+        if self.batch_prefetch_queue_size <= 0:
+            raise ValueError("--batch-prefetch-queue-size must be >= 1")
+        self.batch_prefetch_auto_min_batch_size = int(
+            batch_prefetch_auto_min_batch_size
+        )
+        if self.batch_prefetch_auto_min_batch_size <= 0:
+            raise ValueError("--batch-prefetch-auto-min-batch-size must be >= 1")
+        self.batch_prefetch_auto_max_shard_cpu_ratio = float(
+            batch_prefetch_auto_max_shard_cpu_ratio
+        )
+        if self.batch_prefetch_auto_max_shard_cpu_ratio <= 0:
+            raise ValueError("--batch-prefetch-auto-max-shard-cpu-ratio must be > 0")
+        self.batch_prefetch_auto_min_wait_ms = float(batch_prefetch_auto_min_wait_ms)
+        if self.batch_prefetch_auto_min_wait_ms < 0:
+            raise ValueError("--batch-prefetch-auto-min-wait-ms must be >= 0")
+        self.batch_prefetch_auto_warmup_batches = int(
+            batch_prefetch_auto_warmup_batches
+        )
+        if self.batch_prefetch_auto_warmup_batches <= 0:
+            raise ValueError("--batch-prefetch-auto-warmup-batches must be >= 1")
+
         self.batch_processor = BatchProcessor(
             batch_size=self.batch_size, checkpoint_dir=checkpoint_dir
         )
@@ -442,6 +476,124 @@ class StreamingCoresetBuilder(CoresetBuilder):
         self._used_cache: OrderedDict[str, bool] = OrderedDict()
         self._used_cache_hits: int = 0
         self._used_cache_misses: int = 0
+
+    def _should_enable_batch_prefetch(self) -> Tuple[bool, str]:
+        if self.batch_prefetch_mode == "off":
+            return False, "mode=off"
+        if self.batch_prefetch_mode == "on":
+            return True, "mode=on"
+
+        cpu_count = int(os.cpu_count() or 1)
+        shard_cpu_ratio = float(self.num_shards) / float(max(1, cpu_count))
+        if self.batch_size < self.batch_prefetch_auto_min_batch_size:
+            return (
+                False,
+                f"auto-disabled: batch_size={self.batch_size} < min_batch_size={self.batch_prefetch_auto_min_batch_size}",
+            )
+        if shard_cpu_ratio > self.batch_prefetch_auto_max_shard_cpu_ratio:
+            return (
+                False,
+                "auto-disabled: shard_cpu_ratio="
+                f"{shard_cpu_ratio:.2f} > max_shard_cpu_ratio={self.batch_prefetch_auto_max_shard_cpu_ratio:.2f}",
+            )
+        return (
+            True,
+            "auto-enabled: "
+            f"batch_size={self.batch_size}, shard_cpu_ratio={shard_cpu_ratio:.2f}, "
+            f"queue_size={self.batch_prefetch_queue_size}",
+        )
+
+    def _iter_with_prefetch(
+        self,
+        source_iter: Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]],
+    ) -> Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]]:
+        import queue
+        import threading
+        import time
+
+        q: "queue.Queue[Any]" = queue.Queue(maxsize=self.batch_prefetch_queue_size)
+        stop_event = threading.Event()
+        sentinel = object()
+        producer_error: Dict[str, Optional[BaseException]] = {"err": None}
+        metrics = {
+            "producer_wait_s": 0.0,
+            "consumer_wait_s": 0.0,
+            "produced": 0,
+            "consumed": 0,
+        }
+
+        def _producer() -> None:
+            try:
+                for item in source_iter:
+                    if stop_event.is_set():
+                        break
+                    put_started = time.perf_counter()
+                    q.put(item)
+                    metrics["producer_wait_s"] += time.perf_counter() - put_started
+                    metrics["produced"] += 1
+            except BaseException as exc:
+                producer_error["err"] = exc
+            finally:
+                q.put(sentinel)
+
+        producer = threading.Thread(
+            target=_producer,
+            name=f"batch-prefetch-shard{self.shard_id:03d}",
+            daemon=True,
+        )
+        producer.start()
+
+        try:
+            while True:
+                get_started = time.perf_counter()
+                item = q.get()
+                metrics["consumer_wait_s"] += time.perf_counter() - get_started
+
+                if item is sentinel:
+                    break
+
+                metrics["consumed"] += 1
+                if (
+                    self.batch_prefetch_mode == "auto"
+                    and metrics["consumed"] == self.batch_prefetch_auto_warmup_batches
+                ):
+                    avg_wait_ms = (
+                        metrics["consumer_wait_s"] / float(max(1, metrics["consumed"]))
+                    ) * 1000.0
+                    if avg_wait_ms < self.batch_prefetch_auto_min_wait_ms:
+                        logger.info(
+                            "Shard %s prefetch(auto): low observed queue wait after warmup "
+                            "(avg_wait_ms=%.2f < min_wait_ms=%.2f). Prefetch may have limited benefit on this run.",
+                            self.shard_id,
+                            avg_wait_ms,
+                            self.batch_prefetch_auto_min_wait_ms,
+                        )
+                    else:
+                        logger.info(
+                            "Shard %s prefetch(auto): observed queue wait after warmup "
+                            "(avg_wait_ms=%.2f >= min_wait_ms=%.2f). Prefetch is likely helping.",
+                            self.shard_id,
+                            avg_wait_ms,
+                            self.batch_prefetch_auto_min_wait_ms,
+                        )
+
+                yield item
+
+            if producer_error["err"] is not None:
+                raise producer_error["err"]
+        finally:
+            stop_event.set()
+            producer.join(timeout=2.0)
+            consumed = int(metrics["consumed"])
+            if consumed > 0:
+                logger.info(
+                    "Shard %s prefetch metrics: consumed=%s producer_wait_s=%.3f consumer_wait_s=%.3f avg_consumer_wait_ms=%.3f",
+                    self.shard_id,
+                    consumed,
+                    float(metrics["producer_wait_s"]),
+                    float(metrics["consumer_wait_s"]),
+                    (float(metrics["consumer_wait_s"]) / float(consumed)) * 1000.0,
+                )
 
     def _used_cache_get(self, chunk_id: str) -> Optional[bool]:
         if self.used_cache_max_entries <= 0:
@@ -662,101 +814,122 @@ class StreamingCoresetBuilder(CoresetBuilder):
     def _iter_batches(self) -> Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]]:
         """Yield (batch_idx, batch_rows) where batch_rows is [(chunk_id, row_dict), ...]."""
 
-        if self.input_format == "jsonl":
-            files = self.batch_processor.list_input_files(self.input_path, "jsonl")
-            if not files:
-                raise ValueError(f"No JSONL files found under {self.input_path}")
+        def _base_iter_batches() -> (
+            Iterator[Tuple[int, List[Tuple[str, Dict[str, Any]]]]]
+        ):
 
-            # File-level sharding works well when there are many files. If there's only one file
-            # total (either input_path is a file or the directory contains a single file), then
-            # file sharding would assign that file to exactly one shard. In that case we switch
-            # to row-level sharding by chunk_id so all shards can work.
-            row_level_shard = self.num_shards > 1 and len(files) == 1
-            if not row_level_shard:
-                files = self.batch_processor.shard_files(
-                    files, self.shard_id, self.num_shards
-                )
+            if self.input_format == "jsonl":
+                files = self.batch_processor.list_input_files(self.input_path, "jsonl")
+                if not files:
+                    raise ValueError(f"No JSONL files found under {self.input_path}")
 
-            emitted = 0
-            batch_idx = 0
-            for f in files:
-                for batch in self.batch_processor.batch_iterator(
-                    str(f),
-                    max_chunks=self.max_rows,
-                    shard_id=(self.shard_id if row_level_shard else 0),
-                    num_shards=(self.num_shards if row_level_shard else 1),
-                    shard_key="chunk_id",
-                ):
-                    if self.max_rows is not None:
-                        remaining = self.max_rows - emitted
-                        if remaining <= 0:
-                            return
-                        if len(batch) > remaining:
-                            batch = batch[:remaining]
-                    emitted += len(batch)
-                    yield batch_idx, batch
-                    batch_idx += 1
-            return
+                # File-level sharding works well when there are many files. If there's only one file
+                # total (either input_path is a file or the directory contains a single file), then
+                # file sharding would assign that file to exactly one shard. In that case we switch
+                # to row-level sharding by chunk_id so all shards can work.
+                row_level_shard = self.num_shards > 1 and len(files) == 1
+                if not row_level_shard:
+                    files = self.batch_processor.shard_files(
+                        files, self.shard_id, self.num_shards
+                    )
 
-        if self.input_format == "parquet":
-            files = self.batch_processor.list_input_files(self.input_path, "parquet")
-            if files:
-                files = self.batch_processor.shard_files(
-                    files, self.shard_id, self.num_shards
-                )
-                paths = [str(p) for p in files]
-            else:
-                paths = [self.input_path]
-
-            columns = [
-                "chunk_id",
-                "dataset_id",
-                "token_count_estimate",
-                "byte_length",
-                "domain",
-                "language",
-                "band",
-                "source_doc_id",
-                "source_url",
-                "token_ids",
-                # Optional continuous score columns used by --band-score-source.
-                "band_score",
-                "difficulty_score",
-                "band_p_B0",
-                "band_p_B1",
-                "band_p_B2",
-                "band_p_B3",
-                "band_p_B4",
-                "band_p_B5",
-                "band_p_B6",
-            ]
-
-            batch_idx = 0
-            emitted = 0
-            for p in paths:
-                for rows in self.batch_processor.parquet_batch_iterator(
-                    p,
-                    batch_size_rows=self.batch_size,
-                    columns=columns,
-                    max_rows=(
-                        None if self.max_rows is None else self.max_rows - emitted
-                    ),
-                ):
-                    out: List[Tuple[str, Dict[str, Any]]] = []
-                    for r in rows:
-                        cid = r.get("chunk_id")
-                        if cid is None:
-                            continue
-                        out.append((str(cid), r))
-                    emitted += len(out)
-                    if out:
-                        yield batch_idx, out
+                emitted = 0
+                batch_idx = 0
+                for f in files:
+                    for batch in self.batch_processor.batch_iterator(
+                        str(f),
+                        max_chunks=self.max_rows,
+                        shard_id=(self.shard_id if row_level_shard else 0),
+                        num_shards=(self.num_shards if row_level_shard else 1),
+                        shard_key="chunk_id",
+                    ):
+                        if self.max_rows is not None:
+                            remaining = self.max_rows - emitted
+                            if remaining <= 0:
+                                return
+                            if len(batch) > remaining:
+                                batch = batch[:remaining]
+                        emitted += len(batch)
+                        yield batch_idx, batch
                         batch_idx += 1
-                    if self.max_rows is not None and emitted >= self.max_rows:
-                        return
+                return
+
+            if self.input_format == "parquet":
+                files = self.batch_processor.list_input_files(
+                    self.input_path, "parquet"
+                )
+                if files:
+                    files = self.batch_processor.shard_files(
+                        files, self.shard_id, self.num_shards
+                    )
+                    paths = [str(p) for p in files]
+                else:
+                    paths = [self.input_path]
+
+                columns = [
+                    "chunk_id",
+                    "dataset_id",
+                    "token_count_estimate",
+                    "byte_length",
+                    "domain",
+                    "language",
+                    "band",
+                    "source_doc_id",
+                    "source_url",
+                    "token_ids",
+                    # Optional continuous score columns used by --band-score-source.
+                    "band_score",
+                    "difficulty_score",
+                    "band_p_B0",
+                    "band_p_B1",
+                    "band_p_B2",
+                    "band_p_B3",
+                    "band_p_B4",
+                    "band_p_B5",
+                    "band_p_B6",
+                ]
+
+                batch_idx = 0
+                emitted = 0
+                for p in paths:
+                    for rows in self.batch_processor.parquet_batch_iterator(
+                        p,
+                        batch_size_rows=self.batch_size,
+                        columns=columns,
+                        max_rows=(
+                            None if self.max_rows is None else self.max_rows - emitted
+                        ),
+                    ):
+                        out: List[Tuple[str, Dict[str, Any]]] = []
+                        for r in rows:
+                            cid = r.get("chunk_id")
+                            if cid is None:
+                                continue
+                            out.append((str(cid), r))
+                        emitted += len(out)
+                        if out:
+                            yield batch_idx, out
+                            batch_idx += 1
+                        if self.max_rows is not None and emitted >= self.max_rows:
+                            return
+                return
+
+            raise ValueError(f"Unsupported input_format: {self.input_format}")
+
+        use_prefetch, reason = self._should_enable_batch_prefetch()
+        logger.info(
+            "Shard %s batch prefetch %s (%s)",
+            self.shard_id,
+            ("ENABLED" if use_prefetch else "DISABLED"),
+            reason,
+        )
+
+        base_iter = _base_iter_batches()
+        if not use_prefetch:
+            yield from base_iter
             return
 
-        raise ValueError(f"Unsupported input_format: {self.input_format}")
+        yield from self._iter_with_prefetch(base_iter)
 
     @retry_with_backoff(max_retries=3)
     def _write_checkpoint(
@@ -1623,6 +1796,46 @@ def main():
         ),
     )
     parser.add_argument(
+        "--batch-prefetch-mode",
+        type=str,
+        default="auto",
+        choices=["off", "on", "auto"],
+        help=(
+            "Batch prefetch mode for streaming iterators. "
+            "off=disable, on=always enable, auto=enable based on host/shard heuristics."
+        ),
+    )
+    parser.add_argument(
+        "--batch-prefetch-queue-size",
+        type=int,
+        default=1,
+        help="Queue size for batch prefetch buffering (default: 1)",
+    )
+    parser.add_argument(
+        "--batch-prefetch-auto-min-batch-size",
+        type=int,
+        default=50000,
+        help="In auto mode, disable prefetch when batch-size is below this value",
+    )
+    parser.add_argument(
+        "--batch-prefetch-auto-max-shard-cpu-ratio",
+        type=float,
+        default=1.0,
+        help="In auto mode, disable prefetch when num_shards / cpu_count exceeds this ratio",
+    )
+    parser.add_argument(
+        "--batch-prefetch-auto-min-wait-ms",
+        type=float,
+        default=2.0,
+        help="In auto mode, warmup queue-wait threshold for prefetch usefulness logging",
+    )
+    parser.add_argument(
+        "--batch-prefetch-auto-warmup-batches",
+        type=int,
+        default=5,
+        help="In auto mode, number of consumed batches before usefulness check logging",
+    )
+    parser.add_argument(
         "--total-input-tokens-estimate",
         type=int,
         default=None,
@@ -1727,6 +1940,12 @@ def main():
                 stage_target_scale=args.stage_target_scale,
                 band_inference=args.band_inference,
                 band_score_source=args.band_score_source,
+                batch_prefetch_mode=args.batch_prefetch_mode,
+                batch_prefetch_queue_size=args.batch_prefetch_queue_size,
+                batch_prefetch_auto_min_batch_size=args.batch_prefetch_auto_min_batch_size,
+                batch_prefetch_auto_max_shard_cpu_ratio=args.batch_prefetch_auto_max_shard_cpu_ratio,
+                batch_prefetch_auto_min_wait_ms=args.batch_prefetch_auto_min_wait_ms,
+                batch_prefetch_auto_warmup_batches=args.batch_prefetch_auto_warmup_batches,
             )
 
         # Build coresets

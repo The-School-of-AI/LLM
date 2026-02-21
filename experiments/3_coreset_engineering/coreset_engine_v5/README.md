@@ -234,7 +234,8 @@ bash shard.sh \
   --total-tokens 4523096944 \
   --checkpoint-every-n-batches 3 \
   --used-cache-max-entries 0 \
-  --used-cache-stats-every 0
+  --used-cache-stats-every 0 \
+  --batch-prefetch-mode auto
 ```
 
 #### 2. Resume (Continue Interrupted Job)
@@ -257,6 +258,7 @@ bash shard.sh \
   --checkpoint-every-n-batches 3 \
   --used-cache-max-entries 0 \
   --used-cache-stats-every 0 \
+  --batch-prefetch-mode auto \
   --resume
 ```
 
@@ -279,6 +281,12 @@ bash shard.sh \
   --checkpoint-every-n-batches 3 \
   --used-cache-max-entries 0 \
   --used-cache-stats-every 0 \
+  --batch-prefetch-mode auto \
+  --batch-prefetch-queue-size 1 \
+  --batch-prefetch-auto-min-batch-size 50000 \
+  --batch-prefetch-auto-max-shard-cpu-ratio 1.0 \
+  --batch-prefetch-auto-min-wait-ms 2.0 \
+  --batch-prefetch-auto-warmup-batches 5 \
   --total-tokens 4523096944
 # Add --resume to continue from checkpoints.
 ```
@@ -318,6 +326,12 @@ bash shard.sh \
 | `--checkpoint-every-n-batches` | No | `3` | Checkpoint cadence (`3` default; `1` = every batch; `N>1` = every N batches, plus stage-end checkpoint) |
 | `--used-cache-max-entries` | No | `0` | Optional in-memory LRU size for used-chunk lookups (`0` disables cache) |
 | `--used-cache-stats-every` | No | `0` | Emit periodic used-cache hit-rate logs every N batches (`0` disables periodic logs) |
+| `--batch-prefetch-mode` | No | `auto` | Batch prefetch mode for `_iter_batches`: `off`, `on`, `auto` |
+| `--batch-prefetch-queue-size` | No | `1` | Prefetch queue depth (number of prefetched batches buffered) |
+| `--batch-prefetch-auto-min-batch-size` | No | `50000` | In `auto`, disable prefetch for smaller batches |
+| `--batch-prefetch-auto-max-shard-cpu-ratio` | No | `1.0` | In `auto`, disable prefetch when `num_shards / cpu_count` is high |
+| `--batch-prefetch-auto-min-wait-ms` | No | `2.0` | Warmup wait threshold used for prefetch usefulness logging |
+| `--batch-prefetch-auto-warmup-batches` | No | `5` | Warmup batch count before usefulness check |
 | `--band-inference` | No | `none` | Band inference mode: `none`, `infer_if_missing`, `infer_if_ineligible`, `force` |
 | `--band-score-source` | No | `auto` | Score source for band inference (`auto`, `band_score`, `difficulty_score`, `band_p_max`, `band_p_argmax`, `band_p_B0..band_p_B5`) |
 | `--resume` | No | `false` | Resume from existing checkpoints and skip output cleanup |
@@ -327,11 +341,51 @@ High-impact tuning knobs:
 - `--batch-size`: controls memory pressure vs throughput (bigger is faster until memory becomes tight).
 - `--checkpoint-every-n-batches`: reduces checkpoint write amplification while keeping resumability.
 - `--used-cache-max-entries`: can reduce SQLite read pressure on repeated membership checks.
+- `--batch-prefetch-mode`: overlaps I/O and compute (`auto` chooses based on shard/CPU and batch-size heuristics).
 
 For most local/manual runs via `shard.sh`, set both explicitly:
 
 - `--batch-size` based on memory headroom (default `80000`; reduce if RAM is tight).
 - `--checkpoint-every-n-batches` to reduce checkpoint churn (e.g., `5` or `10`).
+
+Prefetch mode guidance:
+
+- `--batch-prefetch-mode off`: fully disable prefetch (simplest debug mode)
+- `--batch-prefetch-mode on`: always prefetch next batch with a single producer + FIFO queue
+- `--batch-prefetch-mode auto`: enable/disable based on runtime parameters (batch size, shard-to-CPU ratio), and log warmup usefulness
+
+Advanced prefetch tuning flags (optional; usually keep defaults):
+
+| Flag | Default | What it controls | When to change |
+| --- | --- | --- | --- |
+| `--batch-prefetch-queue-size` | `1` | Number of prefetched batches buffered ahead | Increase to `2` only if you still observe loader stalls and have extra RAM |
+| `--batch-prefetch-auto-min-batch-size` | `50000` | In `auto`, disables prefetch for smaller batches | Lower only if you want prefetch on smaller test/debug batches |
+| `--batch-prefetch-auto-max-shard-cpu-ratio` | `1.0` | In `auto`, disables prefetch when `num_shards / cpu_count` is too high | Lower for CPU-constrained hosts; raise if you want prefetch to stay on more aggressively |
+| `--batch-prefetch-auto-min-wait-ms` | `2.0` | Warmup threshold for “is prefetch helping?” logging | Mostly for observability tuning; rarely needed |
+| `--batch-prefetch-auto-warmup-batches` | `5` | Number of batches before warmup usefulness check | Increase for noisy workloads, decrease for faster feedback |
+
+Do users need to pass these manually?
+
+- **No**, not for normal runs.
+- Typical usage is just `--batch-prefetch-mode auto` (or `off` / `on`).
+- The advanced flags are expert tuning knobs; defaults are designed to work safely without extra input.
+- `shard.sh` and `commands.sh` now also expose the advanced prefetch knobs; you can still leave them at defaults in most runs.
+
+Quick tuning presets:
+
+- **CPU-constrained host (many shards, limited vCPU headroom)**
+  - Keep `--batch-prefetch-mode auto`
+  - Use `--batch-prefetch-auto-max-shard-cpu-ratio 0.75`
+  - Keep queue conservative: `--batch-prefetch-queue-size 1`
+  - Optional env equivalents: `BATCH_PREFETCH_MODE=auto`, `BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO=0.75`, `BATCH_PREFETCH_QUEUE_SIZE=1`
+
+- **High-RAM host (good memory headroom, occasional loader stalls)**
+  - Keep `--batch-prefetch-mode auto`
+  - Increase queue depth: `--batch-prefetch-queue-size 2`
+  - Make auto mode more permissive: `--batch-prefetch-auto-max-shard-cpu-ratio 1.25`
+  - Optional env equivalents: `BATCH_PREFETCH_MODE=auto`, `BATCH_PREFETCH_QUEUE_SIZE=2`, `BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO=1.25`
+
+Switch back to defaults (`queue-size=1`, `auto-max-shard-cpu-ratio=1.0`) once prefetch logs show consistently low producer/consumer waits and no recurring loader stalls.
 
 #### Sizing `--used-cache-max-entries` and `--used-cache-stats-every`
 
@@ -482,6 +536,12 @@ All parameters are configured via environment variables (with defaults):
 | `CHECKPOINT_EVERY_N_BATCHES` | `3` | Streaming checkpoint cadence (`3` default; `1` = every batch; `N>1` = every N batches) |
 | `USED_CACHE_MAX_ENTRIES` | `0` | Passed to `shard.sh --used-cache-max-entries` (`0` disables in-memory used-cache) |
 | `USED_CACHE_STATS_EVERY` | `0` | Passed to `shard.sh --used-cache-stats-every` (`0` disables periodic hit-rate logging) |
+| `BATCH_PREFETCH_MODE` | `auto` | Passed to `shard.sh --batch-prefetch-mode` (`off`, `on`, `auto`) |
+| `BATCH_PREFETCH_QUEUE_SIZE` | `1` | Passed to `shard.sh --batch-prefetch-queue-size` |
+| `BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE` | `50000` | Passed to `shard.sh --batch-prefetch-auto-min-batch-size` |
+| `BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO` | `1.0` | Passed to `shard.sh --batch-prefetch-auto-max-shard-cpu-ratio` |
+| `BATCH_PREFETCH_AUTO_MIN_WAIT_MS` | `2.0` | Passed to `shard.sh --batch-prefetch-auto-min-wait-ms` |
+| `BATCH_PREFETCH_AUTO_WARMUP_BATCHES` | `5` | Passed to `shard.sh --batch-prefetch-auto-warmup-batches` |
 | `RESUME` | `false` | Set to `true` to resume from last checkpoint (skips output cleanup) |
 | `BRANCH_NAME` | `p3/feat/stage-wise-coreset-selection_v2` | Git branch to clone (only used when repo setup is not skipped) |
 
@@ -500,6 +560,12 @@ BATCH_SIZE=80000 \
 CHECKPOINT_EVERY_N_BATCHES=10 \
 USED_CACHE_MAX_ENTRIES=1000000 \
 USED_CACHE_STATS_EVERY=100 \
+BATCH_PREFETCH_MODE=auto \
+BATCH_PREFETCH_QUEUE_SIZE=1 \
+BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE=50000 \
+BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO=1.0 \
+BATCH_PREFETCH_AUTO_MIN_WAIT_MS=2.0 \
+BATCH_PREFETCH_AUTO_WARMUP_BATCHES=5 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=false \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
@@ -516,6 +582,12 @@ BATCH_SIZE=80000 \
 CHECKPOINT_EVERY_N_BATCHES=5 \
 USED_CACHE_MAX_ENTRIES=1000000 \
 USED_CACHE_STATS_EVERY=100 \
+BATCH_PREFETCH_MODE=auto \
+BATCH_PREFETCH_QUEUE_SIZE=1 \
+BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE=50000 \
+BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO=1.0 \
+BATCH_PREFETCH_AUTO_MIN_WAIT_MS=2.0 \
+BATCH_PREFETCH_AUTO_WARMUP_BATCHES=5 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=true \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
@@ -539,6 +611,12 @@ export BATCH_SIZE=80000
 export CHECKPOINT_EVERY_N_BATCHES=10
 export USED_CACHE_MAX_ENTRIES=1000000
 export USED_CACHE_STATS_EVERY=100
+export BATCH_PREFETCH_MODE=auto
+export BATCH_PREFETCH_QUEUE_SIZE=1
+export BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE=50000
+export BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO=1.0
+export BATCH_PREFETCH_AUTO_MIN_WAIT_MS=2.0
+export BATCH_PREFETCH_AUTO_WARMUP_BATCHES=5
 ./commands.sh
 # Pipeline runs in background via nohup. Check output/logs for progress.
 ```

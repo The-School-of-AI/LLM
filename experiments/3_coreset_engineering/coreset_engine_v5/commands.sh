@@ -45,6 +45,12 @@ BATCH_SIZE="${BATCH_SIZE:-80000}"
 CHECKPOINT_EVERY_N_BATCHES="${CHECKPOINT_EVERY_N_BATCHES:-3}"
 USED_CACHE_MAX_ENTRIES="${USED_CACHE_MAX_ENTRIES:-0}"
 USED_CACHE_STATS_EVERY="${USED_CACHE_STATS_EVERY:-0}"
+BATCH_PREFETCH_MODE="${BATCH_PREFETCH_MODE:-auto}"
+BATCH_PREFETCH_QUEUE_SIZE="${BATCH_PREFETCH_QUEUE_SIZE:-1}"
+BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE="${BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE:-50000}"
+BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO="${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO:-1.0}"
+BATCH_PREFETCH_AUTO_MIN_WAIT_MS="${BATCH_PREFETCH_AUTO_MIN_WAIT_MS:-2.0}"
+BATCH_PREFETCH_AUTO_WARMUP_BATCHES="${BATCH_PREFETCH_AUTO_WARMUP_BATCHES:-5}"
 RESUME="${RESUME:-false}" 
 # ------------------------------------------------------------------------------
 
@@ -211,6 +217,7 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "  Batch Size:   ${BATCH_SIZE}"
         echo "  Ckpt Every N: ${CHECKPOINT_EVERY_N_BATCHES}"
         echo "  Used Cache:   max=${USED_CACHE_MAX_ENTRIES} stats_every=${USED_CACHE_STATS_EVERY}"
+        echo "  Prefetch:     mode=${BATCH_PREFETCH_MODE} queue=${BATCH_PREFETCH_QUEUE_SIZE} auto_min_batch=${BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE} auto_max_ratio=${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO} auto_min_wait_ms=${BATCH_PREFETCH_AUTO_MIN_WAIT_MS} auto_warmup=${BATCH_PREFETCH_AUTO_WARMUP_BATCHES}"
         echo "  Resume:       ${RESUME}"
         echo "  Foreground:   ${FOREGROUND}"
         echo ""
@@ -220,6 +227,12 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "      --input-path \"${S3_INPUT_PATH}\" --total-tokens ${TOTAL_TOKENS} --batch-size ${BATCH_SIZE}"
         echo "      --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} ${RESUME_FLAG}"
         echo "      --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} --used-cache-stats-every ${USED_CACHE_STATS_EVERY}"
+        echo "      --batch-prefetch-mode ${BATCH_PREFETCH_MODE}"
+        echo "      --batch-prefetch-queue-size ${BATCH_PREFETCH_QUEUE_SIZE}"
+        echo "      --batch-prefetch-auto-min-batch-size ${BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE}"
+        echo "      --batch-prefetch-auto-max-shard-cpu-ratio ${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO}"
+        echo "      --batch-prefetch-auto-min-wait-ms ${BATCH_PREFETCH_AUTO_MIN_WAIT_MS}"
+        echo "      --batch-prefetch-auto-warmup-batches ${BATCH_PREFETCH_AUTO_WARMUP_BATCHES}"
         echo "=========================================="
         exit 0
 fi
@@ -237,6 +250,12 @@ if [ "${FOREGROUND}" = "true" ]; then
             --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
             --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} \
             --used-cache-stats-every ${USED_CACHE_STATS_EVERY} \
+            --batch-prefetch-mode ${BATCH_PREFETCH_MODE} \
+            --batch-prefetch-queue-size ${BATCH_PREFETCH_QUEUE_SIZE} \
+            --batch-prefetch-auto-min-batch-size ${BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE} \
+            --batch-prefetch-auto-max-shard-cpu-ratio ${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO} \
+            --batch-prefetch-auto-min-wait-ms ${BATCH_PREFETCH_AUTO_MIN_WAIT_MS} \
+            --batch-prefetch-auto-warmup-batches ${BATCH_PREFETCH_AUTO_WARMUP_BATCHES} \
             ${RESUME_FLAG}
 else
         # Background: Used for manual EC2 runs with nohup for SSH disconnect safety
@@ -251,6 +270,12 @@ else
             --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
             --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} \
             --used-cache-stats-every ${USED_CACHE_STATS_EVERY} \
+            --batch-prefetch-mode ${BATCH_PREFETCH_MODE} \
+            --batch-prefetch-queue-size ${BATCH_PREFETCH_QUEUE_SIZE} \
+            --batch-prefetch-auto-min-batch-size ${BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE} \
+            --batch-prefetch-auto-max-shard-cpu-ratio ${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO} \
+            --batch-prefetch-auto-min-wait-ms ${BATCH_PREFETCH_AUTO_MIN_WAIT_MS} \
+            --batch-prefetch-auto-warmup-batches ${BATCH_PREFETCH_AUTO_WARMUP_BATCHES} \
             ${RESUME_FLAG} \
             > shard_run.log 2>&1 &
 
