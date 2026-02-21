@@ -5,7 +5,7 @@
 # Any deviation requires escalation + re-freeze.
 # ============================================================
 
-version: "0.5"
+version: "0.7"
 owner_team: "Team 2: Curriculum Architects"
 status: "DRAFT"  # "FROZEN"
 frozen_on: "2026-02-02"
@@ -41,7 +41,7 @@ language_and_context:
       - lang: "en"
         max_share: 0.92
     secondary_languages:
-      - lang: "indic"
+      - lang: ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"]
         max_share: 0.08
         earliest_stage: "1B"
     excluded_languages: ["zh", "ja", "ko", "fr", "de", "es"]
@@ -110,7 +110,7 @@ difficulty_system:
       name: "Nursery"
       intent: "Surface language acquisition"
       allowed_modalities: ["general_text"]
-      allowed_domains: ["general_web_clean", "dialogue_chat"]
+      allowed_domains: ["web", "social", "qa"]
       constraints:
         tokenizer:
           avg_max: 5000
@@ -126,7 +126,7 @@ difficulty_system:
       name: "Primary"
       intent: "Fluent everyday language"
       allowed_modalities: ["general_text", "clean_exposition"]
-      allowed_domains: ["general_web_clean", "encyclopedic", "dialogue_chat"]
+      allowed_domains: ["web", "encyclopedia", "news", "social", "qa"]
       constraints:
         tokenizer:
           avg_max: 10000
@@ -141,7 +141,7 @@ difficulty_system:
       name: "HighSchool"
       intent: "Structured knowledge without explicit reasoning"
       allowed_modalities: ["general_text", "structured_knowledge"]
-      allowed_domains: ["encyclopedic", "news_nonpolitical", "technical_docs"]
+      allowed_domains: ["encyclopedia", "news", "education", "literature", "web", "qa"]
       constraints:
         tokenizer:
           avg_max: 20000
@@ -156,7 +156,7 @@ difficulty_system:
       name: "Undergraduate"
       intent: "Reasoning emergence"
       allowed_modalities: ["structured_knowledge", "technical_text", "code"]
-      allowed_domains: ["technical_docs", "math_science", "code_repos"]
+      allowed_domains: ["science", "math", "education", "code", "literature"]
       constraints:
         tokenizer:
           avg_max: 40000
@@ -173,7 +173,7 @@ difficulty_system:
       name: "Graduate"
       intent: "Explicit abstraction and algorithms"
       allowed_modalities: ["technical_text", "math", "code"]
-      allowed_domains: ["math_science", "code_repos", "planning_reasoning_curated"]
+      allowed_domains: ["science", "math", "code", "instruction"]
       constraints:
         tokenizer:
           avg_max: 70000
@@ -190,7 +190,7 @@ difficulty_system:
       name: "PhD"
       intent: "Planning and system-level reasoning"
       allowed_modalities: ["hard_reasoning", "math", "advanced_code", "planning"]
-      allowed_domains: ["planning_reasoning_curated", "math_science", "code_repos"]
+      allowed_domains: ["instruction", "science", "math", "code"]
       constraints:
         tokenizer:
           avg_max: .inf
@@ -367,22 +367,26 @@ domains:
   definition_method: "team1_tags_consolidated_by_team2"
 
   domain_groups:
-    - id: "general_web_clean"
-    - id: "encyclopedic"
-    - id: "news_nonpolitical"
-    - id: "technical_docs"
-    - id: "math_science"
-    - id: "code_repos"
-    - id: "dialogue_chat"
-    - id: "planning_reasoning_curated"
+    - id: "web"
+    - id: "encyclopedia"
+    - id: "news"
+    - id: "science"
+    - id: "math"
+    - id: "code"
+    - id: "literature"
+    - id: "instruction"
+    - id: "social"
+    - id: "qa"
+    - id: "education"
+    - id: "conversation"
 
   band_domain_policy:
-    B0: ["general_web_clean", "dialogue_chat"]
-    B1: ["general_web_clean", "encyclopedic", "dialogue_chat"]
-    B2: ["encyclopedic", "news_nonpolitical", "technical_docs"]
-    B3: ["technical_docs", "math_science", "code_repos"]
-    B4: ["math_science", "code_repos", "planning_reasoning_curated"]
-    B5: ["planning_reasoning_curated", "math_science", "code_repos"]
+    B0: ["web", "social", "qa"]
+    B1: ["web", "encyclopedia", "news", "social", "qa"]
+    B2: ["encyclopedia", "news", "education", "literature", "web", "qa","conversation"]
+    B3: ["science", "math", "education", "code", "literature", "conversation"]
+    B4: ["science", "math", "code", "instruction"]
+    B5: ["instruction", "science", "math", "code"]
 
 # ============================================================
 # EVALUATION SIGNAL INTERFACE
