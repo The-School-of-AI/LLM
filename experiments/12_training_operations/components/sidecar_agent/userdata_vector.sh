@@ -26,7 +26,25 @@ echo "T12 Vector bootstrap started at $(date -u)"
 # ---- 1. System packages ----
 echo "[1/9] Installing dependencies..."
 export DEBIAN_FRONTEND=noninteractive
+
+# Wait for dpkg lock to clear (common on first boot with unattended-upgrades)
+wait_for_dpkg_lock() {
+  local max_attempts=30
+  for i in $(seq 1 $max_attempts); do
+    if ! lsof /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "Waiting for dpkg lock... ($i/$max_attempts)"
+    sleep 5
+  done
+  echo "ERROR: dpkg lock still held after $max_attempts attempts"
+  exit 1
+}
+
+wait_for_dpkg_lock
 apt-get update -qq
+
+wait_for_dpkg_lock
 apt-get install -y -qq awscli jq curl bc
 
 # ---- Configuration (EDIT THESE) ----
@@ -55,7 +73,7 @@ chown ubuntu:ubuntu /var/lib/vector
 # ---- 4. Pull CA cert + Vector config from S3 (public URLs, no IAM needed) ----
 echo "[4/9] Pulling config from S3..."
 curl -fsSL "https://${T12_CONFIG_BUCKET}.s3.amazonaws.com/certs/ca_clickhouse.crt" -o /etc/t12/ca.crt
-curl -fsSL "https://raw.githubusercontent.com/The-School-of-AI/LLM/refs/heads/P12/feat/training-ops-base-startup/experiments/12_training_operations/components/sidecar_agent/vector.toml" -o /etc/t12/vector.toml
+curl -fsSL "https://raw.githubusercontent.com/The-School-of-AI/LLM/refs/heads/P12/feat/training-ops-base/experiments/12_training_operations/components/sidecar_agent/vector.toml" -o /etc/t12/vector.toml
 chmod 644 /etc/t12/ca.crt
 
 # ---- 5. Assume cross-account role for Secrets Manager access ----
