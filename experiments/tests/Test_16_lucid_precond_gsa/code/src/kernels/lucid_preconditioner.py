@@ -66,6 +66,19 @@ def _rms_normalize_keys(K: torch.Tensor) -> torch.Tensor:
     return math.sqrt(d) * K / norm
 
 
+def _solve_triangular(A, B, upper=False):
+    """
+    Wrapper for solve_triangular with fp32 upcast.
+    cuBLAS TRSM doesn't support bf16, so we cast to fp32 and back.
+    """
+    orig_dtype = B.dtype
+    if orig_dtype == torch.bfloat16 or orig_dtype == torch.float16:
+        return torch.linalg.solve_triangular(
+            A.float(), B.float(), upper=upper
+        ).to(orig_dtype)
+    return torch.linalg.solve_triangular(A, B, upper=upper)
+
+
 # =====================================================================
 # Block-wise triangular solve (shared by forward and backward)
 # =====================================================================
@@ -111,7 +124,7 @@ def _blockwise_forward_substitution(K_RN, V, sqrt_d, block_size, device):
         causal = torch.tril(torch.ones(bs_actual, bs_actual, device=device, dtype=torch.bool))
         exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
 
-        Y[:, i:i_end, :] = torch.linalg.solve_triangular(exp_ii, rhs, upper=False)
+        Y[:, i:i_end, :] = _solve_triangular(exp_ii, rhs, upper=False)
 
     return Y
 
@@ -172,7 +185,7 @@ def _blockwise_backward_substitution(K_RN, grad_Y, sqrt_d, block_size, device):
         causal = torch.tril(torch.ones(bs_actual, bs_actual, device=device, dtype=torch.bool))
         exp_ii = torch.exp(exp_ii_scores.masked_fill(~causal, float('-inf')))
         # P[i,i]ᵀ is upper-triangular
-        dV[:, i:i_end, :] = torch.linalg.solve_triangular(exp_ii.transpose(-2, -1), rhs, upper=True)
+        dV[:, i:i_end, :] = _solve_triangular(exp_ii.transpose(-2, -1), rhs, upper=True)
 
     return dV
 
@@ -212,7 +225,7 @@ def pytorch_lucid_precondition(
     scores = scores.masked_fill(~causal_mask, float('-inf'))
     P = torch.exp(scores)
 
-    Y = torch.linalg.solve_triangular(P, V, upper=False)
+    Y = _solve_triangular(P, V, upper=False)
 
     if multi_head:
         Y = Y.reshape(B, H, T, D).permute(0, 2, 1, 3)
