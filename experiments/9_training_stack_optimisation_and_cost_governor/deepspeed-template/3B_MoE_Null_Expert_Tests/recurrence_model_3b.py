@@ -1542,7 +1542,7 @@ class DeepSpeedMoEFFN(nn.Module):
         # 6. POST-INIT HACK: Swap Null slots with Ghost Experts
         local_experts = None
         
-        # Search Path 1: Wrapper style (Your Version)
+        # Search Path 1: Wrapper style 
         if hasattr(self.ds_moe, 'deepspeed_moe'):
             submodule = self.ds_moe.deepspeed_moe
             if hasattr(submodule, 'experts') and hasattr(submodule.experts, 'deepspeed_experts'):
