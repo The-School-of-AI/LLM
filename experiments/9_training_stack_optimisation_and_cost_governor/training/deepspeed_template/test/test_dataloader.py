@@ -26,9 +26,7 @@ import tempfile
 import time
 import types
 from dataclasses import dataclass
-from typing import Optional
 
-import numpy as np
 import torch
 
 
@@ -58,8 +56,8 @@ sys.path.insert(0, _PROJECT_ROOT)
 # ── Stub the `src` package and its sub-modules to avoid triggering
 # src/__init__.py (which imports train.py -> psutil, unavailable in spawned
 # worker processes that use system Python rather than the venv).
-import importlib
-import importlib.util
+import importlib  # noqa: E402
+import importlib.util  # noqa: E402
 
 # 1. Stub src package itself
 _src_stub = types.ModuleType("src")
@@ -86,7 +84,7 @@ data_module.__package__ = "src"  # needed for relative imports inside data.py
 sys.modules["src.data"] = data_module
 _data_spec.loader.exec_module(data_module)
 
-from src.data import SPDLIterableDataset, bin_idx_source, get_dataloaders
+from src.data import SPDLIterableDataset  # noqa: E402
 
 # Try to detect whether SPDL is actually importable at runtime
 try:
@@ -124,7 +122,7 @@ class RankResult:
 # Per-rank worker functions
 # ─────────────────────────────────────────────────────────────────────────────
 
-from torch.utils.data import IterableDataset
+from torch.utils.data import IterableDataset  # noqa: E402
 
 
 class _BinIdxDataset(IterableDataset):
@@ -143,7 +141,7 @@ class _BinIdxDataset(IterableDataset):
             f"scanning {len(my_files)} shards"
         )
         total = 0
-        from src.data import bin_idx_source
+        from src.data import bin_idx_source  # noqa: E402
 
         for seq in bin_idx_source(
             self.shard_dir,

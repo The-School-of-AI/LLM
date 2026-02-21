@@ -25,7 +25,7 @@ disables prefetching and falls back to synchronous transfer.
 
 import threading
 from collections import deque
-from typing import Any, Dict, Iterable, Optional, Union
+from typing import Any, Dict, Iterable
 
 import torch
 

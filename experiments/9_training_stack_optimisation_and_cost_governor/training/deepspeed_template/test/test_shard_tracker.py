@@ -13,13 +13,9 @@ Tests cover:
 
 import json
 import os
-import shutil
-import struct
 import sys
-import tempfile
 import threading
 import types
-from pathlib import Path
 
 import pytest
 
@@ -27,7 +23,7 @@ import pytest
 # The core ShardTracker tests are pure-Python.
 try:
     import numpy as np
-    import torch
+    import torch  # noqa: F401
 
     _HAS_NUMPY_TORCH = True
 except ImportError:
@@ -58,8 +54,8 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, _PROJECT_ROOT)
 
 # Stub src package to avoid heavy imports (same pattern as test_dataloader.py)
-import importlib
-import importlib.util
+import importlib  # noqa: E402
+import importlib.util  # noqa: E402
 
 _src_pkg = types.ModuleType("src")
 _src_pkg.__path__ = [os.path.join(_PROJECT_ROOT, "src")]

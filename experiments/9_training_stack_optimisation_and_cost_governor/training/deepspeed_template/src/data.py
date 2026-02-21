@@ -29,7 +29,6 @@ Key features:
     sequence lengths and dynamic padding for mixed-length batches.
 """
 
-import logging
 import mmap
 import os
 from collections import defaultdict
@@ -42,7 +41,7 @@ import torch
 import torch.distributed as dist
 from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
 from spdl.pipeline import PipelineBuilder
-from torch.utils.data import DataLoader, IterableDataset, TensorDataset
+from torch.utils.data import DataLoader, IterableDataset
 from torch.utils.data.distributed import DistributedSampler
 
 from .shard_tracker import ShardTracker
@@ -431,9 +430,11 @@ class SPDLIterableDataset(IterableDataset):
         on_shard_complete: Optional[Callable[[str], None]] = None
         if self.shard_tracker is not None:
             exclude_files = self.shard_tracker.get_processed_files()
-            on_shard_complete = lambda name: self.shard_tracker.mark_processed(
-                name, rank=self.rank, source_dir=self.shard_dir
-            )
+
+            def on_shard_complete(name):
+                self.shard_tracker.mark_processed(
+                    name, rank=self.rank, source_dir=self.shard_dir
+                )
 
         pipeline = build_spdl_pipeline(
             self.shard_dir,
@@ -494,7 +495,7 @@ def get_tokenizer(tokenizer_path: str = None):
 
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
-    print_rank_0(f"  Tokenizer loaded:")
+    print_rank_0("  Tokenizer loaded:")
     print_rank_0(f"    - Vocab size: {tokenizer.vocab_size:,}")
     print_rank_0(f"    - Total tokens (with special): {len(tokenizer):,}")
     print_rank_0(

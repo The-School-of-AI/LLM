@@ -114,6 +114,3 @@ class DummyModel(torch.nn.Module):
 
     def forward(self, x):
         return x.sum(dim=1)
-
-    def forward(self, x):
-        return x.sum(dim=1)

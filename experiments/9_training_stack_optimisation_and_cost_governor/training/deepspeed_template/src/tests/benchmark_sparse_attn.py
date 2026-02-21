@@ -2,7 +2,6 @@ import os
 import sys
 
 import torch
-import triton
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "kernels"))
 import time

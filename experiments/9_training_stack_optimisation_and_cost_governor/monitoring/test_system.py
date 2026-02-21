@@ -16,8 +16,8 @@ print("=" * 80)
 # Test 1: Check imports
 print("\n[Test 1] Checking imports...")
 try:
-    from flask import Flask
-    from flask_cors import CORS
+    from flask import Flask  # noqa: F401
+    from flask_cors import CORS  # noqa: F401
 
     print("✅ PASS: Flask and CORS available")
 except ImportError as e:

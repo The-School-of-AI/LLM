@@ -88,7 +88,9 @@ class MidpointFunction(torch.autograd.Function):
         buffer_clones = saved_tensors[n_params : n_params + n_buffers]
 
         # Rebuild params/buffers for functional_call
-        params = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_tensors)}
+        _params = {
+            f"layer.{k}": v for k, v in zip(ctx.param_keys, param_tensors)
+        }  # noqa: F841
 
         # Use the CLONED buffers saved during forward, NOT the live module buffers.
         # This is critical for correctness: NCCL all_reduce may have mutated the

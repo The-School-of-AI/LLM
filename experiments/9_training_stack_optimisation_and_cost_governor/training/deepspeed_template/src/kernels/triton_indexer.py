@@ -17,8 +17,6 @@ requires fp16 inputs on T4/Volta (sm_75).
 Based on the GSA paper implementation (arXiv:2601.15305v1).
 """
 
-from typing import Optional
-
 import torch
 
 # Check for Triton availability

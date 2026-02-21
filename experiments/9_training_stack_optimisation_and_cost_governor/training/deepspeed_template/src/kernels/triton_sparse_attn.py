@@ -16,8 +16,6 @@ Includes:
 - PyTorch chunked fallback (for testing / debugging / gradient reference)
 """
 
-from typing import Optional
-
 import torch
 import torch.nn.functional as F
 

@@ -401,8 +401,6 @@ def train_epoch(
                 # Persist shard tracker manifest alongside checkpoint
                 if shard_tracker is not None:
                     # Synchronize processed shards across all ranks before saving
-                    import torch.distributed as dist
-
                     if dist.is_initialized():
                         local_shards = list(shard_tracker.get_processed_files())
                         gathered_shards = [None for _ in range(dist.get_world_size())]

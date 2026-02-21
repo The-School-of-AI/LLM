@@ -1423,15 +1423,19 @@ class TrainingStage:
 
         # Calculate layer distribution for hybrid
         deltanet_layer_weight = 0.0
-        gsa_layer_weight_hybrid = 0.0
+        _gsa_layer_weight_hybrid = 0.0  # noqa: F841
         if parsed_attn.get("type") == "hybrid" and parsed_attn.get("hybrid_config"):
             hc = parsed_attn["hybrid_config"]
             if hc.get("type1") == "deltanet":
                 deltanet_layer_weight = hc.get("layer_weight_type1", 0.75)
-                gsa_layer_weight_hybrid = hc.get("layer_weight_type2", 0.25)
+                _gsa_layer_weight_hybrid = hc.get(
+                    "layer_weight_type2", 0.25
+                )  # noqa: F841
             elif hc.get("type2") == "deltanet":
                 deltanet_layer_weight = hc.get("layer_weight_type2", 0.25)
-                gsa_layer_weight_hybrid = hc.get("layer_weight_type1", 0.75)
+                _gsa_layer_weight_hybrid = hc.get(
+                    "layer_weight_type1", 0.75
+                )  # noqa: F841
         elif deltanet_enabled and not deltanet_in_hybrid:
             deltanet_layer_weight = 1.0
 
@@ -1769,7 +1773,6 @@ class TrainingStage:
 
         # SwiGLU has 3 weight matrices per FFN: gate_proj, up_proj, down_proj
         # For upcycling, we need to shrink each matrix
-        num_matrices_per_layer = 3
 
         if method == "slicing":
             # Just memory copy, zero compute FLOPs
@@ -2305,7 +2308,7 @@ def main() -> None:
         price_per_gpu_hour = hardware["price_per_gpu_hour"]
         precision_specs = hardware["tflops_per_gpu"]
         selected_quantization = hardware.get("quantization", "all").lower()
-        tflops_mode = hardware.get("tflops_mode", "dense")
+        _tflops_mode = hardware.get("tflops_mode", "dense")  # noqa: F841
         zero_stage = hardware.get("zero_stage", 2)  # Default ZeRO-2
         cpu_offload = hardware.get("cpu_offload", False)  # ZeRO-Infinity
         expert_parallel_size = int(
@@ -2455,7 +2458,7 @@ def main() -> None:
         # Summary comparison
         print("COST COMPARISON SUMMARY:")
         print("─" * 50)
-        slicing_time = sum(
+        _slicing_time = sum(  # noqa: F841
             u["upcycling_time_seconds"]
             for _, u in upcycling_stages
             if u["method"] == "slicing"
@@ -2647,7 +2650,7 @@ def main() -> None:
 
         if upcycling_stages:
             print(f"\n{'─'*80}")
-            print(f"UPCYCLING COST (One-Time Dense→MoE Conversion)")
+            print("UPCYCLING COST (One-Time Dense→MoE Conversion)")
             print(f"{'─'*80}")
 
             total_upcycling_flops = 0

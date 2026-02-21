@@ -6,18 +6,12 @@ Sweeps batch sizes 1→2048 and creates reversibility_analysis.md.
 Usage:
     python3 generate_reversibility_report.py
 """
-import json
 import os
 import sys
 
 # Import from compute.py in same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from compute import (
-    TrainingStage,
-    bytes_for_precision,
-    load_config,
-    normalize_deepspeed_config,
-)
+from compute import TrainingStage, load_config, normalize_deepspeed_config
 
 CONFIG = "configs/moe_team8/stage4_70b_moe.json"
 OUTPUT = "reversibility_analysis.md"

@@ -19,8 +19,6 @@ Requirements:
     pip install fla
 """
 
-from typing import Optional, Tuple
-
 import torch
 
 # Check for fla availability

@@ -582,7 +582,7 @@ def serve_static(path):
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print(f"\n🚀 ClickHouse Dashboard Server Running")
+    print("\n🚀 ClickHouse Dashboard Server Running")
     print(f"   Host:     {CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}")
     print(f"   Database: {CLICKHOUSE_DB}")
     print(

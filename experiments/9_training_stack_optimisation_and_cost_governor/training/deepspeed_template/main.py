@@ -47,23 +47,23 @@ warnings.filterwarnings(
     category=FutureWarning,
 )
 
-import json
+import json  # noqa: E402
 
-import deepspeed
-import torch
-import yaml
-from aws.config import S3Config
-from src.checkpoint import S3CheckpointManager
-from src.data import get_dataloaders, get_tokenizer
-from src.models.recurrence_model_1b import (
+import deepspeed  # noqa: E402
+import torch  # noqa: E402
+import yaml  # noqa: E402
+from aws.config import S3Config  # noqa: E402
+from src.checkpoint import S3CheckpointManager  # noqa: E402
+from src.data import get_dataloaders, get_tokenizer  # noqa: E402
+from src.models.recurrence_model_1b import (  # noqa: E402
     KroneckerConfig,
     KroneckerEmbeddings,
     Model1B,
     ModelConfig,
 )
-from src.prefetch_loader import PrefetchDataLoader
-from src.train import evaluate, generate_text, train_epoch
-from src.utils import print_rank_0, set_seed
+from src.prefetch_loader import PrefetchDataLoader  # noqa: E402
+from src.train import evaluate, generate_text, train_epoch  # noqa: E402
+from src.utils import print_rank_0, set_seed  # noqa: E402
 
 
 def validate_precision_policy(ds_config: dict, model_dtype: torch.dtype):
@@ -241,8 +241,8 @@ def main():
     if torch.cuda.is_available():
         print_rank_0(f"CUDA Devices: {torch.cuda.device_count()}")
     print_rank_0("\nConfiguration:")
-    print_rank_0(f"  Model: 1B Dense (1.513B params, 100% active)")
-    print_rank_0(f"  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
+    print_rank_0("  Model: 1B Dense (1.513B params, 100% active)")
+    print_rank_0("  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
     print_rank_0(f"  Embedding Type: {args.embedding_type}")
     print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
@@ -364,7 +364,7 @@ def main():
             try:
                 token = tokenizer.decode([i])
                 bpe_vocab.append(token if token else f"<unk_{i}>")
-            except:
+            except Exception:
                 bpe_vocab.append(f"<unk_{i}>")
 
         # Create Kronecker codec
@@ -377,7 +377,7 @@ def main():
         )
         pf_codec = KroneckerEmbeddings(pf_config)
 
-        print_rank_0(f"  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192")
+        print_rank_0("  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192")
     else:
         print_rank_0("  Using Standard Embeddings")
 
@@ -395,8 +395,8 @@ def main():
     model = model.to(dtype=torch.bfloat16)
     # ----------------------
 
-    print_rank_0(f"  Model cast to bfloat16")
-    print_rank_0(f"  Model created successfully")
+    print_rank_0("  Model cast to bfloat16")
+    print_rank_0("  Model created successfully")
 
     # ========================================
     # Step 2.5: Preflight checks

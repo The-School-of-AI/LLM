@@ -23,7 +23,7 @@ Usage:
 
 # ── Triton availability flag ──────────────────────────────────────────
 try:
-    import triton
+    import triton  # noqa: F401
 
     HAS_TRITON = True
 except ImportError:
@@ -49,22 +49,15 @@ from .triton_indexer import pytorch_gated_indexer, triton_gated_indexer
 from .triton_indexer_streaming import fused_indexer_topk, streaming_indexer_variance
 
 # ── RMSNorm ───────────────────────────────────────────────────────────
-from .triton_rmsnorm import (
-    TritonRMSNorm,
-    pytorch_rmsnorm,
-    triton_rmsnorm,
-    triton_rmsnorm_fwd_only,
-)
+from .triton_rmsnorm import triton_rmsnorm_fwd_only  # noqa: F401
+from .triton_rmsnorm import TritonRMSNorm, pytorch_rmsnorm, triton_rmsnorm
 
 # ── Sinkhorn-Knopp ───────────────────────────────────────────────────
 from .triton_sinkhorn import pytorch_sinkhorn_knopp, triton_sinkhorn_knopp
 
 # ── Sparse Attention ──────────────────────────────────────────────────
-from .triton_sparse_attn import (
-    USE_TRITON_BACKWARD,
-    pytorch_sparse_attention,
-    triton_sparse_attention,
-)
+from .triton_sparse_attn import USE_TRITON_BACKWARD  # noqa: F401
+from .triton_sparse_attn import pytorch_sparse_attention, triton_sparse_attention
 
 __all__ = [
     "HAS_TRITON",

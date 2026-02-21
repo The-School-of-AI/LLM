@@ -29,7 +29,7 @@ import gc
 import math
 import os
 import sys
-from typing import List, Optional, Tuple
+from typing import Tuple
 
 import torch
 
@@ -84,7 +84,6 @@ if not torch.cuda.is_available():
 
 try:
     import triton
-    import triton.language as tl
 
     HAS_TRITON = True
     info(f"Triton {triton.__version__} found")
@@ -93,7 +92,7 @@ except ImportError:
     warn("Triton not installed — GSA Triton tests will be skipped.")
 
 try:
-    from fla.ops.gated_delta_rule import chunk_gated_delta_rule
+    from fla.ops.gated_delta_rule import chunk_gated_delta_rule  # noqa: F401
 
     HAS_FLA = True
     info("fla (flash-linear-attention) found")
@@ -101,8 +100,10 @@ except ImportError:
     HAS_FLA = False
     warn("fla not installed — DeltaNet Triton tests will be skipped.")
 
-from kernels.triton_sparse_attn import HAS_TRITON as KERNEL_HAS_TRITON
-from kernels.triton_sparse_attn import (
+from kernels.triton_sparse_attn import (  # noqa: E402, F401
+    HAS_TRITON as KERNEL_HAS_TRITON,
+)
+from kernels.triton_sparse_attn import (  # noqa: E402
     USE_TRITON_BACKWARD,
     pytorch_sparse_attention,
     triton_sparse_attention,
@@ -117,8 +118,8 @@ if HAS_TRITON:
         _sparse_attn_bwd_dkdv_kernel,
     )
 
-from kernels.fla_deltanet import HAS_FLA as KERNEL_HAS_FLA
-from kernels.fla_deltanet import fla_gated_delta_rule
+from kernels.fla_deltanet import HAS_FLA as KERNEL_HAS_FLA  # noqa: E402, F401
+from kernels.fla_deltanet import fla_gated_delta_rule  # noqa: E402
 
 ok("Imports OK")
 
@@ -367,7 +368,6 @@ else:
     try:
         # Check for known Triton kernel files in fla
         import fla.ops.gated_delta_rule as fla_mod
-        from fla.ops.gated_delta_rule import chunk_gated_delta_rule as fla_fn
 
         fla_dir = os.path.dirname(fla_mod.__file__)
         triton_files = [f for f in os.listdir(fla_dir) if f.endswith(".py")]

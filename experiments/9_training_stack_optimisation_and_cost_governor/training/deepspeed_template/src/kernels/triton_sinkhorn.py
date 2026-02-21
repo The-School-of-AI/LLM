@@ -18,8 +18,6 @@ Performance:
 - All intermediate results stay in SRAM/registers
 """
 
-from typing import Optional
-
 import torch
 
 # Check for Triton availability

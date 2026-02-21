@@ -157,7 +157,7 @@ def test_backward_sizes():
                 max_diff < 5e-2
             ), f"{name} mismatch at {(B,T,H,D,k_sel)}: max_diff={max_diff}"
 
-        print(f"    ✅ OK")
+        print("    ✅ OK")
 
 
 if __name__ == "__main__":

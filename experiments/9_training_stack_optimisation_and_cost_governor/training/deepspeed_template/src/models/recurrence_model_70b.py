@@ -127,7 +127,7 @@ import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 import torch
@@ -2218,15 +2218,15 @@ class Model70B(nn.Module):
             embedding_params = self.vocab_size * config.hidden_size / 1e6
             embedding_buffer = 0
 
-        print(f"\n🤖 MODEL WITH MEMORY STREAM RECURRENCE INITIALIZED:")
+        print("\n🤖 MODEL WITH MEMORY STREAM RECURRENCE INITIALIZED:")
         print(
             f"   🔄 Recurrence: Stream {self.recurrence_stream_idx} | λ_r={F.softplus(self.lambda_r_raw).item():.4f}"
         )
         print(f"   Vocabulary: {self.vocab_size:,}")
         print(f"   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
-            print(f"\n   📐 Kronecker Embeddings:")
-            print(f"      POS_DIM=32 x CHAR_DIM=256 = D=8192")
+            print("\n   📐 Kronecker Embeddings:")
+            print("      POS_DIM=32 x CHAR_DIM=256 = D=8192")
             print(
                 f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)"
             )
@@ -2259,7 +2259,7 @@ class Model70B(nn.Module):
             else "   MTP: Disabled"
         )
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
-        print(f"   Active Parameters: ~4.079B (avg 5 experts × top-k routing)")
+        print("   Active Parameters: ~4.079B (avg 5 experts × top-k routing)")
 
     def _init_weights(self, module):
         # FIX #38: Skip initialization for kronecker_embeddings and all its submodules
@@ -2551,14 +2551,14 @@ if __name__ == "__main__":
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
-    print(f"\nAttention Mix:")
+    print("\nAttention Mix:")
     print(
         f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context"
     )
     print(
         f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality"
     )
-    print(f"\nExperts:")
+    print("\nExperts:")
     print(f"  Real: {num_experts}")
     print(f"  Null: {num_experts} (ρ={config.data_sparsity})")
     print(f"  Total slots: {config.total_expert_slots}")

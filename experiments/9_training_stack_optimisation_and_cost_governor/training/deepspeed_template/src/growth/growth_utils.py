@@ -23,7 +23,6 @@ SVD modes:
 Based on spectral_moe_initializer.py by teammate (Rohan).
 """
 
-import math
 from typing import Dict, Optional, Tuple
 
 import torch

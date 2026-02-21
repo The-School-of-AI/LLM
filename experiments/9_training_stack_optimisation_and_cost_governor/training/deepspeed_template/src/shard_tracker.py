@@ -44,7 +44,6 @@ import json
 import os
 import tempfile
 import threading
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Union

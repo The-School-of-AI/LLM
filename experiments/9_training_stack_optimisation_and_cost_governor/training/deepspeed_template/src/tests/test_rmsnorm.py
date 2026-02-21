@@ -21,17 +21,11 @@ import sys
 import time
 
 import torch
-import torch.nn.functional as F
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from kernels.triton_rmsnorm import (
-    HAS_TRITON,
-    pytorch_rmsnorm,
-    triton_rmsnorm,
-    triton_rmsnorm_fwd_only,
-)
+from kernels.triton_rmsnorm import HAS_TRITON, triton_rmsnorm, triton_rmsnorm_fwd_only
 
 # ═══════════════════════════════════════════════════════════════════════
 # Test Helpers
@@ -340,7 +334,7 @@ if __name__ == "__main__":
     gpu_name = torch.cuda.get_device_name(0)
     print("=" * 70)
     print(f"  RMSNorm Kernel Tests — {gpu_name}")
-    print(f"  3-Way: PyTorch | Old Triton (fwd-only) | New Liger Triton (fwd+bwd)")
+    print("  3-Way: PyTorch | Old Triton (fwd-only) | New Liger Triton (fwd+bwd)")
     print("=" * 70)
 
     results = []
