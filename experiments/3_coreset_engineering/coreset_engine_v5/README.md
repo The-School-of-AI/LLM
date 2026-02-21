@@ -51,7 +51,8 @@ python coreset_builder.py \
   --curriculum config/curriculum.yaml \
   --input-path data/datasets/sample_chunks.jsonl \
   --input-format jsonl \
-  --checkpoint-dir output/checkpoints
+  --checkpoint-dir output/checkpoints \
+  --checkpoint-every-n-batches 1
 
 # Run with custom stages
 python coreset_builder.py \
@@ -147,6 +148,22 @@ Streaming runs support multi-worker sharding with:
 
 Checkpoint filenames are keyed by stage and batch number. If multiple shards share the same `--checkpoint-dir`, they will overwrite each other’s checkpoints.
 
+Checkpoint cadence is configurable in streaming mode via:
+
+- `--checkpoint-every-n-batches N`
+  - `N=1` (default): checkpoint every successful batch (current legacy behavior)
+  - `N>1`: checkpoint every N successful batches, and always write a final checkpoint at stage end
+
+Examples:
+
+```bash
+# default behavior (every batch)
+python coreset_builder.py ... --checkpoint-dir output/checkpoints --checkpoint-every-n-batches 1
+
+# reduced checkpoint write frequency
+python coreset_builder.py ... --checkpoint-dir output/checkpoints --checkpoint-every-n-batches 10
+```
+
 Important: if you change `--num-shards`, `--shard-id`, or `--stage-target-scale`, you must use a fresh `--checkpoint-dir` (or delete old checkpoints). Checkpoints are only safely resumable when these run parameters are unchanged.
 
 Recommended pattern:
@@ -203,7 +220,8 @@ Use this if it is your first time running the job or if you want to wipe previou
 bash shard.sh \
   --num-shards 8 \
   --input-path "data/combined/bands/" \
-  --total-tokens 4523096944
+  --total-tokens 4523096944 \
+  --checkpoint-every-n-batches 10
 ```
 
 #### 2. Resume (Continue Interrupted Job)
@@ -215,6 +233,7 @@ bash shard.sh \
   --num-shards 8 \
   --input-path "data/combined/bands/" \
   --total-tokens 4523096944 \
+  --checkpoint-every-n-batches 10 \
   --resume
 ```
 
@@ -222,6 +241,9 @@ bash shard.sh \
 
 - `--resume`: Skips cleaning `output/` and tells the builder to jump to the last saved checkpoint.
 - `--num-shards`: Controls how many background processes to spawn.
+- `--checkpoint-every-n-batches`: Pass-through checkpoint cadence for `coreset_builder.py` (default: `1`).
+
+For most local/manual runs via `shard.sh`, set this explicitly (for example `5` or `10`) to reduce checkpoint write overhead while preserving resumability.
 
 ### Optional: Band Inference for Curriculum Eligibility
 
@@ -311,6 +333,7 @@ All parameters are configured via environment variables (with defaults):
 | `NUM_SHARDS` | `8` | Number of parallel shards |
 | `STAGES` | `1B` | Space-separated stage list (e.g., `"1B 3B 8B 70B"`) |
 | `TOTAL_TOKENS` | `4523096944` | Total token count of the input dataset (must match `S3_INPUT_PATH`) |
+| `CHECKPOINT_EVERY_N_BATCHES` | `1` | Streaming checkpoint cadence (`1` = every batch; `N>1` = every N batches) |
 | `RESUME` | `false` | Set to `true` to resume from last checkpoint (skips output cleanup) |
 | `BRANCH_NAME` | `p3/feat/stage-wise-coreset-selection_v2` | Git branch to clone (only used when repo setup is not skipped) |
 
@@ -325,6 +348,7 @@ S3_BUCKET=t2-datacurriculum-353 \
 NUM_SHARDS=8 \
 STAGES="1B" \
 TOTAL_TOKENS=4523096944 \
+CHECKPOINT_EVERY_N_BATCHES=10 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=false \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
@@ -337,6 +361,7 @@ S3_BUCKET=t2-datacurriculum-353 \
 NUM_SHARDS=16 \
 STAGES="1B 3B 8B 70B" \
 TOTAL_TOKENS=4523096944 \
+CHECKPOINT_EVERY_N_BATCHES=5 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=true \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
@@ -356,6 +381,7 @@ export S3_BUCKET=t2-datacurriculum-353
 export NUM_SHARDS=8
 export STAGES="1B 3B 8B 70B"
 export TOTAL_TOKENS=4523096944
+export CHECKPOINT_EVERY_N_BATCHES=10
 ./commands.sh
 # Pipeline runs in background via nohup. Check output/logs for progress.
 ```

@@ -361,6 +361,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
         input_format: str,
         batch_size: int = 10_000,
         checkpoint_dir: Optional[str] = None,
+        checkpoint_every_n_batches: int = 1,
         total_input_tokens_estimate: Optional[int] = None,
         shard_id: int = 0,
         num_shards: int = 1,
@@ -374,6 +375,9 @@ class StreamingCoresetBuilder(CoresetBuilder):
         self.input_path = input_path
         self.input_format = input_format.lower()
         self.batch_size = int(batch_size)
+        self.checkpoint_every_n_batches = int(checkpoint_every_n_batches)
+        if self.checkpoint_every_n_batches <= 0:
+            raise ValueError("--checkpoint-every-n-batches must be >= 1")
         self.total_input_tokens_estimate = (
             int(total_input_tokens_estimate) if total_input_tokens_estimate else None
         )
@@ -940,6 +944,10 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             "This can happen if code/config changed between runs; use a new --checkpoint-dir."
                         ) from e
 
+        last_successful_batch_idx: Optional[int] = None
+        last_checkpoint_batch_idx: Optional[int] = None
+        last_checkpoint_state: Optional[Dict[str, Any]] = None
+
         for batch_idx, batch in self._iter_batches():
             if batch_idx < start_batch:
                 continue
@@ -1276,7 +1284,12 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 except Exception:
                     # Best-effort: resume will still work, but may not be bitwise deterministic.
                     pass
-                self._write_checkpoint(stage_name, batch_idx, state)
+
+                last_successful_batch_idx = int(batch_idx)
+                last_checkpoint_state = state
+                if ((batch_idx + 1) % self.checkpoint_every_n_batches) == 0:
+                    self._write_checkpoint(stage_name, batch_idx, state)
+                    last_checkpoint_batch_idx = int(batch_idx)
 
                 logger.info(
                     f"{stage_name} batch {batch_idx}: seen_tokens={total_tokens_seen:,} "
@@ -1296,6 +1309,18 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 if ctx.severity == ErrorSeverity.FATAL:
                     raise
                 continue
+
+        # Ensure we always persist a final checkpoint at stage end when batches were processed.
+        if (
+            last_successful_batch_idx is not None
+            and last_checkpoint_state is not None
+            and last_checkpoint_batch_idx != last_successful_batch_idx
+        ):
+            self._write_checkpoint(
+                stage_name,
+                int(last_successful_batch_idx),
+                last_checkpoint_state,
+            )
 
         # Save minimal manifest for this shard
         from src.core.types import (
@@ -1480,6 +1505,15 @@ def main():
         help="Checkpoint directory (enables resume)",
     )
     parser.add_argument(
+        "--checkpoint-every-n-batches",
+        type=int,
+        default=1,
+        help=(
+            "Checkpoint cadence in streaming mode. "
+            "1 preserves current behavior (checkpoint every successful batch)."
+        ),
+    )
+    parser.add_argument(
         "--total-input-tokens-estimate",
         type=int,
         default=None,
@@ -1573,6 +1607,7 @@ def main():
                 input_format=args.input_format,
                 batch_size=args.batch_size,
                 checkpoint_dir=args.checkpoint_dir,
+                checkpoint_every_n_batches=args.checkpoint_every_n_batches,
                 total_input_tokens_estimate=args.total_input_tokens_estimate,
                 shard_id=args.shard_id,
                 num_shards=args.num_shards,
