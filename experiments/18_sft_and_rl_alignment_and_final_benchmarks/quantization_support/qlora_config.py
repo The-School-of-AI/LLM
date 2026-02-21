@@ -140,10 +140,21 @@ class DPOSettings:
 
 
 @dataclass
+class IDFTSettings:
+    """IDFT-specific training settings."""
+    enabled: bool = False
+    clip_B: float = 5.0
+    learning_rates: List[float] = field(
+        default_factory=lambda: [5e-5, 2e-5, 1e-5]
+    )
+    log_diagnostics_every: int = 10
+
+
+@dataclass
 class TrainingConfig:
     """Training configuration."""
     output_dir: str = "./outputs"
-    method: Literal["sft", "grpo", "dpo"] = "sft"
+    method: Literal["sft", "grpo", "dpo", "idft"] = "sft"
     
     # Batch settings
     per_device_train_batch_size: int = 2
@@ -181,6 +192,7 @@ class TrainingConfig:
     # Method-specific settings
     grpo: GRPOSettings = field(default_factory=GRPOSettings)
     dpo: DPOSettings = field(default_factory=DPOSettings)
+    idft: IDFTSettings = field(default_factory=IDFTSettings)
 
 
 @dataclass
@@ -271,7 +283,8 @@ class QLoRAConfig:
         training_dict = config_dict.get("training", {})
         grpo_settings = GRPOSettings(**training_dict.pop("grpo", {}))
         dpo_settings = DPOSettings(**training_dict.pop("dpo", {}))
-        training_config = TrainingConfig(**training_dict, grpo=grpo_settings, dpo=dpo_settings)
+        idft_settings = IDFTSettings(**training_dict.pop("idft", {}))
+        training_config = TrainingConfig(**training_dict, grpo=grpo_settings, dpo=dpo_settings, idft=idft_settings)
         
         # Data config with nested filters
         data_dict = config_dict.get("data", {})
@@ -358,12 +371,20 @@ class QLoRAConfig:
         if hasattr(args, 'hub_model_id') and args.hub_model_id:
             config.hub.hub_model_id = args.hub_model_id
         
+        if hasattr(args, 'idft_clip_B') and args.idft_clip_B is not None:
+            config.training.idft.clip_B = args.idft_clip_B
+            config.training.idft.enabled = True
+
+        if hasattr(args, 'use_idft') and args.use_idft:
+            config.training.idft.enabled = True
+            config.training.method = "idft"
+
         if hasattr(args, 'dataset_name') and args.dataset_name:
             config.data.dataset_name = args.dataset_name
-        
+
         if hasattr(args, 'max_samples') and args.max_samples:
             config.data.max_samples = args.max_samples
-        
+
         return config
     
     def validate(self) -> List[str]:
@@ -519,10 +540,17 @@ class QLoRAConfig:
         print(f"  Max steps: {self.training.max_steps}")
         print(f"  Output dir: {self.training.output_dir}")
         
+        if self.training.method == "idft" or self.training.idft.enabled:
+            print(f"\n[IDFT]")
+            print(f"  Enabled: {self.training.idft.enabled}")
+            print(f"  Clip B: {self.training.idft.clip_B}")
+            print(f"  LR grid: {self.training.idft.learning_rates}")
+            print(f"  Log diagnostics every: {self.training.idft.log_diagnostics_every}")
+
         print(f"\n[Data]")
         print(f"  Dataset: {self.data.dataset_name}")
         print(f"  Max samples: {self.data.max_samples or 'all'}")
-        
+
         print("=" * 70)
 
 
@@ -608,7 +636,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--method",
         type=str,
-        choices=["sft", "grpo", "dpo"],
+        choices=["sft", "grpo", "dpo", "idft"],
         help="Training method"
     )
     parser.add_argument(
@@ -652,7 +680,19 @@ def create_argument_parser() -> argparse.ArgumentParser:
         type=str,
         help="HuggingFace Hub model ID"
     )
-    
+
+    # IDFT settings
+    parser.add_argument(
+        "--use_idft",
+        action="store_true",
+        help="Enable IDFT loss (sets method to idft)"
+    )
+    parser.add_argument(
+        "--idft_clip_B",
+        type=float,
+        help="IDFT phi clipping bound (default: 5.0)"
+    )
+
     return parser
 
 
