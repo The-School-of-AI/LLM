@@ -68,7 +68,7 @@ if HAS_TRITON:
 
         Computation done in fp32 for numerical stability (Llama-style).
         """
-        row_idx = tl.program_id(0)
+        row_idx = tl.program_id(0).to(tl.int64)  # int64 to prevent overflow with long sequences (>262k tokens × batch)
         col_offsets = tl.arange(0, BLOCK_SIZE)
         mask = col_offsets < n_cols
 
@@ -151,15 +151,20 @@ if HAS_TRITON:
         W_row = tl.load(W_ptr + col_offsets, mask=mask, other=0.0)
 
         for row_idx in range(row_start, row_end):
+            # Explicit int64 cast: row_start is int64, but Triton's range loop variable may
+            # inherit int32 depending on version — force int64 to prevent pointer overflow
+            # with long sequences (B × 262k rows × n_cols stride > 2^31).
+            row_idx_64 = row_idx.to(tl.int64)
+
             # Load dY and X for this row
-            dy_base = dY_ptr + row_idx * stride_dy_row
-            x_base = X_ptr + row_idx * stride_x_row
+            dy_base = dY_ptr + row_idx_64 * stride_dy_row
+            x_base = X_ptr + row_idx_64 * stride_x_row
 
             dY_row = tl.load(dy_base + col_offsets, mask=mask, other=0.0)
             X_row = tl.load(x_base + col_offsets, mask=mask, other=0.0)
 
             # Load cached RSTD (1 scalar)
-            rstd = tl.load(RSTD_ptr + row_idx)
+            rstd = tl.load(RSTD_ptr + row_idx_64)
 
             # Upcast X to fp32 for computation
             X_row_f32 = X_row.to(tl.float32)
@@ -172,7 +177,7 @@ if HAS_TRITON:
             dX_row = rstd * m + rstd * (-(1.0 / n_cols) * rstd * rstd * dot_mx * X_row_f32)
 
             # Store dX (cast back to input dtype)
-            dx_base = dX_ptr + row_idx * stride_dx_row
+            dx_base = dX_ptr + row_idx_64 * stride_dx_row
             tl.store(dx_base + col_offsets, dX_row.to(X_row.dtype), mask=mask)
 
             # Accumulate dW: dY * (X * rstd), cast to input dtype first (Llama-style)
