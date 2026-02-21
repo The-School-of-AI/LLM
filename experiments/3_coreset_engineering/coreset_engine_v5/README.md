@@ -52,7 +52,7 @@ python coreset_builder.py \
   --input-path data/datasets/sample_chunks.jsonl \
   --input-format jsonl \
   --checkpoint-dir output/checkpoints \
-  --checkpoint-every-n-batches 1
+  --checkpoint-every-n-batches 3
 
 # Run with custom stages
 python coreset_builder.py \
@@ -88,6 +88,8 @@ python coreset_builder.py \
   --input-format jsonl \
   --ablation-variant no_neardup
 ```
+
+Note: default `--batch-size` is `80000`; reduce it on low-memory machines.
 
 ### How to Pick `--total-input-tokens-estimate` and `--stage-target-scale`
 
@@ -151,14 +153,15 @@ Checkpoint filenames are keyed by stage and batch number. If multiple shards sha
 Checkpoint cadence is configurable in streaming mode via:
 
 - `--checkpoint-every-n-batches N`
-  - `N=1` (default): checkpoint every successful batch (current legacy behavior)
+  - `N=3` (default): checkpoint every 3 successful batches
+  - `N=1`: checkpoint every successful batch
   - `N>1`: checkpoint every N successful batches, and always write a final checkpoint at stage end
 
 Examples:
 
 ```bash
 # default behavior (every batch)
-python coreset_builder.py ... --checkpoint-dir output/checkpoints --checkpoint-every-n-batches 1
+python coreset_builder.py ... --checkpoint-dir output/checkpoints --checkpoint-every-n-batches 3
 
 # reduced checkpoint write frequency
 python coreset_builder.py ... --checkpoint-dir output/checkpoints --checkpoint-every-n-batches 10
@@ -219,10 +222,19 @@ Use this if it is your first time running the job or if you want to wipe previou
 ```bash
 bash shard.sh \
   --num-shards 8 \
+  --stages "1B 3B 8B 70B" \
   --input-path "data/combined/bands/" \
+  --input-format parquet \
+  --config config/pipeline.yaml \
+  --curriculum config/curriculum.yaml \
+  --checkpoint-base output/checkpoints \
   --batch-size 80000 \
+  --band-inference none \
+  --band-score-source auto \
   --total-tokens 4523096944 \
-  --checkpoint-every-n-batches 10
+  --checkpoint-every-n-batches 3 \
+  --used-cache-max-entries 0 \
+  --used-cache-stats-every 0
 ```
 
 #### 2. Resume (Continue Interrupted Job)
@@ -232,28 +244,151 @@ Use this if your job was interrupted (e.g., manual kill or crash). It will **kee
 ```bash
 bash shard.sh \
   --num-shards 8 \
+  --stages "1B 3B 8B 70B" \
   --input-path "data/combined/bands/" \
+  --input-format parquet \
+  --config config/pipeline.yaml \
+  --curriculum config/curriculum.yaml \
+  --checkpoint-base output/checkpoints \
   --batch-size 80000 \
+  --band-inference none \
+  --band-score-source auto \
   --total-tokens 4523096944 \
-  --checkpoint-every-n-batches 10 \
+  --checkpoint-every-n-batches 3 \
+  --used-cache-max-entries 0 \
+  --used-cache-stats-every 0 \
   --resume
 ```
 
-#### Key Wrapper Flags
+#### 3. Complete Template (All Parameters + Defaults)
 
-- `--resume`: Skips cleaning `output/` and tells the builder to jump to the last saved checkpoint.
-- `--num-shards`: Controls how many background processes to spawn.
-- `--batch-size`: Pass-through batch size for `coreset_builder.py` (default: `80000`).
-  - **What it does**: Number of rows/chunks read and processed per selection batch.
-  - **Why tune it**: Controls memory pressure vs throughput; larger batches reduce loop overhead but increase RAM usage.
-- `--checkpoint-every-n-batches`: Pass-through checkpoint cadence for `coreset_builder.py` (default: `1`).
-  - **What it does**: Writes a checkpoint every N successful batches (and always writes one at stage end).
-  - **Why tune it**: Reduces checkpoint write amplification on long runs while preserving resumability.
+Use this as a baseline command. Keep flags you need, and remove/override the rest.
+
+```bash
+bash shard.sh \
+  --num-shards 4 \
+  --stages "1B 3B 8B 70B" \
+  --input-path "data/datasets/large_sample_chunks.parquet" \
+  --input-format parquet \
+  --config config/pipeline.yaml \
+  --curriculum config/curriculum.yaml \
+  --checkpoint-base output/checkpoints \
+  --band-inference none \
+  --band-score-source auto \
+  --batch-size 80000 \
+  --checkpoint-every-n-batches 3 \
+  --used-cache-max-entries 0 \
+  --used-cache-stats-every 0 \
+  --total-tokens 4523096944
+# Add --resume to continue from checkpoints.
+```
+
+#### 4. Minimal Command (Only Required Flags)
+
+Use this shortest form when you want `shard.sh` defaults for everything except the required input path.
+
+```bash
+bash shard.sh \
+  --input-path "data/combined/bands/"
+```
+
+Equivalent minimal run with an explicit token estimate (recommended for proportional per-batch budgeting):
+
+```bash
+bash shard.sh \
+  --input-path "data/combined/bands/" \
+  --total-tokens 4523096944
+```
+
+#### `shard.sh` Parameters
+
+`shard.sh` accepts the following parameters:
+
+| Parameter | Required | Default | Description |
+| --- | --- | --- | --- |
+| `--input-path` | Yes | — | Input file or directory path (local FS or `s3://...`) |
+| `--num-shards` | No | `4` | Number of parallel shard workers to launch |
+| `--stages` | No | `"1B 3B 8B 70B"` | Space-separated stage list |
+| `--input-format` | No | `parquet` | Input format passed to `coreset_builder.py` (`parquet` or `jsonl`) |
+| `--config` | No | `config/pipeline.yaml` | Pipeline config path |
+| `--curriculum` | No | `config/curriculum.yaml` | Curriculum config path |
+| `--checkpoint-base` | No | `output/checkpoints` | Base directory where per-shard checkpoint folders are created |
+| `--total-tokens` | No | empty | Passed as `--total-input-tokens-estimate` for proportional per-batch budgeting |
+| `--batch-size` | No | `80000` | Rows/chunks processed per batch |
+| `--checkpoint-every-n-batches` | No | `3` | Checkpoint cadence (`3` default; `1` = every batch; `N>1` = every N batches, plus stage-end checkpoint) |
+| `--used-cache-max-entries` | No | `0` | Optional in-memory LRU size for used-chunk lookups (`0` disables cache) |
+| `--used-cache-stats-every` | No | `0` | Emit periodic used-cache hit-rate logs every N batches (`0` disables periodic logs) |
+| `--band-inference` | No | `none` | Band inference mode: `none`, `infer_if_missing`, `infer_if_ineligible`, `force` |
+| `--band-score-source` | No | `auto` | Score source for band inference (`auto`, `band_score`, `difficulty_score`, `band_p_max`, `band_p_argmax`, `band_p_B0..band_p_B5`) |
+| `--resume` | No | `false` | Resume from existing checkpoints and skip output cleanup |
+
+High-impact tuning knobs:
+
+- `--batch-size`: controls memory pressure vs throughput (bigger is faster until memory becomes tight).
+- `--checkpoint-every-n-batches`: reduces checkpoint write amplification while keeping resumability.
+- `--used-cache-max-entries`: can reduce SQLite read pressure on repeated membership checks.
 
 For most local/manual runs via `shard.sh`, set both explicitly:
 
-- `--batch-size` based on memory headroom (e.g., `80000` start; increase only if RAM allows).
+- `--batch-size` based on memory headroom (default `80000`; reduce if RAM is tight).
 - `--checkpoint-every-n-batches` to reduce checkpoint churn (e.g., `5` or `10`).
+
+#### Sizing `--used-cache-max-entries` and `--used-cache-stats-every`
+
+Use shard-aware sizing (not global chunk count):
+
+- Start `--used-cache-max-entries` at about **0.5% to 2% of per-shard unique chunks**.
+- Compute per-shard chunks as:
+  $$\text{chunks\_per\_shard} \approx \frac{\text{total\_chunks}}{\text{num\_shards}}$$
+- Then size cache as:
+  $$\text{used\_cache\_max\_entries} \approx (0.005\ \text{to}\ 0.02) \times \text{chunks\_per\_shard}$$
+
+Example for **1B total chunks**:
+
+- `num-shards=8` → `chunks_per_shard ≈ 125M`
+- recommended cache range ≈ **625k to 2.5M** entries
+- `--used-cache-max-entries 1000000` is a good practical starting point.
+
+Memory rule-of-thumb for cache budget:
+
+$$\text{RAM} \approx \text{entries} \times (150\ \text{to}\ 350\ \text{bytes})$$
+
+So `1,000,000` entries is typically on the order of **~150MB to ~350MB** (can vary by id length/object overhead).
+
+For `--used-cache-stats-every`, use log cadence based on total batches:
+
+- target roughly every **1% to 5%** of batches
+- practical formula:
+  $$\text{stats\_every} \approx \max\left(20,\ \left\lfloor\frac{\text{total\_batches}}{50}\right\rfloor\ \text{to}\ \left\lfloor\frac{\text{total\_batches}}{20}\right\rfloor\right)$$
+- `--used-cache-stats-every 100` is reasonable for long multi-batch runs.
+
+#### Used-cache hit rate: calculation and why it matters
+
+When used-cache is enabled (`--used-cache-max-entries > 0`), the pipeline logs cache stats in stdout and `coreset_selection.log`:
+
+- periodic (if `--used-cache-stats-every > 0`): `used-cache: size=... hit_rate=... hits=... misses=...`
+- stage-final summary: `used-cache final: size=... hit_rate=... hits=... misses=...`
+
+Hit-rate formula:
+
+$$\text{hit\_rate}(\%) = 100 \times \frac{\text{hits}}{\text{hits} + \text{misses}}$$
+
+Where:
+
+- `hits`: membership checks answered directly from in-memory cache
+- `misses`: checks not found in cache (these require SQLite lookup, then cache backfill)
+
+Interpretation guide:
+
+- `<40%`: cache is likely too small (or IDs are highly non-repeating)
+- `40%–70%`: decent benefit
+- `>70%`: strong benefit, many lookups are avoiding disk/SQLite reads
+
+Why this helps:
+
+- higher hit rate means fewer SQLite membership reads in the hot path
+- that reduces I/O and lock pressure and generally lowers per-batch latency
+- with stable memory, increasing cache size is useful only until hit rate plateaus
 
 ### Optional: Band Inference for Curriculum Eligibility
 
@@ -344,7 +479,9 @@ All parameters are configured via environment variables (with defaults):
 | `STAGES` | `1B` | Space-separated stage list (e.g., `"1B 3B 8B 70B"`) |
 | `TOTAL_TOKENS` | `4523096944` | Total token count of the input dataset (must match `S3_INPUT_PATH`) |
 | `BATCH_SIZE` | `80000` | Passed to `shard.sh --batch-size`; controls rows/chunks processed per batch |
-| `CHECKPOINT_EVERY_N_BATCHES` | `1` | Streaming checkpoint cadence (`1` = every batch; `N>1` = every N batches) |
+| `CHECKPOINT_EVERY_N_BATCHES` | `3` | Streaming checkpoint cadence (`3` default; `1` = every batch; `N>1` = every N batches) |
+| `USED_CACHE_MAX_ENTRIES` | `0` | Passed to `shard.sh --used-cache-max-entries` (`0` disables in-memory used-cache) |
+| `USED_CACHE_STATS_EVERY` | `0` | Passed to `shard.sh --used-cache-stats-every` (`0` disables periodic hit-rate logging) |
 | `RESUME` | `false` | Set to `true` to resume from last checkpoint (skips output cleanup) |
 | `BRANCH_NAME` | `p3/feat/stage-wise-coreset-selection_v2` | Git branch to clone (only used when repo setup is not skipped) |
 
@@ -361,6 +498,8 @@ STAGES="1B" \
 TOTAL_TOKENS=4523096944 \
 BATCH_SIZE=80000 \
 CHECKPOINT_EVERY_N_BATCHES=10 \
+USED_CACHE_MAX_ENTRIES=1000000 \
+USED_CACHE_STATS_EVERY=100 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=false \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
@@ -375,6 +514,8 @@ STAGES="1B 3B 8B 70B" \
 TOTAL_TOKENS=4523096944 \
 BATCH_SIZE=80000 \
 CHECKPOINT_EVERY_N_BATCHES=5 \
+USED_CACHE_MAX_ENTRIES=1000000 \
+USED_CACHE_STATS_EVERY=100 \
 S3_INPUT_PATH="s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=ncert/" \
 RESUME=true \
 bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
@@ -396,6 +537,8 @@ export STAGES="1B 3B 8B 70B"
 export TOTAL_TOKENS=4523096944
 export BATCH_SIZE=80000
 export CHECKPOINT_EVERY_N_BATCHES=10
+export USED_CACHE_MAX_ENTRIES=1000000
+export USED_CACHE_STATS_EVERY=100
 ./commands.sh
 # Pipeline runs in background via nohup. Check output/logs for progress.
 ```
@@ -952,6 +1095,6 @@ Same outputs will be produced (bit-for-bit identical indices, same seed).
 
 ---
 
-**Last Updated**: 2026-02-10  
+**Last Updated**: 2026-02-22  
 **Maintainer**: Coreset Selection Team  
 **License**: Internal Use Only

@@ -26,7 +26,9 @@ CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
 BAND_SCORE_SOURCE="auto"
 BATCH_SIZE=80000
-CHECKPOINT_EVERY_N_BATCHES=1
+CHECKPOINT_EVERY_N_BATCHES=3
+USED_CACHE_MAX_ENTRIES=0
+USED_CACHE_STATS_EVERY=0
 TOTAL_TOKENS=""
 RESUME=false
 
@@ -49,7 +51,9 @@ usage() {
   echo "  --band-score-source Band score source (default: auto)"
   echo "                     Values: auto | band_score | difficulty_score | band_p_max | band_p_argmax | band_p_B0..band_p_B5"
   echo "  --batch-size        Rows/chunks per batch in streaming mode (default: 80000)"
-  echo "  --checkpoint-every-n-batches  Checkpoint cadence passed to coreset_builder (default: 1)"
+  echo "  --checkpoint-every-n-batches  Checkpoint cadence passed to coreset_builder (default: 3)"
+  echo "  --used-cache-max-entries   Optional in-memory LRU size for used-chunk checks (default: 0=off)"
+  echo "  --used-cache-stats-every   Log used-cache hit-rate every N batches (default: 0=off)"
   echo "  --resume            Resume from last checkpoints (don't clean output dirs)"
   exit 1
 }
@@ -67,6 +71,8 @@ while [[ $# -gt 0 ]]; do
     --band-score-source) BAND_SCORE_SOURCE="$2"; shift 2 ;;
     --batch-size)       BATCH_SIZE="$2";       shift 2 ;;
     --checkpoint-every-n-batches) CHECKPOINT_EVERY_N_BATCHES="$2"; shift 2 ;;
+    --used-cache-max-entries) USED_CACHE_MAX_ENTRIES="$2"; shift 2 ;;
+    --used-cache-stats-every) USED_CACHE_STATS_EVERY="$2"; shift 2 ;;
     --total-tokens)     TOTAL_TOKENS="$2";     shift 2 ;;
     --resume)           RESUME=true;           shift 1 ;;
     -h|--help)          usage ;;
@@ -92,6 +98,7 @@ echo "  Batch Size   : $BATCH_SIZE"
 echo "  Band Infer   : $BAND_INFERENCE"
 echo "  Band Score   : $BAND_SCORE_SOURCE"
 echo "  Ckpt Every N : $CHECKPOINT_EVERY_N_BATCHES"
+echo "  Used Cache   : max=$USED_CACHE_MAX_ENTRIES stats_every=$USED_CACHE_STATS_EVERY"
 echo "============================================================"
 
 # --------------- PYTHON DETECTION (WINDOWS/GIT-BASH FRIENDLY) ---------------
@@ -187,6 +194,8 @@ for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
       --shard-id "$SHARD_ID" \
       --checkpoint-dir "$SHARD_DIR" \
       --checkpoint-every-n-batches "$CHECKPOINT_EVERY_N_BATCHES" \
+      --used-cache-max-entries "$USED_CACHE_MAX_ENTRIES" \
+      --used-cache-stats-every "$USED_CACHE_STATS_EVERY" \
       --band-inference "$BAND_INFERENCE" \
       --band-score-source "$BAND_SCORE_SOURCE" \
       ${TOTAL_TOKENS:+--total-input-tokens-estimate "$TOTAL_TOKENS"} \

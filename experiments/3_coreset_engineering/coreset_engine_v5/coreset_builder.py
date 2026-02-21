@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import sys
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
@@ -359,9 +360,11 @@ class StreamingCoresetBuilder(CoresetBuilder):
         *,
         input_path: str,
         input_format: str,
-        batch_size: int = 80000,
+        batch_size: int = 80_000,
         checkpoint_dir: Optional[str] = None,
-        checkpoint_every_n_batches: int = 1,
+        checkpoint_every_n_batches: int = 3,
+        used_cache_max_entries: int = 0,
+        used_cache_stats_every: int = 0,
         total_input_tokens_estimate: Optional[int] = None,
         shard_id: int = 0,
         num_shards: int = 1,
@@ -378,6 +381,12 @@ class StreamingCoresetBuilder(CoresetBuilder):
         self.checkpoint_every_n_batches = int(checkpoint_every_n_batches)
         if self.checkpoint_every_n_batches <= 0:
             raise ValueError("--checkpoint-every-n-batches must be >= 1")
+        self.used_cache_max_entries = int(used_cache_max_entries)
+        if self.used_cache_max_entries < 0:
+            raise ValueError("--used-cache-max-entries must be >= 0")
+        self.used_cache_stats_every = int(used_cache_stats_every)
+        if self.used_cache_stats_every < 0:
+            raise ValueError("--used-cache-stats-every must be >= 0")
         self.total_input_tokens_estimate = (
             int(total_input_tokens_estimate) if total_input_tokens_estimate else None
         )
@@ -427,6 +436,37 @@ class StreamingCoresetBuilder(CoresetBuilder):
         used_dir = Path(self.config.io.output_coreset_path) / ".used_chunks"
         used_db = used_dir / f"used_chunks_shard{self.shard_id:03d}.sqlite"
         self.used_store = UsedChunksStore(used_db)
+
+        # Optional in-memory LRU cache for used-chunk membership lookups.
+        # key: chunk_id, value: bool (True=used, False=unused)
+        self._used_cache: OrderedDict[str, bool] = OrderedDict()
+        self._used_cache_hits: int = 0
+        self._used_cache_misses: int = 0
+
+    def _used_cache_get(self, chunk_id: str) -> Optional[bool]:
+        if self.used_cache_max_entries <= 0:
+            return None
+        if chunk_id in self._used_cache:
+            self._used_cache_hits += 1
+            val = self._used_cache[chunk_id]
+            self._used_cache.move_to_end(chunk_id, last=True)
+            return bool(val)
+        self._used_cache_misses += 1
+        return None
+
+    def _used_cache_put(self, chunk_id: str, is_used: bool) -> None:
+        if self.used_cache_max_entries <= 0:
+            return
+        self._used_cache[chunk_id] = bool(is_used)
+        self._used_cache.move_to_end(chunk_id, last=True)
+        while len(self._used_cache) > self.used_cache_max_entries:
+            self._used_cache.popitem(last=False)
+
+    def _used_cache_hit_rate(self) -> float:
+        total = self._used_cache_hits + self._used_cache_misses
+        if total <= 0:
+            return 0.0
+        return float(self._used_cache_hits) / float(total)
 
     def _infer_band_from_score(self, score: float) -> DifficultyBand:
         """Infer a DifficultyBand from a continuous difficulty score.
@@ -955,7 +995,31 @@ class StreamingCoresetBuilder(CoresetBuilder):
             try:
                 # Parse batch into ChunkMetadata (after non-overlap filtering)
                 batch_ids = [str(chunk_id) for chunk_id, _row in batch]
-                allowed_ids = self.used_store.filter_unused(batch_ids)
+                if self.used_cache_max_entries > 0:
+                    cached_unused = set()
+                    unknown_ids = []
+                    for cid in batch_ids:
+                        cached = self._used_cache_get(cid)
+                        if cached is None:
+                            unknown_ids.append(cid)
+                        elif cached is False:
+                            cached_unused.add(cid)
+
+                    db_unused = (
+                        self.used_store.filter_unused(unknown_ids)
+                        if unknown_ids
+                        else set()
+                    )
+
+                    # Populate cache for unknown IDs queried from SQLite.
+                    if unknown_ids:
+                        db_unused_set = set(db_unused)
+                        for cid in unknown_ids:
+                            self._used_cache_put(cid, cid not in db_unused_set)
+
+                    allowed_ids = cached_unused | set(db_unused)
+                else:
+                    allowed_ids = self.used_store.filter_unused(batch_ids)
 
                 stream: List[Tuple[str, ChunkMetadata]] = []
                 batch_tokens = 0
@@ -1243,6 +1307,9 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             parts_written += 1
                             # Update used-chunk membership immediately so later stages cannot re-select.
                             self.used_store.add_many(selected_ids)
+                            if self.used_cache_max_entries > 0:
+                                for cid in selected_ids:
+                                    self._used_cache_put(str(cid), True)
 
                 total_chunks_seen += len(stream)
                 total_tokens_seen += batch_tokens
@@ -1295,6 +1362,20 @@ class StreamingCoresetBuilder(CoresetBuilder):
                     f"{stage_name} batch {batch_idx}: seen_tokens={total_tokens_seen:,} "
                     f"selected_tokens={selected_tokens:,} batch_target={batch_stats.get('batch_target_tokens', 0):,}"
                 )
+                if (
+                    self.used_cache_max_entries > 0
+                    and self.used_cache_stats_every > 0
+                    and ((batch_idx + 1) % self.used_cache_stats_every) == 0
+                ):
+                    logger.info(
+                        "%s batch %d: used-cache size=%d hit_rate=%.2f%% hits=%d misses=%d",
+                        stage_name,
+                        batch_idx,
+                        len(self._used_cache),
+                        100.0 * self._used_cache_hit_rate(),
+                        self._used_cache_hits,
+                        self._used_cache_misses,
+                    )
 
             except Exception as e:
                 ctx = self.error_recovery.handle_error(
@@ -1432,6 +1513,16 @@ class StreamingCoresetBuilder(CoresetBuilder):
             )
             logger.info(f"{stage_name} timing totals: {timing_str}")
 
+        if self.used_cache_max_entries > 0:
+            logger.info(
+                "%s used-cache final: size=%d hit_rate=%.2f%% hits=%d misses=%d",
+                stage_name,
+                len(self._used_cache),
+                100.0 * self._used_cache_hit_rate(),
+                self._used_cache_hits,
+                self._used_cache_misses,
+            )
+
         return {
             "shard_id": self.shard_id,
             "num_shards": self.num_shards,
@@ -1495,7 +1586,7 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=80000,
+        default=80_000,
         help="Rows/chunks per batch in streaming mode",
     )
     parser.add_argument(
@@ -1507,10 +1598,28 @@ def main():
     parser.add_argument(
         "--checkpoint-every-n-batches",
         type=int,
-        default=1,
+        default=3,
         help=(
             "Checkpoint cadence in streaming mode. "
-            "1 preserves current behavior (checkpoint every successful batch)."
+            "Default is 3 (checkpoint every 3 successful batches)."
+        ),
+    )
+    parser.add_argument(
+        "--used-cache-max-entries",
+        type=int,
+        default=0,
+        help=(
+            "Optional in-memory LRU size for used-chunk membership lookups. "
+            "0 disables cache (default)."
+        ),
+    )
+    parser.add_argument(
+        "--used-cache-stats-every",
+        type=int,
+        default=0,
+        help=(
+            "Log used-cache hit-rate every N batches in streaming mode. "
+            "0 disables periodic stats logging."
         ),
     )
     parser.add_argument(
@@ -1608,6 +1717,8 @@ def main():
                 batch_size=args.batch_size,
                 checkpoint_dir=args.checkpoint_dir,
                 checkpoint_every_n_batches=args.checkpoint_every_n_batches,
+                used_cache_max_entries=args.used_cache_max_entries,
+                used_cache_stats_every=args.used_cache_stats_every,
                 total_input_tokens_estimate=args.total_input_tokens_estimate,
                 shard_id=args.shard_id,
                 num_shards=args.num_shards,
