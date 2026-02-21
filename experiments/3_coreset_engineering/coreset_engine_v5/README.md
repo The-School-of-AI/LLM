@@ -95,16 +95,18 @@ Note: default `--batch-size` is `80000`; reduce it on low-memory machines.
 
 - `--stage-target-scale` multiplies the **global** curriculum stage targets (e.g., `70B.total_tokens`) so you can run end-to-end on small samples.
   - Streaming selection uses an **effective per-worker stage budget** computed as:
-    $$\text{target\_tokens\_shard} = \left\lfloor\frac{\text{target\_tokens\_global} \times \text{stage\_target\_scale}}{\text{num\_shards}}\right\rfloor$$
+    $$T_{\mathrm{shard}} = \left\lfloor\frac{T_{\mathrm{global}} \times s}{N_{\mathrm{shards}}}\right\rfloor$$
   - The total targeted across all shards is therefore approximately:
-    $$\sum\text{target\_tokens\_shard} \approx \text{target\_tokens\_global} \times \text{stage\_target\_scale}$$
+    $$\sum T_{\mathrm{shard}} \approx T_{\mathrm{global}} \times s$$
+  - where $T_{\mathrm{global}}$ = global stage target, $s$ = `--stage-target-scale`, and $N_{\mathrm{shards}}$ = `--num-shards`.
   - Examples:
     - Global target = 2,000,000,000, `--num-shards 2`, `--stage-target-scale 1.0` → each shard targets ~1,000,000,000 (total ~2,000,000,000).
     - Global target = 2,000,000,000, `--num-shards 2`, `--stage-target-scale 0.5` → each shard targets ~500,000,000 (total ~1,000,000,000).
   - Practical rule: if you want to reach the full global target across shards, use `--stage-target-scale 1.0` (sharding already divides the work).
 - `--total-input-tokens-estimate` enables *proportional per-batch budgeting* in streaming mode.
   - The batched engine computes each batch’s selection budget roughly as:
-    $$\text{batch_target} = \text{stage_target} \times \frac{\text{batch_tokens_raw}}{\text{total_input_tokens_estimate}}$$
+    $$B_{\mathrm{target}} = T_{\mathrm{stage}} \times \frac{B_{\mathrm{raw}}}{T_{\mathrm{input}}}$$
+  - where $B_{\mathrm{target}}$ = batch target, $T_{\mathrm{stage}}$ = stage target, $B_{\mathrm{raw}}$ = raw tokens in the current batch, and $T_{\mathrm{input}}$ = `--total-input-tokens-estimate`.
   - If you omit it, the engine defaults to “select everything in batch” (not representative for 2T-scale behavior).
 
 **Practical way to compute it** (exact for typical JSONL/Parquet inputs):
@@ -393,9 +395,9 @@ Use shard-aware sizing (not global chunk count):
 
 - Start `--used-cache-max-entries` at about **0.5% to 2% of per-shard unique chunks**.
 - Compute per-shard chunks as:
-  $$\text{chunks\_per\_shard} \approx \frac{\text{total\_chunks}}{\text{num\_shards}}$$
+  $$C_{\mathrm{shard}} \approx \frac{C_{\mathrm{total}}}{N_{\mathrm{shards}}}$$
 - Then size cache as:
-  $$\text{used\_cache\_max\_entries} \approx (0.005\ \text{to}\ 0.02) \times \text{chunks\_per\_shard}$$
+  $$E_{\mathrm{cache}} \approx (0.005\ \text{to}\ 0.02) \times C_{\mathrm{shard}}$$
 
 Example for **1B total chunks**:
 
@@ -413,7 +415,7 @@ For `--used-cache-stats-every`, use log cadence based on total batches:
 
 - target roughly every **1% to 5%** of batches
 - practical formula:
-  $$\text{stats\_every} \approx \max\left(20,\ \left\lfloor\frac{\text{total\_batches}}{50}\right\rfloor\ \text{to}\ \left\lfloor\frac{\text{total\_batches}}{20}\right\rfloor\right)$$
+  $$S_{\mathrm{every}} \approx \max\left(20,\ \left\lfloor\frac{B_{\mathrm{total}}}{50}\right\rfloor\ \text{to}\ \left\lfloor\frac{B_{\mathrm{total}}}{20}\right\rfloor\right)$$
 - `--used-cache-stats-every 100` is reasonable for long multi-batch runs.
 
 #### Used-cache hit rate: calculation and why it matters
@@ -425,7 +427,7 @@ When used-cache is enabled (`--used-cache-max-entries > 0`), the pipeline logs c
 
 Hit-rate formula:
 
-$$\text{hit\_rate}(\%) = 100 \times \frac{\text{hits}}{\text{hits} + \text{misses}}$$
+$$R_{\mathrm{hit}}(\%) = 100 \times \frac{H}{H + M}$$
 
 Where:
 
