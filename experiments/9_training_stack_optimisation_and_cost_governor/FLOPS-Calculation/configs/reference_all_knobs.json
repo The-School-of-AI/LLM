@@ -1,0 +1,106 @@
+{
+  "_description": "REFERENCE CONFIG - All knobs that affect FLOPs/memory",
+  "hardware": {
+    "num_gpus": 8,
+    "price_per_gpu_hour": 2.5,
+    "tflops_per_gpu": {
+      "bf16": 989.0,
+      "fp8": 1979.0
+    },
+    "expert_parallel_size": 1,
+    "zero_efficiency": {
+      "_comment": "Throughput efficiency for each ZeRO mode (0.0-1.0)",
+      "zero0": 1.0,
+      "zero2": 0.95,
+      "zero3": 0.70,
+      "zero_infinity": 0.25
+    },
+    "scaling_efficiency": {
+      "_comment": "Multi-GPU scaling efficiency at different GPU counts",
+      "base_gpus": 8,
+      "efficiency_at_base": 1.0,
+      "efficiency_at_64": 0.90,
+      "efficiency_at_256": 0.80,
+      "efficiency_at_1024": 0.65
+    }
+  },
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": {
+      "device": "none"
+    },
+    "offload_param": {
+      "device": "none"
+    }
+  },
+  "activation_checkpointing": {
+    "partition_activations": true,
+    "cpu_checkpointing": false,
+    "checkpoint_factor": 0.1,
+    "_comment": "checkpoint_factor: 1.0=none, 0.5=half layers, 0.1=aggressive"
+  },
+  "bf16": {
+    "enabled": true
+  },
+  "mfu": 0.3,
+  "stages": [
+    {
+      "name": "Reference Model",
+      "total_tokens": 20000000000,
+      "architecture": {
+        "_section_1": "=== CORE (always affects params & FLOPs) ===",
+        "vocab_size": 128000,
+        "hidden_size": 2048,
+        "intermediate_size": 8192,
+        "num_layers": 24,
+        "sequence_length": 4096,
+        "_section_2": "=== ATTENTION (always affects params & FLOPs) ===",
+        "num_heads": 16,
+        "num_kv_heads": 4,
+        "attention_type": "gqa:4:1",
+        "_section_3": "=== EMBEDDINGS (affects params) ===",
+        "tie_embeddings": false,
+        "_section_4": "=== MTP (affects params if enabled) ===",
+        "use_multi_token_prediction": true,
+        "num_prediction_heads": 2,
+        "_section_5": "=== MoE (affects params if experts > 0) ===",
+        "num_routed_experts": 8,
+        "num_shared_experts": 1,
+        "top_k": 2,
+        "moe_layer_frequency": 1,
+        "moe_intermediate_size": 2048,
+        "_section_6": "=== PRECISION (affects memory) ===",
+        "precision": {
+          "weight_precision": "auto",
+          "gradient_precision": "fp32",
+          "optimizer_precision": "fp32",
+          "optimizer_states_count": 2,
+          "master_weights": false
+        }
+      }
+    }
+  ],
+  "_alternatives": {
+    "_attention_types": [
+      "mha",
+      "gqa:Q:KV (e.g. gqa:4:1)",
+      "gsa:k (e.g. gsa:128 for sparse attention)",
+      "dsa:rank (e.g. dsa:256 for DeepSeek MLA)",
+      "type1-type2:r1:r2 (e.g. gqa-gsa:4:1 for hybrid)"
+    ],
+    "_zero_stages": [
+      0,
+      2,
+      3
+    ],
+    "_offload_devices": [
+      "none",
+      "cpu",
+      "nvme"
+    ],
+    "_batch_size_notes": [
+      "train_micro_batch_size_per_gpu: affects activation memory",
+      "gradient_accumulation_steps: affects global batch size"
+    ]
+  }
+}
