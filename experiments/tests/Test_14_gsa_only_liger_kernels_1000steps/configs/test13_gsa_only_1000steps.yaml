@@ -31,7 +31,7 @@ deepspeed:
   local_rank: -1
 
 model:
-  tokenizer_name: null
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"
   embedding_type: "kronecker"
   model_variant: "reversible"
 

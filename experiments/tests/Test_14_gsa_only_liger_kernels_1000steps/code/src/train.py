@@ -117,7 +117,6 @@ def train_epoch(
     start_step=0,
     global_step=0,
     metrics_jsonl_path=None,
-    use_fused_ce=False,
 ):
     """
     Train the model for one epoch.
@@ -181,7 +180,7 @@ def train_epoch(
         loss_aux_value = None
 
         if uses_custom_forward:
-            # Reversible model: returns (logits_ntp, logits_mtp, aux_loss) or (loss_ntp, loss_mtp, aux_loss) when use_fused_ce
+            # Reversible model: returns (logits_ntp, logits_mtp, aux_loss); CE in train.py (no fused CE)
             x_input = input_ids[:, :-2].contiguous()
             y_ntp = input_ids[:, 1:-1].contiguous()
             y_mtp = input_ids[:, 2:].contiguous()
@@ -189,26 +188,14 @@ def train_epoch(
             # 2. Forward pass with reversibility fix
             # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper
             with torch.amp.autocast('cuda',enabled=False):
-                if use_fused_ce:
-                    logits_ntp, logits_mtp, aux_loss = model_engine.module(
-                        x_input,
-                        next_token_ids=y_ntp,
-                        attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
-                        return_loss=True,
-                        return_memory=False,
-                        prev_memory_stream=None,
-                        ntp_targets=y_ntp,
-                        mtp_targets=y_mtp,
-                    )
-                else:
-                    logits_ntp, logits_mtp, aux_loss = model_engine.module(
-                        x_input,
-                        next_token_ids=y_ntp,
-                        attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
-                        return_loss=True,
-                        return_memory=False,
-                        prev_memory_stream=None,
-                    )
+                logits_ntp, logits_mtp, aux_loss = model_engine.module(
+                    x_input,
+                    next_token_ids=y_ntp,
+                    attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                    return_loss=True,
+                    return_memory=False,
+                    prev_memory_stream=None,
+                )
             leak_frac_t = getattr(model_engine.module, "last_gsa_leak_fraction", None)
             leak_attempt_t = getattr(
                 model_engine.module, "last_gsa_leak_attempt_fraction", None
@@ -239,36 +226,23 @@ def train_epoch(
                 print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
                 print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
             
-            # 3. Compute loss with aggressive memory management
-            if use_fused_ce:
-                # In fused-CE mode, model already returns scalar CE losses.
-                loss_ntp = logits_ntp if torch.is_tensor(logits_ntp) else torch.as_tensor(logits_ntp, device=model_engine.device)
-                if logits_mtp is None:
-                    loss_mtp = torch.zeros_like(loss_ntp)
-                else:
-                    loss_mtp = logits_mtp if torch.is_tensor(logits_mtp) else torch.as_tensor(logits_mtp, device=model_engine.device)
-                if loss_ntp.ndim != 0 or loss_mtp.ndim != 0:
-                    raise RuntimeError("Fused CE path must return scalar losses for NTP/MTP")
-            else:
-                vocab_size = logits_ntp.size(-1)
-                # Compute NTP and MTP losses sequentially with immediate cleanup
-                with torch.amp.autocast('cuda',enabled=False):
-                    loss_ntp = torch.nn.functional.cross_entropy(
-                        logits_ntp.float().view(-1, vocab_size),
-                        y_ntp.view(-1),
-                    )
-                # Memory profiling after NTP loss
-                if i == 0:
-                    mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
-                    print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
-                del logits_ntp
-                # Compute MTP loss
-                with torch.amp.autocast('cuda',enabled=False):
-                    loss_mtp = torch.nn.functional.cross_entropy(
-                        logits_mtp.float().view(-1, vocab_size),
-                        y_mtp.view(-1),
-                    )
-                del logits_mtp
+            # 3. Compute loss (standard CE in train.py; no fused CE)
+            vocab_size = logits_ntp.size(-1)
+            with torch.amp.autocast('cuda',enabled=False):
+                loss_ntp = torch.nn.functional.cross_entropy(
+                    logits_ntp.float().view(-1, vocab_size),
+                    y_ntp.view(-1),
+                )
+            if i == 0:
+                mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
+                print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
+            del logits_ntp
+            with torch.amp.autocast('cuda',enabled=False):
+                loss_mtp = torch.nn.functional.cross_entropy(
+                    logits_mtp.float().view(-1, vocab_size),
+                    y_mtp.view(-1),
+                )
+            del logits_mtp
             
             # 4. NaN Watchdog
             if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):

@@ -1,10 +1,10 @@
 """
-1B Dense Baseline Model with Gated Sparse Attention (GSA) Only — Test 14
+1B Dense Baseline Model — Test 14: DeltaNet + GSA (DDDGDDDG), no fused CE
 
 Configuration:
 - 1.513B total parameters, 1.513B active parameters (100% dense - no MoE)
 - 131,072 vocabulary (2^17)
-- 4096 hidden size, 8 layers — all 8 layers are GSA only (no DeltaNet)
+- 4096 hidden size, 8 layers: 6 DeltaNet + 2 GSA (DDDGDDDG pattern)
 - No experts - Dense FFN with 2048 intermediate size (Liger SwiGLU MLP)
 - Multi-Token Prediction (MTP) with 2 predictions
 - Multi-Head Composition (mHC) with 4 streams
@@ -13,12 +13,12 @@ Configuration:
 - Enhanced with Memory Stream Recurrence for infinite-length documents
 
 Architecture:
-- All 8 decoder layers use Gated Sparse Attention (GSA) only; no DeltaNet.
-- Liger kernels: RoPE (liger_rotary_pos_emb), MLP (LigerSwiGLUMLP), fused linear+CE (LigerFusedLinearCrossEntropyLoss).
-- Gated Sparse Attention: arXiv:2601.15305v1 (Jan 2026)
-- Multi-Token Prediction: DeepSeek-V3 style
+- DDDGDDDG: layers 1–3 DeltaNet, layer 4 GSA, layers 5–7 DeltaNet, layer 8 GSA.
+- DeltaNet: fla chunk_gated_delta_rule (O(N) linear attention).
+- GSA: Test 14 Triton sparse attn + indexer (same kernels as before).
+- Liger: RoPE (liger_rotary_pos_emb), MLP (LigerSwiGLUMLP). No fused CE (logits only; CE in train.py).
 
-Purpose: Test 14 — GSA-only with all non-DeltaNet kernels (Liger RoPE, MLP, fused CE).
+Purpose: Test 14 — Test 6/7-style hybrid with our new kernels, standard CE (no fused CE).
 """
 
 import logging
@@ -68,6 +68,7 @@ def _import_kernels_module():
 _kernels_module = _import_kernels_module()
 if _kernels_module is not None:
     HAS_TRITON = bool(getattr(_kernels_module, "HAS_TRITON", False))
+    HAS_FLA = bool(getattr(_kernels_module, "HAS_FLA", False))
     triton_sparse_attention = getattr(_kernels_module, "triton_sparse_attention", None)
     pytorch_sparse_attention = getattr(_kernels_module, "pytorch_sparse_attention", None)
     triton_sinkhorn_knopp = getattr(_kernels_module, "triton_sinkhorn_knopp", None)
@@ -76,8 +77,10 @@ if _kernels_module is not None:
     pytorch_rmsnorm = getattr(_kernels_module, "pytorch_rmsnorm", None)
     TritonRMSNorm = getattr(_kernels_module, "TritonRMSNorm", None)
     fused_indexer_topk = getattr(_kernels_module, "fused_indexer_topk", None)
+    fla_gated_delta_rule = getattr(_kernels_module, "fla_gated_delta_rule", None)
 else:
     HAS_TRITON = False
+    HAS_FLA = False
     triton_sparse_attention = None
     pytorch_sparse_attention = None
     triton_sinkhorn_knopp = None
@@ -86,10 +89,11 @@ else:
     pytorch_rmsnorm = None
     TritonRMSNorm = None
     fused_indexer_topk = None
+    fla_gated_delta_rule = None
 
 HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
-# ── Liger ops (Test 14: RoPE, MLP, fused CE — no DeltaNet) ───────────────────
+# ── Liger ops (Test 14: RoPE, MLP only — no fused CE) ────────────────────────
 def _import_liger_ops_module():
     try:
         from . import liger_ops as liger_module
@@ -107,7 +111,6 @@ _liger_module = _import_liger_ops_module()
 LigerSwiGLUMLP = _liger_module.LigerSwiGLUMLP
 liger_rotary_pos_emb = _liger_module.liger_rotary_pos_emb
 liger_silu_mul = _liger_module.liger_silu_mul
-LigerFusedLinearCrossEntropyLoss = _liger_module.LigerFusedLinearCrossEntropyLoss
 
 # ── Kernel availability diagnostics ──────────────────────────────────────────
 _kernel_log = logging.getLogger("recurrence_model_1b.kernels")
@@ -123,6 +126,7 @@ _kernel_log.info(f"  HAS_TRITON:           {HAS_TRITON}")
 _kernel_log.info(f"  Triton RMSNorm:       {'ENABLED' if HAS_TRITON and triton_rmsnorm is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  Triton Sinkhorn:      {'ENABLED' if HAS_TRITON and triton_sinkhorn_knopp is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  Triton Sparse Attn:   {'ENABLED' if HAS_TRITON and triton_sparse_attention is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
+_kernel_log.info(f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and fla_gated_delta_rule is not None and _cuda_available else 'UNAVAILABLE (pip install fla)'}")
 if not _cuda_available:
     _kernel_log.info("  NOTE: Triton kernels require CUDA. Running on MPS/CPU uses PyTorch fallbacks.")
 _kernel_log.info("=" * 60)
@@ -401,8 +405,14 @@ class ModelConfig:
     hidden_size = 4096
     num_layers = 8
 
-    # Test 13: All 8 layers are GSA only (no DeltaNet)
-    num_gsa_layers = 8
+    # Attention Mix (75% DeltaNet / 25% GSA) — DDDGDDDG pattern
+    num_deltanet_layers = 6
+    num_gsa_layers = 2
+
+    # DeltaNet Configuration
+    delta_v_heads = 32  # hidden_size / delta_head_dim = 4096 / 128
+    delta_head_dim = 128
+    delta_gate_dim = 384  # 9.4% of hidden_size
 
     # GSA Configuration
     gsa_num_heads = 16  # hidden_size / attn_head_dim = 4096 / 256
@@ -412,8 +422,14 @@ class ModelConfig:
     gsa_k_max = 1024  # Increased for 256k context
     gsa_indexer_heads = 4
 
-    # Dense FFN only (Test 13: no MoE)
-    shared_expert_intermediate_size = 2048  # Dense FFN hidden size
+    # MoE Configuration (DENSE MODEL - No MoE) — same as Test 5 for parity
+    num_real_experts = 0
+    num_null_experts = 0
+    total_expert_slots = 0
+    top_k = 0  # Not used in dense model
+    expert_intermediate_size = 1024  # Not used in dense model
+    shared_expert_intermediate_size = 2048  # Acts as dense FFN
+    data_sparsity = 0.0  # No data sparsity (dense)
 
     # MTP Configuration
     enable_mtp = True
@@ -431,6 +447,7 @@ class ModelConfig:
 
     # Training
     dropout = 0.0  # Required for reversible integration
+    require_fused_deltanet_kernel = True
     require_fused_gsa_kernel = True
 
 
@@ -587,21 +604,209 @@ class RotaryEmbedding(nn.Module):
 
 
 # ============================================================================
-# Gated Sparse Attention (all 8 layers in Test 13)
+# Helper Modules for Gated DeltaNet
+# ============================================================================
+
+class ShortConvolution(nn.Module):
+    """
+    Short convolution layer with causal padding.
+    Used in GatedDeltaNet for local context integration.
+    """
+    def __init__(self, dim, conv_size=4, activation='silu'):
+        super().__init__()
+        self.conv_size = conv_size
+        self.conv = nn.Conv1d(
+            dim, dim,
+            kernel_size=conv_size,
+            padding=conv_size - 1,  # Causal padding
+            groups=dim  # Depthwise convolution
+        )
+        self.activation = nn.SiLU() if activation == 'silu' else nn.Identity()
+
+    def forward(self, x):
+        # x: (B, T, D)
+        x = x.transpose(1, 2)  # (B, D, T)
+        x = self.conv(x)
+        x = x[:, :, :-(self.conv_size - 1)]  # Remove extra padding for causality
+        x = x.transpose(1, 2)  # (B, T, D)
+        return self.activation(x)
+
+
+class FusedRMSNormSwishGate(nn.Module):
+    """
+    Fused RMSNorm with Swish gating for output projection.
+    Matches official implementation: g * swish(RMSNorm(x))
+    """
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.norm = RMSNorm(dim, eps)
+
+    def forward(self, x, g):
+        # x: (B, T, D), g: (B, T, D)
+        x_norm = self.norm(x)
+        return g * F.silu(x_norm)
+
+
+# ============================================================================
+# Gated DeltaNet (75% of layers) - O(N) Linear Attention
+# ============================================================================
+
+class GatedDeltaNet(nn.Module):
+    """
+    Gated DeltaNet - arXiv:2412.06464 (Dec 2024)
+
+    O(N) linear attention with gating and alpha decay for long-context efficiency.
+    Key components: alpha (decay), beta (writing strength), L2 norm on Q/K,
+    short convolutions. Uses fla's chunk_gated_delta_rule when available.
+    """
+    def __init__(self, hidden_size, num_heads, head_dim,
+                 max_seq_len=262144, rope_base=10000,
+                 rope_original_max=8192, rope_scaling_factor=32.0,
+                 conv_size=4, use_output_norm=True,
+                 require_fused_kernel=True):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.head_dim = head_dim
+        self.max_seq_len = max_seq_len
+        self.use_output_norm = use_output_norm
+        self.require_fused_kernel = require_fused_kernel
+
+        key_dim = num_heads * head_dim
+        value_dim = num_heads * head_dim
+
+        self.q_proj = nn.Linear(hidden_size, key_dim, bias=False)
+        self.k_proj = nn.Linear(hidden_size, key_dim, bias=False)
+        self.v_proj = nn.Linear(hidden_size, value_dim, bias=False)
+        self.g_proj = nn.Linear(hidden_size, value_dim, bias=False)
+        self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
+
+        self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)
+        self.gk_proj = nn.Linear(hidden_size, num_heads, bias=True)
+
+        self.q_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
+        self.k_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
+        self.v_conv1d = ShortConvolution(value_dim, conv_size=conv_size, activation='silu')
+
+        A_init = torch.empty(num_heads).uniform_(0, 16)
+        self.A_log = nn.Parameter(torch.log(A_init))
+
+        self.D = nn.Parameter(torch.ones(num_heads))
+        dt_bias = torch.rand(num_heads) * 0.02 - 0.01
+        self.dt_bias = nn.Parameter(dt_bias)
+
+        self.rotary_emb = RotaryEmbedding(
+            head_dim,
+            max_position_embeddings=max_seq_len,
+            base=rope_base,
+            original_max_position_embeddings=rope_original_max,
+            scaling_factor=rope_scaling_factor
+        )
+
+        if use_output_norm:
+            self.o_norm = FusedRMSNormSwishGate(head_dim)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in [self.q_proj, self.k_proj, self.v_proj, self.g_proj, self.o_proj]:
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+        for m in [self.b_proj, self.gk_proj]:
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+
+    def forward(self, x, attention_mask=None):
+        B, T, C = x.shape
+        device = x.device
+        token_keep = _token_keep_mask(attention_mask, B, T, device)
+        token_keep_f = None
+
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        g = self.g_proj(x)
+
+        q = self.q_conv1d(q)
+        k = self.k_conv1d(k)
+        v = self.v_conv1d(v)
+
+        q = q.view(B, T, self.num_heads, self.head_dim)
+        k = k.view(B, T, self.num_heads, self.head_dim)
+        v = v.view(B, T, self.num_heads, self.head_dim)
+        g = g.view(B, T, self.num_heads, self.head_dim)
+
+        cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
+        cos = cos.unsqueeze(0).unsqueeze(2)
+        sin = sin.unsqueeze(0).unsqueeze(2)
+        q = self.rotary_emb._apply_rotary(q, cos, sin)
+        k = self.rotary_emb._apply_rotary(k, cos, sin)
+
+        q = F.normalize(q, p=2, dim=-1)
+        k = F.normalize(k, p=2, dim=-1)
+
+        beta = torch.sigmoid(self.b_proj(x)).unsqueeze(-1)  # (B, T, num_heads, 1)
+        gk = self.gk_proj(x)
+        A = torch.exp(self.A_log)
+        alpha = torch.exp(-A.view(1, 1, self.num_heads, 1) * F.softplus(gk + self.dt_bias).unsqueeze(-1))
+
+        if token_keep is not None:
+            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
+            q = q * token_keep_f
+            k = k * token_keep_f
+            v = v * token_keep_f
+            g = g * token_keep_f
+            beta = beta * token_keep_f
+            alpha = alpha * token_keep_f + (1.0 - token_keep_f)
+
+        fla_available = HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda
+        if self.require_fused_kernel and not fla_available:
+            raise RuntimeError(
+                "DeltaNet fused kernel is required but unavailable. "
+                f"HAS_FLA={HAS_FLA}, fla_gated_delta_rule={fla_gated_delta_rule is not None}, "
+                f"q.is_cuda={q.is_cuda}. Install fla: pip install fla"
+            )
+
+        if fla_available:
+            try:
+                o = fla_gated_delta_rule(
+                    q=q, k=k, v=v, alpha=alpha, beta=beta,
+                    D=self.D, num_heads=self.num_heads,
+                )
+            except Exception as e:
+                if self.require_fused_kernel:
+                    raise RuntimeError("DeltaNet fused kernel execution failed and fallback is disabled.") from e
+                raise
+        else:
+            raise RuntimeError("DeltaNet requires fla (pip install fla) when require_fused_kernel=True.")
+
+        if self.use_output_norm:
+            o_flat = o.reshape(B * T * self.num_heads, self.head_dim)
+            g_flat = g.reshape(B * T * self.num_heads, self.head_dim)
+            o_normed = self.o_norm(o_flat, g_flat)
+            o = o_normed.view(B, T, self.num_heads, self.head_dim)
+        else:
+            o = o * torch.sigmoid(g)
+
+        if token_keep_f is not None:
+            o = o * token_keep_f
+
+        o = o.reshape(B, T, self.num_heads * self.head_dim)
+        return self.o_proj(o)
+
+
+# ============================================================================
+# Gated Sparse Attention (25% of layers in Test 14 — DDDGDDDG)
 # ============================================================================
 
 class GatedSparseAttention(nn.Module):
     """
     Gated Sparse Attention (GSA) - arXiv:2601.15305v1
 
-    Implements adaptive sparse attention with gating. In Test 13, all 8 decoder
-    layers use GSA only (no DeltaNet).
+    Implements adaptive sparse attention with gating. In Test 14, layers 4 and 8
+    use GSA (DDDGDDDG); layers 1–3, 5–7 use GatedDeltaNet.
 
     Memory complexity: O(T·k) via fused_indexer_topk chunked kernel.
-    The indexer processes importance scores in [B, C, T] chunks (C auto-tuned
-    to ~512MB), never materializing the full [B, T, T] score tensor.
-    Safe for 256k+ context lengths.
-
     Architecture:
     - Shared indexer keys (W_Ik → [B, T, d_idx]) across indexer heads
     - Per-attention-head diversity via head_importance_bias on attention logits
@@ -1001,31 +1206,48 @@ class MHCSublayer(nn.Module):
 
 
 # ============================================================================
-# Decoder Layer (GSA only — Test 13)
+# Decoder Layer (Hybrid DeltaNet + GSA — Test 14 DDDGDDDG)
 # ============================================================================
 
 class LightningDecoderLayer(nn.Module):
     """
-    Decoder layer with Gated Sparse Attention only. All 8 layers in Test 13 use this.
+    Decoder layer that can be either DeltaNet or GSA.
+    Type is determined at initialization (DDDGDDDG: every 4th layer is GSA).
     """
-    def __init__(self, config: ModelConfig, layer_type: str = "gsa"):
+    def __init__(self, config: ModelConfig, layer_type: str):
         super().__init__()
-        self.layer_type = "gsa"
+        self.layer_type = layer_type  # "deltanet" or "gsa"
         self.n_streams = config.n_streams
 
-        attn = GatedSparseAttention(
-            hidden_size=config.hidden_size,
-            num_heads=config.gsa_num_heads,
-            max_seq_len=config.max_seq_len,
-            rope_base=config.rope_base,
-            k_base=config.gsa_k_base,
-            k_min=config.gsa_k_min,
-            k_max=config.gsa_k_max,
-            indexer_heads=config.gsa_indexer_heads,
-            rope_original_max=config.rope_original_max_position,
-            rope_scaling_factor=config.rope_scaling_factor,
-            require_fused_kernel=config.require_fused_gsa_kernel,
-        )
+        if layer_type == "deltanet":
+            attn = GatedDeltaNet(
+                hidden_size=config.hidden_size,
+                num_heads=config.delta_v_heads,
+                head_dim=config.delta_head_dim,
+                max_seq_len=config.max_seq_len,
+                rope_base=config.rope_base,
+                rope_original_max=config.rope_original_max_position,
+                rope_scaling_factor=config.rope_scaling_factor,
+                conv_size=4,
+                use_output_norm=True,
+                require_fused_kernel=config.require_fused_deltanet_kernel,
+            )
+        elif layer_type == "gsa":
+            attn = GatedSparseAttention(
+                hidden_size=config.hidden_size,
+                num_heads=config.gsa_num_heads,
+                max_seq_len=config.max_seq_len,
+                rope_base=config.rope_base,
+                k_base=config.gsa_k_base,
+                k_min=config.gsa_k_min,
+                k_max=config.gsa_k_max,
+                indexer_heads=config.gsa_indexer_heads,
+                rope_original_max=config.rope_original_max_position,
+                rope_scaling_factor=config.rope_scaling_factor,
+                require_fused_kernel=config.require_fused_gsa_kernel,
+            )
+        else:
+            raise ValueError(f"Unknown layer type: {layer_type}")
 
         mlp = LightningMLP(config)
 
@@ -1174,12 +1396,12 @@ class MTPTransformerBlock(nn.Module):
 
 class Model1B(nn.Module):
     """
-    1B Dense Model with Gated Sparse Attention (GSA) only — Test 13.
+    1B Dense Model — Test 14: Hybrid DeltaNet + GSA (DDDGDDDG), no fused CE.
 
     Configuration:
     - 1.513B total params, 1.513B active params (100% dense - no MoE)
-    - 8 layers: all 8 are GSA only (no DeltaNet)
-    - No experts (dense FFN 2048, Liger SwiGLU MLP + fused CE)
+    - 8 layers: 6 DeltaNet + 2 GSA (DDDGDDDG)
+    - No experts (dense FFN 2048, Liger SwiGLU MLP); CE in train.py
     - 256k context length target
 
     ENHANCED WITH MEMORY STREAM RECURRENCE:
@@ -1232,14 +1454,19 @@ class Model1B(nn.Module):
             self.embed_norm = None
             self.use_kronecker = False
 
-        # Test 13: Build GSA-only stack (all layers use GatedSparseAttention).
+        # Build hybrid layer stack: 75% DeltaNet + 25% GSA (DDDGDDDG)
         layers = []
-
-        for _ in range(config.num_layers):
-            layers.append(LightningDecoderLayer(config, "gsa"))
+        layer_types = []
+        for i in range(config.num_layers):
+            if (i + 1) % 4 == 0:
+                layer_type = "gsa"
+            else:
+                layer_type = "deltanet"
+            layers.append(LightningDecoderLayer(config, layer_type))
+            layer_types.append(layer_type)
 
         self.layers = nn.ModuleList(layers)
-        self.layer_types = ["gsa"] * config.num_layers
+        self.layer_types = layer_types
 
         # Reversible Midpoint Integration
         from .reversible_ops_midpoint import ReversibleMidpointStack
@@ -1260,9 +1487,11 @@ class Model1B(nn.Module):
             self.mtp_block = None
 
         # ============================================================================
-        # Memory Stream Recurrence (for infinite-length document processing)
+        # Memory Stream Recurrence — "different" style (same as different_recurrence_model_1b_wo_rev.py)
+        # Injects into embedding space (before stream expansion); reads from collapsed h_main.
+        # (lambda_r, memory_ln, content-dependent memory_gate_proj.)
         # ============================================================================
-        self.recurrence_stream_idx = 3  # Use stream 3 for memory
+        self.recurrence_stream_idx = 3  # Unused in "different" style; kept for compat
         self.lambda_r_raw = nn.Parameter(torch.tensor(-2.5))  # Initial strength ~0.078
         self.memory_ln = nn.LayerNorm(config.hidden_size)  # Normalize memory before injection
         # FIX #25: Content-dependent memory gating (prevents uniform broadcast shortcut learning)
@@ -1270,7 +1499,6 @@ class Model1B(nn.Module):
 
         # Output projection
         self.lm_head = nn.Linear(config.hidden_size, self.vocab_size, bias=False)
-        self.liger_fused_ce = LigerFusedLinearCrossEntropyLoss(chunk_size=256)
         # Initialize
         self.apply(self._init_weights)
 
@@ -1302,8 +1530,9 @@ class Model1B(nn.Module):
             print(f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)")
             print(f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})")
             print(f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})")
-        print(f"\n   Total Layers: {config.num_layers} (all GSA only)")
-        print(f"   - GSA: {config.num_gsa_layers} layers (100%) - Adaptive sparse attention")
+        print(f"\n   Total Layers: {config.num_layers}")
+        print(f"   - DeltaNet: {config.num_deltanet_layers} layers ({100*config.num_deltanet_layers//config.num_layers}%) - O(N) linear attention")
+        print(f"   - GSA: {config.num_gsa_layers} layers ({100*config.num_gsa_layers//config.num_layers}%) - Adaptive sparse")
         print(f"\n   Context Target: {config.max_seq_len:,} tokens (standard RoPE)")
         print(f"   Dense FFN: {config.shared_expert_intermediate_size} intermediate (no MoE)")
         print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
@@ -1332,20 +1561,11 @@ class Model1B(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    def _fused_linear_cross_entropy(self, hidden, lm_head, targets):
-        """Liger fused linear+CE (chunked, no [B,T,V] materialization)."""
-        return self.liger_fused_ce(
-            hidden,
-            lm_head.weight,
-            targets,
-            bias=lm_head.bias,
-        )
-
     def forward(self, input_ids, next_token_ids=None, attention_mask=None,
                 prev_memory_stream=None, return_memory=True, return_loss=False,
                 ntp_targets=None, mtp_targets=None):
         """
-        Forward pass with Multi-Token Prediction.
+        Forward pass with Multi-Token Prediction. Always returns logits (no fused CE).
 
         Args:
             input_ids: [B, T] - Input token IDs
@@ -1354,19 +1574,11 @@ class Model1B(nn.Module):
             prev_memory_stream: [B, D] - Memory from previous chunk (None for first chunk)
             return_memory: Whether to return memory stream for next chunk
             return_loss: Whether to return auxiliary loss
-            ntp_targets: [B, T] - NTP target IDs.  When provided the model
-                returns a scalar ``loss_ntp`` instead of the full logit tensor,
-                using chunked cross-entropy to avoid materializing [B, T, vocab].
-            mtp_targets: [B, T] - MTP target IDs (same semantics as ntp_targets).
+            ntp_targets, mtp_targets: Ignored (no fused CE). CE is computed in train.py.
 
         Returns:
-            When ``ntp_targets`` is None (inference / eval):
-                - logits_ntp: [B, T, vocab_size]
-                - logits_mtp: [B, T, vocab_size] or None
-            When ``ntp_targets`` is provided (training):
-                - loss_ntp: scalar
-                - loss_mtp: scalar or None
-            Plus optionally aux_loss and memory_stream.
+            logits_ntp: [B, T, vocab_size], logits_mtp: [B, T, vocab_size] or None,
+            plus optionally aux_loss and memory_stream.
         """
         batch_size, seq_len = input_ids.size()
         token_keep_mask = _token_keep_mask(attention_mask, batch_size, seq_len, input_ids.device)
@@ -1380,8 +1592,20 @@ class Model1B(nn.Module):
         else:
             x = self.token_embed(input_ids)
 
-        # Expand to streams
         B, T, D = x.shape
+
+        # ============================================================================
+        # EMBEDDING-SPACE MEMORY INJECTION (before stream expansion) — "different" style
+        # ============================================================================
+        if prev_memory_stream is not None:
+            prev_memory_stream = prev_memory_stream.detach()
+            memory = self.memory_ln(prev_memory_stream)
+            memory_gates = torch.sigmoid(self.memory_gate_proj(x))  # (B, T, 1)
+            memory_broadcast = memory.unsqueeze(1).expand(B, T, D)
+            lambda_r = F.softplus(self.lambda_r_raw)
+            x = x + lambda_r * memory_gates * memory_broadcast
+
+        # Expand to streams
         x_stream = torch.zeros(B, T, self.n_streams, D, device=x.device, dtype=x.dtype)
         x_stream[:, :, 0, :] = x
 
@@ -1407,34 +1631,6 @@ class Model1B(nn.Module):
             if cache_key not in mtp_attn.rotary_emb._forward_cache:
                 cos, sin = mtp_attn.rotary_emb._compute_cos_sin(T, x.device, x.dtype)
                 mtp_attn.rotary_emb._forward_cache[cache_key] = (cos, sin)
-
-        # ============================================================================
-        # MEMORY STREAM INJECTION (Non-blocking, fully parallel)
-        # ============================================================================
-        if prev_memory_stream is not None:
-            # Defensive: Prevent cross-chunk gradient accumulation
-            prev_memory_stream = prev_memory_stream.detach()
-
-            # Normalize memory for stability
-            memory = self.memory_ln(prev_memory_stream)
-
-            # FIX #25: Content-dependent gating instead of uniform broadcast
-            # Compute per-token gates from current input (prevents shortcut learning)
-            # Gates are based on content, not position - model learns when memory is relevant
-            memory_gates = torch.sigmoid(
-                self.memory_gate_proj(x_stream[:, :, 0, :])  # Use stream 0 (primary) for gating decision
-            )  # (B, T, 1)
-
-            # Broadcast memory with content-dependent modulation
-            memory_broadcast = memory.unsqueeze(1).expand(B, T, D)
-
-            # Apply learnable strength + content-dependent gates (out-of-place
-            # to preserve autograd link to lambda_r and memory_gate_proj)
-            lambda_r = F.softplus(self.lambda_r_raw)
-            mem_val = (lambda_r * memory_gates * memory_broadcast).unsqueeze(2)  # (B, T, 1, D)
-            one_hot = torch.zeros(self.n_streams, device=x.device, dtype=x.dtype)
-            one_hot[self.recurrence_stream_idx] = 1.0
-            x_stream = x_stream + mem_val * one_hot.view(1, 1, self.n_streams, 1)
 
         # Pass through reversible stack
         x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
@@ -1462,23 +1658,20 @@ class Model1B(nn.Module):
         )
 
 
-        # ============================================================================
-        # EXTRACT MEMORY STREAM for next chunk (from final position)
-        # ============================================================================
-        if return_memory:
-            memory_stream_out = x_stream[:, -1, self.recurrence_stream_idx, :].detach()
-        else:
-            memory_stream_out = None
-
         # Collapse streams
         h_main = x_stream.mean(dim=2)
         h_main = self.norm(h_main)
 
-        # NTP Prediction (Liger fused linear+CE when targets provided)
-        if ntp_targets is not None:
-            logits_ntp = self._fused_linear_cross_entropy(h_main, self.lm_head, ntp_targets)
+        # ============================================================================
+        # EXTRACT MEMORY from collapsed h_main (not stream-3) — "different" style
+        # ============================================================================
+        if return_memory:
+            memory_stream_out = h_main[:, -1, :].detach()
         else:
-            logits_ntp = self.lm_head(h_main)
+            memory_stream_out = None
+
+        # NTP Prediction (logits only; CE in train.py)
+        logits_ntp = self.lm_head(h_main)
 
         # MTP Prediction
         logits_mtp = None
@@ -1497,10 +1690,7 @@ class Model1B(nn.Module):
             mtp_attention_mask = token_keep_mask[:, :min_len] if token_keep_mask is not None else None
             h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
-            if mtp_targets is not None:
-                logits_mtp = self._fused_linear_cross_entropy(h_mtp_normed, self.lm_head, mtp_targets)
-            else:
-                logits_mtp = self.lm_head(h_mtp_normed)
+            logits_mtp = self.lm_head(h_mtp_normed)
 
         # FIX #41: Clear RoPE forward-pass cache to prevent accumulation (CRITICAL PATH FIX)
         # Architecture: LightningDecoderLayer → MHCSublayer → GatedSparseAttention → RotaryEmbedding (all 8 layers GSA only)
@@ -1534,7 +1724,7 @@ def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
     """
     Create 1B model with default configuration.
 
-    Test 13 is intended for Kronecker embeddings (default). Pass bpe_vocab and pf_codec
+    Test 14 is intended for Kronecker embeddings (default). Pass bpe_vocab and pf_codec
     when using embedding_type="kronecker".
 
     Args:
@@ -1558,7 +1748,7 @@ if __name__ == "__main__":
         hidden_size=4096,
         target_params=1e9,
         attention_type="gsa",
-        deltanet_layer_ratio=0.0,  # Test 13: GSA only
+        deltanet_layer_ratio=0.75,  # Test 14: DDDGDDDG (6 DeltaNet, 2 GSA)
         num_routed_experts_active=0,
         num_shared_experts=0,
         expert_intermediate_size=1024,
@@ -1597,10 +1787,11 @@ if __name__ == "__main__":
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
-    print("\nAttention (Test 13: GSA only):")
-    print(f"  GSA: {config.num_gsa_layers} layers (100%) - Adaptive sparse attention")
-    print("\nModel Type: DENSE (No MoE) — Test 13")
+    print("\nAttention (Test 14: DDDGDDDG — DeltaNet + GSA):")
+    print(f"  DeltaNet: {config.num_deltanet_layers} layers ({100*config.num_deltanet_layers//config.num_layers}%) - O(N) linear attention")
+    print(f"  GSA: {config.num_gsa_layers} layers ({100*config.num_gsa_layers//config.num_layers}%) - Adaptive sparse attention")
+    print("\nModel Type: DENSE (No MoE) — Test 14")
     print(f"  Dense FFN intermediate: {config.shared_expert_intermediate_size}")
-    print(f"\nEmbedding: Kronecker (intended for Test 13)")
+    print(f"\nEmbedding: Kronecker (intended for Test 14)")
     print(f"Context: {config.max_seq_len:,} tokens")
     print("=" * 80)

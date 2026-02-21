@@ -1,11 +1,12 @@
 """
-Kernel library for Test 13 (GSA-only).
+Kernel library for Test 14 (DeltaNet + GSA, no fused CE).
 
 Centralized Triton kernels and PyTorch fallbacks for:
 - Sparse Attention (GSA)
 - Gated Lightning Indexer (GSA)
 - Fused Sinkhorn-Knopp (mHC routing)
 - Fused RMSNorm (all layers)
+- DeltaNet fla wrapper (fused linear attention)
 """
 
 try:
@@ -13,6 +14,13 @@ try:
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
+
+# fla (flash-linear-attention) for DeltaNet
+try:
+    from .fla_deltanet import HAS_FLA, fla_gated_delta_rule
+except (ImportError, AttributeError):
+    HAS_FLA = False
+    fla_gated_delta_rule = None
 
 from .triton_sparse_attn import (
     triton_sparse_attention,
@@ -47,6 +55,8 @@ from .moe_grouped_gemm import (
 
 __all__ = [
     "HAS_TRITON",
+    "HAS_FLA",
+    "fla_gated_delta_rule",
     "HAS_MOE_GROUPED_GEMM",
     "triton_sparse_attention",
     "pytorch_sparse_attention",
