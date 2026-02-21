@@ -140,6 +140,8 @@ class PrefetchDataLoader:
                             len(queue) >= self.prefetch_depth and not finished.is_set()
                         ):
                             condition.wait(timeout=0.1)
+                        if finished.is_set():
+                            break
                         queue.append((moved, event))
                         condition.notify()
             except Exception as exc:
@@ -166,8 +168,14 @@ class PrefetchDataLoader:
                     batch, event = queue.popleft()
                     condition.notify()  # unblock producer if it was waiting
 
-                # Ensure the H2D transfer for this batch has completed
-                event.synchronize()
+                # GPU synchronization: make the default stream wait for the H2D transfer
+                torch.cuda.current_stream().wait_event(event)
+
+                # Tell the allocator about the tensors' use on the default stream
+                # so memory is not freed before the compute kernels finish.
+                for key, value in batch.items():
+                    if isinstance(value, torch.Tensor):
+                        value.record_stream(torch.cuda.current_stream())
 
                 yield batch
 
