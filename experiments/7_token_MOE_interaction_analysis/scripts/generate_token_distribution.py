@@ -9,9 +9,8 @@ from typing import Any
 import numpy as np
 import ray
 import torch
-from transformers import AutoTokenizer
-
 from moeint.expert_analysis import ModalityDistribution
+from transformers import AutoTokenizer
 
 TokenCountDict = dict[str, np.ndarray]  # modality -> count array of shape [vocab_size]
 
@@ -43,10 +42,9 @@ def process_file(
     import numpy as np
     import pyarrow.parquet as pq
     import yaml
-    from transformers import AutoTokenizer
-
     from curriculum_tags.metrics.modality import ModalityMetric
     from curriculum_tags.utils.curriculum_loader import CurriculumConfig
+    from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
 
