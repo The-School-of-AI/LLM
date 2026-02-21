@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from rich.console import Console
 from .registry import BenchmarkRegistry
-from .detectors import NGramDetector, MinHashDetector
+from .detectors import NGramDetector, MinHashDetector, SemanticDetector
 
 console = Console()
 
@@ -24,13 +24,25 @@ class ContaminationScanner:
             n=self.config.get('ngram_size', 13)
         )
         self.minhash = MinHashDetector(
-            threshold=self.config.get('minhash_threshold', 0.6),
+            threshold=self.config.get('minhash_threshold', 0.8),
             num_perm=self.config.get('minhash_permutations', 128)
         )
-        
+
         self.ngram.build_index(self.registry)
         self.minhash.build_index(self.registry)
-        
+
+        try:
+            self.semantic = SemanticDetector(
+                threshold=self.config.get('semantic_threshold', 0.9),
+                model_name=self.config.get('semantic_model', 'all-MiniLM-L6-v2'),
+                batch_size=self.config.get('semantic_batch_size', 512),
+            )
+            self.semantic.build_index(self.registry)
+            self.has_semantic = True
+        except ImportError as e:
+            console.print(f"[yellow]⚠ Semantic detector disabled: {e}[/yellow]\n")
+            self.has_semantic = False
+
         console.print("[bold green]✓ Scanner ready![/bold green]\n")
     
     def scan_dataset(self, filepath, team_name, batch_name):
@@ -46,6 +58,7 @@ class ContaminationScanner:
         # Run detectors
         ngram_matches = self.ngram.scan(texts)
         minhash_matches = self.minhash.scan(texts)
+        semantic_matches = self.semantic.scan(texts) if self.has_semantic else {}
         
         # Aggregate with detailed sample info
         contaminated_samples = {}  # idx -> details
@@ -109,7 +122,7 @@ class ContaminationScanner:
                     contaminated_samples[idx]["matched_benchmarks"].append({
                         "benchmark": benchmark,
                         "match_type": "fuzzy",
-                        "confidence": "60-80%",
+                        "confidence": f"{match.get('jaccard', 0):.0%}",
                         "similar_to": match.get('match', '')[:100]
                     })
                     
@@ -129,7 +142,52 @@ class ContaminationScanner:
                     "benchmarks": list(minhash_matches.keys()),
                     "contaminated_samples": sample_details[:50]
                 })
-        
+
+        if semantic_matches:
+            sample_details = []
+            new_contaminated = 0
+
+            for benchmark, matches in semantic_matches.items():
+                for match in matches:
+                    idx = match['idx']
+
+                    # Skip if already caught by a stricter layer
+                    if idx in contaminated_samples:
+                        continue
+
+                    contaminated_samples[idx] = {
+                        "id": ids[idx],
+                        "text": texts[idx],
+                        "detection_method": "SEMANTIC",
+                        "matched_benchmarks": []
+                    }
+                    new_contaminated += 1
+
+                    contaminated_samples[idx]["matched_benchmarks"].append({
+                        "benchmark": benchmark,
+                        "match_type": "semantic",
+                        "confidence": f"{match.get('cosine', 0):.0%}",
+                        "similar_to": match.get('match', '')[:100]
+                    })
+
+                    sample_details.append({
+                        "sample_id": ids[idx],
+                        "sample_index": idx,
+                        "text_preview": texts[idx][:200] + ("..." if len(texts[idx]) > 200 else ""),
+                        "benchmark": benchmark,
+                        "similar_to": match.get('match', '')[:100],
+                        "cosine": match.get('cosine', 0)
+                    })
+
+            if new_contaminated > 0:
+                findings.append({
+                    "layer": "SEMANTIC",
+                    "severity": "MEDIUM",
+                    "count": new_contaminated,
+                    "benchmarks": list(semantic_matches.keys()),
+                    "contaminated_samples": sample_details[:50]
+                })
+
         # Build report
         report = {
             "dataset": batch_name,
