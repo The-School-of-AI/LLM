@@ -18,8 +18,8 @@ set -euo pipefail
 # --------------- DEFAULTS ---------------
 NUM_SHARDS=4
 STAGES="1B 3B 8B 70B"
-INPUT_PATH="data/books/bands/"
-INPUT_FORMAT="jsonl"
+INPUT_PATH="data/datasets/large_sample_chunks.parquet"
+INPUT_FORMAT="parquet"
 CONFIG="config/pipeline.yaml"
 CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"

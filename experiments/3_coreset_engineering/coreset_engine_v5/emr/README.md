@@ -15,7 +15,7 @@ This pipeline consolidates, transforms, and deduplicates curriculum data from mu
 | :--- | :--- | :--- |
 | `id` | `chunk_id` | Mapped from source `id` for unique identification. |
 | `id`, `uuid` | *Dropped* | Internal IDs are removed to keep the output clean. |
-| `text`, `metadata` | *Dropped* | Large fields are removed from the final JSONL output. |
+| `text`, `metadata` | *Dropped* | Large fields are removed from the final Parquet output. |
 | `hash` | *Dropped* | Used for deduplication and then removed. |
 | `assigned_band` | `band` | The final band the record belongs to. |
 | (New) | `band_score` | Probability score specifically for the assigned band. |
@@ -51,10 +51,12 @@ This pipeline consolidates, transforms, and deduplicates curriculum data from mu
     - **Band Alignment**: Derives the final `band` column from `assigned_band`.
     - **Score Mapping**: Selects the `band_score` by looking up the specific probability column (e.g., if band is `B3`, it matches the value in `band_p_B3`).
 8.  **Statistics Collection**: Aggregates word and token counts for both the input set and the unique set, calculating the reduction percentages.
-9.  **S3 Persistence**: Saves the unique records to S3 as JSONL, partitioned by source for easy access.
+9.  **S3 Persistence**: Saves the unique records to S3 as Parquet, optimized for downstream analytical tasks.
 10. **Checkpointing**: Writes a `<source>.done` file to S3 marking completion. This enables the script to "Resume" if interrupted.
 
-## Sample Output Record
+## Sample Record (Schema Illustration)
+
+While the final output is in **Parquet** format, each record contains the following schema and data structure:
 
 ```json
 {
@@ -138,7 +140,7 @@ aws emr-serverless start-job-run \
 
 All results are centralized under the `OUTPUT_PREFIX`:
 
-1.  **Processed Data**: `s3://<BUCKET>/processed_dataset/curriculum_pyspark_output/source=<SOURCE>/` (JSONL format)
+1.  **Processed Data**: `s3://<BUCKET>/processed_dataset/curriculum_pyspark_output/source=<SOURCE>/` (Parquet format)
 2.  **Distribution Stats**: `s3://<BUCKET>/processed_dataset/curriculum_pyspark_output/stats/<SOURCE>/` (CSV format)
 3.  **Job Logs**: `s3://<BUCKET>/processed_dataset/curriculum_pyspark_output/logs/` (Spark stdout/stderr)
 

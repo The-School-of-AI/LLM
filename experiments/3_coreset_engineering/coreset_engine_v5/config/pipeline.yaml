@@ -54,7 +54,7 @@ io:
   input_metadata_path: data/metadata
   output_coreset_path: output/coresets
   output_manifest_path: output/manifests
-  output_index_format: jsonl # or parquet, csv
+  output_index_format: parquet # or jsonl, csv
   use_object_store: false
   object_store_type: null
   object_store_bucket: null

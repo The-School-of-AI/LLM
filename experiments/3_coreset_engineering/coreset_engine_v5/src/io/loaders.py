@@ -275,7 +275,8 @@ class CoresetWriter:
         fmt = format.lower()
         if fmt == "parquet":
             output_file = stage_dir / "selected_indices.parquet"
-            df.to_parquet(output_file, index=False)
+            # Use Snappy compression (default for most Parquet engines, but made explicit here)
+            df.to_parquet(output_file, index=False, compression="snappy")
         elif fmt == "jsonl" or fmt == "json":
             output_file = stage_dir / "selected_indices.jsonl"
             df.to_json(output_file, orient="records", lines=True)

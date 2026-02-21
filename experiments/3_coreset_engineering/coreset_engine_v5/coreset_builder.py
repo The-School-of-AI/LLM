@@ -1196,7 +1196,10 @@ class StreamingCoresetBuilder(CoresetBuilder):
                         wrote = False
                         try:
                             if part_path.suffix.lower() == ".parquet":
-                                pd.DataFrame(rows).to_parquet(part_path, index=False)
+                                # Use Snappy compression for ultra-fast I/O at 2T scale
+                                pd.DataFrame(rows).to_parquet(
+                                    part_path, index=False, compression="snappy"
+                                )
                             elif part_path.suffix.lower() == ".csv":
                                 pd.DataFrame(rows).to_csv(part_path, index=False)
                             elif part_path.suffix.lower() == ".jsonl":

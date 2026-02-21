@@ -158,13 +158,8 @@ def generate_distribution_stats(df, stats_output_path):
         .drop("source_total_tokens")
     )
 
-    logger.info("Writing distribution CSV...")
-    (
-        final_stats_df.coalesce(1)
-        .write.mode("overwrite")
-        .option("header", "true")
-        .csv(stats_output_path)
-    )
+    logger.info("Writing distribution Parquet...")
+    (final_stats_df.coalesce(1).write.mode("overwrite").parquet(stats_output_path))
     logger.info("Distribution stats written successfully.")
 
 
@@ -187,7 +182,8 @@ class CheckpointManager:
         try:
             self.s3.head_object(Bucket=self.bucket, Key=key)
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error checking checkpoint: {e}")
             return False
 
     def mark_finished(self, identifier: str):
@@ -355,10 +351,10 @@ class SparkDataProcessor:
         return df
 
     def save_output(self, df: DataFrame, output_path: str, source_name: str):
-        """Saves as JSONL. We write to source-specific folder explicitly to keep 'source' column inside the JSON."""
+        """Saves as Parquet. We write to source-specific folder explicitly to keep 'source' column inside the data."""
         final_path = f"{output_path}/source={source_name}"
         logger.info(f"  Saving deduplicated data to {final_path}")
-        df.write.mode("append").json(final_path)
+        df.write.mode("append").parquet(final_path)
 
 
 # =========================================================================
