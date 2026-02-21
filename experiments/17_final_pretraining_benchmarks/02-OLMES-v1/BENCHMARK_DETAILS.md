@@ -1,139 +1,103 @@
 # OLMES Benchmark Pipeline Documentation
 
-This document provides a comprehensive breakdown of all benchmarks, suites, and sub-tasks executed across the various training phases (1B Pretraining to SFT/Instruct).
+This document provides a comprehensive breakdown of all benchmarks and tasks executed across training phases for both the **Developer Pipeline** (`benchmark-config.yaml`) and the **Industry Pipeline** (`industry-benchmarks.yaml`).
 
 ---
 
-## 📈 1. Pipeline Progression Overview
-The evaluation strategy transitions from **"Easy/Fast"** tasks in early pretraining to **"Full/Complex"** tasks as the model scales.
+## 📈 1. Industry Pipeline Progression (industry-benchmarks.yaml)
 
-| Phase | Main Objective | Key Suites Running | Output Directory |
+| Tier | Stage | Main Objective | Key Tasks |
 | :--- | :--- | :--- | :--- |
-| **CI / Breadth** | Fast Smoke Test | `ci_breadth` (Sampled from all buckets) | `./benchmark-results/ci_breadth/` |
-| **Pretrain 1B** | Frequent Monitoring | `base_easy`, `indic_nlu` | `./benchmark-results/pretrain_1b/` |
-| **Pretrain 3B** | Enhanced Signal | `base_easy`, `indic_standard`, `core_qa` | `./benchmark-results/pretrain_3b/` |
-| **Pretrain 8B** | Full Base Milestone | `olmo3_base`, `mmlu`, `indic_standard` | `./benchmark-results/pretrain_8b/` |
-| **Pretrain 70B** | Reasoning Readiness | `olmo3_base`, `bbh:cot::olmes`, `gpqa:0shot_cot_v1`, `indic_standard`, `code_completion` | `./benchmark-results/pretrain_70b/` |
-| **SFT / Instruct** | Instruction & Agency | `olmo3_adapt`, `indic_instruct`, `regression_guard` | `./benchmark-results/sft/` |
+| 🥉 **Tier 1** | `pretrain_small` | Fast signal for 1B–3B models | `mmlu`, `triviaqa`, `arc_challenge`, `blimp`, `indic_glue` |
+| 🥈 **Tier 2** | `pretrain_8b` | Standard industry milestone | + `mmlu_pro`, `gsm8k`, `minerva_math`, `truthfulqa`, RULER |
+| 🥇 **Tier 3** | `pretrain_70b` | Full frontier sweep | + `bbh:cot`, `gpqa_diamond`, LongBench, disabled: `apps`, `aime_2025`, `simpleqa`, `l_eval` |
+| 🏅 **Tier 4** | `sft` | Alignment & instruction | `ifeval`, `olmo3:adapt`, `truthfulqa`, `indic_glue`, `indic_qa` |
+
+## 📈 2. Developer Pipeline Progression (benchmark-config.yaml)
+
+| Phase | Stage | Main Objective | Key Tasks |
+| :--- | :--- | :--- | :--- |
+| **CI** | `pretrain_1b` | Frequent checkpoint signal | `olmo3:base_easy` tasks, `arc_challenge`, `blimp`, `indic_glue`, `niah_4k` |
+| **Nightly** | `pretrain_3b` | Enhanced breadth | + `mmlu`, `triviaqa`, `gsm8k`, `truthfulqa`, `indic_qa` |
+| **Milestone** | `pretrain_8b` | Full base suite | + `mmlu_pro`, `minerva_math`, RULER probes |
+| **Milestone** | `pretrain_70b` | Reasoning readiness | + `bbh:cot`, `gpqa_diamond`, RULER, disabled: `aime_2025`, `apps`, `msgs`, `l_eval` |
+| **Release** | `sft` | Instruction + agentic | `ifeval`, `olmo3:adapt`, `truthfulqa`, regression guard |
+| **CI** | `ci_breadth` | Fast breadth sample | Sampled 2 examples from every capability bucket |
 
 ---
 
-## 📈 2. Key Suite & Sub-task Mapping
-This table explicitly maps the high-level "Key Suites" to their individual component tasks and datasets.
+## 🗂 3. Benchmark → OLMES Task Mapping
 
-| Key Suite Name | Individual Sub-tasks / Components | Primary Focus |
-| :--- | :--- | :--- |
-| **`base_easy`** | ARC-Easy, ARC-Challenge, MMLU, CommonsenseQA, HellaSwag, Winogrande, SocialIQA, PIQA, CoQA, DROP, Jeopardy, NaturalQS, SQuAD, SciQ, QASPER, Basic Skills, Lab Bench, Lambada, MedMCQA, MedQA, SciRIFF. | Foundation / RC |
-| **`olmo3_base`** | MMLU (STEM, Humanities, Social Sciences, Other), ARC-MC, MedMCQA, MedQA, SciQ, HellaSwag, Winogrande, Lambada, Basic Skills, DROP, Jeopardy, NaturalQS, SQuAD, CoQA, GSM8K, GSM-Symbolic, Minerva Math, olmo3:base:code_fim, olmo3:base_easy:code_bpb. | Scale Milestone |
-| **`indic_standard`** | **IndicGLUE**: WNLI (hi, mr, gu, pa, bn), COPA (hi, mr, gu), CSQA (hi, te, ta, kn, as, ml, or), ACTSA (te). <br> **IndicQA**: (hi, bn, ta, te, ml, mr, gu, kn, pa, as). | Multilingual |
-| **`bbh:cot::olmes`** | Boolean Expressions, Causal Judgement, Date Understanding, Disambiguation QA, Dyck Languages, Formal Fallacies, Geometric Shapes, Hyperbaton, Logical Deduction, Movie Recommendation, Multistep Arithmetic, Navigate, Object Counting, Penguins in a Table, Reasoning about Colored Objects, Ruin Names, Snarks, Sports Understanding, Temporal Sequences, Tracking Shuffled Objects, Web of Lies, Word Sorting. | Logic / CoT |
-| **`olmo3:adapt`** | IFEval, AlpacaEval, SimpleQA, PopQA, ZebraLogic, AGIEval (English), gpqa:0shot_cot_v1, Minerva Math, GSM8K, Omega, AIME (2024/2025), Code Completion (FIM). | Agency / Chat / Instruct (SFT Only) |
-
----
-
-### 3. Multi-Dimensional Breakdown
-
-#### 🇮🇳 Indic Language Coverage
-All pretraining phases run these expanded sweeps (NLU focus) to ensure cross-lingual stability:
-*   **IndicGLUE (NLU):** WNLI (Logical), COPA (Causal), CSQA (Commonsense), ACTSA (Sentiment).
-*   **IndicQA (Gen):** 10 Languages (hi, bn, ta, te, ml, mr, gu, kn, pa, as).
-
-#### 💡 Glossary of Terms in Task Names:
-*   **`:rc`**: Generative evaluation where the model's text output is parsed for the answer.
-*   **`:mc`**: Multiple Choice evaluation based on token probabilities (log-likelihood).
-*   **`:bpb`**: "Bits Per Byte" (Perplexity). Used for fast evaluations where we measure how "surprised" the model is by the correct answer without generating text.
-
----
-
-## 🧠 4. English Capability Suites (Detailed Catalog)
-
-### A. OLMES Core (QA & Common Sense)
-These tasks form the "Signal of Life" for the model.
-*   **ARC (AI2 Reasoning Challenge)**: Easy & Challenge sets.
-*   **HellaSwag**: Common sense NLI.
-*   **Winogrande**: Pronoun resolution/Common sense.
-*   **PIQA / SIQA**: Physical and Social interaction QA.
-*   **BoolQ**: Yes/No reading comprehension.
-*   **CoQA / SQuAD**: Conversational and extractive question answering.
-*   **DROP**: Reasoning over paragraphs (math/discrete).
-*   **SciQ**: Science exam questions.
-
-### B. MMLU (Massive Multitask Language Understanding)
-*Suite Name:* `mmlu::olmes`
-Includes **57 subjects** across STEM, Humanities, Social Sciences, and more.
-*   **STEM**: Algebra, Astronomy, Biology (College/HS), Chemistry, Computer Science, Engineering, Mathematics, Physics, Statistics, Machine Learning.
-*   **Humanities**: Art History, Ethnic Studies, History (European/US/World), Law, Philosophy, Prehistory, World Religions.
-*   **Social Sciences**: Geography, Macro/Microeconomics, Psychology, Sociology, US Foreign Policy.
-*   **Other**: Business Ethics, Clinical Knowledge, Human Aging, Management, Marketing, Nutrition, Virology.
-
-### C. BBH (Big-Bench Hard)
-*Suite Name:* `bbh:cot::olmes`
-Tasks where LLMs traditionally struggled, requiring Chain-of-Thought (CoT).
-1.  Boolean Expressions
-2.  Causal Judgement
-3.  Date Understanding
-4.  Disambiguation QA
-5.  Dyck Languages
-6.  Formal Fallacies
-7.  Geometric Shapes
-8.  Hyperbaton
-9.  Logical Deduction (3, 5, 7 objects)
-10. Movie Recommendation
-11. Multistep Arithmetic
-12. Navigate
-13. Object Counting
-14. Penguins in a Table
-15. Reasoning about Colored Objects
-16. Snarks (Sarcasm detection)
-17. Sports Understanding
-18. Temporal Sequences
-19. Tracking Shuffled Objects
-20. Web of Lies / Word Sorting
+| Benchmark Name | OLMES Task Name | Engine | Notes |
+| :--- | :--- | :--- | :--- |
+| MMLU | `mmlu::olmes` | olmes | 57-subject MC |
+| TriviaQA | `triviaqa::olmes` | olmes | Open-domain QA |
+| MMLU-Pro (MC) | `mmlu_pro:mc::none` | olmes | 10-way MC, harder than MMLU |
+| MMLU-Pro (CoT) | `mmlu_pro:cot::none` | olmes | Tier 3 only |
+| GPQA Diamond | `gpqa_diamond::olmes` | olmes | Expert-level graduate QA |
+| GSM8K | `gsm8k::olmes` | olmes | Grade-school math |
+| BBH | `bbh:cot::olmes` | olmes | Big Bench Hard (22 CoT tasks) |
+| ARC-Challenge | `arc_challenge::olmes` | olmes | Science MC |
+| MATH | `minerva_math::olmes` | olmes | Competition-level math |
+| IFEval | `ifeval` | olmes | Instruction following |
+| TruthfulQA | `truthfulqa:::olmo1` | olmes | Factuality / hallucination |
+| BLiMP | `blimp` | harness | 67 linguistic sub-tasks |
+| IndicGLUE | `indic_glue` | custom | 16 Indic NLU subsets |
+| IndicQA | `indic_qa` | custom | QA in 10 Indic languages |
+| Indic-Bias | `indic_bias` | custom | Gated – FairITales dataset |
+| RULER | `niah_multikey_1`, `ruler_vt`, `ruler_cwe` | custom | Long-context robustness |
+| LongBench | `longbench_narrativeqa`, `longbench_qasper`, `longbench_hotpotqa` | custom | Tier 3 only |
+| SimpleQA_Verified | `simpleqa` | — | **disabled** – needs registration |
+| APPS | `apps` | — | **disabled** – needs custom script |
+| AIME 2025 | `aime_2025` | — | **disabled** – needs registration |
+| L-Eval | `l_eval` | — | **disabled** – needs task suite setup |
 
 ---
 
-## 🇮🇳 5. Indic Multilingual Suites (Expanded)
+## 🧠 4. Key Benchmark Details
 
-These benchmarks use custom scripts to evaluate 11 major Indian languages.
+### MMLU-Pro
+`mmlu_pro:mc::none` (Tier 2+) and `mmlu_pro:cot::none` (Tier 3)
+- 10-way multiple choice (vs MMLU's 4-way)
+- ~12K expert-level questions across 14 subjects
+
+### GPQA Diamond
+`gpqa_diamond::olmes`
+- Graduate-level questions in Biology, Physics, Chemistry
+- Calibrated so PhD experts score ~65%; random baseline ~25%
+
+### BBH (Big Bench Hard)
+`bbh:cot::olmes` — 22 tasks requiring Chain-of-Thought:
+Boolean Expressions, Causal Judgement, Date Understanding, Disambiguation QA, Dyck Languages, Formal Fallacies, Geometric Shapes, Hyperbaton, Logical Deduction (3/5/7 objects), Movie Recommendation, Multistep Arithmetic, Navigate, Object Counting, Penguins in a Table, Reasoning about Colored Objects, Ruin Names, Snarks, Sports Understanding, Temporal Sequences, Tracking Shuffled Objects, Web of Lies, Word Sorting.
+
+### BLiMP
+`blimp` — 67 sub-tasks evaluating grammatical acceptability:
+Runs via lm-eval harness (not OLMES registry). Aggregated score across paradigms including anaphor agreement, subject-verb agreement, NPI licensing, island constraints.
+
+---
+
+## 🇮🇳 5. Indic Multilingual Coverage
 
 ### IndicGLUE (NLU Tasks)
-Evaluating **16 distinct subsets** across all major scripts. In **Pretrain 1B**, we run this as `indic_nlu` without generative QA to maintain speed.
-*   **Logical Inference**: `wnli.hi`, `wnli.mr`, `wnli.gu`, `wnli.pa`, `wnli.bn`
-*   **Causality**: `copa.hi`, `copa.mr`, `copa.gu`
-*   **Commonsense QA**: `csqa.hi`, `csqa.te`, `csqa.ta`, `csqa.kn`, `csqa.as`, `csqa.ml`, `csqa.or`
-*   **Sentiment Analysis**: `actsa-sc.te`
+Evaluating **16 distinct subsets** across major Indic scripts:
+- **Logical Inference**: `wnli.hi`, `wnli.mr`, `wnli.gu`, `wnli.pa`, `wnli.bn`
+- **Causality**: `copa.hi`, `copa.mr`, `copa.gu`
+- **Commonsense QA**: `csqa.hi`, `csqa.te`, `csqa.ta`, `csqa.kn`, `csqa.as`, `csqa.ml`, `csqa.or`
+- **Sentiment Analysis**: `actsa-sc.te`
 
 ### IndicQA (Generative Reading Comprehension)
-Evaluating **10 languages** with a generative (RC) paradigm:
-*   Hindi (`hi`), Bengali (`bn`), Tamil (`ta`), Telugu (`te`), Malayalam (`ml`), Marathi (`mr`), Gujarati (`gu`), Kannada (`kn`), Punjabi (`pa`), Assamese (`as`).
+Evaluating **10 languages**: Hindi (`hi`), Bengali (`bn`), Tamil (`ta`), Telugu (`te`), Malayalam (`ml`), Marathi (`mr`), Gujarati (`gu`), Kannada (`kn`), Punjabi (`pa`), Assamese (`as`).
 
 ---
 
----
+## 📝 6. Glossary of Evaluation Metrics
 
-## 💻 6. Code Completion (Non-Execution)
-
-| Category | Benchmark | Format | Description |
-| :--- | :--- | :--- | :--- |
-| **Code** | **Code BPB** | BPB | Python/Code perplexity (Fast trend signal). |
-| **Code** | **Code FIM** | Likelihood | Fill-in-the-middle code completion accuracy. |
-
----
-
-## 🤖 7. Agentic & Instruction (SFT Phase)
-
-The `olmo3:adapt` suite focuses on how the model follows human intent.
-*   **IFEval**: Instruction following (formatting, constraints).
-*   **AlpacaEval**: Conversational helpfulness.
-*   **PopQA / SimpleQA**: Factuality and hallucination checks.
-*   **ZebraLogic**: Complex constraint-satisfaction reasoning.
-*   **AGIEval**: College entrance and professional licensing exams.
-
----
-
-## 📝 8. Glossary of Evaluation Metrics
-
-*   **MC (Multiple Choice)**: Measured via log-likelihood of options (A, B, C, D). Robust but less representative of chat use.
-*   **RC (Reading Comprehension)**: Generative evaluation where the model's text output is parsed and compared to references.
-*   **BPB (Bits Per Byte)**: Perplexity-based measure. Very fast, used for frequent CI checks to track loss/surprisal trends.
-*   **CoT (Chain of Thought)**: Model is prompted to "think step by step" before answering. Higher token cost but more accurate for reasoning.
+| Term | Meaning |
+| :--- | :--- |
+| **MC** | Multiple Choice – log-likelihood over answer options. |
+| **RC** | Reading Comprehension – generative, parsed against reference. |
+| **BPB** | Bits Per Byte – perplexity proxy, fast and no generation needed. |
+| **CoT** | Chain of Thought – prompted step-by-step reasoning before answering. |
+| **`::olmes`** | Task uses OLMES-standardized prompt format and scoring. |
+| **`:::olmo1`** | Task uses OLMo-1 prompt format variant. |
+| **`::none`** | No special prompt wrapping; raw task format. |

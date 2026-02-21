@@ -25,6 +25,13 @@ def resolve_task_type(task_name):
     """
     Heuristic to determine if a task is OLMES, Harness, or Custom.
     """
+    # Detect JSON-formatted tasks (Usually OLMES/oe-eval overrides)
+    if (isinstance(task_name, str) and task_name.strip().startswith("{")) or isinstance(task_name, dict):
+        return "olmes"
+
+    # Standardize hyphen vs underscore for consistency
+    normalized_name = task_name.replace("-", "_")
+    
     # OLMES tasks
     if "olmo3:" in task_name or "::olmes" in task_name or ":rc" in task_name or ":mc" in task_name:
         return "olmes"
@@ -35,33 +42,34 @@ def resolve_task_type(task_name):
         "indic_qa": "01-EleutherAI-v1/src/custom-scripts/indic_qa.py",
         "indic_bias": "01-EleutherAI-v1/src/custom-scripts/indic_bias.py",
         "simpleqa": "01-EleutherAI-v1/src/custom-scripts/simpleqa.py",
-        "humaneval": "01-EleutherAI-v1/src/custom-scripts/humaneval.py"
+        "humaneval": "01-EleutherAI-v1/src/custom-scripts/humaneval.py",
+        "ruler": "01-EleutherAI-v1/src/custom-scripts/ruler.py",
+        "leval": "01-EleutherAI-v1/src/custom-scripts/leval.py"
     }
-    if task_name in custom_scripts:
-        return ("custom", custom_scripts[task_name])
+    if normalized_name in custom_scripts:
+        return ("custom", custom_scripts[normalized_name])
     
     # Standard Harness tasks
     harness_tasks = [
         "mmlu", "gsm8k", "bbh", "arc_challenge", "blimp", 
-        "truthfulqa", "hellaswag", "winogrande", "piqa", 
+        "truthfulqa", "hellaswag", "winogrande", "piqa", "gpqa"
     ]
     
-    # RULER & LongBench (Native Harness Tasks)
-    # These contain 'niah_' but are part of the RULER suite in lm-eval
-    if "ruler_" in task_name or "niah_multikey" in task_name or "niah_single" in task_name or "niah_multiquery" in task_name or "niah_multivalue" in task_name or "longbench_" in task_name:
-        return "harness"
+    # RULER & LongBench (Redirect to Custom)
+    if "ruler_" in normalized_name or "longbench_" in normalized_name or "niah_multikey" in normalized_name:
+        # These are handled by specialized scripts (ruler.py or needle_in_haystack.py)
+        if "ruler_" in normalized_name or "longbench_" in normalized_name:
+            return ("custom", "01-EleutherAI-v1/src/custom-scripts/ruler.py")
+        else:
+            return ("custom", "01-EleutherAI-v1/src/custom-scripts/needle_in_haystack.py")
 
     # Custom Context Length Benchmarks (niah_4k, niah_8k, etc.)
-    if "niah_" in task_name:
+    if "niah_" in normalized_name:
          return ("custom", "01-EleutherAI-v1/src/custom-scripts/needle_in_haystack.py")
          
-    if task_name in harness_tasks or "mmlu" in task_name:
+    if normalized_name in harness_tasks or any(h in normalized_name for h in harness_tasks):
         return "harness"
     
-    # Detect JSON-formatted tasks (usually Harness overrides)
-    if (isinstance(task_name, str) and task_name.strip().startswith("{")) or isinstance(task_name, dict):
-        return "harness"
-
     # Fallback to OLMES as it's the primary engine for this config
     return "olmes"
 
@@ -79,9 +87,9 @@ def main():
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         default_device = "mps"
 
-    parser.add_argument("--device", type=str, default=default_device, help=f"Execution device (default: {default_device})")
-    parser.add_argument("--batch_size", type=str, default="1", help="Execution batch size")
-    parser.add_argument("--num_workers", type=int, default=1, help="Number of parallel workers for OLMES (default 1 for Mac stability)")
+    parser.add_argument("--device", type=str, default=default_device, help="Device to use (cuda, mps, cpu)")
+    parser.add_argument("--batch_size", type=int, default=1, help="Global batch size")
+    parser.add_argument("--num_workers", type=int, default=1, help="Number of workers (for OLMES only)")
     
     args = parser.parse_args()
     
@@ -89,23 +97,31 @@ def main():
     if args.sample and args.limit is None:
         args.limit = 2
         
-    logger = setup_orchestrator_logging()
+    setup_orchestrator_logging()
+    logger = logging.getLogger("Orchestrator")
     eval_logger = logging.getLogger("eval_runner")
 
-    # 1. Load configuration
-    with open(args.config, "r") as f:
-        orchestrator_config = yaml.safe_load(f)
-    
-    if args.stage not in orchestrator_config.get("stages", {}):
-        logger.error(f"Stage '{args.stage}' not found in {args.config}")
+    # 1. Load config
+    if not os.path.exists(args.config):
+        logger.error(f"Config not found: {args.config}")
         sys.exit(1)
         
-    stage_data = orchestrator_config["stages"][args.stage]
-    
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+        
+    stages_config = config.get("stages", {})
+    if args.stage not in stages_config:
+        logger.error(f"Stage '{args.stage}' not found in {args.config}")
+        sys.exit(1)
+
     # 2. Setup run directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join("benchmark-results", args.stage, timestamp)
-    if not os.path.exists(run_dir): os.makedirs(run_dir)
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join(config.get("defaults", {}).get("output_root", "./benchmark-results"), args.stage, run_timestamp)
+    os.makedirs(run_dir, exist_ok=True)
+    
+    # Create subfolders for raw logs
+    for engine in ["olmes_raw", "harness_raw", "custom_raw", "reports"]:
+        os.makedirs(os.path.join(run_dir, engine), exist_ok=True)
     
     pipeline_start = time.time()
     logger.info(f"Starting pipeline stage: {args.stage}")
@@ -120,45 +136,60 @@ def main():
                        "Set it with: export HF_TOKEN=\"hf_your_token_here\"")
     
     # Initialize eval_runner logging (redirects execution logs to run_dir)
-    eval_runner.setup_logging(run_dir, timestamp)
+    eval_runner.setup_logging(run_dir, run_timestamp)
     
     # 3. Ensure Vendor
-    eval_runner.ensure_olmes_vendor(eval_logger)
+    eval_runner.ensure_olmes_vendor(logger)
     
-    # 4. Resolve and Run Benchmarks
+    # 4. Flatten tasks and identify their types
     benchmarks_to_run = []
-    groups = stage_data.get("benchmarks", [])
     
-    for group in groups:
-        if not group.get("enabled", True):
-            continue
-            
-        group_name = group["name"]
-        tasks = group.get("tasks", [])
+    for group in stages_config.get(args.stage, {}).get("benchmarks", []):
+        group_name = group.get("name", "unnamed_group")
         
-        for t_name in tasks:
+        # We handle groups by splitting them by engine
+        # This prevents redundant lm-eval calls when multiple harness tasks are in one group
+        tasks_by_engine = {}
+        for t_name in group.get("tasks", []):
             t_type = resolve_task_type(t_name)
+            if t_type not in tasks_by_engine:
+                tasks_by_engine[t_type] = []
+            tasks_by_engine[t_type].append(t_name)
             
-            b_def = {
-                "name": f"{group_name}:{t_name}",
-                "enabled": True,
-                "phases": [args.stage], 
-                "baseline": group.get("baseline"),
-                "subjects": group.get("subjects"),
-                "subset": group.get("subset"),
-                "limit": group.get("limit"),
-                "tasks": group.get("tasks_refined") or group.get("tasks") 
-            }
-            
-            if t_type == "olmes":
-                b_def["olmes_task"] = t_name
-            elif t_type == "harness":
-                b_def["harness_task"] = t_name
-            elif t_type == "custom" or (isinstance(t_type, tuple) and t_type[0] == "custom"):
-                # Handle both string and tuple formats
-                b_def["custom_script"] = t_type[1] if isinstance(t_type, tuple) else t_name
-            
-            benchmarks_to_run.append(b_def)
+        for engine_type, engine_tasks in tasks_by_engine.items():
+            for t_name in engine_tasks:
+                # For OLMES and Custom, we still treat them as individual benchmarks for now 
+                # (OLMES will be batched later in the execution loop)
+                if engine_type == "olmes" or (isinstance(engine_type, tuple) and engine_type[0] == "custom"):
+                    b_def = {
+                        "name": f"{group_name}:{t_name}",
+                        "enabled": True,
+                        "limit": group.get("limit"),
+                        "subjects": group.get("subjects"),
+                        "subset": group.get("subset"),
+                    }
+                    if engine_type == "olmes":
+                        b_def["olmes_task"] = t_name
+                    else:
+                        b_def["custom_script"] = engine_type[1]
+                    benchmarks_to_run.append(b_def)
+                
+                # For Harness, we combine all tasks for the same engine within a group into ONE call
+                # But only do this if it's the first time we see a harness task for this group
+                elif engine_type == "harness":
+                    # Check if we already created a harness bundle for this group
+                    existing = next((b for b in benchmarks_to_run if b.get("name") == group_name and b.get("harness_task")), None)
+                    if not existing:
+                        b_def = {
+                            "name": group_name,
+                            "enabled": True,
+                            "harness_task": engine_tasks[0], # Primary task/base
+                            "tasks": engine_tasks,          # Full list
+                            "limit": group.get("limit"),
+                            "subjects": group.get("subjects"),
+                        }
+                        benchmarks_to_run.append(b_def)
+                    break # Skip the rest of engine_tasks as they are now bundled
 
     # 5. Execute via eval_runner logic
     results = {
@@ -263,7 +294,7 @@ def main():
 
     report_start = time.time()
     report_path = eval_runner.generate_summary_report(
-        results, run_dir, capability_map=orchestrator_config.get("buckets", {}), 
+        results, run_dir, capability_map=config.get("buckets", {}), 
         baselines=eval_runner.get_baselines(benchmarks_to_run)
     )
     report_elapsed = time.time() - report_start

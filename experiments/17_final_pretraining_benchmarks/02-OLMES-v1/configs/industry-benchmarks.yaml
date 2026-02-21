@@ -1,5 +1,5 @@
 # industry-benchmarks.yaml
-# Purpose: Tiered benchmarking configuration based on industry "Gold Standards" 
+# Purpose: Tiered benchmarking configuration based on industry "Gold Standards"
 # (Llama 3.1/3.2, Qwen 2.5, OLMo 2).
 
 version: 1
@@ -23,15 +23,17 @@ stages:
     description: "Essential industry signal for small mobile-scale models."
     backend: "hf"
     benchmarks:
-      - name: "academic_core"
-        tasks:
-          - "core_9mcqa::olmes"
       - name: "world_knowledge"
         tasks:
-          - "mmlu::olmes"
+          - "mmlu::olmes"             # MMLU
+          - "triviaqa::olmes"         # TriviaQA
+          - "arc_challenge::olmes"    # ARC-Challenge
+      - name: "linguistic_diagnostics"
+        tasks:
+          - "blimp"                   # BLiMP
       - name: "multilingual_indic"
         tasks:
-          - "indic_glue"
+          - "indic_glue"              # IndicGLUE
       - name: "context_window"
         tasks:
           - "niah_4k"
@@ -43,23 +45,33 @@ stages:
     description: "Industry-standard competitive milestone (8B scale)."
     backend: "hf"
     benchmarks:
-      - name: "academic_core"
-        tasks:
-          - "core_9mcqa::olmes"
       - name: "world_knowledge"
         tasks:
-          - "mmlu::olmes"
+          - "mmlu::olmes"             # MMLU
+          - "mmlu_pro:mc::none"       # MMLU-Pro
+          - "triviaqa::olmes"         # TriviaQA
+          - "arc_challenge::olmes"    # ARC-Challenge
       - name: "mathematical_reasoning"
         tasks:
-          - "gsm8k::olmes"
+          - "gsm8k::olmes"            # GSM8K
+          - "minerva_math::olmes"     # MATH
+      - name: "linguistic_diagnostics"
+        tasks:
+          - "blimp"                   # BLiMP
+      - name: "factuality"
+        tasks:
+          - "truthfulqa:::olmo1"       # TruthfulQA
       - name: "multilingual_indic"
         tasks:
-          - "indic_glue"
-          - "indic_qa"
+          - "indic_glue"              # IndicGLUE
+          - "indic_qa"                # IndicQA
       - name: "context_window"
         tasks:
           - "niah_8k"
           - "niah_16k"
+          - "niah_multikey_1"         # RULER – multi-key probe
+          - "ruler_vt"                # RULER – Variable Tracking
+          - "ruler_cwe"               # RULER – Common Words Extraction
 
   # 🥇 Tier 3: 70B Parameters (Frontier/Publishable)
   # Comprehensive evaluation for flagship model releases.
@@ -69,29 +81,35 @@ stages:
     decoding:
       max_new_tokens: 1024
     benchmarks:
-      - name: "academic_core"
-        tasks:
-          - "core_9mcqa::olmes"
       - name: "world_knowledge"
         tasks:
-          - "mmlu::olmes"
+          - "mmlu::olmes"             # MMLU
+          - "mmlu_pro:mc::none"       # MMLU-Pro None
+          - "mmlu_pro:cot::none"      # MMLU-Pro COT
+          - "triviaqa::olmes"         # TriviaQA
+          - "arc_challenge::olmes"    # ARC-Challenge
       - name: "mathematical_reasoning"
         tasks:
-          - "gsm8k::olmes"
-          - "minerva_math::olmes"
-      - name: "coding_capability"
+          - "gsm8k::olmes"            # GSM8K
+          - "minerva_math::olmes"     # MATH / Minerva
+      - name: "expert_reasoning"
         tasks:
-          - "olmo3:base:code_fim"
-      - name: "expert_reasoning_olmes"
+          - "bbh:cot::olmes"          # BBH (Big Bench Hard)
+          - "gpqa_diamond::olmes"     # GPQA Diamond
+      - name: "linguistic_diagnostics"
         tasks:
-          - "bbh:cot::olmes"
+          - "blimp"                   # BLiMP
+      - name: "factuality"
+        tasks:
+          - "truthfulqa::olmes"       # TruthfulQA
       - name: "multilingual_indic"
         tasks:
-          - "indic_glue"
-          - "indic_qa"
-      - name: "expert_reasoning_harness"
+          - "indic_glue"              # IndicGLUE
+          - "indic_qa"                # IndicQA
+      - name: "indic_bias"
+        enabled: false                # Gated dataset – enable after access granted
         tasks:
-          - '{"task_name": "gpqa:0shot_cot_v1", "dataset_path": "Wanfq/gpqa", "use_chat_format": false}'
+          - "indic_bias"              # Indic-Bias / FairITales
       - name: "context_window"
         tasks:
           - "niah_8k"
@@ -108,6 +126,24 @@ stages:
           - "longbench_narrativeqa"
           - "longbench_qasper"
           - "longbench_hotpotqa"
+      # L-Eval – enable once task is registered
+      - name: "l_eval"
+        enabled: false                # TODO: register L-Eval task suite
+        tasks:
+          - "l_eval"
+      # Tasks requiring custom registration – enable once available
+      - name: "aime_2025"
+        enabled: false                # TODO: register AIME 2025 task
+        tasks:
+          - "aime_2025"
+      - name: "apps"
+        enabled: false                # TODO: register APPS task (needs custom script)
+        tasks:
+          - "apps"
+      - name: "simple_qa"
+        enabled: false                # TODO: register SimpleQA_Verified task
+        tasks:
+          - "simpleqa"
 
   # 🏅 Tier 4: SFT / Instruct (Alignment & Utility)
   # Final evaluation for chat-aligned and instruction-following models.
@@ -121,11 +157,18 @@ stages:
     benchmarks:
       - name: "alignment_utility"
         tasks:
-          - "olmo3:adapt"  # Includes IFEval, AlpacaEval, WildBench
+          - "olmo3:adapt"             # Includes IFEval, AlpacaEval, WildBench
+      - name: "ifeval"
+        tasks:
+          - "ifeval"                  # IFEval (instruction-following)
       - name: "factuality_safety"
         tasks:
-          - "indic-bias"
+          - "truthfulqa::olmes"       # TruthfulQA
+      - name: "indic_bias"
+        enabled: false                # Gated dataset – enable after access granted
+        tasks:
+          - "indic_bias"              # Indic-Bias / FairITales
       - name: "multilingual_indic_instruct"
         tasks:
-          - "indic_glue"
-          - "indic_qa"
+          - "indic_glue"              # IndicGLUE
+          - "indic_qa"                # IndicQA

@@ -305,10 +305,25 @@ def run_harness_benchmark(
 
     # Refine task selection based on YAML fields
     task_list = []
-    if benchmark_info.get("subjects"):
-        task_list = [f"{base_task}_{s}" for s in benchmark_info["subjects"]]
+    
+    # If base_task is complex (JSON), use it as is
+    is_json_task = (isinstance(base_task, str) and base_task.strip().startswith("{")) or isinstance(base_task, dict)
+    
+    if is_json_task:
+        task_list = [base_task]
+    elif benchmark_info.get("subjects"):
+        # For subjects, we usually WANT the prefix, e.g. mmlu -> mmlu_anatomy
+        task_list = [f"{base_task}_{s}" if not str(s).startswith(base_task) else s for s in benchmark_info["subjects"]]
     elif benchmark_info.get("tasks"):
-        task_list = [f"{base_task}_{t}" for t in benchmark_info["tasks"]]
+        # For bundled tasks in a group, they might already be full names
+        task_list = []
+        for t in benchmark_info["tasks"]:
+            t_str = str(t)
+            # Heuristic: if it looks like a full task name, don't prefix
+            if ":" in t_str or t_str.startswith("mmlu_") or t_str.startswith("bbh_") or t_str == base_task:
+                task_list.append(t_str)
+            else:
+                task_list.append(f"{base_task}_{t_str}")
     elif benchmark_info.get("subset"):
         task_list = [f"{base_task}_{benchmark_info['subset']}"]
     else:
@@ -565,10 +580,15 @@ def run_custom_benchmark(
                 task_part = name.split(":")[-1] if ":" in name else name
                 if "niah_" in task_part:
                     length_str = task_part.split("niah_")[1] # "8k" or "16k"
-                    length = int(length_str.replace("k", "")) * 1024
-                    cmd += ["--context_length", str(length)]
+                    if "k" in length_str:
+                        length = int(length_str.replace("k", "")) * 1024
+                        cmd += ["--context_length", str(length)]
+                    elif length_str.isdigit():
+                        cmd += ["--context_length", length_str]
+                    else:
+                        logger.warning(f"  [Warning] Task '{task_part}' does not specify a simple numeric context length. Skipping --context_length arg.")
             except Exception as e:
-                logger.warning(f"  [Warning] Failed to parse context length for {name}: {e}")
+                logger.warning(f"  [Warning] Failed to parse context length for {name}: {str(e)}")
 
         if limit:
             cmd += ["--limit", str(limit)]
@@ -647,7 +667,16 @@ def run_olmes_benchmark(
 
     # Setup OLMES raw status folder
     # For batches, we use a generic name or the first task's name
-    folder_name = tasks[0].replace("/", "_").replace(":", "_") if not is_batch else "batch_" + datetime.now().strftime("%H%M%S")
+    # Setup OLMES raw status folder
+    # For batches, we use a generic name or the first task's name
+    if is_batch:
+        folder_name = "batch_" + datetime.now().strftime("%H%M%S")
+    else:
+        task_name = tasks[0]
+        if task_name.startswith("{"): # JSON task
+            folder_name = "json_task_" + datetime.now().strftime("%H%M%S")
+        else:
+            folder_name = task_name.replace("/", "_").replace(":", "_")
     task_raw_dir = os.path.join(run_dir, "olmes_raw", folder_name)
     if not os.path.exists(task_raw_dir):
         os.makedirs(task_raw_dir)
@@ -676,8 +705,7 @@ def run_olmes_benchmark(
     cmd += ["--model", model_path]
     
     # Add all tasks
-    for t in tasks:
-        cmd += ["--task", t]
+    cmd += ["--task"] + tasks
         
     cmd += ["--output-dir", task_raw_dir]
 

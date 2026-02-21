@@ -95,7 +95,25 @@ def main():
 
 
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16 if device != "cpu" else torch.float32).to(device)
+        
+        # Check model context limits
+        max_context = getattr(tokenizer, "model_max_length", 2048)
+        # Try to get from config if tokenizer is unreliable
+        try:
+            from transformers import AutoConfig
+            config = AutoConfig.from_pretrained(model_name)
+            max_context = getattr(config, "max_position_embeddings", max_context)
+        except:
+             pass
+             
+        if args.context_length > max_context:
+             raise ValueError(f"Requested context length {args.context_length} exceeds model max context {max_context}")
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, 
+            torch_dtype=torch.float16 if device != "cpu" else torch.float32,
+            low_cpu_mem_usage=True
+        ).to(device)
         model.eval()
 
         for depth in depths:
@@ -129,11 +147,22 @@ def main():
             }
         }))
 
-    except Exception as e:
-        # Use full length if defined, else fallback
-        name_reported = f"niah_{args.context_length}" if args.context_length > 1000 else f"niah_{args.context_length}k"
+    except (RuntimeError, ValueError) as e:
+        msg = str(e)
+        status = "failed"
+        # Graceful failure for OOM or Context limits
+        if "buffer size" in msg or "out of memory" in msg or "exceeds model max context" in msg:
+             status = "skipped" # Or failed with specific reason
+        
         print(json.dumps({
-            "name": name_reported,
+            "name": f"niah_{args.context_length}",
+            "status": status,
+            "error": msg
+        }))
+        return
+    except Exception as e:
+        print(json.dumps({
+            "name": f"niah_{args.context_length}",
             "status": "failed",
             "error": str(e)
         }))
