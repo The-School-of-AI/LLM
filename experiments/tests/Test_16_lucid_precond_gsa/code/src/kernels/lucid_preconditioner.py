@@ -109,7 +109,7 @@ def pytorch_lucid_precondition(
 
     # Step 3: Solve P · Y = V via triangular solve
     # P is lower-triangular with unit diagonal
-    Y = torch.linalg.solve_triangular(P, V, upper=False, unit_diagonal=True)
+    Y = torch.linalg.solve_triangular(P, V, upper=False)
 
     if multi_head:
         Y = Y.reshape(B, H, T, D).permute(0, 2, 1, 3)  # [B, T, H, D]
