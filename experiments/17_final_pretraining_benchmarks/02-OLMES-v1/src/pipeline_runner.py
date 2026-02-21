@@ -132,8 +132,7 @@ def main():
     if hf_token:
         logger.info("🔑 HF_TOKEN detected — gated datasets (e.g., Indic-Bias) will be accessible.")
     else:
-        logger.warning("⚠️  HF_TOKEN not set — benchmarks requiring gated datasets will fail. "
-                       "Set it with: export HF_TOKEN=\"hf_your_token_here\"")
+        logger.warning("⚠️  HF_TOKEN not set — benchmarks requiring gated datasets will fail. Set it with: export HF_TOKEN=\"hf_your_token_here\"")
     
     # Initialize eval_runner logging (redirects execution logs to run_dir)
     eval_runner.setup_logging(run_dir, run_timestamp)

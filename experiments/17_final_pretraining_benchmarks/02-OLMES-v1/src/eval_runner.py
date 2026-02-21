@@ -549,9 +549,7 @@ def run_custom_benchmark(
                 break
 
     if not resolved_script or not os.path.exists(resolved_script):
-        logger.warning(
-            f"  [Warning] Script {script} not found (tried {resolved_script})"
-        )
+        logger.warning(f"  [Warning] Script {script} not found (tried {resolved_script})")
         return {
             "name": name,
             "type": "custom",
@@ -587,8 +585,8 @@ def run_custom_benchmark(
                         cmd += ["--context_length", length_str]
                     else:
                         logger.warning(f"  [Warning] Task '{task_part}' does not specify a simple numeric context length. Skipping --context_length arg.")
-            except Exception as e:
-                logger.warning(f"  [Warning] Failed to parse context length for {name}: {str(e)}")
+            except Exception:
+                logger.warning(f"  [Warning] Task '{task_part}' does not specify a simple numeric context length. Skipping --context_length arg.")
 
         if limit:
             cmd += ["--limit", str(limit)]
@@ -617,13 +615,13 @@ def run_custom_benchmark(
 
         # Check return code
         if process.returncode != 0:
-             logger.error(f"  [Custom] Script failed with exit code {process.returncode}")
-             return {
-                 "name": name, 
-                 "type": "custom", 
-                 "status": "failed", 
-                 "error": f"Script failed (exit {process.returncode}). Check logs in {custom_raw_dir}"
-             }
+            logger.error(f"  [Custom] Script failed with exit code {process.returncode}")
+            return {
+                "name": name,
+                "type": "custom",
+                "status": "failed",
+                "error": f"Script failed (exit {process.returncode}). Check logs in {custom_raw_dir}"
+            }
 
         # Read stdout to parse JSON result
         with open(stdout_path, "r") as f:
@@ -639,7 +637,7 @@ def run_custom_benchmark(
                     continue
         
         if not res_data:
-             return {"name": name, "type": "custom", "status": "failed", "error": "No JSON output found in custom script stdout"}
+            return {"name": name, "type": "custom", "status": "failed", "error": "No JSON output found in custom script stdout"}
 
         return res_data
 
@@ -736,7 +734,7 @@ def run_olmes_benchmark(
 
         metrics_path = os.path.join(task_raw_dir, "metrics.json")
         if not os.path.exists(metrics_path):
-             return {"name": primary_name, "type": "olmes", "status": "failed", "error": "metrics.json missing"}
+            return {"name": primary_name, "type": "olmes", "status": "failed", "error": "metrics.json missing"}
 
         with open(metrics_path, "r") as f:
             res_data = json.load(f)

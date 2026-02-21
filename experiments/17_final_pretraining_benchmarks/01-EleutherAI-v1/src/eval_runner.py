@@ -459,9 +459,7 @@ def run_custom_benchmark(
                 break
 
     if not resolved_script or not os.path.exists(resolved_script):
-        logger.warning(
-            f"  [Warning] Script {script} not found (tried {resolved_script})"
-        )
+        logger.warning(f"  [Warning] Script {script} not found (tried {resolved_script})")
         return {
             "name": name,
             "type": "custom",
@@ -493,8 +491,8 @@ def run_custom_benchmark(
                     length_str = task_part.split("niah_")[1] # "8k" or "16k"
                     length = int(length_str.replace("k", "")) * 1024
                     cmd += ["--context_length", str(length)]
-            except Exception as e:
-                logger.warning(f"  [Warning] Failed to parse context length for {name}: {e}")
+            except Exception:
+                logger.warning(f"  [Warning] Task '{task_part}' does not specify a simple numeric context length. Skipping --context_length arg.")
 
         if limit:
             cmd += ["--limit", str(limit)]
