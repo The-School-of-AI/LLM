@@ -4,8 +4,8 @@ Test script for monitoring dashboard system.
 Verifies core functionality before deployment.
 """
 
-import sys
 import json
+import sys
 import tempfile
 from pathlib import Path
 
@@ -18,6 +18,7 @@ print("\n[Test 1] Checking imports...")
 try:
     from flask import Flask
     from flask_cors import CORS
+
     print("✅ PASS: Flask and CORS available")
 except ImportError as e:
     print(f"❌ FAIL: Missing dependencies - {e}")
@@ -32,24 +33,28 @@ try:
         run_dir = Path(tmpdir) / "test_run"
         metrics_dir = run_dir / "metrics"
         metrics_dir.mkdir(parents=True)
-        
+
         # Write test JSONL file
         jsonl_file = metrics_dir / "data.jsonl"
         with open(jsonl_file, "w") as f:
             for step in range(10):
-                f.write(json.dumps({
-                    "step": step,
-                    "metric": "train/loss",
-                    "value": 5.0 - step * 0.1
-                }) + "\n")
-                f.write(json.dumps({
-                    "step": step,
-                    "metric": "gpu/temp",
-                    "value": 65 + step
-                }) + "\n")
-        
+                f.write(
+                    json.dumps(
+                        {
+                            "step": step,
+                            "metric": "train/loss",
+                            "value": 5.0 - step * 0.1,
+                        }
+                    )
+                    + "\n"
+                )
+                f.write(
+                    json.dumps({"step": step, "metric": "gpu/temp", "value": 65 + step})
+                    + "\n"
+                )
+
         print(f"✅ PASS: Created test data at {jsonl_file}")
-        
+
         # Test 3: Verify file format
         print("\n[Test 3] Verifying JSONL format...")
         with open(jsonl_file) as f:
@@ -58,7 +63,7 @@ try:
                 print(f"✅ PASS: Correct number of entries ({len(lines)})")
             else:
                 print(f"❌ FAIL: Expected 20 entries, got {len(lines)}")
-        
+
         # Test 4: Parse JSONL entries
         print("\n[Test 4] Parsing JSONL entries...")
         valid_entries = 0
@@ -70,12 +75,12 @@ try:
                         valid_entries += 1
                 except json.JSONDecodeError:
                     pass
-        
+
         if valid_entries == 20:
             print(f"✅ PASS: All {valid_entries} entries valid")
         else:
             print(f"❌ FAIL: Only {valid_entries}/20 entries valid")
-        
+
         # Test 5: Metric discovery simulation
         print("\n[Test 5] Testing metric discovery...")
         unique_metrics = set()
@@ -83,13 +88,13 @@ try:
             for line in f:
                 entry = json.loads(line.strip())
                 unique_metrics.add(entry["metric"])
-        
+
         expected_metrics = {"train/loss", "gpu/temp"}
         if unique_metrics == expected_metrics:
             print(f"✅ PASS: Discovered metrics: {unique_metrics}")
         else:
             print(f"❌ FAIL: Expected {expected_metrics}, got {unique_metrics}")
-        
+
         # Test 6: Metric grouping
         print("\n[Test 6] Testing metric grouping...")
         grouped = {}
@@ -98,7 +103,7 @@ try:
             if category not in grouped:
                 grouped[category] = []
             grouped[category].append(metric)
-        
+
         expected_groups = {"train": ["train/loss"], "gpu": ["gpu/temp"]}
         if grouped == expected_groups:
             print(f"✅ PASS: Correct grouping: {grouped}")
@@ -108,6 +113,7 @@ try:
 except Exception as e:
     print(f"❌ FAIL: Error during testing - {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -131,7 +137,8 @@ else:
 print("\n" + "=" * 80)
 print("Test Summary")
 print("=" * 80)
-print("""
+print(
+    """
 All core tests passed! You can now:
 
 1. Start the dashboard:
@@ -144,5 +151,6 @@ All core tests passed! You can now:
    python dashboard_server.py --log-dir ../training/deepspeed_template/logs
 
 See README.md for detailed usage instructions.
-""")
+"""
+)
 print("=" * 80)

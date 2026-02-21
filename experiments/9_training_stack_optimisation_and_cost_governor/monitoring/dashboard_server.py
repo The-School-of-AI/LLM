@@ -3,13 +3,14 @@ dashboard_server.py
 ClickHouse-backed Training Dashboard Server — with auto table discovery
 """
 
-from flask import Flask, jsonify, request, send_from_directory
-from flask_cors import CORS
-import clickhouse_connect
-from pathlib import Path
-from collections import defaultdict
 import os
 import threading
+from collections import defaultdict
+from pathlib import Path
+
+import clickhouse_connect
+from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
 
 # Load .env file if it exists (no extra packages needed)
 _env_path = Path(__file__).parent / ".env"
@@ -24,11 +25,11 @@ if _env_path.exists():
 # CONFIGURATION — set these as environment variables, never hardcode them
 # -----------------------------------------------------------------------------
 
-CLICKHOUSE_HOST     = os.environ["CH_HOST"]
-CLICKHOUSE_PORT     = int(os.environ.get("CH_PORT", 8443))
-CLICKHOUSE_USER     = os.environ["CH_USER"]
+CLICKHOUSE_HOST = os.environ["CH_HOST"]
+CLICKHOUSE_PORT = int(os.environ.get("CH_PORT", 8443))
+CLICKHOUSE_USER = os.environ["CH_USER"]
 CLICKHOUSE_PASSWORD = os.environ["CH_PASSWORD"]
-CLICKHOUSE_DB       = os.environ.get("CH_DB", "training_observability")
+CLICKHOUSE_DB = os.environ.get("CH_DB", "training_observability")
 
 DASHBOARD_DIR = Path("dashboard")
 
@@ -40,6 +41,7 @@ app = Flask(__name__)
 CORS(app)
 
 _thread_local = threading.local()
+
 
 def ch_client():
     if not hasattr(_thread_local, "client"):
@@ -71,13 +73,17 @@ def ch_client():
 
 TABLE_REGISTRY = {}
 
+
 def discover_tables():
-    result = ch_client().query("""
+    result = ch_client().query(
+        """
         SELECT table, name, type
         FROM system.columns
         WHERE database = %(db)s
         ORDER BY table, position
-    """, {"db": CLICKHOUSE_DB})
+    """,
+        {"db": CLICKHOUSE_DB},
+    )
 
     # Group columns by table
     tables = defaultdict(dict)
@@ -93,15 +99,17 @@ def discover_tables():
             registry[table] = {"columns": cols, "role": "ignored"}
             continue
 
-        has_step   = "step"   in col_names
+        has_step = "step" in col_names
         has_metric = "metric" in col_names
 
         array_cols = [
-            c for c, t in cols.items()
+            c
+            for c, t in cols.items()
             if t.startswith("Array(Float") or t.startswith("Array(Int")
         ]
         scalar_cols = [
-            c for c, t in cols.items()
+            c
+            for c, t in cols.items()
             if any(t.startswith(p) for p in ("Float", "Int", "UInt"))
             and c not in ("step", "rank", "device")
             and not t.startswith("Array")
@@ -121,9 +129,9 @@ def discover_tables():
             role = "ignored"
 
         registry[table] = {
-            "columns":     cols,
-            "role":        role,
-            "array_cols":  array_cols,
+            "columns": cols,
+            "role": role,
+            "array_cols": array_cols,
             "scalar_cols": scalar_cols,
         }
 
@@ -144,6 +152,7 @@ refresh_table_registry()
 # DATABASE FUNCTIONS
 # -----------------------------------------------------------------------------
 
+
 def get_runs():
     """
     Query the runs table (role=runs) for rich metadata.
@@ -153,16 +162,23 @@ def get_runs():
 
     if runs_tables:
         table = runs_tables[0]
-        cols  = set(TABLE_REGISTRY[table]["columns"].keys())
+        cols = set(TABLE_REGISTRY[table]["columns"].keys())
 
         select_parts = ["run_id"]
-        if "status"       in cols: select_parts.append("status")
-        if "model_name"   in cols: select_parts.append("model_name")
-        if "model_size"   in cols: select_parts.append("model_size")
-        if "source"       in cols: select_parts.append("source")
-        if "cluster"      in cols: select_parts.append("cluster")
+        if "status" in cols:
+            select_parts.append("status")
+        if "model_name" in cols:
+            select_parts.append("model_name")
+        if "model_size" in cols:
+            select_parts.append("model_size")
+        if "source" in cols:
+            select_parts.append("source")
+        if "cluster" in cols:
+            select_parts.append("cluster")
         if "created_time" in cols:
-            select_parts.append("formatDateTime(created_time, '%Y-%m-%d %H:%i') AS created_at")
+            select_parts.append(
+                "formatDateTime(created_time, '%Y-%m-%d %H:%i') AS created_at"
+            )
 
         order = "created_time DESC" if "created_time" in cols else "run_id DESC"
         query = f"""
@@ -177,16 +193,18 @@ def get_runs():
         runs = []
         for row in result.result_rows:
             keys = [p.split(" AS ")[-1] for p in select_parts]
-            run  = dict(zip(keys, row))
-            runs.append({
-                "run_id":     run.get("run_id", ""),
-                "status":     run.get("status", "unknown"),
-                "model_name": run.get("model_name", ""),
-                "model_size": run.get("model_size", ""),
-                "source":     run.get("source", ""),
-                "cluster":    run.get("cluster", ""),
-                "created_at": run.get("created_at", ""),
-            })
+            run = dict(zip(keys, row))
+            runs.append(
+                {
+                    "run_id": run.get("run_id", ""),
+                    "status": run.get("status", "unknown"),
+                    "model_name": run.get("model_name", ""),
+                    "model_size": run.get("model_size", ""),
+                    "source": run.get("source", ""),
+                    "cluster": run.get("cluster", ""),
+                    "created_at": run.get("created_at", ""),
+                }
+            )
         if runs:
             return runs
 
@@ -195,17 +213,32 @@ def get_runs():
     for table, info in TABLE_REGISTRY.items():
         if info["role"] in ("scalar", "array", "events", "generic"):
             try:
-                rows = ch_client().query(f"""
+                rows = (
+                    ch_client()
+                    .query(
+                        f"""
                     SELECT DISTINCT run_id FROM {table}
                     WHERE run_id != '' LIMIT 200
-                """).result_rows
+                """
+                    )
+                    .result_rows
+                )
                 run_ids.update(r[0] for r in rows)
             except Exception:
                 pass
 
-    return [{"run_id": rid, "status": "unknown", "model_name": "",
-             "model_size": "", "source": "", "cluster": "", "created_at": ""}
-            for rid in sorted(run_ids, reverse=True)]
+    return [
+        {
+            "run_id": rid,
+            "status": "unknown",
+            "model_name": "",
+            "model_size": "",
+            "source": "",
+            "cluster": "",
+            "created_at": "",
+        }
+        for rid in sorted(run_ids, reverse=True)
+    ]
 
 
 def discover_metrics(run_id):
@@ -221,11 +254,18 @@ def discover_metrics(run_id):
         if "metric" not in info["columns"]:
             continue
         try:
-            rows = ch_client().query(f"""
+            rows = (
+                ch_client()
+                .query(
+                    f"""
                 SELECT DISTINCT metric FROM {table}
                 WHERE run_id = %(run_id)s
                 ORDER BY metric
-            """, {"run_id": run_id}).result_rows
+            """,
+                    {"run_id": run_id},
+                )
+                .result_rows
+            )
         except Exception:
             continue
 
@@ -256,10 +296,17 @@ def get_metric_data(run_id, metric_names, max_points=1000):
         if "metric" not in info["columns"]:
             continue
         try:
-            rows = ch_client().query(f"""
+            rows = (
+                ch_client()
+                .query(
+                    f"""
                 SELECT DISTINCT metric FROM {table}
                 WHERE run_id = %(run_id)s
-            """, {"run_id": run_id}).result_rows
+            """,
+                    {"run_id": run_id},
+                )
+                .result_rows
+            )
             for (m,) in rows:
                 if m in metric_names:
                     metric_table_map[m] = (table, info["role"])
@@ -278,26 +325,42 @@ def get_metric_data(run_id, metric_names, max_points=1000):
                 table_cols = TABLE_REGISTRY.get(table, {}).get("columns", {})
                 arr_cols = TABLE_REGISTRY.get(table, {}).get("array_cols", [])
                 # Detect a keys column: any Array(String) column named 'keys'
-                has_keys = "keys" in table_cols and table_cols["keys"].startswith("Array(")
+                has_keys = "keys" in table_cols and table_cols["keys"].startswith(
+                    "Array("
+                )
                 val_col = arr_cols[0] if arr_cols else "values"
 
                 if has_keys:
-                    rows = ch_client().query(f"""
+                    rows = (
+                        ch_client()
+                        .query(
+                            f"""
                         SELECT step, keys, {val_col} FROM {table}
                         WHERE run_id = %(run_id)s AND metric = %(metric)s
                         ORDER BY step
-                    """, {"run_id": run_id, "metric": metric}).result_rows
+                    """,
+                            {"run_id": run_id, "metric": metric},
+                        )
+                        .result_rows
+                    )
                     if rows:
                         data[metric] = [
                             {"step": int(r[0]), "keys": list(r[1]), "value": list(r[2])}
                             for r in rows
                         ]
                 else:
-                    rows = ch_client().query(f"""
+                    rows = (
+                        ch_client()
+                        .query(
+                            f"""
                         SELECT step, {val_col} FROM {table}
                         WHERE run_id = %(run_id)s AND metric = %(metric)s
                         ORDER BY step
-                    """, {"run_id": run_id, "metric": metric}).result_rows
+                    """,
+                            {"run_id": run_id, "metric": metric},
+                        )
+                        .result_rows
+                    )
                     if rows:
                         data[metric] = [
                             {"step": int(r[0]), "keys": [], "value": list(r[1])}
@@ -307,12 +370,19 @@ def get_metric_data(run_id, metric_names, max_points=1000):
                 print(f"⚠ Array query failed for {metric} in {table}: {e}")
         else:
             try:
-                rows = ch_client().query(f"""
+                rows = (
+                    ch_client()
+                    .query(
+                        f"""
                     SELECT step, avg(value) AS value
                     FROM {table}
                     WHERE run_id = %(run_id)s AND metric = %(metric)s
                     GROUP BY step ORDER BY step
-                """, {"run_id": run_id, "metric": metric}).result_rows
+                """,
+                        {"run_id": run_id, "metric": metric},
+                    )
+                    .result_rows
+                )
                 if rows:
                     points = [{"x": int(r[0]), "y": float(r[1])} for r in rows]
                     if len(points) > max_points:
@@ -334,28 +404,45 @@ def get_run_events(run_id, limit=200):
         cols = set(info["columns"].keys())
         try:
             select_parts = [
-                "formatDateTime(event_time, '%Y-%m-%d %H:%i:%S') AS ts" if "event_time" in cols else "'' AS ts",
-                "step"       if "step"       in cols else "0 AS step",
+                (
+                    "formatDateTime(event_time, '%Y-%m-%d %H:%i:%S') AS ts"
+                    if "event_time" in cols
+                    else "'' AS ts"
+                ),
+                "step" if "step" in cols else "0 AS step",
                 "event_type" if "event_type" in cols else "'' AS event_type",
-                "severity"   if "severity"   in cols else "'' AS severity",
-                "message"    if "message"    in cols else "'' AS message",
-                "host"       if "host"       in cols else "'' AS host",
-                "rank"       if "rank"       in cols else "0 AS rank",
+                "severity" if "severity" in cols else "'' AS severity",
+                "message" if "message" in cols else "'' AS message",
+                "host" if "host" in cols else "'' AS host",
+                "rank" if "rank" in cols else "0 AS rank",
             ]
-            rows = ch_client().query(f"""
+            rows = (
+                ch_client()
+                .query(
+                    f"""
                 SELECT {', '.join(select_parts)}
                 FROM {table}
                 WHERE run_id = %(run_id)s
                 ORDER BY event_time DESC
                 LIMIT %(limit)s
-            """, {"run_id": run_id, "limit": limit}).result_rows
+            """,
+                    {"run_id": run_id, "limit": limit},
+                )
+                .result_rows
+            )
             for r in rows:
-                events.append({
-                    "time": r[0], "step": int(r[1]), "event_type": r[2],
-                    "severity": r[3], "message": r[4],
-                    "host": r[5], "rank": int(r[6]),
-                    "source_table": table,
-                })
+                events.append(
+                    {
+                        "time": r[0],
+                        "step": int(r[1]),
+                        "event_type": r[2],
+                        "severity": r[3],
+                        "message": r[4],
+                        "host": r[5],
+                        "rank": int(r[6]),
+                        "source_table": table,
+                    }
+                )
         except Exception:
             pass
 
@@ -370,12 +457,19 @@ def get_current_metrics(run_id):
         if "metric" not in info["columns"]:
             continue
         try:
-            rows = ch_client().query(f"""
+            rows = (
+                ch_client()
+                .query(
+                    f"""
                 SELECT metric, argMax(value, step)
                 FROM {table}
                 WHERE run_id = %(run_id)s
                 GROUP BY metric
-            """, {"run_id": run_id}).result_rows
+            """,
+                    {"run_id": run_id},
+                )
+                .result_rows
+            )
             for r in rows:
                 result_map[r[0]] = r[1]
         except Exception:
@@ -387,40 +481,49 @@ def get_current_metrics(run_id):
 # API ROUTES
 # -----------------------------------------------------------------------------
 
+
 @app.route("/api/runs")
 def api_runs():
     return jsonify({"runs": get_runs()})
+
 
 @app.route("/api/runs/<run_id>/metrics")
 def api_discover_metrics(run_id):
     return jsonify({"metrics": discover_metrics(run_id)})
 
+
 @app.route("/api/runs/<run_id>/data")
 def api_metric_data(run_id):
     metrics_param = request.args.get("metrics", "")
-    metric_names  = [m.strip() for m in metrics_param.split(",") if m.strip()]
-    max_points    = request.args.get("max_points", 1000, type=int)
+    metric_names = [m.strip() for m in metrics_param.split(",") if m.strip()]
+    max_points = request.args.get("max_points", 1000, type=int)
     if not metric_names:
         return jsonify({"error": "No metrics specified"}), 400
     return jsonify(get_metric_data(run_id, metric_names, max_points))
 
+
 @app.route("/api/runs/<run_id>/current")
 def api_current(run_id):
     return jsonify(get_current_metrics(run_id))
+
 
 @app.route("/api/runs/<run_id>/events")
 def api_events(run_id):
     limit = request.args.get("limit", 200, type=int)
     return jsonify({"events": get_run_events(run_id, limit)})
 
+
 @app.route("/api/tables")
 def api_tables():
     """See all discovered tables and their assigned roles."""
-    return jsonify({
-        table: {"role": info["role"], "columns": list(info["columns"].keys())}
-        for table, info in TABLE_REGISTRY.items()
-        if info["role"] != "ignored"
-    })
+    return jsonify(
+        {
+            table: {"role": info["role"], "columns": list(info["columns"].keys())}
+            for table, info in TABLE_REGISTRY.items()
+            if info["role"] != "ignored"
+        }
+    )
+
 
 @app.route("/api/tables/refresh")
 def api_refresh_tables():
@@ -429,35 +532,50 @@ def api_refresh_tables():
     Just hit: GET /api/tables/refresh
     """
     refresh_table_registry()
-    return jsonify({
-        table: {"role": info["role"], "columns": list(info["columns"].keys())}
-        for table, info in TABLE_REGISTRY.items()
-        if info["role"] != "ignored"
-    })
+    return jsonify(
+        {
+            table: {"role": info["role"], "columns": list(info["columns"].keys())}
+            for table, info in TABLE_REGISTRY.items()
+            if info["role"] != "ignored"
+        }
+    )
+
 
 @app.route("/api/health")
 def api_health():
     try:
         ch_client().query("SELECT 1")
-        return jsonify({
-            "status": "ok",
-            "clickhouse": "connected",
-            "tables_discovered": len([t for t in TABLE_REGISTRY if TABLE_REGISTRY[t]["role"] != "ignored"])
-        })
+        return jsonify(
+            {
+                "status": "ok",
+                "clickhouse": "connected",
+                "tables_discovered": len(
+                    [
+                        t
+                        for t in TABLE_REGISTRY
+                        if TABLE_REGISTRY[t]["role"] != "ignored"
+                    ]
+                ),
+            }
+        )
     except Exception as e:
         return jsonify({"status": "error", "clickhouse": str(e)}), 500
+
 
 # -----------------------------------------------------------------------------
 # SERVE FRONTEND
 # -----------------------------------------------------------------------------
 
+
 @app.route("/")
 def serve_dashboard():
     return send_from_directory(DASHBOARD_DIR, "index.html")
 
+
 @app.route("/<path:path>")
 def serve_static(path):
     return send_from_directory(DASHBOARD_DIR, path)
+
 
 # -----------------------------------------------------------------------------
 # MAIN
@@ -467,5 +585,7 @@ if __name__ == "__main__":
     print(f"\n🚀 ClickHouse Dashboard Server Running")
     print(f"   Host:     {CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}")
     print(f"   Database: {CLICKHOUSE_DB}")
-    print(f"   Tables:   {len([t for t in TABLE_REGISTRY if TABLE_REGISTRY[t]['role'] != 'ignored'])} active\n")
+    print(
+        f"   Tables:   {len([t for t in TABLE_REGISTRY if TABLE_REGISTRY[t]['role'] != 'ignored'])} active\n"
+    )
     app.run(host="0.0.0.0", port=5050, debug=False)
