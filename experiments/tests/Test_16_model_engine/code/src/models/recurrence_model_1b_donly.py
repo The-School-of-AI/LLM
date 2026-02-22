@@ -70,29 +70,22 @@ _kernels_module = _import_kernels_module()
 if _kernels_module is not None:
     HAS_TRITON = bool(getattr(_kernels_module, "HAS_TRITON", False))
     HAS_FLA = bool(getattr(_kernels_module, "HAS_FLA", False))
-    triton_sparse_attention = getattr(_kernels_module, "triton_sparse_attention", None)
-    pytorch_sparse_attention = getattr(_kernels_module, "pytorch_sparse_attention", None)
+    # Note: triton_sparse_attention / fused_indexer_topk are GSA-only — not loaded here (D-only model)
     triton_sinkhorn_knopp = getattr(_kernels_module, "triton_sinkhorn_knopp", None)
     pytorch_sinkhorn_knopp = getattr(_kernels_module, "pytorch_sinkhorn_knopp", None)
     triton_rmsnorm = getattr(_kernels_module, "triton_rmsnorm", None)
     pytorch_rmsnorm = getattr(_kernels_module, "pytorch_rmsnorm", None)
     TritonRMSNorm = getattr(_kernels_module, "TritonRMSNorm", None)
-    fused_indexer_topk = getattr(_kernels_module, "fused_indexer_topk", None)
     fla_gated_delta_rule = getattr(_kernels_module, "fla_gated_delta_rule", None)
 else:
     HAS_TRITON = False
     HAS_FLA = False
-    triton_sparse_attention = None
-    pytorch_sparse_attention = None
     triton_sinkhorn_knopp = None
     pytorch_sinkhorn_knopp = None
     triton_rmsnorm = None
     pytorch_rmsnorm = None
     TritonRMSNorm = None
-    fused_indexer_topk = None
     fla_gated_delta_rule = None
-
-HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
 # ── Liger ops (Test 14: RoPE, MLP only — no fused CE) ────────────────────────
 def _import_liger_ops_module():
@@ -140,7 +133,7 @@ _kernel_log.info(f"  CUDA available:       {_cuda_available}")
 _kernel_log.info(f"  HAS_TRITON:           {HAS_TRITON}")
 _kernel_log.info(f"  Triton RMSNorm:       {'ENABLED' if HAS_TRITON and triton_rmsnorm is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  Triton Sinkhorn:      {'ENABLED' if HAS_TRITON and triton_sinkhorn_knopp is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
-_kernel_log.info(f"  Triton Sparse Attn:   {'ENABLED' if HAS_TRITON and triton_sparse_attention is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
+_kernel_log.info("  Triton Sparse Attn:   NOT LOADED (D-only model — no GSA layers)")
 _kernel_log.info(f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and fla_gated_delta_rule is not None and _cuda_available else 'UNAVAILABLE (pip install fla)'}")
 _kernel_log.info(f"  Liger FusedLinearCE:  {'ENABLED (zero logit VRAM)' if _LIGER_FUSED_LINEAR_CE_AVAILABLE and _cuda_available else 'FALLBACK (chunked F.cross_entropy, ~512MB peak)'}")
 if not _cuda_available:
@@ -522,13 +515,7 @@ class ModelConfig:
     delta_head_dim = 128
     delta_gate_dim = 384  # 9.4% of hidden_size
 
-    # GSA Configuration (kept for compatibility but unused — no GSA layers)
-    gsa_num_heads = 16  # hidden_size / attn_head_dim = 4096 / 256
-    gsa_head_dim = 256
-    gsa_k_base = 128
-    gsa_k_min = 32
-    gsa_k_max = 256
-    gsa_indexer_heads = 4
+    # GSA Configuration removed — no GSA layers in DDDDDDDD
 
     # MoE Configuration (DENSE MODEL - No MoE) — same as Test 5 for parity
     num_real_experts = 0
@@ -904,22 +891,10 @@ class GatedDeltaNet(nn.Module):
 
 
 # ============================================================================
-# Gated Sparse Attention (25% of layers in Test 14 — DDDGDDDG)
+# NOTE: GatedSparseAttention removed — D-only model (DDDDDDDD) has no GSA layers.
 # ============================================================================
 
-class GatedSparseAttention(nn.Module):
-    """
-    Gated Sparse Attention (GSA) - arXiv:2601.15305v1
 
-    Implements adaptive sparse attention with gating. In Test 14, layers 4 and 8
-    use GSA (DDDGDDDG); layers 1–3, 5–7 use GatedDeltaNet.
-
-    Memory complexity: O(T·k) via fused_indexer_topk chunked kernel.
-    Architecture:
-    - Shared indexer keys (W_Ik → [B, T, d_idx]) across indexer heads
-    - Per-attention-head diversity via head_importance_bias on attention logits
-    - Adaptive sparsity budget k_t from variance-based heuristic
-    """
     def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
                  k_base=512, k_min=32, k_max=1024, indexer_heads=4,
                  rope_original_max=8192, rope_scaling_factor=32.0,
@@ -1311,48 +1286,33 @@ class MHCSublayer(nn.Module):
 
 
 # ============================================================================
-# Decoder Layer (Hybrid DeltaNet + GSA — Test 14 DDDGDDDG)
+# Decoder Layer (D-Only — all DeltaNet, DDDDDDDD)
 # ============================================================================
 
 class LightningDecoderLayer(nn.Module):
     """
-    Decoder layer that can be either DeltaNet or GSA.
-    Type is determined at initialization (DDDGDDDG: every 4th layer is GSA).
+    Decoder layer — always DeltaNet in this D-only model (DDDDDDDD).
+    The layer_type parameter is accepted for API compatibility but must be "deltanet".
     """
     def __init__(self, config: ModelConfig, layer_type: str):
         super().__init__()
         self.layer_type = layer_type  # "deltanet" or "gsa"
         self.n_streams = config.n_streams
 
-        if layer_type == "deltanet":
-            attn = GatedDeltaNet(
-                hidden_size=config.hidden_size,
-                num_heads=config.delta_v_heads,
-                head_dim=config.delta_head_dim,
-                max_seq_len=config.max_seq_len,
-                rope_base=config.rope_base,
-                rope_original_max=config.rope_original_max_position,
-                rope_scaling_factor=config.rope_scaling_factor,
-                conv_size=4,
-                use_output_norm=True,
-                require_fused_kernel=config.require_fused_deltanet_kernel,
-            )
-        elif layer_type == "gsa":
-            attn = GatedSparseAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.gsa_num_heads,
-                max_seq_len=config.max_seq_len,
-                rope_base=config.rope_base,
-                k_base=config.gsa_k_base,
-                k_min=config.gsa_k_min,
-                k_max=config.gsa_k_max,
-                indexer_heads=config.gsa_indexer_heads,
-                rope_original_max=config.rope_original_max_position,
-                rope_scaling_factor=config.rope_scaling_factor,
-                require_fused_kernel=config.require_fused_gsa_kernel,
-            )
-        else:
-            raise ValueError(f"Unknown layer type: {layer_type}")
+        if layer_type != "deltanet":
+            raise ValueError(f"D-only model only supports layer_type='deltanet', got: {layer_type}")
+        attn = GatedDeltaNet(
+            hidden_size=config.hidden_size,
+            num_heads=config.delta_v_heads,
+            head_dim=config.delta_head_dim,
+            max_seq_len=config.max_seq_len,
+            rope_base=config.rope_base,
+            rope_original_max=config.rope_original_max_position,
+            rope_scaling_factor=config.rope_scaling_factor,
+            conv_size=4,
+            use_output_norm=True,
+            require_fused_kernel=config.require_fused_deltanet_kernel,
+        )
 
         mlp = LightningMLP(config)
 
@@ -1758,27 +1718,9 @@ class Model1B(nn.Module):
         # Pass through reversible stack
         x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
 
-        # Surface GSA leak metrics at model level for train.py logging/guards.
-        leak_vals = []
-        leak_attempt_vals = []
-        for layer in self.layers:
-            attn_mod = layer.attn_block.sublayer
-            leak_v = getattr(attn_mod, "last_gsa_leak_fraction", None)
-            leak_attempt_v = getattr(attn_mod, "last_gsa_leak_attempt_fraction", None)
-            if leak_v is not None:
-                leak_vals.append(leak_v.detach().float())
-            if leak_attempt_v is not None:
-                leak_attempt_vals.append(leak_attempt_v.detach().float())
-        self.last_gsa_leak_fraction = (
-            torch.stack(leak_vals).mean()
-            if leak_vals
-            else x_stream.new_tensor(0.0, dtype=torch.float32)
-        )
-        self.last_gsa_leak_attempt_fraction = (
-            torch.stack(leak_attempt_vals).mean()
-            if leak_attempt_vals
-            else x_stream.new_tensor(0.0, dtype=torch.float32)
-        )
+        # D-only: no GSA layers, so leak metrics are always zero
+        self.last_gsa_leak_fraction = x_stream.new_tensor(0.0, dtype=torch.float32)
+        self.last_gsa_leak_attempt_fraction = x_stream.new_tensor(0.0, dtype=torch.float32)
 
 
         # Collapse streams
@@ -1832,7 +1774,7 @@ class Model1B(nn.Module):
                 out_mtp = self.lm_head(h_mtp_normed)  # [B, T, V] for eval
 
         # FIX #41: Clear RoPE forward-pass cache to prevent accumulation (CRITICAL PATH FIX)
-        # Architecture: LightningDecoderLayer → MHCSublayer → GatedSparseAttention → RotaryEmbedding (all 8 layers GSA only)
+        # Architecture: LightningDecoderLayer → MHCSublayer → GatedDeltaNet → RotaryEmbedding (all 8 layers DeltaNet)
         for layer in self.layers:
             if hasattr(layer.attn_block.sublayer, 'rotary_emb'):
                 if hasattr(layer.attn_block.sublayer.rotary_emb, '_forward_cache'):
@@ -1886,8 +1828,8 @@ if __name__ == "__main__":
         vocab_size=131072,
         hidden_size=4096,
         target_params=1e9,
-        attention_type="gsa",
-        deltanet_layer_ratio=0.75,  # Test 14: DDDGDDDG (6 DeltaNet, 2 GSA)
+        attention_type="deltanet",
+        deltanet_layer_ratio=1.0,  # D-only: DDDDDDDD (8 DeltaNet, 0 GSA)
         num_routed_experts_active=0,
         num_shared_experts=0,
         expert_intermediate_size=1024,
@@ -1920,17 +1862,17 @@ if __name__ == "__main__":
     config = ModelConfig()
 
     print("=" * 80)
-    print("1B DENSE MODEL ARCHITECTURE")
+    print("1B DENSE MODEL ARCHITECTURE — D-Only (DDDDDDDD)")
     print("=" * 80)
     print("\nConfiguration:")
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
-    print("\nAttention (Test 14: DDDGDDDG — DeltaNet + GSA):")
+    print("\nAttention (D-Only: DDDDDDDD — all DeltaNet):")
     print(f"  DeltaNet: {config.num_deltanet_layers} layers ({100*config.num_deltanet_layers//config.num_layers}%) - O(N) linear attention")
-    print(f"  GSA: {config.num_gsa_layers} layers ({100*config.num_gsa_layers//config.num_layers}%) - Adaptive sparse attention")
-    print("\nModel Type: DENSE (No MoE) — Test 14")
+    print(f"  GSA: {config.num_gsa_layers} layers (0%) — none")
+    print("\nModel Type: DENSE (No MoE) — D-Only")
     print(f"  Dense FFN intermediate: {config.shared_expert_intermediate_size}")
-    print(f"\nEmbedding: Kronecker (intended for Test 14)")
+    print(f"\nEmbedding: Kronecker")
     print(f"Context: {config.max_seq_len:,} tokens")
     print("=" * 80)
