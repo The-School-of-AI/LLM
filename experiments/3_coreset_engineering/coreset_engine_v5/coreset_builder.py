@@ -1949,7 +1949,11 @@ def main():
             )
 
         # Build coresets
-        results = builder.build_coresets()
+        try:
+            results = builder.build_coresets()
+        except KeyboardInterrupt:
+            logger.warning("\n[!] Interrupted by user. Exiting gracefully...")
+            sys.exit(1)
 
         # Streaming-mode summary (timings + throughput-ish stats)
         if not args.legacy and isinstance(results, dict):

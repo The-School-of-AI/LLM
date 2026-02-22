@@ -15,6 +15,26 @@
 # =============================================================================
 set -euo pipefail
 
+# --------------- SIGNAL HANDLING ---------------
+PIDS=()
+cleanup() {
+  local sig=$1
+  echo ""
+  echo "[!] Interrupted by signal $sig. Shutting down shards..."
+  for pid in "${PIDS[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "[*] Terminating shard PID $pid..."
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+  done
+  # Wait briefly for shards to exit gracefully
+  sleep 1
+  exit 1
+}
+
+trap 'cleanup SIGINT' SIGINT
+trap 'cleanup SIGTERM' SIGTERM
+
 # --------------- DEFAULTS ---------------
 NUM_SHARDS=4
 STAGES="1B 3B 8B 70B"
@@ -196,7 +216,6 @@ fi
 
 # Launch all shards in parallel using background processes
 echo "[*] Launching $NUM_SHARDS shards..."
-PIDS=()
 for SHARD_ID in $(seq 0 $((NUM_SHARDS - 1))); do
   SHARD_DIR="${CHECKPOINT_BASE}/shard$(printf '%03d' "$SHARD_ID")"
   mkdir -p "$SHARD_DIR"
