@@ -165,13 +165,14 @@ def triton_gated_indexer(
     batch_size, seq_q, n_heads, d_idx = q.shape
     _, seq_kv, _ = k.shape
 
-    # Cast inputs to float32 — kernel does all compute in fp32.
-    # Passing bf16 pointers causes type-inference failures in Triton's JIT
-    # on some GPU/Triton version combos.
-    q_f32 = q.float().contiguous()
-    k_f32 = k.float().contiguous()
-    w_f32 = w.float().contiguous()
-    b_f32 = b.float().contiguous()
+    # FIX-PERF-05: Pass inputs directly without upcast — the Triton kernel loads
+    # all values via `.to(tl.float32)` on the GPU, so pre-casting to fp32 on the
+    # host was pure wasted allocation + bandwidth (4 full tensor copies per call).
+    # We still require contiguous layout for valid stride arithmetic.
+    q_in = q.contiguous()
+    k_in = k.contiguous()
+    w_in = w.contiguous()
+    b_in = b.contiguous()
 
     # Allocate output in float32 (kernel stores fp32 accumulator)
     out = torch.empty(batch_size, seq_q, seq_kv, device=q.device, dtype=torch.float32)
@@ -185,11 +186,11 @@ def triton_gated_indexer(
 
     try:
         _gated_indexer_fwd_kernel[grid](
-            q_f32, k_f32, w_f32, b_f32, out,
+            q_in, k_in, w_in, b_in, out,
             batch_size, seq_q, seq_kv, n_heads, d_idx,
-            q_f32.stride(0), q_f32.stride(1), q_f32.stride(2), q_f32.stride(3),
-            k_f32.stride(0), k_f32.stride(1), k_f32.stride(2),
-            w_f32.stride(0), w_f32.stride(1), w_f32.stride(2),
+            q_in.stride(0), q_in.stride(1), q_in.stride(2), q_in.stride(3),
+            k_in.stride(0), k_in.stride(1), k_in.stride(2),
+            w_in.stride(0), w_in.stride(1), w_in.stride(2),
             out.stride(0), out.stride(1), out.stride(2),
             scale,
             q_offset,

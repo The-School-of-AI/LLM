@@ -497,81 +497,88 @@ if HAS_TRITON:
                 BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
             )
 
-            # ── Step 3: dK/dV via PyTorch scatter_add (FIX-PERF-03b) ──
-            # The old Triton atomic-scatter kernel launched B*H*T programs, each
-            # doing k_sel random atomic writes — O(B*H*T*k_sel) atomics with
-            # heavily non-coalesced access patterns — causing severe L2 thrashing.
+            # ── Step 3: dK/dV — chunked scatter_add_ (FIX-PERF-03b v2) ──
+            # Previous full-T approach materialised [B, H, T, k_sel, D] which is
+            #   4 × 16 × 4096 × 256 × 256 × 4 bytes = 68 GB → OOM.
             #
-            # New approach: recompute attention weights P[b,h,q,ki] for all
-            # selected (q, ki) pairs in one vectorised pass, then use
-            # scatter_add_ which PyTorch dispatches as a segmented reduction
-            # (far better memory access pattern on A100).
+            # Fix: process C queries at a time.  Peak intermediate tensor:
+            #   [B, H, C, k_sel, D] = 4×16×C×256×256×4 bytes
+            #   At C=64 → ~4.3 GB — fits comfortably.
             #
-            # Shapes:
-            #   indices: [B, H, T, k_sel]  (already int64 from forward)
-            #   mask:    [B, H, T, k_sel]  float32
-            #   q, k, v, do: [B, T, H, D]
+            # scatter_add_ is preserved (no atomics), so the perf win vs the original
+            # Triton atomic kernel is maintained.  Memory scales O(C) not O(T).
 
-            # Reorder to [B, H, T, D] for head-major batch computation
+            # Permute to head-major layout once (shared by dQ already computed above)
             q_bh  = q.permute(0, 2, 1, 3).contiguous().float()   # [B, H, T,   D]
             k_bh  = k.permute(0, 2, 1, 3).contiguous().float()   # [B, H, T_kv,D]
             v_bh  = v.permute(0, 2, 1, 3).contiguous().float()   # [B, H, T_kv,D]
             do_bh = do.permute(0, 2, 1, 3).contiguous()          # [B, H, T,   D]
 
-            # Gather k_sel keys/values via advanced indexing: [B, H, T, k_sel, D]
-            b_idx = torch.arange(B, device=q.device).view(B, 1, 1, 1).expand(B, H, T, k_sel)
-            h_idx = torch.arange(H, device=q.device).view(1, H, 1, 1).expand(B, H, T, k_sel)
-            k_sel_t = k_bh[b_idx, h_idx, indices]        # [B, H, T, k_sel, D]
-            v_sel_t = v_bh[b_idx, h_idx, indices]        # [B, H, T, k_sel, D]
-
-            # Recompute attention scores S[b,h,q,ki] = dot(q[q], k[ki]) * scale
-            # q_bh: [B, H, T, D] → [B, H, T, 1, D] for broadcasting
-            S = (q_bh.unsqueeze(3) * k_sel_t).sum(dim=-1) * scale   # [B, H, T, k_sel]
-
-            # Load saved LSE: [B, H, T]
-            lse_bh = lse  # already [B, H, T]
-
-            # P = softmax = exp(S - LSE).  Clamp against sentinel (-1e4) for masked rows.
-            P = torch.exp((S - lse_bh.unsqueeze(-1)).clamp(max=50.0))  # [B, H, T, k_sel]
-
-            # Zero out masked entries
-            bool_mask = mask > 0.5  # [B, H, T, k_sel]
-            P = P * bool_mask.float()
-
-            # delta[b,h,q] from preprocess step — [B, H, T]
-            delta_bh = delta  # [B, H, T]
-
-            # dO (head-major) dot V_sel → [B, H, T, k_sel]
-            do_v = (do_bh.unsqueeze(3) * v_sel_t).sum(dim=-1)         # [B, H, T, k_sel]
-
-            # dS = P * (dO·V − delta)
-            dS = P * (do_v - delta_bh.unsqueeze(-1))                  # [B, H, T, k_sel]
-
-            # --- dK: scatter_add dS * Q back to key positions ---
-            # contribution per (b,h,q,ki): dK[ki] += scale * dS[q,ki] * Q[q]
-            # [B, H, T, k_sel, D]
-            dk_contrib = (dS.unsqueeze(-1) * q_bh.unsqueeze(3)) * scale
-
             dk = torch.zeros(B, H, T_kv, D, device=q.device, dtype=torch.float32)
-            # Expand index for D dimension
-            idx_d = indices.unsqueeze(-1).expand(B, H, T, k_sel, D)  # [B,H,T,k_sel,D]
-            dk.scatter_add_(2, idx_d.reshape(B, H, T * k_sel, D),
-                               dk_contrib.reshape(B, H, T * k_sel, D))
-
-            # --- dV: scatter_add P * dO back to key positions ---
-            # [B, H, T, k_sel, D]
-            dv_contrib = P.unsqueeze(-1) * do_bh.unsqueeze(3)
-
             dv = torch.zeros(B, H, T_kv, D, device=q.device, dtype=torch.float32)
-            dv.scatter_add_(2, idx_d.reshape(B, H, T * k_sel, D),
-                               dv_contrib.reshape(B, H, T * k_sel, D))
+
+            # Auto-size chunk so [B, H, C, k_sel, D] × 4 bytes < 512 MB
+            _bytes_per_row = B * H * k_sel * D * 4  # float32 per query row
+            C = max(1, min(T, 512 * 1024 * 1024 // max(_bytes_per_row, 1)))
+            # Round down to power of 2 for alignment, capped at T
+            _c = 1
+            while _c * 2 <= C:
+                _c *= 2
+            C = min(_c, T)
+
+            # Broadcast indices for batch and head dims (created once, sliced per chunk)
+            b_idx_full = torch.arange(B, device=q.device).view(B, 1, 1, 1)  # [B,1,1,1]
+            h_idx_full = torch.arange(H, device=q.device).view(1, H, 1, 1)  # [1,H,1,1]
+
+            for q_start in range(0, T, C):
+                q_end = min(q_start + C, T)
+                Cq = q_end - q_start   # actual chunk size (may be < C at tail)
+
+                # Slice per-chunk tensors
+                idx_c  = indices[:, :, q_start:q_end, :]   # [B, H, Cq, k_sel]
+                msk_c  = mask[:, :, q_start:q_end, :]      # [B, H, Cq, k_sel]
+                q_c    = q_bh[:, :, q_start:q_end, :]      # [B, H, Cq, D]
+                do_c   = do_bh[:, :, q_start:q_end, :]     # [B, H, Cq, D]
+                lse_c  = lse[:, :, q_start:q_end]          # [B, H, Cq]
+                delta_c = delta[:, :, q_start:q_end]       # [B, H, Cq]
+
+                # Advanced gather: k_sel_c[b,h,q,ki,d] = k_bh[b,h, idx_c[b,h,q,ki], d]
+                b_idx_c = b_idx_full.expand(B, H, Cq, k_sel)  # [B, H, Cq, k_sel]
+                h_idx_c = h_idx_full.expand(B, H, Cq, k_sel)  # [B, H, Cq, k_sel]
+                k_sel_c = k_bh[b_idx_c, h_idx_c, idx_c]      # [B, H, Cq, k_sel, D]
+                v_sel_c = v_bh[b_idx_c, h_idx_c, idx_c]      # [B, H, Cq, k_sel, D]
+
+                # Recompute softmax weights P for this chunk
+                S_c = (q_c.unsqueeze(3) * k_sel_c).sum(dim=-1) * scale  # [B, H, Cq, k_sel]
+                P_c = torch.exp((S_c - lse_c.unsqueeze(-1)).clamp(max=50.0))
+                P_c = P_c * (msk_c > 0.5).float()
+
+                # dO·V — [B, H, Cq, k_sel]
+                do_v_c = (do_c.unsqueeze(3) * v_sel_c).sum(dim=-1)
+
+                # dS = P * (dO·V − delta)
+                dS_c = P_c * (do_v_c - delta_c.unsqueeze(-1))           # [B, H, Cq, k_sel]
+
+                # dK contribution: scale * dS * Q  →  [B, H, Cq, k_sel, D]
+                dk_c = (dS_c.unsqueeze(-1) * q_c.unsqueeze(3)) * scale
+
+                # dV contribution: P * dO  →  [B, H, Cq, k_sel, D]
+                dv_c = P_c.unsqueeze(-1) * do_c.unsqueeze(3)
+
+                # scatter_add_ into dk / dv along the T_kv dimension
+                idx_d = idx_c.unsqueeze(-1).expand(B, H, Cq, k_sel, D)  # [B,H,Cq,k_sel,D]
+                dk.scatter_add_(2, idx_d.reshape(B, H, Cq * k_sel, D),
+                                   dk_c.reshape(B, H, Cq * k_sel, D))
+                dv.scatter_add_(2, idx_d.reshape(B, H, Cq * k_sel, D),
+                                   dv_c.reshape(B, H, Cq * k_sel, D))
+
+                del k_sel_c, v_sel_c, S_c, P_c, do_v_c, dS_c, dk_c, dv_c, idx_d
 
             # Convert back to [B, T, H, D] and cast to input dtype
             dk = dk.permute(0, 2, 1, 3).contiguous().to(k.dtype)
             dv = dv.permute(0, 2, 1, 3).contiguous().to(v.dtype)
 
             return dq.to(q.dtype), dk, dv, None, None, None
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Public API

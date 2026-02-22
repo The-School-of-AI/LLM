@@ -103,6 +103,7 @@ class Config:
             "enable_system_metrics", False
         )
         self.init_model_path = config_dict["training"].get("init_model_path")
+        self.use_fused_ce = config_dict["training"].get("use_fused_ce", False)  # FIX-PERF-04: Liger fused CE
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
@@ -531,6 +532,7 @@ def main():
             start_step=epoch_start_step,
             global_step=global_step,
             metrics_jsonl_path=args.metrics_jsonl_path,
+            use_fused_ce=args.use_fused_ce,  # FIX-PERF-04: pass Liger fused CE flag
         )
 
         # Evaluate on validation set

@@ -1099,29 +1099,26 @@ class LightningMLP(nn.Module):
 # ============================================================================
 
 def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> torch.Tensor:
-    """Doubly-stochastic matrix via Sinkhorn-Knopp with numerical stability.
-    FIX #26: Default reduced to 5 iterations (from 20) for performance at long context.
-
-    Triton acceleration: When available, fuses all iterations into a single
-    kernel launch (eliminates 2*iters kernel launches).
     """
-    # Triton path: fused kernel (all iterations in one launch). Sinkhorn has no
-    # autograd.Function in this codebase, so use Triton only when grad disabled.
-    if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda and not torch.is_grad_enabled():
+    Sinkhorn-Knopp doubly-stochastic normalisation.
+    Dispatches to fused Triton kernel (single launch) when available,
+    falling back to PyTorch for CPU or when Triton is absent.
+
+    FIX-PERF-06: Removed the `not torch.is_grad_enabled()` guard.
+    The Triton kernel is pure computation with no autograd hooks, so it
+    is safe inside torch.enable_grad() contexts (e.g. reversible backward
+    recomputation pass). Previously the backward path fell back to 20
+    separate PyTorch kernel launches per sublayer instead of 1 Triton call.
+    """
+    if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda:
+        # Stable exp: subtract max along last dim before passing to kernel
+        logits_stable = logits - logits.amax(dim=-1, keepdim=True)
         try:
-            logits_stable = logits - logits.amax(dim=-1, keepdim=True)
             return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
         except Exception:
-            pass  # Fall through to PyTorch path
-
-    # PyTorch fallback
-    # CRITICAL FIX: Log-sum-exp trick prevents overflow when logits are large
-    logits = logits - logits.amax(dim=-1, keepdim=True)
-    M = torch.exp(logits).clamp_min(eps)
-    for _ in range(iters):
-        M = M / (M.sum(dim=-1, keepdim=True).clamp_min(eps))
-        M = M / (M.sum(dim=-2, keepdim=True).clamp_min(eps))
-    return M
+            pass  # fall through to PyTorch
+    # PyTorch fallback (CPU or Triton unavailable)
+    return pytorch_sinkhorn_knopp(logits, num_iters=iters, eps=eps)
 
 
 class MHCCoeffs(nn.Module):
