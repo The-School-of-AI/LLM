@@ -830,7 +830,7 @@ class GatedSparseAttention(nn.Module):
         self.indexer_heads = indexer_heads
 
         # Lightning Indexer (shared keys across indexer heads for kernel compatibility)
-        self.d_idx = 32
+        self.d_idx = 128  # ARCH-01: paper Table 1 specifies d_idx=128 (was 32, 4× under-spec)
         self.W_Iq = nn.Linear(hidden_size, indexer_heads * self.d_idx, bias=False)
         self.W_Ik = nn.Linear(hidden_size, self.d_idx, bias=False)  # Shared across indexer heads
         self.W_Iw = nn.Linear(hidden_size, indexer_heads, bias=False)
@@ -897,7 +897,7 @@ class GatedSparseAttention(nn.Module):
         # Lightning Indexer — O(T·k) via fused chunked kernel
         # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
         # Processes in [B, C, T] chunks where C is auto-tuned to fit in ~512MB.
-        q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # [B, T, 4, 32]
+        q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # [B, T, 4, 128]
         k_I = self.W_Ik(x)          # [B, T, d_idx] — shared across indexer heads
         w_raw = self.W_Iw(x)        # [B, T, indexer_heads] — pre-sigmoid (kernel applies sigmoid)
         scale_idx = 1.0 / math.sqrt(self.d_idx)
@@ -1560,22 +1560,27 @@ class Model1B(nn.Module):
 
     def forward(self, input_ids, next_token_ids=None, attention_mask=None,
                 prev_memory_stream=None, return_memory=True, return_loss=False,
-                ntp_targets=None, mtp_targets=None):
+                ntp_targets=None, mtp_targets=None, return_hidden=False):
         """
-        Forward pass with Multi-Token Prediction. Always returns logits (no fused CE).
+        Forward pass with Multi-Token Prediction.
 
         Args:
             input_ids: [B, T] - Input token IDs
             next_token_ids: [B, T] - Optional for MTP (t+1 tokens)
             attention_mask: Optional attention mask
-            prev_memory_stream: [B, D] - Memory from previous chunk (None for first chunk)
+            prev_memory_stream: [B, D] - Memory from previous chunk
             return_memory: Whether to return memory stream for next chunk
             return_loss: Whether to return auxiliary loss
-            ntp_targets, mtp_targets: Ignored (no fused CE). CE is computed in train.py.
+            ntp_targets, mtp_targets: Ignored. CE is computed in train.py.
+            return_hidden (bool): If True, skip lm_head and return hidden states
+                [B, T, H] instead of logits [B, T, V]. Used by FusedLinearCE
+                to avoid materialising the [B*T, vocab] tensor. Default: False.
 
         Returns:
-            logits_ntp: [B, T, vocab_size], logits_mtp: [B, T, vocab_size] or None,
-            plus optionally aux_loss and memory_stream.
+            When return_hidden=False (inference, default):
+                logits_ntp [B, T, V], logits_mtp [B, T, V] or None, + optional aux/memory
+            When return_hidden=True (training with FusedLinearCE):
+                h_ntp [B, T, H], h_mtp [B, T, H] or None, + optional aux_loss
         """
         batch_size, seq_len = input_ids.size()
         token_keep_mask = _token_keep_mask(attention_mask, batch_size, seq_len, input_ids.device)
@@ -1667,8 +1672,13 @@ class Model1B(nn.Module):
         else:
             memory_stream_out = None
 
-        # NTP Prediction (logits only; CE in train.py)
-        logits_ntp = self.lm_head(h_main)
+        # NTP Prediction
+        # return_hidden=True: skip lm_head, return raw hidden states so train.py
+        # can call FusedLinearCrossEntropyLoss without ever creating logit tensors.
+        if return_hidden:
+            logits_ntp = h_main                      # [B, T, H] — NOT logits
+        else:
+            logits_ntp = self.lm_head(h_main)        # [B, T, V]
 
         # MTP Prediction
         logits_mtp = None
@@ -1687,7 +1697,10 @@ class Model1B(nn.Module):
             mtp_attention_mask = token_keep_mask[:, :min_len] if token_keep_mask is not None else None
             h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
-            logits_mtp = self.lm_head(h_mtp_normed)
+            if return_hidden:
+                logits_mtp = h_mtp_normed            # [B, T, H] — NOT logits
+            else:
+                logits_mtp = self.lm_head(h_mtp_normed)  # [B, T, V]
 
         # FIX #41: Clear RoPE forward-pass cache to prevent accumulation (CRITICAL PATH FIX)
         # Architecture: LightningDecoderLayer → MHCSublayer → GatedSparseAttention → RotaryEmbedding (all 8 layers GSA only)

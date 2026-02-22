@@ -197,3 +197,33 @@ keeps row/col partial sums in registers across iterations.
 
 > **To restore for 256k context:** set `gsa_k_base = 512`, `gsa_k_max = 1024` in `ModelConfig`.
 > All other fixes (01, 03–06) are context-independent and should remain permanently.
+
+---
+
+## 2026-02-22 — Paper Alignment Fix
+
+### ARCH-01 · GatedSparseAttention: d_idx 32 → 128 (paper Table 1)
+
+**File changed:** `code/src/models/recurrence_model_1b.py` (`GatedSparseAttention.__init__`)
+
+**Problem:**
+- `self.d_idx = 32` was 4× smaller than the paper's specified value.
+- Paper arXiv:2601.15305v1 Section 4.1 / Table 1 specifies `d_idx = 128` for models
+  in the 1–7B class.
+- Impact: `W_Iq` projected 4096 → `4×32=128` dimensions; `W_Ik` projected 4096 → 32.
+  Importance scores `I_{t,s} = Σ_j σ(q_{t,j}^I · k_s^I) · σ(w_{t,j})` were computed
+  in a 32-dimensional space — far too low-rank to discriminate between 4096 tokens.
+  The adaptive sparsity EMA had less signal variance to work with, keeping k_t
+  artificially high and degrading the quality of sparse selection.
+
+**Fix:**
+- `self.d_idx = 128` — matches paper exactly.
+- `W_Iq`: 4096 → 512 dims (4×128); `W_Ik`: 4096 → 128 dims.
+- `scale_idx = 1/√128 = 0.088` (was `1/√32 = 0.177`); sigmoid less likely to saturate.
+- No kernel changes required — `triton_gated_indexer` accepts any power-of-2 `d_idx`.
+
+**Parameter overhead:** +3.67M params per GSA layer (two layers in this config → +7.3M total;
+< 0.5% of total model size).
+
+**Expected impact:** Better token selection → lower perplexity for same training budget.
+No throughput impact (indexer is <1% of step time).

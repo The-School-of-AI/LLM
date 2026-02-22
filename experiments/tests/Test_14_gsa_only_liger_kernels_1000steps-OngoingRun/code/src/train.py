@@ -16,15 +16,11 @@ import torch
 import torch.distributed as dist
 from tqdm import tqdm
 
-# FIX-PERF-04: Liger fused cross-entropy — avoids materialising the [B*T, vocab] logit tensor.
-# LigerCrossEntropyLoss fuses lm_head matmul + log-softmax + NLL into one tiled Triton kernel.
-# Falls back gracefully to F.cross_entropy if liger_kernel is unavailable.
-try:
-    from liger_kernel.transformers.cross_entropy import LigerCrossEntropyLoss as _LigerCE
-    _LIGER_CE_AVAILABLE = True
-except Exception:
-    _LigerCE = None
-    _LIGER_CE_AVAILABLE = False
+# FIX-PERF-04 (v3): FusedLinearCrossEntropyLoss — fuses lm_head matmul + CE.
+# Never materialises [B*T, vocab] logits (saves ~17 GB per step).
+# ZERO FALLBACK — if this import fails, training crashes immediately.
+from .kernels.triton_cross_entropy import FusedLinearCrossEntropyLoss as _FusedLinearCE
+_fused_ce = _FusedLinearCE(ignore_index=-100, reduction='mean')
 
 from .utils import is_main_process, print_rank_0
 try:
@@ -197,22 +193,23 @@ def train_epoch(
         loss_aux_value = None
 
         if uses_custom_forward:
-            # Reversible model: returns (logits_ntp, logits_mtp, aux_loss); CE in train.py (no fused CE)
+            # Reversible model: returns (h_ntp, h_mtp, aux_loss) hidden states
+            # (NOT logits — lm_head is skipped; FusedLinearCE fuses matmul+CE below)
             x_input = input_ids[:, :-2].contiguous()
             y_ntp = input_ids[:, 1:-1].contiguous()
             y_mtp = input_ids[:, 2:].contiguous()
-            
-            # 2. Forward pass with reversibility fix
-            # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper
-            with torch.amp.autocast('cuda',enabled=False):
-                logits_ntp, logits_mtp, aux_loss = model_engine.module(
-                    x_input,
-                    next_token_ids=y_ntp,
-                    attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
-                    return_loss=True,
-                    return_memory=False,
-                    prev_memory_stream=None,
-                )
+
+            # FIX: Call model_engine(...) not model_engine.module(...)
+            # This ensures DeepSpeed's BF16, gradient hooks, and ZeRO all fire correctly.
+            h_ntp, h_mtp, aux_loss = model_engine(
+                x_input,
+                next_token_ids=y_ntp,
+                attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                return_loss=True,
+                return_memory=False,
+                prev_memory_stream=None,
+                return_hidden=True,   # Skip lm_head — we compute CE below
+            )
             leak_frac_t = getattr(model_engine.module, "last_gsa_leak_fraction", None)
             leak_attempt_t = getattr(
                 model_engine.module, "last_gsa_leak_attempt_fraction", None
@@ -242,42 +239,44 @@ def train_epoch(
                 mem_peak = torch.cuda.max_memory_allocated(model_engine.device) / 1e9
                 print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
                 print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
-            
-            # 3. Compute loss — FIX-PERF-04: use Liger fused CE when available.
-            # Liger CE never materialises the [B*T, vocab] logit tensor (saves 4.3 GB at B=4,T=4094,V=131k).
-            # Falls back to standard F.cross_entropy when fused_ce_fn is None.
-            vocab_size = logits_ntp.size(-1)
-            if fused_ce_fn is not None:
-                # Liger CE: accepts (logits [N, V], targets [N]) natively; works in BF16
-                loss_ntp = fused_ce_fn(logits_ntp.view(-1, vocab_size), y_ntp.view(-1))
-            else:
-                with torch.amp.autocast('cuda', enabled=False):
-                    loss_ntp = torch.nn.functional.cross_entropy(
-                        logits_ntp.float().view(-1, vocab_size),
-                        y_ntp.view(-1),
-                    )
+
+            # 3. FusedLinearCE: fuses lm_head matmul + CE in one chunked kernel.
+            # Never materialises [B*T, vocab] logits. Zero fallback.
+            lm_weight = model_engine.module.lm_head.weight  # [V, H]
+            B_seq, T_seq, H_dim = h_ntp.shape
+            vocab_size = lm_weight.shape[0]
+
+            loss_ntp = _fused_ce(
+                h_ntp.view(-1, H_dim),          # [B*T, H]
+                lm_weight,                       # [V, H]
+                y_ntp.view(-1),                  # [B*T]
+            )
             if i == 0:
                 mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
                 print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
-            del logits_ntp
-            if fused_ce_fn is not None:
-                loss_mtp = fused_ce_fn(logits_mtp.view(-1, vocab_size), y_mtp.view(-1))
-            else:
-                with torch.amp.autocast('cuda', enabled=False):
-                    loss_mtp = torch.nn.functional.cross_entropy(
-                        logits_mtp.float().view(-1, vocab_size),
-                        y_mtp.view(-1),
-                    )
-            del logits_mtp
+
+            loss_mtp = None
+            if h_mtp is not None:
+                B_m, T_m, H_m = h_mtp.shape
+                loss_mtp = _fused_ce(
+                    h_mtp.view(-1, H_m),         # [B*T, H]
+                    lm_weight,                   # [V, H]
+                    y_mtp.view(-1),              # [B*T]
+                )
             
-            # 4. NaN Watchdog
-            if torch.isnan(loss_ntp) or torch.isnan(loss_mtp) or (aux_loss is not None and torch.isnan(aux_loss)):
-                with torch.no_grad():
-                    print_rank_0(f"\n⚠️ NaN detected at epoch {epoch}, step {i}!")
-                    print_rank_0(f"  loss_ntp={loss_ntp.item()}, loss_mtp={loss_mtp.item()}")
+            # 4. NaN Watchdog — HARD CRASH (FIX: was silently continuing, corrupting weights)
+            if torch.isnan(loss_ntp) or (loss_mtp is not None and torch.isnan(loss_mtp)) or \
+                    (aux_loss is not None and torch.isnan(aux_loss)):
+                raise RuntimeError(
+                    f"NaN detected at epoch {epoch}, step {i}: "
+                    f"loss_ntp={loss_ntp.item():.4f}, "
+                    f"loss_mtp={loss_mtp.item():.4f if loss_mtp is not None else 'None'}"
+                )
 
             # 5. Combine Loss (NTP + 0.3*MTP + aux)
-            loss = loss_ntp + 0.3 * loss_mtp
+            loss = loss_ntp
+            if loss_mtp is not None:
+                loss = loss + 0.3 * loss_mtp
             if aux_loss is not None and aux_loss.numel() > 0:
                 # Defensive scalarization: some model variants may return
                 # aux tensors with more than one element.
@@ -287,7 +286,7 @@ def train_epoch(
             else:
                 loss_aux_value = 0.0
             loss_ntp_value = float(loss_ntp.detach().float().item())
-            loss_mtp_value = float(loss_mtp.detach().float().item())
+            loss_mtp_value = float(loss_mtp.detach().float().item()) if loss_mtp is not None else 0.0
             
             # Memory profiling before backward
             if i == 0:
