@@ -3,6 +3,7 @@ outputv2
 output1
 output2
 output3
+output*
 output_wo_bandinference
 output_w_bandinferbeforeauto(bandscore)
 output_w_bandinferauto(banbd_pmax)

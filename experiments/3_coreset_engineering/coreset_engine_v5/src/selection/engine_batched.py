@@ -909,10 +909,33 @@ class BatchedSelectionEngine(SelectionEngine):
         def _key(v) -> str:
             return str(getattr(v, "value", v))
 
+        band_keys = set(difficulty_band_order())
+
+        _allowed_cache: Dict[str, Set[str]] = {}
+
+        def allowed_domains_for_band_name(band_name: str) -> Set[str]:
+            band_name = str(band_name)
+            cached = _allowed_cache.get(band_name)
+            if cached is not None:
+                return cached
+            try:
+                band_enum = DifficultyBand(str(band_name))
+            except Exception:
+                out = set()
+                _allowed_cache[band_name] = out
+                return out
+            try:
+                allowed = self.curriculum.get_allowed_domains_for_band(band_enum) or []
+            except Exception:
+                allowed = []
+            out = set(str(d) for d in allowed)
+            _allowed_cache[band_name] = out
+            return out
+
         for rule in protected_slices:
             key = _key(rule.band_or_domain)
             # Band-based rules
-            if key in {"B0", "B1", "B2", "B3", "B4", "B5"}:
+            if key in band_keys:
                 needed = int(remaining_band.get(key, 0) or 0)
                 if needed <= 0:
                     continue
@@ -920,10 +943,16 @@ class BatchedSelectionEngine(SelectionEngine):
                 if budget <= 0:
                     continue
 
+                allowed_domains = allowed_domains_for_band_name(key)
+
                 candidates = [
                     cid
                     for cid, meta in batch_chunks.items()
-                    if cid not in selected_out and _key(meta.band) == key
+                    if cid not in selected_out
+                    and _key(meta.band) == key
+                    and (
+                        (not allowed_domains) or (_key(meta.domain) in allowed_domains)
+                    )
                 ]
                 if not candidates:
                     continue
@@ -966,7 +995,15 @@ class BatchedSelectionEngine(SelectionEngine):
             candidates = [
                 cid
                 for cid, meta in batch_chunks.items()
-                if cid not in selected_out and _key(meta.domain) == key
+                if cid not in selected_out
+                and _key(meta.domain) == key
+                and (
+                    (not allowed_domains_for_band_name(_key(meta.band)))
+                    or (
+                        _key(meta.domain)
+                        in allowed_domains_for_band_name(_key(meta.band))
+                    )
+                )
             ]
             if not candidates:
                 continue

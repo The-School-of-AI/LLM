@@ -1528,7 +1528,32 @@ class StreamingCoresetBuilder(CoresetBuilder):
 
                 last_successful_batch_idx = int(batch_idx)
                 last_checkpoint_state = state
-                if ((batch_idx + 1) % self.checkpoint_every_n_batches) == 0:
+                # Test hook support: if a crash-after-checkpoint is requested for a
+                # specific batch, ensure we actually persist a checkpoint for that
+                # batch even when checkpoint_every_n_batches > 1.
+                crash_stage = os.environ.get(
+                    "CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_STAGE"
+                )
+                crash_batch_raw = os.environ.get(
+                    "CORESET_SIMULATE_CRASH_AFTER_CHECKPOINT_BATCH"
+                )
+                crash_batch = None
+                if crash_batch_raw is not None:
+                    try:
+                        crash_batch = int(crash_batch_raw)
+                    except Exception:
+                        crash_batch = None
+
+                should_checkpoint_now = (
+                    (batch_idx + 1) % self.checkpoint_every_n_batches
+                ) == 0
+                crash_requested_for_this_batch = (
+                    crash_batch is not None
+                    and int(batch_idx) == int(crash_batch)
+                    and (not crash_stage or str(crash_stage) == str(stage_name))
+                )
+
+                if should_checkpoint_now or crash_requested_for_this_batch:
                     self._write_checkpoint(stage_name, batch_idx, state)
                     last_checkpoint_batch_idx = int(batch_idx)
 
