@@ -1,3 +1,8 @@
 experiments/tests/*/results/
 LLM/experiments/tests/*/results/
 **/results/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
