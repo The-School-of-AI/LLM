@@ -1799,7 +1799,7 @@ def main():
     parser.add_argument(
         "--batch-prefetch-mode",
         type=str,
-        default="auto",
+        default="off",
         choices=["off", "on", "auto"],
         help=(
             "Batch prefetch mode for streaming iterators. "

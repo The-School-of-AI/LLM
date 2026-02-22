@@ -34,7 +34,8 @@ project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.core.types import difficulty_band_order
+from src.core.types import difficulty_band_order  # noqa: E402  # isort: skip
+
 
 _UTC = _dt.timezone.utc
 
