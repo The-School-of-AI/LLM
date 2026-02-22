@@ -53,7 +53,13 @@ from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
 from src.data import get_dataloaders, get_tokenizer
 from src.kernels import HAS_TRITON
-from src.models.recurrence_model_1b import (
+# from src.models.recurrence_model_1b import (  # DDDGDDDG hybrid — commented out
+#     Model1B as Model1B_Rev,
+#     ModelConfig as ModelConfig_Rev,
+#     KroneckerConfig,
+#     KroneckerEmbeddings,
+# )
+from src.models.recurrence_model_1b_donly import (  # D-Only (DDDDDDDD) — all DeltaNet
     Model1B as Model1B_Rev,
     ModelConfig as ModelConfig_Rev,
     KroneckerConfig,
