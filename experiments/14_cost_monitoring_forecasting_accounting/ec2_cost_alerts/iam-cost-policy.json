@@ -1,0 +1,51 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "CloudWatchLogs",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Sid": "EC2Describe",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceStatus"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "STSIdentity",
+            "Effect": "Allow",
+            "Action": "sts:GetCallerIdentity",
+            "Resource": "*"
+        },
+        {
+            "Sid": "CostExplorer",
+            "Effect": "Allow",
+            "Action": [
+                "ce:GetCostAndUsage"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "S3CostState",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::ec2-cost-state-*",
+                "arn:aws:s3:::ec2-cost-state-*/*"
+            ]
+        }
+    ]
+}

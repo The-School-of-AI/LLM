@@ -1,0 +1,86 @@
+# EC2 Cost Tracker — Deployment Instructions
+# =============================================
+# Run these steps on EACH account 
+#
+# Prerequisites:
+#   - Admin/root access on the account
+#   - AWS CloudShell or CLI configured
+#
+# Total time: ~5 minutes per account
+
+# ─────────────────────────────────────────────
+# STEP 0: One-time account setting (IMPORTANT)
+# ─────────────────────────────────────────────
+# In the AWS Console (as root/account owner):
+#   1. Click account name (top right) → Account
+#   2. Scroll to "IAM User and Role Access to Billing Information"
+#   3. Click Edit → Check "Activate IAM Access" → Update
+#
+# Without this, the bot can't show actual billing/credits data.
+# (The bot still works for EC2 tracking without this, but won't show AWS bill)
+
+# ─────────────────────────────────────────────
+# STEP 1: Open CloudShell and set credentials
+# ─────────────────────────────────────────────
+
+# Verify you're on the correct account
+aws sts get-caller-identity
+
+# Set Telegram bot credentials (shared privately by the team admin)
+export TELEGRAM_BOT_TOKEN="REPLACE_WITH_TOKEN"
+export TELEGRAM_CHAT_ID="REPLACE_WITH_CHAT_ID"
+
+# ─────────────────────────────────────────────
+# STEP 2: Create working directory
+# ─────────────────────────────────────────────
+
+mkdir -p ~/ec2-cost-alerts && cd ~/ec2-cost-alerts
+
+# ─────────────────────────────────────────────
+# STEP 3: Upload the two files
+# ─────────────────────────────────────────────
+# Click "Actions" (top right in CloudShell) → "Upload file"
+# Upload these two files:
+#   1. ec2_cost_tracker_lambda.py
+#   2. setup-cost-alerts.sh
+#
+# Then move them into the working directory:
+
+mv ~/ec2_cost_tracker_lambda.py .
+mv ~/setup-cost-alerts.sh .
+chmod +x setup-cost-alerts.sh
+
+# ─────────────────────────────────────────────
+# STEP 4: Deploy
+# ─────────────────────────────────────────────
+
+./setup-cost-alerts.sh --credit-limit 500
+
+# Expected output:
+#   [✓] S3 bucket created
+#   [✓] IAM role created
+#   [✓] Policy attached
+#   [✓] Lambda created
+#   [✓] EventBridge rule created
+#   [✓] Test passed!
+#   EC2 Cost Tracker Deployed!
+
+# ─────────────────────────────────────────────
+# STEP 5: Verify
+# ─────────────────────────────────────────────
+
+# Check Telegram group — you should see a cost report message.
+# If EC2 instances are running, they'll show up with runtime and cost.
+
+# ─────────────────────────────────────────────
+# DONE! Repeat Steps 1-5 on the second account.
+# ─────────────────────────────────────────────
+
+# What was created:
+#   - IAM Role:        ec2-cost-tracker-lambda-role
+#   - Lambda Function: ec2-cost-tracker
+#   - EventBridge Rule: ec2-cost-check-every-15m (every 15 min)
+#   - S3 Bucket:       ec2-cost-state-{account-id}-us-east-1
+
+# To remove everything later:
+#   ./teardown-cost-alerts.sh
