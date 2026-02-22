@@ -112,6 +112,20 @@ LigerSwiGLUMLP = _liger_module.LigerSwiGLUMLP
 liger_rotary_pos_emb = _liger_module.liger_rotary_pos_emb
 liger_silu_mul = _liger_module.liger_silu_mul
 
+# ── Liger Fused Linear Cross-Entropy ─────────────────────────────────────────
+# LigerFusedLinearCrossEntropyLoss fuses lm_head matmul + log-softmax + NLL
+# into a single Triton kernel, so the [B*T, vocab_size] logit tensor is NEVER
+# materialised in VRAM (peak extra memory ≈ 0 vs ~8.6 GB without it).
+# Checked once at module load time; falls back gracefully if unavailable.
+try:
+    from liger_kernel.transformers.fused_linear_cross_entropy import (
+        LigerFusedLinearCrossEntropyLoss as _LigerFusedLinearCE,
+    )
+    _LIGER_FUSED_LINEAR_CE_AVAILABLE = True
+except Exception:
+    _LigerFusedLinearCE = None
+    _LIGER_FUSED_LINEAR_CE_AVAILABLE = False
+
 # ── Kernel availability diagnostics ──────────────────────────────────────────
 _kernel_log = logging.getLogger("recurrence_model_1b.kernels")
 if not _kernel_log.handlers:
@@ -127,6 +141,7 @@ _kernel_log.info(f"  Triton RMSNorm:       {'ENABLED' if HAS_TRITON and triton_r
 _kernel_log.info(f"  Triton Sinkhorn:      {'ENABLED' if HAS_TRITON and triton_sinkhorn_knopp is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  Triton Sparse Attn:   {'ENABLED' if HAS_TRITON and triton_sparse_attention is not None and _cuda_available else 'FALLBACK (PyTorch)'}")
 _kernel_log.info(f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and fla_gated_delta_rule is not None and _cuda_available else 'UNAVAILABLE (pip install fla)'}")
+_kernel_log.info(f"  Liger FusedLinearCE:  {'ENABLED (zero logit VRAM)' if _LIGER_FUSED_LINEAR_CE_AVAILABLE and _cuda_available else 'FALLBACK (chunked F.cross_entropy, ~512MB peak)'}")
 if not _cuda_available:
     _kernel_log.info("  NOTE: Triton kernels require CUDA. Running on MPS/CPU uses PyTorch fallbacks.")
 _kernel_log.info("=" * 60)
@@ -200,61 +215,73 @@ def _chunked_cross_entropy(
     ignore_index: int = -100,
 ) -> torch.Tensor:
     """
-    Compute cross-entropy loss in small chunks along the sequence dimension.
+    Compute cross-entropy loss, eliminating the [B, T, vocab_size] logit spike.
 
-    WHY THIS EXISTS
-    ---------------
-    With vocab_size=131 072, materialising the full logit tensor eats huge VRAM:
+    TWO PATHS — chosen automatically at module load time:
 
-        [B=4, T=4094, V=131072] x 4 bytes (fp32) ≈ 8.6 GB
+    PATH 1 ── Liger FusedLinearCrossEntropy  (when liger_kernel is installed)
+    ─────────────────────────────────────────────────────────────────────────
+    Uses a single Triton kernel that fuses:
+        lm_head matmul  +  log-softmax  +  NLL
+    into one pass. The [B*T, V] logit tensor is NEVER created in VRAM.
+    Peak extra memory ≈ 0 (just the hidden states, which are already there).
 
-    That tensor is only needed for ~1 ms to compute the loss, then discarded —
-    but the memory spike forces smaller batch sizes and hammers bandwidth.
+        hidden [B*T, D]  ──►  Triton kernel  ──►  scalar loss
+                  ↑                   ↑
+              already in VRAM    lm_head.weight (already in VRAM)
 
-    HOW IT WORKS
-    ------------
-    Instead of ``lm_head(h_main)`` → one giant [B, T, V] tensor, we loop over
-    the T dimension in windows of ``chunk_size`` tokens:
-
-        for start in range(0, T, chunk_size):
-            chunk_logits = lm_head(hidden[:, start:end])   # [B, cs, V]
-            chunk_loss   = cross_entropy(chunk_logits, targets[:, start:end])
-            del chunk_logits   # free immediately
-
-    Peak extra VRAM drops from ~8.6 GB to ~512 MB (chunk_size=256, B=4, fp32).
+    PATH 2 ── Chunked F.cross_entropy  (fallback when liger_kernel absent)
+    ─────────────────────────────────────────────────────────────────────────
+    Processes the sequence in windows of `chunk_size` tokens. Each window
+    creates only a small [B*chunk, V] tensor, which is freed immediately.
+    Peak extra memory ≈ 512 MB (vs ~8.6 GB without chunking).
 
     ARGS
     ----
     hidden      : [B, T, D]  — backbone hidden states (not yet projected).
-    lm_head     : nn.Linear — the shared language-model head (weights already
-                  live in VRAM; we do not copy them).
-    targets     : [B, T]    — ground-truth token IDs; padding uses ignore_index.
-    chunk_size  : int       — number of sequence positions per chunk (tune to
-                  balance memory vs. kernel-launch overhead; 256 is a good default).
-    ignore_index: int       — tokens with this ID are excluded from the loss
-                  (typical value: -100, same as PyTorch default).
+    lm_head     : nn.Linear  — LM head (weights already live in VRAM).
+    targets     : [B, T]     — ground-truth token IDs.
+    chunk_size  : int        — tokens per chunk for Path 2 (ignored in Path 1).
+    ignore_index: int        — padding token ID excluded from loss (-100).
 
     RETURNS
     -------
-    Scalar tensor — mean token loss over all non-ignored positions.
-    Has a grad_fn so backward() works normally.
+    Scalar tensor with grad_fn — backward() works normally on both paths.
     """
-    B, T, _ = hidden.shape
-    total_loss = hidden.new_tensor(0.0, dtype=torch.float32)
+    B, T, D = hidden.shape
+
+    # ── PATH 1: Liger FusedLinearCE — zero logit VRAM ────────────────────────
+    if _LIGER_FUSED_LINEAR_CE_AVAILABLE and hidden.is_cuda:
+        # LigerFusedLinearCrossEntropyLoss expects:
+        #   hidden_states : [N, D]   (N = B*T)
+        #   weight        : [V, D]   (lm_head.weight)
+        #   target        : [N]      (flat targets)
+        #   bias          : [V] or None
+        _fused_ce_fn = _LigerFusedLinearCE(ignore_index=ignore_index, reduction="mean")
+        bias = lm_head.bias if hasattr(lm_head, "bias") and lm_head.bias is not None else None
+        return _fused_ce_fn(
+            hidden.view(-1, D),       # [B*T, D]
+            lm_head.weight,           # [V, D] — kernel reads, never expands to [B*T, V]
+            targets.view(-1),         # [B*T]
+            bias,
+        )
+
+    # ── PATH 2: Chunked F.cross_entropy — 17× less peak VRAM than full CE ────
+    total_loss   = hidden.new_tensor(0.0, dtype=torch.float32)
     total_tokens = 0
 
     for start in range(0, T, chunk_size):
         end = min(start + chunk_size, T)
 
-        # Project this window of hidden states: [B, cs, D] → [B, cs, V]
-        chunk_logits = lm_head(hidden[:, start:end, :].contiguous()).float()
-        V = chunk_logits.size(-1)
-        chunk_logits_2d = chunk_logits.view(-1, V)            # [B*cs, V]
+        # Project this window: [B, cs, D] → [B, cs, V], then flatten
+        chunk_logits    = lm_head(hidden[:, start:end, :].contiguous()).float()
+        V               = chunk_logits.size(-1)
+        chunk_logits_2d = chunk_logits.view(-1, V)                     # [B*cs, V]
         chunk_targets   = targets[:, start:end].contiguous().view(-1)  # [B*cs]
 
         n_tokens = (chunk_targets != ignore_index).sum().item()
         if n_tokens > 0:
-            chunk_loss = F.cross_entropy(
+            chunk_loss  = F.cross_entropy(
                 chunk_logits_2d,
                 chunk_targets,
                 ignore_index=ignore_index,
@@ -263,7 +290,7 @@ def _chunked_cross_entropy(
             total_loss   = total_loss + chunk_loss
             total_tokens += n_tokens
 
-        del chunk_logits, chunk_logits_2d  # free immediately — this is the whole point
+        del chunk_logits, chunk_logits_2d  # free immediately
 
     return total_loss / max(total_tokens, 1)
 
