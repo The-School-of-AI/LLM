@@ -23,9 +23,16 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+# Add project root to sys.path to allow importing from 'src'
+# This handles cases where the script is run directly from the 'tools' directory
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from src.core.types import difficulty_band_order
 

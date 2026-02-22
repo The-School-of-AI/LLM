@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import os
+import signal
 import sys
 from collections import OrderedDict
 from datetime import datetime
@@ -1948,10 +1949,19 @@ def main():
                 batch_prefetch_auto_warmup_batches=args.batch_prefetch_auto_warmup_batches,
             )
 
+        # Signal handling for graceful shutdown
+        def signal_handler(sig, frame):
+            logger.warning(f"\n[!] Received signal {sig}. Exiting gracefully...")
+            sys.exit(1)
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
         # Build coresets
         try:
             results = builder.build_coresets()
         except KeyboardInterrupt:
+            # Fallback for synchronous interrupts if handler wasn't triggered
             logger.warning("\n[!] Interrupted by user. Exiting gracefully...")
             sys.exit(1)
 

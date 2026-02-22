@@ -20,15 +20,16 @@ PIDS=()
 cleanup() {
   local sig=$1
   echo ""
-  echo "[!] Interrupted by signal $sig. Shutting down shards..."
-  for pid in "${PIDS[@]}"; do
-    if kill -0 "$pid" 2>/dev/null; then
-      echo "[*] Terminating shard PID $pid..."
-      kill -TERM "$pid" 2>/dev/null || true
-    fi
-  done
-  # Wait briefly for shards to exit gracefully
+  echo "[!] Interrupted by $sig. Shutting down all shards..."
+  
+  # Send TERM to the entire process group
+  # This kills the script and all its children (python, sed, etc.)
+  trap - SIGINT SIGTERM EXIT
+  kill 0 2>/dev/null || true
+  
+  # Final fallback for stubborn processes
   sleep 1
+  kill -9 0 2>/dev/null || true
   exit 1
 }
 
@@ -44,7 +45,7 @@ CONFIG="config/pipeline.yaml"
 CURRICULUM="config/curriculum.yaml"
 CHECKPOINT_BASE="output/checkpoints"
 BAND_INFERENCE="none"
-BAND_SCORE_SOURCE="auto"
+BAND_SCORE_SOURCE="band_score"
 BATCH_SIZE=80000
 CHECKPOINT_EVERY_N_BATCHES=3
 USED_CACHE_MAX_ENTRIES=0
