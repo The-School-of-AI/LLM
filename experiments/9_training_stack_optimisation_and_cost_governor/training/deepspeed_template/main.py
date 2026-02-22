@@ -175,6 +175,9 @@ class Config:
         # Generation configuration
         self.test_generation = config_dict["generation"]["test_generation"]
         self.generation_prompt = config_dict["generation"]["generation_prompt"]
+        self.generation_interval = config_dict["generation"].get(
+            "generation_interval", None
+        )  # Generate a sample every N optimizer steps (None = disabled)
 
 
 def load_config(config_path: str = "config.yaml") -> Config:
@@ -521,6 +524,9 @@ def main():
     print_rank_0(f"Checkpoint interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"Starting from epoch {start_epoch}, global step {global_step}")
 
+    # Running total tokens processed — accumulates across epochs
+    total_tokens_processed = 0
+
     for epoch in range(start_epoch, args.num_epochs):
         print_rank_0(f"\n{'=' * 80}")
         print_rank_0(f"Epoch {epoch + 1}/{args.num_epochs}")
@@ -534,7 +540,7 @@ def main():
         epoch_start_step = start_step if epoch == start_epoch else 0
 
         # Train
-        avg_loss, global_step = train_epoch(
+        avg_loss, global_step, total_tokens_processed = train_epoch(
             model_engine,
             train_loader,
             epoch,
@@ -547,12 +553,20 @@ def main():
             start_step=epoch_start_step,
             global_step=global_step,
             shard_tracker=dataset_info.get("shard_tracker"),
+            tokenizer=tokenizer,
+            generation_interval=args.generation_interval,
+            start_total_tokens=total_tokens_processed,
         )
 
         # Evaluate on validation set
         print_rank_0("\nEvaluating on validation set...")
         eval_loss, eval_perplexity = evaluate(
-            model_engine, eval_loader, phase="Validation", max_steps=args.max_eval_steps
+            model_engine,
+            eval_loader,
+            phase="Validation",
+            max_steps=args.max_eval_steps,
+            output_dir=args.output_dir,
+            global_step=global_step,
         )
 
         # Save epoch checkpoint
@@ -589,7 +603,12 @@ def main():
     # Evaluate on test set
     print_rank_0("\nEvaluating on test set...")
     test_loss, test_perplexity = evaluate(
-        model_engine, test_loader, phase="Test", max_steps=args.max_eval_steps
+        model_engine,
+        test_loader,
+        phase="Test",
+        max_steps=args.max_eval_steps,
+        output_dir=args.output_dir,
+        global_step=global_step,
     )
 
     # Test text generation

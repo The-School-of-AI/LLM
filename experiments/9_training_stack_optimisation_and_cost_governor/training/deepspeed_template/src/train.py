@@ -54,6 +54,9 @@ def train_epoch(
     start_step=0,
     global_step=0,
     shard_tracker=None,
+    tokenizer=None,
+    generation_interval=None,
+    start_total_tokens=0,
 ):
     """
     Train the model for one epoch.
@@ -81,9 +84,12 @@ def train_epoch(
         checkpoint_manager: S3CheckpointManager instance (optional)
         start_step: Optimizer step to start from (for resuming)
         global_step: Global optimizer step counter across all epochs
+        tokenizer: Tokenizer for generating samples during training (optional)
+        generation_interval: Generate a sample every N optimizer steps (None = disabled)
+        start_total_tokens: Running token counter carried over from previous epochs
 
     Returns:
-        Tuple of (average_loss, final_global_step)
+        Tuple of (average_loss, final_global_step, cumulative_tokens)
     """
     model_engine.train()
     total_loss = 0
@@ -99,7 +105,13 @@ def train_epoch(
     accum_loss_ntp = 0.0
     accum_loss_mtp = 0.0
     accum_loss_aux = 0.0
+    accum_loss_null_router = 0.0
+    accum_loss_moe_router = 0.0
     accum_tokens = 0
+
+    # Running total tokens across all steps (persists across epochs via start_total_tokens)
+    cumulative_tokens = start_total_tokens
+
     step_start_time = time.time()
 
     # Only show progress bar on main process
@@ -155,7 +167,7 @@ def train_epoch(
 
             # Pass targets directly — model uses chunked cross-entropy internally
             # to avoid materializing [B, T, 131072] logit tensors (saves ~4+ GB).
-            loss_ntp, loss_mtp, aux_loss = model_engine(
+            loss_ntp, loss_mtp, aux_loss_raw = model_engine(
                 x_input,
                 next_token_ids=y_ntp,
                 attention_mask=(
@@ -169,6 +181,17 @@ def train_epoch(
                 ntp_targets=y_ntp,
                 mtp_targets=y_mtp,
             )
+
+            # Split aux_loss into null_router and moe_router if model returns a tuple.
+            # Falls back gracefully if model returns a single scalar (current behaviour).
+            loss_null_router = None
+            loss_moe_router = None
+            if isinstance(aux_loss_raw, (tuple, list)) and len(aux_loss_raw) == 2:
+                loss_null_router = aux_loss_raw[0]
+                loss_moe_router = aux_loss_raw[1]
+                aux_loss = loss_null_router + loss_moe_router
+            else:
+                aux_loss = aux_loss_raw
 
             # Memory profiling after first forward
             if i == 0 or (i == skip_micro_batches and skip_micro_batches > 0):
@@ -205,6 +228,9 @@ def train_epoch(
                 input_ids, attention_mask=attention_mask, labels=labels
             )
             loss = outputs.loss
+            aux_loss = None
+            loss_null_router = None
+            loss_moe_router = None
 
         # DeepSpeed backward — internally divides by grad_accum_steps and
         # accumulates gradients
@@ -223,6 +249,10 @@ def train_epoch(
                 if (aux_loss is not None and aux_loss.numel() > 0)
                 else 0.0
             )
+            if loss_null_router is not None:
+                accum_loss_null_router += loss_null_router.item()
+            if loss_moe_router is not None:
+                accum_loss_moe_router += loss_moe_router.item()
         with torch.no_grad():
             tokens = attention_mask.sum().item()
             accum_tokens += int(tokens)
@@ -253,6 +283,19 @@ def train_epoch(
             avg_mtp = accum_loss_mtp / grad_accum_steps
             avg_aux = accum_loss_aux / grad_accum_steps
 
+            # Null router and MoE router losses — only populated when model
+            # returns a split aux_loss tuple; None otherwise (e.g. non-MoE models)
+            avg_null_router = (
+                accum_loss_null_router / grad_accum_steps
+                if accum_loss_null_router > 0
+                else None
+            )
+            avg_moe_router = (
+                accum_loss_moe_router / grad_accum_steps
+                if accum_loss_moe_router > 0
+                else None
+            )
+
             # tok/s = total tokens across ALL micro-batches in this step / wall time
             # Also aggregate across ranks for multi-GPU
             step_tokens_tensor = torch.tensor(
@@ -262,6 +305,12 @@ def train_epoch(
                 dist.all_reduce(step_tokens_tensor, op=dist.ReduceOp.SUM)
             total_step_tokens = step_tokens_tensor.item()
             tokens_per_sec = total_step_tokens / step_time if step_time > 0 else 0.0
+
+            # batches_per_sec: optimizer steps measure one full batch (grad_accum micro-batches)
+            batches_per_sec = grad_accum_steps / step_time if step_time > 0 else 0.0
+
+            # Update running total token counter
+            cumulative_tokens += total_step_tokens
 
             total_loss += avg_step_loss
 
@@ -307,6 +356,10 @@ def train_epoch(
                         gpu_table = "\n".join(lines)
                     except Exception:
                         pass
+
+            # Idle times — derived from utilization; None when metrics not enabled
+            gpu_idle_pct = (100.0 - gpu_util) if gpu_util is not None else None
+            cpu_idle_pct = (100.0 - cpu_util) if cpu_util is not None else None
 
             # Profiler stop
             if global_step == profile_step:
@@ -361,18 +414,25 @@ def train_epoch(
             # Structured JSONL metrics (every optimizer step, rank 0 only)
             jsonl_log(
                 {
+                    "event": "train_step",
                     "epoch": epoch,
                     "global_step": global_step,
                     "loss": avg_step_loss,
                     "loss_ntp": avg_ntp,
                     "loss_mtp": avg_mtp,
                     "loss_aux": avg_aux,
+                    "loss_null_router": avg_null_router,
+                    "loss_moe_router": avg_moe_router,
                     "tokens_per_sec": tokens_per_sec,
+                    "batches_per_sec": batches_per_sec,
                     "tokens": int(total_step_tokens),
+                    "total_tokens_processed": int(cumulative_tokens),
                     "step_time_s": step_time,
                     "gpu_util_pct": gpu_util,
+                    "gpu_idle_pct": gpu_idle_pct,
                     "gpu_mem_gb": gpu_mem_used,
                     "cpu_util_pct": cpu_util,
+                    "cpu_idle_pct": cpu_idle_pct,
                     "lr": (
                         model_engine.get_lr()[0]
                         if hasattr(model_engine, "get_lr")
@@ -418,6 +478,7 @@ def train_epoch(
                             f"  Shard tracker saved: {shard_tracker.num_processed} shards processed"
                         )
 
+                checkpoint_start = time.time()
                 if checkpoint_manager:
                     checkpoint_manager.save_checkpoint(
                         model_engine,
@@ -427,12 +488,48 @@ def train_epoch(
                     )
                 elif output_dir:
                     save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
+                checkpoint_duration = time.time() - checkpoint_start
+
+                jsonl_log(
+                    {
+                        "event": "checkpoint_saved",
+                        "global_step": global_step,
+                        "tag": checkpoint_tag,
+                        "duration_s": checkpoint_duration,
+                        "timestamp": time.time(),
+                    }
+                )
+
+            # Generate a text sample at the specified interval (rank 0 only)
+            if (
+                generation_interval is not None
+                and tokenizer is not None
+                and global_step % generation_interval == 0
+                and is_main_process()
+            ):
+                print_rank_0(f"\n[Generation] Sampling at global_step {global_step}...")
+                try:
+                    result = generate_text(model_engine, tokenizer)
+                    jsonl_log(
+                        {
+                            "event": "generated_sample",
+                            "global_step": global_step,
+                            "epoch": epoch,
+                            "prompt": result.get("prompt", ""),
+                            "generated_text": result.get("generated_text", ""),
+                            "timestamp": time.time(),
+                        }
+                    )
+                except Exception as e:
+                    print_rank_0(f"  [Generation] Failed at step {global_step}: {e}")
 
             # Reset accumulators for next optimizer step
             accum_loss = 0.0
             accum_loss_ntp = 0.0
             accum_loss_mtp = 0.0
             accum_loss_aux = 0.0
+            accum_loss_null_router = 0.0
+            accum_loss_moe_router = 0.0
             accum_tokens = 0
             step_start_time = time.time()
             micro_batch_idx = 0
@@ -444,10 +541,17 @@ def train_epoch(
     avg_loss = total_loss / optimizer_steps if optimizer_steps > 0 else 0
     print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
 
-    return avg_loss, global_step
+    return avg_loss, global_step, cumulative_tokens
 
 
-def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
+def evaluate(
+    model_engine,
+    data_loader,
+    phase="Evaluation",
+    max_steps=None,
+    output_dir=None,
+    global_step=None,
+):
     """
     Evaluate the model on a dataset.
 
@@ -456,6 +560,8 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
         data_loader: DataLoader for evaluation data
         phase: Name of the evaluation phase (for logging)
         max_steps: Maximum number of steps (None for full evaluation)
+        output_dir: Directory for JSONL logging (None = skip logging)
+        global_step: Current global training step (for JSONL record)
 
     Returns:
         Tuple of (average_loss, average_perplexity)
@@ -547,6 +653,20 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     print_rank_0(
         f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}"
     )
+
+    # Write validation metrics to JSONL alongside training metrics
+    if output_dir is not None:
+        jsonl_log = _jsonl_logger(output_dir)
+        jsonl_log(
+            {
+                "event": "evaluation",
+                "phase": phase,
+                "global_step": global_step,
+                "avg_loss": avg_loss,
+                "avg_perplexity": avg_perplexity,
+                "timestamp": time.time(),
+            }
+        )
 
     return avg_loss, avg_perplexity
 

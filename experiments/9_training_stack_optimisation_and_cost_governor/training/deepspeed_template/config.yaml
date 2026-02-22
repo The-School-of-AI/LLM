@@ -55,3 +55,4 @@ s3:
 generation:
   test_generation: false
   generation_prompt: "The history of artificial intelligence begins with"
+  generation_interval: null  # Generate a sample every N optimizer steps during training (null = disabled)
