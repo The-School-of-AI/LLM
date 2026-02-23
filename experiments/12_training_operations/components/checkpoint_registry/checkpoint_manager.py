@@ -5,6 +5,7 @@ import torch
 import yaml
 from pathlib import Path
 from datetime import datetime
+from components.metrics_server import get_metrics_server
 
 class CheckpointManager:
     def __init__(self, config_path="config.yaml"):
@@ -67,7 +68,6 @@ class CheckpointManager:
             duration = time.time() - start_time
             print(f"  ✓ Complete in {duration:.1f}s\n")
             
-            from components.metrics_server import get_metrics_server
             metrics = get_metrics_server()
             metrics.record_checkpoint(duration, success=True)
             
@@ -75,7 +75,6 @@ class CheckpointManager:
             
         except Exception as e:
             print(f"  ✗ Checkpoint failed: {e}")
-            from components.metrics_server import get_metrics_server
             metrics = get_metrics_server()
             metrics.record_checkpoint(0, success=False)
             raise
