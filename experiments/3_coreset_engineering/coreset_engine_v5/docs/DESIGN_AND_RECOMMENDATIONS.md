@@ -1,7 +1,7 @@
 # Coreset Selection Engine - Design & Implementation Guide
 
 **Document Version**: 1.0.0  
-**Date**: February 3, 2026  
+**Date**: February 23, 2026  
 **Team**: Coreset Selection Architecture  
 **Status**: Production Ready
 
@@ -51,7 +51,7 @@ Large-scale pre-training requires careful curation, not just volume. The key ins
 
 - **Redundancy**: Exact duplicates and near-duplicates account for 10-20% of tokens
 - **Signal Degradation**: Low-quality, boilerplate-heavy data dilutes learning signals
-- **Tail Risk**: Rare tokens and specialized domains are critical for emerging capabilities but are few
+- **Tail Risk**: Specialized domains and protected slices are critical for emerging capabilities but are few
 - **Curriculum Necessity**: Early stages need different data than late stages
 
 **Core Thesis**: A carefully curated 400B-token coreset will accelerate learning and improve convergence relative to a randomly sampled subset, and may outperform or match full 2T token training in early benchmarks.
@@ -59,7 +59,7 @@ Large-scale pre-training requires careful curation, not just volume. The key ins
 ### 2. Why Stratified Selection?
 
 Stratified (also called **importance sampling** or **stratified importance sampling**) ensures:
-- **Coverage**: Each band (B0-B5) and domain (code, math, reasoning, etc.) is represented
+- **Coverage**: Each curriculum band (extensible) and domain (code, math, reasoning, etc.) is represented
 - **Quality**: Higher-scoring chunks are preferentially selected within each stratum
 - **Balance**: Prevents accidental collapse of important subgroups
 - **Determinism**: Seeded random selection is fully reproducible
@@ -105,11 +105,11 @@ The curriculum defines **the right data distribution at each stage**. Violating 
 │  └──────────────────────────────────────────────────────┘  │
 │                          ↓                                   │
 │  ┌──────────────────────────────────────────────────────┐  │
-│  │ 4. Diversity Scoring (Vectorized)                    │  │
-│  │    - Token frequency analysis                        │  │
-│  │    - Rarity & tail token boosting                    │  │
-│  │    - Domain diversity weighting                      │  │
-│  │    - Coverage tracking                               │  │
+│  │ 4. Scoring & Ranking (Configurable)                 │  │
+│  │    - Column-driven scoring (difficulty_score/band_score)│  │
+│  │    - Optional band probabilities (band_p_*)          │  │
+│  │    - Optional diversity/rarity signals when available│  │
+│  │    - Deterministic ordering within buckets           │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                          ↓                                   │
 │  ┌──────────────────────────────────────────────────────┐  │
@@ -246,39 +246,27 @@ near_dups = near_dedup.find_near_duplicates()
 
 ### 5. Diversity Scorer (`src/diversity/scorer.py`)
 
-**Purpose**: Score chunks for diversity and rarity preservation.
+**Purpose**: Provide diversity-aware scoring utilities. In the production sharded/batched pipeline, scoring is primarily **column-driven** (precomputed difficulty/band signals), with optional diversity/rarity signals when tokenizer artifacts (e.g., `token_ids`) are available.
 
 **Scoring Components**:
 
-1. **Token Rarity Boost**:
-   - Classify tokens into bands (junk, boilerplate, normal, rare, tail)
-   - Boost score by `rare_token_boost` (default: 1.5x) for rare tokens
-   - Boost by `tail_token_boost` (default: 2.0x) for tail tokens
-   - Formula: `rarity_score = rare_ratio * 1.5 + tail_ratio * 2.0`
+1. **Column-driven score sources (default path)**:
+  - **Difficulty/Band score**: uses existing per-chunk columns (e.g., `difficulty_score`, `band_score`) when present
+  - **Band probabilities (optional)**: uses `band_p_*` columns (e.g., `band_p_B4`) if available and configured
+  - Controlled via CLI flags: `--band-inference` and `--band-score-source`
 
-2. **Coverage Contribution**:
-   - Track tokens, domains, languages seen so far
-   - Reward chunks with new tokens / domains / languages
-   - Prevent oversampling of common content
+2. **Diversity/coverage signals (optional)**:
+  - Domain/language balancing and coverage can be applied without tokenizer IDs
+  - Token-level rarity/coverage requires tokenizer-derived `token_ids` (often absent in large-scale streaming inputs)
 
 3. **Composite Score**:
-   - Weighted average: `score = rarity_weight * rarity + coverage_weight * coverage`
-   - Default: rarity 40%, coverage 60% (tunable)
+  - When multiple signals exist, the final score is a deterministic composite (weights configurable)
 
 **Example Usage**:
 ```python
-from src.diversity.scorer import TokenFrequencyAnalyzer, DiversityScorer
-
-analyzer = TokenFrequencyAnalyzer(vocab_size=128_000)
-analyzer.add_tokens([100, 50000, 127999])  # Mixed frequency tokens
-
-scorer = DiversityScorer(analyzer, rare_token_boost=1.5, tail_token_boost=2.0)
-score = scorer.score_chunk_composite(
-    token_ids=[100, 50000, 127999],
-    domain="code",
-    language="en"
-)
-print(f"Chunk score: {score:.3f}")
+"""In production, scoring is typically sourced from existing columns and configured
+via --band-inference / --band-score-source. Token-level rarity examples only apply
+when token_ids are available."""
 ```
 
 ### 6. Selection Engine (`src/selection/engine.py`)
@@ -405,8 +393,7 @@ Procedure:
 
 | Metric | Purpose | Target |
 |--------|---------|--------|
-| Rare Token Preservation | B4/B5 capability grounding | ≥95% of rare tokens |
-| Tail Token Coverage | Model expressiveness | ≥90% of unique tail tokens |
+| Protected Slice Preservation | Preserve curriculum-critical slices (e.g., B4/B5, code, agentic, Indic) | Per-curriculum thresholds |
 | Code Domain Preservation | Programming capability | ≥90% of code tokens |
 | Agentic Content Preservation | Agent grounding | ≥90% of agentic tokens |
 | Indic Coverage | Multilingual support | ≥85% Indic-language tokens |
@@ -557,27 +544,23 @@ PROTECTED_SLICES = [
 
 ### 5. Scalability Optimization
 
-**Recommendation**: **Parallel I/O + Vectorized Scoring**
+**Recommendation**: **CPU-first sharding + batching + checkpoint/resume**
 
 ```python
-# Configuration for 2T token coreset with 32-worker cluster
+# Configuration pattern for large-scale sharded runs
 io_config = IOConfig(
     num_parallel_loaders=32,        # 32 parallel chunk loaders
     cache_metadata=True,             # Cache metadata in memory
     cache_dir="/fast_ssd/cache",
 )
 
-# Vectorized scoring with NumPy
-import numpy as np
-
-def vectorized_score(chunks: np.ndarray, token_ids_batch: np.ndarray) -> np.ndarray:
-    """Score 10k chunks in parallel via NumPy"""
-    rare_ratios = compute_rare_token_ratio_vectorized(token_ids_batch)  # Vectorized
-    coverage = compute_coverage_vectorized(token_ids_batch)             # Vectorized
-    scores = 0.4 * rare_ratios + 0.6 * coverage
-    return scores
-
-# Expected throughput: 100M tokens/second per GPU-accelerated node
+# Key scaling levers:
+# - Run the pipeline in shards (e.g., shard.sh) and merge outputs
+# - Use batching in the selection engine to avoid loading all metadata at once
+# - Checkpoint per stage/shard to support fault-tolerant runs
+#
+# Note: token-level rarity scoring requires token_ids; in many streaming inputs,
+# token_ids are not present and rarity is skipped by design.
 ```
 
 ---
@@ -605,7 +588,7 @@ def vectorized_score(chunks: np.ndarray, token_ids_batch: np.ndarray) -> np.ndar
 #### Team 2: Curriculum Architect
 **Required Handoff**:
 - Curriculum YAML file (FROZEN)
-- Band definitions (B0-B5)
+- Band definitions (extensible bands)
 - Stage-wise ratios (1B, 3B, 8B, 70B)
 - Guarantee certificate (deterministic sampling guaranteed)
 
@@ -630,7 +613,7 @@ def vectorized_score(chunks: np.ndarray, token_ids_batch: np.ndarray) -> np.ndar
 
 #### Team 4: Curriculum Loader
 **Required Handoff**:
-- Pre-computed difficulty bands (B0-B5) for all chunks
+- Pre-computed difficulty bands (extensible bands) for all chunks
 - Domain group assignments (code, math, reasoning, agentic, indic)
 - Perplexity scores (for validation)
 
@@ -1000,21 +983,16 @@ stage_3b_seed = get_stage_seed(42, "3B")
 
 1. **Pipeline Scheduling**:
    - Full pipeline runtime: 24-72 hours (depends on hardware)
-   - Recommend: 48 hours with 64-node GPU cluster
-   - Parallelism: Embarrassingly parallel by (band, domain) bucket
+  - Recommend: plan for horizontal scale via sharding + parallel I/O; GPU is not required for the default scoring path
+  - Parallelism: Primarily by shard and stage; within-stage parallel I/O is the main lever
 
 2. **Resource Allocation**:
    ```
    Recommended cluster:
-   - 64 × GPU nodes (for vectorized scoring)
-   - 16 × CPU nodes (for I/O and dedup)
+  - CPU-first worker pool sized to dataset/object-store throughput
+  - Fast local SSD/NVMe recommended for metadata caching and checkpoint I/O
    - 2TB NVMe per node (metadata caching)
    - 100 Gbps interconnect
-   
-   Expected throughput:
-   - Dedup phase: 500M tokens/hour
-   - Scoring phase: 200M tokens/hour
-   - Selection phase: 100M tokens/hour
    ```
 
 3. **Monitoring & Alerting**:
@@ -1061,7 +1039,7 @@ stages:
 
 ## Document Maintenance
 
-- **Last Updated**: 2026-02-03
+- **Last Updated**: 2026-02-23
 - **Next Review**: 2026-04-30
 - **Maintainer**: Coreset Selection Team
 - **Review Cycle**: Quarterly (post-training results)
