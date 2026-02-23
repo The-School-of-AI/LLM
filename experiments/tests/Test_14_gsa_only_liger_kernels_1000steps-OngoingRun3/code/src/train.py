@@ -22,7 +22,15 @@ from tqdm import tqdm
 from .kernels.triton_cross_entropy import FusedLinearCrossEntropyLoss as _FusedLinearCE
 # _fused_ce is initialized inside train_epoch using max_chunk_gb from config
 
+from contextlib import contextmanager
+
 from .utils import is_main_process, print_rank_0
+from .profiler import StepProfiler
+
+
+@contextmanager
+def _null_ctx():
+    yield
 try:
     from deepspeed.profiling.flops_profiler import FlopsProfiler
 except Exception:  # pragma: no cover - fallback for lightweight environments
@@ -124,6 +132,9 @@ def train_epoch(
     global_step=0,
     metrics_jsonl_path=None,
     max_chunk_gb=4.0,
+    profiler: "StepProfiler | None" = None,
+    profile_steps: "set | None" = None,
+    profile_output_dir: "str | None" = None,
 ):
     """
     Train the model for one epoch.
@@ -150,6 +161,22 @@ def train_epoch(
     # FIX-PERF-07: Use dynamic chunk size from config (default 4GB)
     fused_ce_fn = _FusedLinearCE(ignore_index=-100, reduction='mean', max_chunk_gb=max_chunk_gb)
 
+    # ── Step profiler setup ──────────────────────────────────────────────────
+    # Auto-create a profiler if profile_steps were provided but no instance passed.
+    _owns_profiler = False
+    if profiler is None and profile_steps:
+        local_rank = getattr(model_engine, "local_rank", 0)
+        _pout = profile_output_dir or (os.path.dirname(metrics_jsonl_path) if metrics_jsonl_path else "results/run")
+        profiler = StepProfiler(
+            rank=local_rank,
+            profile_steps=set(profile_steps),
+            output_dir=_pout,
+        )
+        profiler.activate()
+        profiler.register_model(model_engine.module)
+        _owns_profiler = True
+        print_rank_0(f"[profiler] Enabled for steps: {sorted(profile_steps)}")
+
     # Only show progress bar on main process
     progress_bar = tqdm(
         train_loader, desc=f"Epoch {epoch}", disable=not is_main_process()
@@ -165,14 +192,27 @@ def train_epoch(
         if i == profile_step:
             print ("Profile started")
             prof.start_profile()
+
+        # ── Profiler: start step ─────────────────────────────────────────────
+        _batch_tokens_for_profiler = (
+            batch["attention_mask"].sum().item() if "attention_mask" in batch else 0
+        )
+        if profiler is not None:
+            profiler.start_step(global_step + 1, tokens=int(_batch_tokens_for_profiler))
+
         # Measure step wall-clock time
         step_start_time = time.time()
-        # Move batch to device
-        input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
-        attention_mask = batch["attention_mask"].to(
-            model_engine.device, non_blocking=True
-        )
-        labels = batch["labels"].to(model_engine.device, non_blocking=True)
+
+        # ── Profiler: dataloader + device transfer ───────────────────────────
+        _profiler_ctx = profiler.phase("dataloader") if profiler is not None else _null_ctx()
+        with _profiler_ctx:
+            input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
+            attention_mask = batch["attention_mask"].to(
+                model_engine.device, non_blocking=True
+            )
+            labels = batch["labels"].to(model_engine.device, non_blocking=True)
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
         
         # Memory profiling on first step
         if i == 0:
@@ -198,31 +238,33 @@ def train_epoch(
 
             # FIX: Call model_engine(...) not model_engine.module(...)
             # This ensures DeepSpeed's BF16, gradient hooks, and ZeRO all fire correctly.
-            h_ntp, h_mtp, aux_loss = model_engine(
-                x_input,
-                next_token_ids=y_ntp,
-                attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
-                return_loss=True,
-                return_memory=False,
-                prev_memory_stream=None,
-                return_hidden=True,   # Skip lm_head — we compute CE below
-            )
-            leak_frac_t = getattr(model_engine.module, "last_gsa_leak_fraction", None)
-            leak_attempt_t = getattr(
-                model_engine.module, "last_gsa_leak_attempt_fraction", None
-            )
-            if leak_frac_t is not None:
-                leak_frac_t = leak_frac_t.detach().float()
-                if dist.is_available() and dist.is_initialized():
-                    dist.all_reduce(leak_frac_t, op=dist.ReduceOp.SUM)
-                    leak_frac_t = leak_frac_t / dist.get_world_size()
-                gsa_leak_frac = float(leak_frac_t.item())
-            if leak_attempt_t is not None:
-                leak_attempt_t = leak_attempt_t.detach().float()
-                if dist.is_available() and dist.is_initialized():
-                    dist.all_reduce(leak_attempt_t, op=dist.ReduceOp.SUM)
-                    leak_attempt_t = leak_attempt_t / dist.get_world_size()
-                gsa_leak_attempt_frac = float(leak_attempt_t.item())
+            with profiler.phase("forward") if profiler is not None else _null_ctx():
+                h_ntp, h_mtp, aux_loss = model_engine(
+                    x_input,
+                    next_token_ids=y_ntp,
+                    attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                    return_loss=True,
+                    return_memory=False,
+                    prev_memory_stream=None,
+                    return_hidden=True,   # Skip lm_head — we compute CE below
+                )
+            with profiler.phase("gsa_leak_allreduce") if profiler is not None else _null_ctx():
+                leak_frac_t = getattr(model_engine.module, "last_gsa_leak_fraction", None)
+                leak_attempt_t = getattr(
+                    model_engine.module, "last_gsa_leak_attempt_fraction", None
+                )
+                if leak_frac_t is not None:
+                    leak_frac_t = leak_frac_t.detach().float()
+                    if dist.is_available() and dist.is_initialized():
+                        dist.all_reduce(leak_frac_t, op=dist.ReduceOp.SUM)
+                        leak_frac_t = leak_frac_t / dist.get_world_size()
+                    gsa_leak_frac = float(leak_frac_t.item())
+                if leak_attempt_t is not None:
+                    leak_attempt_t = leak_attempt_t.detach().float()
+                    if dist.is_available() and dist.is_initialized():
+                        dist.all_reduce(leak_attempt_t, op=dist.ReduceOp.SUM)
+                        leak_attempt_t = leak_attempt_t / dist.get_world_size()
+                    gsa_leak_attempt_frac = float(leak_attempt_t.item())
             # Regression guard: if this ever fires, sparse selection let future
             # tokens through and the training loss is no longer trustworthy.
             if gsa_leak_frac is not None and gsa_leak_frac > 1e-12:
@@ -243,11 +285,12 @@ def train_epoch(
             B_seq, T_seq, H_dim = h_ntp.shape
             vocab_size = lm_weight.shape[0]
 
-            loss_ntp = fused_ce_fn(
-                h_ntp.view(-1, H_dim),          # [B*T, H]
-                lm_weight,                       # [V, H]
-                y_ntp.view(-1),                  # [B*T]
-            )
+            with profiler.phase("fused_ce") if profiler is not None else _null_ctx():
+                loss_ntp = fused_ce_fn(
+                    h_ntp.view(-1, H_dim),          # [B*T, H]
+                    lm_weight,                       # [V, H]
+                    y_ntp.view(-1),                  # [B*T]
+                )
             if i == 0:
                 mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
                 print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
@@ -255,11 +298,12 @@ def train_epoch(
             loss_mtp = None
             if h_mtp is not None:
                 B_m, T_m, H_m = h_mtp.shape
-                loss_mtp = fused_ce_fn(
-                    h_mtp.view(-1, H_m),         # [B*T, H]
-                    lm_weight,                   # [V, H]
-                    y_mtp.view(-1),              # [B*T]
-                )
+                with profiler.phase("fused_ce_mtp") if profiler is not None else _null_ctx():
+                    loss_mtp = fused_ce_fn(
+                        h_mtp.view(-1, H_m),         # [B*T, H]
+                        lm_weight,                   # [V, H]
+                        y_mtp.view(-1),              # [B*T]
+                    )
             
             # 4. NaN Watchdog — HARD CRASH (FIX: was silently continuing, corrupting weights)
             if torch.isnan(loss_ntp) or (loss_mtp is not None and torch.isnan(loss_mtp)) or \
@@ -297,17 +341,20 @@ def train_epoch(
             
         else:
             # Standard transformer model
-            outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
+            with profiler.phase("forward") if profiler is not None else _null_ctx():
+                outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
             loss_ntp_value = float(loss.detach().float().item())
             loss_mtp_value = None
             loss_aux_value = None
 
         # Backward pass
-        model_engine.backward(loss)
+        with profiler.phase("backward") if profiler is not None else _null_ctx():
+            model_engine.backward(loss)
 
-        # Update weights
-        model_engine.step()
+        # Update weights (includes allreduce in ZeRO-1)
+        with profiler.phase("optim_step") if profiler is not None else _null_ctx():
+            model_engine.step()
         
         if i == 0:
             mem_after_step = torch.cuda.memory_allocated(model_engine.device) / 1e9
@@ -315,14 +362,24 @@ def train_epoch(
 
         # Compute tokens per second for this step
         step_time = time.time() - step_start_time
+
+        # ── Profiler: record total step time and finalize ────────────────────
+        if profiler is not None:
+            with torch.no_grad():
+                _ptoks = attention_mask.sum().float()
+                if dist.is_available() and dist.is_initialized():
+                    dist.all_reduce(_ptoks, op=dist.ReduceOp.SUM)
+                profiler._current and profiler._current.add("step_total", step_time * 1000.0)
+            profiler.end_step(tokens=int(_ptoks.item()))
         step_dt_ms = step_time * 1000.0
-        with torch.no_grad():
-            # Count tokens in this batch using attention mask (1s for real tokens)
-            tokens = attention_mask.sum().float()
-            # Aggregate across all ranks if distributed is initialized
-            if dist.is_available() and dist.is_initialized():
-                dist.all_reduce(tokens, op=dist.ReduceOp.SUM)
-            tokens = tokens.item()
+        with profiler.phase("token_count_allreduce") if profiler is not None else _null_ctx():
+            with torch.no_grad():
+                # Count tokens in this batch using attention mask (1s for real tokens)
+                tokens = attention_mask.sum().float()
+                # Aggregate across all ranks if distributed is initialized
+                if dist.is_available() and dist.is_initialized():
+                    dist.all_reduce(tokens, op=dist.ReduceOp.SUM)
+                tokens = tokens.item()
         tokens_per_sec = tokens / step_time if step_time > 0 else 0.0
         learning_rate = _get_learning_rate(model_engine)
 
@@ -330,50 +387,51 @@ def train_epoch(
         gpu_util = gpu_mem_used = gpu_mem_total = None
         cpu_util = cpu_mem_used = cpu_mem_total = None
         if enable_system_metrics:
-            # CPU metrics
-            vm = psutil.virtual_memory()
-            cpu_util = psutil.cpu_percent(interval=None)
-            cpu_mem_used = vm.used / (1024**3)
-            cpu_mem_total = vm.total / (1024**3)
+            with profiler.phase("system_metrics") if profiler is not None else _null_ctx():
+                # CPU metrics
+                vm = psutil.virtual_memory()
+                cpu_util = psutil.cpu_percent(interval=None)
+                cpu_mem_used = vm.used / (1024**3)
+                cpu_mem_total = vm.total / (1024**3)
 
-            # GPU metrics (only on main process to avoid spam)
-            if _NVML_AVAILABLE and is_main_process() and torch.cuda.is_available():
-                try:
-                    # Collect metrics for all visible GPUs
-                    n_devices = pynvml.nvmlDeviceGetCount()
-                    gpu_rows = []
-                    for idx in range(n_devices):
-                        handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
-                        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                        util_info = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                        used_gb = mem_info.used / (1024**3)
-                        total_gb = mem_info.total / (1024**3)
-                        util = util_info.gpu
-                        gpu_rows.append((idx, util, used_gb, total_gb))
+                # GPU metrics (only on main process to avoid spam)
+                if _NVML_AVAILABLE and is_main_process() and torch.cuda.is_available():
+                    try:
+                        # Collect metrics for all visible GPUs
+                        n_devices = pynvml.nvmlDeviceGetCount()
+                        gpu_rows = []
+                        for idx in range(n_devices):
+                            handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
+                            mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                            util_info = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                            used_gb = mem_info.used / (1024**3)
+                            total_gb = mem_info.total / (1024**3)
+                            util = util_info.gpu
+                            gpu_rows.append((idx, util, used_gb, total_gb))
 
-                    # For scalar summary fields, use the device this rank is bound to
-                    device_index = (
-                        model_engine.local_rank
-                        if hasattr(model_engine, "local_rank")
-                        else torch.cuda.current_device()
-                    )
-                    _, gpu_util, gpu_mem_used, gpu_mem_total = next(
-                        (r for r in gpu_rows if r[0] == int(device_index)),
-                        (device_index, None, None, None),
-                    )
-
-                    # Build a neat table string for all GPUs
-                    header = "GPU  Util(%)  Mem(GB Used/Total)"
-                    lines = [header, "-" * len(header)]
-                    for idx, util, used_gb, total_gb in gpu_rows:
-                        lines.append(
-                            f"{idx:<3}  {util:>6.0f}%  {used_gb:>5.1f}G/{total_gb:>5.1f}G"
+                        # For scalar summary fields, use the device this rank is bound to
+                        device_index = (
+                            model_engine.local_rank
+                            if hasattr(model_engine, "local_rank")
+                            else torch.cuda.current_device()
                         )
-                    gpu_table = "\n".join(lines)
-                except Exception:
-                    gpu_table = None
-                    # Fail silently if NVML query fails
-                    pass
+                        _, gpu_util, gpu_mem_used, gpu_mem_total = next(
+                            (r for r in gpu_rows if r[0] == int(device_index)),
+                            (device_index, None, None, None),
+                        )
+
+                        # Build a neat table string for all GPUs
+                        header = "GPU  Util(%)  Mem(GB Used/Total)"
+                        lines = [header, "-" * len(header)]
+                        for idx, util, used_gb, total_gb in gpu_rows:
+                            lines.append(
+                                f"{idx:<3}  {util:>6.0f}%  {used_gb:>5.1f}G/{total_gb:>5.1f}G"
+                            )
+                        gpu_table = "\n".join(lines)
+                    except Exception:
+                        gpu_table = None
+                        # Fail silently if NVML query fails
+                        pass
 
         if i == profile_step:
             print("Profile stoped\n")
@@ -413,92 +471,94 @@ def train_epoch(
 
         # Log periodically
         if i % log_interval == 0:
-            loss_str = f"{loss_ntp_value:.4f}" if loss_ntp_value is not None else "nan"
-            loss2_str = f"{loss_mtp_value:.4f}" if loss_mtp_value is not None else "nan"
-            r_loss_str = f"{loss_aux_value:.4f}" if loss_aux_value is not None else "nan"
-            lr_str = f"{learning_rate:.2e}" if learning_rate is not None else "nan"
-            msg = (
-                f"{_format_log_timestamp()} | step {global_step} | "
-                f"loss: {loss_str} | loss2: {loss2_str} | r_loss: {r_loss_str} | "
-                f"lr: {lr_str} | dt: {step_dt_ms:.2f}ms | tok/sec: {tokens_per_sec:9.2f}"
-            )
-            if enable_system_metrics:
-                if gpu_util is not None:
-                    msg += (
-                        f", GPU Util: {gpu_util:.0f}%, "
-                        f"GPU Mem: {gpu_mem_used:.1f}G/{gpu_mem_total:.1f}G"
-                    )
-                if cpu_util is not None:
-                    msg += (
-                        f", CPU Util: {cpu_util:.0f}%, "
-                        f"CPU Mem: {cpu_mem_used:.1f}G/{cpu_mem_total:.1f}G"
-                    )
-            print_rank_0(msg)
-            _append_jsonl(
-                metrics_jsonl_path,
-                {
-                    "phase": "train",
-                    "epoch": epoch,
-                    "step": i,
-                    "global_step": global_step,
-                    "loss": float(loss.item()),
-                    "loss_ntp": None if loss_ntp_value is None else float(loss_ntp_value),
-                    "loss2": None if loss_mtp_value is None else float(loss_mtp_value),
-                    "r_loss": None if loss_aux_value is None else float(loss_aux_value),
-                    "lr": None if learning_rate is None else float(learning_rate),
-                    "dt_ms": float(step_dt_ms),
-                    "tokens_per_sec": float(tokens_per_sec),
-                    "tokens": int(tokens),
-                    "gpu_util": None if gpu_util is None else float(gpu_util),
-                    "gpu_mem_used_gb": None if gpu_mem_used is None else float(gpu_mem_used),
-                    "cpu_util": None if cpu_util is None else float(cpu_util),
-                    "cpu_mem_used_gb": None if cpu_mem_used is None else float(cpu_mem_used),
-                    "gsa_leak_fraction": None if gsa_leak_frac is None else float(gsa_leak_frac),
-                    "gsa_leak_attempt_fraction": (
-                        None
-                        if gsa_leak_attempt_frac is None
-                        else float(gsa_leak_attempt_frac)
-                    ),
-                },
-            )
+            with profiler.phase("log_write") if profiler is not None else _null_ctx():
+                loss_str = f"{loss_ntp_value:.4f}" if loss_ntp_value is not None else "nan"
+                loss2_str = f"{loss_mtp_value:.4f}" if loss_mtp_value is not None else "nan"
+                r_loss_str = f"{loss_aux_value:.4f}" if loss_aux_value is not None else "nan"
+                lr_str = f"{learning_rate:.2e}" if learning_rate is not None else "nan"
+                msg = (
+                    f"{_format_log_timestamp()} | step {global_step} | "
+                    f"loss: {loss_str} | loss2: {loss2_str} | r_loss: {r_loss_str} | "
+                    f"lr: {lr_str} | dt: {step_dt_ms:.2f}ms | tok/sec: {tokens_per_sec:9.2f}"
+                )
+                if enable_system_metrics:
+                    if gpu_util is not None:
+                        msg += (
+                            f", GPU Util: {gpu_util:.0f}%, "
+                            f"GPU Mem: {gpu_mem_used:.1f}G/{gpu_mem_total:.1f}G"
+                        )
+                    if cpu_util is not None:
+                        msg += (
+                            f", CPU Util: {cpu_util:.0f}%, "
+                            f"CPU Mem: {cpu_mem_used:.1f}G/{cpu_mem_total:.1f}G"
+                        )
+                print_rank_0(msg)
+                _append_jsonl(
+                    metrics_jsonl_path,
+                    {
+                        "phase": "train",
+                        "epoch": epoch,
+                        "step": i,
+                        "global_step": global_step,
+                        "loss": float(loss.item()),
+                        "loss_ntp": None if loss_ntp_value is None else float(loss_ntp_value),
+                        "loss2": None if loss_mtp_value is None else float(loss_mtp_value),
+                        "r_loss": None if loss_aux_value is None else float(loss_aux_value),
+                        "lr": None if learning_rate is None else float(learning_rate),
+                        "dt_ms": float(step_dt_ms),
+                        "tokens_per_sec": float(tokens_per_sec),
+                        "tokens": int(tokens),
+                        "gpu_util": None if gpu_util is None else float(gpu_util),
+                        "gpu_mem_used_gb": None if gpu_mem_used is None else float(gpu_mem_used),
+                        "cpu_util": None if cpu_util is None else float(cpu_util),
+                        "cpu_mem_used_gb": None if cpu_mem_used is None else float(cpu_mem_used),
+                        "gsa_leak_fraction": None if gsa_leak_frac is None else float(gsa_leak_frac),
+                        "gsa_leak_attempt_fraction": (
+                            None
+                            if gsa_leak_attempt_frac is None
+                            else float(gsa_leak_attempt_frac)
+                        ),
+                    },
+                )
 
-            # Print full GPU table (all devices) when enabled and available
-            if enable_system_metrics and is_main_process():
-                try:
-                    # gpu_table is defined above when NVML succeeds; guard with getattr-style check
-                    if _NVML_AVAILABLE and "gpu_table" in locals() and gpu_table:
-                        print_rank_0("\nGPU Utilization / Memory (all devices):")
-                        print_rank_0(gpu_table)
-                except Exception:
-                    # Don't let logging issues break training
-                    pass
+                # Print full GPU table (all devices) when enabled and available
+                if enable_system_metrics and is_main_process():
+                    try:
+                        # gpu_table is defined above when NVML succeeds; guard with getattr-style check
+                        if _NVML_AVAILABLE and "gpu_table" in locals() and gpu_table:
+                            print_rank_0("\nGPU Utilization / Memory (all devices):")
+                            print_rank_0(gpu_table)
+                    except Exception:
+                        # Don't let logging issues break training
+                        pass
 
         # Save checkpoint periodically
         if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:
-            checkpoint_tag = f"epoch{epoch}_step{i + 1}"
-            print_rank_0(
-                f"\nSaving checkpoint at epoch {epoch}, step {i + 1}, global_step {global_step}..."
-            )
-
-            # Client state to save with checkpoint
-            client_state = {
-                "epoch": epoch,
-                "step": i + 1,
-                "global_step": global_step,
-                "loss": loss.item(),
-            }
-
-            if checkpoint_manager:
-                # Use S3CheckpointManager (will upload to S3 in background)
-                checkpoint_manager.save_checkpoint(
-                    model_engine,
-                    step=global_step,
-                    tag=checkpoint_tag,
-                    client_state=client_state,
+            with profiler.phase("checkpoint_save") if profiler is not None else _null_ctx():
+                checkpoint_tag = f"epoch{epoch}_step{i + 1}"
+                print_rank_0(
+                    f"\nSaving checkpoint at epoch {epoch}, step {i + 1}, global_step {global_step}..."
                 )
-            elif output_dir:
-                # Use basic checkpoint saving
-                save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
+
+                # Client state to save with checkpoint
+                client_state = {
+                    "epoch": epoch,
+                    "step": i + 1,
+                    "global_step": global_step,
+                    "loss": loss.item(),
+                }
+
+                if checkpoint_manager:
+                    # Use S3CheckpointManager (will upload to S3 in background)
+                    checkpoint_manager.save_checkpoint(
+                        model_engine,
+                        step=global_step,
+                        tag=checkpoint_tag,
+                        client_state=client_state,
+                    )
+                elif output_dir:
+                    # Use basic checkpoint saving
+                    save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
@@ -506,6 +566,15 @@ def train_epoch(
 
     avg_loss = total_loss / steps if steps > 0 else 0
     print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
+
+    # ── Profiler: write reports and clean up ─────────────────────────────────
+    if profiler is not None and profiler._history:
+        _pout = profile_output_dir or (os.path.dirname(metrics_jsonl_path) if metrics_jsonl_path else "results/run")
+        profiler.write_report(os.path.join(_pout, "profile_report.txt"))
+        profiler.write_jsonl(os.path.join(_pout, "profile.jsonl"))
+        print_rank_0(f"[profiler] Report written to {_pout}/profile_report.txt")
+    if _owns_profiler and profiler is not None:
+        profiler.deactivate()
 
     return avg_loss, global_step
 
