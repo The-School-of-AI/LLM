@@ -35,7 +35,7 @@
 ### MoE Router
 
 | Metric | What it means |
-|---|---|---|
+|---|---|
 | `moe_null_rate` | Fraction of top-k picks that went to a null slot |
 | `moe_avg_real_experts` | Avg real experts hit per token |
 | `moe_zero_real_frac` | Fraction of tokens that hit zero real experts (all picks null) | 
