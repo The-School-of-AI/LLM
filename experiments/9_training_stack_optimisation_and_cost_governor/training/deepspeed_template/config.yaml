@@ -5,54 +5,53 @@
 data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-2-raw-v1"
-  max_length: 4096
+  max_length: 512
   # SPDL Dataloader Settings
-  use_dataloader: false          # If true, use SPDL pipeline reading .bin/.idx shards
-  shard_dir: null                # Required if use_dataloader=true
-  shard_manifest_path: null      # Path to consumed_shards.json for tracking/excluding processed shards
+  use_dataloader: false
+  shard_dir: null
+  shard_manifest_path: null
   # GPU Prefetch Settings
-  prefetch_to_gpu: true           # Async H2D transfer on a dedicated CUDA stream
-  prefetch_depth: 2               # Number of batches to prefetch ahead (0 = synchronous fallback)
+  prefetch_to_gpu: false
+  prefetch_depth: 2
 
 # Training Configuration
 training:
   num_epochs: 1
-  max_train_steps: null  # Set to a number for debugging, null for full epoch
-  max_eval_steps: null   # Set to a number for debugging, null for full evaluation
-  log_interval: 10
+  max_train_steps: 50
+  max_eval_steps: 10
+  log_interval: 1
   seed: 42
+  enable_system_metrics: true
 
 # DeepSpeed Configuration
 deepspeed:
-  config_path: "deepspeed/zero-2-dense.json"
+  config_path: "deepspeed/zero-2-moe-oom-fixed.json"
   local_rank: -1
 
 # Model Configuration
 model:
-  tokenizer_name: "Qwen/Qwen2.5-0.5B"  # or "distilgpt2"
-  # model_name: "distilgpt2"  # Uncomment if using different model
+  tokenizer_name: "distilgpt2"
+  embedding_type: "standard"
 
 # Checkpoint Configuration
 checkpoint:
-  output_dir: "./checkpoints"
+  output_dir: "./checkpoints_moe_test"
   save_checkpoint: false
-  checkpoint_interval: 100  # Save checkpoint every N steps
+  checkpoint_interval: 100
   keep_last_n_checkpoints: 3
-  
-  # Resume Configuration
-  resume_from_checkpoint: null  # Set to checkpoint tag name (e.g., "epoch0_step50")
-  resume_step: null             # Step number to resume from
+  resume_from_checkpoint: null
+  resume_step: null
 
 # S3 Configuration
 s3:
   enabled: false
-  bucket: null                    # Set your S3 bucket name (required if enabled=true)
-  prefix: "training/checkpoints"  # S3 folder path for checkpoints
+  bucket: null
+  prefix: "training/checkpoints"
   region: "us-east-1"
-  cleanup_after_upload: false     # Delete local checkpoints after S3 upload
-  
+  cleanup_after_upload: false
+
 # Generation Configuration
 generation:
   test_generation: false
   generation_prompt: "The history of artificial intelligence begins with"
-  generation_interval: null  # Generate a sample every N optimizer steps during training (null = disabled)
+  generation_interval: null

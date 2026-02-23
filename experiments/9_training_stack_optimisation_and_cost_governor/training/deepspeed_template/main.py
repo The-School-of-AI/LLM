@@ -1,11 +1,11 @@
 """
-Main entry point for DeepSpeed training with 1B Model.
+Main entry point for DeepSpeed training with 3B MoE Model.
 
-This script trains a 1.513B parameter dense model with:
+This script trains a ~3.9B parameter sparse MoE model with:
 - TSAI 131K Tokenizer (2^17 vocab, byte-level Kronecker embeddings)
 - Hybrid Gated DeltaNet + Gated Sparse Attention architecture
 - Reversible midpoint integration for memory efficiency
-- Dense FFN (no MoE)
+- MoE FFN (20 real + 4 null experts per layer, top-2 routing)
 - 256k context length target with YARN RoPE scaling
 - Memory Stream Recurrence for infinite-length documents
 
@@ -55,10 +55,10 @@ import yaml  # noqa: E402
 from aws.config import S3Config  # noqa: E402
 from src.checkpoint import S3CheckpointManager  # noqa: E402
 from src.data import get_dataloaders, get_tokenizer  # noqa: E402
-from src.models.recurrence_model_1b import (  # noqa: E402
+from src.models.recurrence_model_3b import (  # noqa: E402
     KroneckerConfig,
     KroneckerEmbeddings,
-    Model1B,
+    Model3B,
     ModelConfig,
 )
 from src.prefetch_loader import PrefetchDataLoader  # noqa: E402
@@ -235,7 +235,7 @@ def main():
     set_seed(args.seed)
 
     print_rank_0("=" * 80)
-    print_rank_0("1B Dense Model Training - DeepSpeed + Reversible Architecture")
+    print_rank_0("3B MoE Model Training - DeepSpeed + Reversible Architecture")
     print_rank_0("=" * 80)
     print_rank_0(f"Configuration File: {cmd_args.config}")
     print_rank_0(f"DeepSpeed Version: {deepspeed.__version__}")
@@ -244,7 +244,7 @@ def main():
     if torch.cuda.is_available():
         print_rank_0(f"CUDA Devices: {torch.cuda.device_count()}")
     print_rank_0("\nConfiguration:")
-    print_rank_0("  Model: 1B Dense (1.513B params, 100% active)")
+    print_rank_0("  Model: 3B MoE (~3.9B params, ~1.74B active)")
     print_rank_0("  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
     print_rank_0(f"  Embedding Type: {args.embedding_type}")
     print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
@@ -323,7 +323,7 @@ def main():
     # ========================================
     print_rank_0("\n[2/5] Loading model...")
     print_rank_0(
-        "  Creating 1B Dense Model with memory-efficient reversible architecture..."
+        "  Creating 3B MoE Model with memory-efficient reversible architecture..."
     )
 
     # Create model configuration
@@ -384,8 +384,8 @@ def main():
     else:
         print_rank_0("  Using Standard Embeddings")
 
-    # Create the 1B model
-    model = Model1B(
+    # Create the 3B MoE model
+    model = Model3B(
         config=config,
         embedding_type=args.embedding_type,
         bpe_vocab=bpe_vocab,
@@ -411,7 +411,7 @@ def main():
 
     # Kernel fail-fast — abort if required fused kernels are missing
     if args.require_fused_kernels:
-        from src.models.recurrence_model_1b import HAS_FLA, HAS_TRITON
+        from src.models.recurrence_model_3b import HAS_FLA, HAS_TRITON
 
         missing = []
         if not HAS_TRITON:

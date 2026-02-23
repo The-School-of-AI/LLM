@@ -535,12 +535,12 @@ class ModelConfig:
 
     # MoE Configuration
     num_real_experts = 20
-    num_null_experts = 20
-    total_expert_slots = 40
+    num_null_experts = 4       # 4 null slots: round(20 * (1-5/6) / (5/6)) = 4
+    total_expert_slots = 24    # 20 real + 4 null
     top_k = 2  # Dynamic 0-2, avg 2 active
     expert_intermediate_size = 1024
     shared_expert_intermediate_size = 2048
-    data_sparsity = 0.5
+    data_sparsity = 5 / 6      # rho≈0.833 → round(20*(1-rho)/rho) = 4 null slots
 
     # MTP Configuration
     enable_mtp = True
@@ -1434,7 +1434,7 @@ class MoEGate(nn.Module):
         # FIX #33: Store target null rate for null-rate regularizer (line 1216)
         self.rho = data_sparsity
 
-        self.num_null_copies = int(num_experts * (1 - data_sparsity) / data_sparsity)
+        self.num_null_copies = round(num_experts * (1 - data_sparsity) / data_sparsity)
         self.total_slots = num_experts + self.num_null_copies
 
         self.gate = nn.Linear(d_model, num_experts, bias=False)
@@ -1442,6 +1442,15 @@ class MoEGate(nn.Module):
         self.null_logit = nn.Parameter(torch.tensor(0.0))
 
         self.gate.weight.data.normal_(mean=0.0, std=0.02)
+
+        # Routing stat trackers — updated every forward pass (CPU scalars, zero overhead)
+        self.last_null_rate: float = 0.0
+        self.last_avg_real_experts: float = 0.0
+        self.last_zero_real_frac: float = 0.0
+        self.last_expert_counts = None  # (num_experts,) CPU tensor
+        self.last_L_bal: float = 0.0
+        self.last_L_null: float = 0.0
+        self.last_L_z: float = 0.0
 
     def forward(self, x: torch.Tensor):
         B, T, D = x.shape
@@ -1502,6 +1511,16 @@ class MoEGate(nn.Module):
         L_z = (lse**2).mean()
 
         aux_loss = 2e-2 * L_bal + 1e-3 * L_z + 1e-2 * L_null
+
+        # Store routing stats for monitoring (no overhead: no_grad + CPU scalars)
+        with torch.no_grad():
+            self.last_avg_real_experts = (~is_null).sum(dim=-1).float().mean().item()
+            self.last_zero_real_frac = is_null.all(dim=-1).float().mean().item()
+            self.last_null_rate = null_rate.item()
+            self.last_expert_counts = counts_real.detach().cpu()
+            self.last_L_bal = L_bal.item()
+            self.last_L_null = L_null.item()
+            self.last_L_z = L_z.item()
 
         return topk_idx, topk_weight, is_null, aux_loss
 
@@ -1979,7 +1998,7 @@ class Model8B(nn.Module):
     Configuration:
     - 8.29B total params, 3.27B active params
     - 20 layers: 75% DeltaNet (15 layers) + 25% GSA (5 layers)
-    - 20 real + 20 null experts = 40 slots, top-k=2 dynamic (avg 1)
+    - 20 real + 4 null experts = 24 slots, top-k=2 dynamic (avg 1)
     - 256k context length target
 
     ENHANCED WITH MEMORY STREAM RECURRENCE:

@@ -41,6 +41,55 @@ except Exception:
     _NVML_AVAILABLE = False
 
 
+def _collect_moe_stats(model):
+    """Collect routing stats from all MoEGate modules (identified by duck-typing).
+
+    Aggregates per-layer stats into global averages and sums expert counts
+    across all layers for a holistic load-balance view.
+
+    Returns None when the model has no MoEGate-style modules (dense models).
+    """
+    gates = [
+        (name, m)
+        for name, m in model.named_modules()
+        if hasattr(m, "last_null_rate") and hasattr(m, "last_expert_counts")
+    ]
+    if not gates:
+        return None
+
+    null_rates, avg_reals, zero_fracs = [], [], []
+    L_bals, L_nulls, L_zs = [], [], []
+    expert_counts_list = []
+
+    for _name, gate in gates:
+        null_rates.append(gate.last_null_rate)
+        avg_reals.append(gate.last_avg_real_experts)
+        zero_fracs.append(gate.last_zero_real_frac)
+        L_bals.append(gate.last_L_bal)
+        L_nulls.append(gate.last_L_null)
+        L_zs.append(gate.last_L_z)
+        if gate.last_expert_counts is not None:
+            expert_counts_list.append(gate.last_expert_counts)
+
+    n = len(gates)
+    agg_counts = None
+    if expert_counts_list:
+        import torch as _torch
+        agg_counts = _torch.stack(expert_counts_list).sum(0)  # sum across layers
+
+    return {
+        "null_rate": sum(null_rates) / n,
+        "avg_real_experts": sum(avg_reals) / n,
+        "zero_real_frac": sum(zero_fracs) / n,
+        "L_bal": sum(L_bals) / n,
+        "L_null": sum(L_nulls) / n,
+        "L_z": sum(L_zs) / n,
+        "num_gates": n,
+        # per-expert token counts aggregated across all MoE layers
+        "expert_counts": agg_counts.tolist() if agg_counts is not None else None,
+    }
+
+
 def train_epoch(
     model_engine,
     train_loader,
@@ -318,6 +367,7 @@ def train_epoch(
             gpu_util = gpu_mem_used = gpu_mem_total = None
             cpu_util = cpu_mem_used = cpu_mem_total = None
             gpu_table = None
+            gpu_rows = []  # all-GPU rows: [(idx, util%, used_gb, total_gb), ...]
             if enable_system_metrics:
                 vm = psutil.virtual_memory()
                 cpu_util = psutil.cpu_percent(interval=None)
@@ -327,7 +377,6 @@ def train_epoch(
                 if _NVML_AVAILABLE and is_main_process() and torch.cuda.is_available():
                     try:
                         n_devices = pynvml.nvmlDeviceGetCount()
-                        gpu_rows = []
                         for idx in range(n_devices):
                             handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
                             mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
@@ -361,6 +410,11 @@ def train_epoch(
             gpu_idle_pct = (100.0 - gpu_util) if gpu_util is not None else None
             cpu_idle_pct = (100.0 - cpu_util) if cpu_util is not None else None
 
+            # MoE routing stats (rank 0 only; None for dense / non-MoE models)
+            moe_stats = None
+            if is_main_process() and is_reversible:
+                moe_stats = _collect_moe_stats(model_engine.module)
+
             # Profiler stop
             if global_step == profile_step:
                 print("Profile stopped\n")
@@ -379,11 +433,20 @@ def train_epoch(
                 "toks/s": f"{tokens_per_sec:.1f}",
             }
             if enable_system_metrics and gpu_mem_used is not None:
-                postfix["gpu_util"] = f"{gpu_util:.0f}%"
+                # Show avg util across all GPUs in progress bar
+                avg_gpu_util = (
+                    sum(u for _, u, _, _ in gpu_rows) / len(gpu_rows)
+                    if gpu_rows
+                    else gpu_util
+                )
+                postfix["gpu_util"] = f"{avg_gpu_util:.0f}%avg"
                 postfix["gpu_mem"] = f"{gpu_mem_used:.1f}G"
             if enable_system_metrics and cpu_util is not None:
                 postfix["cpu_util"] = f"{cpu_util:.0f}%"
                 postfix["cpu_mem"] = f"{cpu_mem_used:.1f}G"
+            if moe_stats is not None:
+                postfix["null_rt"] = f"{moe_stats['null_rate']:.2f}"
+                postfix["real_e"] = f"{moe_stats['avg_real_experts']:.2f}"
             progress_bar.set_postfix(postfix)
 
             # Log at optimizer-step granularity
@@ -394,6 +457,10 @@ def train_epoch(
                     f"Tokens/s: {tokens_per_sec:.1f}, "
                     f"Tokens: {int(total_step_tokens)}"
                 )
+                if avg_null_router is not None:
+                    msg += f", NullRouter: {avg_null_router:.4f}"
+                if avg_moe_router is not None:
+                    msg += f", MoERouter: {avg_moe_router:.4f}"
                 if enable_system_metrics:
                     if gpu_util is not None:
                         msg += (
@@ -410,6 +477,25 @@ def train_epoch(
                 if enable_system_metrics and is_main_process() and gpu_table:
                     print_rank_0("\nGPU Utilization / Memory (all devices):")
                     print_rank_0(gpu_table)
+
+                # MoE routing stats log
+                if moe_stats is not None:
+                    print_rank_0(
+                        f"\n[MoE Router] null_rate={moe_stats['null_rate']:.3f} "
+                        f"avg_real={moe_stats['avg_real_experts']:.2f} "
+                        f"zero_real_frac={moe_stats['zero_real_frac']:.3f} "
+                        f"L_bal={moe_stats['L_bal']:.4f} "
+                        f"L_null={moe_stats['L_null']:.4f} "
+                        f"L_z={moe_stats['L_z']:.4f} "
+                        f"({moe_stats['num_gates']} gates)"
+                    )
+                    if moe_stats["expert_counts"] is not None:
+                        counts = moe_stats["expert_counts"]
+                        total = sum(counts) if sum(counts) > 0 else 1.0
+                        load_str = "  ".join(
+                            f"E{i}:{c / total:.2f}" for i, c in enumerate(counts)
+                        )
+                        print_rank_0(f"[Expert Load] {load_str}")
 
             # Structured JSONL metrics (every optimizer step, rank 0 only)
             jsonl_log(
@@ -428,11 +514,31 @@ def train_epoch(
                     "tokens": int(total_step_tokens),
                     "total_tokens_processed": int(cumulative_tokens),
                     "step_time_s": step_time,
+                    # single-device GPU metrics (local rank)
                     "gpu_util_pct": gpu_util,
                     "gpu_idle_pct": gpu_idle_pct,
                     "gpu_mem_gb": gpu_mem_used,
+                    # all-device GPU metrics
+                    "gpu_util_all_pct": (
+                        {str(idx): util for idx, util, _, _ in gpu_rows}
+                        if gpu_rows
+                        else None
+                    ),
+                    "gpu_mem_all_gb": (
+                        {str(idx): round(used, 2) for idx, _, used, _ in gpu_rows}
+                        if gpu_rows
+                        else None
+                    ),
                     "cpu_util_pct": cpu_util,
                     "cpu_idle_pct": cpu_idle_pct,
+                    # MoE routing metrics
+                    "moe_null_rate": moe_stats["null_rate"] if moe_stats else None,
+                    "moe_avg_real_experts": moe_stats["avg_real_experts"] if moe_stats else None,
+                    "moe_zero_real_frac": moe_stats["zero_real_frac"] if moe_stats else None,
+                    "moe_L_bal": moe_stats["L_bal"] if moe_stats else None,
+                    "moe_L_null": moe_stats["L_null"] if moe_stats else None,
+                    "moe_L_z": moe_stats["L_z"] if moe_stats else None,
+                    "moe_expert_counts": moe_stats["expert_counts"] if moe_stats else None,
                     "lr": (
                         model_engine.get_lr()[0]
                         if hasattr(model_engine, "get_lr")
