@@ -72,3 +72,19 @@
 | `global_step` | Optimizer step count. |
 | `lr` | Current learning rate from the DeepSpeed scheduler. |
 | `cpu_util_pct` | CPU usage. High values mean data loading is a bottleneck. |
+
+---
+
+### Results for 3B MoE Model
+
+experiments/9_training_stack_optimisation_and_cost_governor/training/deepspeed_template/checkpoints_moe_test/metrics.jsonl
+
+https://github.com/The-School-of-AI/LLM/blob/p9/feat/reversibility_metrics/experiments/9_training_stack_optimisation_and_cost_governor/training/deepspeed_template/checkpoints_moe_test/metrics.jsonl
+
+---
+
+### Results for 1B dense Model
+
+experiments/9_training_stack_optimisation_and_cost_governor/training/deepspeed_template/checkpoints_1b_dense/metrics.jsonl
+
+https://github.com/The-School-of-AI/LLM/blob/p9/feat/reversibility_metrics/experiments/9_training_stack_optimisation_and_cost_governor/training/deepspeed_template/checkpoints_1b_dense/metrics.jsonl
