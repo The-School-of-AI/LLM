@@ -9,6 +9,7 @@ H = 4
 T = 4096
 D = 128
 k_sel = 64
+scale = D**-0.5
 
 # Create synthetic data
 torch.manual_seed(42)
@@ -72,13 +73,14 @@ def benchmark(setup, num_iters=10):
         
     # Warmup
     try:
-        out = triton_sparse_attention(q, k, v, indices, mask)
+        out = triton_sparse_attention(q, k, v, indices, mask, scale)
         out.backward(do, retain_graph=True)
         q.grad = None
         k.grad = None
         v.grad = None
         torch.cuda.synchronize()
     except Exception as e:
+        print(f"Benchmark setup failed: {e}")
         return float('inf')  # Failed to run
         
     start_event = torch.cuda.Event(enable_timing=True)
@@ -86,7 +88,7 @@ def benchmark(setup, num_iters=10):
     
     start_event.record()
     for _ in range(num_iters):
-        out = triton_sparse_attention(q, k, v, indices, mask)
+        out = triton_sparse_attention(q, k, v, indices, mask, scale)
         out.backward(do, retain_graph=True)
         q.grad = None
         k.grad = None
