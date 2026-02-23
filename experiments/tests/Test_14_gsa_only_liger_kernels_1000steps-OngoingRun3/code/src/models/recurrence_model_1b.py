@@ -34,6 +34,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# ── Profiler (optional — zero overhead when inactive) ────────────────────────
+try:
+    from ..profiler import time_region
+except Exception:
+    try:
+        from src.profiler import time_region
+    except Exception:
+        from contextlib import contextmanager
+
+        @contextmanager
+        def time_region(name: str):  # type: ignore[misc]
+            yield
+
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
 # Mirror 70B import resolution so 1B behaves identically across launch contexts.
 def _import_kernels_module():
@@ -770,10 +783,11 @@ class GatedDeltaNet(nn.Module):
 
         if fla_available:
             try:
-                o = fla_gated_delta_rule(
-                    q=q, k=k, v=v, alpha=alpha, beta=beta,
-                    D=self.D, num_heads=self.num_heads,
-                )
+                with time_region("deltanet.fla"):
+                    o = fla_gated_delta_rule(
+                        q=q, k=k, v=v, alpha=alpha, beta=beta,
+                        D=self.D, num_heads=self.num_heads,
+                    )
             except Exception as e:
                 if self.require_fused_kernel:
                     raise RuntimeError("DeltaNet fused kernel execution failed and fallback is disabled.") from e
@@ -929,14 +943,15 @@ class GatedSparseAttention(nn.Module):
                     "Fallback indexer path is disabled."
                 )
 
-            var_t, k_t, top_indices = fused_indexer_topk(
-                q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
-                scale=scale_idx, causal=True,
-                k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
-                variance_ema=ema_for_indexer,  # snapshot or live
-                is_training=False,
-                sink_size=4,
-            )
+            with time_region("gsa.indexer"):
+                var_t, k_t, top_indices = fused_indexer_topk(
+                    q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
+                    scale=scale_idx, causal=True,
+                    k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
+                    variance_ema=ema_for_indexer,  # snapshot or live
+                    is_training=False,
+                    sink_size=4,
+                )
 
             if is_reversible_forward:
                 var_t_mean = var_t.mean().detach()
@@ -1041,10 +1056,11 @@ class GatedSparseAttention(nn.Module):
                 "GSA fused sparse attention kernel (forward+backward) is required. "
                 "PyTorch fallback is disabled for this test."
             )
-        o_sparse = triton_sparse_attention(
-            q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
-            use_triton_backward=True,
-        )
+        with time_region("gsa.sparse_attn"):
+            o_sparse = triton_sparse_attention(
+                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+                use_triton_backward=True,
+            )
         if token_keep is not None:
             o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
 
@@ -1117,11 +1133,13 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> t
         # Stable exp: subtract max along last dim before passing to kernel
         logits_stable = logits - logits.amax(dim=-1, keepdim=True)
         try:
-            return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
+            with time_region("sinkhorn.triton"):
+                return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
         except Exception:
             pass  # fall through to PyTorch
     # PyTorch fallback (CPU or Triton unavailable)
-    return pytorch_sinkhorn_knopp(logits, num_iters=iters, eps=eps)
+    with time_region("sinkhorn.pytorch"):
+        return pytorch_sinkhorn_knopp(logits, num_iters=iters, eps=eps)
 
 
 class MHCCoeffs(nn.Module):
