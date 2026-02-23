@@ -1,6 +1,6 @@
 # Coreset Selection Engine - Deliverables Summary
 
-**Date**: February 3, 2026  
+**Date (Last Updated)**: February 23, 2026  
 **Version**: 1.0.0  
 **Status**: ✅ Production Ready  
 **Team**: Coreset Selection Architecture
@@ -9,7 +9,7 @@
 
 ## 📋 Executive Summary
 
-A **production-grade, highly scalable coreset selection engine** has been developed to compress 2 trillion tokens into ~400 billion tokens for 70B LLM pre-training, SFT, and alignment stages. The engine is deterministic, curriculum-compliant, and preserves rare, capability-critical content.
+A **production-grade, highly scalable coreset selection engine** has been developed to compress 2 trillion tokens into ~400 billion tokens for 70B LLM pre-training, SFT, and alignment stages. The engine is deterministic, curriculum-compliant, and preserves capability-critical protected slices (e.g., B4/B5, code, agentic, indic) while enforcing non-overlap across stages.
 
 **Key Achievement**: Enables **5-8x compression** while maintaining or exceeding training efficiency and downstream benchmark performance.
 
@@ -42,13 +42,15 @@ src/
 │   ├── deduplicator.py     # Exact + Near-dedup (SimHash/MinHash)
 │   └── __init__.py
 ├── diversity/
-│   ├── scorer.py           # Token rarity + coverage metrics
+│   ├── scorer.py           # Diversity scoring (domain/language + optional token-id based rarity)
 │   └── __init__.py
 ├── selection/
 │   ├── engine.py           # Main orchestrator (stratified sampling)
+│   ├── engine_batched.py   # Streaming/batched selection for large datasets
 │   └── __init__.py
 └── io/
-    ├── loaders.py          # Chunk loading + manifest writing
+   ├── loaders.py          # Chunk loading + manifest writing
+   ├── batch_processor.py  # Batch iteration + checkpoints (streaming mode)
     └── __init__.py
 ```
 
@@ -59,12 +61,12 @@ src/
 1. **Default (`config/pipeline.yaml`)**
    - Production settings
    - Deduplication: exact + near-dedup (SimHash)
-   - Diversity: rare token boost 1.5x, tail 2.0x
+   - Diversity: domain/language diversity always available; token-id based rarity is applied only when token IDs are present
    - All 6 stages (1B, 3B, 8B, 70B, SFT, ALIGNMENT)
 
 2. **Curriculum (`config/curriculum.yaml`)**
    - Frozen curriculum with deterministic guarantees
-   - Band definitions (B0-B5) with constraints
+   - Band definitions (B0-B6) with constraints
    - Stage-wise ratios (1B: 45% B0/30% B1/..., etc.)
    - Language constraints (92% EN, 8% HI)
    - Perplexity filters per band
@@ -74,31 +76,19 @@ src/
    - `ablation_no_diversity.yaml`: Study diversity weighting impact
    - `ablation_high_compression.yaml`: Extreme compression (50% target tokens)
 
-### 3. Integration Schemas
+### 3. Operational Interfaces & Artifacts
 
-**File**: `schemas/integration_schema.json`
+The engine’s “integration contract” is expressed through **on-disk artifacts** (selected indices parts, manifests, and reports) and stable CLI/config knobs.
 
-Comprehensive contract definitions for:
-- **Upstream Teams** (Team 1-5): Input format specifications
-- **Downstream Teams** (Training, Benchmarking, Synthetic): Output consumption patterns
-- **Error Handling**: Standardized escalation procedures
-
-**Key Contracts**:
-```json
-Team 1 → Pipeline: Dataset metadata (parquet/jsonl)
-Team 2 → Pipeline: FROZEN curriculum.yaml with guarantees
-Team 3 → Pipeline: Immutable chunks with metadata
-Team 4 → Pipeline: Pre-computed difficulty bands
-Team 5 → Pipeline: Dedup signatures + quality scores
-
-Pipeline → Training: Non-overlapping stage-specific indices + manifests
-Pipeline → Benchmarking: Ablation reports + coverage diagnostics
-Pipeline → Synthetic: Available band/domain quotas (5-10% per stage)
-```
+Key references:
+- Output formats and sharded layout: [docs/OUTPUT_FORMAT_GUIDE.md](OUTPUT_FORMAT_GUIDE.md)
+- Report generation + locations: [docs/REPORT_GENERATION_GUIDE.md](REPORT_GENERATION_GUIDE.md)
+- How to interpret ablation reports: [docs/ABLATION_REPORT_GUIDE.md](ABLATION_REPORT_GUIDE.md)
+- 2T-scale batching/checkpoint design: [docs/2T_OPTIMIZATION_GUIDE.md](2T_OPTIMIZATION_GUIDE.md)
 
 ### 4. Comprehensive Documentation
 
-#### A. Design & Recommendations (`docs/DESIGN_AND_RECOMMENDATIONS.md`)
+#### A. Design & Recommendations ([docs/DESIGN_AND_RECOMMENDATIONS.md](DESIGN_AND_RECOMMENDATIONS.md))
 - 100+ pages of architectural guidance
 - Algorithm deep-dives with complexity analysis
 - Research references from 18 foundational papers
@@ -106,7 +96,7 @@ Pipeline → Synthetic: Available band/domain quotas (5-10% per stage)
 - Gotchas & pitfalls with solutions
 - Downstream recommendations for each team
 
-#### B. README (`README.md`)
+#### B. README ([README.md](../README.md))
 - Quick-start guide (installation, basic usage)
 - Architecture overview with pipeline diagram
 - Core components reference
@@ -114,10 +104,10 @@ Pipeline → Synthetic: Available band/domain quotas (5-10% per stage)
 - Troubleshooting section
 - Performance benchmarks
 
-#### C. Integration Schema (`schemas/integration_schema.json`)
-- Formal handshake contracts between teams
-- Error handling procedures
-- Data format specifications
+#### C. I/O, Output & Reporting
+- Output format guide: [docs/OUTPUT_FORMAT_GUIDE.md](OUTPUT_FORMAT_GUIDE.md)
+- Report generation guide: [docs/REPORT_GENERATION_GUIDE.md](REPORT_GENERATION_GUIDE.md)
+- Ablation report guide: [docs/ABLATION_REPORT_GUIDE.md](ABLATION_REPORT_GUIDE.md)
 
 ### 5. Reproducibility & Validation
 
@@ -181,7 +171,7 @@ pytest tests/test_pipeline.py -v
 2. Remove near-duplicates (SimHash, threshold 0.85)
 3. Create stratified buckets by (band, domain)
 4. Allocate tokens per bucket from curriculum
-5. Score chunks by rarity + coverage
+5. Score chunks using a metadata-driven difficulty signal (see “Scoring & Band Inference” below)
 6. Greedily select top-scoring chunks
 7. Enforce protected slice minimums
 8. Validate rolling window constraints
@@ -208,16 +198,20 @@ Preserves critical content:
 
 ### 4. Diversity Boosting
 
-- **Token Rarity**: Boost rare tokens by 1.5x, tail by 2.0x
-- **Domain Diversity**: Track coverage across code, math, reasoning, etc.
+**Note on token rarity**: In the current large-scale streaming/sharded pipeline, token-level rarity is skipped because the input does not provide tokenizer-derived `token_ids` and `token_count_estimate` is computed via an upstream heuristic (e.g., word-count × multiplier). Without real tokenization, “rare token” tracking is not meaningful.
+
+- **Difficulty / Band Scoring**: Selection uses a configurable score source per chunk (see CLI options below)
+- **Domain Diversity**: Track coverage across curriculum domains
 - **Language Diversity**: Maintain language distribution per curriculum
-- **Coverage Tracking**: Reward new tokens/domains not yet seen
 
 ### 5. Scalability
 
-**Throughput**: 100M+ tokens/hour with 64-node GPU cluster  
-**Memory**: ~100GB total (metadata cache + dedup structures)  
-**Runtime**: ~2-4 hours for full 2T token pipeline
+The pipeline is **CPU-first** and designed to scale via **sharding + batching**, without requiring GPU tokenization.
+
+- **Sharding**: Run multiple workers with `shard.sh --num-shards N` to scale out across machines/cores
+- **Batching**: Streaming batch processing avoids full dataset loads and supports large parquet/jsonl inputs
+- **Checkpoint/Resume**: Periodic batch checkpoints allow crash+resume for long runs
+- **Prefetch (optional)**: Batch prefetch can overlap I/O and compute for better throughput
 
 ### 6. Determinism & Reproducibility
 
@@ -247,7 +241,7 @@ Preserves critical content:
 | B5 Preservation | ≥95% | ✅ 95-98% |
 | B4 Preservation | ≥95% | ✅ 95-98% |
 | Code Coverage | ≥90% | ✅ 90-95% |
-| Rare Token Survival | ≥85% | ✅ 85-92% |
+| Band/Domain Eligibility | No disallowed pairs | ✅ enforced |
 | Domain Balance | ±2% error | ✅ ±1-2% achieved |
 
 ### Benchmark Impact (Projected from Literature)
@@ -351,20 +345,18 @@ The engine incorporates techniques from **18 foundational papers**:
 
 ```
 Hardware:
-- 64 × GPU nodes (V100/A100)
-- 16 × CPU nodes
-- 100 Gbps interconnect
-- 2TB NVMe per node
+- CPU nodes (scale out via sharding)
+- Fast local disk or object-store bandwidth for parquet/jsonl scans
+- Optional: high-throughput networking when running many shards
 
 Software:
 - Python 3.10+
-- PyTorch 2.0+
 - NumPy 1.24+
-- CUDA 11.8+
+
+GPU/CUDA is not required for the current scoring approach because tokenization-based rarity tracking is skipped in streaming mode.
 
 Runtime:
-- Full pipeline: 2-4 hours (all stages parallel)
-- Per-stage: 30-95 minutes
+- Runtime depends on shard count, batch size, and storage bandwidth; scale horizontally with `--num-shards`.
 ```
 
 ### Monitoring
@@ -376,16 +368,16 @@ for stage in ["1B", "3B", "8B", "70B"]:
     print(f"{stage}: {result['selected_chunks']} chunks, "
           f"{result['compression_ratio']:.1f}x compression")
     
-    # Validate
-    assert result['band_distribution'].B5 >= 0.14, "B5 underrepresented"
-    assert result['compression_ratio'] >= 7.0, "Compression below target"
+   # Validate (example sanity checks)
+   assert result.get('deterministic', True) is True, "Run is not deterministic"
+   assert result.get('selected_tokens', 0) >= 0
 ```
 
 ### Failure Recovery
 
-- Checkpoints after each stage
-- Can resume from last completed stage
-- Manifests stored in version control
+- Batch-level checkpoints enable resume from the last persisted batch for a stage
+- Resume is compatible with sharded runs when each shard has its own checkpoint directory
+- Manifests and reports are written under `output/` (stage manifests under `output/coresets/<stage>/` and merged reports under `output/manifests/`)
 
 ---
 
@@ -422,17 +414,21 @@ for stage in ["1B", "3B", "8B", "70B"]:
    - Gotchas & pitfalls
    - Downstream team recommendations
 
-3. **integration_schema.json**
-   - Formal team handshake contracts
-   - Input/output specifications
-   - Error handling procedures
+3. **2T Optimization Guide**
+   - [docs/2T_OPTIMIZATION_GUIDE.md](2T_OPTIMIZATION_GUIDE.md)
+   - Batch processing, checkpoints, sharded runs, reliability notes
 
-4. **Configuration Files**
+4. **Output & Reporting Guides**
+   - [docs/OUTPUT_FORMAT_GUIDE.md](OUTPUT_FORMAT_GUIDE.md)
+   - [docs/REPORT_GENERATION_GUIDE.md](REPORT_GENERATION_GUIDE.md)
+   - [docs/ABLATION_REPORT_GUIDE.md](ABLATION_REPORT_GUIDE.md)
+
+5. **Configuration Files**
    - `config/pipeline.yaml` (production)
    - `config/curriculum.yaml` (frozen)
    - `config/ablation_*.yaml` (3 ablation variants)
 
-5. **Test Suite**
+6. **Test Suite**
    - `tests/test_pipeline.py` (12+ tests)
    - Coverage of all core modules
 
@@ -463,7 +459,7 @@ for stage in ["1B", "3B", "8B", "70B"]:
 1. Allocate cluster resources per deployment guide
 2. Monitor pipeline via logs + manifests
 3. Implement checkpoint + recovery procedures
-4. Version control manifests + configs
+4. Version control configs; archive manifests/reports under `output/` (and/or object storage)
 
 ---
 
@@ -473,12 +469,32 @@ for stage in ["1B", "3B", "8B", "70B"]:
 - **Deterministic**: Full reproducibility guaranteed with seeding
 - **Scalable**: Handles 2T tokens efficiently on commodity clusters
 - **Compliant**: Strict curriculum adherence with validation
-- **Protective**: Preserves rare, capability-critical content
+- **Protective**: Preserves capability-critical protected slices
 - **Auditable**: Comprehensive manifests + coverage reports
 
 ---
 
+## 🧠 Scoring & Band Inference (Current)
+
+Large-scale selection uses a metadata-driven scoring strategy that avoids requiring GPU tokenization:
+
+- **Band inference mode**: choose how to handle missing/ineligible bands (CLI: `--band-inference`)
+- **Score source**: choose which per-chunk field(s) to score from (CLI: `--band-score-source`)
+   - Examples include using a provided `band_score`, `difficulty_score`, or band probability columns (e.g., `band_p_B0..band_p_B6`) when present.
+
+These options are used in the streaming/sharded pipeline and are the recommended knobs for production runs.
+
+Design references:
+- CLI behavior and recommended settings: [README.md](../README.md)
+- Large-scale batching/checkpoint architecture: [docs/2T_OPTIMIZATION_GUIDE.md](2T_OPTIMIZATION_GUIDE.md)
+- Protected slice / curriculum enforcement notes (implementation-level): [docs/CODE_CHANGES_CURRICULUM_ADHERENCE.md](CODE_CHANGES_CURRICULUM_ADHERENCE.md)
+
+Historical/optional (only relevant if tokenizer-derived `token_ids` are available in the input):
+- Token-frequency scoring optimizations: [docs/PERFORMANCE_FIX_SUMMARY.md](PERFORMANCE_FIX_SUMMARY.md)
+
+---
+
 **Prepared by**: Coreset Selection Team  
-**Date**: February 3, 2026  
+**Date**: February 23, 2026  
 **Version**: 1.0.0  
 **Status**: ✅ Ready for Production Training
