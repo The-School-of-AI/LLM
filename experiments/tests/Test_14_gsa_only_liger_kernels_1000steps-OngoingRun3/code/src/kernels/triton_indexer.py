@@ -31,6 +31,16 @@ except ImportError:
     triton = None
     tl = None
 
+# Import profiling helpers
+try:
+    from ..profiler import kernel_region
+except ImportError:
+    # Fallback: no-op context manager
+    from contextlib import contextmanager
+    @contextmanager
+    def kernel_region(name: str):
+        yield
+
 
 if HAS_TRITON:
     @triton.jit
@@ -158,56 +168,63 @@ def triton_gated_indexer(
     Returns:
         scores: [batch, seq_q, seq_kv]
     """
-    if not HAS_TRITON:
-        raise ImportError("Triton is required for triton_gated_indexer")
+    with kernel_region("indexer_total"):
+        if not HAS_TRITON:
+            raise ImportError("Triton is required for triton_gated_indexer")
 
-    orig_dtype = q.dtype
-    batch_size, seq_q, n_heads, d_idx = q.shape
-    _, seq_kv, _ = k.shape
+        orig_dtype = q.dtype
+        batch_size, seq_q, n_heads, d_idx = q.shape
+        _, seq_kv, _ = k.shape
 
-    # FIX-PERF-05: Pass inputs directly without upcast — the Triton kernel loads
-    # all values via `.to(tl.float32)` on the GPU, so pre-casting to fp32 on the
-    # host was pure wasted allocation + bandwidth (4 full tensor copies per call).
-    # We still require contiguous layout for valid stride arithmetic.
-    q_in = q.contiguous()
-    k_in = k.contiguous()
-    w_in = w.contiguous()
-    b_in = b.contiguous()
+        # FIX-PERF-05: Pass inputs directly without upcast — the Triton kernel loads
+        # all values via `.to(tl.float32)` on the GPU, so pre-casting to fp32 on the
+        # host was pure wasted allocation + bandwidth (4 full tensor copies per call).
+        # We still require contiguous layout for valid stride arithmetic.
+        with kernel_region("indexer_contiguous"):
+            q_in = q.contiguous()
+            k_in = k.contiguous()
+            w_in = w.contiguous()
+            b_in = b.contiguous()
 
-    # Allocate output in float32 (kernel stores fp32 accumulator)
-    out = torch.empty(batch_size, seq_q, seq_kv, device=q.device, dtype=torch.float32)
+        # Allocate output in float32 (kernel stores fp32 accumulator)
+        with kernel_region("indexer_alloc"):
+            out = torch.empty(batch_size, seq_q, seq_kv, device=q.device, dtype=torch.float32)
 
-    # Block sizes
-    BLOCK_K = min(64, triton.next_power_of_2(seq_kv))
-    BLOCK_D = triton.next_power_of_2(d_idx)
+        # Block sizes
+        BLOCK_K = min(64, triton.next_power_of_2(seq_kv))
+        BLOCK_D = triton.next_power_of_2(d_idx)
 
-    # Grid: one program per (batch, query_row, key_block)
-    grid = (batch_size, seq_q, triton.cdiv(seq_kv, BLOCK_K))
+        # Grid: one program per (batch, query_row, key_block)
+        grid = (batch_size, seq_q, triton.cdiv(seq_kv, BLOCK_K))
 
-    try:
-        _gated_indexer_fwd_kernel[grid](
-            q_in, k_in, w_in, b_in, out,
-            batch_size, seq_q, seq_kv, n_heads, d_idx,
-            q_in.stride(0), q_in.stride(1), q_in.stride(2), q_in.stride(3),
-            k_in.stride(0), k_in.stride(1), k_in.stride(2),
-            w_in.stride(0), w_in.stride(1), w_in.stride(2),
-            out.stride(0), out.stride(1), out.stride(2),
-            scale,
-            q_offset,
-            causal,
-            BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
-        )
-        # Cast back to original dtype
-        out = out.to(orig_dtype)
-    except Exception as e:
-        strict = os.environ.get("REQUIRE_LONGCTX_KERNELS", "0") == "1"
-        if strict:
-            raise RuntimeError(f"Triton indexer kernel failed in strict mode: {e}") from e
-        import warnings
-        warnings.warn(f"Triton indexer kernel failed with: {e}. Falling back to PyTorch.")
-        out = pytorch_gated_indexer(q, k, w, b, scale, causal, q_offset)
+        try:
+            with kernel_region("indexer_kernel"):
+                _gated_indexer_fwd_kernel[grid](
+                    q_in, k_in, w_in, b_in, out,
+                    batch_size, seq_q, seq_kv, n_heads, d_idx,
+                    q_in.stride(0), q_in.stride(1), q_in.stride(2), q_in.stride(3),
+                    k_in.stride(0), k_in.stride(1), k_in.stride(2),
+                    w_in.stride(0), w_in.stride(1), w_in.stride(2),
+                    out.stride(0), out.stride(1), out.stride(2),
+                    scale,
+                    q_offset,
+                    causal,
+                    BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
+                )
+            
+            # Cast back to original dtype
+            with kernel_region("indexer_convert"):
+                out = out.to(orig_dtype)
+        except Exception as e:
+            strict = os.environ.get("REQUIRE_LONGCTX_KERNELS", "0") == "1"
+            if strict:
+                raise RuntimeError(f"Triton indexer kernel failed in strict mode: {e}") from e
+            import warnings
+            warnings.warn(f"Triton indexer kernel failed with: {e}. Falling back to PyTorch.")
+            with kernel_region("indexer_fallback"):
+                out = pytorch_gated_indexer(q, k, w, b, scale, causal, q_offset)
 
-    return out
+        return out
 
 
 def pytorch_gated_indexer(

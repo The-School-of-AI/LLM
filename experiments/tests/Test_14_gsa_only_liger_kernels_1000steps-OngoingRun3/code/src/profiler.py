@@ -1,14 +1,19 @@
 """
 Step-level profiler for Recurrence Model 1B — Test 14 OngoingRun3.
 
-Captures CUDA-accurate timing at three granularity levels:
-  1. Step phases  : forward, backward, optimizer_step, allreduce, dataloader
-  2. Layer level  : per LightningDecoderLayer + MTP block (forward + backward)
-  3. Kernel level : indexer, sparse_attn, sinkhorn, deltanet_fla, mlp, rmsnorm, rope
+Captures CUDA-accurate timing at FOUR granularity levels:
+  1. Step phases      : forward, backward, optimizer_step, allreduce, dataloader
+  2. Layer level      : per LightningDecoderLayer + MTP block (forward + backward)
+  3. Kernel level     : indexer, sparse_attn, sinkhorn, deltanet_fla, mlp, rmsnorm, rope
+  4. Sub-kernel level : within-kernel operations (indexing, computation, reduction)
 
 Usage (activated from train.py):
     from .profiler import StepProfiler
-    profiler = StepProfiler(rank=local_rank, profile_steps={10, 11, 12})
+    profiler = StepProfiler(
+        rank=local_rank,
+        profile_steps={10, 11, 12},
+        enable_async_write=True,  # Write JSONL in background thread
+    )
     profiler.activate()   # sets global so model hooks auto-register
     ...
     profiler.start_step(global_step)
@@ -17,28 +22,39 @@ Usage (activated from train.py):
     ...
     profiler.deactivate()
     profiler.write_report("results/run/profile_report.txt")
-    profiler.write_jsonl("results/run/profile.jsonl")
 
-Inside the model, use the module-level helpers:
-    from src.profiler import time_region
+Module-level helpers for kernels:
+    from src.profiler import time_region, kernel_region
+    
+    # High-level region (coarse timing)
     with time_region("gsa.indexer"):
         var_t, k_t, top_indices = fused_indexer_topk(...)
-    with time_region("gsa.sparse_attn"):
-        o_sparse = triton_sparse_attention(...)
+    
+    # Sub-kernel region (granular timing within a kernel)
+    with kernel_region("gsa.indexer.matmul"):
+        result = triton_matmul(...)
+    
+    with kernel_region("gsa.indexer.sort"):
+        sorted_indices = torch.sort(...)
 
-time_region() is a no-op when no profiler is active, so it adds zero overhead
-during normal training.
+Both are no-ops when no profiler is active, adding zero overhead during normal training.
+
+Real-time Reporting:
+  - After each step, results are appended to profile.jsonl
+  - Optional async writing: JSONL writes happen in background thread
+  - Zero impact on training throughput
 """
 
 from __future__ import annotations
 
 import json
 import os
+import queue
 import threading
 import time as _time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 
 import torch
 
@@ -46,9 +62,53 @@ import torch
 _ACTIVE_PROFILER: Optional["StepProfiler"] = None
 _PROFILER_LOCK = threading.Lock()
 
+# ─── Global async write queue (background writer thread) ──────────────────
+_WRITE_QUEUE: queue.Queue = queue.Queue()
+_WRITE_THREAD: Optional[threading.Thread] = None
+_WRITE_THREAD_RUNNING = False
+
 
 def get_active_profiler() -> Optional["StepProfiler"]:
     return _ACTIVE_PROFILER
+
+
+# ─── Async background writer for JSONL ─────────────────────────────────────
+
+def _writer_thread_main():
+    """Background thread that processes JSONL write requests from a queue."""
+    while _WRITE_THREAD_RUNNING:
+        try:
+            item = _WRITE_QUEUE.get(timeout=0.1)
+            if item is None:  # Sentinel to exit
+                break
+            path, row = item
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(row) + "\n")
+        except queue.Empty:
+            continue
+        except Exception:
+            pass  # Never crash the writer thread
+
+
+def _start_async_writer():
+    """Start the background JSONL writer thread (only calls once)."""
+    global _WRITE_THREAD, _WRITE_THREAD_RUNNING
+    if _WRITE_THREAD is not None and _WRITE_THREAD.is_alive():
+        return
+    _WRITE_THREAD_RUNNING = True
+    _WRITE_THREAD = threading.Thread(target=_writer_thread_main, daemon=True)
+    _WRITE_THREAD.start()
+
+
+def _stop_async_writer():
+    """Stop the background JSONL writer thread."""
+    global _WRITE_THREAD, _WRITE_THREAD_RUNNING
+    if _WRITE_THREAD is not None:
+        _WRITE_THREAD_RUNNING = False
+        _WRITE_QUEUE.put(None)  # Sentinel
+        _WRITE_THREAD.join(timeout=2.0)
+        _WRITE_THREAD = None
 
 
 # ─── Low-level CUDA event timer ─────────────────────────────────────────────
@@ -93,21 +153,53 @@ class _CUDARegion:
         return self._ms
 
 
-# ─── Context-manager helper (used by model code) ────────────────────────────
+# ─── Context-manager helpers (used by model code and kernels) ─────────────
 
 @contextmanager
 def time_region(name: str):
     """
-    Thin, zero-overhead context manager.
-
+    High-level region timer (typically for layer/module boundaries).
+    
     When no profiler is active this is a strict no-op (one global read + branch).
     When profiling is active, records a CUDA event pair for `name`.
+    
+    Usage in kernel code:
+        with time_region("gsa.indexer"):
+            result = kernelA()
     """
     profiler = _ACTIVE_PROFILER
     if profiler is None or not profiler._recording:
         yield
         return
 
+    region = _CUDARegion(name)
+    region.record_start()
+    try:
+        yield
+    finally:
+        region.record_end()
+        profiler._record_region(region)
+
+
+@contextmanager
+def kernel_region(name: str):
+    """
+    Sub-kernel region timer for granular timing within kernel operations.
+    
+    Use this for minute-level breakdown inside kernels:
+    - gsa.sparse_attn.matmul
+    - gsa.sparse_attn.softmax
+    - gsa.indexer.topk
+    - deltanet.computation
+    etc.
+    
+    Zero overhead when no profiler is active.
+    """
+    profiler = _ACTIVE_PROFILER
+    if profiler is None or not profiler._recording:
+        yield
+        return
+    
     region = _CUDARegion(name)
     region.record_start()
     try:
@@ -163,15 +255,37 @@ def _make_backward_hook(profiler: "StepProfiler", label: str):
 
 @dataclass
 class StepRecord:
+    """Per-step profile data with support for hierarchical regions."""
     step: int
     tokens: int = 0
     regions: Dict[str, float] = field(default_factory=dict)  # name → ms
+    region_counts: Dict[str, int] = field(default_factory=dict)  # name → count
+    start_timestamp: float = 0.0  # Wall clock for this step
 
     def add(self, name: str, ms: float):
+        """Record a region timing, accumulating if called multiple times."""
         if name in self.regions:
             self.regions[name] += ms
+            self.region_counts[name] += 1
         else:
             self.regions[name] = ms
+            self.region_counts[name] = 1
+    
+    def to_json_row(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dict with count info."""
+        row = {
+            "step": self.step,
+            "tokens": self.tokens,
+            "timestamp": self.start_timestamp,
+        }
+        # Add region timings
+        for name, ms in self.regions.items():
+            count = self.region_counts.get(name, 1)
+            row[name] = ms
+            if count > 1:
+                row[f"{name}__count"] = count
+                row[f"{name}__avg"] = ms / count
+        return row
 
 
 # ─── Main profiler class ─────────────────────────────────────────────────────
@@ -183,11 +297,19 @@ class StepProfiler:
     Thread-safe for a single training process; each rank should create its
     own instance and only rank-0 writes reports.
 
+    Features:
+    - Granular kernel-level profiling (indexer, sparse_attn, etc.)
+    - Sub-kernel timing for optimization insights
+    - Optional async JSONL writing (background thread, zero impact)
+    - Real-time incremental reporting after each step
+
     Args:
-        rank           : This process's local rank (only rank-0 writes to disk).
-        profile_steps  : Set of global step numbers to profile.
-                         Pass an empty set to disable.
-        output_dir     : Where to write profile.jsonl and profile_report.txt.
+        rank              : This process's local rank (only rank-0 writes to disk).
+        profile_steps     : Set of global step numbers to profile.
+                            Pass an empty set to disable.
+        output_dir        : Where to write profile.jsonl and profile_report.txt.
+        enable_async_write: If True, writes JSONL in a background thread
+                            (no impact on training throughput).
     """
 
     def __init__(
@@ -195,14 +317,18 @@ class StepProfiler:
         rank: int = 0,
         profile_steps: Optional[Set[int]] = None,
         output_dir: str = "results/run",
+        enable_async_write: bool = True,
     ):
         self.rank = rank
         self.profile_steps: Set[int] = profile_steps or set()
         self.output_dir = output_dir
+        self.enable_async_write = enable_async_write
         self._recording = False
         self._current: Optional[StepRecord] = None
         self._history: List[StepRecord] = []
         self._hook_handles: List = []
+        self._jsonl_path: Optional[str] = None
+        self._kernel_call_counts: Dict[str, int] = {}  # Track kernel calls for aggregation
 
     # ── activation / deactivation ────────────────────────────────────────────
 
@@ -211,14 +337,19 @@ class StepProfiler:
         global _ACTIVE_PROFILER
         with _PROFILER_LOCK:
             _ACTIVE_PROFILER = self
+        if self.rank == 0 and self.enable_async_write:
+            _start_async_writer()
+        self._jsonl_path = os.path.join(self.output_dir, "profile.jsonl")
 
     def deactivate(self):
-        """Remove this profiler from the global singleton."""
+        """Remove this profiler from the global singleton and stop async writer."""
         global _ACTIVE_PROFILER
         with _PROFILER_LOCK:
             if _ACTIVE_PROFILER is self:
                 _ACTIVE_PROFILER = None
         self._remove_hooks()
+        if self.rank == 0 and self.enable_async_write:
+            _stop_async_writer()
 
     # ── module hook registration ─────────────────────────────────────────────
 
@@ -295,20 +426,48 @@ class StepProfiler:
             self._recording = False
             return
         self._recording = True
-        self._current = StepRecord(step=global_step, tokens=tokens)
+        self._current = StepRecord(
+            step=global_step,
+            tokens=tokens,
+            start_timestamp=_time.time(),
+        )
 
     def end_step(self, tokens: int = 0):
-        """Call after optimizer.step(). Finalizes the step record."""
+        """
+        Call after optimizer.step(). Finalizes the step record and writes it
+        to JSONL immediately (either async or sync).
+        """
         if not self._recording or self._current is None:
             return
         self._recording = False
         if tokens:
             self._current.tokens = tokens
+        
         # Force CUDA sync so all event elapsed_time() calls are ready
         if torch.cuda.is_available():
             torch.cuda.synchronize()
+        
         self._history.append(self._current)
+        
+        # Immediately write this step's record to JSONL (async or sync)
+        if self.rank == 0 and self._jsonl_path:
+            self._write_step_async(self._current)
+        
         self._current = None
+    
+    def _write_step_async(self, record: StepRecord):
+        """Queue a step record for async JSONL writing (or write sync if disabled)."""
+        row = record.to_json_row()
+        if self.enable_async_write:
+            _WRITE_QUEUE.put((self._jsonl_path, row))
+        else:
+            # Sync write
+            try:
+                os.makedirs(os.path.dirname(self._jsonl_path) or ".", exist_ok=True)
+                with open(self._jsonl_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(row) + "\n")
+            except Exception:
+                pass  # Never crash training
 
     # ── explicit phase timers (called from train.py) ─────────────────────────
 
@@ -329,6 +488,7 @@ class StepProfiler:
     # ── internal accumulation ─────────────────────────────────────────────────
 
     def _record_region(self, region: _CUDARegion):
+        """Accumulate timing for a region (supports multiple calls per region)."""
         if self._current is None:
             return
         try:
@@ -340,15 +500,32 @@ class StepProfiler:
     # ── reporting ─────────────────────────────────────────────────────────────
 
     def write_jsonl(self, path: Optional[str] = None):
-        """Write one JSON line per profiled step to `path`."""
+        """
+        Write all collected steps to JSONL.
+        
+        Note: In real-time mode (enable_async_write=True), each step is already
+        written immediately after end_step(). This method is mainly for:
+        - Final flush when profiling ends
+        - Backward compatibility
+        """
         if self.rank != 0 or not self._history:
             return
         if path is None:
             path = os.path.join(self.output_dir, "profile.jsonl")
+        
+        # If we have a current JSONL path and it's already being written to,
+        # this is a no-op (all steps are already written)
+        if self._jsonl_path == path:
+            if self.enable_async_write:
+                # Wait for async queue to flush
+                _WRITE_QUEUE.join() if hasattr(_WRITE_QUEUE, 'join') else None
+            return
+        
+        # Otherwise, write all history to the new path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
             for rec in self._history:
-                row = {"step": rec.step, "tokens": rec.tokens, **rec.regions}
+                row = rec.to_json_row()
                 f.write(json.dumps(row) + "\n")
 
     def write_report(self, path: Optional[str] = None):
@@ -371,22 +548,26 @@ class StepProfiler:
         # Average across all recorded steps
         from collections import defaultdict
         sums: Dict[str, float] = defaultdict(float)
-        counts: Dict[str, int] = defaultdict(int)
+        region_counts: Dict[str, int] = defaultdict(int)  # Actual call counts
+        step_counts: Dict[str, int] = defaultdict(int)     # How many steps had this region
         total_tokens = 0
+        
         for rec in self._history:
             total_tokens += rec.tokens
             for k, v in rec.regions.items():
                 sums[k] += v
-                counts[k] += 1
+                region_counts[k] += rec.region_counts.get(k, 1)  # Accumulate calls
+                step_counts[k] += 1  # Count steps where region appeared
 
         n = len(self._history)
-        avgs = {k: sums[k] / counts[k] for k in sums}
+        avgs = {k: sums[k] / step_counts[k] for k in sums}
         avg_tokens = total_tokens / n
 
         lines = []
-        lines.append("=" * 72)
-        lines.append(f"  STEP PROFILER REPORT  ({n} step(s) averaged, {avg_tokens:.0f} tokens/step)")
-        lines.append("=" * 72)
+        lines.append("=" * 90)
+        lines.append(f"  STEP PROFILER REPORT — Granular Kernel Analysis")
+        lines.append(f"  ({n} step(s) averaged, {avg_tokens:.0f} tokens/step)")
+        lines.append("=" * 90)
 
         # ── Phase summary ────────────────────────────────────────────────────
         phase_keys = [
@@ -446,19 +627,37 @@ class StepProfiler:
             for ktype, total_ms in sorted(kernel_totals.items(), key=lambda x: -x[1]):
                 lines.append(f"  {ktype:<30}  {total_ms:>10.2f}")
 
+        # ── Sub-kernel / granular regions (NEW) ───────────────────────────────
+        lines.append("\n── Granular Kernel Operations (avg per call) ────────────────────")
+        lines.append(f"  {'Operation':<52}  {'per-call ms':>10}  {'calls':>8}")
+        lines.append(f"  {'-'*52}  {'-'*10}  {'-'*8}")
+        
+        # Filter for detailed kernel operations (those with dots indicating nesting)
+        detailed_ops = sorted(
+            [(k, avgs[k], region_counts[k]) for k in avgs 
+             if "." in k and not k.endswith(".fwd") and not k.endswith(".bwd")],
+            key=lambda x: -x[1]  # Sort by avg time descending
+        )[:40]
+        
+        for k, avg_ms, calls in detailed_ops:
+            per_call = avg_ms / (calls / n) if calls > 0 else 0  # Estimate per-call time
+            lines.append(f"  {k:<52}  {per_call:>10.4f}  {calls:>8}")
+
         # ── All raw regions (sorted by time) ─────────────────────────────────
         lines.append("\n── All Regions (sorted by avg ms) ───────────────────────────────")
-        lines.append(f"  {'Region':<44}  {'avg ms':>8}  {'calls':>6}")
-        lines.append(f"  {'-'*44}  {'-'*8}  {'-'*6}")
+        lines.append(f"  {'Region':<44}  {'avg ms':>8}  {'calls':>6}  {'per-call':>8}")
+        lines.append(f"  {'-'*44}  {'-'*8}  {'-'*6}  {'-'*8}")
         for k, v in sorted(avgs.items(), key=lambda x: -x[1])[:60]:
-            lines.append(f"  {k:<44}  {v:>8.2f}  {counts[k]:>6}")
+            calls = region_counts[k]
+            per_call_ms = v / (calls / n) if calls > 0 else 0
+            lines.append(f"  {k:<44}  {v:>8.2f}  {calls:>6}  {per_call_ms:>8.4f}")
 
         if avg_tokens > 0:
             step_ms = avgs.get("step_total", 1)
             tok_per_sec = avg_tokens / (step_ms / 1000.0)
             lines.append(f"\n  Estimated throughput: {tok_per_sec:,.0f} tok/sec")
 
-        lines.append("=" * 72)
+        lines.append("=" * 90)
         return lines
 
 

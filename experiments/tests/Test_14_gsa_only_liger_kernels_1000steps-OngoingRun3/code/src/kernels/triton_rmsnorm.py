@@ -37,6 +37,16 @@ except ImportError:
     triton = None
     tl = None
 
+# Import profiling helpers
+try:
+    from ..profiler import kernel_region
+except ImportError:
+    # Fallback: no-op context manager
+    from contextlib import contextmanager
+    @contextmanager
+    def kernel_region(name: str):
+        yield
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Triton Forward Kernel
@@ -218,75 +228,87 @@ if HAS_TRITON:
                 eps: Epsilon for numerical stability
 
             Returns:
-                Normalized tensor, same shape and dtype as X
+                Normalized tensor, same dtype as X
             """
-            orig_shape = X.shape
-            n_cols = X.shape[-1]
-            X_2d = X.contiguous().reshape(-1, n_cols)
-            n_rows = X_2d.shape[0]
+            with kernel_region("rmsnorm_fwd_total"):
+                orig_shape = X.shape
+                n_cols = X.shape[-1]
+                
+                with kernel_region("rmsnorm_fwd_reshape"):
+                    X_2d = X.contiguous().reshape(-1, n_cols)
+                
+                n_rows = X_2d.shape[0]
 
-            BLOCK_SIZE, num_warps = _calculate_settings(n_cols)
+                BLOCK_SIZE, num_warps = _calculate_settings(n_cols)
 
-            # Safety: fall back to PyTorch if dim is too large
-            if BLOCK_SIZE > 65536:
-                return pytorch_rmsnorm(X, W, eps)
+                # Safety: fall back to PyTorch if dim is too large
+                if BLOCK_SIZE > 65536:
+                    return pytorch_rmsnorm(X, W, eps)
 
-            Y = torch.empty_like(X_2d)
-            RSTD = torch.empty(n_rows, dtype=torch.float32, device=X.device)
+                with kernel_region("rmsnorm_fwd_alloc"):
+                    Y = torch.empty_like(X_2d)
+                    RSTD = torch.empty(n_rows, dtype=torch.float32, device=X.device)
 
-            _rmsnorm_fwd_kernel[(n_rows,)](
-                Y, X_2d, W, RSTD,
-                n_cols, eps,
-                X_2d.stride(0), Y.stride(0),
-                BLOCK_SIZE=BLOCK_SIZE,
-                num_warps=num_warps,
-            )
+                with kernel_region("rmsnorm_fwd_kernel"):
+                    _rmsnorm_fwd_kernel[(n_rows,)](
+                        Y, X_2d, W, RSTD,
+                        n_cols, eps,
+                        X_2d.stride(0), Y.stride(0),
+                        BLOCK_SIZE=BLOCK_SIZE,
+                        num_warps=num_warps,
+                    )
 
-            Y = Y.reshape(orig_shape)
+                with kernel_region("rmsnorm_fwd_reshape_out"):
+                    Y = Y.reshape(orig_shape)
 
-            # Save for backward
-            ctx.save_for_backward(X_2d, W, RSTD)
-            ctx.BLOCK_SIZE = BLOCK_SIZE
-            ctx.num_warps = num_warps
-            ctx.n_rows = n_rows
-            ctx.n_cols = n_cols
-            ctx.orig_shape = orig_shape
+                # Save for backward
+                ctx.save_for_backward(X_2d, W, RSTD)
+                ctx.BLOCK_SIZE = BLOCK_SIZE
+                ctx.num_warps = num_warps
+                ctx.n_rows = n_rows
+                ctx.n_cols = n_cols
+                ctx.orig_shape = orig_shape
 
-            return Y
+                return Y
 
         @staticmethod
         def backward(ctx, dY):
-            X_2d, W, RSTD = ctx.saved_tensors
-            BLOCK_SIZE = ctx.BLOCK_SIZE
-            num_warps = ctx.num_warps
-            n_rows = ctx.n_rows
-            n_cols = ctx.n_cols
+            with kernel_region("rmsnorm_bwd_total"):
+                X_2d, W, RSTD = ctx.saved_tensors
+                BLOCK_SIZE = ctx.BLOCK_SIZE
+                num_warps = ctx.num_warps
+                n_rows = ctx.n_rows
+                n_cols = ctx.n_cols
 
-            dY_2d = dY.contiguous().reshape(-1, n_cols)
+                with kernel_region("rmsnorm_bwd_reshape"):
+                    dY_2d = dY.contiguous().reshape(-1, n_cols)
 
-            # Allocate outputs
-            dX = torch.empty_like(X_2d)
+                # Allocate outputs
+                with kernel_region("rmsnorm_bwd_alloc"):
+                    dX = torch.empty_like(X_2d)
 
-            # Number of SMs for dW accumulation across row blocks
-            sm_count = torch.cuda.get_device_properties(X_2d.device).multi_processor_count
-            _dW = torch.empty(sm_count, n_cols, dtype=torch.float32, device=W.device)
+                    # Number of SMs for dW accumulation across row blocks
+                    sm_count = torch.cuda.get_device_properties(X_2d.device).multi_processor_count
+                    _dW = torch.empty(sm_count, n_cols, dtype=torch.float32, device=W.device)
 
-            rows_per_program = math.ceil(n_rows / sm_count)
-            grid = (sm_count,)
+                rows_per_program = math.ceil(n_rows / sm_count)
+                grid = (sm_count,)
 
-            _rmsnorm_bwd_kernel[grid](
-                dY_2d, dX, X_2d, W, RSTD, _dW,
-                n_rows, n_cols,
-                dY_2d.stride(0), dX.stride(0), X_2d.stride(0),
-                rows_per_program,
-                BLOCK_SIZE=BLOCK_SIZE,
-                num_warps=num_warps,
-            )
+                with kernel_region("rmsnorm_bwd_kernel"):
+                    _rmsnorm_bwd_kernel[grid](
+                        dY_2d, dX, X_2d, W, RSTD, _dW,
+                        n_rows, n_cols,
+                        dY_2d.stride(0), dX.stride(0), X_2d.stride(0),
+                        rows_per_program,
+                        BLOCK_SIZE=BLOCK_SIZE,
+                        num_warps=num_warps,
+                    )
 
-            # Sum partial dW across SM blocks → final dW
-            dW = _dW.sum(dim=0).to(W.dtype)
+                # Sum partial dW across SM blocks → final dW
+                with kernel_region("rmsnorm_bwd_dw_reduce"):
+                    dW = _dW.sum(dim=0).to(W.dtype)
 
-            return dX.reshape(ctx.orig_shape), dW, None
+                return dX.reshape(ctx.orig_shape), dW, None
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -314,14 +336,17 @@ def triton_rmsnorm(
     Returns:
         Normalized tensor of same shape as x
     """
-    if not HAS_TRITON:
-        raise ImportError("Triton is required for triton_rmsnorm")
+    with kernel_region("rmsnorm_total"):
+        if not HAS_TRITON:
+            raise ImportError("Triton is required for triton_rmsnorm")
 
-    # Handle optional residual (add before norm)
-    if residual is not None:
-        x = x + residual
+        # Handle optional residual (add before norm)
+        if residual is not None:
+            with kernel_region("rmsnorm_residual_add"):
+                x = x + residual
 
-    return LigerRMSNormFunction.apply(x, weight, eps)
+        with kernel_region("rmsnorm_apply"):
+            return LigerRMSNormFunction.apply(x, weight, eps)
 
 
 def pytorch_rmsnorm(
