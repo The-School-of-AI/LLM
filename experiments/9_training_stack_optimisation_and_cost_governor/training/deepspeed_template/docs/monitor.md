@@ -34,15 +34,15 @@
 
 ### MoE Router
 
-| Metric | What it means | Target |
+| Metric | What it means |
 |---|---|---|
-| `moe_null_rate` | Fraction of top-k picks that went to a null slot | ~0.833 (83%) at convergence |
-| `moe_avg_real_experts` | Avg real experts hit per token | ~0.33 at convergence (2 picks × 1/6) |
-| `moe_zero_real_frac` | Fraction of tokens that hit zero real experts (all picks null) | ~69% at convergence |
-| `moe_L_bal` | Load balance penalty — penalises uneven token distribution across the 20 real experts | ~1.0 (perfectly balanced) |
-| `moe_L_null` | Squared deviation of null rate from target ρ=5/6. Max is 0.694 (null rate = 0). | → 0.0 at convergence |
-| `moe_L_z` | Z-loss — penalises large router logit magnitudes. Keeps softmax well-calibrated. | Stable 10–50 |
-| `moe_expert_counts` | Token count routed to each of the 20 real experts. Shows load imbalance. | Roughly equal across all 20 |
+| `moe_null_rate` | Fraction of top-k picks that went to a null slot |
+| `moe_avg_real_experts` | Avg real experts hit per token |
+| `moe_zero_real_frac` | Fraction of tokens that hit zero real experts (all picks null) | 
+| `moe_L_bal` | Load balance penalty — penalises uneven token distribution across the real experts |
+| `moe_L_null` | Squared deviation of null rate from target ρ=5/6. Max is 0.694 (null rate = 0). |
+| `moe_L_z` | Z-loss — penalises large router logit magnitudes. Keeps softmax well-calibrated. | 
+| `moe_expert_counts` | Token count routed to each of the real experts. Shows load imbalance. | 
 
 ---
 
