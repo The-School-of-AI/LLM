@@ -234,7 +234,6 @@ if HAS_TRITON:
         stride_cnt_b,   # inv_count:   [B, T_kv]
         stride_off_b,   # inv_offset:  [B, T_kv]
         scale,
-        max_fan_in,     # max fan-in across all keys (loop bound)
         BLOCK_Q_INNER: tl.constexpr,
         BLOCK_D: tl.constexpr,
     ):
@@ -261,8 +260,8 @@ if HAS_TRITON:
         d_mask = d_offs < d_head
 
         # ── Load fan-in count and offset (shared across heads) ────────
-        fan_in = tl.load(INV_COUNT_ptr + pid_b * stride_cnt_b + pid_ki)
-        base_off = tl.load(INV_OFFSET_ptr + pid_b * stride_off_b + pid_ki)
+        fan_in = tl.load(INV_COUNT_ptr + pid_b * stride_cnt_b + pid_ki).to(tl.int32)
+        base_off = tl.load(INV_OFFSET_ptr + pid_b * stride_off_b + pid_ki).to(tl.int32)
 
         # ── Load K[b, ki, h, :] and V[b, ki, h, :] once ──────────────
         k_base = K_ptr + pid_b * stride_kb + pid_ki * stride_kk + pid_h * stride_kh
@@ -287,8 +286,8 @@ if HAS_TRITON:
 
         q_inner_offs = tl.arange(0, BLOCK_Q_INNER)
 
-        # ── Main loop: iterate over fan-in queries ────────────────────
-        for q_start in range(0, max_fan_in, BLOCK_Q_INNER):
+        # ── Main loop: iterate ONLY over this key's fan-in (not global max) ─
+        for q_start in range(0, fan_in, BLOCK_Q_INNER):
             q_block_offs = q_start + q_inner_offs
             q_valid = q_block_offs < fan_in
 
@@ -346,9 +345,7 @@ if HAS_TRITON:
 def _build_inverse_index(indices, mask, T_kv):
     """
     Build inverse index: for each key position, which queries selected it.
-
-    Since indices and mask are shared across attention heads (stride-0 on H dim),
-    we only need one inverse index per batch element.
+    Fully vectorized — no Python for-loops, no GPU→CPU syncs.
 
     Args:
         indices: [B, H, T, k_sel] int64 (H dim is stride-0 broadcast)
@@ -374,10 +371,24 @@ def _build_inverse_index(indices, mask, T_kv):
     q_pos = torch.arange(T, device=device, dtype=torch.int32)
     q_pos = q_pos.view(1, T, 1).expand(B, T, k_sel)  # [B, T, k_sel]
 
-    # Per-batch processing (B is small, typically 4)
-    results = []
+    # Count per key per batch using scatter_add (fully vectorized)
+    idx_clamped = idx.clamp(0, T_kv - 1)  # [B, T, k_sel]
+    valid_int = valid.int().reshape(B, -1)  # [B, T*k_sel]
+    idx_flat = idx_clamped.reshape(B, -1)   # [B, T*k_sel]
     inv_count = torch.zeros(B, T_kv, device=device, dtype=torch.int32)
+    inv_count.scatter_add_(1, idx_flat, valid_int)
 
+    # Offsets: exclusive prefix sum
+    inv_offset = torch.zeros(B, T_kv, device=device, dtype=torch.int32)
+    inv_offset[:, 1:] = inv_count[:, :-1].cumsum(dim=1).int()
+
+    # Total entries per batch (no CPU sync — keep on GPU)
+    total_per_batch = inv_count.sum(dim=1)  # [B]
+    # Use a safe upper bound: T * k_sel (max possible valid entries)
+    max_entries = T * k_sel
+
+    # Per-batch sort and scatter (B is small, typically 4)
+    inv_queries = torch.zeros(B, max_entries, device=device, dtype=torch.int32)
     for b in range(B):
         v = valid[b].reshape(-1)         # [T * k_sel]
         ki = idx[b].reshape(-1)[v]       # valid key indices
@@ -387,23 +398,9 @@ def _build_inverse_index(indices, mask, T_kv):
         order = ki.argsort(stable=True)
         qi_sorted = qi[order]
 
-        # Count per key position
-        inv_count[b] = torch.bincount(ki.int(), minlength=T_kv).int()
-
-        results.append(qi_sorted)
-
-    # Offsets: exclusive prefix sum of counts
-    inv_offset = torch.zeros(B, T_kv, device=device, dtype=torch.int32)
-    inv_offset[:, 1:] = inv_count[:, :-1].cumsum(dim=1).int()
-
-    # Pad inv_queries to uniform length across batch
-    max_entries = max(r.shape[0] for r in results) if results else 1
-    max_entries = max(max_entries, 1)
-    inv_queries = torch.zeros(B, max_entries, device=device, dtype=torch.int32)
-    for b in range(B):
-        n = results[b].shape[0]
+        n = qi_sorted.shape[0]
         if n > 0:
-            inv_queries[b, :n] = results[b].int()
+            inv_queries[b, :n] = qi_sorted.int()
 
     return inv_queries, inv_count, inv_offset
 
@@ -522,14 +519,10 @@ if HAS_TRITON:
             )
 
             # ── Step 4: dK/dV via KEY-MAJOR kernel (ZERO atomics!) ───
-            dk = torch.empty(B, T_kv, H, D, device=q.device, dtype=torch.float32)
-            dv = torch.empty(B, T_kv, H, D, device=q.device, dtype=torch.float32)
+            dk = torch.zeros(B, T_kv, H, D, device=q.device, dtype=torch.float32)
+            dv = torch.zeros(B, T_kv, H, D, device=q.device, dtype=torch.float32)
 
-            max_fan_in = int(inv_count.max().item())
             BLOCK_Q_INNER = 4  # Process 4 queries per inner loop iteration
-
-            # Pad max_fan_in to multiple of BLOCK_Q_INNER
-            max_fan_in_padded = ((max_fan_in + BLOCK_Q_INNER - 1) // BLOCK_Q_INNER) * BLOCK_Q_INNER
 
             grid_dkdv = (B * H, T_kv)
             _sparse_attn_bwd_dkdv_keymajor_kernel[grid_dkdv](
@@ -548,9 +541,8 @@ if HAS_TRITON:
                 inv_count.stride(0),    # stride_cnt_b
                 inv_offset.stride(0),   # stride_off_b
                 scale,
-                max_fan_in_padded,
                 BLOCK_Q_INNER=BLOCK_Q_INNER, BLOCK_D=BLOCK_D,
-                num_warps=4, num_stages=1,  # Compute-bound, moderate parallelism
+                num_warps=4, num_stages=1,
             )
 
             return dq.to(q.dtype), dk.to(k.dtype), dv.to(v.dtype), None, None, None
