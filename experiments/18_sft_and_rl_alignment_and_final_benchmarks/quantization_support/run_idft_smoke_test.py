@@ -19,7 +19,6 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import sys
 import time
 from copy import deepcopy
@@ -99,8 +98,8 @@ def phase1_ddt_validation(setup: Dict[str, Any]) -> Dict[str, Any]:
     config = setup["config"]
 
     # Load model for diagnostic (lighter than training)
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     logger.info(f"Loading model for phi diagnostic: {config.model.name}")
     tokenizer = AutoTokenizer.from_pretrained(config.model.name, trust_remote_code=True)
@@ -251,11 +250,7 @@ def phase3_evaluation(
     Returns:
         Dict with evaluation results for all conditions.
     """
-    from evaluate_smoke_test import (
-        evaluate_checkpoint,
-        compare_conditions,
-        print_results_table,
-    )
+    from evaluate_smoke_test import evaluate_checkpoint
 
     logger.info("=" * 70)
     logger.info("PHASE 3: EVALUATION")
@@ -452,7 +447,7 @@ def main():
 
     # Phase 4: Decision
     if eval_results and (args.phase is None or args.phase == 4):
-        decision = phase4_decision(setup, eval_results, phi_results)
+        phase4_decision(setup, eval_results, phi_results)
 
     elapsed = time.time() - start_time
     logger.info(f"\nTotal elapsed time: {elapsed / 3600:.1f} hours")

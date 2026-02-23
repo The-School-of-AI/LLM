@@ -91,25 +91,26 @@ class TestIDFTLoss:
         _, diag = idft_loss(logits, labels, mask)
 
         expected_keys = {
-            "phi_mean", "phi_std",
-            "phi_below_neg1_pct", "phi_below_neg3_pct", "phi_below_neg5_pct",
-            "gamma_mean", "gamma_max",
+            "phi_mean",
+            "phi_std",
+            "phi_below_neg1_pct",
+            "phi_below_neg3_pct",
+            "phi_below_neg5_pct",
+            "gamma_mean",
+            "gamma_max",
         }
         assert set(diag.keys()) == expected_keys
 
     def test_clip_B_zero_reduces_to_standard_loss(self):
         """With clip_B=0, phi is clamped to 0, gamma=exp(0)=1, so IDFT = SFT."""
-        from idft_loss import (
-            idft_loss,
-            sft_loss,
-        )
+        from idft_loss import idft_loss, sft_loss
 
         torch.manual_seed(42)
         logits = torch.randn(2, 8, 50)
         labels = torch.randint(0, 50, (2, 8))
         mask = torch.ones(2, 8)
 
-        sft = sft_loss(logits, labels, mask)
+        sft_loss(logits, labels, mask)
         idft, _ = idft_loss(logits, labels, mask, clip_B=0.0)
 
         # When clip_B=0, phi_clipped=0, gamma=1, weight=p^1=p
@@ -131,8 +132,7 @@ class TestIDFTLoss:
         loss, diag = idft_loss(logits_big, labels, mask, clip_B=5.0)
         assert torch.isfinite(loss), f"Loss is not finite: {loss}"
         assert all(
-            not (isinstance(v, float) and (v != v))  # NaN check
-            for v in diag.values()
+            not (isinstance(v, float) and (v != v)) for v in diag.values()  # NaN check
         )
 
     def test_no_nan_with_tiny_logits(self):

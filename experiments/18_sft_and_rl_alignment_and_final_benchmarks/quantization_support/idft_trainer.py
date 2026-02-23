@@ -7,12 +7,9 @@ with the IDFT loss from "Towards On-Policy SFT" (arXiv:2602.12222).
 """
 
 import logging
-from typing import Any, Dict, Optional, Union
-
-import torch
-from trl import SFTTrainer, SFTConfig
 
 from idft_loss import idft_loss
+from trl import SFTTrainer
 
 logger = logging.getLogger(__name__)
 

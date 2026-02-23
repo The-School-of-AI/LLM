@@ -8,9 +8,10 @@ Implements the IDFT (In-Distribution Fine-Tuning) loss from
 Also provides a standard SFT loss for baseline comparison.
 """
 
+from typing import Dict, Tuple
+
 import torch
 import torch.nn.functional as F
-from typing import Dict, Tuple
 
 
 def sft_loss(
