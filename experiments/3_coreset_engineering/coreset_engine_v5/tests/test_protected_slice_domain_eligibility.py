@@ -8,7 +8,9 @@ from src.curriculum.loader import CurriculumLoader
 from src.selection.engine_batched import BatchedSelectionEngine
 
 
-def test_protected_slice_enforcement_respects_band_allowed_domains(tmp_path: Path) -> None:
+def test_protected_slice_enforcement_respects_band_allowed_domains(
+    tmp_path: Path,
+) -> None:
     """Protected slice top-ups must not violate (band, domain) eligibility.
 
     Regression guard for cases like B4 selecting domain=web even though
