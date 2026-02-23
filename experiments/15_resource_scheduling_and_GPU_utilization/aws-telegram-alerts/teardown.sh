@@ -26,13 +26,18 @@ teardown_account() {
   echo "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 
   # Delete CloudWatch alarms
+  # --output text returns tab-separated names on one line; tr converts to newlines
+  # so each alarm name is read as a single token regardless of spaces in names
   ALARMS=$(aws cloudwatch describe-alarms \
     --query "MetricAlarms[?ends_with(AlarmName, '-cpu-idle')].AlarmName" \
     --output text \
-    --region "${AWS_REGION}" 2>/dev/null || echo "")
-  echo "  Deleting alarms...${ALARMS}"
+    --region "${AWS_REGION}" 2>/dev/null | tr '\t' '\n' || true)
   if [ -n "${ALARMS}" ]; then
-    aws cloudwatch delete-alarms --alarm-names ${ALARMS} --region "${AWS_REGION}"
+    echo "  Deleting alarms..."
+    printf '%s\n' "${ALARMS}" | while IFS= read -r alarm; do
+      [ -n "${alarm}" ] && \
+        aws cloudwatch delete-alarms --alarm-names "${alarm}" --region "${AWS_REGION}" 2>/dev/null || true
+    done
   fi
 
   # Delete EventBridge rule targets first
@@ -66,7 +71,13 @@ teardown_account() {
     --function-name "${LAMBDA_FUNCTION_NAME}" \
     --region "${AWS_REGION}" 2>/dev/null || true
 
-  # Detach managed policies from IAM role
+  # Delete SSM parameter
+  echo "  Deleting SSM parameter.../${PREFIX}/telegram-bot-token"
+  aws ssm delete-parameter \
+    --name "/${PREFIX}/telegram-bot-token" \
+    --region "${AWS_REGION}" 2>/dev/null || true
+
+  # Detach managed policies and inline policies from IAM role
   echo "  Detaching ${POLICY_ARN} from role...${LAMBDA_ROLE_NAME}"
   aws iam detach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
@@ -76,6 +87,11 @@ teardown_account() {
   aws iam detach-role-policy \
     --role-name "${LAMBDA_ROLE_NAME}" \
     --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 2>/dev/null || true
+
+  echo "  Deleting inline SSM policy from role...${LAMBDA_ROLE_NAME}"
+  aws iam delete-role-policy \
+    --role-name "${LAMBDA_ROLE_NAME}" \
+    --policy-name "${PREFIX}-ssm-read" 2>/dev/null || true
 
   # Delete IAM role
   echo "  Deleting IAM role...${LAMBDA_ROLE_NAME}"

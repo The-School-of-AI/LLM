@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 
 #######################################
@@ -49,29 +49,31 @@ echo "=========================================="
 SUCCESS=0
 FAILED=0
 
-echo "${PROFILES}" | while read -r PROFILE; do
+while IFS= read -r PROFILE; do
   PROFILE=$(echo "${PROFILE}" | xargs)
-  
+
   echo ""
   echo ">>> ${PROFILE}"
-  
-  ARGS="--telegram-token ${TELEGRAM_BOT_TOKEN} --telegram-chat-id ${TELEGRAM_CHAT_ID}"
-  
+
+  # Build args array so each value is a separate word — safe for tokens with spaces
+  SETUP_ARGS=(
+    --telegram-token "${TELEGRAM_BOT_TOKEN}"
+    --telegram-chat-id "${TELEGRAM_CHAT_ID}"
+  )
   if [ -n "${AWS_REGION:-}" ]; then
-    ARGS="${ARGS} --region ${AWS_REGION}"
+    SETUP_ARGS+=(--region "${AWS_REGION}")
   fi
-  
   if [ -n "${CPU_THRESHOLD:-}" ]; then
-    ARGS="${ARGS} --cpu-threshold ${CPU_THRESHOLD}"
+    SETUP_ARGS+=(--cpu-threshold "${CPU_THRESHOLD}")
   fi
-  
-  if AWS_PROFILE="${PROFILE}" "${SCRIPT_DIR}/setup.sh" ${ARGS}; then
+
+  if AWS_PROFILE="${PROFILE}" "${SCRIPT_DIR}/setup.sh" "${SETUP_ARGS[@]}"; then
     SUCCESS=$((SUCCESS + 1))
   else
     echo "[FAILED] ${PROFILE}"
     FAILED=$((FAILED + 1))
   fi
-done
+done <<< "${PROFILES}"
 
 echo ""
 echo "=========================================="

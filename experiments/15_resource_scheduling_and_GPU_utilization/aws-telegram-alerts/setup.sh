@@ -74,7 +74,7 @@ log_info "Account: ${AWS_ACCOUNT_ID} | Region: ${AWS_REGION}"
 log_info "Checking IAM role..."
 
 # hardcoding policy arn as its going to same across all accounts
-POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/T15-CloudWatchAlarms-410"
+POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${PREFIX}"
 
 log_info "Checking if ${LAMBDA_ROLE_NAME} role exists..."
 if ! aws iam get-role --role-name "${LAMBDA_ROLE_NAME}" >/dev/null 2>&1; then
@@ -117,6 +117,34 @@ fi
 
 LAMBDA_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${LAMBDA_ROLE_NAME}"
 
+# Attach inline policy so Lambda can read the SSM token parameter
+log_info "Attaching SSM read inline policy to role...${LAMBDA_ROLE_NAME}"
+aws iam put-role-policy \
+  --role-name "${LAMBDA_ROLE_NAME}" \
+  --policy-name "${PREFIX}-ssm-read" \
+  --policy-document "{
+    \"Version\": \"2012-10-17\",
+    \"Statement\": [{
+      \"Sid\": \"SSMTokenRead\",
+      \"Effect\": \"Allow\",
+      \"Action\": \"ssm:GetParameter\",
+      \"Resource\": \"arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/${PREFIX}/*\"
+    }]
+  }"
+
+#######################################
+# Step 1b: Store Telegram token in SSM Parameter Store
+#######################################
+SSM_PARAM_NAME="/${PREFIX}/telegram-bot-token"
+log_info "Storing Telegram bot token in SSM Parameter Store (${SSM_PARAM_NAME})..."
+aws ssm put-parameter \
+  --name "${SSM_PARAM_NAME}" \
+  --value "${TELEGRAM_BOT_TOKEN}" \
+  --type "SecureString" \
+  --overwrite \
+  --region "${AWS_REGION}" > /dev/null
+log_info "Token stored in SSM."
+
 #######################################
 # Step 2: Create/Update Telegram Forwarder Lambda
 #######################################
@@ -126,12 +154,27 @@ TEMP_DIR=$(mktemp -d)
 cat > "${TEMP_DIR}/lambda_function.py" << 'PYTHON_EOF'
 import json
 import os
+import boto3
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta
 
+_token_cache = None
+
+def get_telegram_token():
+    global _token_cache
+    if _token_cache:
+        return _token_cache
+    ssm = boto3.client('ssm')
+    response = ssm.get_parameter(
+        Name=os.environ['TELEGRAM_TOKEN_PARAM'],
+        WithDecryption=True
+    )
+    _token_cache = response['Parameter']['Value']
+    return _token_cache
+
 def lambda_handler(event, context):
-    bot_token = os.environ['TELEGRAM_BOT_TOKEN']
+    bot_token = get_telegram_token()
     chat_id = os.environ['TELEGRAM_CHAT_ID']
     account_id = os.environ.get('AWS_ACCOUNT_ID', 'Unknown')
 
@@ -164,22 +207,22 @@ def lambda_handler(event, context):
         raise
 
 def get_instance_name(instance_id):
-    if instance_id:
-      try:
+    """Return the Name tag value, or instance_id if no Name tag exists."""
+    if not instance_id:
+        return "unknown"
+    try:
         import boto3
         ec2 = boto3.client('ec2')
         response = ec2.describe_instances(InstanceIds=[instance_id])
         tags = response['Reservations'][0]['Instances'][0].get('Tags', [])
         for tag in tags:
-          if tag['Key'] == 'Name':
-            return tag['Value']
-
-      except Exception:
-          instance_name = instance_id
-    else:
-      instance_name = None
-
-    return instance_name
+            if tag.get('Key') == 'Name':
+                name = tag.get('Value', '').strip()
+                if name:
+                    return name
+    except Exception as e:
+        print("Warning: could not get name for {}: {}".format(instance_id, e))
+    return instance_id
 
 def format_alarm(alarm, account_id, instance_name=None):
     name = alarm.get('AlarmName', 'Unknown')
@@ -258,7 +301,7 @@ if aws lambda get-function --function-name "${LAMBDA_FUNCTION_NAME}" --region "$
   sleep 5
   aws lambda update-function-configuration \
     --function-name "${LAMBDA_FUNCTION_NAME}" \
-    --environment "Variables={TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}}" \
+    --environment "Variables={TELEGRAM_TOKEN_PARAM=${SSM_PARAM_NAME},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}}" \
     --region "${AWS_REGION}" > /dev/null
 else
   log_info "Inside ELSE, ${LAMBDA_FUNCTION_NAME} does not exist, Creating it..."
@@ -270,7 +313,7 @@ else
     --zip-file "fileb://lambda.zip" \
     --timeout 30 \
     --memory-size 128 \
-    --environment "Variables={TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}}" \
+    --environment "Variables={TELEGRAM_TOKEN_PARAM=${SSM_PARAM_NAME},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}}" \
     --tags Team=${TAG_TEAM},TaskId=${TAG_TASK_ID},WorkloadType=${TAG_WORKLOAD_TYPE} \
     --region "${AWS_REGION}" > /dev/null
 
@@ -317,7 +360,7 @@ aws sns subscribe \
 #######################################
 log_info "Checking EventBridge Lambda...${EVENTBRIDGE_LAMBDA_NAME}"
 
-cat > "${TEMP_DIR}/eventbridge_lambda.py" << PYTHON_EOF
+cat > "${TEMP_DIR}/eventbridge_lambda.py" << 'PYTHON_EOF'
 import json
 import os
 import boto3
@@ -326,27 +369,53 @@ import urllib.parse
 from datetime import datetime, timedelta
 
 cloudwatch = boto3.client('cloudwatch')
-
 ec2 = boto3.client('ec2')
 
 # Configuration from environment
-CPU_THRESHOLD = int(os.environ.get('CPU_THRESHOLD', '10'))
+CPU_THRESHOLD      = int(os.environ.get('CPU_THRESHOLD', '10'))
 EVALUATION_PERIODS = int(os.environ.get('EVALUATION_PERIODS', '3'))
-PERIOD_SECONDS = int(os.environ.get('PERIOD_SECONDS', '300'))
-SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
-AWS_ACCOUNT_ID = os.environ.get('AWS_ACCOUNT_ID', 'Unknown')
-TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
+PERIOD_SECONDS     = int(os.environ.get('PERIOD_SECONDS', '300'))
+SNS_TOPIC_ARN      = os.environ['SNS_TOPIC_ARN']
+AWS_ACCOUNT_ID     = os.environ.get('AWS_ACCOUNT_ID', 'Unknown')
+TELEGRAM_CHAT_ID   = os.environ['TELEGRAM_CHAT_ID']
+TAG_TEAM           = os.environ.get('TAG_TEAM', '')
+TAG_TASK_ID        = os.environ.get('TAG_TASK_ID', '')
+TAG_WORKLOAD_TYPE  = os.environ.get('TAG_WORKLOAD_TYPE', '')
+PREFIX             = os.environ.get('PREFIX', '')
 
-TAG_TEAM = "${TAG_TEAM}"
-TAG_TASK_ID = "${TAG_TASK_ID}"
-TAG_WORKLOAD_TYPE = "${TAG_WORKLOAD_TYPE}"
-PREFIX = "${PREFIX}"
+_token_cache = None
+
+def get_telegram_token():
+    global _token_cache
+    if _token_cache:
+        return _token_cache
+    ssm = boto3.client('ssm')
+    response = ssm.get_parameter(
+        Name=os.environ['TELEGRAM_TOKEN_PARAM'],
+        WithDecryption=True
+    )
+    _token_cache = response['Parameter']['Value']
+    return _token_cache
 
 def lambda_handler(event, context):
     instance_id = event['detail']['instance-id']
     region = event['region']
-    
+
+    # Check opt-out tag: instances tagged IdleCPUAutoStop=false are skipped
+    try:
+        tag_response = ec2.describe_tags(
+            Filters=[
+                {'Name': 'resource-id', 'Values': [instance_id]},
+                {'Name': 'key', 'Values': ['IdleCPUAutoStop']}
+            ]
+        )
+        if tag_response['Tags'] and tag_response['Tags'][0]['Value'] == 'false':
+            print("Instance {} opted out via IdleCPUAutoStop=false".format(instance_id))
+            return {'statusCode': 200, 'body': 'Opted out — no alarm created'}
+    except Exception as e:
+        print("Warning: could not check IdleCPUAutoStop tag for {}: {}".format(instance_id, e))
+        # Fail open: proceed to create alarm if tag check fails
+
     # Get instance name
     instance_name = get_instance_name(instance_id)
     alarm_name = "{}-{}-cpu-idle".format(PREFIX, instance_name)
@@ -384,20 +453,20 @@ def lambda_handler(event, context):
     return {'statusCode': 200, 'body': 'Alarm created: {}'.format(alarm_name)}
 
 def get_instance_name(instance_id):
-    if instance_id:
-      try:
+    """Return the Name tag value, or instance_id if no Name tag exists."""
+    if not instance_id:
+        return "unknown"
+    try:
         response = ec2.describe_instances(InstanceIds=[instance_id])
         tags = response['Reservations'][0]['Instances'][0].get('Tags', [])
         for tag in tags:
-          if tag['Key'] == 'Name':
-            return tag['Value']
-            break
-      except Exception:
-          instance_name = instance_id
-    else:
-      instance_name = None
-
-    return instance_name
+            if tag.get('Key') == 'Name':
+                name = tag.get('Value', '').strip()
+                if name:
+                    return name
+    except Exception as e:
+        print("Warning: could not get name for {}: {}".format(instance_id, e))
+    return instance_id
 
 
 
@@ -418,7 +487,7 @@ def notify_telegram(instance_id, instance_name, alarm_name, region):
     ]
     text = "\n".join(lines)
     
-    url = "https://api.telegram.org/bot{}/sendMessage".format(TELEGRAM_BOT_TOKEN)
+    url = "https://api.telegram.org/bot{}/sendMessage".format(get_telegram_token())
     data = urllib.parse.urlencode({
         'chat_id': TELEGRAM_CHAT_ID,
         'text': text,
@@ -446,7 +515,7 @@ if aws lambda get-function --function-name "${EVENTBRIDGE_LAMBDA_NAME}" --region
   log_info "Updating EventBridge Lambda configuration...${EVENTBRIDGE_LAMBDA_NAME}"
   aws lambda update-function-configuration \
     --function-name "${EVENTBRIDGE_LAMBDA_NAME}" \
-    --environment "Variables={CPU_THRESHOLD=${CPU_THRESHOLD},EVALUATION_PERIODS=${EVALUATION_PERIODS},PERIOD_SECONDS=${PERIOD_SECONDS},SNS_TOPIC_ARN=${SNS_TOPIC_ARN},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}}" \
+    --environment "Variables={CPU_THRESHOLD=${CPU_THRESHOLD},EVALUATION_PERIODS=${EVALUATION_PERIODS},PERIOD_SECONDS=${PERIOD_SECONDS},SNS_TOPIC_ARN=${SNS_TOPIC_ARN},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},TELEGRAM_TOKEN_PARAM=${SSM_PARAM_NAME},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},TAG_TEAM=${TAG_TEAM},TAG_TASK_ID=${TAG_TASK_ID},TAG_WORKLOAD_TYPE=${TAG_WORKLOAD_TYPE},PREFIX=${PREFIX}}" \
     --region "${AWS_REGION}" > /dev/null
 else
   log_info "Inside ELSE, Creating EventBridge Lambda...${EVENTBRIDGE_LAMBDA_NAME}"
@@ -458,7 +527,7 @@ else
     --zip-file "fileb://eventbridge_lambda.zip" \
     --timeout 30 \
     --memory-size 128 \
-    --environment "Variables={CPU_THRESHOLD=${CPU_THRESHOLD},EVALUATION_PERIODS=${EVALUATION_PERIODS},PERIOD_SECONDS=${PERIOD_SECONDS},SNS_TOPIC_ARN=${SNS_TOPIC_ARN},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}}" \
+    --environment "Variables={CPU_THRESHOLD=${CPU_THRESHOLD},EVALUATION_PERIODS=${EVALUATION_PERIODS},PERIOD_SECONDS=${PERIOD_SECONDS},SNS_TOPIC_ARN=${SNS_TOPIC_ARN},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},TELEGRAM_TOKEN_PARAM=${SSM_PARAM_NAME},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID},TAG_TEAM=${TAG_TEAM},TAG_TASK_ID=${TAG_TASK_ID},TAG_WORKLOAD_TYPE=${TAG_WORKLOAD_TYPE},PREFIX=${PREFIX}}" \
     --tags Team=${TAG_TEAM},TaskId=${TAG_TASK_ID},WorkloadType=${TAG_WORKLOAD_TYPE} \
     --region "${AWS_REGION}" > /dev/null
 
@@ -537,6 +606,17 @@ if [ -z "${RUNNING_INSTANCES}" ]; then
   log_warn "No running instances found"
 else
   echo "${RUNNING_INSTANCES}" | while IFS='	' read -r instance_id instance_name; do
+    # Check opt-out tag: instances tagged IdleCPUAutoStop=false are skipped
+    AUTO_STOP_TAG=$(aws ec2 describe-tags \
+      --filters "Name=resource-id,Values=${instance_id}" "Name=key,Values=IdleCPUAutoStop" \
+      --query 'Tags[0].Value' \
+      --output text \
+      --region "${AWS_REGION}" 2>/dev/null || echo "")
+    if [ "${AUTO_STOP_TAG}" = "false" ]; then
+      log_info "Skipping ${instance_id} — IdleCPUAutoStop=false"
+      continue
+    fi
+
     if [ -z "${instance_name}" ] || [ "${instance_name}" = "None" ]; then
       instance_name="${instance_id}"
     fi

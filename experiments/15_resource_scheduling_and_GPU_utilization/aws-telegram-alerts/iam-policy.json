@@ -10,6 +10,8 @@
                 "iam:GetRole",
                 "iam:AttachRolePolicy",
                 "iam:DetachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
                 "iam:PassRole",
                 "iam:TagRole",
                 "iam:GetPolicyVersion"
@@ -58,7 +60,10 @@
         {
             "Sid": "EC2",
             "Effect": "Allow",
-            "Action": "ec2:DescribeInstances",
+            "Action": [
+                "ec2:DescribeInstances",
+                "ec2:DescribeTags"
+            ],
             "Resource": "*"
         },
         {
@@ -78,6 +83,16 @@
                     ]
                 }
             }
+        },
+        {
+            "Sid": "SSMSetup",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:PutParameter",
+                "ssm:DeleteParameter",
+                "ssm:GetParameter"
+            ],
+            "Resource": "arn:aws:ssm:*:*:parameter/T15-IdleCPUMonitor-410/*"
         },
         {
             "Sid": "EventBridge",

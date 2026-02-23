@@ -23,12 +23,24 @@ CloudWatch Alarm ──► SNS ──► Lambda ──► Telegram Alert        
 
 | Resource | Name | Purpose |
 |----------|------|---------|
-| IAM Role | telegram-cpu-alert-lambda-execution-role | Lambda execution |
-| Lambda | telegram-cpu-idle-alert-forwarder | Forwards alarms to Telegram |
-| Lambda | ec2-launch-alarm-creator | Auto-creates alarms on EC2 launch |
-| SNS Topic | telegram-cpu-idle-alert-topic | Bridges CloudWatch to Lambda |
-| EventBridge Rule | ec2-launch-cpu-alarm-rule | Triggers on EC2 start |
-| CloudWatch Alarms | {instance-name}-cpu-idle | One per EC2 instance |
+| SSM Parameter | `/{PREFIX}/telegram-bot-token` | Encrypted Telegram token (SecureString) |
+| IAM Role | `{PREFIX}-Telegram-alert-lambda-execution-role` | Lambda execution |
+| Lambda | `{PREFIX}-Telegram-alert-forwarder` | Forwards alarms to Telegram |
+| Lambda | `{PREFIX}-ec2-launch-alarm-creator` | Auto-creates alarms on EC2 launch |
+| SNS Topic | `{PREFIX}-Telegram-alert-topic` | Bridges CloudWatch to Lambda |
+| EventBridge Rule | `{PREFIX}-ec2-launch-cpu-alarm-rule` | Triggers on EC2 start |
+| CloudWatch Alarms | `{instance-name}-cpu-idle` | One per EC2 instance |
+
+## Security
+
+The Telegram bot token is stored as an SSM Parameter Store `SecureString` at deploy time. It is **never** written to Lambda environment variables in plaintext.
+
+- `setup.sh` writes the token to `/{PREFIX}/telegram-bot-token` using `ssm:PutParameter`
+- Both Lambda functions fetch the token at runtime using `ssm:GetParameter` with `WithDecryption=True`
+- The Lambda execution role is granted `ssm:GetParameter` on that parameter path only, via an inline IAM policy
+- The token is cached in memory for the lifetime of the Lambda container to avoid repeated SSM calls
+
+To rotate the token: run `setup.sh` again with the new token — it will overwrite the SSM parameter (`--overwrite`) and update the Lambda code. No redeployment of the Lambda zip is needed.
 
 ## Files
 
@@ -53,9 +65,9 @@ iam-policy.json   # IAM policy for setup user
 
 Attach `iam-policy.json` to IAM users/roles that will run the setup scripts.
 
-The managed policy `T15-IdleCPUMonitor-410` must exist in the account before running setup.sh. Create it with:
+The managed policy `T15-IdleCPUMonitor-410` must exist in each account before running `setup.sh`. It is attached to the Lambda execution role and grants the permissions the Lambdas need at runtime. Create it with:
 
-```
+```bash
 aws iam create-policy \
   --policy-name "T15-IdleCPUMonitor-410" \
   --policy-document '{
@@ -72,12 +84,17 @@ aws iam create-policy \
       },
       {
         "Effect": "Allow",
-        "Action": "ec2:DescribeInstances",
+        "Action": [
+          "ec2:DescribeInstances",
+          "ec2:DescribeTags"
+        ],
         "Resource": "*"
       }
     ]
   }'
 ```
+
+> The `ssm:GetParameter` permission for the Lambda role is handled automatically by `setup.sh` via an inline policy — it does **not** need to be part of the managed policy above.
 ## Single Account
 
 ```bash
