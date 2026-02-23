@@ -895,97 +895,99 @@ class GatedSparseAttention(nn.Module):
                 f"x.is_cuda={x.is_cuda}."
             )
 
-        # Lightning Indexer — O(T·k) via fused chunked kernel
-        # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
-        # Processes in [B, C, T] chunks where C is auto-tuned to fit in ~512MB.
-        q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # [B, T, 4, 128]
-        k_I = self.W_Ik(x)          # [B, T, d_idx] — shared across indexer heads
-        w_raw = self.W_Iw(x)        # [B, T, indexer_heads] — pre-sigmoid (kernel applies sigmoid)
-        scale_idx = 1.0 / math.sqrt(self.d_idx)
-
-        # Stateless re-computation: always recompute indices via fused_indexer_topk.
-        # This avoids the gradient-accumulation race condition where _saved_selection
-        # from micro-batch B would overwrite micro-batch A's indices before A's backward pass.
-        # The fused_indexer_topk kernel is O(N) and adds <1% overhead vs O(N·K) attention.
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
+        is_reconstruct = self.training and torch.is_grad_enabled()
 
-        # REVERSIBILITY FIX: During the forward pass (no_grad), snapshot the
-        # current variance_ema BEFORE computing indices, then update the live
-        # EMA afterwards.  During backward reconstruct (enable_grad), use the
-        # snapshot so that fused_indexer_topk produces identical k_t/indices.
-        # This prevents the race where gradient-accumulation micro-batch N+1
-        # mutates variance_ema before micro-batch N's backward reconstruct.
-        if is_reversible_forward:
-            self._variance_ema_snapshot.copy_(self.variance_ema)
+        if not hasattr(self, '_index_cache'):
+            self._index_cache = []
 
-        # Use snapshot for the indexer call (both forward and reconstruct)
-        ema_for_indexer = self._variance_ema_snapshot
+        if is_reconstruct and len(self._index_cache) > 0:
+            var_t, k_t, keep_mask, base_idx, leak_attempt_mask, attempt_den, leak_final_mask, final_den = self._index_cache.pop(0)
+            k_limit = base_idx.size(-1)
+            
+            self.last_gsa_leak_attempt_fraction = (
+                leak_attempt_mask.float().sum() / attempt_den
+            ).detach()
+            self.last_gsa_leak_fraction = (
+                leak_final_mask.float().sum() / final_den
+            ).detach()
+        else:
+            # Lightning Indexer — O(T·k) via fused chunked kernel
+            # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
+            q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # [B, T, 4, 128]
+            k_I = self.W_Ik(x)          # [B, T, d_idx]
+            w_raw = self.W_Iw(x)        # [B, T, indexer_heads]
+            scale_idx = 1.0 / math.sqrt(self.d_idx)
 
-        if not HAS_FUSED_INDEXER:
-            raise RuntimeError(
-                "GSA fused indexer kernel is required but unavailable. "
-                "Fallback indexer path is disabled."
+            if is_reversible_forward:
+                self._variance_ema_snapshot.copy_(self.variance_ema)
+            ema_for_indexer = self._variance_ema_snapshot if is_reversible_forward else self.variance_ema
+
+            if not HAS_FUSED_INDEXER:
+                raise RuntimeError(
+                    "GSA fused indexer kernel is required but unavailable. "
+                    "Fallback indexer path is disabled."
+                )
+
+            var_t, k_t, top_indices = fused_indexer_topk(
+                q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
+                scale=scale_idx, causal=True,
+                k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
+                variance_ema=ema_for_indexer,  # snapshot or live
+                is_training=False,
+                sink_size=4,
             )
 
-        var_t, k_t, top_indices = fused_indexer_topk(
-            q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
-            scale=scale_idx, causal=True,
-            k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
-            variance_ema=ema_for_indexer,  # snapshot, not live EMA
-            is_training=False,
-            sink_size=4,
-        )
-        # var_t: [B, T], k_t: [B, T] (long), top_indices: [B, T, k_limit] (int32)
+            if is_reversible_forward:
+                var_t_mean = var_t.mean().detach()
+                if torch.distributed.is_initialized():
+                    torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
+                self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
 
-        # Update live variance EMA only during the reversible forward pass (no grad)
-        # This happens AFTER the indexer call, so it doesn't affect this micro-batch's
-        # indices.  The snapshot ensures backward reconstruct sees the same value.
-        if is_reversible_forward:
-            var_t_mean = var_t.mean().detach()
-            if torch.distributed.is_initialized():
-                torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
-            self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
+            # Build per-query keep mask from adaptive k_t with strict causal safety.
+            k_limit = top_indices.size(-1)
+            base_idx = top_indices.long()  # [B, T, k_limit]
+            q_pos = torch.arange(T, device=device, dtype=base_idx.dtype).view(1, T, 1)
+            causal_cap = (q_pos + 1).to(dtype=k_t.dtype)
+            k_t = torch.minimum(k_t, causal_cap.squeeze(-1)).clamp(min=1)
 
-        # Build per-query keep mask from adaptive k_t with strict causal safety.
-        k_limit = top_indices.size(-1)
-        base_idx = top_indices.long()  # [B, T, k_limit]
-        q_pos = torch.arange(T, device=device, dtype=base_idx.dtype).view(1, T, 1)
-        causal_cap = (q_pos + 1).to(dtype=k_t.dtype)
-        k_t = torch.minimum(k_t, causal_cap.squeeze(-1)).clamp(min=1)
+            range_k = torch.arange(k_limit, device=device)
+            keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)  # [B, T, k_limit]
+            causal_selected = base_idx <= q_pos
 
-        range_k = torch.arange(k_limit, device=device)
-        keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)  # [B, T, k_limit]
-        causal_selected = base_idx <= q_pos
+            if token_keep is not None:
+                query_keep = token_keep.unsqueeze(-1)
+                invalid_query = ~token_keep
+                if invalid_query.any():
+                    fallback_idx = torch.arange(T, device=device).view(1, T).expand(B, T)
+                    base_idx = base_idx.clone()
+                    base_idx[..., 0] = torch.where(invalid_query, fallback_idx, base_idx[..., 0])
+                    causal_selected = base_idx <= q_pos
 
-        if token_keep is not None:
-            query_keep = token_keep.unsqueeze(-1)
-            invalid_query = ~token_keep
-            if invalid_query.any():
-                fallback_idx = torch.arange(T, device=device).view(1, T).expand(B, T)
-                base_idx = base_idx.clone()
-                base_idx[..., 0] = torch.where(invalid_query, fallback_idx, base_idx[..., 0])
-                causal_selected = base_idx <= q_pos
+                key_keep = torch.gather(token_keep, dim=1, index=base_idx.reshape(B, -1)).view(B, T, k_limit)
+                keep_mask = keep_mask & key_keep & query_keep
 
-            key_keep = torch.gather(token_keep, dim=1, index=base_idx.reshape(B, -1)).view(B, T, k_limit)
-            keep_mask = keep_mask & key_keep & query_keep
+                # Keep at least one index for masked queries to avoid empty-kernel rows.
+                if invalid_query.any():
+                    keep_mask = keep_mask.clone()
+                    keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
 
-            # Keep at least one index for masked queries to avoid empty-kernel rows.
-            if invalid_query.any():
-                keep_mask = keep_mask.clone()
-                keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
+            attempt_keep_mask = keep_mask
+            leak_attempt_mask = attempt_keep_mask & ~causal_selected
+            keep_mask = attempt_keep_mask & causal_selected
+            leak_final_mask = keep_mask & ~causal_selected
+            attempt_den = attempt_keep_mask.sum().clamp(min=1).float()
+            final_den = keep_mask.sum().clamp(min=1).float()
+            
+            self.last_gsa_leak_attempt_fraction = (
+                leak_attempt_mask.float().sum() / attempt_den
+            ).detach()
+            self.last_gsa_leak_fraction = (
+                leak_final_mask.float().sum() / final_den
+            ).detach()
 
-        attempt_keep_mask = keep_mask
-        leak_attempt_mask = attempt_keep_mask & ~causal_selected
-        keep_mask = attempt_keep_mask & causal_selected
-        leak_final_mask = keep_mask & ~causal_selected
-        attempt_den = attempt_keep_mask.sum().clamp(min=1).float()
-        final_den = keep_mask.sum().clamp(min=1).float()
-        self.last_gsa_leak_attempt_fraction = (
-            leak_attempt_mask.float().sum() / attempt_den
-        ).detach()
-        self.last_gsa_leak_fraction = (
-            leak_final_mask.float().sum() / final_den
-        ).detach()
+            if is_reversible_forward:
+                self._index_cache.append((var_t, k_t, keep_mask, base_idx, leak_attempt_mask, attempt_den, leak_final_mask, final_den))
 
         # Dual Gating & Attention Projections
         q = self.W_q(x)
