@@ -19,11 +19,9 @@ Features:
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import struct
-import sys
 import tempfile
 import time
 import shutil
@@ -32,7 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from datasets import Dataset, load_dataset
+from datasets import Dataset
 from transformers import AutoTokenizer
 
 # ---------------------------------------------------------------------------
@@ -388,7 +386,7 @@ def process_coreset_file(
             df_filtered = src_df[src_df[args.src_id_col].isin(valid_ids)]
             
             if df_filtered.empty:
-                print(f"SKIP (0 matches)")
+                print("SKIP (0 matches)")
                 continue
 
             # 3. Tokenize
@@ -564,7 +562,7 @@ def main():
         # Cleanup
         try:
             os.rmdir(tmp_dir)
-        except:
+        except Exception:
             pass
 
 if __name__ == "__main__":

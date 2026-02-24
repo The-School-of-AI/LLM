@@ -292,7 +292,7 @@ def main():
     num_indic = len(indic_tokens)
     num_general_max = vocab_budget - num_indic
 
-    print(f"\n[7] Token budget:")
+    print("\n[7] Token budget:")
     print(f"    Target: {TARGET_VOCAB_SIZE:,} (2^17)")
     print(f"    Base special: {num_base_special}")
     print(f"    Additional special: {NUM_ADDITIONAL_SPECIAL}")

@@ -2,11 +2,12 @@ import os
 import glob
 import json
 import time
+from collections import Counter
+import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import tiktoken
-from transformers import AutoTokenizer
 from tokenizers import Tokenizer
+from transformers import AutoTokenizer
 
 # Configuration
 LIMIT_LINES = None # Set to an integer (e.g., 1000) for testing, or None for full run
@@ -187,10 +188,6 @@ def sample_data(files, category_name):
         except Exception as e:
             print(f"Error reading {fpath}: {e}")
 
-import numpy as np
-from collections import Counter
-import re
-
 def calculate_gini(counts):
     """Calculate Gini coefficient of inequality for token usage."""
     if not counts: return 0.0
@@ -221,7 +218,7 @@ def count_byte_fallbacks(tokenizer, ids, tokenizer_type):
                     t = tokenizer.id_to_token(i)
                     if t and t.startswith("<0x") and t.endswith(">") and len(t) == 6:
                         count += 1
-        except:
+        except Exception:
             pass
             
     # Tiktoken handling is harder without explicit map, skipping for now or assumed 0 for base text

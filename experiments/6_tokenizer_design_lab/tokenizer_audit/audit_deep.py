@@ -102,7 +102,7 @@ def main():
         print(f"  [ISSUE] {mismatches} content mismatches between files")
         issues.append(f"{mismatches} content mismatches in added_tokens_decoder")
     else:
-        print(f"  [OK] All contents match")
+        print("  [OK] All contents match")
 
     # ─── CHECK C: Token ID gaps/overlaps ───
     print("\n[C] TOKEN ID INTEGRITY")
@@ -125,7 +125,7 @@ def main():
         print(f"  [ISSUE] {len(duplicate_ids)} duplicate IDs")
         issues.append(f"{len(duplicate_ids)} duplicate token IDs")
     else:
-        print(f"  [OK] No duplicate IDs")
+        print("  [OK] No duplicate IDs")
 
     # ─── CHECK D: Foreign-language Latin-script tokens ───
     print("\n[D] SUSPICIOUS FOREIGN-LANGUAGE TOKENS (Latin script but non-English)")
@@ -207,7 +207,7 @@ def main():
         for t, tid, length, r in sorted(whitespace_tokens, key=lambda x: -x[2]):
             print(f"    ID {tid}: {length} chars of whitespace")
     else:
-        print(f"  [OK] No excessive whitespace tokens")
+        print("  [OK] No excessive whitespace tokens")
 
     # ─── CHECK F: build_clean_tokenizer.py generates correct config ───
     print("\n[F] BUILD SCRIPT CONSISTENCY")
@@ -215,7 +215,6 @@ def main():
     
     # Check if build_clean_tokenizer.py would produce wrong tokens
     # It hardcodes the special_tokens_map - let's check
-    import ast
     try:
         with open('../build_clean_tokenizer.py', 'r', encoding='utf-8') as f:
             src = f.read()

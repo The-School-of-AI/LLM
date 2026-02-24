@@ -51,7 +51,7 @@ def generate_graphs(input_csv="tokenizer_metrics.csv", output_dir="graphs"):
             plt.figure(figsize=(14, 8))
             
             # Create Bar Plot
-            chart = sns.barplot(
+            sns.barplot(
                 data=subset,
                 x="SubCategory",
                 y=metric,

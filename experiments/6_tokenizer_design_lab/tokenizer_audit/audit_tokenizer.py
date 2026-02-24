@@ -1,7 +1,6 @@
 """Comprehensive audit of tsai_131k_tokenizer."""
 import json
-import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 PATH = "../tsai_131k_tokenizer/tokenizer.json"
 
@@ -254,8 +253,8 @@ def main():
         P("  [PASS] No tokens exceed 32 characters")
     else:
         P("  [FAIL] The following tokens exceed 32 chars:")
-        for t, l, tid in long_tokens[:20]:
-            P(f"    ID {tid}: len={l} '{dec(t)[:50]}'")
+        for t, tok_len, tid in long_tokens[:20]:
+            P(f"    ID {tid}: len={tok_len} '{dec(t)[:50]}'")
         if len(long_tokens) > 20:
             P(f"    ... and {len(long_tokens)-20} more")
 
@@ -478,7 +477,7 @@ def main():
             P(f"    ID {tid:6d}: {repr(d)[:60]}")
 
     # Last 30 non-special tokens (should be Indic)
-    P(f"\n  Last 30 non-special tokens (should be Indic):")
+    P("\n  Last 30 non-special tokens (should be Indic):")
     for t, tid in non_special_sorted[-30:]:
         d = dec(t)
         sc = indic_scripts(t)
@@ -489,10 +488,6 @@ def main():
     P("\n" + "-"*60)
     P("CHECK 13: TOKEN COUNT BREAKDOWN")
     P("-"*60)
-    
-    # Base special count  
-    base_special_count = len(BASE_SPECIAL_EXPECTED)
-    additional_count = len(ADDITIONAL_EXPECTED)
     
     # Count categories
     base_byte_tokens = 0
@@ -527,7 +522,7 @@ def main():
     # Write report
     with open("tsai_131k_tokenizer/AUDIT_REPORT.txt", "w", encoding="utf-8") as f:
         f.write("\n".join(out))
-    P(f"\n  Report saved to: tsai_131k_tokenizer/AUDIT_REPORT.txt")
+    P("\n  Report saved to: tsai_131k_tokenizer/AUDIT_REPORT.txt")
 
 # These are used in CHECK 13 just for counting
 BASE_SPECIAL_EXPECTED = [

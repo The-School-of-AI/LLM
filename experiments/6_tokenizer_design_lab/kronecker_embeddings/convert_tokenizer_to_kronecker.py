@@ -128,7 +128,7 @@ def generate_kronecker_embeddings(
 
     print(f"Total vocabulary size: {vocab_size}")
     print(f"Embedding dimension: {encoder.D}")
-    print(f"Generating embeddings...")
+    print("Generating embeddings...")
 
     # Initialize embedding matrix
     embeddings = np.zeros((vocab_size, encoder.D), dtype=np.float32)
