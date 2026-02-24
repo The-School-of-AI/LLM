@@ -8,7 +8,7 @@ print("Building validation dataset...\n")
 
 # Load EXACT benchmark questions from registry
 mmlu_benchmark = []
-with open('benchmarks/mmlu_test.jsonl', 'r') as f:
+with open("benchmarks/mmlu_test.jsonl", "r") as f:
     for line in f:
         mmlu_benchmark.append(json.loads(line))
 
@@ -28,37 +28,41 @@ clean_texts = [
     "Urban planning initiatives focus on sustainable transportation solutions.",
     "Educational reforms aim to improve student outcomes across districts.",
     "Healthcare providers implement new telemedicine service offerings.",
-    "Consumer confidence indices showed improvement in recent surveys."
+    "Consumer confidence indices showed improvement in recent surveys.",
 ]
 
 output = []
 
 # Add contaminated samples
 for idx, item in enumerate(contaminated):
-    output.append({
-        "id": f"contaminated_{idx}",
-        "text": item['question'],
-        "source": "mmlu",
-        "ground_truth": "contaminated"
-    })
+    output.append(
+        {
+            "id": f"contaminated_{idx}",
+            "text": item["question"],
+            "source": "mmlu",
+            "ground_truth": "contaminated",
+        }
+    )
 
 # Add clean samples
 for idx in range(9000):
-    output.append({
-        "id": f"clean_{idx}",
-        "text": random.choice(clean_texts) + f" Additional context {idx}.",
-        "source": "synthetic",
-        "ground_truth": "clean"
-    })
+    output.append(
+        {
+            "id": f"clean_{idx}",
+            "text": random.choice(clean_texts) + f" Additional context {idx}.",
+            "source": "synthetic",
+            "ground_truth": "clean",
+        }
+    )
 
 # Shuffle
 random.shuffle(output)
 
 # Save
-Path('test_data').mkdir(exist_ok=True)
-with open('test_data/validation_10k.jsonl', 'w') as f:
+Path("test_data").mkdir(exist_ok=True)
+with open("test_data/validation_10k.jsonl", "w") as f:
     for item in output:
-        f.write(json.dumps(item) + '\n')
+        f.write(json.dumps(item) + "\n")
 
 print(f"✓ Created validation_10k.jsonl")
 print(f"  - 1,000 contaminated (from registry)")
