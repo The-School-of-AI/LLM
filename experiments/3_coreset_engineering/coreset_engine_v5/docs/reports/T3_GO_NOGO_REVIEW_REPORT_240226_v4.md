@@ -638,7 +638,7 @@ If time does not permit, explicitly document: *"Learning-quality validation is d
    - [ ] `total_input_tokens_estimate` recomputed for current input path via `tools/estimate_total_tokens.py`
    - [ ] Unique `--checkpoint-dir` per shard (e.g., `output/checkpoints_1B/shard000`)
    - [ ] `.used_chunks/` directory preserved from previous stages
-   - [ ] EC2 instance type confirmed (c6i.32xlarge / r6i.16xlarge preferred)
+   - [ ] EC2 instance type confirmed (c7gd.16xlarge)
    - [ ] EBS volume ~600GB attached and mounted
    - [ ] On-demand vs. Spot decision documented
    - [ ] `--num-shards` / `--shard-id` / `--stage-target-scale` unchanged from last checkpoint (or fresh `--checkpoint-dir` if changed)
