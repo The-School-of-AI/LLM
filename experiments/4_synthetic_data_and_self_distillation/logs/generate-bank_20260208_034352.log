@@ -1,0 +1,46 @@
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline] ============================================================
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline]   PIPELINE LOG STARTED
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline]   Command:    generate-bank
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline]   Log file:   /Users/sriranga/Desktop/LLM/experiments/4_synthetic_data_and_self_distillation/logs/generate-bank_20260208_034352.log
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline]   File level: DEBUG | Console level: DEBUG
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline]   Timestamp:  2026-02-08T03:43:52.031770
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline] ============================================================
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline] Log file: /Users/sriranga/Desktop/LLM/experiments/4_synthetic_data_and_self_distillation/logs/generate-bank_20260208_034352.log
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline] ============================================================
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline]   PHASE 1: PRE-GENERATING SYNTHETIC DATA BANK
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline] ============================================================
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline]   Bank directory: /private/tmp/test_logging
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline]   Model: qwen2.5:1.5b
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline]   Skills to generate: 1
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline]   Samples per skill: 1
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline]   Builtin seeds: True | Hard negatives: True | Error correction: True
+[2026-02-08 03:43:52] [DEBUG   ] [synth_pipeline.run_pipeline]   Skill list: ['RSN-ARITH']
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline]   Creating new manifest
+[2026-02-08 03:43:52] [INFO    ] [synth_pipeline.run_pipeline] [1/1] RSN-ARITH | Generating 1 samples (band=B3, priority=critical)
+[2026-02-08 03:43:52] [DEBUG   ] [synth_pipeline.run_pipeline]   Using 1 builtin seeds for RSN-ARITH
+[2026-02-08 03:43:52] [DEBUG   ] [synth_pipeline.run_pipeline]   [1/1] Seed: A store sells apples for $2 each. If you buy 7 apples, how m (lang=en)
+[2026-02-08 03:43:52] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] Generating distilled view for skill=RSN-ARITH, band=B3, lang=en
+[2026-02-08 03:43:52] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   _generate_distilled: category=default, max_tokens=256, skill=RSN-ARITH
+[2026-02-08 03:43:52] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=256, temp=0.30, timeout=600s
+[2026-02-08 03:43:52] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this question. You MUST respond in this EXACT format:  Answer: [your answer here] Justification: [1-2 sentence exp
+[2026-02-08 03:43:53] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (126 chars): Answer: 14  Justification: The price of one apple is $2. Therefore, if you buy 7 apples, the total c
+[2026-02-08 03:43:53] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Extracted answer (2 chars): '14'
+[2026-02-08 03:43:53] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating COT view (max_tokens=1024)
+[2026-02-08 03:43:53] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=1024, temp=0.50, timeout=600s
+[2026-02-08 03:43:53] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this step-by-step. You MUST use numbered steps.  Question: A store sells apples for $2 each. If you buy 7 apples, 
+[2026-02-08 03:43:54] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (312 chars): Step 1: Determine the cost of one apple.    The store sells each apple for $2.  Step 2: Calculate th
+[2026-02-08 03:43:54] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   COT view: 312 chars
+[2026-02-08 03:43:54] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating hard negative (correct_answer='14')
+[2026-02-08 03:43:54] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=512, temp=0.70, timeout=600s
+[2026-02-08 03:43:54] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating training data with INTENTIONAL MISTAKES for teaching error detection.  Question: A store sells apples
+[2026-02-08 03:43:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (616 chars): <think> The store sells apples for $2 each, and you buy 7 apples. The correct way to calculate this 
+[2026-02-08 03:43:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Hard negative: wrong_answer='You pay $14.'
+[2026-02-08 03:43:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=768, temp=0.30, timeout=600s
+[2026-02-08 03:43:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating error correction training data.  Question: A store sells apples for $2 each. If you buy 7 apples, how
+[2026-02-08 03:43:57] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (494 chars): Error Identified: The problem involves multiplication, but it was incorrectly solved by addition ins
+[2026-02-08 03:43:57] [DEBUG   ] [synth_pipeline.run_pipeline]     -> answer='14' | dist=126 chars | think=312 chars | hn=yes | ec=yes
+[2026-02-08 03:43:57] [INFO    ] [synth_pipeline.run_pipeline]   -> Generated 1/1 samples for RSN-ARITH
+[2026-02-08 03:43:57] [DEBUG   ] [synth_pipeline.run_pipeline]   Saved shard: /tmp/test_logging/RSN-ARITH.jsonl
+[2026-02-08 03:43:57] [INFO    ] [synth_pipeline.run_pipeline] ============================================================
+[2026-02-08 03:43:57] [INFO    ] [synth_pipeline.run_pipeline]   DONE: Bank created with 1 total samples across 1 skills
+[2026-02-08 03:43:57] [INFO    ] [synth_pipeline.run_pipeline] ============================================================

@@ -1,0 +1,113 @@
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline] ============================================================
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline]   PIPELINE LOG STARTED
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline]   Command:    generate-bank
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline]   Log file:   /Users/sriranga/Desktop/LLM/experiments/4_synthetic_data_and_self_distillation/logs/generate-bank_20260208_034425.log
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline]   File level: DEBUG | Console level: INFO
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline]   Timestamp:  2026-02-08T03:44:25.842489
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline] ============================================================
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline] Log file: /Users/sriranga/Desktop/LLM/experiments/4_synthetic_data_and_self_distillation/logs/generate-bank_20260208_034425.log
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline] ============================================================
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline]   PHASE 1: PRE-GENERATING SYNTHETIC DATA BANK
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline] ============================================================
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline]   Bank directory: /private/tmp/test_logging_info
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline]   Model: qwen2.5:1.5b
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline]   Skills to generate: 2
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline]   Samples per skill: 2
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline]   Builtin seeds: True | Hard negatives: True | Error correction: True
+[2026-02-08 03:44:25] [DEBUG   ] [synth_pipeline.run_pipeline]   Skill list: ['RSN-ARITH', 'CODE-GEN-T1']
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline]   Creating new manifest
+[2026-02-08 03:44:25] [INFO    ] [synth_pipeline.run_pipeline] [1/2] RSN-ARITH | Generating 2 samples (band=B3, priority=critical)
+[2026-02-08 03:44:25] [DEBUG   ] [synth_pipeline.run_pipeline]   Using 2 builtin seeds for RSN-ARITH
+[2026-02-08 03:44:25] [DEBUG   ] [synth_pipeline.run_pipeline]   [1/2] Seed: A store sells apples for $2 each. If you buy 7 apples, how m (lang=en)
+[2026-02-08 03:44:25] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] Generating distilled view for skill=RSN-ARITH, band=B3, lang=en
+[2026-02-08 03:44:25] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   _generate_distilled: category=default, max_tokens=256, skill=RSN-ARITH
+[2026-02-08 03:44:25] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=256, temp=0.30, timeout=600s
+[2026-02-08 03:44:25] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this question. You MUST respond in this EXACT format:  Answer: [your answer here] Justification: [1-2 sentence exp
+[2026-02-08 03:44:26] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (118 chars): Answer: $14 Justification: The price of one apple is $2. Therefore, the total cost for 7 apples woul
+[2026-02-08 03:44:26] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Extracted answer (3 chars): '$14'
+[2026-02-08 03:44:26] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating COT view (max_tokens=1024)
+[2026-02-08 03:44:26] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=1024, temp=0.50, timeout=600s
+[2026-02-08 03:44:26] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this step-by-step. You MUST use numbered steps.  Question: A store sells apples for $2 each. If you buy 7 apples, 
+[2026-02-08 03:44:27] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (352 chars): Step 1: Determine the price of one apple. The store sells each apple for $2.  Step 2: Calculate the 
+[2026-02-08 03:44:27] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   COT view: 352 chars
+[2026-02-08 03:44:27] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating hard negative (correct_answer='$14')
+[2026-02-08 03:44:27] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=512, temp=0.70, timeout=600s
+[2026-02-08 03:44:27] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating training data with INTENTIONAL MISTAKES for teaching error detection.  Question: A store sells apples
+[2026-02-08 03:44:30] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (961 chars): Think: To solve this problem, let's break down each part and ensure we account for all possible scen
+[2026-02-08 03:44:30] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Hard negative: wrong_answer='If we buy all 7 apples together at once, it would cost $14.'
+[2026-02-08 03:44:30] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=768, temp=0.30, timeout=600s
+[2026-02-08 03:44:30] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating error correction training data.  Question: A store sells apples for $2 each. If you buy 7 apples, how
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (879 chars): ### Error Identified:  The error lies in the assumption that buying all 7 apples together at once is
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.run_pipeline]     -> answer='$14' | dist=118 chars | think=352 chars | hn=yes | ec=yes
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.run_pipeline]   [2/2] Seed: Tom has 45 marbles. He gives 12 to Jane and 8 to Mike. How m (lang=en)
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] Generating distilled view for skill=RSN-ARITH, band=B3, lang=en
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   _generate_distilled: category=default, max_tokens=256, skill=RSN-ARITH
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=256, temp=0.30, timeout=600s
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this question. You MUST respond in this EXACT format:  Answer: [your answer here] Justification: [1-2 sentence exp
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (209 chars): Answer: 25 Justification: To find out how many marbles Tom has left, we need to subtract the number 
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Extracted answer (2 chars): '25'
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating COT view (max_tokens=1024)
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=1024, temp=0.50, timeout=600s
+[2026-02-08 03:44:33] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this step-by-step. You MUST use numbered steps.  Question: Tom has 45 marbles. He gives 12 to Jane and 8 to Mike. 
+[2026-02-08 03:44:35] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (544 chars): Let's solve this problem step by step.  **Step 1:** Determine how many marbles Tom gives away in tot
+[2026-02-08 03:44:35] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   COT view: 504 chars
+[2026-02-08 03:44:35] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating hard negative (correct_answer='25')
+[2026-02-08 03:44:35] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=512, temp=0.70, timeout=600s
+[2026-02-08 03:44:35] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating training data with INTENTIONAL MISTAKES for teaching error detection.  Question: Tom has 45 marbles. 
+[2026-02-08 03:44:36] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (254 chars): <think> Tom initially had 45 marbles. He gave 12 to Jane and 8 to Mike. Total given away = 12 (Jane)
+[2026-02-08 03:44:36] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Hard negative: wrong_answer='37'
+[2026-02-08 03:44:36] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=768, temp=0.30, timeout=600s
+[2026-02-08 03:44:36] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating error correction training data.  Question: Tom has 45 marbles. He gives 12 to Jane and 8 to Mike. How
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (803 chars): ### Error Identified:  The error in the provided solution is that it incorrectly subtracted 20 from 
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.run_pipeline]     -> answer='25' | dist=209 chars | think=504 chars | hn=yes | ec=yes
+[2026-02-08 03:44:39] [INFO    ] [synth_pipeline.run_pipeline]   -> Generated 2/2 samples for RSN-ARITH
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.run_pipeline]   Saved shard: /tmp/test_logging_info/RSN-ARITH.jsonl
+[2026-02-08 03:44:39] [INFO    ] [synth_pipeline.run_pipeline] [2/2] CODE-GEN-T1 | Generating 2 samples (band=B4, priority=critical)
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.run_pipeline]   Using 2 builtin seeds for CODE-GEN-T1
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.run_pipeline]   [1/2] Seed: Write a Python function to check if a number is even. (lang=en)
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] Generating distilled view for skill=CODE-GEN-T1, band=B4, lang=en
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   _generate_distilled: category=code_gen, max_tokens=512, skill=CODE-GEN-T1
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=512, temp=0.30, timeout=600s
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Provide the solution to this coding task. You MUST respond in this EXACT format:  Answer: ```python [your code here] ```
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (170 chars): ```python def is_even(number):     return number % 2 == 0  # Test the function with some examples pr
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Extracted answer (170 chars): '```python\ndef is_even(number):\n    return number % 2 == 0\n\n# Test the function w'
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating COT view (max_tokens=1024)
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=1024, temp=0.50, timeout=600s
+[2026-02-08 03:44:39] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this step-by-step. You MUST use numbered steps.  Question: Write a Python function to check if a number is even.  
+[2026-02-08 03:44:42] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (1098 chars): Step 1: Define the problem clearly. We need to write a Python function that checks whether a given n
+[2026-02-08 03:44:42] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   COT view: 1098 chars
+[2026-02-08 03:44:42] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating hard negative (correct_answer='```python\ndef is_even(number):\n    return number %')
+[2026-02-08 03:44:42] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=512, temp=0.70, timeout=600s
+[2026-02-08 03:44:42] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating training data with INTENTIONAL MISTAKES for teaching error detection.  Question: Write a Python funct
+[2026-02-08 03:44:46] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (1355 chars): Think: To check if a number is even, we need to divide it by 2 and see if there's any remainder. If 
+[2026-02-08 03:44:46] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Hard negative: wrong_answer='The correct way to determine if a number is even involves di'
+[2026-02-08 03:44:46] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=768, temp=0.30, timeout=600s
+[2026-02-08 03:44:46] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating error correction training data.  Question: Write a Python function to check if a number is even.  Inc
+[2026-02-08 03:44:49] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (1192 chars): ### Error Identified: Incorrect Division by 2 ### Why It's Wrong: The function `is_even(number)` inc
+[2026-02-08 03:44:49] [DEBUG   ] [synth_pipeline.run_pipeline]     -> answer='```python\ndef is_even(number):\n    return number %' | dist=178 chars | think=1098 chars | hn=yes | ec=yes
+[2026-02-08 03:44:49] [DEBUG   ] [synth_pipeline.run_pipeline]   [2/2] Seed: Write a Python function to find the maximum of two numbers. (lang=en)
+[2026-02-08 03:44:49] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] Generating distilled view for skill=CODE-GEN-T1, band=B4, lang=en
+[2026-02-08 03:44:49] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   _generate_distilled: category=code_gen, max_tokens=512, skill=CODE-GEN-T1
+[2026-02-08 03:44:49] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=512, temp=0.30, timeout=600s
+[2026-02-08 03:44:49] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Provide the solution to this coding task. You MUST respond in this EXACT format:  Answer: ```python [your code here] ```
+[2026-02-08 03:44:50] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (435 chars): Answer: ```python def max_of_two(a, b):     if a > b:         return a     else:         return b  #
+[2026-02-08 03:44:50] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Extracted answer (150 chars): '```python\ndef max_of_two(a, b):\n    if a > b:\n        return a\n    else:\n       '
+[2026-02-08 03:44:50] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating COT view (max_tokens=1024)
+[2026-02-08 03:44:50] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=1024, temp=0.50, timeout=600s
+[2026-02-08 03:44:50] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: Solve this step-by-step. You MUST use numbered steps.  Question: Write a Python function to find the maximum of two numb
+[2026-02-08 03:44:55] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (1920 chars): Sure, let's solve this problem step-by-step:  ### Step 1: Understand What We Need to Do We need a fu
+[2026-02-08 03:44:55] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   COT view: 1745 chars
+[2026-02-08 03:44:55] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Generating hard negative (correct_answer='```python\ndef max_of_two(a, b):\n    if a > b:\n    ')
+[2026-02-08 03:44:55] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=512, temp=0.70, timeout=600s
+[2026-02-08 03:44:55] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating training data with INTENTIONAL MISTAKES for teaching error detection.  Question: Write a Python funct
+[2026-02-08 03:44:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (185 chars): ``` def max_of_two(a, b):     if a > b:         return a     else:         return c  # Error here; v
+[2026-02-08 03:44:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   Hard negative: wrong_answer='None'
+[2026-02-08 03:44:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator] ollama_chat -> model=qwen2.5:1.5b, max_tokens=768, temp=0.30, timeout=600s
+[2026-02-08 03:44:56] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   prompt: You are generating error correction training data.  Question: Write a Python function to find the maximum of two numbers
+[2026-02-08 03:44:58] [DEBUG   ] [synth_pipeline.generation.dual_view_generator]   response (632 chars): Error Identified: The variable 'c' is undefined. Why It's Wrong: In the function, there was an attem
+[2026-02-08 03:44:58] [DEBUG   ] [synth_pipeline.run_pipeline]     -> answer='```python\ndef max_of_two(a, b):\n    if a > b:\n    ' | dist=435 chars | think=1745 chars | hn=yes | ec=yes
+[2026-02-08 03:44:58] [INFO    ] [synth_pipeline.run_pipeline]   -> Generated 2/2 samples for CODE-GEN-T1
+[2026-02-08 03:44:58] [DEBUG   ] [synth_pipeline.run_pipeline]   Saved shard: /tmp/test_logging_info/CODE-GEN-T1.jsonl
+[2026-02-08 03:44:58] [INFO    ] [synth_pipeline.run_pipeline] ============================================================
+[2026-02-08 03:44:58] [INFO    ] [synth_pipeline.run_pipeline]   DONE: Bank created with 4 total samples across 2 skills
+[2026-02-08 03:44:58] [INFO    ] [synth_pipeline.run_pipeline] ============================================================

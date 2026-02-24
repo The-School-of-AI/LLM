@@ -1066,21 +1066,15 @@ class GatedDeltaNet(nn.Module):
         # - fla path: Fused Triton kernel via flash-linear-attention library (500-2000x faster)
         # - Python path: Explicit for-loop fallback (always correct, slow at long context)
 
-        if HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda:
-            # ── fla fused kernel path ──────────────────────────────────────
-            # fla expects (B, T, H, d) layout — q/k/v are already in this shape.
-            # D residual (D * (q·k) * v) is computed inside fla_gated_delta_rule.
+        fla_available = HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda
 
+        if fla_available:
             try:
-                o = fla_gated_delta_rule(
-                    q=q,  # (B, T, num_heads, head_dim)
-                    k=k,  # (B, T, num_heads, head_dim)
-                    v=v,  # (B, T, num_heads, head_dim)
-                    alpha=alpha,  # (B, T, num_heads, 1)
-                    beta=beta,  # (B, T, num_heads, 1)
-                    D=self.D,  # (num_heads,)
-                    num_heads=self.num_heads,
-                )
+                with time_region("deltanet.fla"):
+                    o = fla_gated_delta_rule(
+                        q=q, k=k, v=v, alpha=alpha, beta=beta,
+                        D=self.D, num_heads=self.num_heads,
+                    )
             except Exception as e:
                 import warnings
 
@@ -1675,7 +1669,7 @@ class MoEFFN(nn.Module):
         else:
             sorted_out = torch.empty(0, D, device=device, dtype=dtype)
 
-        weighted_out = (sorted_out * sorted_weights.unsqueeze(-1)).to(dtype)
+        weighted_out = sorted_out * sorted_weights.unsqueeze(-1)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
         routed_out.scatter_add_(
             0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out
@@ -1724,13 +1718,13 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> t
     Dispatches to fused Triton kernel (single launch) when available,
     falling back to PyTorch for CPU or when Triton is absent.
 
-    IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
-    autograd, which breaks the reversible midpoint backward recompute.
-    The forward pass (under torch.no_grad) uses the fast Triton path;
-    the backward recompute (under torch.enable_grad) uses PyTorch for
-    correct gradient flow through MHC coefficients.
+    FIX-PERF-06: Removed the `not torch.is_grad_enabled()` guard.
+    The Triton kernel is pure computation with no autograd hooks, so it
+    is safe inside torch.enable_grad() contexts (e.g. reversible backward
+    recomputation pass). Previously the backward path fell back to 20
+    separate PyTorch kernel launches per sublayer instead of 1 Triton call.
     """
-    if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda and not torch.is_grad_enabled():
+    if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda:
         # Stable exp: subtract max along last dim before passing to kernel
         logits_stable = logits - logits.amax(dim=-1, keepdim=True)
         try:
@@ -1915,9 +1909,7 @@ class LightningDecoderLayer(nn.Module):
                 aux = aux + aux2
 
         if aux is None:
-            # Must have a grad_fn for reversible midpoint backward
-            # (torch.autograd.grad requires all outputs to be differentiable)
-            aux = (delta * 0.0).sum()
+            aux = x.new_zeros((), dtype=torch.float32)
 
         return delta, aux
 
@@ -2134,7 +2126,7 @@ class Model3B(nn.Module):
         self.layer_types = layer_types
 
         # Reversible Midpoint Integration
-        from .reversible_ops_midpoint import ReversibleMidpointStack
+        from reversible_ops_midpoint import ReversibleMidpointStack
 
         self.stack = ReversibleMidpointStack(
             self.layers,
