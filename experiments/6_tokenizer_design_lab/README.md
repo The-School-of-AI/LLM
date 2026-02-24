@@ -38,6 +38,13 @@ source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install Git Pre-commit Hooks (Required)
+# This ensures all code is formatted properly before committing.
+# Windows:
+.\setup_dev.bat
+# Linux/Mac:
+bash setup_dev.sh
 ```
 
 ## Reproduction
