@@ -18,6 +18,14 @@ import torch
 import triton
 import triton.language as tl
 
+try:
+    from src.profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    @contextmanager
+    def kernel_region(name: str):
+        yield
+
 
 # -----------------------------------------------------------------------------
 # Forward (1D grid over B blocks, streams vocab tiles)
@@ -228,12 +236,13 @@ class _UltimateFusedLinearCE_V33(torch.autograd.Function):
         def grid_fwd(meta):
             return (triton.cdiv(B, meta["BLOCK_B"]),)
 
-        _fwd_stream_kernel[grid_fwd](
-            x, weight, target, lse, ylog,
-            B, H, V, ignore_index,
-            x.stride(0), x.stride(1),
-            weight.stride(0), weight.stride(1),
-        )
+        with kernel_region("ce.fwd_stream"):
+            _fwd_stream_kernel[grid_fwd](
+                x, weight, target, lse, ylog,
+                B, H, V, ignore_index,
+                x.stride(0), x.stride(1),
+                weight.stride(0), weight.stride(1),
+            )
 
         active = (target != ignore_index)
         n_non_ignore = max(int(active.sum().item()), 1)
@@ -270,14 +279,15 @@ class _UltimateFusedLinearCE_V33(torch.autograd.Function):
         def grid_bwd(meta):
             return (triton.cdiv(B, meta["BLOCK_B"]), triton.cdiv(V, meta["BLOCK_V"]))
 
-        _bwd_tile_kernel[grid_bwd](
-            x, weight, target, lse, dX32, dW32, scale_tensor,
-            B, H, V, ctx.ignore_index,
-            x.stride(0), x.stride(1),
-            weight.stride(0), weight.stride(1),
-            dX32.stride(0), dX32.stride(1),
-            dW32.stride(0), dW32.stride(1),
-        )
+        with kernel_region("ce.bwd_tile"):
+            _bwd_tile_kernel[grid_bwd](
+                x, weight, target, lse, dX32, dW32, scale_tensor,
+                B, H, V, ctx.ignore_index,
+                x.stride(0), x.stride(1),
+                weight.stride(0), weight.stride(1),
+                dX32.stride(0), dX32.stride(1),
+                dW32.stride(0), dW32.stride(1),
+            )
 
         return dX32.to(x.dtype), dW32.to(weight.dtype), None, None, None
 

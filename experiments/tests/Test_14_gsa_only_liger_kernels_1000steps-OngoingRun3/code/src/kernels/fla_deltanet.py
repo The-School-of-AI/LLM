@@ -30,6 +30,14 @@ except ImportError:
     HAS_FLA = False
     chunk_gated_delta_rule = None
 
+try:
+    from src.profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    @contextmanager
+    def kernel_region(name: str):
+        yield
+
 
 def fla_gated_delta_rule(
     q: torch.Tensor,       # [B, T, H, d]
@@ -88,15 +96,17 @@ def fla_gated_delta_rule(
     beta_fla = beta[:, :, :, 0].float()
 
     # Call fla fused kernel — scale=1.0 since q, k are L2-normalized
-    o_fla, _ = chunk_gated_delta_rule(
-        q_f32, k_f32, v_f32, g, beta_fla,
-        scale=1.0,
-        output_final_state=False,
-    )
+    with kernel_region("deltanet.chunk_gated_delta_rule"):
+        o_fla, _ = chunk_gated_delta_rule(
+            q_f32, k_f32, v_f32, g, beta_fla,
+            scale=1.0,
+            output_final_state=False,
+        )
 
     # Add D residual: D * (q . k) * v  (in original dtype to save memory)
-    D_weight = D.view(1, 1, num_heads, 1)  # (1, 1, H, 1) for (B, T, H, d)
-    qk_dot = (q * k).sum(dim=-1, keepdim=True)  # (B, T, H, 1)
-    d_residual = D_weight * qk_dot * v  # (B, T, H, d)
+    with kernel_region("deltanet.d_residual"):
+        D_weight = D.view(1, 1, num_heads, 1)  # (1, 1, H, 1) for (B, T, H, d)
+        qk_dot = (q * k).sum(dim=-1, keepdim=True)  # (B, T, H, 1)
+        d_residual = D_weight * qk_dot * v  # (B, T, H, d)
 
     return o_fla.to(q.dtype) + d_residual

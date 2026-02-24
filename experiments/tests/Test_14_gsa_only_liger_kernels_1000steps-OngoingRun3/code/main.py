@@ -51,6 +51,7 @@ import torch
 import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
+from src.bin_idx_dataloader import build_bin_idx_dataloader
 from src.data import get_dataloaders, get_tokenizer
 from src.kernels import HAS_TRITON
 from src.models.recurrence_model_1b import (
@@ -87,6 +88,15 @@ class Config:
         self.num_workers = config_dict["data"].get("num_workers", 8)  # Default to 8 for p4d.24xlarge
         self.tokenize_num_proc = config_dict["data"].get("tokenize_num_proc")  # e.g. 8 for wikitext-103
 
+        # --- bin/idx dataloader (production pre-tokenized shards) ---
+        # loader_type: "hf" (default, HuggingFace datasets via data.py)
+        #              "bin_idx" (pre-tokenized .bin/.idx shards via bin_idx_dataloader.py)
+        self.loader_type = config_dict["data"].get("loader_type", "hf")
+        self.shard_dir = config_dict["data"].get("shard_dir")
+        self.eval_shard_dir = config_dict["data"].get("eval_shard_dir")
+        self.tokenizer_dir = config_dict["data"].get("tokenizer_dir")
+        self.validate_tokenizer = config_dict["data"].get("validate_tokenizer", True)
+
         # Training configuration
         self.num_epochs = config_dict["training"]["num_epochs"]
         self.max_train_steps = config_dict["training"]["max_train_steps"]
@@ -103,6 +113,7 @@ class Config:
             "enable_system_metrics", False
         )
         self.init_model_path = config_dict["training"].get("init_model_path")
+        self.profile_steps = config_dict["training"].get("profile_steps", [])
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
 
         # DeepSpeed configuration
@@ -246,16 +257,23 @@ def main():
     print_rank_0(f"  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)")
     print_rank_0(f"  Embedding Type: {args.embedding_type}")
     print_rank_0(f"  Model Variant: {args.model_variant}")
-    print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
-    print_rank_0(f"  Packed Blocks Enabled: {args.pack_into_blocks}")
-    if args.pack_into_blocks:
-        print_rank_0(f"  Block Sizes: {args.block_sizes}")
-        print_rank_0(f"  Block Size Counts: {args.block_size_counts}")
-        print_rank_0(f"  Domain Column: {args.domain_column}")
-        print_rank_0(f"  Concat Across Domains: {args.concat_across_domains}")
-    print_rank_0(f"  Require Local NVMe Dataset: {args.require_local_nvme}")
-    if args.local_nvme_cache_dir:
-        print_rank_0(f"  Local NVMe Cache Dir: {args.local_nvme_cache_dir}")
+    print_rank_0(f"  DataLoader Type: {args.loader_type}")
+    if args.loader_type == "bin_idx":
+        print_rank_0(f"  Shard Dir (train): {args.shard_dir}")
+        print_rank_0(f"  Shard Dir (eval):  {args.eval_shard_dir or 'None (eval skipped)'}")
+        print_rank_0(f"  Tokenizer Dir:     {args.tokenizer_dir or 'auto (code/src/tokenizer/)'}")
+        print_rank_0(f"  Validate Tokenizer: {args.validate_tokenizer}")
+    else:
+        print_rank_0(f"  Dataset: {args.dataset_name}/{args.dataset_config}")
+        print_rank_0(f"  Packed Blocks Enabled: {args.pack_into_blocks}")
+        if args.pack_into_blocks:
+            print_rank_0(f"  Block Sizes: {args.block_sizes}")
+            print_rank_0(f"  Block Size Counts: {args.block_size_counts}")
+            print_rank_0(f"  Domain Column: {args.domain_column}")
+            print_rank_0(f"  Concat Across Domains: {args.concat_across_domains}")
+        print_rank_0(f"  Require Local NVMe Dataset: {args.require_local_nvme}")
+        if args.local_nvme_cache_dir:
+            print_rank_0(f"  Local NVMe Cache Dir: {args.local_nvme_cache_dir}")
     print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
     print_rank_0(f"  Batch Size: {args.batch_size}")
     print_rank_0(f"  Max Length: {args.max_length}")
@@ -315,28 +333,83 @@ def main():
     print_rank_0("\n[1/5] Loading tokenizer and data...")
     print_rank_0("  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)")
     tokenizer = get_tokenizer()  # Loads from src/tokenizer/
-    train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
-        dataset_name=args.dataset_name,
-        dataset_config=args.dataset_config,
-        tokenizer=tokenizer,
-        batch_size=micro_batch_size,  # Use DeepSpeed config value instead of args.batch_size
-        max_length=args.max_length,
-        tokenized_dataset_path=args.tokenized_dataset_path,
-        dataset_cache_dir=args.dataset_cache_dir,
-        local_nvme_cache_dir=args.local_nvme_cache_dir,
-        require_local_nvme=args.require_local_nvme,
-        pack_into_blocks=args.pack_into_blocks,
-        block_sizes=args.block_sizes,
-        block_size_counts=args.block_size_counts,
-        domain_column=args.domain_column,
-        concat_across_domains=args.concat_across_domains,
-        drop_remainder=args.drop_remainder,
-        num_workers=args.num_workers,
-        tokenize_num_proc=args.tokenize_num_proc,
-    )
-    print_rank_0(f"  Train batches: {len(train_loader)}")
-    print_rank_0(f"  Eval batches: {len(eval_loader)}")
-    print_rank_0(f"  Test batches: {len(test_loader)}")
+
+    dataset_info = {}  # populated by HF path; empty for bin_idx path
+
+    if args.loader_type == "bin_idx":
+        # ------------------------------------------------------------------
+        # Production path: pre-tokenized .bin/.idx shards from tokenizer team.
+        #
+        # train_loader reads from args.shard_dir.
+        # eval_loader / test_loader read from args.eval_shard_dir (optional).
+        # If eval_shard_dir is not set, evaluation steps are skipped gracefully.
+        # ------------------------------------------------------------------
+        if not args.shard_dir:
+            raise ValueError(
+                "data.loader_type=bin_idx requires data.shard_dir to be set in the config. "
+                "Point it at the directory containing shard subdirectories."
+            )
+        print_rank_0(f"  [bin_idx] Loading train shards from: {args.shard_dir}")
+        train_loader = build_bin_idx_dataloader(
+            shard_dir=args.shard_dir,
+            batch_size=micro_batch_size,
+            tokenizer=tokenizer,
+            tokenizer_dir=args.tokenizer_dir,
+            seq_len=args.max_length,
+            num_workers=args.num_workers,
+            validate_tokenizer=args.validate_tokenizer,
+        )
+        print_rank_0(f"  [bin_idx] Train loader ready (seq_len={args.max_length})")
+
+        if args.eval_shard_dir:
+            print_rank_0(f"  [bin_idx] Loading eval shards from: {args.eval_shard_dir}")
+            eval_loader = build_bin_idx_dataloader(
+                shard_dir=args.eval_shard_dir,
+                batch_size=micro_batch_size,
+                tokenizer=tokenizer,
+                tokenizer_dir=args.tokenizer_dir,
+                seq_len=args.max_length,
+                num_workers=args.num_workers,
+                validate_tokenizer=args.validate_tokenizer,
+            )
+            # Use the same eval set for both validation and test phases.
+            test_loader = eval_loader
+            print_rank_0(f"  [bin_idx] Eval/test loader ready")
+        else:
+            eval_loader = None
+            test_loader = None
+            print_rank_0(
+                "  [bin_idx] No eval_shard_dir set — validation and test "
+                "evaluation will be skipped."
+            )
+
+    else:
+        # ------------------------------------------------------------------
+        # Development / HuggingFace path: tokenize on-the-fly from a HF dataset.
+        # Suitable for smoke tests, wikitext runs, and eval on public benchmarks.
+        # ------------------------------------------------------------------
+        train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
+            dataset_name=args.dataset_name,
+            dataset_config=args.dataset_config,
+            tokenizer=tokenizer,
+            batch_size=micro_batch_size,
+            max_length=args.max_length,
+            tokenized_dataset_path=args.tokenized_dataset_path,
+            dataset_cache_dir=args.dataset_cache_dir,
+            local_nvme_cache_dir=args.local_nvme_cache_dir,
+            require_local_nvme=args.require_local_nvme,
+            pack_into_blocks=args.pack_into_blocks,
+            block_sizes=args.block_sizes,
+            block_size_counts=args.block_size_counts,
+            domain_column=args.domain_column,
+            concat_across_domains=args.concat_across_domains,
+            drop_remainder=args.drop_remainder,
+            num_workers=args.num_workers,
+            tokenize_num_proc=args.tokenize_num_proc,
+        )
+        print_rank_0(f"  Train batches: {len(train_loader)}")
+        print_rank_0(f"  Eval batches: {len(eval_loader)}")
+        print_rank_0(f"  Test batches: {len(test_loader)}")
 
     # ========================================
     # Step 2: Load Model (1B Dense Model)
@@ -532,17 +605,23 @@ def main():
             start_step=epoch_start_step,
             global_step=global_step,
             metrics_jsonl_path=args.metrics_jsonl_path,
+            profile_steps=set(args.profile_steps) if args.profile_steps else None,
         )
 
-        # Evaluate on validation set
-        print_rank_0("\nEvaluating on validation set...")
-        eval_loss, eval_perplexity = evaluate(
-            model_engine,
-            eval_loader,
-            phase="Validation",
-            max_steps=args.max_eval_steps,
-            metrics_jsonl_path=args.metrics_jsonl_path,
-        )
+        # Evaluate on validation set (skipped when eval_loader is None,
+        # e.g. bin_idx mode with no eval_shard_dir configured)
+        if eval_loader is not None:
+            print_rank_0("\nEvaluating on validation set...")
+            eval_loss, eval_perplexity = evaluate(
+                model_engine,
+                eval_loader,
+                phase="Validation",
+                max_steps=args.max_eval_steps,
+                metrics_jsonl_path=args.metrics_jsonl_path,
+            )
+        else:
+            print_rank_0("\n[skip] Validation skipped — no eval_shard_dir configured.")
+            eval_loss, eval_perplexity = None, None
 
         # Save epoch checkpoint
         if checkpoint_manager or args.save_checkpoint:
@@ -554,8 +633,8 @@ def main():
                 "step": 0,
                 "global_step": global_step,
                 "avg_loss": avg_loss,
-                "eval_loss": eval_loss,
-                "eval_perplexity": eval_perplexity,
+                "eval_loss": eval_loss if eval_loss is not None else "skipped",
+                "eval_perplexity": eval_perplexity if eval_perplexity is not None else "skipped",
             }
 
             if checkpoint_manager:
@@ -575,15 +654,19 @@ def main():
     # ========================================
     print_rank_0("\n[5/5] Final Evaluation...")
 
-    # Evaluate on test set
-    print_rank_0("\nEvaluating on test set...")
-    test_loss, test_perplexity = evaluate(
-        model_engine,
-        test_loader,
-        phase="Test",
-        max_steps=args.max_eval_steps,
-        metrics_jsonl_path=args.metrics_jsonl_path,
-    )
+    # Evaluate on test set (skipped when test_loader is None)
+    if test_loader is not None:
+        print_rank_0("\nEvaluating on test set...")
+        test_loss, test_perplexity = evaluate(
+            model_engine,
+            test_loader,
+            phase="Test",
+            max_steps=args.max_eval_steps,
+            metrics_jsonl_path=args.metrics_jsonl_path,
+        )
+    else:
+        print_rank_0("\n[skip] Test evaluation skipped — no eval_shard_dir configured.")
+        test_loss, test_perplexity = 0.0, 0.0
 
     # Test text generation
     if args.test_generation:
