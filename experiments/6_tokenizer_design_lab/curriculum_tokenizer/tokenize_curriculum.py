@@ -361,9 +361,9 @@ def process_coreset_file(
         shard_size_mb=args.shard_size_mb,
         tmp_dir=tmp_dir,
         vocab_size=len(tokenizer),
-        pad_token_id=tokenizer.pad_token_id
-        if tokenizer.pad_token_id is not None
-        else 0,
+        pad_token_id=(
+            tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+        ),
         eos_token_id=tokenizer.eos_token_id,
     )
 

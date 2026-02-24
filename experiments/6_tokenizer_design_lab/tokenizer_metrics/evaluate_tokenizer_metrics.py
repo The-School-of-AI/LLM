@@ -139,9 +139,9 @@ def get_dataset_files():
     if os.path.exists(DATA_DIRS["NCERT"]):
         ncert_files = glob.glob(os.path.join(DATA_DIRS["NCERT"], "*.jsonl"))
         if ncert_files:
-            dataset_map[
-                "NCERT"
-            ] = ncert_files  # Special handling for subject grouping later
+            dataset_map["NCERT"] = (
+                ncert_files  # Special handling for subject grouping later
+            )
         else:
             print(
                 f"Warning: No .jsonl files found in '{DATA_DIRS['NCERT']}'. Please ensure dataset files are in .jsonl format."

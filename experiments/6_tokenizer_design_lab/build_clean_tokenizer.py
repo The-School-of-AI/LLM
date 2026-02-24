@@ -24,8 +24,11 @@ import csv
 import json
 import os
 
-from special_tokens import (ADDITIONAL_SPECIAL_TOKENS, BASE_SPECIAL_TOKENS,
-                            NUM_ADDITIONAL_SPECIAL)
+from special_tokens import (
+    ADDITIONAL_SPECIAL_TOKENS,
+    BASE_SPECIAL_TOKENS,
+    NUM_ADDITIONAL_SPECIAL,
+)
 
 BASE_GPTOSS_PATH = "Tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
 OUTPUT_DIR = "tsai_131k_tokenizer"
