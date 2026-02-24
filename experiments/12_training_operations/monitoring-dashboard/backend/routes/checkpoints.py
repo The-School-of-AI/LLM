@@ -1,6 +1,5 @@
-from fastapi import APIRouter
-
 from db import get_client
+from fastapi import APIRouter
 
 router = APIRouter()
 
@@ -30,7 +29,11 @@ async def get_checkpoints(run_id: str):
                 "duration_s": float(row[6]) if row[6] is not None else None,
                 "size_bytes": int(row[7]) if row[7] is not None else None,
                 "host": row[8],
-                "timestamp": row[9].timestamp() if hasattr(row[9], "timestamp") else float(row[9]),
+                "timestamp": (
+                    row[9].timestamp()
+                    if hasattr(row[9], "timestamp")
+                    else float(row[9])
+                ),
             }
             for row in result.result_rows
         ],

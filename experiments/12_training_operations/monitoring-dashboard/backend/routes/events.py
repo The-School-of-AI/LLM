@@ -1,8 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Query
-
 from db import get_client
+from fastapi import APIRouter, Query
 
 router = APIRouter()
 
@@ -49,7 +48,11 @@ async def get_events(
                 "message": row[3],
                 "host": row[4],
                 "rank": row[5],
-                "timestamp": row[6].timestamp() if hasattr(row[6], "timestamp") else float(row[6]),
+                "timestamp": (
+                    row[6].timestamp()
+                    if hasattr(row[6], "timestamp")
+                    else float(row[6])
+                ),
             }
             for row in result.result_rows
         ],

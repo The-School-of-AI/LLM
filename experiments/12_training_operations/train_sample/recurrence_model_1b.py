@@ -140,13 +140,14 @@ Before deploying this model at 256k context, the following MUST be addressed:
 ═══════════════════════════════════════════════════════════════════════════════
 """
 
+import math
+from dataclasses import dataclass
+from typing import List
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-import numpy as np
-from typing import List
-from dataclasses import dataclass
 
 # Note: Importing for backwards compatibility - we define KroneckerEmbeddings inline
 # from kronecker_se_decoder import PFConfig, PFCodec
@@ -155,6 +156,7 @@ from dataclasses import dataclass
 # ============================================================================
 # Kronecker Product Embeddings (formerly PFCodec)
 # ============================================================================
+
 
 @dataclass
 class KroneckerConfig:
@@ -175,15 +177,18 @@ class KroneckerConfig:
     - POS_DIM: 32 (max 32 bytes per token)
     - D: 32 × 256 = 8192 dimensions
     """
+
     CHAR_DIM: int = 256  # Byte vocabulary (0-255)
-    POS_DIM: int = 32    # Max token length in bytes
-    D: int = 8192        # CHAR_DIM × POS_DIM = 256 × 32
+    POS_DIM: int = 32  # Max token length in bytes
+    D: int = 8192  # CHAR_DIM × POS_DIM = 256 × 32
     length_normalize: bool = True
     truncate_long_words: bool = True
 
     def __post_init__(self):
         assert self.CHAR_DIM == 256, "CHAR_DIM must be 256 for byte-level encoding"
-        assert self.D == self.CHAR_DIM * self.POS_DIM, f"D ({self.D}) must equal CHAR_DIM × POS_DIM ({self.CHAR_DIM} × {self.POS_DIM})"
+        assert (
+            self.D == self.CHAR_DIM * self.POS_DIM
+        ), f"D ({self.D}) must equal CHAR_DIM × POS_DIM ({self.CHAR_DIM} × {self.POS_DIM})"
 
 
 class KroneckerEmbeddings:
@@ -213,6 +218,7 @@ class KroneckerEmbeddings:
 
     Note: Cannot tie with lm_head (8192 != hidden_size=4096)
     """
+
     def __init__(self, cfg: KroneckerConfig):
         self.cfg = cfg
         self.CHAR_DIM = cfg.CHAR_DIM
@@ -239,13 +245,13 @@ class KroneckerEmbeddings:
         # Try decoding at truncation point and move back if invalid
         for end in range(max_bytes, max(max_bytes - 4, 0) - 1, -1):
             try:
-                byte_seq[:end].decode('utf-8')
+                byte_seq[:end].decode("utf-8")
                 return byte_seq[:end]
             except UnicodeDecodeError:
                 continue
 
         # Fallback: return empty if can't find valid truncation
-        return b''
+        return b""
 
     def encode_word(self, word: str) -> np.ndarray:
         """
@@ -272,14 +278,16 @@ class KroneckerEmbeddings:
             return np.zeros((self.D,), dtype=np.float32)
 
         # Convert to UTF-8 bytes
-        byte_seq = word.encode('utf-8')
+        byte_seq = word.encode("utf-8")
 
         # Truncate if needed (UTF-8 safe)
         if len(byte_seq) > self.POS_DIM:
             if self.cfg.truncate_long_words:
                 byte_seq = self._utf8_safe_truncate(byte_seq, self.POS_DIM)
             else:
-                raise ValueError(f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}")
+                raise ValueError(
+                    f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}"
+                )
 
         L = len(byte_seq)
         if L == 0:
@@ -293,7 +301,7 @@ class KroneckerEmbeddings:
 
         # Length normalization
         if self.cfg.length_normalize:
-            M *= (1.0 / math.sqrt(L))
+            M *= 1.0 / math.sqrt(L)
 
         return M.reshape(self.D)
 
@@ -338,11 +346,11 @@ class KroneckerEmbeddings:
         # Convert bytes to string
         byte_seq = bytes(bytes_list)
         try:
-            return byte_seq.decode('utf-8')
+            return byte_seq.decode("utf-8")
         except UnicodeDecodeError:
             # Should never happen with properly encoded data
             # But handle gracefully just in case
-            return byte_seq.decode('utf-8', errors='replace')
+            return byte_seq.decode("utf-8", errors="replace")
 
     def encode_batch(self, words: List[str]) -> np.ndarray:
         """Encode a batch of words."""
@@ -362,8 +370,10 @@ PFConfig = KroneckerConfig
 # CONFIGURATION
 # ============================================================================
 
+
 class ModelConfig:
     """1B Dense Model Configuration"""
+
     # Architecture
     vocab_size = 131072  # 2^17
     hidden_size = 4096
@@ -402,7 +412,9 @@ class ModelConfig:
 
     # mHC Configuration
     n_streams = 4
-    sinkhorn_iters = 20  # PROBABLE FIX #26: Reduced from 20 (major compute savings at long context)
+    sinkhorn_iters = (
+        20  # PROBABLE FIX #26: Reduced from 20 (major compute savings at long context)
+    )
 
     # Context and RoPE (YARN Scaling)
     max_seq_len = 262144  # 256k context
@@ -417,6 +429,7 @@ class ModelConfig:
 # ============================================================================
 # Embedding Layer (Kronecker Product)
 # ============================================================================
+
 
 class PureHybridEmbeddingTorch(nn.Module):
     """
@@ -438,6 +451,7 @@ class PureHybridEmbeddingTorch(nn.Module):
 
     Note: Embedding tying NOT possible (D=8192 != hidden_size=4096)
     """
+
     def __init__(self, vocab_words: List[str], pf_codec: KroneckerEmbeddings):
         super().__init__()
         PF_table = pf_codec.encode_batch(vocab_words)  # (vocab_size, D)
@@ -472,6 +486,7 @@ class PureHybridEmbeddingTorch(nn.Module):
 # Core Components
 # ============================================================================
 
+
 class RMSNorm(nn.Module):
     """
     Root Mean Square Layer Normalization with fp32 statistics.
@@ -479,6 +494,7 @@ class RMSNorm(nn.Module):
     FIX #43: Computes variance in fp32 for numerical stability at 256k context.
     Critical for preventing rare NaN spikes with bf16/fp16 training.
     """
+
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.eps = eps
@@ -513,8 +529,15 @@ class RotaryEmbedding(nn.Module):
     For 256k context training, we need every GB of VRAM for activations and optimizer states.
     Trading 5-10% RoPE compute time for 2.1GB free memory is an excellent trade-off.
     """
-    def __init__(self, dim: int, max_position_embeddings: int = 8192, base: int = 10000,
-                 original_max_position_embeddings: int = 8192, scaling_factor: float = 32.0):
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 8192,
+        base: int = 10000,
+        original_max_position_embeddings: int = 8192,
+        scaling_factor: float = 32.0,
+    ):
         super().__init__()
         self.dim = dim
         self.base = base
@@ -529,7 +552,9 @@ class RotaryEmbedding(nn.Module):
             ext_ratio = max_position_embeddings / original_max_position_embeddings
             # Use a gentler scaling exponent for YARN (typically around 1.0)
             scaled_base = base * (ext_ratio ** (dim / (dim - 2)))
-            print(f"   🧶 YARN RoPE: Scaling base {base} -> {scaled_base:.0f} for {max_position_embeddings:,} context")
+            print(
+                f"   🧶 YARN RoPE: Scaling base {base} -> {scaled_base:.0f} for {max_position_embeddings:,} context"
+            )
         else:
             scaled_base = base
 
@@ -542,7 +567,7 @@ class RotaryEmbedding(nn.Module):
         # beta_fast: controls high-freq behavior (preserve local distinctions)
         # beta_slow: controls low-freq behavior (interpolate for global context)
         # CRITICAL: High freq (small wavelength) should NOT be scaled, low freq should be scaled
-        self.beta_fast = 1   # High frequencies (preserve - do not scale below this)
+        self.beta_fast = 1  # High frequencies (preserve - do not scale below this)
         self.beta_slow = 32  # Low frequencies (interpolate - fully scale above this)
 
         # Compute interpolation weights (mscale) for each frequency
@@ -552,12 +577,16 @@ class RotaryEmbedding(nn.Module):
         # - mscale determines the 0-1 ramp for interpolation strength
         # - This ramp is APPLIED to the NTK-scaled frequencies (inv_freq above)
         # - Using scaled_base here would misclassify which bands need interpolation
-        freq_extra = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))  # ORIGINAL base intentional
+        freq_extra = 1.0 / (
+            base ** (torch.arange(0, dim, 2).float() / dim)
+        )  # ORIGINAL base intentional
         # Determine which frequencies to interpolate vs extrapolate
         # High frequencies (small wavelengths) get less interpolation
         wavelen = 2 * math.pi / freq_extra
         # Ramp function: 0 at beta_fast (preserve), 1 at beta_slow (interpolate fully)
-        ramp = torch.clamp((wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1)
+        ramp = torch.clamp(
+            (wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1
+        )
         self.register_buffer("mscale", ramp)  # Interpolation weight per frequency
 
     def _compute_cos_sin(self, seq_len: int, device, dtype=None):
@@ -571,7 +600,7 @@ class RotaryEmbedding(nn.Module):
         # FIX #30: Check if cache exists (set at model forward start)
         # FIX #39: Include dtype in cache key (default to None for backward compatibility)
         cache_key = (seq_len, device, dtype)
-        if hasattr(self, '_forward_cache') and cache_key in self._forward_cache:
+        if hasattr(self, "_forward_cache") and cache_key in self._forward_cache:
             return self._forward_cache[cache_key]
 
         t = torch.arange(seq_len, device=device).float()
@@ -599,9 +628,11 @@ class RotaryEmbedding(nn.Module):
     def _apply_rotary(x, cos, sin):
         x1, x2 = x[..., ::2], x[..., 1::2]
         return torch.cat(
-            (x1 * cos[..., ::2] - x2 * sin[..., ::2],
-             x1 * sin[..., ::2] + x2 * cos[..., ::2]),
-            dim=-1
+            (
+                x1 * cos[..., ::2] - x2 * sin[..., ::2],
+                x1 * sin[..., ::2] + x2 * cos[..., ::2],
+            ),
+            dim=-1,
         )
 
 
@@ -609,27 +640,30 @@ class RotaryEmbedding(nn.Module):
 # Helper Modules for Gated DeltaNet
 # ============================================================================
 
+
 class ShortConvolution(nn.Module):
     """
     Short convolution layer with causal padding.
     Used in Gated DeltaNet for local context integration.
     """
-    def __init__(self, dim, conv_size=4, activation='silu'):
+
+    def __init__(self, dim, conv_size=4, activation="silu"):
         super().__init__()
         self.conv_size = conv_size
         self.conv = nn.Conv1d(
-            dim, dim,
+            dim,
+            dim,
             kernel_size=conv_size,
             padding=conv_size - 1,  # Causal padding
-            groups=dim  # Depthwise convolution
+            groups=dim,  # Depthwise convolution
         )
-        self.activation = nn.SiLU() if activation == 'silu' else nn.Identity()
+        self.activation = nn.SiLU() if activation == "silu" else nn.Identity()
 
     def forward(self, x):
         # x: (B, T, D)
         x = x.transpose(1, 2)  # (B, D, T)
         x = self.conv(x)
-        x = x[:, :, :-(self.conv_size - 1)]  # Remove extra padding for causality
+        x = x[:, :, : -(self.conv_size - 1)]  # Remove extra padding for causality
         x = x.transpose(1, 2)  # (B, T, D)
         return self.activation(x)
 
@@ -639,6 +673,7 @@ class FusedRMSNormSwishGate(nn.Module):
     Fused RMSNorm with Swish gating for output projection.
     Matches official implementation: g * swish(RMSNorm(x))
     """
+
     def __init__(self, dim, eps=1e-6):
         super().__init__()
         self.norm = RMSNorm(dim, eps)
@@ -652,6 +687,7 @@ class FusedRMSNormSwishGate(nn.Module):
 # ============================================================================
 # Gated DeltaNet (75% of layers) - O(N) Linear Attention
 # ============================================================================
+
 
 class GatedDeltaNet(nn.Module):
     """
@@ -668,10 +704,19 @@ class GatedDeltaNet(nn.Module):
     - L2 normalization: For Q/K stability (NOT softmax)
     - Short convolutions: Local context integration (kernel_size=4)
     """
-    def __init__(self, hidden_size, num_heads, head_dim,
-                 max_seq_len=262144, rope_base=10000,
-                 rope_original_max=8192, rope_scaling_factor=32.0,
-                 conv_size=4, use_output_norm=True):
+
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        head_dim,
+        max_seq_len=262144,
+        rope_base=10000,
+        rope_original_max=8192,
+        rope_scaling_factor=32.0,
+        conv_size=4,
+        use_output_norm=True,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -690,13 +735,23 @@ class GatedDeltaNet(nn.Module):
         self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
 
         # Gate projections for alpha/beta computation
-        self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)  # Beta writing strength
-        self.gk_proj = nn.Linear(hidden_size, num_heads, bias=True)  # For alpha computation
+        self.b_proj = nn.Linear(
+            hidden_size, num_heads, bias=True
+        )  # Beta writing strength
+        self.gk_proj = nn.Linear(
+            hidden_size, num_heads, bias=True
+        )  # For alpha computation
 
         # Short convolutions for local context
-        self.q_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
-        self.k_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
-        self.v_conv1d = ShortConvolution(value_dim, conv_size=conv_size, activation='silu')
+        self.q_conv1d = ShortConvolution(
+            key_dim, conv_size=conv_size, activation="silu"
+        )
+        self.k_conv1d = ShortConvolution(
+            key_dim, conv_size=conv_size, activation="silu"
+        )
+        self.v_conv1d = ShortConvolution(
+            value_dim, conv_size=conv_size, activation="silu"
+        )
 
         # Alpha decay parameters (per-head)
         # Paper: A initialized uniform(0, 16), then log for exponential parameterization
@@ -718,7 +773,7 @@ class GatedDeltaNet(nn.Module):
             max_position_embeddings=max_seq_len,
             base=rope_base,
             original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
+            scaling_factor=rope_scaling_factor,
         )
 
         # Output normalization with gating
@@ -792,7 +847,9 @@ class GatedDeltaNet(nn.Module):
         # Reference: DeltaNet paper arXiv:2412.06464v3 explicitly states α_t ∈ (0,1)
         gk = self.gk_proj(x)  # (B, T, num_heads)
         A = torch.exp(self.A_log)  # Positive (move negative to multiplication)
-        alpha = -A.view(1, 1, self.num_heads, 1) * F.softplus(gk + self.dt_bias).unsqueeze(-1)
+        alpha = -A.view(1, 1, self.num_heads, 1) * F.softplus(
+            gk + self.dt_bias
+        ).unsqueeze(-1)
         # Map negative values to (0, 1) range using exp - CRITICAL for 256k retention
         alpha = torch.exp(alpha)  # (B, T, num_heads, 1) - full (0,1) range, not (0,0.5)
 
@@ -828,14 +885,24 @@ class GatedDeltaNet(nn.Module):
         # FIX #24: Keep recurrent state in fp32 for numerical stability at 256k
         # bf16/fp16 accumulation causes drift over long sequences - store original dtype for casting back
         original_dtype = x.dtype
-        S = torch.zeros(B, self.num_heads, self.head_dim, self.head_dim,
-                       device=device, dtype=torch.float32)
+        S = torch.zeros(
+            B,
+            self.num_heads,
+            self.head_dim,
+            self.head_dim,
+            device=device,
+            dtype=torch.float32,
+        )
 
         # OPTIMIZATION: Preallocate output tensor (avoids Python list + stack overhead)
-        outputs = torch.empty(B, self.num_heads, T, self.head_dim, device=device, dtype=torch.float32)
+        outputs = torch.empty(
+            B, self.num_heads, T, self.head_dim, device=device, dtype=torch.float32
+        )
 
         # Identity matrix for orthogonal projection
-        identity_mat = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
+        identity_mat = torch.eye(
+            self.head_dim, device=device, dtype=torch.float32
+        ).view(1, 1, self.head_dim, self.head_dim)
 
         for t in range(T):
             # FIX #24: Cast inputs to fp32 for stable recurrence computation
@@ -846,17 +913,26 @@ class GatedDeltaNet(nn.Module):
             alpha_t = alpha[:, :, t, 0].float()  # (B, num_heads) - scalar per head
 
             # Query current state
-            o_t = torch.einsum('bhd,bhde->bhe', q_t, S)  # (B, num_heads, head_dim)
+            o_t = torch.einsum("bhd,bhde->bhe", q_t, S)  # (B, num_heads, head_dim)
 
             # Add D residual (direct token contribution)
-            o_t = o_t + self.D.view(1, self.num_heads, 1) * (q_t * k_t).sum(dim=-1, keepdim=True) * v_t
+            o_t = (
+                o_t
+                + self.D.view(1, self.num_heads, 1)
+                * (q_t * k_t).sum(dim=-1, keepdim=True)
+                * v_t
+            )
 
             outputs[:, :, t, :] = o_t
 
             # Update state with gated delta rule (Paper Equation 10 - FULL FORMULA)
             # Compute outer products
-            v_outer = torch.einsum('bhd,bhe->bhde', v_t, k_t)  # v_t ⊗ k_t^T: (B, num_heads, head_dim, head_dim)
-            k_outer = torch.einsum('bhd,bhe->bhde', k_t, k_t)  # k_t ⊗ k_t^T: (B, num_heads, head_dim, head_dim)
+            v_outer = torch.einsum(
+                "bhd,bhe->bhde", v_t, k_t
+            )  # v_t ⊗ k_t^T: (B, num_heads, head_dim, head_dim)
+            k_outer = torch.einsum(
+                "bhd,bhe->bhde", k_t, k_t
+            )  # k_t ⊗ k_t^T: (B, num_heads, head_dim, head_dim)
 
             # Reshape alpha_t and beta_t for broadcasting: (B, num_heads) -> (B, num_heads, 1, 1)
             alpha_t = alpha_t.view(B, self.num_heads, 1, 1)
@@ -867,7 +943,10 @@ class GatedDeltaNet(nn.Module):
             orthogonal_proj = identity_mat - beta_t * k_outer
 
             # Apply full paper formula: S_t = α_t · S_{t-1} · (I - β_t · k_t ⊗ k_t^T) + β_t · v_t ⊗ k_t^T
-            S = alpha_t * torch.einsum('bhde,bhef->bhdf', S, orthogonal_proj) + beta_t * v_outer
+            S = (
+                alpha_t * torch.einsum("bhde,bhef->bhdf", S, orthogonal_proj)
+                + beta_t * v_outer
+            )
 
         # FIX #24: Cast output back to original dtype (bf16/fp16) for downstream processing
         o = outputs.to(original_dtype)
@@ -895,6 +974,7 @@ class GatedDeltaNet(nn.Module):
 # Gated Sparse Attention (25% of layers) - From test model
 # ============================================================================
 
+
 class GatedSparseAttention(nn.Module):
     """
     Gated Sparse Attention (GSA) - arXiv:2601.15305v1
@@ -918,9 +998,20 @@ class GatedSparseAttention(nn.Module):
 
     TODO: Port their Triton kernel implementation to avoid T×T materialization
     """
-    def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
-                 k_base=512, k_min=32, k_max=1024, indexer_heads=4,
-                 rope_original_max=8192, rope_scaling_factor=32.0):
+
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        max_seq_len=262144,
+        rope_base=10000,
+        k_base=512,
+        k_min=32,
+        k_max=1024,
+        indexer_heads=4,
+        rope_original_max=8192,
+        rope_scaling_factor=32.0,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -936,7 +1027,9 @@ class GatedSparseAttention(nn.Module):
         # Lightning Indexer
         self.d_idx = 32
         self.W_Iq = nn.Linear(hidden_size, indexer_heads * self.d_idx, bias=False)
-        self.W_Ik = nn.Linear(hidden_size, indexer_heads * self.d_idx, bias=False)  # Per-head keys
+        self.W_Ik = nn.Linear(
+            hidden_size, indexer_heads * self.d_idx, bias=False
+        )  # Per-head keys
         self.W_Iw = nn.Linear(hidden_size, indexer_heads, bias=False)
         self.gate_bias = nn.Parameter(torch.zeros(indexer_heads))
 
@@ -963,14 +1056,23 @@ class GatedSparseAttention(nn.Module):
             max_position_embeddings=max_seq_len,
             base=rope_base,
             original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
+            scaling_factor=rope_scaling_factor,
         )
 
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.W_Iq, self.W_Ik, self.W_Iw, self.W_q, self.W_k, self.W_v,
-                  self.o_proj, self.W_gv, self.W_go]:
+        for m in [
+            self.W_Iq,
+            self.W_Ik,
+            self.W_Iw,
+            self.W_q,
+            self.W_k,
+            self.W_v,
+            self.o_proj,
+            self.W_gv,
+            self.W_go,
+        ]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
         nn.init.zeros_(self.gate_bias)
         nn.init.zeros_(self.head_importance_bias)
@@ -981,14 +1083,18 @@ class GatedSparseAttention(nn.Module):
 
         # Lightning Indexer (FIXED: Per-head keys for diverse selection patterns)
         q_I = self.W_Iq(x).view(B, T, self.indexer_heads, self.d_idx)  # (B, T, 4, 32)
-        k_I = self.W_Ik(x).view(B, T, self.indexer_heads, self.d_idx)  # (B, T, 4, 32) - now per-head!
+        k_I = self.W_Ik(x).view(
+            B, T, self.indexer_heads, self.d_idx
+        )  # (B, T, 4, 32) - now per-head!
         w = torch.sigmoid(self.W_Iw(x))  # (B, T, 4)
 
         # Compute per-head matching scores
         q_I_p = q_I.permute(0, 2, 1, 3)  # (B, 4, T, 32)
         k_I_p = k_I.permute(0, 2, 3, 1)  # (B, 4, 32, T)
 
-        match_logits = torch.matmul(q_I_p, k_I_p)  # (B, 4, T, T) - now using distinct keys per indexer head!
+        match_logits = torch.matmul(
+            q_I_p, k_I_p
+        )  # (B, 4, T, T) - now using distinct keys per indexer head!
         match_logits = match_logits + self.gate_bias.view(1, self.indexer_heads, 1, 1)
         match_gate = torch.sigmoid(match_logits)
 
@@ -999,12 +1105,18 @@ class GatedSparseAttention(nn.Module):
         # Map 4 indexer patterns → 16 attention heads with learned per-head diversity
         # Each attention head gets a base pattern (replicated) + learned modulation
         heads_per_indexer = self.num_heads // self.indexer_heads  # 16 // 4 = 4
-        importance_score = importance_per_indexer.repeat_interleave(heads_per_indexer, dim=1)  # (B, 16, T, T)
+        importance_score = importance_per_indexer.repeat_interleave(
+            heads_per_indexer, dim=1
+        )  # (B, 16, T, T)
 
         # Apply learned per-attention-head biases for fine-grained diversity
         # This allows each of 16 heads to modulate the base indexer pattern independently
-        head_bias = self.head_importance_bias.view(1, self.num_heads, 1, 1)  # (1, 16, 1, 1)
-        importance_score = importance_score * torch.sigmoid(head_bias)  # Learned modulation
+        head_bias = self.head_importance_bias.view(
+            1, self.num_heads, 1, 1
+        )  # (1, 16, 1, 1)
+        importance_score = importance_score * torch.sigmoid(
+            head_bias
+        )  # Learned modulation
 
         # Causal masking (NOTE: Still O(T²) - Triton kernel needed for 256k)
         if T > 1:
@@ -1013,8 +1125,12 @@ class GatedSparseAttention(nn.Module):
             # For causal: only attend to positions <= current position
             positions = torch.arange(T, device=device)
             # Shape: [1, 1, T, 1] compared to [1, 1, 1, T] -> broadcasts to [1, num_heads, T, T]
-            causal_mask_broadcast = positions.view(1, 1, -1, 1) >= positions.view(1, 1, 1, -1)
-            importance_score_masked = importance_score.masked_fill(~causal_mask_broadcast, 0.0)
+            causal_mask_broadcast = positions.view(1, 1, -1, 1) >= positions.view(
+                1, 1, 1, -1
+            )
+            importance_score_masked = importance_score.masked_fill(
+                ~causal_mask_broadcast, 0.0
+            )
             causal_mask = causal_mask_broadcast  # Store for later use
         else:
             importance_score_masked = importance_score
@@ -1029,13 +1145,19 @@ class GatedSparseAttention(nn.Module):
         # Production refactor: Move to reversible stack bookkeeping keyed by microbatch ID
         # Current status: Works for single-GPU training, may have issues in complex setups
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = self.training and torch.is_grad_enabled() and getattr(self, "_saved_selection", None) is not None
+        is_reversible_reconstruct = (
+            self.training
+            and torch.is_grad_enabled()
+            and getattr(self, "_saved_selection", None) is not None
+        )
 
         if is_reversible_forward:
             var_t_mean = var_t.mean().detach()
             # FIX #35: Synchronize variance EMA across DDP ranks (prevents drift)
             if torch.distributed.is_initialized():
-                torch.distributed.all_reduce(var_t_mean, op=torch.distributed.ReduceOp.AVG)
+                torch.distributed.all_reduce(
+                    var_t_mean, op=torch.distributed.ReduceOp.AVG
+                )
             self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
 
         if is_reversible_reconstruct:
@@ -1045,10 +1167,14 @@ class GatedSparseAttention(nn.Module):
         else:
             avg_V = self.variance_ema.clamp(min=1e-6)
             k_t_float = self.k_base * var_t / avg_V
-            k_t = k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long()  # [B, num_heads, T]
+            k_t = (
+                k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long()
+            )  # [B, num_heads, T]
 
             if T > 1:
-                importance_for_selection = importance_score.masked_fill(~causal_mask, -float('inf'))
+                importance_for_selection = importance_score.masked_fill(
+                    ~causal_mask, -float("inf")
+                )
             else:
                 importance_for_selection = importance_score
 
@@ -1056,21 +1182,31 @@ class GatedSparseAttention(nn.Module):
             sink_size = 4
             if T > sink_size:
                 sink_mask = torch.zeros_like(importance_for_selection, dtype=torch.bool)
-                sink_mask[:, :, :, :sink_size] = True  # Updated for [B, num_heads, T, T] shape
-                importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
+                sink_mask[:, :, :, :sink_size] = (
+                    True  # Updated for [B, num_heads, T, T] shape
+                )
+                importance_for_selection = importance_for_selection.masked_fill(
+                    sink_mask, float("inf")
+                )
 
             k_limit = min(T, max(k_t.max().item(), sink_size))
-            _, top_indices = importance_for_selection.topk(k_limit, dim=-1)  # [B, num_heads, T, k_limit]
+            _, top_indices = importance_for_selection.topk(
+                k_limit, dim=-1
+            )  # [B, num_heads, T, k_limit]
 
             if is_reversible_forward:
                 self._saved_selection = (k_t, top_indices)
 
         # Construct boolean mask (per-head)
         k_limit = top_indices.size(-1)
-        range_k = torch.arange(k_limit, device=device).unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, k_limit]
+        range_k = (
+            torch.arange(k_limit, device=device).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+        )  # [1, 1, 1, k_limit]
         keep_in_topk = range_k < k_t.unsqueeze(-1)  # [B, num_heads, T, k_limit]
 
-        selection_mask = torch.zeros_like(importance_score, dtype=torch.bool)  # [B, num_heads, T, T]
+        selection_mask = torch.zeros_like(
+            importance_score, dtype=torch.bool
+        )  # [B, num_heads, T, T]
         selection_mask.scatter_(dim=-1, index=top_indices, src=keep_in_topk)
 
         if T > 1:
@@ -1111,10 +1247,7 @@ class GatedSparseAttention(nn.Module):
 
         # No need to unsqueeze(1) - bias_mask is already [B, num_heads, T, T]
         o_sparse = F.scaled_dot_product_attention(
-            q, k, v,
-            attn_mask=bias_mask,
-            dropout_p=0.0,
-            is_causal=False
+            q, k, v, attn_mask=bias_mask, dropout_p=0.0, is_causal=False
         )
 
         o_sparse = o_sparse.transpose(1, 2).contiguous().view(B, T, self.hidden_size)
@@ -1128,6 +1261,7 @@ class GatedSparseAttention(nn.Module):
 # ============================================================================
 # MoE with Null Experts (from test model)
 # ============================================================================
+
 
 class MoEGate(nn.Module):
     """
@@ -1182,7 +1316,10 @@ class MoEGate(nn.Module):
         logger.log(f"Layer {layer_idx}: real={num_real:.2f}, zero_frac={zero_real_frac:.3f}")
     ```
     """
-    def __init__(self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5):
+
+    def __init__(
+        self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5
+    ):
         super().__init__()
         self.num_experts = num_experts
         self.top_k = top_k
@@ -1224,7 +1361,9 @@ class MoEGate(nn.Module):
             return topk_idx, topk_weight, is_null, aux_loss
 
         real_logits = self.gate(x) + self.logit_bias
-        null_logits = self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        null_logits = (
+            self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        )
         logits = torch.cat([real_logits, null_logits], dim=-1)
 
         probs = F.softmax(logits, dim=-1)
@@ -1237,21 +1376,35 @@ class MoEGate(nn.Module):
 
         # FIX #29: Separate real vs null expert losses (prevents null slots from distorting balance)
         # Balance loss: only over REAL experts (not null slots)
-        logits_real = logits[:, :, :self.num_experts]  # (B, T, num_experts) - exclude null slots
+        logits_real = logits[
+            :, :, : self.num_experts
+        ]  # (B, T, num_experts) - exclude null slots
         probs_real = F.softmax(logits_real, dim=-1)
-        P_real = probs_real.mean(dim=(0, 1))  # (num_experts,) - average probability per real expert
+        P_real = probs_real.mean(
+            dim=(0, 1)
+        )  # (num_experts,) - average probability per real expert
 
         # Count only real expert selections
         idx_flat = topk_idx.view(-1)
-        is_null_flat = (idx_flat >= self.num_experts)
-        idx_real = torch.where(is_null_flat, torch.tensor(0, device=idx_flat.device), idx_flat)
+        is_null_flat = idx_flat >= self.num_experts
+        idx_real = torch.where(
+            is_null_flat, torch.tensor(0, device=idx_flat.device), idx_flat
+        )
         counts_real = torch.bincount(idx_real, minlength=self.num_experts).float()
-        counts_real[0] -= is_null_flat.sum().float()  # Remove null selections from bin 0
+        counts_real[
+            0
+        ] -= is_null_flat.sum().float()  # Remove null selections from bin 0
         # FIX #34: Normalize by actual real assignments, not total slots (prevents router collapse)
-        total_real_assignments = counts_real.sum()  # Total actual real expert selections
-        f_real = counts_real / total_real_assignments.clamp(min=1e-6)  # Per-expert frequency among real selections
+        total_real_assignments = (
+            counts_real.sum()
+        )  # Total actual real expert selections
+        f_real = counts_real / total_real_assignments.clamp(
+            min=1e-6
+        )  # Per-expert frequency among real selections
 
-        L_bal = self.num_experts * torch.sum(f_real * P_real)  # Balance only real experts
+        L_bal = self.num_experts * torch.sum(
+            f_real * P_real
+        )  # Balance only real experts
 
         # Null-rate regularizer: target ρ=0.5 (50% null selections)
         null_rate = is_null.float().mean()
@@ -1260,7 +1413,7 @@ class MoEGate(nn.Module):
 
         # Z-loss: unchanged
         lse = torch.logsumexp(logits, dim=-1)
-        L_z = (lse ** 2).mean()
+        L_z = (lse**2).mean()
 
         aux_loss = 2e-2 * L_bal + 1e-3 * L_z + 1e-2 * L_null
 
@@ -1272,15 +1425,23 @@ class MoEFFN(nn.Module):
 
     For dense models (num_experts=0), acts as a simple dense FFN using only the shared expert.
     """
-    def __init__(self, d_model: int, d_hidden: int, num_experts: int = 270, top_k: int = 10,
-                 dropout: float = 0.0, data_sparsity: float = 0.5):
+
+    def __init__(
+        self,
+        d_model: int,
+        d_hidden: int,
+        num_experts: int = 270,
+        top_k: int = 10,
+        dropout: float = 0.0,
+        data_sparsity: float = 0.5,
+    ):
         super().__init__()
         self.d_model = d_model
         self.d_hidden = d_hidden
         self.num_experts = num_experts
         self.top_k = top_k
         self.dropout = dropout
-        self.is_dense = (num_experts == 0 or data_sparsity == 0.0)
+        self.is_dense = num_experts == 0 or data_sparsity == 0.0
 
         # Shared Expert (always present - acts as dense FFN for dense models)
         self.shared_gate = nn.Linear(d_model, d_hidden, bias=False)
@@ -1290,12 +1451,18 @@ class MoEFFN(nn.Module):
 
         # Only create MoE components for sparse models
         if not self.is_dense:
-            self.gate = MoEGate(d_model, num_experts, top_k, data_sparsity=data_sparsity)
+            self.gate = MoEGate(
+                d_model, num_experts, top_k, data_sparsity=data_sparsity
+            )
 
             # Expert weights (batched)
-            self.W_gate = nn.Parameter(torch.randn(num_experts, d_model, d_hidden) * 0.02)
+            self.W_gate = nn.Parameter(
+                torch.randn(num_experts, d_model, d_hidden) * 0.02
+            )
             self.W_up = nn.Parameter(torch.randn(num_experts, d_model, d_hidden) * 0.02)
-            self.W_down = nn.Parameter(torch.randn(num_experts, d_hidden, d_model) * 0.02)
+            self.W_down = nn.Parameter(
+                torch.randn(num_experts, d_hidden, d_model) * 0.02
+            )
         else:
             self.gate = None
             self.W_gate = None
@@ -1368,7 +1535,9 @@ class MoEFFN(nn.Module):
 
         weighted_out = sorted_out * sorted_weights.unsqueeze(-1)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
-        routed_out.scatter_add_(0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out)
+        routed_out.scatter_add_(
+            0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out
+        )
 
         y = shared_out + routed_out.view(B, T, D)
         return y, aux_loss
@@ -1376,8 +1545,10 @@ class MoEFFN(nn.Module):
 
 class LightningMLP(nn.Module):
     """MLP wrapper using MoEFFN."""
-    def __init__(self, hidden_size, intermediate_size, num_experts, top_k,
-                 data_sparsity=0.5):
+
+    def __init__(
+        self, hidden_size, intermediate_size, num_experts, top_k, data_sparsity=0.5
+    ):
         super().__init__()
         self.moe = MoEFFN(
             d_model=hidden_size,
@@ -1385,7 +1556,7 @@ class LightningMLP(nn.Module):
             num_experts=num_experts,
             top_k=top_k,
             dropout=0.0,
-            data_sparsity=data_sparsity
+            data_sparsity=data_sparsity,
         )
 
     def forward(self, x):
@@ -1396,10 +1567,14 @@ class LightningMLP(nn.Module):
 # mHC (Multi-Head Composition) - From test model
 # ============================================================================
 
+
 @torch.jit.script
-def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> torch.Tensor:
+def sinkhorn_knopp(
+    logits: torch.Tensor, iters: int = 5, eps: float = 1e-6
+) -> torch.Tensor:
     """Doubly-stochastic matrix via Sinkhorn-Knopp with numerical stability.
-    FIX #26: Default reduced to 5 iterations (from 20) for performance at long context."""
+    FIX #26: Default reduced to 5 iterations (from 20) for performance at long context.
+    """
     # CRITICAL FIX: Log-sum-exp trick prevents overflow when logits are large
     logits = logits - logits.amax(dim=-1, keepdim=True)
     M = torch.exp(logits).clamp_min(eps)
@@ -1411,6 +1586,7 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> t
 
 class MHCCoeffs(nn.Module):
     """Produces routing coefficients for mHC."""
+
     def __init__(self, d_model: int, n_streams: int = 4, iters: int = 20):
         super().__init__()
         self.d_model = d_model
@@ -1456,7 +1632,15 @@ class MHCCoeffs(nn.Module):
 
 class MHCSublayer(nn.Module):
     """Wrap sublayer with mHC residual routing."""
-    def __init__(self, d_model: int, n_streams: int, sublayer: nn.Module, norm: nn.Module, iters: int = 20):
+
+    def __init__(
+        self,
+        d_model: int,
+        n_streams: int,
+        sublayer: nn.Module,
+        norm: nn.Module,
+        iters: int = 20,
+    ):
         super().__init__()
         self.d_model = d_model
         self.n = n_streams
@@ -1491,11 +1675,13 @@ class MHCSublayer(nn.Module):
 # Decoder Layer (Hybrid DeltaNet + GSA)
 # ============================================================================
 
+
 class LightningDecoderLayer(nn.Module):
     """
     Decoder layer that can be either DeltaNet or GSA.
     Type is determined at initialization.
     """
+
     def __init__(self, config: ModelConfig, layer_type: str):
         super().__init__()
         self.layer_type = layer_type  # "deltanet" or "gsa"
@@ -1512,7 +1698,7 @@ class LightningDecoderLayer(nn.Module):
                 rope_original_max=config.rope_original_max_position,
                 rope_scaling_factor=config.rope_scaling_factor,
                 conv_size=4,
-                use_output_norm=True
+                use_output_norm=True,
             )
         elif layer_type == "gsa":
             attn = GatedSparseAttention(
@@ -1525,7 +1711,7 @@ class LightningDecoderLayer(nn.Module):
                 k_max=config.gsa_k_max,
                 indexer_heads=config.gsa_indexer_heads,
                 rope_original_max=config.rope_original_max_position,
-                rope_scaling_factor=config.rope_scaling_factor
+                rope_scaling_factor=config.rope_scaling_factor,
             )
         else:
             raise ValueError(f"Unknown layer type: {layer_type}")
@@ -1535,7 +1721,7 @@ class LightningDecoderLayer(nn.Module):
             intermediate_size=config.expert_intermediate_size,
             num_experts=config.num_real_experts,
             top_k=config.top_k,
-            data_sparsity=config.data_sparsity
+            data_sparsity=config.data_sparsity,
         )
 
         # mHC Wrappers
@@ -1582,7 +1768,9 @@ class LightningDecoderLayer(nn.Module):
 
         total_aux = None
         if aux1 is not None or aux2 is not None:
-            total_aux = (aux1 if aux1 is not None else 0) + (aux2 if aux2 is not None else 0)
+            total_aux = (aux1 if aux1 is not None else 0) + (
+                aux2 if aux2 is not None else 0
+            )
 
         return x_stream, total_aux
 
@@ -1591,8 +1779,10 @@ class LightningDecoderLayer(nn.Module):
 # Multi-Token Prediction Block
 # ============================================================================
 
+
 class MTPTransformerBlock(nn.Module):
     """MTP block for predicting t+2 from [h_t; emb_{t+1}]."""
+
     def __init__(self, config: ModelConfig):
         super().__init__()
 
@@ -1600,7 +1790,9 @@ class MTPTransformerBlock(nn.Module):
         self.hidden_size = config.hidden_size
 
         # Fusion layer
-        self.fusion_proj = nn.Linear(config.hidden_size * 2, config.hidden_size, bias=False)
+        self.fusion_proj = nn.Linear(
+            config.hidden_size * 2, config.hidden_size, bias=False
+        )
 
         # Core sublayers (using GSA for better gradient quality)
         # MTP block runs only once per step (not 8x like backbone layers),
@@ -1615,7 +1807,7 @@ class MTPTransformerBlock(nn.Module):
             k_max=config.gsa_k_max,
             indexer_heads=config.gsa_indexer_heads,
             rope_original_max=config.rope_original_max_position,
-            rope_scaling_factor=config.rope_scaling_factor
+            rope_scaling_factor=config.rope_scaling_factor,
         )
 
         self.mlp = LightningMLP(
@@ -1623,7 +1815,7 @@ class MTPTransformerBlock(nn.Module):
             intermediate_size=config.expert_intermediate_size,
             num_experts=config.num_real_experts,
             top_k=config.top_k,
-            data_sparsity=config.data_sparsity
+            data_sparsity=config.data_sparsity,
         )
 
         # mHC Wrappers
@@ -1662,8 +1854,14 @@ class MTPTransformerBlock(nn.Module):
         x = self.fusion_proj(x)
 
         # Expand to streams
-        x_stream = torch.zeros(batch_size, seq_len, self.n_streams, self.hidden_size,
-                              device=x.device, dtype=x.dtype)
+        x_stream = torch.zeros(
+            batch_size,
+            seq_len,
+            self.n_streams,
+            self.hidden_size,
+            device=x.device,
+            dtype=x.dtype,
+        )
         x_stream[:, :, 0, :] = x
 
         # NOTE: Memory stream injection happens in the main Model1B.forward(),
@@ -1683,6 +1881,7 @@ class MTPTransformerBlock(nn.Module):
 # ============================================================================
 # Complete 70B Model
 # ============================================================================
+
 
 class Model1B(nn.Module):
     """
@@ -1716,7 +1915,14 @@ class Model1B(nn.Module):
 
     Note: aux_loss will be near-zero for this model (no MoE routers in backbone)
     """
-    def __init__(self, config: ModelConfig, embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
+
+    def __init__(
+        self,
+        config: ModelConfig,
+        embedding_type="kronecker",
+        bpe_vocab=None,
+        pf_codec=None,
+    ):
         super().__init__()
 
         self.config = config
@@ -1728,9 +1934,13 @@ class Model1B(nn.Module):
         # Embeddings
         if self.embedding_type == "kronecker":
             if bpe_vocab is None or pf_codec is None:
-                raise ValueError("bpe_vocab and pf_codec required for Kronecker embeddings")
+                raise ValueError(
+                    "bpe_vocab and pf_codec required for Kronecker embeddings"
+                )
 
-            self.kronecker_embeddings = PureHybridEmbeddingTorch(bpe_vocab, pf_codec).module()
+            self.kronecker_embeddings = PureHybridEmbeddingTorch(
+                bpe_vocab, pf_codec
+            ).module()
             D_pf = pf_codec.D
             self.pf_to_model = nn.Linear(D_pf, config.hidden_size, bias=False)
             self.embed_norm = RMSNorm(config.hidden_size)
@@ -1767,6 +1977,7 @@ class Model1B(nn.Module):
 
         # Reversible Midpoint Integration
         from reversible_ops_midpoint import ReversibleMidpointStack
+
         self.stack = ReversibleMidpointStack(
             self.layers,
             step_size=0.25,
@@ -1788,9 +1999,13 @@ class Model1B(nn.Module):
         # ============================================================================
         self.recurrence_stream_idx = 3  # Use stream 3 for memory
         self.lambda_r_raw = nn.Parameter(torch.tensor(-2.5))  # Initial strength ~0.078
-        self.memory_ln = nn.LayerNorm(config.hidden_size)  # Normalize memory before injection
+        self.memory_ln = nn.LayerNorm(
+            config.hidden_size
+        )  # Normalize memory before injection
         # FIX #25: Content-dependent memory gating (prevents uniform broadcast shortcut learning)
-        self.memory_gate_proj = nn.Linear(config.hidden_size, 1, bias=True)  # Per-token gate from content
+        self.memory_gate_proj = nn.Linear(
+            config.hidden_size, 1, bias=True
+        )  # Per-token gate from content
 
         # Output projection
         self.lm_head = nn.Linear(config.hidden_size, self.vocab_size, bias=False)
@@ -1802,7 +2017,9 @@ class Model1B(nn.Module):
         if self.use_kronecker and self.pf_to_model is not None:
             pf_to_model_std = 0.02 / math.sqrt(self._D_pf)
             self.pf_to_model.weight.data.normal_(mean=0.0, std=pf_to_model_std)
-            print(f"   🔧 pf_to_model (8192→{config.hidden_size}) initialized with std={pf_to_model_std:.6f}")
+            print(
+                f"   🔧 pf_to_model (8192→{config.hidden_size}) initialized with std={pf_to_model_std:.6f}"
+            )
 
         # Print configuration
         total_params = sum(p.numel() for p in self.parameters())
@@ -1823,16 +2040,34 @@ class Model1B(nn.Module):
         if self.use_kronecker:
             print("\n   📐 Kronecker Embeddings:")
             print("      POS_DIM=32 x CHAR_DIM=256 = D=8192")
-            print(f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)")
-            print(f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})")
-            print(f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})")
+            print(
+                f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)"
+            )
+            print(
+                f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})"
+            )
+            print(
+                f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})"
+            )
         print(f"\n   Total Layers: {config.num_layers}")
-        print(f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention")
-        print(f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse")
+        print(
+            f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention"
+        )
+        print(
+            f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse"
+        )
         print(f"\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
-        print(f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots")
-        print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
-        print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
+        print(
+            f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots"
+        )
+        print(
+            f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})"
+        )
+        print(
+            f"   MTP: {config.mtp_num_predictions} predictions"
+            if config.enable_mtp
+            else "   MTP: Disabled"
+        )
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
         print("   Active Parameters: ~1.513B (100% active, no MoE sparsity)")
 
@@ -1858,8 +2093,15 @@ class Model1B(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    def forward(self, input_ids, next_token_ids=None, attention_mask=None,
-                prev_memory_stream=None, return_memory=True, return_loss=False):
+    def forward(
+        self,
+        input_ids,
+        next_token_ids=None,
+        attention_mask=None,
+        prev_memory_stream=None,
+        return_memory=True,
+        return_loss=False,
+    ):
         """
         Forward pass with Multi-Token Prediction.
 
@@ -1901,7 +2143,7 @@ class Model1B(nn.Module):
         cache_key = (T, x.device, x.dtype)
         for layer in self.layers:
             attn_mod = layer.attn_block.sublayer  # Access through MHCSublayer wrapper
-            if not hasattr(attn_mod.rotary_emb, '_forward_cache'):
+            if not hasattr(attn_mod.rotary_emb, "_forward_cache"):
                 attn_mod.rotary_emb._forward_cache = {}
             if cache_key not in attn_mod.rotary_emb._forward_cache:
                 cos, sin = attn_mod.rotary_emb._compute_cos_sin(T, x.device, x.dtype)
@@ -1910,7 +2152,7 @@ class Model1B(nn.Module):
         # Also cache for MTP block if enabled
         if self.mtp_block is not None:
             mtp_attn = self.mtp_block.attn_block.sublayer
-            if not hasattr(mtp_attn.rotary_emb, '_forward_cache'):
+            if not hasattr(mtp_attn.rotary_emb, "_forward_cache"):
                 mtp_attn.rotary_emb._forward_cache = {}
             if cache_key not in mtp_attn.rotary_emb._forward_cache:
                 cos, sin = mtp_attn.rotary_emb._compute_cos_sin(T, x.device, x.dtype)
@@ -1930,7 +2172,9 @@ class Model1B(nn.Module):
             # Compute per-token gates from current input (prevents shortcut learning)
             # Gates are based on content, not position - model learns when memory is relevant
             memory_gates = torch.sigmoid(
-                self.memory_gate_proj(x_stream[:, :, 0, :])  # Use stream 0 (primary) for gating decision
+                self.memory_gate_proj(
+                    x_stream[:, :, 0, :]
+                )  # Use stream 0 (primary) for gating decision
             )  # (B, T, 1)
 
             # Broadcast memory with content-dependent modulation
@@ -1938,11 +2182,12 @@ class Model1B(nn.Module):
 
             # Apply learnable strength + content-dependent gates
             lambda_r = F.softplus(self.lambda_r_raw)
-            x_stream[:, :, self.recurrence_stream_idx, :] = lambda_r * memory_gates * memory_broadcast
+            x_stream[:, :, self.recurrence_stream_idx, :] = (
+                lambda_r * memory_gates * memory_broadcast
+            )
 
         # Pass through reversible stack
         x_stream, total_aux_loss = self.stack(x_stream)
-
 
         # ============================================================================
         # EXTRACT MEMORY STREAM for next chunk (from final position)
@@ -1968,7 +2213,9 @@ class Model1B(nn.Module):
 
             if self.use_kronecker:
                 next_emb = self.kronecker_embeddings(next_ids_use)
-                next_emb = self.pf_to_model(next_emb.to(dtype=self.pf_to_model.weight.dtype))
+                next_emb = self.pf_to_model(
+                    next_emb.to(dtype=self.pf_to_model.weight.dtype)
+                )
                 next_emb = self.embed_norm(next_emb)
             else:
                 next_emb = self.token_embed(next_ids_use)
@@ -1980,14 +2227,16 @@ class Model1B(nn.Module):
         # Correct path: layer.attn_block.sublayer.rotary_emb (not layer.attn)
         # Architecture: LightningDecoderLayer → MHCSublayer → GatedDeltaNet/GatedSparseAttention → RotaryEmbedding
         for layer in self.layers:
-            if hasattr(layer.attn_block.sublayer, 'rotary_emb'):
-                if hasattr(layer.attn_block.sublayer.rotary_emb, '_forward_cache'):
+            if hasattr(layer.attn_block.sublayer, "rotary_emb"):
+                if hasattr(layer.attn_block.sublayer.rotary_emb, "_forward_cache"):
                     layer.attn_block.sublayer.rotary_emb._forward_cache.clear()
 
         # Also clear MTP block cache if enabled
         if self.mtp_block is not None:
-            if hasattr(self.mtp_block.attn_block.sublayer, 'rotary_emb'):
-                if hasattr(self.mtp_block.attn_block.sublayer.rotary_emb, '_forward_cache'):
+            if hasattr(self.mtp_block.attn_block.sublayer, "rotary_emb"):
+                if hasattr(
+                    self.mtp_block.attn_block.sublayer.rotary_emb, "_forward_cache"
+                ):
                     self.mtp_block.attn_block.sublayer.rotary_emb._forward_cache.clear()
 
         if return_loss:
@@ -2005,6 +2254,7 @@ class Model1B(nn.Module):
 # Factory Function
 # ============================================================================
 
+
 def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
     """
     Create 1B model with default configuration.
@@ -2018,12 +2268,14 @@ def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
         Model1B instance
     """
     config = ModelConfig()
-    return Model1B(config, embedding_type=embedding_type, bpe_vocab=bpe_vocab, pf_codec=pf_codec)
+    return Model1B(
+        config, embedding_type=embedding_type, bpe_vocab=bpe_vocab, pf_codec=pf_codec
+    )
 
 
 if __name__ == "__main__":
     # Calculate actual metrics from weight_calculator.py
-    from weight_calculator import LightningConfig, LightningCalculator
+    from weight_calculator import LightningCalculator, LightningConfig
 
     config_calc = LightningConfig(
         vocab_size=131072,
@@ -2054,10 +2306,12 @@ if __name__ == "__main__":
     report_df, _ = calc.generate_report(num_experts)
 
     # Extract actual values
-    active_row = report_df[report_df['Component'] == 'TOTAL ACTIVE PARAMETERS']
-    total_row = report_df[report_df['Component'] == 'TOTAL MODEL PARAMETERS']
-    active_params = float(str(active_row['Total Contribution'].iloc[0]).replace(' B', ''))
-    total_params = float(str(total_row['Total Contribution'].iloc[0]).replace(' B', ''))
+    active_row = report_df[report_df["Component"] == "TOTAL ACTIVE PARAMETERS"]
+    total_row = report_df[report_df["Component"] == "TOTAL MODEL PARAMETERS"]
+    active_params = float(
+        str(active_row["Total Contribution"].iloc[0]).replace(" B", "")
+    )
+    total_params = float(str(total_row["Total Contribution"].iloc[0]).replace(" B", ""))
     sparsity = total_params / active_params
 
     config = ModelConfig()
@@ -2070,8 +2324,12 @@ if __name__ == "__main__":
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
     print("\nAttention Mix:")
-    print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context")
-    print(f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality")
+    print(
+        f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context"
+    )
+    print(
+        f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality"
+    )
     print("\nModel Type:")
     if num_experts == 0:
         print("  DENSE MODEL (No MoE)")
@@ -2081,8 +2339,12 @@ if __name__ == "__main__":
         print(f"  Real Experts: {num_experts}")
         print(f"  Null Experts: {num_experts} (ρ={config.data_sparsity})")
         print(f"  Total slots: {config.total_expert_slots}")
-        print(f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})")
-        print(f"  Shared Expert FFN: {config.shared_expert_intermediate_size} (always active)")
+        print(
+            f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})"
+        )
+        print(
+            f"  Shared Expert FFN: {config.shared_expert_intermediate_size} (always active)"
+        )
         print(f"  Routed Expert FFN: {config.expert_intermediate_size} (sparse)")
     print(f"\nContext: {config.max_seq_len:,} tokens")
     print("=" * 80)

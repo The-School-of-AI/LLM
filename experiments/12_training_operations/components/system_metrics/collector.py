@@ -18,8 +18,8 @@ work without any changes for the scalar fan-out path.
 
 import json
 import os
-import time
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -99,6 +99,7 @@ class SystemMetricsCollector:
     def _init_gpu(self):
         try:
             import pynvml
+
             pynvml.nvmlInit()
             self._gpu_count = pynvml.nvmlDeviceGetCount()
             self._gpu_available = self._gpu_count > 0
@@ -113,11 +114,14 @@ class SystemMetricsCollector:
             return metrics
         try:
             import pynvml
+
             for i in range(self._gpu_count):
                 handle = pynvml.nvmlDeviceGetHandleByIndex(i)
                 util = pynvml.nvmlDeviceGetUtilizationRates(handle)
                 mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                temp = pynvml.nvmlDeviceGetTemperature(
+                    handle, pynvml.NVML_TEMPERATURE_GPU
+                )
                 try:
                     power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0  # mW → W
                 except pynvml.NVMLError:
@@ -127,7 +131,9 @@ class SystemMetricsCollector:
                 metrics[f"{prefix}.util_percent"] = float(util.gpu)
                 metrics[f"{prefix}.mem_used_bytes"] = float(mem.used)
                 metrics[f"{prefix}.mem_total_bytes"] = float(mem.total)
-                metrics[f"{prefix}.mem_percent"] = round(mem.used / mem.total * 100, 2) if mem.total else 0.0
+                metrics[f"{prefix}.mem_percent"] = (
+                    round(mem.used / mem.total * 100, 2) if mem.total else 0.0
+                )
                 metrics[f"{prefix}.temperature_c"] = float(temp)
                 metrics[f"{prefix}.power_w"] = round(power, 2)
         except Exception:
@@ -158,8 +164,12 @@ class SystemMetricsCollector:
             prev_sent, prev_recv = self._prev_net.get(iface, (sent, recv))
             delta_sent = max(0, sent - prev_sent)
             delta_recv = max(0, recv - prev_recv)
-            metrics[f"sys.net.{iface}.sent_bytes_per_s"] = round(delta_sent / self.interval, 2)
-            metrics[f"sys.net.{iface}.recv_bytes_per_s"] = round(delta_recv / self.interval, 2)
+            metrics[f"sys.net.{iface}.sent_bytes_per_s"] = round(
+                delta_sent / self.interval, 2
+            )
+            metrics[f"sys.net.{iface}.recv_bytes_per_s"] = round(
+                delta_recv / self.interval, 2
+            )
         self._prev_net = current
         return metrics
 
@@ -216,7 +226,11 @@ class SystemMetricsCollector:
 
     def _build_payload(self, metrics: dict) -> dict:
         """Build a JSONL-compatible payload matching the training logger format."""
-        ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        ts = (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
+        )
         with self._step_lock:
             step = self._current_step
         return {

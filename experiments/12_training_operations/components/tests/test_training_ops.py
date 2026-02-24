@@ -70,10 +70,16 @@ def test_training_ops():
             data = json.loads(resp.read().decode())
 
         assert "gauges" in data, "Missing 'gauges' in /metrics"
-        assert data["gauges"]["training_loss"] == 3.0, f"Expected loss=3.0, got {data['gauges']['training_loss']}"
-        assert data["gauges"]["global_step"] == 4.0, f"Expected step=4, got {data['gauges']['global_step']}"
+        assert (
+            data["gauges"]["training_loss"] == 3.0
+        ), f"Expected loss=3.0, got {data['gauges']['training_loss']}"
+        assert (
+            data["gauges"]["global_step"] == 4.0
+        ), f"Expected step=4, got {data['gauges']['global_step']}"
         assert data["counters"]["checkpoint_saves_total"] == 1
-        print(f"✓ /metrics: loss={data['gauges']['training_loss']}, step={data['gauges']['global_step']}, ckpt_saves={data['counters']['checkpoint_saves_total']}")
+        print(
+            f"✓ /metrics: loss={data['gauges']['training_loss']}, step={data['gauges']['global_step']}, ckpt_saves={data['counters']['checkpoint_saves_total']}"
+        )
     except Exception as e:
         print(f"✗ MetricsServer check failed: {e}")
         raise
@@ -91,9 +97,16 @@ def test_training_ops():
     print(f"✓ {log_file.name}: {len(lines)} lines written")
 
     # Check checkpoint event is in the logs
-    ckpt_lines = [line for line in lines if line.get("context", {}).get("event") == "checkpoint_saved"]
+    ckpt_lines = [
+        line
+        for line in lines
+        if line.get("context", {}).get("event") == "checkpoint_saved"
+    ]
     assert len(ckpt_lines) == 1, f"Expected 1 checkpoint event, got {len(ckpt_lines)}"
-    assert ckpt_lines[0]["context"]["s3_key"] == f"s3://test-bucket/{run_id}/ckpt_step_4.pt"
+    assert (
+        ckpt_lines[0]["context"]["s3_key"]
+        == f"s3://test-bucket/{run_id}/ckpt_step_4.pt"
+    )
     print("✓ Checkpoint event found in JSONL with correct s3_key")
 
     # ---- 6. Verify CheckpointRegistry in ClickHouse ----
@@ -104,7 +117,9 @@ def test_training_ops():
         assert ckpts[0]["step"] == 4
         assert ckpts[0]["tag"] == "temporary"
         assert ckpts[0]["is_protected"] is False
-        print(f"✓ ClickHouse registry: step={ckpts[0]['step']}, tag={ckpts[0]['tag']}, s3_key={ckpts[0]['s3_key']}")
+        print(
+            f"✓ ClickHouse registry: step={ckpts[0]['step']}, tag={ckpts[0]['tag']}, s3_key={ckpts[0]['s3_key']}"
+        )
     except Exception as e:
         print(f"⚠ ClickHouse registry check: {e}")
 

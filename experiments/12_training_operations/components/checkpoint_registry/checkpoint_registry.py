@@ -11,9 +11,8 @@ import base64
 import json
 import os
 import ssl
-import urllib.request
 import urllib.error
-
+import urllib.request
 
 PROTECTED_TAGS = frozenset(["growth", "lora", "release_candidate"])
 
@@ -63,7 +62,9 @@ class CheckpointRegistry:
             self._auth_header = f"Basic {creds}"
 
         # TLS
-        ca_path = ca_cert if ca_cert is not None else os.environ.get("CLICKHOUSE_CA_CERT", "")
+        ca_path = (
+            ca_cert if ca_cert is not None else os.environ.get("CLICKHOUSE_CA_CERT", "")
+        )
         self._ssl_ctx = None
         if self.clickhouse_url.startswith("https"):
             self._ssl_ctx = ssl.create_default_context()
@@ -142,7 +143,9 @@ class CheckpointRegistry:
             f"{duration_s}, {size_bytes}, '{_esc(metadata_json)}')"
         )
         self._insert(sql)
-        print(f"✓ Registered checkpoint: {s3_key} (tag={tag}, protected={bool(is_protected)})")
+        print(
+            f"✓ Registered checkpoint: {s3_key} (tag={tag}, protected={bool(is_protected)})"
+        )
 
     def can_delete(self, s3_key: str) -> bool:
         """
@@ -226,7 +229,9 @@ class CheckpointRegistry:
             return []
         return [_row_to_dict(line) for line in result.split("\n") if line.strip()]
 
-    def best_checkpoint(self, run_id: str, metric: str = "loss", top_n: int = 1) -> list[dict]:
+    def best_checkpoint(
+        self, run_id: str, metric: str = "loss", top_n: int = 1
+    ) -> list[dict]:
         """Return the top-N checkpoints with the lowest loss for a run."""
         sql = (
             f"SELECT run_id, step, s3_key, loss, tag, is_protected, status, "
@@ -244,6 +249,7 @@ class CheckpointRegistry:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _esc(value: str) -> str:
     """Escape single quotes for ClickHouse SQL strings."""

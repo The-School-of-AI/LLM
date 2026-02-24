@@ -12,28 +12,28 @@ Usage:
 No tokenizer or dataset required — uses synthetic random data.
 """
 
+import gc
 import os
 import sys
 import time
-import gc
+
+import psutil
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import psutil
+from torch.utils.data import DataLoader, Dataset
 
 # Ensure components are importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from recurrence_model_70b import ModelConfig, Model70B
-from config_mini import apply_mini_config
-
 # P12 Observability
 from components import TrainingOps
-
+from config_mini import apply_mini_config
+from recurrence_model_70b import Model70B, ModelConfig
 
 # ---------------------------------------------------------------------------
 # Env helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_env_file_if_present(path: str) -> bool:
     """Load KEY=VALUE pairs from a simple env file if it exists."""
@@ -59,6 +59,7 @@ def _load_env_file_if_present(path: str) -> bool:
 # Synthetic dataset (no tokenizer needed)
 # ---------------------------------------------------------------------------
 
+
 class SyntheticTokenDataset(Dataset):
     """Generates random token sequences for dry-run testing."""
 
@@ -79,6 +80,7 @@ class SyntheticTokenDataset(Dataset):
 # ---------------------------------------------------------------------------
 # Training loop
 # ---------------------------------------------------------------------------
+
 
 def train(model, loader, device, num_steps=50, ops=None):
     model.train()
@@ -111,7 +113,11 @@ def train(model, loader, device, num_steps=50, ops=None):
 
         V = logits_ntp.size(-1)
         loss_ntp = criterion(logits_ntp.reshape(-1, V), y_ntp.reshape(-1))
-        loss_mtp = criterion(logits_mtp.reshape(-1, V), y_mtp.reshape(-1)) if logits_mtp is not None else torch.tensor(0.0)
+        loss_mtp = (
+            criterion(logits_mtp.reshape(-1, V), y_mtp.reshape(-1))
+            if logits_mtp is not None
+            else torch.tensor(0.0)
+        )
         loss = loss_ntp + 0.3 * loss_mtp + aux_loss
 
         # Lightweight periodic validation probe on synthetic data.
@@ -119,7 +125,9 @@ def train(model, loader, device, num_steps=50, ops=None):
         if step % 20 == 0:
             model.eval()
             with torch.no_grad():
-                val_tokens = torch.randint(0, V, (x.size(0), x.size(1) + 2), device=device)
+                val_tokens = torch.randint(
+                    0, V, (x.size(0), x.size(1) + 2), device=device
+                )
                 x_val = val_tokens[:, :-2]
                 y_val = val_tokens[:, 1:-1]
                 logits_val, _, _ = model(
@@ -129,7 +137,9 @@ def train(model, loader, device, num_steps=50, ops=None):
                     return_memory=False,
                     prev_memory_stream=None,
                 )
-                loss_val = criterion(logits_val.reshape(-1, V), y_val.reshape(-1)).item()
+                loss_val = criterion(
+                    logits_val.reshape(-1, V), y_val.reshape(-1)
+                ).item()
             model.train()
 
         loss.backward()
@@ -141,7 +151,9 @@ def train(model, loader, device, num_steps=50, ops=None):
         tok_sec = x.numel() / max(dt / 1000.0, 1e-9)
         batch_sec = 1000.0 / max(dt, 1e-9)
         tokens_processed_total += int(x.numel())
-        cpu_idle_percent = float(getattr(psutil.cpu_times_percent(interval=None), "idle", 0.0))
+        cpu_idle_percent = float(
+            getattr(psutil.cpu_times_percent(interval=None), "idle", 0.0)
+        )
 
         print(
             f"step {step:3d} | loss {loss.item():.4f} | "
@@ -171,7 +183,9 @@ def train(model, loader, device, num_steps=50, ops=None):
 
             # Array metrics examples
             k = min(8, input_ids.size(-1))
-            top_vals, top_idx = torch.topk(torch.bincount(input_ids.reshape(-1), minlength=V).float(), k=k)
+            top_vals, top_idx = torch.topk(
+                torch.bincount(input_ids.reshape(-1), minlength=V).float(), k=k
+            )
             ops.log_metric_array(
                 step=step,
                 metric="moe/favorite_tokens_topk",
@@ -183,7 +197,9 @@ def train(model, loader, device, num_steps=50, ops=None):
 
             # Approximate routing distribution proxy for dry-run observability.
             n_bins = 8
-            x_norm = torch.softmax(torch.arange(n_bins, device=x.device, dtype=torch.float32), dim=0)
+            x_norm = torch.softmax(
+                torch.arange(n_bins, device=x.device, dtype=torch.float32), dim=0
+            )
             ops.log_metric_array(
                 step=step,
                 metric="moe/routing_dist_mean",
@@ -194,7 +210,7 @@ def train(model, loader, device, num_steps=50, ops=None):
 
             fft_src = x[0].float()
             fft = torch.fft.rfft(fft_src)
-            energy = (fft.real * fft.real + fft.imag * fft.imag)
+            energy = fft.real * fft.real + fft.imag * fft.imag
             max_buckets = min(8, energy.numel())
             ops.log_metric_array(
                 step=step,
@@ -237,7 +253,9 @@ def train(model, loader, device, num_steps=50, ops=None):
                     step=step,
                     event_type="sample_generated",
                     message=f"Generated synthetic sample at step {step}",
-                    payload={"token_preview": [int(t) for t in input_ids[0, :8].tolist()]},
+                    payload={
+                        "token_preview": [int(t) for t in input_ids[0, :8].tolist()]
+                    },
                 )
 
         del logits_ntp, logits_mtp, x, y_ntp, y_mtp, loss
@@ -251,15 +269,16 @@ def train(model, loader, device, num_steps=50, ops=None):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     print("=" * 60)
     print("  DRY RUN — Mini 70B Architecture (~20M params)")
     print("=" * 60)
 
     device = torch.device(
-        "cuda" if torch.cuda.is_available()
-        else "mps" if torch.backends.mps.is_available()
-        else "cpu"
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps" if torch.backends.mps.is_available() else "cpu"
     )
     print(f"Device: {device}")
 
@@ -284,7 +303,9 @@ def main():
     num_steps = int(os.environ.get("DRYRUN_STEPS", "200"))
     dataset = SyntheticTokenDataset(config.vocab_size, seq_len, num_samples=500)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    print(f"Dry-run workload: batch_size={batch_size}, seq_len={seq_len}, steps={num_steps}")
+    print(
+        f"Dry-run workload: batch_size={batch_size}, seq_len={seq_len}, steps={num_steps}"
+    )
 
     # P12 Observability
     run_id = f"dry_run_{int(time.time())}"
@@ -293,7 +314,9 @@ def main():
         or os.environ.get("CLICKHOUSE_HTTPS_ENDPOINT")
         or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT")
     )
-    vector_service_name = os.environ.get("VECTOR_SERVICE_NAME", "p12-vector.service").strip() or None
+    vector_service_name = (
+        os.environ.get("VECTOR_SERVICE_NAME", "p12-vector.service").strip() or None
+    )
     if clickhouse_url is not None:
         print(f"ClickHouse endpoint: {clickhouse_url}")
     if vector_service_name is not None:

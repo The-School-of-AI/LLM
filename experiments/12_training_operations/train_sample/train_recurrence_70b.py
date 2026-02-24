@@ -10,26 +10,28 @@ Usage:
 """
 
 import os
+
 # MPS memory management - critical for Mac M1
 os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "1.0"
 os.environ["PYTORCH_MPS_LOW_WATERMARK_RATIO"] = "0.9"
 os.environ["PYTORCH_MPS_PREFER_METAL"] = "1"
 
-import time
 import gc
+import time
+
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from transformers import PreTrainedTokenizerFast
 
-# Import the 70B recurrence model (local file in endGame directory)
-from recurrence_model_70b import create_model_70b, KroneckerEmbeddings, KroneckerConfig
+# P12 Observability (all env vars are set before launch — see train_sample/README.md)
+from components import TrainingOps
 
 # Import existing data utilities
 from data_utils import SYNTHStream
 
-# P12 Observability (all env vars are set before launch — see train_sample/README.md)
-from components import TrainingOps
+# Import the 70B recurrence model (local file in endGame directory)
+from recurrence_model_70b import KroneckerConfig, KroneckerEmbeddings, create_model_70b
+from torch.utils.data import DataLoader
+from transformers import PreTrainedTokenizerFast
 
 
 def load_tokenizer_from_json(tokenizer_path):
@@ -66,16 +68,18 @@ def setup_kronecker_embeddings(vocab_size):
     # D = CHAR_DIM × POS_DIM = 256 × 32 = 8192
     pf_cfg = KroneckerConfig(
         CHAR_DIM=256,  # Byte vocabulary (0-255)
-        POS_DIM=32,    # Max 32 bytes per token
-        D=8192,        # Total embedding dimension
+        POS_DIM=32,  # Max 32 bytes per token
+        D=8192,  # Total embedding dimension
         length_normalize=True,
-        truncate_long_words=True
+        truncate_long_words=True,
     )
 
     # Create codec
     pf_codec = KroneckerEmbeddings(pf_cfg)
 
-    print(f"   ✓ Kronecker config: {pf_cfg.CHAR_DIM}×{pf_cfg.POS_DIM} = {pf_cfg.D} dims")
+    print(
+        f"   ✓ Kronecker config: {pf_cfg.CHAR_DIM}×{pf_cfg.POS_DIM} = {pf_cfg.D} dims"
+    )
 
     return pf_codec
 
@@ -85,9 +89,7 @@ def create_model(vocab_size, bpe_vocab, pf_codec, device):
     print("🤖 Creating Model70B with Kronecker embeddings...")
 
     model = create_model_70b(
-        embedding_type="kronecker",
-        bpe_vocab=bpe_vocab,
-        pf_codec=pf_codec
+        embedding_type="kronecker", bpe_vocab=bpe_vocab, pf_codec=pf_codec
     )
 
     # Move to device
@@ -135,7 +137,7 @@ def simple_training_loop(model, train_loader, device, num_steps=100, ops=None):
             next_token_ids=y_ntp,
             return_loss=True,
             return_memory=False,  # Don't need memory for now
-            prev_memory_stream=None
+            prev_memory_stream=None,
         )
 
         # DEBUG: Check if MTP is actually being computed (step 0 only)
@@ -143,7 +145,9 @@ def simple_training_loop(model, train_loader, device, num_steps=100, ops=None):
             print("\nDEBUG - Model output:")
             print(f"  logits_mtp is None: {logits_mtp is None}")
             if logits_mtp is not None:
-                print(f"  logits_mtp contains NaN: {torch.isnan(logits_mtp).any().item()}")
+                print(
+                    f"  logits_mtp contains NaN: {torch.isnan(logits_mtp).any().item()}"
+                )
                 print(f"  logits_mtp mean: {logits_mtp.mean().item():.4f}")
                 print(f"  logits_mtp std: {logits_mtp.std().item():.4f}")
 
@@ -155,8 +159,12 @@ def simple_training_loop(model, train_loader, device, num_steps=100, ops=None):
         # DEBUG: Check shapes and perplexities (step 0 only)
         if step == 0:
             print(f"\nDEBUG - Step {step}:")
-            print(f"  x_input shape: {x_input.shape}, y_ntp shape: {y_ntp.shape}, y_mtp shape: {y_mtp.shape}")
-            print(f"  logits_ntp shape: {logits_ntp.shape}, logits_mtp shape: {logits_mtp.shape}")
+            print(
+                f"  x_input shape: {x_input.shape}, y_ntp shape: {y_ntp.shape}, y_mtp shape: {y_mtp.shape}"
+            )
+            print(
+                f"  logits_ntp shape: {logits_ntp.shape}, logits_mtp shape: {logits_mtp.shape}"
+            )
             print(f"  NTP perplexity: {torch.exp(loss_ntp).item():.2f}")
             print(f"  MTP perplexity: {torch.exp(loss_mtp).item():.2f}")
             print(f"  aux_loss: {aux_loss.item():.6f}")
@@ -187,21 +195,26 @@ def simple_training_loop(model, train_loader, device, num_steps=100, ops=None):
         # Log every step (since we're just testing)
         if step % 1 == 0:
             tok_sec = x_input.numel() / max(dt / 1000.0, 1e-9)
-            print(f"step {step:3d} | loss_ntp: {loss_ntp.item():.4f} | "
-                  f"loss_mtp: {loss_mtp.item():.4f} | aux: {aux_loss.item():.4f} | "
-                  f"dt: {dt:6.1f}ms | tok/sec: {tok_sec:8.1f}")
+            print(
+                f"step {step:3d} | loss_ntp: {loss_ntp.item():.4f} | "
+                f"loss_mtp: {loss_mtp.item():.4f} | aux: {aux_loss.item():.4f} | "
+                f"dt: {dt:6.1f}ms | tok/sec: {tok_sec:8.1f}"
+            )
 
             # P12: log training metrics
             if ops is not None:
-                ops.log_step(step=step, metrics={
-                    "loss": loss.item(),
-                    "loss_ntp": loss_ntp.item(),
-                    "loss_mtp": loss_mtp.item(),
-                    "aux_loss": aux_loss.item(),
-                    "lr": optimizer.param_groups[0]["lr"],
-                    "tokens_per_second": tok_sec,
-                    "step_time_ms": dt,
-                })
+                ops.log_step(
+                    step=step,
+                    metrics={
+                        "loss": loss.item(),
+                        "loss_ntp": loss_ntp.item(),
+                        "loss_mtp": loss_mtp.item(),
+                        "aux_loss": aux_loss.item(),
+                        "lr": optimizer.param_groups[0]["lr"],
+                        "tokens_per_second": tok_sec,
+                        "step_time_ms": dt,
+                    },
+                )
 
         # Cleanup
         del logits_ntp, logits_mtp, x_input, y_ntp, y_mtp, loss
@@ -262,7 +275,7 @@ def main():
         include_answer=True,
         combine_separator="\n\n",
         filter_language="en",
-        start_step=0
+        start_step=0,
     )
 
     train_loader = DataLoader(

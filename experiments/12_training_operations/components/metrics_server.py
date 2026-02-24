@@ -1,21 +1,24 @@
 """Metrics server for P12 POC — Custom Implementation (no Prometheus)"""
+
 import json
 import os
-import time
-import yaml
-import psutil
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+import time
 from collections import deque
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
 
+import psutil
+import yaml
 
 # ---------------------------------------------------------------------------
 # In-memory metric store
 # ---------------------------------------------------------------------------
 
+
 class _Gauge:
     """Thread-safe gauge (last-value) metric."""
+
     __slots__ = ("name", "description", "_value", "_lock")
 
     def __init__(self, name: str, description: str = ""):
@@ -35,6 +38,7 @@ class _Gauge:
 
 class _Counter:
     """Thread-safe monotonically-increasing counter."""
+
     __slots__ = ("name", "description", "_value", "_lock")
 
     def __init__(self, name: str, description: str = ""):
@@ -54,6 +58,7 @@ class _Counter:
 
 class _InfoMetric:
     """Thread-safe key/value info metric."""
+
     __slots__ = ("name", "description", "_data", "_lock")
 
     def __init__(self, name: str, description: str = ""):
@@ -75,6 +80,7 @@ class _InfoMetric:
 # Time-series ring buffer for recent metric history
 # ---------------------------------------------------------------------------
 
+
 class _MetricHistory:
     """Fixed-size ring buffer that stores (timestamp, value) tuples."""
 
@@ -95,6 +101,7 @@ class _MetricHistory:
 # ---------------------------------------------------------------------------
 # HTTP request handler
 # ---------------------------------------------------------------------------
+
 
 class _MetricsHandler(BaseHTTPRequestHandler):
     """
@@ -151,10 +158,12 @@ class _MetricsHandler(BaseHTTPRequestHandler):
             if points is None:
                 self._send_json({"error": f"unknown metric '{metric_name}'"}, 404)
                 return
-            self._send_json({
-                "metric": metric_name,
-                "data": [{"timestamp": t, "value": v} for t, v in points],
-            })
+            self._send_json(
+                {
+                    "metric": metric_name,
+                    "data": [{"timestamp": t, "value": v} for t, v in points],
+                }
+            )
 
         else:
             self._send_json({"error": "not found"}, 404)
@@ -163,6 +172,7 @@ class _MetricsHandler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 # MetricsServer — drop-in replacement (same public API)
 # ---------------------------------------------------------------------------
+
 
 class MetricsServer:
     _DEFAULTS = {
@@ -173,7 +183,7 @@ class MetricsServer:
 
     def __init__(self, config_path=None):
         if config_path and os.path.exists(config_path):
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 self.config = yaml.safe_load(f) or {}
         else:
             self.config = {}
@@ -184,28 +194,37 @@ class MetricsServer:
                 self.config[section].setdefault(k, v)
 
         # Gauges
-        self.loss = _Gauge('training_loss', 'Training loss')
-        self.learning_rate = _Gauge('learning_rate', 'Learning rate')
-        self.throughput = _Gauge('tokens_per_second', 'Training throughput')
-        self.global_step = _Gauge('global_step', 'Training step')
-        self.gradient_norm = _Gauge('gradient_norm', 'Gradient norm')
-        self.cpu_usage = _Gauge('cpu_usage_percent', 'CPU usage')
-        self.memory_usage = _Gauge('memory_usage_percent', 'Memory usage')
-        self.last_checkpoint_time = _Gauge('last_checkpoint_timestamp', 'Last checkpoint time')
+        self.loss = _Gauge("training_loss", "Training loss")
+        self.learning_rate = _Gauge("learning_rate", "Learning rate")
+        self.throughput = _Gauge("tokens_per_second", "Training throughput")
+        self.global_step = _Gauge("global_step", "Training step")
+        self.gradient_norm = _Gauge("gradient_norm", "Gradient norm")
+        self.cpu_usage = _Gauge("cpu_usage_percent", "CPU usage")
+        self.memory_usage = _Gauge("memory_usage_percent", "Memory usage")
+        self.last_checkpoint_time = _Gauge(
+            "last_checkpoint_timestamp", "Last checkpoint time"
+        )
 
         # Counters
-        self.checkpoint_saves = _Counter('checkpoint_saves_total', 'Checkpoints saved')
-        self.checkpoint_failures = _Counter('checkpoint_failures_total', 'Checkpoint failures')
+        self.checkpoint_saves = _Counter("checkpoint_saves_total", "Checkpoints saved")
+        self.checkpoint_failures = _Counter(
+            "checkpoint_failures_total", "Checkpoint failures"
+        )
 
         # Info
-        self.training_status = _InfoMetric('training_status', 'Training status')
+        self.training_status = _InfoMetric("training_status", "Training status")
 
         # Registry for easy iteration
         self._gauges: dict[str, _Gauge] = {
-            g.name: g for g in [
-                self.loss, self.learning_rate, self.throughput,
-                self.global_step, self.gradient_norm,
-                self.cpu_usage, self.memory_usage,
+            g.name: g
+            for g in [
+                self.loss,
+                self.learning_rate,
+                self.throughput,
+                self.global_step,
+                self.gradient_norm,
+                self.cpu_usage,
+                self.memory_usage,
                 self.last_checkpoint_time,
             ]
         }
@@ -241,16 +260,20 @@ class MetricsServer:
             If provided, the collector is started alongside this server.
             Pass one in to have system metrics written to disk for Vector.
         """
-        port = self.config['training']['metrics_port']
+        port = self.config["training"]["metrics_port"]
 
         self._httpd = HTTPServer(("0.0.0.0", port), _MetricsHandler)
         self._httpd._metrics_server = self  # type: ignore[attr-defined]
-        self._http_thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+        self._http_thread = threading.Thread(
+            target=self._httpd.serve_forever, daemon=True
+        )
         self._http_thread.start()
         print(f"✓ Metrics server started on port {port}")
 
         self.running = True
-        self.collection_thread = threading.Thread(target=self._collect_system_metrics, daemon=True)
+        self.collection_thread = threading.Thread(
+            target=self._collect_system_metrics, daemon=True
+        )
         self.collection_thread.start()
 
         # Optionally start the disk-writing system collector (for ClickHouse)
@@ -289,15 +312,15 @@ class MetricsServer:
         if grad_norm:
             self.gradient_norm.set(grad_norm)
         # Record history
-        self._history['training_loss'].append(now, float(loss))
-        self._history['learning_rate'].append(now, float(lr))
-        self._history['global_step'].append(now, float(step))
+        self._history["training_loss"].append(now, float(loss))
+        self._history["learning_rate"].append(now, float(lr))
+        self._history["global_step"].append(now, float(step))
         if grad_norm:
-            self._history['gradient_norm'].append(now, float(grad_norm))
+            self._history["gradient_norm"].append(now, float(grad_norm))
 
     def update_throughput(self, tps):
         self.throughput.set(tps)
-        self._history['tokens_per_second'].append(time.time(), float(tps))
+        self._history["tokens_per_second"].append(time.time(), float(tps))
 
     def record_checkpoint(self, duration, success=True):
         if success:
@@ -307,7 +330,7 @@ class MetricsServer:
             self.checkpoint_failures.inc()
 
     def update_training_status(self, status, message=""):
-        self.training_status.info({'status': status, 'message': message})
+        self.training_status.info({"status": status, "message": message})
 
     # ------------------------------------------------------------------
     # Query helpers (used by HTTP handler and watchdog)
@@ -345,6 +368,7 @@ class MetricsServer:
 # ---------------------------------------------------------------------------
 
 _metrics_server = None
+
 
 def get_metrics_server(config_path=None):
     global _metrics_server

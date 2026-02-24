@@ -1,8 +1,8 @@
-
 import json
-import time
-import shutil
 import os
+import shutil
+import time
+
 
 def test_system_metrics_collector():
     """Verify SystemMetricsCollector writes valid JSONL that Vector can ingest."""

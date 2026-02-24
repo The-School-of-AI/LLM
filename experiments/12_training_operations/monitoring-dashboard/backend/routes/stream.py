@@ -1,12 +1,11 @@
 import asyncio
 import json
 
+from cache import cache
 from fastapi import APIRouter
+from sse import broadcaster
 from sse_starlette.sse import EventSourceResponse
 from starlette.requests import Request
-
-from cache import cache
-from sse import broadcaster
 
 router = APIRouter()
 

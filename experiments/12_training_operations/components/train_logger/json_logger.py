@@ -1,17 +1,29 @@
 import json
-import threading
-import queue
-from pathlib import Path
-from datetime import datetime, timezone
-import numpy as np
 import os
+import queue
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+
 
 class JSONLogger:
     """
     A high-performance, non-blocking structured logger for training runs.
     Writes JSONL files to local NVMe storage for sidecar ingestion.
     """
-    def __init__(self, base_dir: str, run_id: str, rank: int = 0, buffer_size: int = 100, default_context: dict = None, queue_maxsize: int = 0, fsync_on_flush: bool = False):
+
+    def __init__(
+        self,
+        base_dir: str,
+        run_id: str,
+        rank: int = 0,
+        buffer_size: int = 100,
+        default_context: dict = None,
+        queue_maxsize: int = 0,
+        fsync_on_flush: bool = False,
+    ):
         self.base_dir = Path(base_dir)
         self.run_id = run_id
         self.rank = rank
@@ -19,26 +31,30 @@ class JSONLogger:
         self.host = os.environ.get("HOSTNAME") or os.uname().nodename
         self.fsync_on_flush = fsync_on_flush
         self.dropped = 0
-        
+
         # Ensure base directory exists
         self.base_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # In distributed training, each rank writes its own file
         # Even if on shared storage, this prevents corruption
         self.log_file = self.base_dir / f"{self.run_id}_rank_{self.rank}.jsonl"
         self.buffer_size = buffer_size
-        
+
         # Async writing setup
-        self.queue = queue.Queue(maxsize=queue_maxsize) if queue_maxsize and queue_maxsize > 0 else queue.Queue()
+        self.queue = (
+            queue.Queue(maxsize=queue_maxsize)
+            if queue_maxsize and queue_maxsize > 0
+            else queue.Queue()
+        )
         self.running = True
-        
+
         # Buffer for batch writing
         self.buffer = []
-        
+
         # Start worker thread
         self.worker_thread = threading.Thread(target=self._writer_loop, daemon=True)
         self.worker_thread.start()
-        
+
         print(f"✓ JSONLogger initialized. Writing to: {self.log_file}")
 
     def log_step(self, step: int, metrics: dict, context: dict = None):
@@ -50,7 +66,11 @@ class JSONLogger:
         if context:
             merged_context.update(context)
 
-        ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        ts = (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
+        )
         payload = {
             "timestamp": ts,
             "run_id": self.run_id,
@@ -58,7 +78,7 @@ class JSONLogger:
             "host": self.host,
             "step": step,
             "metrics": metrics,
-            "context": merged_context
+            "context": merged_context,
         }
         try:
             self.queue.put(payload, block=False)
@@ -77,11 +97,13 @@ class JSONLogger:
                     self.buffer.append(data)
                 except queue.Empty:
                     pass
-                
+
                 # Flush if buffer full or timeout reached
-                if len(self.buffer) >= self.buffer_size or (self.buffer and self.queue.empty()):
+                if len(self.buffer) >= self.buffer_size or (
+                    self.buffer and self.queue.empty()
+                ):
                     self._flush()
-                    
+
             except Exception as e:
                 print(f"CRITICAL LOGGER ERROR: {e}")
 
@@ -108,7 +130,12 @@ class JSONLogger:
         try:
             if hasattr(obj, "detach") and hasattr(obj, "cpu"):
                 t = obj.detach().cpu()
-                if hasattr(t, "numel") and callable(t.numel) and t.numel() == 1 and hasattr(t, "item"):
+                if (
+                    hasattr(t, "numel")
+                    and callable(t.numel)
+                    and t.numel() == 1
+                    and hasattr(t, "item")
+                ):
                     return float(t.item())
                 if hasattr(t, "tolist"):
                     return t.tolist()

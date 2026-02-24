@@ -1,5 +1,5 @@
-
 import time
+
 from components.checkpoint_registry import CheckpointRegistry
 
 
@@ -27,7 +27,9 @@ def test_registry():
     assert record["tag"] == "temporary"
     assert record["is_protected"] is False
     assert record["status"] == "registered"
-    print(f"✓ Registered: step={record['step']}, tag={record['tag']}, protected={record['is_protected']}")
+    print(
+        f"✓ Registered: step={record['step']}, tag={record['tag']}, protected={record['is_protected']}"
+    )
 
     # ---- 2. can_delete on temporary → True ----
     print("\n--- Test 2: can_delete (temporary) ---")
@@ -50,7 +52,9 @@ def test_registry():
     record = registry.get_checkpoint(key_growth)
     assert record["is_protected"] is True
     assert record["tag"] == "growth"
-    print(f"✓ Registered: step={record['step']}, tag={record['tag']}, protected={record['is_protected']}")
+    print(
+        f"✓ Registered: step={record['step']}, tag={record['tag']}, protected={record['is_protected']}"
+    )
 
     # ---- 5. can_delete on protected → False ----
     print("\n--- Test 5: can_delete (protected) ---")
@@ -82,14 +86,18 @@ def test_registry():
     assert len(checkpoints) >= 2, f"Expected >= 2, got {len(checkpoints)}"
     print(f"✓ list_checkpoints returned {len(checkpoints)} registered checkpoints")
     for c in checkpoints:
-        print(f"  step={c['step']}, tag={c['tag']}, loss={c['loss']}, s3_key={c['s3_key']}")
+        print(
+            f"  step={c['step']}, tag={c['tag']}, loss={c['loss']}, s3_key={c['s3_key']}"
+        )
 
     # ---- 9. best_checkpoint ----
     print("\n--- Test 9: best_checkpoint ---")
     best = registry.best_checkpoint(run_id, top_n=1)
     assert len(best) == 1
     assert best[0]["loss"] <= 0.1, f"Expected lowest loss, got {best[0]['loss']}"
-    print(f"✓ Best checkpoint: step={best[0]['step']}, loss={best[0]['loss']}, s3_key={best[0]['s3_key']}")
+    print(
+        f"✓ Best checkpoint: step={best[0]['step']}, loss={best[0]['loss']}, s3_key={best[0]['s3_key']}"
+    )
 
     print("\n✅ All CheckpointRegistry tests passed!")
 

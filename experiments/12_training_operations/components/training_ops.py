@@ -33,13 +33,13 @@ import shutil
 import ssl
 import subprocess
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 
-from components.train_logger.json_logger import JSONLogger
-from components.system_metrics.collector import SystemMetricsCollector
-from components.metrics_server import MetricsServer
 from components.checkpoint_registry import CheckpointRegistry
+from components.metrics_server import MetricsServer
+from components.system_metrics.collector import SystemMetricsCollector
+from components.train_logger.json_logger import JSONLogger
 
 
 class TrainingOps:
@@ -104,14 +104,22 @@ class TrainingOps:
             or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT", "http://localhost:8123")
         )
         self._ch_user = clickhouse_user or os.environ.get("CLICKHOUSE_USER", "")
-        self._ch_password = clickhouse_password or os.environ.get("CLICKHOUSE_PASSWORD", "")
-        self._ch_ca_cert = clickhouse_ca_cert if clickhouse_ca_cert is not None else os.environ.get("CLICKHOUSE_CA_CERT", "")
+        self._ch_password = clickhouse_password or os.environ.get(
+            "CLICKHOUSE_PASSWORD", ""
+        )
+        self._ch_ca_cert = (
+            clickhouse_ca_cert
+            if clickhouse_ca_cert is not None
+            else os.environ.get("CLICKHOUSE_CA_CERT", "")
+        )
         self._vector_service_name = vector_service_name
 
         # Build auth header + TLS context for preflight check
         self._auth_header = ""
         if self._ch_user:
-            creds = base64.b64encode(f"{self._ch_user}:{self._ch_password}".encode()).decode()
+            creds = base64.b64encode(
+                f"{self._ch_user}:{self._ch_password}".encode()
+            ).decode()
             self._auth_header = f"Basic {creds}"
         self._ssl_ctx = None
         if self._clickhouse_url.startswith("https"):
@@ -130,7 +138,7 @@ class TrainingOps:
         if skip_vector_check:
             print("⚠ Preflight: Vector check skipped (skip_vector_check=True)")
         else:
-            self._check_vector()      # fatal
+            self._check_vector()  # fatal
         if check_clickhouse_preflight:
             self._check_clickhouse()  # warn-only
 
@@ -177,7 +185,9 @@ class TrainingOps:
             systemctl_bin = shutil.which("systemctl")
             if systemctl_bin is None:
                 print("=" * 60)
-                print("  FATAL: systemctl not found; cannot verify Vector service health.")
+                print(
+                    "  FATAL: systemctl not found; cannot verify Vector service health."
+                )
                 print()
                 print(f"  Expected active service: {self._vector_service_name}")
                 print("=" * 60)
@@ -190,7 +200,9 @@ class TrainingOps:
                     timeout=5,
                 )
                 if result.returncode == 0:
-                    print(f"✓ Preflight: Vector service '{self._vector_service_name}' is active")
+                    print(
+                        f"✓ Preflight: Vector service '{self._vector_service_name}' is active"
+                    )
                     return
             except Exception:
                 pass
@@ -219,7 +231,8 @@ class TrainingOps:
         try:
             result = subprocess.run(
                 ["pgrep", "-x", "vector"],
-                capture_output=True, timeout=5,
+                capture_output=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 pids = result.stdout.decode().strip().split("\n")
@@ -295,7 +308,10 @@ class TrainingOps:
 
         if loss is not None:
             self.metrics_server.update_training_metrics(
-                loss=loss, lr=lr, step=step, grad_norm=grad_norm,
+                loss=loss,
+                lr=lr,
+                step=step,
+                grad_norm=grad_norm,
             )
         if tps is not None:
             self.metrics_server.update_throughput(tps)

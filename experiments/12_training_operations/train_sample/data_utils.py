@@ -9,18 +9,19 @@ Includes:
 """
 
 import os
-import sys
 import random
-from typing import Optional, List, Dict, Any, Iterator
-import torch
-from torch.utils.data import IterableDataset
-from datasets import load_from_disk
-from tqdm import tqdm
+import sys
+from typing import Any, Dict, Iterator, List, Optional
 
+import torch
+from datasets import load_from_disk
+from torch.utils.data import IterableDataset
+from tqdm import tqdm
 
 # ============================================================================
 # BPE TOKEN UTILITIES (For Fourier Embeddings)
 # ============================================================================
+
 
 def discover_chars_from_bpe_tokenizer(tokenizer, vocab_size=50272):
     """
@@ -30,7 +31,9 @@ def discover_chars_from_bpe_tokenizer(tokenizer, vocab_size=50272):
     print("🔍 Discovering characters from BPE tokenizer...")
     all_chars = set()
 
-    for token_id in tqdm(range(min(vocab_size, len(tokenizer))), desc="Extracting chars"):
+    for token_id in tqdm(
+        range(min(vocab_size, len(tokenizer))), desc="Extracting chars"
+    ):
         try:
             token_text = tokenizer.decode([token_id])
             all_chars.update(token_text)
@@ -66,7 +69,7 @@ def pad_char_vocab_128(chars):
 
     i = 0
     while len(uniq) < 128:
-        placeholder = f'¤{i}'
+        placeholder = f"¤{i}"
         if placeholder not in seen:
             uniq.append(placeholder)
             seen.add(placeholder)
@@ -83,7 +86,9 @@ def create_bpe_token_strings(tokenizer, vocab_size=50272):
     print("🔄 Converting BPE tokens to strings for Fourier processing...")
     bpe_vocab = []
 
-    for token_id in tqdm(range(min(vocab_size, len(tokenizer))), desc="Converting BPE tokens"):
+    for token_id in tqdm(
+        range(min(vocab_size, len(tokenizer))), desc="Converting BPE tokens"
+    ):
         try:
             token_text = tokenizer.decode([token_id])
             bpe_vocab.append(token_text)
@@ -99,15 +104,29 @@ def create_bpe_token_strings(tokenizer, vocab_size=50272):
 # SYNTH DATASET
 # ============================================================================
 
+
 class SYNTHStream(IterableDataset):
     """
     STRICT Loader: Instant resume using Arrow slicing.
     Supports deterministic ordering for reproducible training.
     """
-    def __init__(self, tokenizer, dataset_name="PleIAs/SYNTH", local_path="../synth_local_en",
-                 seq_len=512, batch_size=16, shuffle_buffer=10000, seed=42,
-                 include_query=True, include_reasoning=True, include_answer=True,
-                 combine_separator="\n\n", filter_language="en", start_step=0):
+
+    def __init__(
+        self,
+        tokenizer,
+        dataset_name="PleIAs/SYNTH",
+        local_path="../synth_local_en",
+        seq_len=512,
+        batch_size=16,
+        shuffle_buffer=10000,
+        seed=42,
+        include_query=True,
+        include_reasoning=True,
+        include_answer=True,
+        combine_separator="\n\n",
+        filter_language="en",
+        start_step=0,
+    ):
         super().__init__()
         self.tokenizer = tokenizer
         self.seq_len = seq_len
@@ -133,7 +152,9 @@ class SYNTHStream(IterableDataset):
         elif os.path.exists(parent_path):
             self.full_path = parent_path
         else:
-            print(f"\n❌ ERROR: Could not find '{local_path}'. Run download_mini_synth.py first.")
+            print(
+                f"\n❌ ERROR: Could not find '{local_path}'. Run download_mini_synth.py first."
+            )
             sys.exit(1)
 
         print(f"📂 SYNTHStream loading from: {self.full_path}")
@@ -143,7 +164,9 @@ class SYNTHStream(IterableDataset):
         # Fast language filter
         if self.filter_language:
             lang = ex.get("language")
-            if not lang or (isinstance(lang, str) and lang.lower() != self.filter_language.lower()):
+            if not lang or (
+                isinstance(lang, str) and lang.lower() != self.filter_language.lower()
+            ):
                 return None
 
         parts = []
@@ -176,13 +199,16 @@ class SYNTHStream(IterableDataset):
             full_ds = full_ds.shuffle(seed=self.seed)
 
             print(f"📊 Dataset loaded: {len(full_ds)} rows")
-            print(f"📊 Deterministic Resume: Fast-forwarding {self.start_step} steps...")
+            print(
+                f"📊 Deterministic Resume: Fast-forwarding {self.start_step} steps..."
+            )
 
             it = iter(full_ds)
 
         except Exception as e:
             print(f"❌ Critical Error loading dataset: {e}")
             import traceback
+
             traceback.print_exc()
             sys.exit(1)
 
@@ -210,8 +236,12 @@ class SYNTHStream(IterableDataset):
                         continue
 
                     encoded = self.tokenizer.encode_plus(
-                        text, add_special_tokens=False, return_tensors=None,
-                        max_length=self.seq_len * 2, truncation=True, padding=False,
+                        text,
+                        add_special_tokens=False,
+                        return_tensors=None,
+                        max_length=self.seq_len * 2,
+                        truncation=True,
+                        padding=False,
                     )
                     ids = encoded["input_ids"]
                     if not ids:
@@ -220,16 +250,18 @@ class SYNTHStream(IterableDataset):
                     buf.extend(ids)
                     # Keep buffer reasonable size
                     if len(buf) > 4 * self.seq_len:
-                        buf[:] = buf[-(4 * self.seq_len):]
+                        buf[:] = buf[-(4 * self.seq_len) :]
 
                 # Consume from buffer (discard)
                 while len(buf) >= self.seq_len and samples_skipped < samples_to_skip:
-                    buf = buf[self.seq_len:]
+                    buf = buf[self.seq_len :]
                     samples_skipped += 1
                     pbar.update(1)
 
             pbar.close()
-            print(f"✅ Fast-forward complete. Resuming exactly at step {self.start_step}.")
+            print(
+                f"✅ Fast-forward complete. Resuming exactly at step {self.start_step}."
+            )
 
         # ----------------------------------------------------------------
         # PHASE 2: Yield Training Data
@@ -248,8 +280,12 @@ class SYNTHStream(IterableDataset):
                     continue
 
                 encoded = self.tokenizer.encode_plus(
-                    text, add_special_tokens=False, return_tensors=None,
-                    max_length=self.seq_len * 2, truncation=True, padding=False,
+                    text,
+                    add_special_tokens=False,
+                    return_tensors=None,
+                    max_length=self.seq_len * 2,
+                    truncation=True,
+                    padding=False,
                 )
                 ids = encoded["input_ids"]
                 if not ids:
@@ -257,13 +293,13 @@ class SYNTHStream(IterableDataset):
 
                 buf.extend(ids)
                 if len(buf) > 4 * self.seq_len:
-                    buf[:] = buf[-(4 * self.seq_len):]
+                    buf[:] = buf[-(4 * self.seq_len) :]
 
-            block = buf[:self.seq_len]
-            buf = buf[self.seq_len:]
+            block = buf[: self.seq_len]
+            buf = buf[self.seq_len :]
             yield {
                 "input_ids": torch.tensor(block, dtype=torch.long),
-                "labels": torch.tensor(block, dtype=torch.long)
+                "labels": torch.tensor(block, dtype=torch.long),
             }
 
 
@@ -271,13 +307,20 @@ class SYNTHStream(IterableDataset):
 # SYNTH PROMPT SAMPLER (For Generation)
 # ============================================================================
 
+
 class SYNTHPromptSampler:
     """
     STRICT Sampler: Checks multiple locations for synth_local.
     Provides deterministic prompt sampling for evaluation.
     """
-    def __init__(self, dataset_name="PleIAs/SYNTH", local_path="../synth_local_en",
-                 tokenizer=None, seed=42):
+
+    def __init__(
+        self,
+        dataset_name="PleIAs/SYNTH",
+        local_path="../synth_local_en",
+        tokenizer=None,
+        seed=42,
+    ):
         self.tokenizer = tokenizer
         self.seed = seed
 
@@ -294,7 +337,9 @@ class SYNTHPromptSampler:
         elif os.path.exists(parent_path):
             self.full_path = parent_path
         else:
-            print("[PROMPTS] ⚠️ Local dataset not found in CWD, Script Dir, or Parent Dir.")
+            print(
+                "[PROMPTS] ⚠️ Local dataset not found in CWD, Script Dir, or Parent Dir."
+            )
             self.dataset = None
             return
 
@@ -335,8 +380,12 @@ class SYNTHPromptSampler:
 
             formatted = f"<|im_start|>user\n{query}<|im_end|>\n<|im_start|>assistant\n"
             encoded = self.tokenizer.encode_plus(
-                formatted, add_special_tokens=False, return_tensors=None,
-                max_length=512, truncation=True, padding=False
+                formatted,
+                add_special_tokens=False,
+                return_tensors=None,
+                max_length=512,
+                truncation=True,
+                padding=False,
             )
             prompts_t.append(torch.tensor(encoded["input_ids"], dtype=torch.long))
 

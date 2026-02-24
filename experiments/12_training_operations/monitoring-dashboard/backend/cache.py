@@ -19,15 +19,15 @@ class RunInfo:
     last_event_time: float
     latest_step: int
     is_active: bool
-    status: str = 'unknown'
-    model_name: str = ''
-    model_size: str = ''
-    source: str = ''
-    cluster: str = ''
+    status: str = "unknown"
+    model_name: str = ""
+    model_size: str = ""
+    source: str = ""
+    cluster: str = ""
 
 
 RunData = dict[str, list[Point]]  # metric_name -> [points]
-AllRuns = dict[str, RunData]       # run_id -> RunData
+AllRuns = dict[str, RunData]  # run_id -> RunData
 
 
 def _lttb_downsample(points: list[Point], target: int) -> list[Point]:
@@ -48,18 +48,25 @@ def _lttb_downsample(points: list[Point], target: int) -> list[Point]:
         next_bucket_end = min(next_bucket_end, n - 1)
 
         # Average of next bucket
-        avg_step = sum(p.step for p in points[next_bucket_start:next_bucket_end + 1]) / max(1, next_bucket_end - next_bucket_start + 1)
-        avg_val = sum(p.value for p in points[next_bucket_start:next_bucket_end + 1]) / max(1, next_bucket_end - next_bucket_start + 1)
+        avg_step = sum(
+            p.step for p in points[next_bucket_start : next_bucket_end + 1]
+        ) / max(1, next_bucket_end - next_bucket_start + 1)
+        avg_val = sum(
+            p.value for p in points[next_bucket_start : next_bucket_end + 1]
+        ) / max(1, next_bucket_end - next_bucket_start + 1)
 
         # Find point in current bucket with largest triangle area
         best_area = -1.0
         best_idx = bucket_start
         a = points[a_idx]
         for j in range(bucket_start, min(bucket_end + 1, n)):
-            area = abs(
-                (a.step - avg_step) * (points[j].value - a.value)
-                - (a.step - points[j].step) * (avg_val - a.value)
-            ) * 0.5
+            area = (
+                abs(
+                    (a.step - avg_step) * (points[j].value - a.value)
+                    - (a.step - points[j].step) * (avg_val - a.value)
+                )
+                * 0.5
+            )
             if area > best_area:
                 best_area = area
                 best_idx = j
@@ -179,5 +186,6 @@ class MetricsCache:
                     for run_id, metrics in self.delta.items()
                 },
             }
+
 
 cache = MetricsCache()

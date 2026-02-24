@@ -1,10 +1,10 @@
-
-import time
 import json
-import tempfile
 import os
-import urllib.request
+import tempfile
+import time
 import urllib.parse
+import urllib.request
+
 
 def test_metrics_server():
     """End-to-end test for the custom metrics server (no Prometheus dependency)."""

@@ -32,9 +32,10 @@ Author: Byte-level adaptation of Kronecker product formulation
 Date: 2026-02-09
 """
 
+import math
 from dataclasses import dataclass
 from typing import List
-import math
+
 import numpy as np
 
 
@@ -50,17 +51,19 @@ class KroneckerConfig:
         length_normalize: Apply 1/√L normalization (default: True)
         truncate_long_words: Truncate tokens longer than POS_DIM bytes (default: True)
     """
+
     CHAR_DIM: int = 256  # Byte vocabulary (0-255)
-    POS_DIM: int = 32    # Max token length in bytes
-    D: int = 8192        # CHAR_DIM × POS_DIM = 256 × 32
+    POS_DIM: int = 32  # Max token length in bytes
+    D: int = 8192  # CHAR_DIM × POS_DIM = 256 × 32
     length_normalize: bool = True
     truncate_long_words: bool = True
 
     def __post_init__(self):
         """Validate configuration parameters."""
         assert self.CHAR_DIM == 256, "CHAR_DIM must be 256 for byte-level encoding"
-        assert self.D == self.CHAR_DIM * self.POS_DIM, \
-            f"D ({self.D}) must equal CHAR_DIM × POS_DIM ({self.CHAR_DIM} × {self.POS_DIM})"
+        assert (
+            self.D == self.CHAR_DIM * self.POS_DIM
+        ), f"D ({self.D}) must equal CHAR_DIM × POS_DIM ({self.CHAR_DIM} × {self.POS_DIM})"
 
 
 class KroneckerEmbeddings:
@@ -118,7 +121,7 @@ class KroneckerEmbeddings:
         # Identity bases for exact inversion
         # These are NOT trainable - they're fixed orthogonal bases
         self.E_char = np.eye(self.CHAR_DIM, dtype=np.float32)  # Byte one-hot basis
-        self.P_pos = np.eye(self.POS_DIM, dtype=np.float32)    # Position one-hot basis
+        self.P_pos = np.eye(self.POS_DIM, dtype=np.float32)  # Position one-hot basis
 
     def _utf8_safe_truncate(self, byte_seq: bytes, max_bytes: int) -> bytes:
         """
@@ -137,13 +140,13 @@ class KroneckerEmbeddings:
         # Try decoding at truncation point and move back if invalid
         for end in range(max_bytes, max(max_bytes - 4, 0) - 1, -1):
             try:
-                byte_seq[:end].decode('utf-8')
+                byte_seq[:end].decode("utf-8")
                 return byte_seq[:end]
             except UnicodeDecodeError:
                 continue
 
         # Fallback: return empty if can't find valid truncation
-        return b''
+        return b""
 
     def encode_word(self, word: str) -> np.ndarray:
         """
@@ -174,14 +177,16 @@ class KroneckerEmbeddings:
             return np.zeros((self.D,), dtype=np.float32)
 
         # Convert to UTF-8 bytes
-        byte_seq = word.encode('utf-8')
+        byte_seq = word.encode("utf-8")
 
         # Truncate if needed (UTF-8 safe)
         if len(byte_seq) > self.POS_DIM:
             if self.cfg.truncate_long_words:
                 byte_seq = self._utf8_safe_truncate(byte_seq, self.POS_DIM)
             else:
-                raise ValueError(f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}")
+                raise ValueError(
+                    f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}"
+                )
 
         L = len(byte_seq)
         if L == 0:
@@ -196,7 +201,7 @@ class KroneckerEmbeddings:
         # Length normalization for fair comparison across different token lengths
         # This ensures that shorter and longer tokens have comparable magnitudes
         if self.cfg.length_normalize:
-            M *= (1.0 / math.sqrt(L))
+            M *= 1.0 / math.sqrt(L)
 
         # Flatten to 8192-dimensional vector
         return M.reshape(self.D)
@@ -245,11 +250,11 @@ class KroneckerEmbeddings:
         # Convert bytes to string
         byte_seq = bytes(bytes_list)
         try:
-            return byte_seq.decode('utf-8')
+            return byte_seq.decode("utf-8")
         except UnicodeDecodeError:
             # Should never happen with properly encoded data
             # But handle gracefully just in case
-            return byte_seq.decode('utf-8', errors='replace')
+            return byte_seq.decode("utf-8", errors="replace")
 
     def encode_batch(self, words: List[str]) -> np.ndarray:
         """
@@ -298,10 +303,12 @@ if __name__ == "__main__":
         POS_DIM=32,
         D=8192,
         length_normalize=True,
-        truncate_long_words=True
+        truncate_long_words=True,
     )
     encoder = KroneckerEmbeddings(cfg)
-    print(f"   ✓ Configuration: CHAR_DIM={cfg.CHAR_DIM}, POS_DIM={cfg.POS_DIM}, D={cfg.D}")
+    print(
+        f"   ✓ Configuration: CHAR_DIM={cfg.CHAR_DIM}, POS_DIM={cfg.POS_DIM}, D={cfg.D}"
+    )
     print("   ✓ Byte-level: All UTF-8 text supported (no exclusions)")
     print()
 
@@ -311,17 +318,29 @@ if __name__ == "__main__":
 
     test_tokens = [
         # Short tokens (1-5 chars)
-        "a", "hi", "the", "and", "hello",
+        "a",
+        "hi",
+        "the",
+        "and",
+        "hello",
         # Medium tokens (6-15 chars)
-        "world", "testing", "embeddings", "kronecker",
+        "world",
+        "testing",
+        "embeddings",
+        "kronecker",
         # Long tokens (16-25 chars)
-        "representation", "characterization", "implementation",
+        "representation",
+        "characterization",
+        "implementation",
         # Very long tokens (26-32 chars)
-        "supercalifragilisticexpial", "pneumonoultramicroscopicsi",
+        "supercalifragilisticexpial",
+        "pneumonoultramicroscopicsi",
         # Exactly 32 characters
         "abcdefghijklmnopqrstuvwxyz123456",
         # Special characters
-        "test_123", "hello-world", "user@email.com",
+        "test_123",
+        "hello-world",
+        "user@email.com",
     ]
 
     print("   ASCII Token Tests (1-32 characters)")
@@ -345,7 +364,9 @@ if __name__ == "__main__":
         # Check dimensions
         dim_ok = embedding.shape == (8192,)
 
-        print(f"   {status} '{token:32s}' | len={len(token):2d} | norm={norm:.4f} | decoded='{decoded}'")
+        print(
+            f"   {status} '{token:32s}' | len={len(token):2d} | norm={norm:.4f} | decoded='{decoded}'"
+        )
 
         if not match:
             all_passed = False
@@ -384,7 +405,9 @@ if __name__ == "__main__":
 
             norm = np.linalg.norm(embedding)
 
-            print(f"   {status} Token {idx:5d}: '{token:20s}' | len={len(token):2d} | norm={norm:.4f}")
+            print(
+                f"   {status} Token {idx:5d}: '{token:20s}' | len={len(token):2d} | norm={norm:.4f}"
+            )
 
             if not match:
                 print(f"      Note: Expected '{token}', got '{decoded}'")
@@ -408,26 +431,21 @@ if __name__ == "__main__":
         ("café", "French accents"),
         ("naïve", "Latin diacritics"),
         ("Zürich", "German umlauts"),
-
         # Chinese/CJK - NOW FULLY SUPPORTED
         ("你好", "Chinese (Simplified)"),
         ("世界", "Chinese (World)"),
         ("こんにちは", "Japanese Hiragana"),
         ("안녕하세요", "Korean Hangul"),
-
         # Arabic/RTL - NOW FULLY SUPPORTED
         ("مرحبا", "Arabic (Hello)"),
         ("السلام", "Arabic (Peace)"),
-
         # Cyrillic - NOW FULLY SUPPORTED
         ("Привет", "Russian (Hello)"),
         ("Здравствуй", "Russian (Greetings)"),
-
         # Emoji - NOW FULLY SUPPORTED
         ("😀🎉", "Emoji (Happy Party)"),
         ("🌍🚀", "Emoji (Earth Rocket)"),
         ("❤️💯", "Emoji (Heart 100)"),
-
         # Mixed scripts
         ("hello世界", "English + Chinese"),
         ("test©2024", "ASCII + symbol + digits"),
@@ -457,9 +475,11 @@ if __name__ == "__main__":
             multilingual_passed += 1
 
         norm = np.linalg.norm(embedding)
-        byte_len = len(token.encode('utf-8'))
+        byte_len = len(token.encode("utf-8"))
 
-        print(f"   {status} {description:30s} | input='{token:15s}' | decoded='{decoded:15s}' | bytes={byte_len:2d}")
+        print(
+            f"   {status} {description:30s} | input='{token:15s}' | decoded='{decoded:15s}' | bytes={byte_len:2d}"
+        )
 
         if not match:
             all_passed = False
@@ -468,7 +488,9 @@ if __name__ == "__main__":
     print()
     print(f"   ✅ Multilingual test: {multilingual_passed}/{multilingual_total} passed")
     print("   ✅ Behavior: 100% lossless encoding/decoding for ALL UTF-8 text")
-    print("   ✅ Coverage: ASCII, Latin Extended, Chinese, Arabic, Cyrillic, Emoji, ALL scripts!")
+    print(
+        "   ✅ Coverage: ASCII, Latin Extended, Chinese, Arabic, Cyrillic, Emoji, ALL scripts!"
+    )
     print()
 
     print("   Key Achievement:")
@@ -490,7 +512,9 @@ if __name__ == "__main__":
     print(f"   ✓ Input:  {batch_tokens}")
     print(f"   ✓ Output: {batch_decoded}")
     batch_match = batch_tokens == batch_decoded
-    print(f"   {'✓' if batch_match else '✗'} Batch encoding: {'PASSED' if batch_match else 'FAILED'}")
+    print(
+        f"   {'✓' if batch_match else '✗'} Batch encoding: {'PASSED' if batch_match else 'FAILED'}"
+    )
     print()
 
     # Test properties
@@ -505,8 +529,12 @@ if __name__ == "__main__":
     long_norm = np.linalg.norm(long_emb)
 
     print("   ✓ Length normalization:")
-    print(f"      Short token '{short_token}' (len={len(short_token)}): norm={short_norm:.4f}")
-    print(f"      Long token  '{long_token}' (len={len(long_token)}): norm={long_norm:.4f}")
+    print(
+        f"      Short token '{short_token}' (len={len(short_token)}): norm={short_norm:.4f}"
+    )
+    print(
+        f"      Long token  '{long_token}' (len={len(long_token)}): norm={long_norm:.4f}"
+    )
     print(f"      Norm ratio: {long_norm/short_norm:.4f} (should be ~1.0)")
 
     # Property 2: Orthogonality

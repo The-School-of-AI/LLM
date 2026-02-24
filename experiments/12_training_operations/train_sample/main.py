@@ -19,21 +19,29 @@ Usage:
 """
 
 import os
+
 # MPS memory management - critical for Mac M1
 os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "1.0"
 os.environ["PYTORCH_MPS_LOW_WATERMARK_RATIO"] = "0.9"
 os.environ["PYTORCH_MPS_PREFER_METAL"] = "1"
 
 import argparse
-import time
 import gc
+import time
+
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from transformers import GPT2Tokenizer
 
 # Import our modular components
 from config import Config
+from data import (
+    SYNTHPromptSampler,
+    SYNTHStream,
+    create_bpe_token_strings,
+    discover_chars_from_bpe_tokenizer,
+    pad_char_vocab_128,
+)
+from fourier_se_decoder import PFCodec, PFConfig
 
 # MODEL SELECTION: Uncomment ONE of the following imports
 # 1. Multi-Token Prediction (NTP + MTP) with Gated Sparse Attention
@@ -42,30 +50,23 @@ from config import Config
 # from model_gated import SmolLM
 # 3. Single-Token Prediction with Multi-Head Latent Attention (original)
 from model import SmolLM
-
-from data import (
-    SYNTHStream,
-    SYNTHPromptSampler,
-    discover_chars_from_bpe_tokenizer,
-    pad_char_vocab_128,
-    create_bpe_token_strings,
-)
+from torch.utils.data import DataLoader
 from training import (
-    setup_training,
     get_learning_rate,
-    update_learning_rate,
-    save_checkpoint,
     load_checkpoint,
+    save_checkpoint,
     setup_tokenizer,
+    setup_training,
+    update_learning_rate,
 )
+from transformers import GPT2Tokenizer
 from utils import (
-    setup_logging,
     PauseHandler,
-    sync_device,
-    set_runtime_optimizations,
     sample_generate_single_fast,
+    set_runtime_optimizations,
+    setup_logging,
+    sync_device,
 )
-from fourier_se_decoder import PFConfig, PFCodec
 
 
 def parse_arguments():
@@ -86,12 +87,12 @@ Examples:
 
   # Resume from latest checkpoint (default behavior)
   python main.py fourier
-        """
+        """,
     )
     parser.add_argument(
         "embedding_type",
         choices=["fourier", "baseline"],
-        help="Type of embedding to use: 'fourier' or 'baseline'"
+        help="Type of embedding to use: 'fourier' or 'baseline'",
     )
     parser.add_argument(
         "--checkpoint",
@@ -99,7 +100,7 @@ Examples:
         dest="checkpoint_path",
         type=str,
         default=None,
-        help="Path to a specific checkpoint file to load"
+        help="Path to a specific checkpoint file to load",
     )
 
     return parser.parse_args()
@@ -122,7 +123,7 @@ def setup_fourier_codec(config, tokenizer):
         POS_DIM=config.fourier.pos_dim,
         D=config.fourier.D,
         length_normalize=config.fourier.length_normalize,
-        truncate_long_words=config.fourier.truncate_long_words
+        truncate_long_words=config.fourier.truncate_long_words,
     )
     pf_codec = PFCodec(pf_cfg)
 
@@ -149,7 +150,7 @@ def create_model(config, pf_codec=None, bpe_vocab=None):
         num_experts=config.model.num_experts,
         num_shared_experts=config.model.num_shared_experts,
         top_k=config.model.top_k_experts,
-        K=config.model.K
+        K=config.model.K,
     )
     return model
 
@@ -160,8 +161,7 @@ def run_generation(model, tokenizer, prompt_sampler, device, step, config, logge
     try:
         # Sample prompts (deterministic based on step)
         prompts_t = prompt_sampler.sample_token_ids(
-            n=config.training.gen_num_prompts,
-            step=step
+            n=config.training.gen_num_prompts, step=step
         )
         prompts_t = [p.to(device) for p in prompts_t]
 
@@ -182,18 +182,26 @@ def run_generation(model, tokenizer, prompt_sampler, device, step, config, logge
 
                 # Log prompt and generation
                 prompt_text = tokenizer.decode(prompt_t, skip_special_tokens=False)
-                new_tokens = gen_t[prompt_t.size(0):]
-                new_text = tokenizer.decode(new_tokens, skip_special_tokens=False) if new_tokens.numel() > 0 else ""
+                new_tokens = gen_t[prompt_t.size(0) :]
+                new_text = (
+                    tokenizer.decode(new_tokens, skip_special_tokens=False)
+                    if new_tokens.numel() > 0
+                    else ""
+                )
 
                 logger.info(f"[GEN {gi+1}]")
                 logger.info(f"  Prompt ({prompt_t.size(0)} tokens):")
-                prompt_display = prompt_text[:500] + "..." if len(prompt_text) > 500 else prompt_text
-                for line in prompt_display.split('\n'):
+                prompt_display = (
+                    prompt_text[:500] + "..." if len(prompt_text) > 500 else prompt_text
+                )
+                for line in prompt_display.split("\n"):
                     logger.info(f"    {line}")
 
                 logger.info(f"  Output ({new_tokens.numel()} tokens):")
-                output_display = new_text[:1000] + "..." if len(new_text) > 1000 else new_text
-                for line in output_display.split('\n'):
+                output_display = (
+                    new_text[:1000] + "..." if len(new_text) > 1000 else new_text
+                )
+                for line in output_display.split("\n"):
                     logger.info(f"    {line}")
                 logger.info("")  # Blank line
 
@@ -213,13 +221,24 @@ def run_generation(model, tokenizer, prompt_sampler, device, step, config, logge
     except Exception as e:
         logger.error(f"Generation failed: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         model.train()
 
 
-def training_loop(model, train_loader, prompt_sampler, device, optimizer,
-                 criterion, config, start_step, pause_handler, logger):
+def training_loop(
+    model,
+    train_loader,
+    prompt_sampler,
+    device,
+    optimizer,
+    criterion,
+    config,
+    start_step,
+    pause_handler,
+    logger,
+):
     """Main training loop - compatible with single-token and multi-token models"""
     print("🔥 Starting training...")
     model.train()
@@ -227,7 +246,7 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
     step = start_step
 
     # Detect model type
-    is_multitoken = hasattr(model, 'mtp_block') and model.mtp_block is not None
+    is_multitoken = hasattr(model, "mtp_block") and model.mtp_block is not None
 
     if is_multitoken:
         logger.info("[MODEL] Multi-Token Prediction model detected (NTP + MTP)")
@@ -276,11 +295,11 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
         t0 = time.time()
 
         # Use AMP for MPS
-        use_amp = (device.type == "mps")
+        use_amp = device.type == "mps"
         amp_dtype = config.training.amp_dtype
 
         # Forward + loss
-        log_emb_stats = (step % 10 == 0)
+        log_emb_stats = step % 10 == 0
         emb_stats = None
 
         if is_multitoken:
@@ -301,8 +320,12 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                         )
 
                     # Compute separate losses for t+1 and t+2
-                    loss_ntp = criterion(logits_ntp.view(-1, config.model.vocab_size), y_ntp.view(-1))
-                    loss_mtp = criterion(logits_mtp.view(-1, config.model.vocab_size), y_mtp.view(-1))
+                    loss_ntp = criterion(
+                        logits_ntp.view(-1, config.model.vocab_size), y_ntp.view(-1)
+                    )
+                    loss_mtp = criterion(
+                        logits_mtp.view(-1, config.model.vocab_size), y_mtp.view(-1)
+                    )
                     # Weight MTP loss by 0.3 (matches original: 1.0 for NTP primary, 0.3 for MTP auxiliary)
                     loss = loss_ntp + 0.3 * loss_mtp + aux_loss
             else:
@@ -316,8 +339,12 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                     )
 
                 # Compute separate losses for t+1 and t+2
-                loss_ntp = criterion(logits_ntp.view(-1, config.model.vocab_size), y_ntp.view(-1))
-                loss_mtp = criterion(logits_mtp.view(-1, config.model.vocab_size), y_mtp.view(-1))
+                loss_ntp = criterion(
+                    logits_ntp.view(-1, config.model.vocab_size), y_ntp.view(-1)
+                )
+                loss_mtp = criterion(
+                    logits_mtp.view(-1, config.model.vocab_size), y_mtp.view(-1)
+                )
                 # Weight MTP loss by 0.3 (matches original: 1.0 for NTP primary, 0.3 for MTP auxiliary)
                 loss = loss_ntp + 0.3 * loss_mtp + aux_loss
 
@@ -339,9 +366,17 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                         model_output = model(x, return_emb_stats=True)
                         # Handle both single logits and (logits, aux_loss, emb_stats)
                         if isinstance(model_output, tuple) and len(model_output) >= 3:
-                            logits, aux_loss, emb_stats = model_output[0], model_output[-2], model_output[-1]
+                            logits, aux_loss, emb_stats = (
+                                model_output[0],
+                                model_output[-2],
+                                model_output[-1],
+                            )
                         else:
-                            logits = model_output if not isinstance(model_output, tuple) else model_output[0]
+                            logits = (
+                                model_output
+                                if not isinstance(model_output, tuple)
+                                else model_output[0]
+                            )
                             aux_loss = torch.zeros((), device=device)
                     else:
                         model_output = model(x, return_loss=True)
@@ -352,15 +387,25 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                             logits = model_output
                             aux_loss = torch.zeros((), device=device)
 
-                    task_loss = criterion(logits.view(-1, config.model.vocab_size), y.view(-1))
+                    task_loss = criterion(
+                        logits.view(-1, config.model.vocab_size), y.view(-1)
+                    )
                     loss = task_loss + aux_loss
             else:
                 if log_emb_stats:
                     model_output = model(x, return_emb_stats=True)
                     if isinstance(model_output, tuple) and len(model_output) >= 3:
-                        logits, aux_loss, emb_stats = model_output[0], model_output[-2], model_output[-1]
+                        logits, aux_loss, emb_stats = (
+                            model_output[0],
+                            model_output[-2],
+                            model_output[-1],
+                        )
                     else:
-                        logits = model_output if not isinstance(model_output, tuple) else model_output[0]
+                        logits = (
+                            model_output
+                            if not isinstance(model_output, tuple)
+                            else model_output[0]
+                        )
                         aux_loss = torch.zeros((), device=device)
                 else:
                     model_output = model(x, return_loss=True)
@@ -370,7 +415,9 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                         logits = model_output
                         aux_loss = torch.zeros((), device=device)
 
-                task_loss = criterion(logits.view(-1, config.model.vocab_size), y.view(-1))
+                task_loss = criterion(
+                    logits.view(-1, config.model.vocab_size), y.view(-1)
+                )
                 loss = task_loss + aux_loss
 
             # Backward pass
@@ -380,7 +427,9 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
             del loss
 
         # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.training.max_grad_norm)
+        torch.nn.utils.clip_grad_norm_(
+            model.parameters(), max_norm=config.training.max_grad_norm
+        )
 
         # Optimizer step
         optimizer.step()
@@ -414,18 +463,42 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
         if step % config.training.log_interval == 0:
             if is_multitoken:
                 # Multi-token: log "loss" (t+1) and "loss2" (t+2) separately
-                avg_ntp = running_ntp_loss / config.training.log_interval if running_ntp_loss > 0 else step_ntp_loss
-                avg_mtp = running_mtp_loss / config.training.log_interval if running_mtp_loss > 0 else step_mtp_loss
-                avg_aux = running_aux_loss / config.training.log_interval if running_aux_loss > 0 else step_aux_loss
-                logger.info(f"step {step} | loss: {avg_ntp:.4f} | loss2: {avg_mtp:.4f} | r_loss: {avg_aux:.4f} | lr: {cur_lr:.2e} | dt: {dt:7.2f}ms | tok/sec: {tok_sec:9.2f}")
+                avg_ntp = (
+                    running_ntp_loss / config.training.log_interval
+                    if running_ntp_loss > 0
+                    else step_ntp_loss
+                )
+                avg_mtp = (
+                    running_mtp_loss / config.training.log_interval
+                    if running_mtp_loss > 0
+                    else step_mtp_loss
+                )
+                avg_aux = (
+                    running_aux_loss / config.training.log_interval
+                    if running_aux_loss > 0
+                    else step_aux_loss
+                )
+                logger.info(
+                    f"step {step} | loss: {avg_ntp:.4f} | loss2: {avg_mtp:.4f} | r_loss: {avg_aux:.4f} | lr: {cur_lr:.2e} | dt: {dt:7.2f}ms | tok/sec: {tok_sec:9.2f}"
+                )
                 running_ntp_loss = 0.0
                 running_mtp_loss = 0.0
                 running_aux_loss = 0.0
             else:
                 # Single-token: log "loss" only
-                avg_task = running_task_loss / config.training.log_interval if running_task_loss > 0 else step_task_loss
-                avg_aux = running_aux_loss / config.training.log_interval if running_aux_loss > 0 else step_aux_loss
-                logger.info(f"step {step} | loss: {avg_task:.4f} | r_loss: {avg_aux:.4f} | lr: {cur_lr:.2e} | dt: {dt:7.2f}ms | tok/sec: {tok_sec:9.2f}")
+                avg_task = (
+                    running_task_loss / config.training.log_interval
+                    if running_task_loss > 0
+                    else step_task_loss
+                )
+                avg_aux = (
+                    running_aux_loss / config.training.log_interval
+                    if running_aux_loss > 0
+                    else step_aux_loss
+                )
+                logger.info(
+                    f"step {step} | loss: {avg_task:.4f} | r_loss: {avg_aux:.4f} | lr: {cur_lr:.2e} | dt: {dt:7.2f}ms | tok/sec: {tok_sec:9.2f}"
+                )
                 running_task_loss = 0.0
                 running_aux_loss = 0.0
         else:
@@ -439,7 +512,9 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
 
         # Log embedding stats
         if emb_stats is not None:
-            logger.info(f"[EMB_STATS] step {step} | emb_std: {emb_stats['emb_std']:.4f} | emb_mean: {emb_stats['emb_mean']:.4f} | proj_std: {emb_stats['proj_std']:.4f} | proj_mean: {emb_stats['proj_mean']:.4f}")
+            logger.info(
+                f"[EMB_STATS] step {step} | emb_std: {emb_stats['emb_std']:.4f} | emb_mean: {emb_stats['emb_mean']:.4f} | proj_std: {emb_stats['proj_std']:.4f} | proj_mean: {emb_stats['proj_mean']:.4f}"
+            )
 
         # Log lambda_e
         if step % 10 == 0:
@@ -451,9 +526,11 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
         if step % 10 == 0:
             gsa_stats = {"k": [], "var": [], "gv": [], "go": []}
             for layer in model.layers:
-                if hasattr(layer, 'attn_block') and hasattr(layer.attn_block, 'sublayer'):
+                if hasattr(layer, "attn_block") and hasattr(
+                    layer.attn_block, "sublayer"
+                ):
                     attn_sublayer = layer.attn_block.sublayer
-                    if hasattr(attn_sublayer, 'last_stats'):
+                    if hasattr(attn_sublayer, "last_stats"):
                         stats = attn_sublayer.last_stats
                         gsa_stats["k"].append(stats["gsa/k_avg"])
                         gsa_stats["var"].append(stats["gsa/var_score"])
@@ -461,10 +538,10 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                         gsa_stats["go"].append(stats["gsa/gate_o"])
 
             if gsa_stats["k"]:
-                k_avg = sum(gsa_stats['k']) / len(gsa_stats['k'])
-                var_avg = sum(gsa_stats['var']) / len(gsa_stats['var'])
-                gv_avg = sum(gsa_stats['gv']) / len(gsa_stats['gv'])
-                go_avg = sum(gsa_stats['go']) / len(gsa_stats['go'])
+                k_avg = sum(gsa_stats["k"]) / len(gsa_stats["k"])
+                var_avg = sum(gsa_stats["var"]) / len(gsa_stats["var"])
+                gv_avg = sum(gsa_stats["gv"]) / len(gsa_stats["gv"])
+                go_avg = sum(gsa_stats["go"]) / len(gsa_stats["go"])
                 logger.info(
                     f"[GSA] step {step} | k: {k_avg:.1f} | var: {var_avg:.4f} | "
                     f"gate_v: {gv_avg:.2f} | gate_o: {go_avg:.2f}"
@@ -473,19 +550,27 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
         # Log null expert usage
         if step % 10 == 0:
             first_layer = model.layers[0]
-            if hasattr(first_layer, 'mlp_block') and hasattr(first_layer.mlp_block.sublayer, 'moe'):
+            if hasattr(first_layer, "mlp_block") and hasattr(
+                first_layer.mlp_block.sublayer, "moe"
+            ):
                 moe = first_layer.mlp_block.sublayer.moe
-                if moe.last_indices is not None and hasattr(moe.gate, 'num_experts'):
+                if moe.last_indices is not None and hasattr(moe.gate, "num_experts"):
                     indices_flat = moe.last_indices.view(-1)
                     total_slots = moe.gate.total_slots
                     counts = torch.bincount(indices_flat, minlength=total_slots).float()
                     total_assignments = counts.sum()
 
-                    null_assignments = counts[moe.gate.num_experts:].sum()
-                    null_pct = (null_assignments / total_assignments * 100).item() if total_assignments > 0 else 0.0
+                    null_assignments = counts[moe.gate.num_experts :].sum()
+                    null_pct = (
+                        (null_assignments / total_assignments * 100).item()
+                        if total_assignments > 0
+                        else 0.0
+                    )
 
-                    logger.info(f"[NULL EXPERTS] step {step} | null usage: {null_pct:.1f}% | "
-                              f"target: {(1-moe.gate.data_sparsity)*100:.0f}%")
+                    logger.info(
+                        f"[NULL EXPERTS] step {step} | null usage: {null_pct:.1f}% | "
+                        f"target: {(1-moe.gate.data_sparsity)*100:.0f}%"
+                    )
 
         # Memory cleanup
         if config.training.mem_every > 0 and (step % config.training.mem_every == 0):
@@ -498,9 +583,20 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                     pass
 
         # Generation
-        if config.training.gen_every > 0 and step >= config.training.gen_warmup_steps and (step % config.training.gen_every == 0):
-            run_generation(model, prompt_sampler.tokenizer, prompt_sampler,
-                         device, step, config, logger)
+        if (
+            config.training.gen_every > 0
+            and step >= config.training.gen_warmup_steps
+            and (step % config.training.gen_every == 0)
+        ):
+            run_generation(
+                model,
+                prompt_sampler.tokenizer,
+                prompt_sampler,
+                device,
+                step,
+                config,
+                logger,
+            )
 
         # Periodic garbage collection
         if config.training.gc_every > 0 and (step % config.training.gc_every == 0):
@@ -514,13 +610,24 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                 torch.cuda.empty_cache()
 
         # Checkpoint
-        if config.training.ckpt_every > 0 and (step % config.training.ckpt_every == 0) and step > 0:
+        if (
+            config.training.ckpt_every > 0
+            and (step % config.training.ckpt_every == 0)
+            and step > 0
+        ):
             if is_multitoken:
                 ckpt_loss = step_ntp_loss + 0.3 * step_mtp_loss + step_aux_loss
             else:
                 ckpt_loss = step_task_loss + step_aux_loss
-            save_checkpoint(model, optimizer, None, step, ckpt_loss,
-                          config.model.embedding_type, config.training.save_dir)
+            save_checkpoint(
+                model,
+                optimizer,
+                None,
+                step,
+                ckpt_loss,
+                config.model.embedding_type,
+                config.training.save_dir,
+            )
             logger.info(f"[CKPT] saved checkpoint at step {step}")
 
         step += 1
@@ -531,16 +638,33 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
 
             if pause_handler.should_save or pause_handler.check_pause_flag():
                 if is_multitoken:
-                    pause_loss = (step_ntp_loss + 0.3 * step_mtp_loss + step_aux_loss) if 'step_ntp_loss' in locals() else 0.0
+                    pause_loss = (
+                        (step_ntp_loss + 0.3 * step_mtp_loss + step_aux_loss)
+                        if "step_ntp_loss" in locals()
+                        else 0.0
+                    )
                 else:
-                    pause_loss = (step_task_loss + step_aux_loss) if 'step_task_loss' in locals() else 0.0
-                save_checkpoint(model, optimizer, None, step, pause_loss,
-                              config.model.embedding_type, config.training.save_dir)
+                    pause_loss = (
+                        (step_task_loss + step_aux_loss)
+                        if "step_task_loss" in locals()
+                        else 0.0
+                    )
+                save_checkpoint(
+                    model,
+                    optimizer,
+                    None,
+                    step,
+                    pause_loss,
+                    config.model.embedding_type,
+                    config.training.save_dir,
+                )
                 logger.info(f"[PAUSE] Checkpoint saved at step {step}")
                 pause_handler.should_save = False
 
             logger.info(f"[PAUSE] Training paused at step {step}.")
-            logger.info("[PAUSE] To resume: remove 'checkpoints/.pause' file or restart training")
+            logger.info(
+                "[PAUSE] To resume: remove 'checkpoints/.pause' file or restart training"
+            )
             logger.info("[PAUSE] To exit: Press Ctrl+C again")
 
             pause_handler.in_pause_wait = True
@@ -548,7 +672,10 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
             try:
                 while pause_handler.should_pause():
                     time.sleep(1.0)
-                    if not pause_handler.check_pause_flag() and not pause_handler.paused:
+                    if (
+                        not pause_handler.check_pause_flag()
+                        and not pause_handler.paused
+                    ):
                         break
             except KeyboardInterrupt:
                 logger.info(f"[EXIT] Exiting at step {step}")
@@ -560,11 +687,24 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
 
     # Final checkpoint
     if is_multitoken:
-        final_loss = (step_ntp_loss + 0.3 * step_mtp_loss + step_aux_loss) if 'step_ntp_loss' in locals() else 0.0
+        final_loss = (
+            (step_ntp_loss + 0.3 * step_mtp_loss + step_aux_loss)
+            if "step_ntp_loss" in locals()
+            else 0.0
+        )
     else:
-        final_loss = (step_task_loss + step_aux_loss) if 'step_task_loss' in locals() else 0.0
-    save_checkpoint(model, optimizer, None, step, final_loss,
-                   config.model.embedding_type, config.training.save_dir)
+        final_loss = (
+            (step_task_loss + step_aux_loss) if "step_task_loss" in locals() else 0.0
+        )
+    save_checkpoint(
+        model,
+        optimizer,
+        None,
+        step,
+        final_loss,
+        config.model.embedding_type,
+        config.training.save_dir,
+    )
     logger.info("[DONE] Training complete")
     print("🏁 Training completed!")
 
@@ -597,7 +737,9 @@ def main():
 
     # Setup training
     device_type = config.auto_detect_device()
-    device, optimizer, lr_scheduler, scaler = setup_training(model, device_type=device_type)
+    device, optimizer, lr_scheduler, scaler = setup_training(
+        model, device_type=device_type
+    )
 
     # Set runtime optimizations
     set_runtime_optimizations(device)
@@ -608,15 +750,22 @@ def main():
     # Try to resume from checkpoint
     print("🔍 Checking for existing checkpoint...")
     start_step, start_loss = load_checkpoint(
-        model, optimizer, lr_scheduler, config.model.embedding_type,
+        model,
+        optimizer,
+        lr_scheduler,
+        config.model.embedding_type,
         save_dir=config.training.save_dir,
-        checkpoint_path=config.checkpoint_path
+        checkpoint_path=config.checkpoint_path,
     )
 
     if start_step > 0:
-        logger.info(f"[RESUME] Resuming from step {start_step} (loss: {start_loss:.4f})")
+        logger.info(
+            f"[RESUME] Resuming from step {start_step} (loss: {start_loss:.4f})"
+        )
         if config.checkpoint_path:
-            logger.info(f"[RESUME] Loaded from specified checkpoint: {config.checkpoint_path}")
+            logger.info(
+                f"[RESUME] Loaded from specified checkpoint: {config.checkpoint_path}"
+            )
     else:
         logger.info("[START] Starting fresh training")
 
@@ -635,7 +784,7 @@ def main():
         include_answer=config.data.include_answer,
         combine_separator=config.data.combine_separator,
         filter_language=config.data.filter_language,
-        start_step=start_step
+        start_step=start_step,
     )
 
     train_loader = DataLoader(
@@ -650,7 +799,7 @@ def main():
     prompt_sampler = SYNTHPromptSampler(
         dataset_name=config.data.dataset_name,
         tokenizer=tokenizer,
-        seed=config.data.seed
+        seed=config.data.seed,
     )
 
     # Training setup
@@ -659,12 +808,22 @@ def main():
     # Pause handler
     pause_handler = PauseHandler(pause_flag_path=f"{config.training.save_dir}/.pause")
     pause_handler.clear_pause_flag()
-    logger.info("[PAUSE] Pause/resume enabled. Press Ctrl+C or create '.pause' file to pause.")
+    logger.info(
+        "[PAUSE] Pause/resume enabled. Press Ctrl+C or create '.pause' file to pause."
+    )
 
     # Run training loop
     training_loop(
-        model, train_loader, prompt_sampler, device, optimizer,
-        criterion, config, start_step, pause_handler, logger
+        model,
+        train_loader,
+        prompt_sampler,
+        device,
+        optimizer,
+        criterion,
+        config,
+        start_step,
+        pause_handler,
+        logger,
     )
 
 

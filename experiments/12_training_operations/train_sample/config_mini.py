@@ -14,6 +14,7 @@ Usage:
     model = Model70B(config, embedding_type="standard")
 """
 
+
 def apply_mini_config(config):
     """
     Mutate a ModelConfig in-place to create a miniaturized version
@@ -32,21 +33,21 @@ def apply_mini_config(config):
     config.num_gsa_layers = 3
 
     # DeltaNet
-    config.delta_v_heads = 8       # hidden_size / delta_head_dim = 512 / 64
+    config.delta_v_heads = 8  # hidden_size / delta_head_dim = 512 / 64
     config.delta_head_dim = 64
     config.delta_gate_dim = 64
 
     # GSA
-    config.gsa_num_heads = 8       # hidden_size / gsa_head_dim = 512 / 64
+    config.gsa_num_heads = 8  # hidden_size / gsa_head_dim = 512 / 64
     config.gsa_head_dim = 64
     config.gsa_k_base = 64
     config.gsa_k_min = 8
     config.gsa_k_max = 128
-    config.gsa_indexer_heads = 4   # must divide gsa_num_heads
+    config.gsa_indexer_heads = 4  # must divide gsa_num_heads
 
     # MoE — small but still exercises routing, null experts, aux loss
     config.num_real_experts = 8
-    config.num_null_experts = 8    # rho=0.5 preserved
+    config.num_null_experts = 8  # rho=0.5 preserved
     config.total_expert_slots = 16
     config.top_k = 2
     config.expert_intermediate_size = 768

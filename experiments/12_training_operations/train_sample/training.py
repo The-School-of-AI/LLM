@@ -7,17 +7,18 @@ Includes:
 - Learning rate schedules
 """
 
-import os
-import math
 import glob
+import math
+import os
 import time
-import torch
 from typing import Tuple
 
+import torch
 
 # ============================================================================
 # TRAINING SETUP
 # ============================================================================
+
 
 def setup_training(model, device_type="mps"):
     """
@@ -31,7 +32,11 @@ def setup_training(model, device_type="mps"):
         Tuple of (device, optimizer, lr_scheduler, scaler)
     """
     # Prioritize MPS for Mac M1
-    if device_type == "mps" and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    if (
+        device_type == "mps"
+        and hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    ):
         device = torch.device("mps")
     elif device_type == "cuda" and torch.cuda.is_available():
         device = torch.device("cuda")
@@ -60,6 +65,7 @@ def setup_training(model, device_type="mps"):
 # ============================================================================
 # LEARNING RATE SCHEDULE
 # ============================================================================
+
 
 def get_learning_rate(step: int, config) -> float:
     """
@@ -96,7 +102,9 @@ def get_learning_rate(step: int, config) -> float:
         tail_end_lr = 1.0e-6
         progress = (step - 10000) / (12000 - 10000)
         progress = min(max(progress, 0.0), 1.0)
-        return tail_end_lr + 0.5 * (tail_start_lr - tail_end_lr) * (1.0 + math.cos(math.pi * progress))
+        return tail_end_lr + 0.5 * (tail_start_lr - tail_end_lr) * (
+            1.0 + math.cos(math.pi * progress)
+        )
 
     # Final plateau
     else:
@@ -113,8 +121,19 @@ def update_learning_rate(optimizer, lr: float):
 # CHECKPOINTING
 # ============================================================================
 
-def save_checkpoint(model, optimizer, lr_scheduler, step, loss, embedding_type,
-                   save_dir="checkpoints", ops=None, s3_key=None, tag="temporary"):
+
+def save_checkpoint(
+    model,
+    optimizer,
+    lr_scheduler,
+    step,
+    loss,
+    embedding_type,
+    save_dir="checkpoints",
+    ops=None,
+    s3_key=None,
+    tag="temporary",
+):
     """
     Save model checkpoint with embedding_type prefix.
 
@@ -134,23 +153,25 @@ def save_checkpoint(model, optimizer, lr_scheduler, step, loss, embedding_type,
     os.makedirs(save_dir, exist_ok=True)
 
     checkpoint = {
-        'step': step,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'scheduler_state_dict': lr_scheduler.state_dict() if lr_scheduler is not None else None,
-        'loss': loss,
-        'embedding_type': embedding_type,
+        "step": step,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": (
+            lr_scheduler.state_dict() if lr_scheduler is not None else None
+        ),
+        "loss": loss,
+        "embedding_type": embedding_type,
     }
 
     # Save with embedding_type prefix and step number
-    path = os.path.join(save_dir, f'{embedding_type}_checkpoint_step_{step:07d}.pt')
+    path = os.path.join(save_dir, f"{embedding_type}_checkpoint_step_{step:07d}.pt")
     t0 = time.time()
     torch.save(checkpoint, path)
     duration_s = time.time() - t0
     size_bytes = os.path.getsize(path)
 
     # Also save as latest for easy resuming
-    latest_path = os.path.join(save_dir, f'{embedding_type}_latest.pt')
+    latest_path = os.path.join(save_dir, f"{embedding_type}_latest.pt")
     torch.save(checkpoint, latest_path)
 
     print(f"💾 Checkpoint saved: {path}")
@@ -169,8 +190,14 @@ def save_checkpoint(model, optimizer, lr_scheduler, step, loss, embedding_type,
         )
 
 
-def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
-                   save_dir="checkpoints", checkpoint_path=None) -> Tuple[int, float]:
+def load_checkpoint(
+    model,
+    optimizer,
+    lr_scheduler,
+    embedding_type,
+    save_dir="checkpoints",
+    checkpoint_path=None,
+) -> Tuple[int, float]:
     """
     Load checkpoint from a specific path or find the latest checkpoint.
 
@@ -193,11 +220,11 @@ def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
         latest_path = checkpoint_path
     else:
         # Auto-discover latest checkpoint
-        latest_path = os.path.join(save_dir, f'{embedding_type}_latest.pt')
+        latest_path = os.path.join(save_dir, f"{embedding_type}_latest.pt")
 
         if not os.path.exists(latest_path):
             # Try to find the highest step checkpoint
-            pattern = os.path.join(save_dir, f'{embedding_type}_checkpoint_step_*.pt')
+            pattern = os.path.join(save_dir, f"{embedding_type}_checkpoint_step_*.pt")
             checkpoints = glob.glob(pattern)
             if not checkpoints:
                 return 0, 0.0
@@ -206,7 +233,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
             def get_step(path):
                 basename = os.path.basename(path)
                 try:
-                    step_str = basename.split('_step_')[1].split('.pt')[0]
+                    step_str = basename.split("_step_")[1].split(".pt")[0]
                     return int(step_str)
                 except Exception:
                     return 0
@@ -215,11 +242,11 @@ def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
             latest_path = checkpoints[0]
 
     try:
-        checkpoint = torch.load(latest_path, map_location='cpu')
+        checkpoint = torch.load(latest_path, map_location="cpu")
 
         # Load model state (with strict=False to handle architecture changes)
         missing_keys, unexpected_keys = model.load_state_dict(
-            checkpoint['model_state_dict'], strict=False
+            checkpoint["model_state_dict"], strict=False
         )
         if missing_keys:
             print(f"[RESUME] Warning: Missing keys: {missing_keys[:5]}...")
@@ -227,16 +254,16 @@ def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
             print(f"[RESUME] Warning: Unexpected keys: {unexpected_keys[:5]}...")
 
         # Load optimizer state
-        if optimizer is not None and 'optimizer_state_dict' in checkpoint:
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if optimizer is not None and "optimizer_state_dict" in checkpoint:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
         # Load scheduler state (if exists and not None)
-        if lr_scheduler is not None and 'scheduler_state_dict' in checkpoint:
-            if checkpoint['scheduler_state_dict'] is not None:
-                lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if lr_scheduler is not None and "scheduler_state_dict" in checkpoint:
+            if checkpoint["scheduler_state_dict"] is not None:
+                lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-        step = checkpoint.get('step', 0)
-        loss = checkpoint.get('loss', 0.0)
+        step = checkpoint.get("step", 0)
+        loss = checkpoint.get("loss", 0.0)
 
         print(f"✅ Loaded checkpoint from {latest_path} at step {step}")
         return step, loss
@@ -244,6 +271,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
     except Exception as e:
         print(f"❌ Failed to load checkpoint: {e}")
         import traceback
+
         traceback.print_exc()
         return 0, 0.0
 
@@ -251,6 +279,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
 # ============================================================================
 # TOKENIZER SETUP
 # ============================================================================
+
 
 def setup_tokenizer(tokenizer, target_vocab_size=50272, cache_dir="checkpoints_70b"):
     """

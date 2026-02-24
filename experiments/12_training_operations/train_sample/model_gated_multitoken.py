@@ -14,20 +14,20 @@ including:
 Based on model_gated.py with Multi-Token Prediction from fourier_proper_mhc_multiToken.py
 """
 
+import math
+from typing import List
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.functional import scaled_dot_product_attention
-import math
-import numpy as np
-from typing import List
-
 from fourier_se_decoder import PFCodec
-
+from torch.nn.functional import scaled_dot_product_attention
 
 # ============================================================================
 # Embedding Layer
 # ============================================================================
+
 
 class PureHybridEmbeddingTorch(nn.Module):
     """
@@ -37,9 +37,10 @@ class PureHybridEmbeddingTorch(nn.Module):
     - Returns normalized PFn directly.
     - NO Semantic Enrichment (SE), NO lambda_se.
     """
+
     def __init__(self, vocab_words: List[str], pf_codec: PFCodec):
         super().__init__()
-        PF_table = pf_codec.encode_batch(vocab_words)   # (V, D_pf)
+        PF_table = pf_codec.encode_batch(vocab_words)  # (V, D_pf)
         PF_np = PF_table.astype(np.float32)  # (V, D_pf)
 
         # Register as buffer (not a parameter)
@@ -66,12 +67,14 @@ class PureHybridEmbeddingTorch(nn.Module):
 # Core Transformer Components
 # ============================================================================
 
+
 class RMSNorm(nn.Module):
     """
     Root Mean Square Layer Normalization
     (used by LLaMA, DeepSeek, etc.)
     Matching deepscreen implementation with rsqrt for efficiency.
     """
+
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.eps = eps
@@ -83,13 +86,17 @@ class RMSNorm(nn.Module):
         x = x * torch.rsqrt(norm + self.eps)
         return self.weight * x
 
+
 class RotaryEmbedding(nn.Module):
     """
     LLaMA-style Rotary Positional Embedding
     Applied to Q/K only.
     Matching deepscreen implementation with caching for efficiency.
     """
-    def __init__(self, dim: int, max_position_embeddings: int = 8192, base: int = 10000):
+
+    def __init__(
+        self, dim: int, max_position_embeddings: int = 8192, base: int = 10000
+    ):
         super().__init__()
         self.dim = dim
         self.base = base
@@ -111,9 +118,11 @@ class RotaryEmbedding(nn.Module):
     def _apply_rotary(x, cos, sin):
         x1, x2 = x[..., ::2], x[..., 1::2]
         return torch.cat(
-            (x1 * cos[..., ::2] - x2 * sin[..., ::2],
-             x1 * sin[..., ::2] + x2 * cos[..., ::2]),
-            dim=-1
+            (
+                x1 * cos[..., ::2] - x2 * sin[..., ::2],
+                x1 * sin[..., ::2] + x2 * cos[..., ::2],
+            ),
+            dim=-1,
         )
 
 
@@ -128,8 +137,18 @@ class GatedSparseAttention(nn.Module):
 
     Replaces MultiheadLatentAttention.
     """
-    def __init__(self, hidden_size, num_heads, max_seq_len=512, rope_base=10000,
-                 k_base=256, k_min=16, k_max=512, indexer_heads=4):
+
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        max_seq_len=512,
+        rope_base=10000,
+        k_base=256,
+        k_min=16,
+        k_max=512,
+        indexer_heads=4,
+    ):
         # NOTE: Reduced k_base/max defaults for seq_len=512 context (vs paper's long context defaults)
         super().__init__()
         self.hidden_size = hidden_size
@@ -144,7 +163,7 @@ class GatedSparseAttention(nn.Module):
         self.indexer_heads = indexer_heads
 
         # --- 1. Lightning Indexer Components ---
-        self.d_idx = 32 # Dimension for indexer projections (lightweight)
+        self.d_idx = 32  # Dimension for indexer projections (lightweight)
 
         # Query projection: h_t -> q^I (B, T, H^I * D_idx)
         self.W_Iq = nn.Linear(hidden_size, indexer_heads * self.d_idx, bias=False)
@@ -172,13 +191,25 @@ class GatedSparseAttention(nn.Module):
         self.W_go = nn.Linear(hidden_size, hidden_size, bias=False)
 
         # Rotary Embeddings
-        self.rotary_emb = RotaryEmbedding(self.head_dim, max_position_embeddings=max_seq_len, base=rope_base)
+        self.rotary_emb = RotaryEmbedding(
+            self.head_dim, max_position_embeddings=max_seq_len, base=rope_base
+        )
 
         self._init_weights()
 
     def _init_weights(self):
         # Initialize projections with std=0.02
-        for m in [self.W_Iq, self.W_Ik, self.W_Iw, self.W_q, self.W_k, self.W_v, self.o_proj, self.W_gv, self.W_go]:
+        for m in [
+            self.W_Iq,
+            self.W_Ik,
+            self.W_Iw,
+            self.W_q,
+            self.W_k,
+            self.W_v,
+            self.o_proj,
+            self.W_gv,
+            self.W_go,
+        ]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
         # Gate bias: 0.0 is safe (sigmoid(0)=0.5). Paper implies "learnable thresholds".
@@ -212,7 +243,7 @@ class GatedSparseAttention(nn.Module):
 
         # Importance Score I_{t,s}
         w_exp = w.permute(0, 2, 1).unsqueeze(-1)
-        importance_score = (w_exp * match_gate).sum(dim=1) # (B, T, T)
+        importance_score = (w_exp * match_gate).sum(dim=1)  # (B, T, T)
 
         # Causal Masking
         # For variance calc, we set future to 0.0 (as in original paper/code)
@@ -220,10 +251,12 @@ class GatedSparseAttention(nn.Module):
         if T > 1:
             causal_mask = torch.tril(torch.ones(T, T, device=device)).bool()
             # Mask future with 0 for now
-            importance_score_masked = importance_score.masked_fill(~causal_mask.unsqueeze(0), 0.0)
+            importance_score_masked = importance_score.masked_fill(
+                ~causal_mask.unsqueeze(0), 0.0
+            )
         else:
             importance_score_masked = importance_score
-            causal_mask = None # Handle T=1 case
+            causal_mask = None  # Handle T=1 case
 
         # ========================================================================
         # 2. Adaptive Sparsity (Budget k_t)
@@ -236,24 +269,30 @@ class GatedSparseAttention(nn.Module):
         # 1. Update EMA only during true forward (no_grad)
         # 2. Cache k_t and top_indices during true forward
         # 3. Reuse cached values during reconstruction (enable_grad) to ensure identical mask
-        
+
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
         # We check for cached selection to identify reconstruction pass
-        is_reversible_reconstruct = self.training and torch.is_grad_enabled() and getattr(self, "_saved_selection", None) is not None
+        is_reversible_reconstruct = (
+            self.training
+            and torch.is_grad_enabled()
+            and getattr(self, "_saved_selection", None) is not None
+        )
 
         if is_reversible_forward:
             # DEBUG LOGGING START
-            should_log = (torch.rand(1).item() < 0.01) # 1% chance
-            
+            should_log = torch.rand(1).item() < 0.01  # 1% chance
+
             var_t_mean = var_t.mean().detach()
             old_ema = self.variance_ema.item()
-            
+
             # GATED UPDATE: Only update in no-grad forward
             # In-Place update to ensure persistence
             self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)
-            
+
             if should_log:
-                print(f"[GSA DEBUG] ID: {id(self)} | BufID: {id(self.variance_ema)} | var_t: {var_t_mean:.4f} | EMA: {old_ema:.4f} -> {self.variance_ema.item():.4f}")
+                print(
+                    f"[GSA DEBUG] ID: {id(self)} | BufID: {id(self.variance_ema)} | var_t: {var_t_mean:.4f} | EMA: {old_ema:.4f} -> {self.variance_ema.item():.4f}"
+                )
             # DEBUG LOGGING END
 
         # Calculate or Restore k_t and top_indices
@@ -262,22 +301,26 @@ class GatedSparseAttention(nn.Module):
             k_t, top_indices = self._saved_selection
             # Clear cache to keep state clean (though we overwrite it next forward anyway)
             self._saved_selection = None
-            avg_V = self.variance_ema.clamp(min=1e-6) # Just for stats if needed
+            avg_V = self.variance_ema.clamp(min=1e-6)  # Just for stats if needed
         else:
             # COMPUTE (Forward Phase or Standard Training)
             avg_V = self.variance_ema.clamp(min=1e-6)
             k_t_float = self.k_base * var_t / avg_V
-            k_t = k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long() # (B, T)
-            
+            k_t = (
+                k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long()
+            )  # (B, T)
+
             # --- Sparse Selection (Top-K Masking) ---
-            
+
             # Prepare scores: Mask future with very negative number (not -inf for safety)
             # Safe low value for selection (softmax/topk invariant shift doesn't apply here, but order matters)
             # Actually for topk -inf is fine, but we avoid in-place
-            
+
             if T > 1:
                 # Out-of-place mask filling
-                importance_for_selection = importance_score.masked_fill(~causal_mask.unsqueeze(0), -float('inf'))
+                importance_for_selection = importance_score.masked_fill(
+                    ~causal_mask.unsqueeze(0), -float("inf")
+                )
             else:
                 importance_for_selection = importance_score
 
@@ -289,7 +332,9 @@ class GatedSparseAttention(nn.Module):
                 sink_mask = torch.zeros_like(importance_for_selection, dtype=torch.bool)
                 sink_mask[:, :, :sink_size] = True
                 # Set sink positions to infinity out-of-place
-                importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
+                importance_for_selection = importance_for_selection.masked_fill(
+                    sink_mask, float("inf")
+                )
 
             # Determine limit
             k_max_needed = k_t.max().item()
@@ -307,13 +352,15 @@ class GatedSparseAttention(nn.Module):
         # ========================================================================
         # 3. Construct Boolean Mask (Reused logic)
         # ========================================================================
-        
+
         # We need to rebuild the mask from k_t and top_indices (whether cached or fresh)
-        k_limit = top_indices.size(-1) 
-        
+        k_limit = top_indices.size(-1)
+
         # Mask for top_indices dimension: keep index j if j < k_t
-        range_k = torch.arange(k_limit, device=device).unsqueeze(0).unsqueeze(0) # (1, 1, k_limit)
-        keep_in_topk = range_k < k_t.unsqueeze(-1) # (B, T, k_limit)
+        range_k = (
+            torch.arange(k_limit, device=device).unsqueeze(0).unsqueeze(0)
+        )  # (1, 1, k_limit)
+        keep_in_topk = range_k < k_t.unsqueeze(-1)  # (B, T, k_limit)
 
         # Scatter this into the full (B, T, T) mask
         # Initialize with False
@@ -362,23 +409,25 @@ class GatedSparseAttention(nn.Module):
         # selection_mask is boolean (B, T, T) where True=Keep
         # Construct additive mask: 0 for keep, MIN_VAL for drop
         # Use safe minimum for MPS/float16
-        min_val = torch.finfo(q.dtype).min 
-        
+        min_val = torch.finfo(q.dtype).min
+
         # Out-of-place mask creation
         bias_mask = torch.zeros_like(selection_mask, dtype=q.dtype)
         bias_mask = bias_mask.masked_fill(~selection_mask, min_val)
 
         # Apply external attention_mask if provided (assumed additive)
         if attention_mask is not None:
-             bias_mask = bias_mask + attention_mask
+            bias_mask = bias_mask + attention_mask
 
         # F.scaled_dot_product_attention handles the fusion
         # q, k, v are (B, H, T, D) -> Output (B, H, T, D)
         o_sparse = F.scaled_dot_product_attention(
-            q, k, v,
-            attn_mask=bias_mask.unsqueeze(1), # Broadcast over heads
+            q,
+            k,
+            v,
+            attn_mask=bias_mask.unsqueeze(1),  # Broadcast over heads
             dropout_p=0.0,
-            is_causal=False # Causal masking is already baked into selection_mask
+            is_causal=False,  # Causal masking is already baked into selection_mask
         )
 
         o_sparse = o_sparse.transpose(1, 2).contiguous().view(B, T, self.hidden_size)
@@ -393,7 +442,7 @@ class GatedSparseAttention(nn.Module):
                 "gsa/k_avg": avg_k,
                 "gsa/var_score": avg_V,
                 "gsa/gate_v": avg_gv,
-                "gsa/gate_o": avg_go
+                "gsa/gate_o": avg_go,
             }
 
         return self.o_proj(o_sparse * g_o)
@@ -404,8 +453,16 @@ class GatedSparseAttention(nn.Module):
 # ============================================================================
 # Kept for reference only - not used in model_gated.py
 
+
 class MultiheadLatentAttention(nn.Module):
-    def __init__(self, hidden_size, num_heads, compression_ratio=8, max_seq_len=512, rope_base=10000):
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        compression_ratio=8,
+        max_seq_len=512,
+        rope_base=10000,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -421,15 +478,23 @@ class MultiheadLatentAttention(nn.Module):
         self.W_UQ = nn.Linear(self.latent_dim, hidden_size // 2, bias=False)
         self.W_QR = nn.Linear(self.latent_dim, hidden_size // 2, bias=False)
         self.o_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.rotary_emb = RotaryEmbedding(self.head_dim // 2, max_position_embeddings=max_seq_len, base=rope_base)
+        self.rotary_emb = RotaryEmbedding(
+            self.head_dim // 2, max_position_embeddings=max_seq_len, base=rope_base
+        )
 
         # DeepScreen initialization (std=0.02)
         self._init_weights()
 
     def _init_weights(self):
         for m in [
-            self.W_DKV, self.W_DQ, self.W_UK, self.W_UV, self.W_UQ,
-            self.W_KR, self.W_QR, self.o_proj
+            self.W_DKV,
+            self.W_DQ,
+            self.W_UK,
+            self.W_UV,
+            self.W_UQ,
+            self.W_KR,
+            self.W_QR,
+            self.o_proj,
         ]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
@@ -455,7 +520,9 @@ class MultiheadLatentAttention(nn.Module):
         if seq_len > self.rotary_emb.cos_cached.size(0):
             self.rotary_emb._set_cos_sin_cache(seq_len)
 
-        cos = self.rotary_emb.cos_cached[:seq_len].unsqueeze(0).unsqueeze(2)  # (1, T, 1, H/2)
+        cos = (
+            self.rotary_emb.cos_cached[:seq_len].unsqueeze(0).unsqueeze(2)
+        )  # (1, T, 1, H/2)
         sin = self.rotary_emb.sin_cached[:seq_len].unsqueeze(0).unsqueeze(2)
         q_r = self.rotary_emb._apply_rotary(q_r, cos, sin)
         k_r = self.rotary_emb._apply_rotary(k_r, cos, sin)
@@ -469,13 +536,14 @@ class MultiheadLatentAttention(nn.Module):
         v = v.transpose(1, 2)
 
         attn_output = scaled_dot_product_attention(
-            q, k, v,
-            attn_mask=attention_mask,
-            dropout_p=0.0,
-            is_causal=True
+            q, k, v, attn_mask=attention_mask, dropout_p=0.0, is_causal=True
         )
 
-        attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, self.hidden_size)
+        attn_output = (
+            attn_output.transpose(1, 2)
+            .contiguous()
+            .view(batch_size, seq_len, self.hidden_size)
+        )
         return self.o_proj(attn_output)
 
 
@@ -484,9 +552,13 @@ class MultiheadLatentAttention(nn.Module):
 # ============================================================================
 # This matches deepscreen/model/moe_ffn.py exactly for identical gradient flow
 
+
 class MoEGate(nn.Module):
     """Router gate for MoE with null experts for data sparsity."""
-    def __init__(self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5):
+
+    def __init__(
+        self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5
+    ):
         super().__init__()
         self.num_experts = num_experts  # N real experts
         self.top_k = top_k
@@ -522,7 +594,9 @@ class MoEGate(nn.Module):
         real_logits = self.gate(x) + self.logit_bias
 
         # 2. Duplicate null logit M times: (B, T, M)
-        null_logits = self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        null_logits = (
+            self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        )
 
         # 3. Concatenate: (B, T, N+M)
         logits = torch.cat([real_logits, null_logits], dim=-1)
@@ -562,13 +636,14 @@ class MoEGate(nn.Module):
         # Z-Loss (Eq 7)
         # "log^2( sum(exp(logits)) )" -> (log_sum_exp(logits))^2
         lse = torch.logsumexp(logits, dim=-1)
-        L_z = (lse ** 2).mean()
+        L_z = (lse**2).mean()
 
         # Combine losses
         # Weights from paper: 2e-2 for Bal, 1e-3 for Z-Loss
         aux_loss = 2e-2 * L_bal + 1e-3 * L_z
 
         return topk_idx, topk_weight, is_null, aux_loss
+
 
 class MoEFFN(nn.Module):
     """
@@ -580,8 +655,16 @@ class MoEFFN(nn.Module):
     - Null experts: zero-compute slots that skip processing entirely
     - Identical gradient flow and numerical characteristics as Deepscreen
     """
-    def __init__(self, d_model: int, d_hidden: int, num_experts: int = 8, top_k: int = 2,
-                 dropout: float = 0.0, data_sparsity: float = 0.5):
+
+    def __init__(
+        self,
+        d_model: int,
+        d_hidden: int,
+        num_experts: int = 8,
+        top_k: int = 2,
+        dropout: float = 0.0,
+        data_sparsity: float = 0.5,
+    ):
         super().__init__()
         self.d_model = d_model
         self.d_hidden = d_hidden
@@ -673,7 +756,9 @@ class MoEFFN(nn.Module):
         # 6. Scatter back (only real expert outputs, null contributes 0)
         weighted_out = sorted_out * sorted_weights.unsqueeze(-1)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
-        routed_out.scatter_add_(0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out)
+        routed_out.scatter_add_(
+            0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out
+        )
 
         y = shared_out + routed_out.view(B, T, D)
         return y, aux_loss
@@ -681,10 +766,19 @@ class MoEFFN(nn.Module):
     # Removed update_balancing_model_a (Loss-Free Balancing) as it violates the Paper's approach.
     # The paper mandates using L_bal and L_z auxiliary losses instead.
 
+
 class LlamaMLP(nn.Module):
     """MLP wrapper using MoEFFN with null experts for data sparsity."""
-    def __init__(self, hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
-                 data_sparsity=0.5):
+
+    def __init__(
+        self,
+        hidden_size,
+        intermediate_size,
+        num_experts,
+        num_shared_experts,
+        top_k,
+        data_sparsity=0.5,
+    ):
         super().__init__()
         # Note: num_shared_experts is always 1 in Deepscreen, handled internally by MoEFFN
         self.moe = MoEFFN(
@@ -693,7 +787,7 @@ class LlamaMLP(nn.Module):
             num_experts=num_experts,
             top_k=top_k,
             dropout=0.0,
-            data_sparsity=data_sparsity
+            data_sparsity=data_sparsity,
         )
 
     def forward(self, x):
@@ -704,8 +798,11 @@ class LlamaMLP(nn.Module):
 # mHC (Multi-Head Composition) Implementation
 # ============================================================================
 
+
 @torch.jit.script
-def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6) -> torch.Tensor:
+def sinkhorn_knopp(
+    logits: torch.Tensor, iters: int = 20, eps: float = 1e-6
+) -> torch.Tensor:
     """
     logits: (..., n, n)
     returns: doubly-stochastic matrix (..., n, n)
@@ -723,11 +820,13 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6) -> 
         M = M / (M.sum(dim=-2, keepdim=True).clamp_min(eps))
     return M
 
+
 class MHCCoeffs(nn.Module):
     """
     Produces H_pre, H_post, H_res from the n-stream residual state.
     Uses per-token dynamic mappings + static biases + small gated scaling (alpha_*).
     """
+
     def __init__(self, d_model: int, n_streams: int = 4, iters: int = 20):
         super().__init__()
         self.d_model = d_model
@@ -737,22 +836,22 @@ class MHCCoeffs(nn.Module):
         d_in = self.n * d_model
 
         # Dynamic projections (phi_* in paper)
-        self.phi_pre  = nn.Linear(d_in, self.n, bias=False)
+        self.phi_pre = nn.Linear(d_in, self.n, bias=False)
         self.phi_post = nn.Linear(d_in, self.n, bias=False)
-        self.phi_res  = nn.Linear(d_in, self.n * self.n, bias=False)
+        self.phi_res = nn.Linear(d_in, self.n * self.n, bias=False)
 
         # Static biases (b_* in paper) (Initialized to 0)
-        self.b_pre  = nn.Parameter(torch.zeros(self.n))
+        self.b_pre = nn.Parameter(torch.zeros(self.n))
         self.b_post = nn.Parameter(torch.zeros(self.n))
-        self.b_res  = nn.Parameter(torch.zeros(self.n, self.n))
+        self.b_res = nn.Parameter(torch.zeros(self.n, self.n))
 
         # Small gated scaling (alpha_* in paper; initialize small/zero)
         # Starting at 0.0 allows the model to start like the baseline (if biases allow passage)
         # but here the "baseline" is multi-stream, so 0.0 means purely bias-driven routing initially.
         # 0.1 This provides the "spark" needed for gradient flow through the routing layers. REQUIRED for mHC
-        self.alpha_pre  = nn.Parameter(torch.tensor(0.1))
+        self.alpha_pre = nn.Parameter(torch.tensor(0.1))
         self.alpha_post = nn.Parameter(torch.tensor(0.1))
-        self.alpha_res  = nn.Parameter(torch.tensor(0.1))
+        self.alpha_res = nn.Parameter(torch.tensor(0.1))
 
         # RMSNorm over flattened n*C vector
         self.rms = RMSNorm(d_in)
@@ -775,29 +874,38 @@ class MHCCoeffs(nn.Module):
         x_flat = x_stream.reshape(B, T, n * D)
         x_flat = self.rms(x_flat)
 
-        pre_logits  = self.alpha_pre  * self.phi_pre(x_flat)  + self.b_pre
+        pre_logits = self.alpha_pre * self.phi_pre(x_flat) + self.b_pre
         post_logits = self.alpha_post * self.phi_post(x_flat) + self.b_post
 
-        res_logits  = self.alpha_res  * self.phi_res(x_flat)  # (B,T,n*n)
-        res_logits  = res_logits.view(B, T, n, n) + self.b_res
+        res_logits = self.alpha_res * self.phi_res(x_flat)  # (B,T,n*n)
+        res_logits = res_logits.view(B, T, n, n) + self.b_res
 
         # Manifold constraints (paper Eq. 8)
-        H_pre  = torch.sigmoid(pre_logits)                 # nonnegative
-        H_post = 2.0 * torch.sigmoid(post_logits)          # nonnegative, helps magnitude
-        H_res  = sinkhorn_knopp(res_logits, iters=self.iters)
+        H_pre = torch.sigmoid(pre_logits)  # nonnegative
+        H_post = 2.0 * torch.sigmoid(post_logits)  # nonnegative, helps magnitude
+        H_res = sinkhorn_knopp(res_logits, iters=self.iters)
 
         return H_pre, H_post, H_res
+
 
 class MHCSublayer(nn.Module):
     """
     Wrap any sublayer F: (B,T,D)->(B,T,D) with mHC residual routing.
     """
-    def __init__(self, d_model: int, n_streams: int, sublayer: nn.Module, norm: nn.Module, iters: int = 20):
+
+    def __init__(
+        self,
+        d_model: int,
+        n_streams: int,
+        sublayer: nn.Module,
+        norm: nn.Module,
+        iters: int = 20,
+    ):
         super().__init__()
         self.d_model = d_model
         self.n = n_streams
         self.sublayer = sublayer
-        self.norm = norm # Norm applied to the aggregated input x_in
+        self.norm = norm  # Norm applied to the aggregated input x_in
         self.coeffs = MHCCoeffs(d_model=d_model, n_streams=n_streams, iters=iters)
 
     def forward(self, x_stream: torch.Tensor, attention_mask=None):
@@ -842,17 +950,39 @@ class MHCSublayer(nn.Module):
 # Decoder Layer
 # ============================================================================
 
+
 class LlamaDecoderLayer(nn.Module):
-    def __init__(self, hidden_size, num_heads, intermediate_size, compression_ratio, num_experts, num_shared_experts, top_k,
-                 n_streams=4, sinkhorn_iters=20, max_seq_len=512, rope_base=10000, data_sparsity=0.5):
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        intermediate_size,
+        compression_ratio,
+        num_experts,
+        num_shared_experts,
+        top_k,
+        n_streams=4,
+        sinkhorn_iters=20,
+        max_seq_len=512,
+        rope_base=10000,
+        data_sparsity=0.5,
+    ):
         super().__init__()
         self.n_streams = n_streams
 
         # Core sublayers
         # Gated Sparse Attention (replaces MLA)
-        attn = GatedSparseAttention(hidden_size, num_heads, max_seq_len=max_seq_len, rope_base=rope_base)
-        mlp = LlamaMLP(hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
-                       data_sparsity=data_sparsity)
+        attn = GatedSparseAttention(
+            hidden_size, num_heads, max_seq_len=max_seq_len, rope_base=rope_base
+        )
+        mlp = LlamaMLP(
+            hidden_size,
+            intermediate_size,
+            num_experts,
+            num_shared_experts,
+            top_k,
+            data_sparsity=data_sparsity,
+        )
 
         # mHC Wrappers
         self.attn_block = MHCSublayer(
@@ -917,7 +1047,9 @@ class LlamaDecoderLayer(nn.Module):
 
         total_aux = None
         if aux1 is not None or aux2 is not None:
-            total_aux = (aux1 if aux1 is not None else 0) + (aux2 if aux2 is not None else 0)
+            total_aux = (aux1 if aux1 is not None else 0) + (
+                aux2 if aux2 is not None else 0
+            )
 
         return x_stream, total_aux
 
@@ -925,6 +1057,7 @@ class LlamaDecoderLayer(nn.Module):
 # ============================================================================
 # Multi-Token Prediction (MTP) Block
 # ============================================================================
+
 
 class MTPTransformerBlock(nn.Module):
     """
@@ -940,9 +1073,21 @@ class MTPTransformerBlock(nn.Module):
     3. Processing: Passes through mHC-wrapped Attention (GSA) and MoE/MLP blocks
     4. Collapse: Collapses back to single stream for prediction
     """
-    def __init__(self, hidden_size, num_heads, intermediate_size,
-                 num_experts, num_shared_experts, top_k, max_seq_len, rope_base,
-                 n_streams=4, sinkhorn_iters=20, data_sparsity=0.5):
+
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        intermediate_size,
+        num_experts,
+        num_shared_experts,
+        top_k,
+        max_seq_len,
+        rope_base,
+        n_streams=4,
+        sinkhorn_iters=20,
+        data_sparsity=0.5,
+    ):
         super().__init__()
 
         self.n_streams = n_streams
@@ -956,7 +1101,7 @@ class MTPTransformerBlock(nn.Module):
             hidden_size=hidden_size,
             num_heads=num_heads,
             max_seq_len=max_seq_len,
-            rope_base=rope_base
+            rope_base=rope_base,
         )
 
         self.mlp = LlamaMLP(
@@ -965,7 +1110,7 @@ class MTPTransformerBlock(nn.Module):
             num_experts=num_experts,
             num_shared_experts=num_shared_experts,
             top_k=top_k,
-            data_sparsity=data_sparsity
+            data_sparsity=data_sparsity,
         )
 
         # 3. mHC Wrappers (The Upgrade!)
@@ -1016,12 +1161,18 @@ class MTPTransformerBlock(nn.Module):
 
         # 1. Fuse Inputs -> (B, T, D)
         x = torch.cat([h_t, next_emb], dim=-1)  # [B, T, 2D]
-        x = self.fusion_proj(x)                 # [B, T, D]
+        x = self.fusion_proj(x)  # [B, T, D]
 
         # 2. Expand to Streams (B, T, n, D)
         # We start with x in stream 0, zeros elsewhere (like backbone input)
-        x_stream = torch.zeros(batch_size, seq_len, self.n_streams, self.hidden_size,
-                              device=x.device, dtype=x.dtype)
+        x_stream = torch.zeros(
+            batch_size,
+            seq_len,
+            self.n_streams,
+            self.hidden_size,
+            device=x.device,
+            dtype=x.dtype,
+        )
         x_stream[:, :, 0, :] = x
 
         # 3. mHC Blocks (ignore aux_loss - matches original MTP design)
@@ -1038,15 +1189,32 @@ class MTPTransformerBlock(nn.Module):
 # Complete Model Architecture
 # ============================================================================
 
+
 class SmolLM(nn.Module):
     """
     SmolLM architecture with configurable embeddings (Fourier or standard).
     """
-    def __init__(self, vocab_size, embedding_type="fourier", bpe_vocab=None, pf_codec=None,
-                 hidden_size=576, num_hidden_layers=10, num_heads=9,
-                 intermediate_size=1536, max_seq_len=512, compression_ratio=8,
-                 num_experts=8, num_shared_experts=1, top_k=2, K=1152,
-                 n_streams=4, sinkhorn_iters=20, data_sparsity=0.5):  # Added mHC args + data_sparsity
+
+    def __init__(
+        self,
+        vocab_size,
+        embedding_type="fourier",
+        bpe_vocab=None,
+        pf_codec=None,
+        hidden_size=576,
+        num_hidden_layers=10,
+        num_heads=9,
+        intermediate_size=1536,
+        max_seq_len=512,
+        compression_ratio=8,
+        num_experts=8,
+        num_shared_experts=1,
+        top_k=2,
+        K=1152,
+        n_streams=4,
+        sinkhorn_iters=20,
+        data_sparsity=0.5,
+    ):  # Added mHC args + data_sparsity
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -1058,7 +1226,9 @@ class SmolLM(nn.Module):
 
         if self.embedding_type == "fourier":
             if bpe_vocab is None or pf_codec is None:
-                raise ValueError("bpe_vocab and pf_codec required for Fourier embeddings")
+                raise ValueError(
+                    "bpe_vocab and pf_codec required for Fourier embeddings"
+                )
             # - gate_dim=384: head_dim=32 (standard), less bottleneck than 252
             # - hidden=1536: 4× expansion ratio (standard transformer FF ratio)
             # These changes reduce information bottleneck and improve expressiveness
@@ -1091,7 +1261,9 @@ class SmolLM(nn.Module):
             # softplus(-2.25) ≈ 0.105.. 0.04 went to 0.1.. performed better than 0.01.. now trying 0.1, same as se
             # moving from -2.25 to 0.54. loss after 3000 steps is 3.82 (average loss of last 10 steps)
             # moving back to -2.25. loss after 3000 steps is 3.7852 (average loss of last 10 steps) lambda_e goes to 0.14
-            self.lambda_e_raw = nn.Parameter(torch.tensor(-1.9)) # starting at 0.14.. it liked to settle there
+            self.lambda_e_raw = nn.Parameter(
+                torch.tensor(-1.9)
+            )  # starting at 0.14.. it liked to settle there
             self.e_inj_ln = nn.LayerNorm(hidden_size)  # stabilizes injected state
             self._D_pf = D_pf  # Store for later initialization
         else:  # standard
@@ -1102,28 +1274,31 @@ class SmolLM(nn.Module):
             self.use_fourier = False
 
         # SmolLM Transformer layers
-        self.layers = nn.ModuleList([
-            LlamaDecoderLayer(
-                hidden_size=hidden_size,
-                num_heads=num_heads,
-                intermediate_size=intermediate_size,
-                compression_ratio=compression_ratio,
-                num_experts=num_experts,
-                num_shared_experts=num_shared_experts,
-                top_k=top_k,
-                max_seq_len=max_seq_len,
-                rope_base=10000,
-                n_streams=n_streams,         # Pass mHC args
-                sinkhorn_iters=sinkhorn_iters,
-                data_sparsity=data_sparsity  # Pass null expert data sparsity
-            )
-            for _ in range(num_hidden_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                LlamaDecoderLayer(
+                    hidden_size=hidden_size,
+                    num_heads=num_heads,
+                    intermediate_size=intermediate_size,
+                    compression_ratio=compression_ratio,
+                    num_experts=num_experts,
+                    num_shared_experts=num_shared_experts,
+                    top_k=top_k,
+                    max_seq_len=max_seq_len,
+                    rope_base=10000,
+                    n_streams=n_streams,  # Pass mHC args
+                    sinkhorn_iters=sinkhorn_iters,
+                    data_sparsity=data_sparsity,  # Pass null expert data sparsity
+                )
+                for _ in range(num_hidden_layers)
+            ]
+        )
 
         # ============================================================================
         # REVERSIBLE MIDPOINT INTEGRATION (Hardened)
         # ============================================================================
         from reversible_ops_midpoint import ReversibleMidpointStack
+
         # step_size=0.1, noise_eps=0.0 as per instructions ORIGINAL
         # step_size=0.25, noise_eps=1e-4 as per instructions
         # 0.01 is the new recommendation from Gemini. Captured by verify_gradienst on v2 version.
@@ -1139,14 +1314,12 @@ class SmolLM(nn.Module):
         self.stack = ReversibleMidpointStack(
             self.layers,
             # CRITICAL CHANGE 1
-
-            step_size=0.25, # CHANGED 0.25 to 0.5 didn't work, back to 0.25
-            a=0.5,  
+            step_size=0.25,  # CHANGED 0.25 to 0.5 didn't work, back to 0.25
+            a=0.5,
             noise_eps=0.0,
-            
             # CRITICAL CHANGE 3: Stop wasting Layer 1!
             # "euler" uses the first layer to kickstart the momentum.
-            bootstrap="euler", 
+            bootstrap="euler",
         )
 
         # Note: dropout=0.0 should be set in LlamaDecoderLayer/MoEFFN config.
@@ -1171,7 +1344,7 @@ class SmolLM(nn.Module):
             rope_base=10000,
             n_streams=n_streams,
             sinkhorn_iters=sinkhorn_iters,
-            data_sparsity=data_sparsity
+            data_sparsity=data_sparsity,
         )
 
         # Output projection (shared for both NTP and MTP predictions)
@@ -1214,11 +1387,20 @@ class SmolLM(nn.Module):
         if self.use_fourier and self.pf_to_model is not None:
             pf_to_model_std = 0.02 / math.sqrt(self._D_pf)  # ≈ 0.00044 for D_pf=2048
             self.pf_to_model.weight.data.normal_(mean=0.0, std=pf_to_model_std)
-            print(f"   🔧 pf_to_model RE-initialized with std={pf_to_model_std:.6f} (scale-matched to baseline)")
+            print(
+                f"   🔧 pf_to_model RE-initialized with std={pf_to_model_std:.6f} (scale-matched to baseline)"
+            )
 
         # Count parameters
         total_params = sum(p.numel() for p in self.parameters())
-        embedding_params = sum(p.numel() for p in (self.fourier_embeddings.parameters() if self.use_fourier else self.token_embed.parameters()))
+        embedding_params = sum(
+            p.numel()
+            for p in (
+                self.fourier_embeddings.parameters()
+                if self.use_fourier
+                else self.token_embed.parameters()
+            )
+        )
         if self.use_fourier:
             embedding_params += sum(p.numel() for p in self.pf_to_model.parameters())
 
@@ -1228,14 +1410,22 @@ class SmolLM(nn.Module):
             print(f"   PF dim: {pf_codec.D} -> model dim: {hidden_size}")
         print(f"   Transformer layers: {num_hidden_layers}, heads: {num_heads}")
         print("   Attention: Gated Sparse Attention (GSA) - arXiv:2601.15305v1")
-        print(f"   MoE: {num_experts} experts, {num_shared_experts} shared, top-{top_k}")
-        print("   Prediction: Multi-Token Prediction (MTP) - DeepSeek-V3 style dual-head")
+        print(
+            f"   MoE: {num_experts} experts, {num_shared_experts} shared, top-{top_k}"
+        )
+        print(
+            "   Prediction: Multi-Token Prediction (MTP) - DeepSeek-V3 style dual-head"
+        )
 
         # Calculate null expert info
         num_null_copies = int(num_experts * (1 - data_sparsity) / data_sparsity)
         total_slots = num_experts + num_null_copies
-        print(f"   🔀 Null Experts: {num_null_copies} null copies (ρ={data_sparsity:.1f}, {total_slots} total slots)")
-        print(f"   🔀 Target data sparsity: {data_sparsity*100:.0f}% tokens use real experts")
+        print(
+            f"   🔀 Null Experts: {num_null_copies} null copies (ρ={data_sparsity:.1f}, {total_slots} total slots)"
+        )
+        print(
+            f"   🔀 Target data sparsity: {data_sparsity*100:.0f}% tokens use real experts"
+        )
 
         print(f"   📊 Vocabulary size: {self.vocab_size}")
         print(f"   📊 Embedding params: {embedding_params:,}")
@@ -1243,7 +1433,6 @@ class SmolLM(nn.Module):
 
     def lambda_e(self):
         return F.softplus(self.lambda_e_raw)
-
 
     def _init_weights(self, module):
         """
@@ -1277,7 +1466,16 @@ class SmolLM(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    def forward(self, input_ids, next_token_ids=None, attention_mask=None, prev_lm_in=None, return_state=False, return_emb_stats=False, return_loss=False):
+    def forward(
+        self,
+        input_ids,
+        next_token_ids=None,
+        attention_mask=None,
+        prev_lm_in=None,
+        return_state=False,
+        return_emb_stats=False,
+        return_loss=False,
+    ):
         """
         Universal Forward Pass with Multi-Token Prediction (MTP).
 
@@ -1311,9 +1509,11 @@ class SmolLM(nn.Module):
             if return_emb_stats:
                 with torch.no_grad():
                     emb_stats = {
-                        "emb_std": EMB.std().item(),           # Overall std of EMB (should be ~1.0)
-                        "emb_mean": EMB.mean().item(),         # Overall mean (should be ~0.0)
-                        "emb_norm": EMB.norm(dim=-1).mean().item(),  # Avg L2 norm per token
+                        "emb_std": EMB.std().item(),  # Overall std of EMB (should be ~1.0)
+                        "emb_mean": EMB.mean().item(),  # Overall mean (should be ~0.0)
+                        "emb_norm": EMB.norm(dim=-1)
+                        .mean()
+                        .item(),  # Avg L2 norm per token
                     }
 
             # Explicit cast to model dtype (bf16) right before projection
@@ -1342,7 +1542,9 @@ class SmolLM(nn.Module):
             # After RMSNorm, these should stay stable throughout training
             if return_emb_stats:
                 with torch.no_grad():
-                    emb_stats["proj_std"] = x.std().item()    # Should be stable ~1.0 after norm
+                    emb_stats["proj_std"] = (
+                        x.std().item()
+                    )  # Should be stable ~1.0 after norm
                     emb_stats["proj_mean"] = x.mean().item()  # Should stay ~0.0
         else:
             x = self.token_embed(input_ids)  # [B,T,hidden_size]
@@ -1398,7 +1600,6 @@ class SmolLM(nn.Module):
 
         # total_aux_loss is a scalar tensor containing sum of all aux losses
 
-
         # ----------------------------------------------------------------------------
         # mHC Readout: Collapse n-streams back to single stream 'h_main'
         # ----------------------------------------------------------------------------
@@ -1427,7 +1628,9 @@ class SmolLM(nn.Module):
             # A. Get embeddings of the "next" tokens (t+1)
             if self.use_fourier:
                 next_emb = self.fourier_embeddings(next_ids_use)
-                next_emb = self.pf_to_model(next_emb.to(dtype=self.pf_to_model.weight.dtype))
+                next_emb = self.pf_to_model(
+                    next_emb.to(dtype=self.pf_to_model.weight.dtype)
+                )
                 next_emb = self.embed_norm(next_emb)
             else:
                 next_emb = self.token_embed(next_ids_use)

@@ -8,6 +8,7 @@ class _ForceWrapper(nn.Module):
     Wraps a Transformer block so functional_call(module, ...) calls force(x),
     not forward(x). This is CRITICAL for midpoint/leapfrog, where f(x)=delta.
     """
+
     def __init__(self, layer: nn.Module):
         super().__init__()
         self.layer = layer
@@ -19,7 +20,9 @@ class _ForceWrapper(nn.Module):
 
 class MidpointFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, p_prev, p_cur, two_h, a, module, param_keys, buffer_keys, *flat_tensors):
+    def forward(
+        ctx, p_prev, p_cur, two_h, a, module, param_keys, buffer_keys, *flat_tensors
+    ):
         """
         Implements generalized reversible midpoint:
             p_next = a*p_prev + (1-a)*p_cur + two_h * f(p_cur)
@@ -33,7 +36,9 @@ class MidpointFunction(torch.autograd.Function):
 
         # IMPORTANT: module is a _ForceWrapper, so param/buffer names must be prefixed with "layer."
         params = {f"layer.{k}": v for k, v in zip(param_keys, flat_tensors[:n_params])}
-        buffers = {f"layer.{k}": v for k, v in zip(buffer_keys, flat_tensors[n_params:])}
+        buffers = {
+            f"layer.{k}": v for k, v in zip(buffer_keys, flat_tensors[n_params:])
+        }
 
         # Save what we truly need for backward
         ctx.save_for_backward(p_prev, p_cur, *flat_tensors[:n_params])
@@ -45,7 +50,9 @@ class MidpointFunction(torch.autograd.Function):
         ctx.n_params = n_params
 
         with torch.no_grad():
-            delta, aux = functional_call(module, (params, buffers), (p_cur,), tie_weights=True)
+            delta, aux = functional_call(
+                module, (params, buffers), (p_cur,), tie_weights=True
+            )
             p_next = (ctx.a * p_prev) + ((1.0 - ctx.a) * p_cur) + (ctx.two_h * delta)
 
         return p_next, aux
@@ -59,7 +66,9 @@ class MidpointFunction(torch.autograd.Function):
         # they come from the original module at runtime via named_buffers
         # so we recreate them here from the live module's buffers:
         live_buffers = dict(ctx.module.named_buffers())
-        buffers = {f"layer.{k}": live_buffers.get(f"layer.{k}", None) for k in ctx.buffer_keys}
+        buffers = {
+            f"layer.{k}": live_buffers.get(f"layer.{k}", None) for k in ctx.buffer_keys
+        }
         # Remove None entries (some layers may have no buffers)
         buffers = {k: v for k, v in buffers.items() if v is not None}
 
@@ -75,7 +84,9 @@ class MidpointFunction(torch.autograd.Function):
             param_req = [t.detach().requires_grad_(True) for t in param_tensors]
             params_req = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_req)}
 
-            delta, aux = functional_call(ctx.module, (params_req, buffers), (p_cur_req,), tie_weights=True)
+            delta, aux = functional_call(
+                ctx.module, (params_req, buffers), (p_cur_req,), tie_weights=True
+            )
 
             if grad_aux is None:
                 # aux may be scalar or tensor
@@ -92,11 +103,16 @@ class MidpointFunction(torch.autograd.Function):
                 allow_unused=True,
             )
 
-        grad_p_cur_through_f = grads[0] if grads[0] is not None else torch.zeros_like(p_cur)
+        grad_p_cur_through_f = (
+            grads[0] if grads[0] is not None else torch.zeros_like(p_cur)
+        )
         grad_p_cur = grad_p_cur_direct + grad_p_cur_through_f
 
         grad_params = grads[1:]
-        grad_params = [g if g is not None else torch.zeros_like(t) for g, t in zip(grad_params, param_tensors)]
+        grad_params = [
+            g if g is not None else torch.zeros_like(t)
+            for g, t in zip(grad_params, param_tensors)
+        ]
 
         # Return grads for (p_prev, p_cur, two_h, a, module, param_keys, buffer_keys, *flat_tensors)
         # Non-tensor args -> None
@@ -109,7 +125,17 @@ class MidpointFunction(torch.autograd.Function):
         # buffers are non-diff
         grad_buffers = (None,) * len(ctx.buffer_keys)
 
-        return (grad_p_prev, grad_p_cur, grad_two_h, grad_a, grad_module, grad_param_keys, grad_buffer_keys, *grad_params, *grad_buffers)
+        return (
+            grad_p_prev,
+            grad_p_cur,
+            grad_two_h,
+            grad_a,
+            grad_module,
+            grad_param_keys,
+            grad_buffer_keys,
+            *grad_params,
+            *grad_buffers,
+        )
 
 
 class MidpointBlock(nn.Module):
@@ -154,6 +180,7 @@ class ReversibleMidpointStack(nn.Module):
     - bootstrap: "no_kick" or "euler"
     - noise_eps: optional noise to delta during training
     """
+
     def __init__(
         self,
         blocks: nn.ModuleList,
@@ -164,7 +191,10 @@ class ReversibleMidpointStack(nn.Module):
     ):
         super().__init__()
         assert 0.0 <= a <= 1.0, "a must be in [0,1]"
-        assert bootstrap in ("no_kick", "euler"), "bootstrap must be 'no_kick' or 'euler'"
+        assert bootstrap in (
+            "no_kick",
+            "euler",
+        ), "bootstrap must be 'no_kick' or 'euler'"
 
         self.blocks = blocks
         self.h = float(step_size)
@@ -173,7 +203,9 @@ class ReversibleMidpointStack(nn.Module):
         self.bootstrap = bootstrap
 
         self.bootstrap_layer = blocks[0]
-        self.mid_layers = nn.ModuleList([MidpointBlock(b, step_size=self.h, a=self.a) for b in blocks[1:]])
+        self.mid_layers = nn.ModuleList(
+            [MidpointBlock(b, step_size=self.h, a=self.a) for b in blocks[1:]]
+        )
 
         self.step_count = 0
 
@@ -200,7 +232,11 @@ class ReversibleMidpointStack(nn.Module):
             # critical change: half-step, NOT full h
             p_cur = p_prev + (0.5 * self.h * delta0)
 
-        total_aux = aux0 if aux0 is not None else torch.tensor(0.0, device=x.device, dtype=torch.float32)
+        total_aux = (
+            aux0
+            if aux0 is not None
+            else torch.tensor(0.0, device=x.device, dtype=torch.float32)
+        )
 
         # Midpoint / leapfrog recurrence
         for layer in self.mid_layers:
