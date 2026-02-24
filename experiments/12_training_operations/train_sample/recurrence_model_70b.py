@@ -152,10 +152,9 @@ Before deploying this model at 256k context, the following MUST be addressed:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
 import math
 import numpy as np
-from typing import List, Optional, Dict
+from typing import List
 from dataclasses import dataclass
 
 # Note: Importing for backwards compatibility - we define KroneckerEmbeddings inline
@@ -844,9 +843,8 @@ class GatedDeltaNet(nn.Module):
         # OPTIMIZATION: Preallocate output tensor (avoids Python list + stack overhead)
         outputs = torch.empty(B, self.num_heads, T, self.head_dim, device=device, dtype=torch.float32)
 
-        # OPTIMIZATION: Hoist identity matrix outside loop (was recreating every iteration)
-        # FIX #24: Identity matrix also in fp32 for stable projection computation
-        I = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
+        # Identity matrix for orthogonal projection
+        identity_mat = torch.eye(self.head_dim, device=device, dtype=torch.float32).view(1, 1, self.head_dim, self.head_dim)
 
         for t in range(T):
             # FIX #24: Cast inputs to fp32 for stable recurrence computation
@@ -875,7 +873,7 @@ class GatedDeltaNet(nn.Module):
 
             # Compute orthogonal projection: (I - β_t · k_t ⊗ k_t^T)
             # This term prevents unbounded state growth and is critical for stability
-            orthogonal_proj = I - beta_t * k_outer
+            orthogonal_proj = identity_mat - beta_t * k_outer
 
             # Apply full paper formula: S_t = α_t · S_{t-1} · (I - β_t · k_t ⊗ k_t^T) + β_t · v_t ⊗ k_t^T
             S = alpha_t * torch.einsum('bhde,bhef->bhdf', S, orthogonal_proj) + beta_t * v_outer
@@ -1787,13 +1785,13 @@ class Model70B(nn.Module):
             embedding_params = self.vocab_size * config.hidden_size / 1e6
             embedding_buffer = 0
 
-        print(f"\n🤖 MODEL WITH MEMORY STREAM RECURRENCE INITIALIZED:")
+        print("\n🤖 MODEL WITH MEMORY STREAM RECURRENCE INITIALIZED:")
         print(f"   🔄 Recurrence: Stream {self.recurrence_stream_idx} | λ_r={F.softplus(self.lambda_r_raw).item():.4f}")
         print(f"   Vocabulary: {self.vocab_size:,}")
         print(f"   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
-            print(f"\n   📐 Kronecker Embeddings:")
-            print(f"      POS_DIM=32 x CHAR_DIM=256 = D=8192")
+            print("\n   📐 Kronecker Embeddings:")
+            print("      POS_DIM=32 x CHAR_DIM=256 = D=8192")
             print(f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)")
             print(f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})")
             print(f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})")
@@ -1805,7 +1803,7 @@ class Model70B(nn.Module):
         print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
         print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
-        print(f"   Active Parameters: ~4.079B (avg 5 experts × top-k routing)")
+        print("   Active Parameters: ~4.079B (avg 5 experts × top-k routing)")
 
     def _init_weights(self, module):
         # FIX #38: Skip initialization for kronecker_embeddings and all its submodules
@@ -2038,10 +2036,10 @@ if __name__ == "__main__":
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
-    print(f"\nAttention Mix:")
+    print("\nAttention Mix:")
     print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context")
     print(f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality")
-    print(f"\nExperts:")
+    print("\nExperts:")
     print(f"  Real: {num_experts}")
     print(f"  Null: {num_experts} (ρ={config.data_sparsity})")
     print(f"  Total slots: {config.total_expert_slots}")

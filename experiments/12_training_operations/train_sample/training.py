@@ -12,8 +12,7 @@ import math
 import glob
 import time
 import torch
-import torch.nn as nn
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 # ============================================================================
@@ -209,7 +208,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, embedding_type,
                 try:
                     step_str = basename.split('_step_')[1].split('.pt')[0]
                     return int(step_str)
-                except:
+                except Exception:
                     return 0
 
             checkpoints.sort(key=get_step, reverse=True)
@@ -276,7 +275,7 @@ def setup_tokenizer(tokenizer, target_vocab_size=50272, cache_dir="checkpoints_7
         print(f"   ✓ Tokenizer loaded: {len(tokenizer):,} tokens")
         return tokenizer
 
-    print(f"   ⚠️  No tokenizer cache, creating padded tokenizer (takes ~30s)...")
+    print("   ⚠️  No tokenizer cache, creating padded tokenizer (takes ~30s)...")
 
     # Add Qwen-style special tokens
     special_tokens = {
@@ -310,6 +309,6 @@ def setup_tokenizer(tokenizer, target_vocab_size=50272, cache_dir="checkpoints_7
     # Cache for next time
     print(f"   💾 Caching tokenizer to {cache_file}...")
     torch.save(tokenizer, cache_file)
-    print(f"   ✓ Cached! Next run loads instantly.")
+    print("   ✓ Cached! Next run loads instantly.")
 
     return tokenizer

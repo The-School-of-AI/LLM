@@ -302,7 +302,7 @@ if __name__ == "__main__":
     )
     encoder = KroneckerEmbeddings(cfg)
     print(f"   ✓ Configuration: CHAR_DIM={cfg.CHAR_DIM}, POS_DIM={cfg.POS_DIM}, D={cfg.D}")
-    print(f"   ✓ Byte-level: All UTF-8 text supported (no exclusions)")
+    print("   ✓ Byte-level: All UTF-8 text supported (no exclusions)")
     print()
 
     # Test with various token lengths
@@ -389,7 +389,7 @@ if __name__ == "__main__":
             if not match:
                 print(f"      Note: Expected '{token}', got '{decoded}'")
 
-        print(f"   ✓ GPT-2 tokenizer test completed")
+        print("   ✓ GPT-2 tokenizer test completed")
 
     except ImportError:
         print("   ⚠️  transformers not installed, skipping GPT-2 test")
@@ -467,8 +467,8 @@ if __name__ == "__main__":
 
     print()
     print(f"   ✅ Multilingual test: {multilingual_passed}/{multilingual_total} passed")
-    print(f"   ✅ Behavior: 100% lossless encoding/decoding for ALL UTF-8 text")
-    print(f"   ✅ Coverage: ASCII, Latin Extended, Chinese, Arabic, Cyrillic, Emoji, ALL scripts!")
+    print("   ✅ Behavior: 100% lossless encoding/decoding for ALL UTF-8 text")
+    print("   ✅ Coverage: ASCII, Latin Extended, Chinese, Arabic, Cyrillic, Emoji, ALL scripts!")
     print()
 
     print("   Key Achievement:")
@@ -504,7 +504,7 @@ if __name__ == "__main__":
     short_norm = np.linalg.norm(short_emb)
     long_norm = np.linalg.norm(long_emb)
 
-    print(f"   ✓ Length normalization:")
+    print("   ✓ Length normalization:")
     print(f"      Short token '{short_token}' (len={len(short_token)}): norm={short_norm:.4f}")
     print(f"      Long token  '{long_token}' (len={len(long_token)}): norm={long_norm:.4f}")
     print(f"      Norm ratio: {long_norm/short_norm:.4f} (should be ~1.0)")
@@ -516,9 +516,9 @@ if __name__ == "__main__":
     emb2 = encoder.encode_word(token2)
     dot_product = np.dot(emb1, emb2)
 
-    print(f"   ✓ Orthogonality:")
+    print("   ✓ Orthogonality:")
     print(f"      Dot product of '{token1}' and '{token2}': {dot_product:.6f}")
-    print(f"      (Near-zero indicates near-orthogonality)")
+    print("      (Near-zero indicates near-orthogonality)")
 
     # Property 3: Invertibility
     test_token = "invertibility"

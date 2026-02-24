@@ -15,7 +15,6 @@ os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "1.0"
 os.environ["PYTORCH_MPS_LOW_WATERMARK_RATIO"] = "0.9"
 os.environ["PYTORCH_MPS_PREFER_METAL"] = "1"
 
-import json
 import time
 import gc
 import torch
@@ -27,7 +26,7 @@ from transformers import PreTrainedTokenizerFast
 from recurrence_model_70b import create_model_70b, KroneckerEmbeddings, KroneckerConfig
 
 # Import existing data utilities
-from data_utils import SYNTHStream, SYNTHPromptSampler
+from data_utils import SYNTHStream
 
 # P12 Observability (all env vars are set before launch — see train_sample/README.md)
 from components import TrainingOps
@@ -141,7 +140,7 @@ def simple_training_loop(model, train_loader, device, num_steps=100, ops=None):
 
         # DEBUG: Check if MTP is actually being computed (step 0 only)
         if step == 0:
-            print(f"\nDEBUG - Model output:")
+            print("\nDEBUG - Model output:")
             print(f"  logits_mtp is None: {logits_mtp is None}")
             if logits_mtp is not None:
                 print(f"  logits_mtp contains NaN: {torch.isnan(logits_mtp).any().item()}")
@@ -213,8 +212,10 @@ def simple_training_loop(model, train_loader, device, num_steps=100, ops=None):
             if device.type == "mps":
                 try:
                     torch.mps.empty_cache()
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Error emptying MPS cache: {e}")
+            elif device.type == "cuda":
+                torch.cuda.empty_cache()
 
     print("🏁 Training test complete!")
 

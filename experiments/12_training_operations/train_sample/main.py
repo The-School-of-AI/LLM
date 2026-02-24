@@ -60,7 +60,6 @@ from training import (
 )
 from utils import (
     setup_logging,
-    get_logger,
     PauseHandler,
     sync_device,
     set_runtime_optimizations,
@@ -206,7 +205,7 @@ def run_generation(model, tokenizer, prompt_sampler, device, step, config, logge
         if device.type == "mps":
             try:
                 torch.mps.empty_cache()
-            except:
+            except Exception:
                 pass
         elif device.type == "cuda":
             torch.cuda.empty_cache()
@@ -541,8 +540,8 @@ def training_loop(model, train_loader, prompt_sampler, device, optimizer,
                 pause_handler.should_save = False
 
             logger.info(f"[PAUSE] Training paused at step {step}.")
-            logger.info(f"[PAUSE] To resume: remove 'checkpoints/.pause' file or restart training")
-            logger.info(f"[PAUSE] To exit: Press Ctrl+C again")
+            logger.info("[PAUSE] To resume: remove 'checkpoints/.pause' file or restart training")
+            logger.info("[PAUSE] To exit: Press Ctrl+C again")
 
             pause_handler.in_pause_wait = True
 

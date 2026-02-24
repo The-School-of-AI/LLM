@@ -17,13 +17,12 @@ Based on model_gated.py with Multi-Token Prediction from fourier_proper_mhc_mult
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
 from torch.nn.functional import scaled_dot_product_attention
 import math
 import numpy as np
-from typing import List, Optional
+from typing import List
 
-from fourier_se_decoder import PFConfig, PFCodec
+from fourier_se_decoder import PFCodec
 
 
 # ============================================================================
@@ -273,7 +272,7 @@ class GatedSparseAttention(nn.Module):
             # --- Sparse Selection (Top-K Masking) ---
             
             # Prepare scores: Mask future with very negative number (not -inf for safety)
-            dtype_min = -1e4 # Safe low value for selection (softmax/topk invariant shift doesn't apply here, but order matters)
+            # Safe low value for selection (softmax/topk invariant shift doesn't apply here, but order matters)
             # Actually for topk -inf is fine, but we avoid in-place
             
             if T > 1:
@@ -1228,9 +1227,9 @@ class SmolLM(nn.Module):
             print(f"   K (semantic anchors): {K}")
             print(f"   PF dim: {pf_codec.D} -> model dim: {hidden_size}")
         print(f"   Transformer layers: {num_hidden_layers}, heads: {num_heads}")
-        print(f"   Attention: Gated Sparse Attention (GSA) - arXiv:2601.15305v1")
+        print("   Attention: Gated Sparse Attention (GSA) - arXiv:2601.15305v1")
         print(f"   MoE: {num_experts} experts, {num_shared_experts} shared, top-{top_k}")
-        print(f"   Prediction: Multi-Token Prediction (MTP) - DeepSeek-V3 style dual-head")
+        print("   Prediction: Multi-Token Prediction (MTP) - DeepSeek-V3 style dual-head")
 
         # Calculate null expert info
         num_null_copies = int(num_experts * (1 - data_sparsity) / data_sparsity)

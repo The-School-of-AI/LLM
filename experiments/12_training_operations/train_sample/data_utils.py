@@ -34,7 +34,7 @@ def discover_chars_from_bpe_tokenizer(tokenizer, vocab_size=50272):
         try:
             token_text = tokenizer.decode([token_id])
             all_chars.update(token_text)
-        except Exception as e:
+        except Exception:
             continue
 
     chars_list = sorted(list(all_chars))
@@ -87,7 +87,7 @@ def create_bpe_token_strings(tokenizer, vocab_size=50272):
         try:
             token_text = tokenizer.decode([token_id])
             bpe_vocab.append(token_text)
-        except Exception as e:
+        except Exception:
             bpe_vocab.append(f"<TOKEN_{token_id}>")
 
     print(f"📝 Created {len(bpe_vocab)} BPE token strings")
@@ -294,7 +294,7 @@ class SYNTHPromptSampler:
         elif os.path.exists(parent_path):
             self.full_path = parent_path
         else:
-            print(f"[PROMPTS] ⚠️ Local dataset not found in CWD, Script Dir, or Parent Dir.")
+            print("[PROMPTS] ⚠️ Local dataset not found in CWD, Script Dir, or Parent Dir.")
             self.dataset = None
             return
 
