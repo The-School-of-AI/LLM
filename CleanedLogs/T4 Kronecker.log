@@ -1,0 +1,371 @@
+step: 1 | loss: 12.6046| toks/sec: 465.6
+step: 2 | loss: 12.6093| toks/sec: 1791.4
+step: 3 | loss: 12.5576| toks/sec: 1798.6
+step: 4 | loss: 12.6902| toks/sec: 1213.7
+step: 5 | loss: 12.6387| toks/sec: 1384.9
+step: 6 | loss: 12.5089| toks/sec: 1752.2
+step: 7 | loss: 12.4865| toks/sec: 1751.0
+step: 8 | loss: 12.6893| toks/sec: 1320.6
+step: 9 | loss: 12.5918| toks/sec: 1386.3
+step: 10 | loss: 12.5575| toks/sec: 1751.6
+step: 11 | loss: 12.5912| toks/sec: 386.7
+step: 12 | loss: 12.6286| toks/sec: 1299.7
+step: 13 | loss: 12.5799| toks/sec: 1374.5
+step: 14 | loss: 12.5937| toks/sec: 1724.7
+step: 15 | loss: 12.5321| toks/sec: 1734.8
+step: 16 | loss: 12.4588| toks/sec: 1318.0
+step: 17 | loss: 12.3105| toks/sec: 1365.2
+step: 18 | loss: 12.3472| toks/sec: 1760.4
+step: 19 | loss: 12.4118| toks/sec: 1758.9
+step: 20 | loss: 12.4397| toks/sec: 1336.4
+step: 21 | loss: 11.9858| toks/sec: 1389.2
+step: 22 | loss: 12.0344| toks/sec: 1757.9
+step: 23 | loss: 11.9891| toks/sec: 1757.5
+step: 24 | loss: 12.0484| toks/sec: 1225.0
+step: 25 | loss: 11.1033| toks/sec: 1256.9
+step: 26 | loss: 11.3553| toks/sec: 1752.1
+step: 27 | loss: 11.4627| toks/sec: 1561.9
+step: 28 | loss: 11.1281| toks/sec: 1294.9
+step: 29 | loss: 11.5442| toks/sec: 1378.9
+step: 30 | loss: 11.0335| toks/sec: 1575.2
+step: 31 | loss: 11.0276| toks/sec: 1751.5
+step: 32 | loss: 11.2389| toks/sec: 1332.4
+step: 33 | loss: 11.7595| toks/sec: 1384.8
+step: 34 | loss: 11.5468| toks/sec: 1761.9
+step: 35 | loss: 11.3449| toks/sec: 1760.8
+step: 36 | loss: 12.0939| toks/sec: 1334.7
+step: 37 | loss: 10.4079| toks/sec: 1364.6
+step: 38 | loss: 11.8160| toks/sec: 1729.8
+step: 39 | loss: 11.5492| toks/sec: 1553.7
+step: 40 | loss: 11.3095| toks/sec: 1329.5
+step: 41 | loss: 10.8524| toks/sec: 1376.0
+step: 42 | loss: 10.9147| toks/sec: 1745.1
+step: 43 | loss: 10.8846| toks/sec: 1730.7
+step: 44 | loss: 11.2142| toks/sec: 1334.6
+step: 45 | loss: 10.0713| toks/sec: 1357.7
+step: 46 | loss: 9.9842 | toks/sec: 1650.7
+step: 47 | loss: 10.5394| toks/sec: 1652.8
+step: 48 | loss: 9.9200 | toks/sec: 1267.0
+step: 49 | loss: 10.2573| toks/sec: 1378.9
+step: 50 | loss: 10.6660| toks/sec: 1746.6
+step: 51 | loss: 10.4674| toks/sec: 1756.3
+step: 52 | loss: 10.1933| toks/sec: 1330.2
+step: 53 | loss: 10.0716| toks/sec: 1378.1
+step: 54 | loss: 9.8937 | toks/sec: 1751.1
+step: 55 | loss: 10.2715| toks/sec: 1751.2
+step: 56 | loss: 9.7225 | toks/sec: 1333.0
+step: 57 | loss: 9.4060 | toks/sec: 1326.4
+step: 58 | loss: 9.8240 | toks/sec: 1659.4
+step: 59 | loss: 9.9999 | toks/sec: 1663.3
+step: 60 | loss: 9.1910 | toks/sec: 1179.3
+step: 61 | loss: 9.0409 | toks/sec: 1382.7
+step: 62 | loss: 8.8870 | toks/sec: 1753.7
+step: 63 | loss: 9.2602 | toks/sec: 1435.0
+step: 64 | loss: 9.3063 | toks/sec: 1332.4
+step: 65 | loss: 8.5049 | toks/sec: 1383.7
+step: 66 | loss: 9.0512 | toks/sec: 1755.0
+step: 67 | loss: 8.5061 | toks/sec: 1610.0
+step: 68 | loss: 8.8512 | toks/sec: 1331.5
+step: 69 | loss: 8.5907 | toks/sec: 1371.2
+step: 70 | loss: 8.1158 | toks/sec: 1750.4
+step: 71 | loss: 8.0232 | toks/sec: 1751.0
+step: 72 | loss: 8.6192 | toks/sec: 1336.6
+step: 73 | loss: 9.3264 | toks/sec: 1363.7
+step: 74 | loss: 8.0870 | toks/sec: 1754.1
+step: 75 | loss: 8.1826 | toks/sec: 1752.9
+step: 76 | loss: 8.0868 | toks/sec: 1332.5
+step: 77 | loss: 7.2654 | toks/sec: 1386.5
+step: 78 | loss: 8.4294 | toks/sec: 1753.3
+step: 79 | loss: 7.7534 | toks/sec: 1754.6
+step: 80 | loss: 8.3078 | toks/sec: 1333.2
+step: 81 | loss: 8.3159 | toks/sec: 1255.8
+step: 82 | loss: 7.7523 | toks/sec: 1747.9
+step: 83 | loss: 7.7350 | toks/sec: 1746.8
+step: 84 | loss: 7.8327 | toks/sec: 1325.0
+step: 85 | loss: 7.9760 | toks/sec: 1385.3
+step: 86 | loss: 7.5952 | toks/sec: 1753.2
+step: 87 | loss: 7.9573 | toks/sec: 1743.5
+step: 88 | loss: 8.3017 | toks/sec: 1343.2
+step: 89 | loss: 8.2503 | toks/sec: 1386.1
+step: 90 | loss: 6.9366 | toks/sec: 1763.4
+step: 91 | loss: 7.6110 | toks/sec: 1764.7
+step: 92 | loss: 7.9079 | toks/sec: 1352.2
+step: 93 | loss: 7.5615 | toks/sec: 1373.8
+step: 94 | loss: 8.0287 | toks/sec: 1744.2
+step: 95 | loss: 7.2585 | toks/sec: 1748.1
+step: 96 | loss: 7.5803 | toks/sec: 1160.8
+step: 97 | loss: 8.3781 | toks/sec: 1382.4
+step: 98 | loss: 7.6139 | toks/sec: 1579.2
+step: 99 | loss: 7.6735 | toks/sec: 1592.9
+step: 100 | loss: 7.9088 | toks/sec: 1338.7
+step: 101 | loss: 7.9020 | toks/sec: 1353.7
+step: 102 | loss: 8.2079 | toks/sec: 1739.7
+step: 103 | loss: 7.0616 | toks/sec: 1740.1
+step: 104 | loss: 7.6405 | toks/sec: 1221.4
+step: 105 | loss: 7.6225 | toks/sec: 1368.1
+step: 106 | loss: 8.1586 | toks/sec: 1749.9
+step: 107 | loss: 8.4046 | toks/sec: 1749.8
+step: 108 | loss: 7.8596 | toks/sec: 1339.9
+step: 109 | loss: 7.3001 | toks/sec: 1342.2
+step: 110 | loss: 7.9013 | toks/sec: 1685.3
+step: 111 | loss: 7.4046 | toks/sec: 1684.7
+step: 112 | loss: 8.1432 | toks/sec: 1303.7
+step: 113 | loss: 6.9075 | toks/sec: 1373.9
+step: 114 | loss: 7.2498 | toks/sec: 1745.5
+step: 115 | loss: 7.8212 | toks/sec: 1741.8
+step: 116 | loss: 8.0221 | toks/sec: 1335.2
+step: 117 | loss: 7.3419 | toks/sec: 1390.6
+step: 118 | loss: 7.5098 | toks/sec: 1753.5
+step: 119 | loss: 8.2705 | toks/sec: 1754.5
+step: 120 | loss: 7.8025 | toks/sec: 1333.1
+step: 121 | loss: 7.7911 | toks/sec: 1390.8
+step: 122 | loss: 6.9238 | toks/sec: 1754.6
+step: 123 | loss: 8.9496 | toks/sec: 1750.4
+step: 124 | loss: 7.7058 | toks/sec: 1323.2
+step: 125 | loss: 7.8835 | toks/sec: 1386.1
+step: 126 | loss: 8.4153 | toks/sec: 1593.4
+step: 127 | loss: 7.6580 | toks/sec: 1751.7
+step: 128 | loss: 6.9517 | toks/sec: 1335.3
+step: 129 | loss: 7.0786 | toks/sec: 1371.9
+step: 130 | loss: 6.7853 | toks/sec: 1750.7
+step: 131 | loss: 7.2884 | toks/sec: 1750.5
+step: 132 | loss: 7.5104 | toks/sec: 1224.5
+step: 133 | loss: 8.2703 | toks/sec: 1091.3
+step: 134 | loss: 6.7944 | toks/sec: 1753.1
+step: 135 | loss: 7.4892 | toks/sec: 1608.9
+step: 136 | loss: 7.3043 | toks/sec: 1337.9
+step: 137 | loss: 7.1882 | toks/sec: 1373.9
+step: 138 | loss: 7.7543 | toks/sec: 1671.1
+step: 139 | loss: 7.4551 | toks/sec: 1670.4
+step: 140 | loss: 7.0577 | toks/sec: 1274.4
+step: 141 | loss: 6.8799 | toks/sec: 1277.6
+step: 142 | loss: 7.9260 | toks/sec: 1744.5
+step: 143 | loss: 7.4983 | toks/sec: 1744.2
+step: 144 | loss: 7.2347 | toks/sec: 1327.4
+step: 145 | loss: 7.3485 | toks/sec: 1376.4
+step: 146 | loss: 7.5680 | toks/sec: 1750.4
+step: 147 | loss: 7.0134 | toks/sec: 1751.2
+step: 148 | loss: 7.3667 | toks/sec: 1330.4
+step: 149 | loss: 7.4460 | toks/sec: 1399.1
+step: 150 | loss: 7.2372 | toks/sec: 1755.8
+step: 151 | loss: 7.2396 | toks/sec: 1758.7
+step: 152 | loss: 7.6297 | toks/sec: 1345.3
+step: 153 | loss: 7.6427 | toks/sec: 1378.8
+step: 154 | loss: 6.9579 | toks/sec: 1749.5
+step: 155 | loss: 7.6023 | toks/sec: 1750.7
+step: 156 | loss: 7.0567 | toks/sec: 1328.2
+step: 157 | loss: 7.2700 | toks/sec: 1385.1
+step: 158 | loss: 6.9668 | toks/sec: 1752.0
+step: 159 | loss: 7.6058 | toks/sec: 1754.5
+step: 160 | loss: 8.0839 | toks/sec: 1336.2
+step: 161 | loss: 6.4307 | toks/sec: 1373.2
+step: 162 | loss: 7.3738 | toks/sec: 1739.6
+step: 163 | loss: 7.7890 | toks/sec: 1738.9
+step: 164 | loss: 7.3996 | toks/sec: 1322.1
+step: 165 | loss: 7.0620 | toks/sec: 1385.5
+step: 166 | loss: 7.0645 | toks/sec: 1672.1
+step: 167 | loss: 6.9881 | toks/sec: 1671.2
+step: 168 | loss: 6.6059 | toks/sec: 1188.5
+step: 169 | loss: 7.5015 | toks/sec: 1279.5
+step: 170 | loss: 7.9275 | toks/sec: 1407.5
+step: 171 | loss: 7.5491 | toks/sec: 1742.0
+step: 172 | loss: 7.1219 | toks/sec: 1234.2
+step: 173 | loss: 7.1796 | toks/sec: 1374.5
+step: 174 | loss: 7.6585 | toks/sec: 1740.5
+step: 175 | loss: 7.8026 | toks/sec: 1741.6
+step: 176 | loss: 6.8470 | toks/sec: 1332.3
+step: 177 | loss: 7.0559 | toks/sec: 1376.8
+step: 178 | loss: 6.8570 | toks/sec: 1745.1
+step: 179 | loss: 7.7812 | toks/sec: 1748.4
+step: 180 | loss: 7.2079 | toks/sec: 1252.8
+step: 181 | loss: 7.1903 | toks/sec: 1369.6
+step: 182 | loss: 6.1316 | toks/sec: 1753.3
+step: 183 | loss: 6.6319 | toks/sec: 1753.5
+step: 184 | loss: 6.7136 | toks/sec: 1339.9
+step: 185 | loss: 7.0757 | toks/sec: 1377.0
+step: 186 | loss: 7.1527 | toks/sec: 1750.5
+step: 187 | loss: 6.6997 | toks/sec: 1751.1
+step: 188 | loss: 7.0337 | toks/sec: 1331.0
+step: 189 | loss: 6.8968 | toks/sec: 1385.2
+step: 190 | loss: 6.9558 | toks/sec: 1751.6
+step: 191 | loss: 7.6884 | toks/sec: 1759.5
+step: 192 | loss: 7.0577 | toks/sec: 1343.0
+step: 193 | loss: 6.6390 | toks/sec: 1367.3
+step: 194 | loss: 7.5346 | toks/sec: 1739.1
+step: 195 | loss: 7.5835 | toks/sec: 1742.3
+step: 196 | loss: 6.8025 | toks/sec: 1333.9
+step: 197 | loss: 7.3077 | toks/sec: 1309.6
+step: 198 | loss: 7.0786 | toks/sec: 1659.9
+step: 199 | loss: 7.1328 | toks/sec: 1660.4
+step: 200 | loss: 7.4594 | toks/sec: 1279.3
+step: 201 | loss: 6.8552 | toks/sec: 1376.0
+step: 202 | loss: 7.3815 | toks/sec: 1731.4
+step: 203 | loss: 7.1808 | toks/sec: 1556.9
+step: 204 | loss: 7.4399 | toks/sec: 1317.6
+step: 205 | loss: 7.1169 | toks/sec: 1375.8
+step: 206 | loss: 6.7183 | toks/sec: 1547.7
+step: 207 | loss: 6.9902 | toks/sec: 1715.5
+step: 208 | loss: 7.0318 | toks/sec: 1136.8
+step: 209 | loss: 7.2560 | toks/sec: 1230.6
+step: 210 | loss: 6.7933 | toks/sec: 1685.5
+step: 211 | loss: 7.2673 | toks/sec: 1530.9
+step: 212 | loss: 6.6205 | toks/sec: 1290.1
+step: 213 | loss: 7.4972 | toks/sec: 1377.9
+step: 214 | loss: 7.0112 | toks/sec: 1744.4
+step: 215 | loss: 7.0584 | toks/sec: 1740.2
+step: 216 | loss: 7.5931 | toks/sec: 1258.8
+step: 217 | loss: 7.1085 | toks/sec: 1384.8
+step: 218 | loss: 6.4728 | toks/sec: 1751.4
+step: 219 | loss: 6.7614 | toks/sec: 1750.5
+step: 220 | loss: 7.0468 | toks/sec: 1332.1
+step: 221 | loss: 6.2838 | toks/sec: 1331.0
+step: 222 | loss: 7.0863 | toks/sec: 1751.7
+step: 223 | loss: 7.4041 | toks/sec: 1752.8
+step: 224 | loss: 8.0096 | toks/sec: 1336.2
+step: 225 | loss: 7.2957 | toks/sec: 1374.5
+step: 226 | loss: 6.0217 | toks/sec: 1747.9
+step: 227 | loss: 6.6262 | toks/sec: 1750.4
+step: 228 | loss: 7.3269 | toks/sec: 1346.1
+step: 229 | loss: 7.1410 | toks/sec: 1365.0
+step: 230 | loss: 7.0357 | toks/sec: 1671.1
+step: 231 | loss: 6.1007 | toks/sec: 1676.6
+step: 232 | loss: 7.2248 | toks/sec: 1287.7
+step: 233 | loss: 6.5112 | toks/sec: 1380.9
+step: 234 | loss: 6.9165 | toks/sec: 1745.5
+step: 235 | loss: 6.8580 | toks/sec: 1746.1
+step: 236 | loss: 7.0409 | toks/sec: 1330.9
+step: 237 | loss: 7.0824 | toks/sec: 1341.5
+step: 238 | loss: 7.4526 | toks/sec: 1531.0
+step: 239 | loss: 6.4140 | toks/sec: 1688.6
+step: 240 | loss: 6.9131 | toks/sec: 1302.9
+step: 241 | loss: 7.3737 | toks/sec: 1382.5
+step: 242 | loss: 7.6390 | toks/sec: 1744.3
+step: 243 | loss: 7.0213 | toks/sec: 1746.6
+step: 244 | loss: 7.5328 | toks/sec: 1212.4
+step: 245 | loss: 6.9613 | toks/sec: 1382.7
+step: 246 | loss: 6.4714 | toks/sec: 1586.1
+step: 247 | loss: 7.4995 | toks/sec: 1750.2
+step: 248 | loss: 7.2631 | toks/sec: 1333.3
+step: 249 | loss: 7.5617 | toks/sec: 1364.0
+step: 250 | loss: 7.0711 | toks/sec: 1653.3
+step: 251 | loss: 6.1101 | toks/sec: 1651.8
+step: 252 | loss: 5.8653 | toks/sec: 1263.4
+step: 253 | loss: 7.5325 | toks/sec: 1352.1
+step: 254 | loss: 5.6211 | toks/sec: 1420.6
+step: 255 | loss: 7.0271 | toks/sec: 1737.8
+step: 256 | loss: 7.6119 | toks/sec: 1313.8
+step: 257 | loss: 7.7847 | toks/sec: 1384.1
+step: 258 | loss: 7.2706 | toks/sec: 1747.2
+step: 259 | loss: 6.8192 | toks/sec: 1747.4
+step: 260 | loss: 7.4497 | toks/sec: 1330.0
+step: 261 | loss: 6.3289 | toks/sec: 1380.3
+step: 262 | loss: 6.5640 | toks/sec: 1742.1
+step: 263 | loss: 6.8085 | toks/sec: 1745.2
+step: 264 | loss: 7.3388 | toks/sec: 1327.9
+step: 265 | loss: 7.4947 | toks/sec: 1384.2
+step: 266 | loss: 7.5702 | toks/sec: 1750.6
+step: 267 | loss: 6.3552 | toks/sec: 1752.8
+step: 268 | loss: 7.5899 | toks/sec: 1336.0
+step: 269 | loss: 7.0934 | toks/sec: 1386.7
+step: 270 | loss: 6.6623 | toks/sec: 1762.8
+step: 271 | loss: 7.2837 | toks/sec: 1763.3
+step: 272 | loss: 7.4132 | toks/sec: 1339.4
+step: 273 | loss: 6.6337 | toks/sec: 1377.0
+step: 274 | loss: 6.9708 | toks/sec: 1728.9
+step: 275 | loss: 7.9307 | toks/sec: 1520.4
+step: 276 | loss: 6.3402 | toks/sec: 1287.8
+step: 277 | loss: 7.6253 | toks/sec: 1284.2
+step: 278 | loss: 6.8107 | toks/sec: 1518.4
+step: 279 | loss: 6.6514 | toks/sec: 1669.7
+step: 280 | loss: 7.3344 | toks/sec: 1283.5
+step: 281 | loss: 5.6121 | toks/sec: 1360.4
+step: 282 | loss: 7.1668 | toks/sec: 1648.0
+step: 283 | loss: 6.6627 | toks/sec: 1668.3
+step: 284 | loss: 7.3805 | toks/sec: 1220.5
+step: 285 | loss: 5.9217 | toks/sec: 1381.8
+step: 286 | loss: 7.7049 | toks/sec: 1649.9
+step: 287 | loss: 7.1915 | toks/sec: 1649.5
+step: 288 | loss: 6.6529 | toks/sec: 1282.4
+step: 289 | loss: 7.4076 | toks/sec: 1320.4
+step: 290 | loss: 6.8604 | toks/sec: 1671.0
+step: 291 | loss: 7.0423 | toks/sec: 1548.4
+step: 292 | loss: 6.9518 | toks/sec: 1284.0
+step: 293 | loss: 6.9460 | toks/sec: 1339.1
+step: 294 | loss: 6.5571 | toks/sec: 1670.1
+step: 295 | loss: 6.9794 | toks/sec: 1668.7
+step: 296 | loss: 6.7115 | toks/sec: 1296.0
+step: 297 | loss: 6.5659 | toks/sec: 1373.7
+step: 298 | loss: 6.4101 | toks/sec: 1741.4
+step: 299 | loss: 6.4508 | toks/sec: 1736.5
+step: 300 | loss: 6.4827 | toks/sec: 1238.3
+step: 301 | loss: 5.9433 | toks/sec: 1329.6
+step: 302 | loss: 6.8708 | toks/sec: 1659.7
+step: 303 | loss: 6.4474 | toks/sec: 1659.8
+step: 304 | loss: 7.0228 | toks/sec: 1286.8
+step: 305 | loss: 6.9333 | toks/sec: 1381.6
+step: 306 | loss: 6.8019 | toks/sec: 1737.4
+step: 307 | loss: 6.3459 | toks/sec: 1736.1
+step: 308 | loss: 7.7475 | toks/sec: 1339.9
+step: 309 | loss: 7.2481 | toks/sec: 1374.9
+step: 310 | loss: 6.6484 | toks/sec: 1578.7
+step: 311 | loss: 7.0534 | toks/sec: 1753.6
+step: 312 | loss: 6.9173 | toks/sec: 1329.7
+step: 313 | loss: 6.6079 | toks/sec: 1382.6
+step: 314 | loss: 7.7082 | toks/sec: 1749.8
+step: 315 | loss: 7.2660 | toks/sec: 1533.9
+step: 316 | loss: 6.5173 | toks/sec: 1222.0
+step: 317 | loss: 6.4736 | toks/sec: 1286.1
+step: 318 | loss: 5.5914 | toks/sec: 1744.4
+step: 319 | loss: 6.1999 | toks/sec: 1745.3
+step: 320 | loss: 7.0112 | toks/sec: 1324.9
+step: 321 | loss: 7.0660 | toks/sec: 1364.6
+step: 322 | loss: 6.5348 | toks/sec: 1738.2
+step: 323 | loss: 7.0210 | toks/sec: 1573.4
+step: 324 | loss: 7.1503 | toks/sec: 1320.1
+step: 325 | loss: 6.8878 | toks/sec: 1375.6
+step: 326 | loss: 7.1568 | toks/sec: 1740.7
+step: 327 | loss: 6.6602 | toks/sec: 1669.4
+step: 328 | loss: 7.6164 | toks/sec: 1216.9
+step: 329 | loss: 6.6495 | toks/sec: 1374.9
+step: 330 | loss: 6.3746 | toks/sec: 1667.9
+step: 331 | loss: 7.7699 | toks/sec: 1666.3
+step: 332 | loss: 6.4874 | toks/sec: 1286.1
+step: 333 | loss: 6.8336 | toks/sec: 1365.4
+step: 334 | loss: 6.9448 | toks/sec: 1741.4
+step: 335 | loss: 6.4798 | toks/sec: 1741.1
+step: 336 | loss: 5.8040 | toks/sec: 1334.4
+step: 337 | loss: 6.7657 | toks/sec: 1387.6
+step: 338 | loss: 6.1196 | toks/sec: 1761.1
+step: 339 | loss: 6.9637 | toks/sec: 1760.2
+step: 340 | loss: 6.8064 | toks/sec: 1339.3
+step: 341 | loss: 6.5764 | toks/sec: 1373.7
+step: 342 | loss: 6.1746 | toks/sec: 1747.3
+step: 343 | loss: 6.4733 | toks/sec: 1749.9
+step: 344 | loss: 6.8400 | toks/sec: 1334.3
+step: 345 | loss: 6.1819 | toks/sec: 1147.1
+step: 346 | loss: 6.3606 | toks/sec: 1656.9
+step: 347 | loss: 7.4621 | toks/sec: 1657.6
+step: 348 | loss: 6.6033 | toks/sec: 1274.1
+step: 349 | loss: 7.2186 | toks/sec: 1326.4
+step: 350 | loss: 6.8557 | toks/sec: 1657.9
+step: 351 | loss: 6.9558 | toks/sec: 1497.6
+step: 352 | loss: 5.8447 | toks/sec: 1196.6
+step: 353 | loss: 6.5996 | toks/sec: 1286.9
+step: 354 | loss: 7.4698 | toks/sec: 1739.1
+step: 355 | loss: 6.6056 | toks/sec: 1738.9
+step: 356 | loss: 7.1144 | toks/sec: 1336.2
+step: 357 | loss: 7.0095 | toks/sec: 1383.3
+step: 358 | loss: 6.7124 | toks/sec: 1744.4
+step: 359 | loss: 5.8780 | toks/sec: 1585.8
+step: 360 | loss: 7.5653 | toks/sec: 1335.8
+step: 361 | loss: 6.6098 | toks/sec: 1385.5
+step: 362 | loss: 7.0280 | toks/sec: 1753.6
+step: 363 | loss: 7.4946 | toks/sec: 1751.6
+step: 364 | loss: 6.1291 | toks/sec: 1339.3
+step: 365 | loss: 6.9530 | toks/sec: 1272.0
+step: 366 | loss: 7.1473 | toks/sec: 1681.0
+step: 367 | loss: 7.6006 | toks/sec: 1681.7
+step: 368 | loss: 7.0157 | toks/sec: 1294.9
+step: 369 | loss: 6.3568 | toks/sec: 1336.0
+step: 370 | loss: 6.7528 | toks/sec: 1745.8
+step: 371 | loss: 6.8660 | toks/sec: 1747.4
