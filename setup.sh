@@ -47,5 +47,7 @@ for d in experiments/tests/*/code/src/tokenizer/; do
   cp -i tokenizer.json "$d"    # -i = interactive prompt
 done
 
-## sync init weights from s3 to base model folder
-aws s3 sync s3://t-endgame-experiment-logs/Test_2_20-step_save_init_model/init /mnt/local-nvme/LLM/experiments/tests/Test_2_20-step_save_init_model/results/init
+## sync data from s3
+# aws s3 sync s3://t-endgame-experiment-logs-2/Test_2_20-step_save_init_model/init /mnt/local-nvme/LLM/experiments/tests/Test_2_20-step_save_init_model/results/init
+
+aws s3 sync s3://t-endgame-experiment-logs-2/shards/wikitext_shards/ /mnt/local-nvme/LLM/experiments/tests/Test_14_gsa_only_liger_kernels_1000steps-OngoingRun3/data/wikitext_shards/

@@ -32,8 +32,17 @@ print('' if val is None else str(val))
 }
 
 LOADER_TYPE="$(_yaml_val loader_type)"
-SHARD_DIR="$(_yaml_val shard_dir)"
-EVAL_SHARD_DIR="$(_yaml_val eval_shard_dir)"
+_raw_shard_dir="$(_yaml_val shard_dir)"
+_raw_eval_shard_dir="$(_yaml_val eval_shard_dir)"
+
+# Resolve relative paths against TEST_ROOT so run.sh works from any cwd
+_abs_path() {
+  local p="$1"
+  [[ -z "$p" ]] && echo "" && return
+  [[ "$p" = /* ]] && echo "$p" || echo "$TEST_ROOT/$p"
+}
+SHARD_DIR="$(_abs_path "$_raw_shard_dir")"
+EVAL_SHARD_DIR="$(_abs_path "$_raw_eval_shard_dir")"
 
 # ---------------------------------------------------------------------------
 # Auto-create shards if loader_type=bin_idx and shard dirs are missing/empty
