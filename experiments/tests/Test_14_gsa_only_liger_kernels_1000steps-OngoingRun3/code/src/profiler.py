@@ -317,7 +317,7 @@ class StepProfiler:
         rank: int = 0,
         profile_steps: Optional[Set[int]] = None,
         output_dir: str = "results/run",
-        enable_async_write: bool = True,
+        enable_async_write: bool = False,
     ):
         self.rank = rank
         self.profile_steps: Set[int] = profile_steps or set()
