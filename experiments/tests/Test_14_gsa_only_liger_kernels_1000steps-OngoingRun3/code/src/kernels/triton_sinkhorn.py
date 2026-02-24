@@ -28,6 +28,14 @@ try:
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
+
+try:
+    from src.profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    @contextmanager
+    def kernel_region(name: str):
+        yield
     triton = None
     tl = None
 
@@ -142,16 +150,17 @@ def triton_sinkhorn_knopp(
     # Launch: one program per matrix
     grid = (num_matrices,)
 
-    _sinkhorn_kernel[grid](
-        H_flat,
-        out_flat,
-        num_matrices,
-        n,
-        eps=eps,
-        num_iters=num_iters,
-        stride_mat=n * n,
-        N_SQ=N_SQ,
-    )
+    with kernel_region("gsa.sinkhorn_knopp"):
+        _sinkhorn_kernel[grid](
+            H_flat,
+            out_flat,
+            num_matrices,
+            n,
+            eps=eps,
+            num_iters=num_iters,
+            stride_mat=n * n,
+            N_SQ=N_SQ,
+        )
 
     return out_flat.reshape(orig_shape).to(orig_dtype)
 
