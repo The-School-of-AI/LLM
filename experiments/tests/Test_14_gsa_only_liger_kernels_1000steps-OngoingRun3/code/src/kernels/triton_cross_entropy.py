@@ -25,10 +25,11 @@ import triton.language as tl
 
 @triton.autotune(
     configs=[
-        triton.Config({"BLOCK_B": 16, "BLOCK_V": 8192,  "BLOCK_H": 256}, num_warps=8, num_stages=4),
-        triton.Config({"BLOCK_B": 32, "BLOCK_V": 16384, "BLOCK_H": 256}, num_warps=8, num_stages=3),
-        triton.Config({"BLOCK_B": 16, "BLOCK_V": 16384, "BLOCK_H": 256}, num_warps=8, num_stages=4),
-        triton.Config({"BLOCK_B": 32, "BLOCK_V": 8192,  "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        # Capping BLOCK_V x BLOCK_H <= 1,048,576 (Triton numel limit)
+        triton.Config({"BLOCK_B": 16, "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 32, "BLOCK_V": 2048, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 16, "BLOCK_V": 2048, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 32, "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
     ],
     key=["V", "H"],
 )
@@ -56,7 +57,7 @@ def _fwd_stream_kernel(
     s = tl.zeros((BLOCK_B,), tl.float32)
     ylog = tl.zeros((BLOCK_B,), tl.float32)
 
-    for v0 in tl.static_range(0, V, BLOCK_V):
+    for v0 in range(0, V, BLOCK_V):
         v_ids = v0 + tl.arange(0, BLOCK_V)
         v_mask = v_ids < V
 
@@ -105,9 +106,10 @@ def _fwd_stream_kernel(
 
 @triton.autotune(
     configs=[
-        triton.Config({"BLOCK_B": 16, "BLOCK_V": 8192, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        # Capping BLOCK_V x BLOCK_H <= 1,048,576
         triton.Config({"BLOCK_B": 16, "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
-        triton.Config({"BLOCK_B": 8,  "BLOCK_V": 8192, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 8,  "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 16, "BLOCK_V": 2048, "BLOCK_H": 256}, num_warps=8, num_stages=3),
     ],
     key=["V", "H"],
 )
