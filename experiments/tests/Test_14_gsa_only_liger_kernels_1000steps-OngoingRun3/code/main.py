@@ -59,7 +59,6 @@ from src.models.recurrence_model_1b import (
     KroneckerConfig,
     KroneckerEmbeddings,
 )
-from src.profiler import PipelineProfiler
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
 
@@ -104,14 +103,7 @@ class Config:
             "enable_system_metrics", False
         )
         self.init_model_path = config_dict["training"].get("init_model_path")
-        self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 4.0)
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
-
-        # Profiler configuration
-        # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
-        # Leave empty or omit to disable profiling.
-        _ps = config_dict["training"].get("profile_steps", [])
-        self.profile_steps: set = set(_ps) if _ps else set()
 
         # DeepSpeed configuration
         self.deepspeed_config = config_dict["deepspeed"]["config_path"]
@@ -240,10 +232,6 @@ def main():
     # Set random seed for reproducibility
     set_seed(args.seed)
 
-    # ── Pipeline profiler (always-on wall-clock, no config gate) ────────────
-    _pipe_out = os.path.dirname(args.metrics_jsonl_path) if args.metrics_jsonl_path else "results/run"
-    pipe = PipelineProfiler(rank=args.local_rank if args.local_rank >= 0 else 0, output_dir=_pipe_out)
-
     print_rank_0("=" * 80)
     print_rank_0("1B Dense Model Training - DeepSpeed + Reversible Architecture")
     print_rank_0("=" * 80)
@@ -288,71 +276,67 @@ def main():
     # Step 0.5: Read DeepSpeed Config to Get Batch Size
     # ========================================
     print_rank_0("\n[0.5/5] Reading DeepSpeed configuration...")
-    with pipe.stage("deepspeed_config_read"):
-        import json
-        with open(args.deepspeed_config, 'r') as f:
-            deepspeed_config = json.load(f)
+    import json
+    with open(args.deepspeed_config, 'r') as f:
+        deepspeed_config = json.load(f)
 
-        validate_kernel_policy(args.require_fused_kernels)
-
-        # Extract batch size from DeepSpeed config
-        micro_batch_size = deepspeed_config.get('train_micro_batch_size_per_gpu', 1)
-        gradient_accumulation_steps = deepspeed_config.get('gradient_accumulation_steps', 1)
-        train_batch_size = deepspeed_config.get('train_batch_size', None)
-
-        print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
-        print_rank_0(f"  train_micro_batch_size_per_gpu: {micro_batch_size}")
-        print_rank_0(f"  gradient_accumulation_steps: {gradient_accumulation_steps}")
-
-        # Calculate expected global batch size
-        # train_batch_size = micro_batch × accum_steps × num_gpus
-        import torch.distributed as dist
-        num_gpus = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
-        expected_global_batch = micro_batch_size * gradient_accumulation_steps * num_gpus
-
-        if train_batch_size is not None:
-            print_rank_0(f"  train_batch_size (from config): {train_batch_size}")
-            if train_batch_size != expected_global_batch:
-                print_rank_0(f"  ⚠️  WARNING: train_batch_size ({train_batch_size}) != "
-                            f"micro_batch ({micro_batch_size}) × accum_steps ({gradient_accumulation_steps}) × "
-                            f"num_gpus ({num_gpus}) = {expected_global_batch}")
-                print_rank_0(f"  This mismatch may cause unexpected behavior.")
-        else:
-            print_rank_0(f"  Calculated global batch size: {expected_global_batch}")
-
-        print_rank_0(f"  ✓ Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
+    validate_kernel_policy(args.require_fused_kernels)
+    
+    # Extract batch size from DeepSpeed config
+    micro_batch_size = deepspeed_config.get('train_micro_batch_size_per_gpu', 1)
+    gradient_accumulation_steps = deepspeed_config.get('gradient_accumulation_steps', 1)
+    train_batch_size = deepspeed_config.get('train_batch_size', None)
+    
+    print_rank_0(f"  DeepSpeed Config: {args.deepspeed_config}")
+    print_rank_0(f"  train_micro_batch_size_per_gpu: {micro_batch_size}")
+    print_rank_0(f"  gradient_accumulation_steps: {gradient_accumulation_steps}")
+    
+    # Calculate expected global batch size
+    # train_batch_size = micro_batch × accum_steps × num_gpus
+    import torch.distributed as dist
+    num_gpus = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+    expected_global_batch = micro_batch_size * gradient_accumulation_steps * num_gpus
+    
+    if train_batch_size is not None:
+        print_rank_0(f"  train_batch_size (from config): {train_batch_size}")
+        if train_batch_size != expected_global_batch:
+            print_rank_0(f"  ⚠️  WARNING: train_batch_size ({train_batch_size}) != "
+                        f"micro_batch ({micro_batch_size}) × accum_steps ({gradient_accumulation_steps}) × "
+                        f"num_gpus ({num_gpus}) = {expected_global_batch}")
+            print_rank_0(f"  This mismatch may cause unexpected behavior.")
+    else:
+        print_rank_0(f"  Calculated global batch size: {expected_global_batch}")
+    
+    print_rank_0(f"  ✓ Using micro_batch_size_per_gpu={micro_batch_size} for DataLoader")
 
     # ========================================
     # Step 1: Load Tokenizer & Data
     # ========================================
     print_rank_0("\n[1/5] Loading tokenizer and data...")
-    with pipe.stage("tokenizer_load"):
-        print_rank_0("  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)")
-        tokenizer = get_tokenizer()  # Loads from src/tokenizer/
-
-    with pipe.stage("data_load"):
-        train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
-            dataset_name=args.dataset_name,
-            dataset_config=args.dataset_config,
-            tokenizer=tokenizer,
-            batch_size=micro_batch_size,  # Use DeepSpeed config value instead of args.batch_size
-            max_length=args.max_length,
-            tokenized_dataset_path=args.tokenized_dataset_path,
-            dataset_cache_dir=args.dataset_cache_dir,
-            local_nvme_cache_dir=args.local_nvme_cache_dir,
-            require_local_nvme=args.require_local_nvme,
-            pack_into_blocks=args.pack_into_blocks,
-            block_sizes=args.block_sizes,
-            block_size_counts=args.block_size_counts,
-            domain_column=args.domain_column,
-            concat_across_domains=args.concat_across_domains,
-            drop_remainder=args.drop_remainder,
-            num_workers=args.num_workers,
-            tokenize_num_proc=args.tokenize_num_proc,
-        )
-        print_rank_0(f"  Train batches: {len(train_loader)}")
-        print_rank_0(f"  Eval batches: {len(eval_loader)}")
-        print_rank_0(f"  Test batches: {len(test_loader)}")
+    print_rank_0("  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)")
+    tokenizer = get_tokenizer()  # Loads from src/tokenizer/
+    train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
+        dataset_name=args.dataset_name,
+        dataset_config=args.dataset_config,
+        tokenizer=tokenizer,
+        batch_size=micro_batch_size,  # Use DeepSpeed config value instead of args.batch_size
+        max_length=args.max_length,
+        tokenized_dataset_path=args.tokenized_dataset_path,
+        dataset_cache_dir=args.dataset_cache_dir,
+        local_nvme_cache_dir=args.local_nvme_cache_dir,
+        require_local_nvme=args.require_local_nvme,
+        pack_into_blocks=args.pack_into_blocks,
+        block_sizes=args.block_sizes,
+        block_size_counts=args.block_size_counts,
+        domain_column=args.domain_column,
+        concat_across_domains=args.concat_across_domains,
+        drop_remainder=args.drop_remainder,
+        num_workers=args.num_workers,
+        tokenize_num_proc=args.tokenize_num_proc,
+    )
+    print_rank_0(f"  Train batches: {len(train_loader)}")
+    print_rank_0(f"  Eval batches: {len(eval_loader)}")
+    print_rank_0(f"  Test batches: {len(test_loader)}")
 
     # ========================================
     # Step 2: Load Model (1B Dense Model)
@@ -381,63 +365,60 @@ def main():
     # Prepare vocabulary for Kronecker embeddings if needed
     bpe_vocab = None
     pf_codec = None
-
-    with pipe.stage("kronecker_vocab_build"):
-        if args.embedding_type == "kronecker":
-            print_rank_0("  Setting up Kronecker Product Embeddings (byte-level)...")
-
-            # Extract vocabulary words from tokenizer
-            bpe_vocab = []
-            for i in range(vocab_size):
-                try:
-                    token = tokenizer.decode([i])
-                    bpe_vocab.append(token if token else f"<unk_{i}>")
-                except:
-                    bpe_vocab.append(f"<unk_{i}>")
-
-            # Create Kronecker codec
-            pf_config = KroneckerConfig(
-                CHAR_DIM=256,
-                POS_DIM=32,
-                D=8192,
-                length_normalize=True,
-                truncate_long_words=True
-            )
-            pf_codec = KroneckerEmbeddings(pf_config)
-
-            print_rank_0(f"  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192")
-        else:
-            print_rank_0("  Using Standard Embeddings")
-
-    with pipe.stage("model_build"):
-        # Create the 1B model
-        model = Model1B(
-            config=config,
-            embedding_type=args.embedding_type,
-            bpe_vocab=bpe_vocab,
-            pf_codec=pf_codec
+    
+    if args.embedding_type == "kronecker":
+        print_rank_0("  Setting up Kronecker Product Embeddings (byte-level)...")
+        
+        # Extract vocabulary words from tokenizer
+        bpe_vocab = []
+        for i in range(vocab_size):
+            try:
+                token = tokenizer.decode([i])
+                bpe_vocab.append(token if token else f"<unk_{i}>")
+            except:
+                bpe_vocab.append(f"<unk_{i}>")
+        
+        # Create Kronecker codec
+        pf_config = KroneckerConfig(
+            CHAR_DIM=256,
+            POS_DIM=32,
+            D=8192,
+            length_normalize=True,
+            truncate_long_words=True
         )
+        pf_codec = KroneckerEmbeddings(pf_config)
+        
+        print_rank_0(f"  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192")
+    else:
+        print_rank_0("  Using Standard Embeddings")
+    
+    # Create the 1B model
+    model = Model1B(
+        config=config,
+        embedding_type=args.embedding_type,
+        bpe_vocab=bpe_vocab,
+        pf_codec=pf_codec
+    )
 
-    with pipe.stage("model_to_bf16"):
-        print_rank_0("  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...")
-        model = model.to(dtype=torch.bfloat16)
+    print_rank_0("  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...")
+    model = model.to(dtype=torch.bfloat16)
+    # ----------------------
 
     if args.init_model_path:
-        with pipe.stage("init_weights_load"):
-            init_model_path = os.path.expanduser(args.init_model_path)
-            if not os.path.exists(init_model_path):
-                raise FileNotFoundError(
-                    f"training.init_model_path does not exist: {init_model_path}"
-                )
-            print_rank_0(f"  Loading init model weights from: {init_model_path}")
-            init_payload = torch.load(init_model_path, map_location="cpu")
-            init_state_dict = (
-                init_payload["state_dict"]
-                if isinstance(init_payload, dict) and "state_dict" in init_payload
-                else init_payload
+        init_model_path = os.path.expanduser(args.init_model_path)
+        if not os.path.exists(init_model_path):
+            raise FileNotFoundError(
+                f"training.init_model_path does not exist: {init_model_path}"
             )
-            model.load_state_dict(init_state_dict, strict=True)
-            print_rank_0("  ✓ Init model weights loaded")
+        print_rank_0(f"  Loading init model weights from: {init_model_path}")
+        init_payload = torch.load(init_model_path, map_location="cpu")
+        init_state_dict = (
+            init_payload["state_dict"]
+            if isinstance(init_payload, dict) and "state_dict" in init_payload
+            else init_payload
+        )
+        model.load_state_dict(init_state_dict, strict=True)
+        print_rank_0("  ✓ Init model weights loaded")
 
     validate_precision_policy(deepspeed_config, next(model.parameters()).dtype)
 
@@ -449,15 +430,14 @@ def main():
     # ========================================
     print_rank_0("\n[3/5] Initializing DeepSpeed...")
 
-    with pipe.stage("deepspeed_init"):
-        with open(args.deepspeed_config, 'r') as f:
-            ds_config = json.load(f)
-
-        model_engine, optimizer, _, _ = deepspeed.initialize(
-            config_params=ds_config,
-            model=model,
-            model_parameters=model.parameters(),
-        )
+    with open(args.deepspeed_config, 'r') as f:
+        ds_config = json.load(f)
+        
+    model_engine, optimizer, _, _ = deepspeed.initialize(
+        config_params=ds_config,
+        model=model, 
+        model_parameters=model.parameters(),
+    )
 
     print_rank_0(f"ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
@@ -470,16 +450,15 @@ def main():
         if not args.s3_bucket:
             raise ValueError("--s3_bucket is required when --use_s3 is enabled")
 
-        with pipe.stage("checkpoint_manager_init"):
-            s3_config = S3Config(
-                bucket_name=args.s3_bucket,
-                s3_prefix=args.s3_prefix,
-                region=args.s3_region,
-                local_checkpoint_dir=args.output_dir,
-                keep_last_n_checkpoints=args.keep_last_n_checkpoints,
-                cleanup_after_upload=args.cleanup_after_upload,
-            )
-            checkpoint_manager = S3CheckpointManager(s3_config)
+        s3_config = S3Config(
+            bucket_name=args.s3_bucket,
+            s3_prefix=args.s3_prefix,
+            region=args.s3_region,
+            local_checkpoint_dir=args.output_dir,
+            keep_last_n_checkpoints=args.keep_last_n_checkpoints,
+            cleanup_after_upload=args.cleanup_after_upload,
+        )
+        checkpoint_manager = S3CheckpointManager(s3_config)
         print_rank_0("  S3 Checkpoint Manager initialized")
 
     # ========================================
@@ -491,35 +470,34 @@ def main():
 
     if args.resume_from_checkpoint:
         print_rank_0("\n[3.6/5] Resuming from checkpoint...")
-        with pipe.stage("checkpoint_resume"):
-            try:
-                if checkpoint_manager:
-                    # Use S3CheckpointManager for resume
-                    resume_step = args.resume_step if args.resume_step else 0
-                    client_state = checkpoint_manager.load_checkpoint(
-                        model_engine, step=resume_step, tag=args.resume_from_checkpoint
-                    )
-                else:
-                    # Use local checkpoint loading
-                    from src.train import load_checkpoint
+        try:
+            if checkpoint_manager:
+                # Use S3CheckpointManager for resume
+                resume_step = args.resume_step if args.resume_step else 0
+                client_state = checkpoint_manager.load_checkpoint(
+                    model_engine, step=resume_step, tag=args.resume_from_checkpoint
+                )
+            else:
+                # Use local checkpoint loading
+                from src.train import load_checkpoint
 
-                    client_state = load_checkpoint(
-                        model_engine, args.output_dir, tag=args.resume_from_checkpoint
-                    )
+                client_state = load_checkpoint(
+                    model_engine, args.output_dir, tag=args.resume_from_checkpoint
+                )
 
-                # Restore training state from client_state
-                if client_state:
-                    start_epoch = client_state.get("epoch", 0)
-                    start_step = client_state.get("step", 0)
-                    global_step = client_state.get("global_step", 0)
-                    print_rank_0(
-                        f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}"
-                    )
-                else:
-                    print_rank_0("  ⚠️  No client state found, starting fresh")
-            except Exception as e:
-                print_rank_0(f"  ❌ Failed to resume from checkpoint: {e}")
-                print_rank_0("  Starting training from scratch...")
+            # Restore training state from client_state
+            if client_state:
+                start_epoch = client_state.get("epoch", 0)
+                start_step = client_state.get("step", 0)
+                global_step = client_state.get("global_step", 0)
+                print_rank_0(
+                    f"  ✓ Resumed from epoch {start_epoch}, step {start_step}, global_step {global_step}"
+                )
+            else:
+                print_rank_0("  ⚠️  No client state found, starting fresh")
+        except Exception as e:
+            print_rank_0(f"  ❌ Failed to resume from checkpoint: {e}")
+            print_rank_0("  Starting training from scratch...")
 
     # ========================================
     # Step 4: Training
@@ -541,35 +519,30 @@ def main():
         epoch_start_step = start_step if epoch == start_epoch else 0
 
         # Train
-        with pipe.stage(f"epoch_{epoch}_train"):
-            avg_loss, global_step = train_epoch(
-                model_engine,
-                train_loader,
-                epoch,
-                max_steps=args.max_train_steps,
-                log_interval=args.log_interval,
-                enable_system_metrics=args.enable_system_metrics,
-                checkpoint_interval=args.checkpoint_interval,
-                output_dir=args.output_dir,
-                checkpoint_manager=checkpoint_manager,
-                start_step=epoch_start_step,
-                global_step=global_step,
-                metrics_jsonl_path=args.metrics_jsonl_path,
-                max_chunk_gb=args.max_chunk_gb,
-                profile_steps=args.profile_steps if args.profile_steps else None,
-                profile_output_dir=os.path.dirname(args.metrics_jsonl_path) if args.metrics_jsonl_path else None,
-            )
+        avg_loss, global_step = train_epoch(
+            model_engine,
+            train_loader,
+            epoch,
+            max_steps=args.max_train_steps,
+            log_interval=args.log_interval,
+            enable_system_metrics=args.enable_system_metrics,
+            checkpoint_interval=args.checkpoint_interval,
+            output_dir=args.output_dir,
+            checkpoint_manager=checkpoint_manager,
+            start_step=epoch_start_step,
+            global_step=global_step,
+            metrics_jsonl_path=args.metrics_jsonl_path,
+        )
 
         # Evaluate on validation set
         print_rank_0("\nEvaluating on validation set...")
-        with pipe.stage(f"epoch_{epoch}_eval"):
-            eval_loss, eval_perplexity = evaluate(
-                model_engine,
-                eval_loader,
-                phase="Validation",
-                max_steps=args.max_eval_steps,
-                metrics_jsonl_path=args.metrics_jsonl_path,
-            )
+        eval_loss, eval_perplexity = evaluate(
+            model_engine,
+            eval_loader,
+            phase="Validation",
+            max_steps=args.max_eval_steps,
+            metrics_jsonl_path=args.metrics_jsonl_path,
+        )
 
         # Save epoch checkpoint
         if checkpoint_manager or args.save_checkpoint:
@@ -585,18 +558,17 @@ def main():
                 "eval_perplexity": eval_perplexity,
             }
 
-            with pipe.stage(f"epoch_{epoch}_checkpoint_save"):
-                if checkpoint_manager:
-                    checkpoint_manager.save_checkpoint(
-                        model_engine,
-                        step=global_step,
-                        tag=epoch_tag,
-                        client_state=client_state,
-                    )
-                else:
-                    from src.train import save_checkpoint
+            if checkpoint_manager:
+                checkpoint_manager.save_checkpoint(
+                    model_engine,
+                    step=global_step,
+                    tag=epoch_tag,
+                    client_state=client_state,
+                )
+            else:
+                from src.train import save_checkpoint
 
-                    save_checkpoint(model_engine, args.output_dir, tag=epoch_tag)
+                save_checkpoint(model_engine, args.output_dir, tag=epoch_tag)
 
     # ========================================
     # Step 5: Final Evaluation and Testing
@@ -605,20 +577,18 @@ def main():
 
     # Evaluate on test set
     print_rank_0("\nEvaluating on test set...")
-    with pipe.stage("final_eval_test"):
-        test_loss, test_perplexity = evaluate(
-            model_engine,
-            test_loader,
-            phase="Test",
-            max_steps=args.max_eval_steps,
-            metrics_jsonl_path=args.metrics_jsonl_path,
-        )
+    test_loss, test_perplexity = evaluate(
+        model_engine,
+        test_loader,
+        phase="Test",
+        max_steps=args.max_eval_steps,
+        metrics_jsonl_path=args.metrics_jsonl_path,
+    )
 
     # Test text generation
     if args.test_generation:
         print_rank_0("\nTesting text generation...")
-        with pipe.stage("text_generation"):
-            generate_text(model_engine, tokenizer, prompt=args.generation_prompt)
+        generate_text(model_engine, tokenizer, prompt=args.generation_prompt)
 
     # Save final checkpoint
     if args.save_checkpoint or checkpoint_manager:
@@ -633,23 +603,22 @@ def main():
             "training_complete": True,
         }
 
-        with pipe.stage("final_checkpoint_save"):
-            if checkpoint_manager:
-                checkpoint_manager.save_checkpoint(
-                    model_engine, step=global_step, tag="final", client_state=client_state
-                )
-                # Wait for all uploads to complete
-                print_rank_0("\nWaiting for S3 uploads to complete...")
-                checkpoint_manager.wait_for_uploads()
+        if checkpoint_manager:
+            checkpoint_manager.save_checkpoint(
+                model_engine, step=global_step, tag="final", client_state=client_state
+            )
+            # Wait for all uploads to complete
+            print_rank_0("\nWaiting for S3 uploads to complete...")
+            checkpoint_manager.wait_for_uploads()
 
-                # Cleanup old checkpoints
-                if args.keep_last_n_checkpoints > 0:
-                    print_rank_0("\nCleaning up old checkpoints...")
-                    checkpoint_manager.cleanup_old_checkpoints()
-            else:
-                from src.train import save_checkpoint
+            # Cleanup old checkpoints
+            if args.keep_last_n_checkpoints > 0:
+                print_rank_0("\nCleaning up old checkpoints...")
+                checkpoint_manager.cleanup_old_checkpoints()
+        else:
+            from src.train import save_checkpoint
 
-                save_checkpoint(model_engine, args.output_dir, tag="final")
+            save_checkpoint(model_engine, args.output_dir, tag="final")
 
     # Summary
     print_rank_0("\n" + "=" * 80)
@@ -663,10 +632,6 @@ def main():
         if checkpoint_manager:
             print_rank_0(f"S3 Bucket: s3://{args.s3_bucket}/{args.s3_prefix}")
     print_rank_0("=" * 80)
-
-    # Write pipeline profiler reports
-    pipe.write_report()
-    pipe.write_jsonl()
 
     # Cleanup
     torch.cuda.empty_cache()

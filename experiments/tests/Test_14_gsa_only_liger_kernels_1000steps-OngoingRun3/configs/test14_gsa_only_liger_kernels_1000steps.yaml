@@ -24,8 +24,6 @@ training:
   init_model_path: "../results/init/model_init.pt"
   require_gsa_triton: true
   require_fused_kernels: false
-  use_fused_ce: true
-  max_chunk_gb: 4.0
   metrics_jsonl_path: "../results/run/metrics.jsonl"
   # Kernel profiler: list global step numbers to profile (e.g. [10, 11, 12]).
   # Outputs profile_report.txt + profile.jsonl next to metrics_jsonl_path.

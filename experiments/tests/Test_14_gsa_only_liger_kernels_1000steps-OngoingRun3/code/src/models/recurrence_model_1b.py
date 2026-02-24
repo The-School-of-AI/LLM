@@ -34,19 +34,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# ── Profiler (optional — zero overhead when inactive) ────────────────────────
-try:
-    from ..profiler import time_region
-except Exception:
-    try:
-        from src.profiler import time_region
-    except Exception:
-        from contextlib import contextmanager
-
-        @contextmanager
-        def time_region(name: str):  # type: ignore[misc]
-            yield
-
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
 # Mirror 70B import resolution so 1B behaves identically across launch contexts.
 def _import_kernels_module():
@@ -639,10 +626,18 @@ class ShortConvolution(nn.Module):
     def forward(self, x):
         # x: (B, T, D)
         x = x.transpose(1, 2)  # (B, D, T)
+        
+        # Stride Safety: Conv1d requires contiguous or memory-format friendly input.
+        # If x is a view of a slice, this avoids an internal hidden copy by doing it explicitly.
+        if not x.is_contiguous():
+            x = x.contiguous()
+            
         x = self.conv(x)
         x = x[:, :, :-(self.conv_size - 1)]  # Remove extra padding for causality
-        x = x.transpose(1, 2)  # (B, T, D)
-        return self.activation(x)
+        
+        # Optimization: Apply activation before final transpose to stay in (B, D, T)
+        x = self.activation(x)
+        return x.transpose(1, 2)  # (B, T, D)
 
 
 class FusedRMSNormSwishGate(nn.Module):
@@ -687,15 +682,15 @@ class GatedDeltaNet(nn.Module):
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
+        self.key_dim = key_dim
+        self.value_dim = value_dim
 
-        self.q_proj = nn.Linear(hidden_size, key_dim, bias=False)
-        self.k_proj = nn.Linear(hidden_size, key_dim, bias=False)
-        self.v_proj = nn.Linear(hidden_size, value_dim, bias=False)
-        self.g_proj = nn.Linear(hidden_size, value_dim, bias=False)
+        # Fused Projections
+        # Big GEMM: [q, k, v, g] -> 2*key_dim + 2*value_dim (total 4096->16384 if dims match)
+        out_dim = 2 * key_dim + 2 * value_dim
+        self.fused_qkvg_proj = nn.Linear(hidden_size, out_dim, bias=False)
+        self.fused_bgk_proj = nn.Linear(hidden_size, 2 * num_heads, bias=True)
         self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
-
-        self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)
-        self.gk_proj = nn.Linear(hidden_size, num_heads, bias=True)
 
         self.q_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
         self.k_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
@@ -710,10 +705,10 @@ class GatedDeltaNet(nn.Module):
 
         self.rotary_emb = RotaryEmbedding(
             head_dim,
-            max_position_embeddings=4096,
-            base=10000,
-            original_max_position_embeddings=4096,
-            scaling_factor=1.0
+            max_position_embeddings=max_seq_len,
+            base=rope_base,
+            original_max_position_embeddings=rope_original_max,
+            scaling_factor=rope_scaling_factor
         )
 
         if use_output_norm:
@@ -722,12 +717,48 @@ class GatedDeltaNet(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.q_proj, self.k_proj, self.v_proj, self.g_proj, self.o_proj]:
+        for m in [self.fused_qkvg_proj, self.fused_bgk_proj, self.o_proj]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
-        for m in [self.b_proj, self.gk_proj]:
-            nn.init.normal_(m.weight, mean=0.0, std=0.02)
-            if m.bias is not None:
+            if hasattr(m, 'bias') and m.bias is not None:
                 nn.init.zeros_(m.bias)
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                              missing_keys, unexpected_keys, error_msgs):
+        """
+        Self-healing checkpoint compatibility:
+        Remaps old separate projection weights into the new fused GEMM parameters.
+        """
+        # 1. Remap Big GEMM: [q, k, v, g]
+        new_qkvg_key = prefix + 'fused_qkvg_proj.weight'
+        old_keys = ['q_proj.weight', 'k_proj.weight', 'v_proj.weight', 'g_proj.weight']
+        if new_qkvg_key not in state_dict and all(prefix + k in state_dict for k in old_keys):
+            weights = [state_dict[prefix + k] for k in old_keys]
+            # Safety: Ensure all weights match expected hidden_size dim before cat
+            if any(w.shape[1] != self.hidden_size for w in weights):
+                error_msgs.append(f"{prefix}: fused_qkvg remap: hidden_size mismatch. Expected {self.hidden_size}")
+            else:
+                state_dict[new_qkvg_key] = torch.cat([state_dict.pop(prefix + k) for k in old_keys], dim=0)
+
+        # 2. Remap Small GEMM: [beta, gk]
+        new_bgk_w_key = prefix + 'fused_bgk_proj.weight'
+        new_bgk_b_key = prefix + 'fused_bgk_proj.bias'
+        old_keys_bgk = ['b_proj.weight', 'gk_proj.weight']
+        old_biases_bgk = ['b_proj.bias', 'gk_proj.bias']
+        
+        if new_bgk_w_key not in state_dict and all(prefix + k in state_dict for k in old_keys_bgk):
+            weights = [state_dict[prefix + k] for k in old_keys_bgk]
+            if any(w.shape[1] != self.hidden_size for w in weights):
+                error_msgs.append(f"{prefix}: fused_bgk weight remap: hidden_size mismatch. Expected {self.hidden_size}")
+            else:
+                state_dict[new_bgk_w_key] = torch.cat([state_dict.pop(prefix + k) for k in old_keys_bgk], dim=0)
+            
+        if new_bgk_b_key not in state_dict and all(prefix + k in state_dict for k in old_biases_bgk):
+            biases = [state_dict[prefix + k] for k in old_biases_bgk]
+            # No hidden_size check for bias: (num_heads,)
+            state_dict[new_bgk_b_key] = torch.cat([state_dict.pop(prefix + k) for k in old_biases_bgk], dim=0)
+
+        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
+                                      missing_keys, unexpected_keys, error_msgs)
 
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
@@ -735,10 +766,14 @@ class GatedDeltaNet(nn.Module):
         token_keep = _token_keep_mask(attention_mask, B, T, device)
         token_keep_f = None
 
-        q = self.q_proj(x)
-        k = self.k_proj(x)
-        v = self.v_proj(x)
-        g = self.g_proj(x)
+        # Launch 1: Big Project (q, k, v, g) — Collapsed memory access
+        qkvg = self.fused_qkvg_proj(x)
+        # Sliced split allows decoupled key_dim vs value_dim
+        q, k, v, g = torch.split(qkvg, [self.key_dim, self.key_dim, self.value_dim, self.value_dim], dim=-1)
+        
+        # Launch 2: Small Project (beta, gk)
+        bgk = self.fused_bgk_proj(x)
+        b_logits, gk_logits = bgk.chunk(2, dim=-1)
 
         q = self.q_conv1d(q)
         k = self.k_conv1d(k)
@@ -759,10 +794,14 @@ class GatedDeltaNet(nn.Module):
         q = self.rotary_emb._apply_rotary(q, cos, sin)
         k = self.rotary_emb._apply_rotary(k, cos, sin)
 
-        beta = torch.sigmoid(self.b_proj(x)).unsqueeze(-1)  # (B, T, num_heads, 1)
-        gk = self.gk_proj(x)
-        A = torch.exp(self.A_log)
-        alpha = torch.exp(-A.view(1, 1, self.num_heads, 1) * F.softplus(gk + self.dt_bias).unsqueeze(-1))
+        beta = torch.sigmoid(b_logits).unsqueeze(-1)  # (B, T, num_heads, 1)
+        gk = gk_logits  # (B, T, num_heads)
+        A = torch.exp(self.A_log)  # (num_heads,)
+        
+        # Explicit broadcasting for alpha calculation (prevent numerical surprises)
+        # Our alpha = exp(-A * softplus(gk + dt_bias))
+        dt = F.softplus(gk + self.dt_bias.view(1, 1, -1))  # (B, T, num_heads)
+        alpha = torch.exp(-A.view(1, 1, -1) * dt).unsqueeze(-1) # (B, T, num_heads, 1)
 
         if token_keep is not None:
             token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
@@ -783,11 +822,10 @@ class GatedDeltaNet(nn.Module):
 
         if fla_available:
             try:
-                with time_region("deltanet.fla"):
-                    o = fla_gated_delta_rule(
-                        q=q, k=k, v=v, alpha=alpha, beta=beta,
-                        D=self.D, num_heads=self.num_heads,
-                    )
+                o = fla_gated_delta_rule(
+                    q=q, k=k, v=v, alpha=alpha, beta=beta,
+                    D=self.D, num_heads=self.num_heads,
+                )
             except Exception as e:
                 if self.require_fused_kernel:
                     raise RuntimeError("DeltaNet fused kernel execution failed and fallback is disabled.") from e
@@ -943,15 +981,14 @@ class GatedSparseAttention(nn.Module):
                     "Fallback indexer path is disabled."
                 )
 
-            with time_region("gsa.indexer"):
-                var_t, k_t, top_indices = fused_indexer_topk(
-                    q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
-                    scale=scale_idx, causal=True,
-                    k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
-                    variance_ema=ema_for_indexer,  # snapshot or live
-                    is_training=False,
-                    sink_size=4,
-                )
+            var_t, k_t, top_indices = fused_indexer_topk(
+                q=q_I, k=k_I, w=w_raw, b=self.gate_bias,
+                scale=scale_idx, causal=True,
+                k_base=self.k_base, k_min=self.k_min, k_max=self.k_max,
+                variance_ema=ema_for_indexer,  # snapshot or live
+                is_training=False,
+                sink_size=4,
+            )
 
             if is_reversible_forward:
                 var_t_mean = var_t.mean().detach()
@@ -1056,11 +1093,10 @@ class GatedSparseAttention(nn.Module):
                 "GSA fused sparse attention kernel (forward+backward) is required. "
                 "PyTorch fallback is disabled for this test."
             )
-        with time_region("gsa.sparse_attn"):
-            o_sparse = triton_sparse_attention(
-                q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
-                use_triton_backward=True,
-            )
+        o_sparse = triton_sparse_attention(
+            q, k_attn, v, sparse_idx, sparse_mask, scale_attn,
+            use_triton_backward=True,
+        )
         if token_keep is not None:
             o_sparse = o_sparse * token_keep.to(dtype=o_sparse.dtype).view(B, T, 1, 1)
 
@@ -1133,13 +1169,11 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> t
         # Stable exp: subtract max along last dim before passing to kernel
         logits_stable = logits - logits.amax(dim=-1, keepdim=True)
         try:
-            with time_region("sinkhorn.triton"):
-                return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
+            return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
         except Exception:
             pass  # fall through to PyTorch
     # PyTorch fallback (CPU or Triton unavailable)
-    with time_region("sinkhorn.pytorch"):
-        return pytorch_sinkhorn_knopp(logits, num_iters=iters, eps=eps)
+    return pytorch_sinkhorn_knopp(logits, num_iters=iters, eps=eps)
 
 
 class MHCCoeffs(nn.Module):
