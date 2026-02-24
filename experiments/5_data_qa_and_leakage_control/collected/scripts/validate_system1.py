@@ -64,7 +64,7 @@ with open("test_data/validation_10k.jsonl", "w") as f:
     for item in output:
         f.write(json.dumps(item) + "\n")
 
-print(f"✓ Created validation_10k.jsonl")
-print(f"  - 1,000 contaminated (from registry)")
-print(f"  - 9,000 clean")
-print(f"\nExpected detection: ~850-900/1,000 (85-90%)")
+print("✓ Created validation_10k.jsonl")
+print("  - 1,000 contaminated (from registry)")
+print("  - 9,000 clean")
+print("\nExpected detection: ~850-900/1,000 (85-90%)")

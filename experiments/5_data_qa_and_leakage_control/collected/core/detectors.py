@@ -27,7 +27,7 @@ class NGramDetector:
             self.index[name] = ngrams
             console.print(f"✓ {name}: {len(ngrams)} n-grams")
 
-        console.print(f"[green]✓ N-gram index ready[/green]\n")
+        console.print("[green]✓ N-gram index ready[/green]\n")
 
     def _extract(self, text):
         words = text.split()
@@ -70,7 +70,7 @@ class MinHashDetector:
 
             console.print(f"✓ {name}: {len(texts)} hashes")
 
-        console.print(f"[green]✓ MinHash index ready[/green]\n")
+        console.print("[green]✓ MinHash index ready[/green]\n")
 
     def _hash(self, text):
         mh = MinHash(num_perm=self.num_perm)
@@ -108,7 +108,6 @@ class MinHashDetector:
 class SemanticDetector:
     def __init__(self, threshold=0.9, model_name="all-MiniLM-L6-v2", batch_size=512):
         try:
-            import faiss
             from sentence_transformers import SentenceTransformer
         except ImportError:
             raise ImportError("pip install faiss-cpu sentence-transformers")
