@@ -2,14 +2,14 @@ data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-103-raw-v1"
   tokenize_num_proc: 8
-  max_length: 512
+  max_length: 4096
   num_workers: 16
   tokenized_dataset_path: null
   dataset_cache_dir: null
   local_nvme_cache_dir: null
   require_local_nvme: false
   pack_into_blocks: true
-  block_sizes: [512]
+  block_sizes: [4096]
   block_size_counts: null
   domain_column: null
   concat_across_domains: false
