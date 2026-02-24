@@ -2145,7 +2145,7 @@ class Model8B(nn.Module):
         self.layer_types = layer_types
 
         # Reversible Midpoint Integration
-        from reversible_ops_midpoint import ReversibleMidpointStack
+        from .reversible_ops_midpoint import ReversibleMidpointStack
 
         self.stack = ReversibleMidpointStack(
             self.layers,
