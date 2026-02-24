@@ -17,14 +17,14 @@ def main():
     if len(sys.argv) < 4:
         print("Usage: python scripts/scan.py <input_file> <team_name> <batch_name>")
         sys.exit(1)
-    
+
     input_file = sys.argv[1]
     team_name = sys.argv[2]
     batch_name = sys.argv[3]
-    
+
     scanner = ContaminationScanner()
     is_approved, _ = scanner.scan_dataset(input_file, team_name, batch_name)
-    
+
     sys.exit(0 if is_approved else 1)
 
 
