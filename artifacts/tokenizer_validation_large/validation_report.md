@@ -72,3 +72,31 @@ The script was run successfully on the large sample subsets. The results indicat
 
 ## 3. Conclusion
 The `tsai_131k_tokenizer` successfully passes all integration checks against the actual data subsets. It seamlessly handles special tokens, avoids unnecessary UNKs, perfectly reconstructs text, and reliably processes long contexts (128k+ tokens). It is ready for use in the data preparation and training pipelines.
+
+## 4. Advanced Quality & Safety Checks
+In addition to data-loss and stability metrics, we ran four qualitative checks (via `quality_checks.py`) to understand how the tokenizer models edge-case behaviors:
+
+### A. Prompt Injection & Special Token Leakage
+- **Test:** Passing the raw string `"<|assistant|>"` into the tokenizer.
+- **Result:** **WARNING.** The tokenizer natively encodes the raw string into the literal special token ID `130728`.
+- **Impact:** This is a prompt injection risk. If an end user sends `"<|assistant|>"` in their input, they could hijack the model's generation turn. The data pipeline and serving API **must** escape these sequences before tokenization.
+
+### B. Compression Ratio by Language
+- **Test:** Calculating the `Characters per Token` ratio across various languages in a 50k pretraining sample.
+- **Results:**
+  - `en`: 4.25 chars/token
+  - `hi` (Hindi): 3.22 chars/token
+  - `ta`, `ml`, `bn`: ~2.8 - 2.9 chars/token
+  - `pa` (Punjabi): 1.91 chars/token
+  - `or` (Odia): 1.02 chars/token
+- **Impact:** The tokenizer is highly efficient for English and reasonable for major Indic scripts. However, it severely struggles with Odia (`or`), treating almost every character as a separate byte token. Training/inference on Odia will be extremely slow and context-inefficient.
+
+### C. Numeric Tokenization
+- **Test:** Tokenizing digits of increasing length (`1`, `12`, `123`, `1234`, `12345`).
+- **Result:** The tokenizer performs greedy merging, chunking numbers into 1-to-3 digit blocks (e.g. `1234` -> `["123", "4"]`).
+- **Impact:** While functional, non-uniform digit splitting can occasionally harm arithmetic and reasoning capabilities compared to tokenizers that strictly split digits into single tokens.
+
+### D. Whitespace Prefix Invariance
+- **Test:** Tokenizing `"Hello"` vs `" Hello"`.
+- **Result:** The tokenizer produces distinct token IDs (`10493` vs `25399`).
+- **Impact:** This is expected for BPE/SentencePiece tokenizers, but confirms that the model must learn two separate representations for the same word depending on preceding whitespace.
