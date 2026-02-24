@@ -22,8 +22,9 @@ except (ImportError, AttributeError):
     HAS_FLA = False
     fla_gated_delta_rule = None
 
-# Swap to V2 (key-major dK/dV backward, no atomics)
-from .triton_sparse_attn_v2 import triton_sparse_attention_v2 as triton_sparse_attention
+from .triton_sparse_attn import (
+    triton_sparse_attention_v2 as triton_sparse_attention,
+)
 
 from .triton_indexer import (
     triton_gated_indexer,
