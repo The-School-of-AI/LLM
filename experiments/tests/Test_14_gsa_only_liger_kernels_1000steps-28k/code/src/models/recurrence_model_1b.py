@@ -91,6 +91,7 @@ if _kernels_module is not None:
     TritonRMSNorm = getattr(_kernels_module, "TritonRMSNorm", None)
     fused_indexer_topk = getattr(_kernels_module, "fused_indexer_topk", None)
     fla_gated_delta_rule = getattr(_kernels_module, "fla_gated_delta_rule", None)
+    fused_delta_entrance = getattr(_kernels_module, "fused_delta_entrance", None)
 else:
     HAS_TRITON = False
     HAS_FLA = False
@@ -103,6 +104,7 @@ else:
     TritonRMSNorm = None
     fused_indexer_topk = None
     fla_gated_delta_rule = None
+    fused_delta_entrance = None
 
 HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
@@ -740,25 +742,24 @@ class GatedDeltaNet(nn.Module):
         v = self.v_proj(x)
         g = self.g_proj(x)
 
-        q = self.q_conv1d(q)
-        k = self.k_conv1d(k)
-        v = self.v_conv1d(v)
+        # ── Kernel Integration ───────────────────────────────────────────────
+        # Fuses: causal conv1d(4) + SiLU + mask + L2Norm + RoPE
+        if fused_delta_entrance is None:
+            raise RuntimeError("fused_delta_entrance kernel is required but missing or failed to load.")
 
-        q = q.view(B, T, self.num_heads, self.head_dim)
-        k = k.view(B, T, self.num_heads, self.head_dim)
-        v = v.view(B, T, self.num_heads, self.head_dim)
-        g = g.view(B, T, self.num_heads, self.head_dim)
-
-        # L2 Normalization MUST happen first, otherwise it destroys the RoPE rotational structure
-        q = F.normalize(q, p=2, dim=-1)
-        k = F.normalize(k, p=2, dim=-1)
-
+        mask_flat = token_keep.to(dtype=x.dtype) if token_keep is not None else torch.ones((B, T), device=device, dtype=x.dtype)
         cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-        cos = cos.unsqueeze(0).unsqueeze(2)
-        sin = sin.unsqueeze(0).unsqueeze(2)
-        q = self.rotary_emb._apply_rotary(q, cos, sin)
-        k = self.rotary_emb._apply_rotary(k, cos, sin)
 
+        # The kernel will return (B, T, H, D)
+        q, k, v = fused_delta_entrance(
+            q, k, v,
+            self.q_conv1d.conv.weight.squeeze(1),
+            self.k_conv1d.conv.weight.squeeze(1),
+            self.v_conv1d.conv.weight.squeeze(1),
+            cos, sin, mask_flat
+        )
+
+        g = g.view(B, T, self.num_heads, self.head_dim)
         beta = torch.sigmoid(self.b_proj(x)).unsqueeze(-1)  # (B, T, num_heads, 1)
         gk = self.gk_proj(x)
         A = torch.exp(self.A_log)
@@ -766,9 +767,7 @@ class GatedDeltaNet(nn.Module):
 
         if token_keep is not None:
             token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
-            q = q * token_keep_f
-            k = k * token_keep_f
-            v = v * token_keep_f
+            # q, k, v already masked via fused_delta_entrance
             g = g * token_keep_f
             beta = beta * token_keep_f
             alpha = alpha * token_keep_f + (1.0 - token_keep_f)

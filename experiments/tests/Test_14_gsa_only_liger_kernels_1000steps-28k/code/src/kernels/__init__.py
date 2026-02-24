@@ -52,6 +52,10 @@ from .moe_grouped_gemm import (
     moe_grouped_gemm,
 )
 
+from .triton_delta_entrance import (
+    fused_delta_entrance,
+)
+
 __all__ = [
     "HAS_TRITON",
     "HAS_FLA",
@@ -68,4 +72,5 @@ __all__ = [
     "fused_indexer_topk",
     "streaming_indexer_variance",
     "moe_grouped_gemm",
+    "fused_delta_entrance",
 ]
