@@ -4,4 +4,10 @@ version = "0.1.0"
 description = "TSAI 70B LLM Training"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+  "pandas>=2.0",
+  "pyarrow>=14.0",
+  "tokenizers>=0.15",
+  "tqdm>=4.66",
+  "transformers>=4.40",
+]

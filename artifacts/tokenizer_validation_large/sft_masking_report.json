@@ -1,0 +1,13 @@
+{
+  "missing_role_tokens": [],
+  "role_token_ids": {
+    "<|system|>": 130726,
+    "<|user|>": 130727,
+    "<|assistant|>": 130728
+  },
+  "role_token_occurrences": {
+    "<|system|>": 0,
+    "<|user|>": 50000,
+    "<|assistant|>": 50000
+  }
+}

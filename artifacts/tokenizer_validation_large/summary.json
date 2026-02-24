@@ -1,0 +1,64 @@
+{
+  "tokenizer_dir": "experiments/6_tokenizer_design_lab/tsai_131k_tokenizer",
+  "seed": 123,
+  "sizes": {
+    "pretraining": 50000,
+    "golden": 128,
+    "sft": 50000
+  },
+  "sft_split_stats": {
+    "paired": 50000,
+    "unpaired": 0
+  },
+  "dataset_summaries": [
+    {
+      "dataset": "pretraining",
+      "count": 50000,
+      "len_mean": 1438.1959,
+      "len_p50": 969,
+      "len_p90": 2580,
+      "len_p95": 3812,
+      "len_p99": 8181,
+      "len_max": 128298,
+      "unk_rate_mean": 0.0,
+      "roundtrip_mismatch_rate_top200": 0.0
+    },
+    {
+      "dataset": "golden",
+      "count": 128,
+      "len_mean": 615.6171875,
+      "len_p50": 486,
+      "len_p90": 1042,
+      "len_p95": 1367,
+      "len_p99": 2549,
+      "len_max": 12617,
+      "unk_rate_mean": 0.0,
+      "roundtrip_mismatch_rate_top200": 0.0
+    },
+    {
+      "dataset": "sft",
+      "count": 50000,
+      "len_mean": 377.67976,
+      "len_p50": 321,
+      "len_p90": 541,
+      "len_p95": 632,
+      "len_p99": 727,
+      "len_max": 1038,
+      "unk_rate_mean": 0.0,
+      "roundtrip_mismatch_rate_top200": 0.0
+    }
+  ],
+  "sft_masking": {
+    "missing_role_tokens": [],
+    "role_token_ids": {
+      "<|system|>": 130726,
+      "<|user|>": 130727,
+      "<|assistant|>": 130728
+    },
+    "role_token_occurrences": {
+      "<|system|>": 0,
+      "<|user|>": 50000,
+      "<|assistant|>": 50000
+    }
+  }
+}
