@@ -1,0 +1,542 @@
+﻿================================================================================
+         TOKENIZER AUDIT REPORT: tsai_131k_tokenizer
+================================================================================
+
+Vocab size: 131,072
+Merges: 303,545
+Added tokens (special): 356
+
+------------------------------------------------------------
+CHECK 1: VOCAB SIZE == 131,072
+------------------------------------------------------------
+  [PASS] 131,072 (2^17)
+
+------------------------------------------------------------
+CHECK 2: REQUIRED SPECIAL TOKENS FOR PRE/POST TRAINING
+------------------------------------------------------------
+  [PASS] BOS                       -> <|begin_of_text|>              (ID: 130716)
+  [PASS] EOS                       -> <|end_of_text|>                (ID: 130717)
+  [PASS] PAD                       -> <|pad|>                        (ID: 130718)
+  [PASS] UNK                       -> <|unk|>                        (ID: 130719)
+  [PASS] SEP                       -> <|sep|>                        (ID: 130720)
+  [PASS] CLS                       -> <|cls|>                        (ID: 130721)
+  [PASS] MASK                      -> <|mask|>                       (ID: 130722)
+  [PASS] SYSTEM role               -> <|system|>                     (ID: 130726)
+  [PASS] USER role                 -> <|user|>                       (ID: 130727)
+  [PASS] ASSISTANT role            -> <|assistant|>                  (ID: 130728)
+  [PASS] TOOL role                 -> <|tool|>                       (ID: 130729)
+  [PASS] FUNCTION role             -> <|function|>                   (ID: 130730)
+  [PASS] CONTEXT                   -> <|context|>                    (ID: 130731)
+  [PASS] INSTRUCTION               -> <|instruction|>                (ID: 130732)
+  [PASS] RESPONSE                  -> <|response|>                   (ID: 130733)
+  [PASS] TURN marker               -> <|turn|>                       (ID: 130734)
+  [PASS] END_TURN                  -> <|end_turn|>                   (ID: 130735)
+  [PASS] EOT                       -> <|EOT|>                        (ID: 130821)
+  [PASS] CODE_BEGIN                -> <|code_begin|>                 (ID: 130736)
+  [PASS] CODE_END                  -> <|code_end|>                   (ID: 130737)
+  [PASS] OUTPUT_BEGIN              -> <|output_begin|>               (ID: 130738)
+  [PASS] OUTPUT_END                -> <|output_end|>                 (ID: 130739)
+  [PASS] ERROR                     -> <|error|>                      (ID: 130740)
+  [PASS] FIM_PREFIX                -> <|fim_prefix|>                 (ID: 130796)
+  [PASS] FIM_MIDDLE                -> <|fim_middle|>                 (ID: 130797)
+  [PASS] FIM_SUFFIX                -> <|fim_suffix|>                 (ID: 130798)
+  [PASS] FIM_PAD                   -> <|fim_pad|>                    (ID: 130799)
+  [PASS] VISION_START              -> <|vision_start|>               (ID: 130800)
+  [PASS] VISION_END                -> <|vision_end|>                 (ID: 130801)
+  [PASS] IMAGE_PAD                 -> <|image_pad|>                  (ID: 130803)
+  [PASS] TOOL_CALL                 -> <|tool_call|>                  (ID: 130768)
+  [PASS] TOOL_RESULT               -> <|tool_result|>                (ID: 130769)
+  [PASS] FUNCTION_CALL             -> <|function_call|>              (ID: 130770)
+  [PASS] FUNCTION_RESULT           -> <|function_result|>            (ID: 130771)
+  [PASS] JSON_BEGIN                -> <|json_begin|>                 (ID: 130766)
+  [PASS] JSON_END                  -> <|json_end|>                   (ID: 130767)
+  [PASS] API_REQUEST               -> <|api_request|>                (ID: 130772)
+  [PASS] API_RESPONSE              -> <|api_response|>               (ID: 130773)
+  [PASS] SCHEMA                    -> <|schema|>                     (ID: 130774)
+  [PASS] ARGUMENTS                 -> <|arguments|>                  (ID: 130775)
+  [PASS] THINK_BEGIN               -> <|think_begin|>                (ID: 130786)
+  [PASS] THINK_END                 -> <|think_end|>                  (ID: 130787)
+  [PASS] IM_START                  -> <|im_start|>                   (ID: 130811)
+  [PASS] IM_END                    -> <|im_end|>                     (ID: 130812)
+  [PASS] FILE_SEP                  -> <|file_sep|>                   (ID: 130813)
+  [PASS] REPO_NAME                 -> <|repo_name|>                  (ID: 130814)
+  [PASS] XML tool_call open        -> <tool_call>                    (ID: 130815)
+  [PASS] XML tool_call close       -> </tool_call>                   (ID: 130816)
+  [PASS] XML tool_response open    -> <tool_response>                (ID: 130817)
+  [PASS] XML tool_response close   -> </tool_response>               (ID: 130818)
+  [PASS] XML think open            -> <think>                        (ID: 130819)
+  [PASS] XML think close           -> </think>                       (ID: 130820)
+
+  Overall: ALL PRESENT
+
+------------------------------------------------------------
+CHECK 2b: AGENT TOKEN FORMAT (supervisor asked about <AGENT> vs |AGENT|)
+------------------------------------------------------------
+  '<|agent|>': in_vocab=False, in_added=False
+  '<AGENT>': in_vocab=False, in_added=False
+  '|AGENT|': in_vocab=False, in_added=False
+  'AGENT': in_vocab=False, in_added=False
+  '<|AGENT|>': in_vocab=False, in_added=False
+
+  Note: The tokenizer uses <|assistant|> for the agent role
+        <|assistant|> in vocab: True
+        <|assistant|> in added: True
+
+------------------------------------------------------------
+CHECK 3: RESERVED TOKENS (250 expected)
+------------------------------------------------------------
+  Found 250 reserved tokens
+  [PASS] Exactly 250 reserved tokens
+  ID range: 130822 to 131071
+
+------------------------------------------------------------
+CHECK 4: PROGRAMMING LANGUAGE TAGS
+------------------------------------------------------------
+  [PASS] <|lang:python|>
+  [PASS] <|lang:javascript|>
+  [PASS] <|lang:typescript|>
+  [PASS] <|lang:java|>
+  [PASS] <|lang:cpp|>
+  [PASS] <|lang:c|>
+  [PASS] <|lang:rust|>
+  [PASS] <|lang:go|>
+  [PASS] <|lang:ruby|>
+  [PASS] <|lang:php|>
+  [PASS] <|lang:swift|>
+  [PASS] <|lang:kotlin|>
+  [PASS] <|lang:scala|>
+  [PASS] <|lang:r|>
+  [PASS] <|lang:julia|>
+  [PASS] <|lang:sql|>
+  [PASS] <|lang:html|>
+  [PASS] <|lang:css|>
+  [PASS] <|lang:bash|>
+  [PASS] <|lang:shell|>
+
+------------------------------------------------------------
+CHECK 5: NO TOKENS > 32 CHARACTERS (excluding special)
+------------------------------------------------------------
+  Tokens > 32 chars: 0
+  [PASS] No tokens exceed 32 characters
+
+------------------------------------------------------------
+CHECK 6: NO BLOCKED SCRIPTS (CJK, Arabic, Cyrillic, etc.)
+------------------------------------------------------------
+  [PASS] No blocked script tokens found
+
+------------------------------------------------------------
+CHECK 7: INDIC LANGUAGE COVERAGE
+------------------------------------------------------------
+  [PASS] Devanagari          : 3,979 tokens
+         Samples: ['αñ╛', 'αÑç', 'αñ░', 'αÑì', 'αñ╛∩┐╜']
+  [PASS] Bengali             : 2,127 tokens
+         Samples: ['αª╛', 'αºç', 'αª╛∩┐╜', 'αºì', 'αª┐']
+  [PASS] Tamil               : 972 tokens
+         Samples: ['α»ì', 'α»ì∩┐╜', 'α«┐', 'α»ü', 'α«┐∩┐╜']
+  [PASS] Telugu              : 1,335 tokens
+         Samples: ['α▒ì', 'α░┐', 'α▒ì∩┐╜', 'α░╛', 'α▒ü']
+  [PASS] Kannada             : 1,304 tokens
+         Samples: ['α│ì', 'α▓┐', 'α│ì∩┐╜', 'α▓┐∩┐╜', 'α▓╛']
+  [PASS] Malayalam           : 1,666 tokens
+         Samples: ['α╡ì', 'α╡ì∩┐╜', 'α┤┐', 'α┤┐∩┐╜', 'α╡ü']
+  [PASS] Gujarati            : 1,619 tokens
+         Samples: ['α¬╛', 'α¬╛∩┐╜', 'α½ç', 'α½ì', 'α½Ç']
+  [PASS] Gurmukhi            : 306 tokens
+         Samples: ['α¿╛', 'α¿╛∩┐╜', 'α⌐Ç', 'α¿░', 'α⌐ç']
+  [PASS] Oriya               : 38 tokens
+         Samples: ['α¼╛', 'α¡ì', 'α¼░', 'α¼┐', 'α¡ç']
+  [PASS] Sinhala             : 296 tokens
+         Samples: ['α╖è', 'α╖Æ', 'α╢▒', 'α╖Å', 'α╢║']
+
+  Total Indic tokens: 13,642
+
+------------------------------------------------------------
+CHECK 8: CODE-OPTIMIZED TOKENS (Python, JS/TS, C/C++, configs)
+------------------------------------------------------------
+  python              : 347 tokens
+    Samples: ["'import'", "' from'", "' return'", "' class'", "'return'"]
+  javascript          : 619 tokens
+    Samples: ["' var'", "' const'", "' function'", "'let'", "'var'"]
+  c_cpp               : 244 tokens
+    Samples: ["' void'", "' static'", "'void'", "'include'", "'#include'"]
+  json_struct         : 114 tokens
+    Samples: ["' null'", "' true'", "' false'", '\'["\'', '\'"]\'']
+  indentation         : 128 tokens
+    Samples: ["'  '", "'    '", "'        '", "'   '", "'       '"]
+
+------------------------------------------------------------
+CHECK 9: GARBAGE TOKEN SCAN (suspiciously useless tokens)
+------------------------------------------------------------
+  Suspicious tokens found: 698
+    ID 188: ''\x00'' (control chars only)
+    ID 189: ''\x01'' (control chars only)
+    ID 190: ''\x02'' (control chars only)
+    ID 191: ''\x03'' (control chars only)
+    ID 192: ''\x04'' (control chars only)
+    ID 193: ''\x05'' (control chars only)
+    ID 194: ''\x06'' (control chars only)
+    ID 195: ''\x07'' (control chars only)
+    ID 196: ''\x08'' (control chars only)
+    ID 199: ''\x0b'' (control chars only)
+    ID 200: ''\x0c'' (control chars only)
+    ID 202: ''\x0e'' (control chars only)
+    ID 203: ''\x0f'' (control chars only)
+    ID 204: ''\x10'' (control chars only)
+    ID 205: ''\x11'' (control chars only)
+    ID 206: ''\x12'' (control chars only)
+    ID 207: ''\x13'' (control chars only)
+    ID 208: ''\x14'' (control chars only)
+    ID 209: ''\x15'' (control chars only)
+    ID 210: ''\x16'' (control chars only)
+
+------------------------------------------------------------
+CHECK 10: TOKEN ID LAYOUT
+------------------------------------------------------------
+  Non-special tokens: 130,716
+    ID range: 0 to 130715
+  General tokens: 117,074
+    ID range: 0 to 117073
+  Indic tokens: 13,642
+    ID range: 117074 to 130715
+  Special tokens: 356
+    ID range: 130716 to 131071
+  [PASS] Layout: General -> Indic -> Special (correct ordering)
+
+------------------------------------------------------------
+CHECK 11: ALL ADDED (SPECIAL) TOKENS LISTING
+------------------------------------------------------------
+
+  chat_format (2 tokens):
+    ID 130811: <|im_start|>
+    ID 130812: <|im_end|>
+
+  chat_roles (8 tokens):
+    ID 130726: <|system|>
+    ID 130727: <|user|>
+    ID 130728: <|assistant|>
+    ID 130731: <|context|>
+    ID 130732: <|instruction|>
+    ID 130733: <|response|>
+    ID 130734: <|turn|>
+    ID 130735: <|end_turn|>
+
+  code (11 tokens):
+    ID 130736: <|code_begin|>
+    ID 130737: <|code_end|>
+    ID 130738: <|output_begin|>
+    ID 130739: <|output_end|>
+    ID 130740: <|error|>
+    ID 130741: <|stdin|>
+    ID 130742: <|stdout|>
+    ID 130743: <|stderr|>
+    ID 130744: <|file_begin|>
+    ID 130745: <|file_end|>
+    ID 130813: <|file_sep|>
+
+  document_control (10 tokens):
+    ID 130716: <|begin_of_text|>
+    ID 130717: <|end_of_text|>
+    ID 130718: <|pad|>
+    ID 130719: <|unk|>
+    ID 130720: <|sep|>
+    ID 130721: <|cls|>
+    ID 130722: <|mask|>
+    ID 130723: <|newline|>
+    ID 130724: <|paragraph|>
+    ID 130725: <|document|>
+
+  end_of_turn (1 tokens):
+    ID 130821: <|EOT|>
+
+  fim (4 tokens):
+    ID 130796: <|fim_prefix|>
+    ID 130797: <|fim_middle|>
+    ID 130798: <|fim_suffix|>
+    ID 130799: <|fim_pad|>
+
+  json_structure (4 tokens):
+    ID 130766: <|json_begin|>
+    ID 130767: <|json_end|>
+    ID 130774: <|schema|>
+    ID 130775: <|arguments|>
+
+  language_tags (20 tokens):
+    ID 130746: <|lang:python|>
+    ID 130747: <|lang:javascript|>
+    ID 130748: <|lang:typescript|>
+    ID 130749: <|lang:java|>
+    ID 130750: <|lang:cpp|>
+    ID 130751: <|lang:c|>
+    ID 130752: <|lang:rust|>
+    ID 130753: <|lang:go|>
+    ID 130754: <|lang:ruby|>
+    ID 130755: <|lang:php|>
+    ID 130756: <|lang:swift|>
+    ID 130757: <|lang:kotlin|>
+    ID 130758: <|lang:scala|>
+    ID 130759: <|lang:r|>
+    ID 130760: <|lang:julia|>
+    ID 130761: <|lang:sql|>
+    ID 130762: <|lang:html|>
+    ID 130763: <|lang:css|>
+    ID 130764: <|lang:bash|>
+    ID 130765: <|lang:shell|>
+
+  other (6 tokens):
+    ID 130788: <|step|>
+    ID 130791: <|verify|>
+    ID 130792: <|conclude|>
+    ID 130794: <|analyze|>
+    ID 130795: <|synthesize|>
+    ID 130814: <|repo_name|>
+
+  reserved (250 tokens): IDs 130822-131071
+
+  source_tags (10 tokens):
+    ID 130776: <|source:wikipedia|>
+    ID 130777: <|source:github|>
+    ID 130778: <|source:arxiv|>
+    ID 130779: <|source:web|>
+    ID 130780: <|source:book|>
+    ID 130781: <|source:code|>
+    ID 130782: <|source:docs|>
+    ID 130783: <|source:news|>
+    ID 130784: <|source:social|>
+    ID 130785: <|source:other|>
+
+  thinking (7 tokens):
+    ID 130786: <|think_begin|>
+    ID 130787: <|think_end|>
+    ID 130789: <|plan|>
+    ID 130790: <|reflect|>
+    ID 130793: <|reason|>
+    ID 130819: <think>
+    ID 130820: </think>
+
+  tool_calling (12 tokens):
+    ID 130729: <|tool|>
+    ID 130730: <|function|>
+    ID 130768: <|tool_call|>
+    ID 130769: <|tool_result|>
+    ID 130770: <|function_call|>
+    ID 130771: <|function_result|>
+    ID 130772: <|api_request|>
+    ID 130773: <|api_response|>
+    ID 130815: <tool_call>
+    ID 130816: </tool_call>
+    ID 130817: <tool_response>
+    ID 130818: </tool_response>
+
+  vision (5 tokens):
+    ID 130800: <|vision_start|>
+    ID 130801: <|vision_end|>
+    ID 130802: <|vision_pad|>
+    ID 130803: <|image_pad|>
+    ID 130804: <|video_pad|>
+
+  vision_grounding (6 tokens):
+    ID 130805: <|object_ref_start|>
+    ID 130806: <|object_ref_end|>
+    ID 130807: <|box_start|>
+    ID 130808: <|box_end|>
+    ID 130809: <|quad_start|>
+    ID 130810: <|quad_end|>
+
+------------------------------------------------------------
+CHECK 12: SAMPLE TOKENS FROM DIFFERENT ID RANGES
+------------------------------------------------------------
+
+  First 20 tokens (byte level):
+    ID      0: '!'
+    ID      1: '"'
+    ID      2: '#'
+    ID      3: '$'
+    ID      4: '%'
+    ID      5: '&'
+    ID      6: "'"
+    ID      7: '('
+    ID      8: ')'
+    ID      9: '*'
+    ID     10: '+'
+    ID     11: ','
+    ID     12: '-'
+    ID     13: '.'
+    ID     14: '/'
+    ID     15: '0'
+    ID     16: '1'
+    ID     17: '2'
+    ID     18: '3'
+    ID     19: '4'
+
+  Tokens 250-270 (early merges):
+    ID    250: '∩┐╜'
+    ID    251: '∩┐╜'
+    ID    252: '∩┐╜'
+    ID    253: '∩┐╜'
+    ID    254: '∩┐╜'
+    ID    255: '∩┐╜'
+    ID    256: '  '
+    ID    257: '    '
+    ID    258: 'in'
+    ID    259: 'er'
+    ID    260: ' t'
+    ID    261: ' a'
+    ID    262: 'en'
+    ID    263: 'on'
+    ID    264: 're'
+    ID    265: ' s'
+    ID    266: 'at'
+    ID    267: 'or'
+    ID    268: 'es'
+    ID    269: '        '
+
+  Tokens 1000-1020:
+    ID   1000: 'line'
+    ID   1001: 'Th'
+    ID   1002: '∩┐╜'
+    ID   1003: 'tion'
+    ID   1004: 'abel'
+    ID   1005: 'Cont'
+    ID   1006: ' add'
+    ID   1007: 'sp'
+    ID   1008: '",\n'
+    ID   1009: 'ely'
+    ID   1010: 'irst'
+    ID   1011: 'i├│'
+    ID   1012: 'public'
+    ID   1013: 'self'
+    ID   1014: '18'
+    ID   1015: 'mer'
+    ID   1016: 'uk'
+    ID   1017: '25'
+    ID   1018: ' bl'
+python.exe : Traceback (most recent call last):
+At line:1 char:32
++ ... NG='utf-8'; & "C:\Users\emb-asansin\AppData\Local\Programs\Python\Pyt ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "D:\LLM_Final\experiments\6_tokenizer_design_lab\tokenizer_audit\audit_tokenizer.py", line 544, in <module>
+    main()
+  File "D:\LLM_Final\experiments\6_tokenizer_design_lab\tokenizer_audit\audit_tokenizer.py", line 528, in main
+    with open("tsai_131k_tokenizer/AUDIT_REPORT.txt", "w", encoding="utf-8") as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'tsai_131k_tokenizer/AUDIT_REPORT.txt'
+    ID   1019: 'Type'
+
+  Tokens 5000-5020:
+    ID   5000: ' ],\n'
+    ID   5001: 'qual'
+    ID   5002: 'output'
+    ID   5003: '()->'
+    ID   5004: 'omain'
+    ID   5005: ' fi'
+    ID   5006: 'Description'
+    ID   5007: ' Home'
+    ID   5008: ' anything'
+    ID   5009: '........'
+    ID   5010: '255'
+    ID   5011: 'icip'
+    ID   5012: ' correct'
+    ID   5013: 'TER'
+    ID   5014: ' onder'
+    ID   5015: ' training'
+    ID   5016: 'Tag'
+    ID   5017: ' [ΓÇª'
+    ID   5018: ' sy'
+    ID   5019: '∩┐╜'
+
+  Tokens 50000-50020:
+    ID  50000: ' abdominal'
+    ID  50001: ' candles'
+    ID  50002: '-sk'
+    ID  50003: ' Pays'
+    ID  50004: ' Wah'
+    ID  50005: '_CACHE'
+    ID  50006: 'prochen'
+    ID  50007: 'KM'
+    ID  50008: ' k├ñn'
+    ID  50009: '<('
+    ID  50010: ' funnels'
+    ID  50011: ' _)'
+    ID  50012: ' proximit├⌐'
+    ID  50013: ' verme'
+    ID  50014: ' dude'
+    ID  50015: ' Vik'
+    ID  50016: ' wolf'
+    ID  50017: 'uver'
+    ID  50018: ' Bloomberg'
+    ID  50019: ' -('
+
+  Tokens 100000-100020:
+    ID 100000: ' Masks'
+    ID 100001: ' communiquer'
+    ID 100002: '.cd'
+    ID 100003: 'oldt'
+    ID 100004: 'do─ƒan'
+    ID 100005: ' Neal'
+    ID 100006: ' stov'
+    ID 100007: "'ouverture"
+    ID 100008: 'ΓÇª]\n\n'
+    ID 100009: ":')\n"
+    ID 100010: 'folders'
+    ID 100011: ' verkeer'
+    ID 100012: ' aitab'
+    ID 100013: ' pcl'
+    ID 100014: ' Georgian'
+    ID 100015: ' criterio'
+    ID 100016: ' Ivory'
+    ID 100017: ' Inbox'
+    ID 100018: ' atento'
+    ID 100019: '(stor'
+
+  Last 30 non-special tokens (should be Indic):
+    ID 130686: ' αñÅαñòαÑìαñƒ'                                    [Devanagari]
+    ID 130687: ' αñÜαñ▓αññαñ╛'                                    [Devanagari]
+    ID 130688: '.α«Ä'                                       [Tamil]
+    ID 130689: 'α½Çα¬á'                                       [Gujarati]
+    ID 130690: ' αñ╕αÑçαñòαÑìαñ╕'                                   [Devanagari]
+    ID 130691: ' α▓ëα▓ñα│ìα▓¬'                                    [Kannada]
+    ID 130692: 'αªòαºìαª╕'                                      [Bengali]
+    ID 130693: ' αñ╡αñ┐αñ░αñ╛αñƒ'                                   [Devanagari]
+    ID 130694: ' αñÿαÑéαñ«'                                     [Devanagari]
+    ID 130695: 'α╡èα┤¬α╡ìα┤¬α┤é'                                    [Malayalam]
+    ID 130696: 'αñ╛αññαñ░'                                      [Devanagari]
+    ID 130697: 'α▓òα│è'                                       [Kannada]
+    ID 130698: ' α¬òα¬░α¬ñα½Ç'                                    [Gujarati]
+    ID 130699: '\u200cα░¿α▒ì'                                 [Telugu]
+    ID 130700: ' αªàαª¬αºçαªòαºìαª╖'                                  [Bengali]
+    ID 130701: 'αÑìαñ»αÑéαñƒαñ░'                                    [Devanagari]
+    ID 130702: ' αñ«αñ¿αÑìαññαÑìαñ░αÑÇ'                                 [Devanagari]
+    ID 130703: ' αñ░αÑïαñ£αñùαñ╛αñ░'                                  [Devanagari]
+    ID 130704: 'α¿ùα⌐Ç'                                       [Gurmukhi]
+    ID 130705: 'αñºαñ╛'                                       [Devanagari]
+    ID 130706: ' αñ╢αÑüαñòαÑìαñ░αñ¼αñ╛αñ░'                                [Devanagari]
+    ID 130707: ' αñàαñ╕αÑìαññ'                                    [Devanagari]
+    ID 130708: ' α░¬α░¿α░┐α░Ü'                                    [Telugu]
+    ID 130709: 'αñ¿αÑìαñªαÑìαñ░αÑÇαñ»'                                  [Devanagari]
+    ID 130710: ' α▓¼α▓╕'                                      [Kannada]
+    ID 130711: 'αñ┐αñ╣αñ░'                                      [Devanagari]
+    ID 130712: 'αª╛αª▓αª╛'                                      [Bengali]
+    ID 130713: ' αªƒαª╛αªç'                                     [Bengali]
+    ID 130714: ' α░Üα░░α▒ìα░»'                                    [Telugu]
+    ID 130715: ' α┤¬α╡ìα┤░α┤«α╡üα┤û'                                  [Malayalam]
+
+------------------------------------------------------------
+CHECK 13: TOKEN COUNT BREAKDOWN
+------------------------------------------------------------
+  Single-char (byte) tokens: 256
+  Non-special vocab tokens: 130,716
+  Indic tokens: 13,642
+  General tokens: 117,074
+  Special tokens: 356
+    - Base special: 106
+    - Reserved: 250
+  TOTAL: 131,072
+
+================================================================================
+FINAL AUDIT SUMMARY
+================================================================================
+  PASS: 87
+  FAIL: 0
+  WARN: 0

@@ -30,7 +30,7 @@ from special_tokens import (
     NUM_ADDITIONAL_SPECIAL,
 )
 
-BASE_GPTOSS_PATH = "tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
+BASE_GPTOSS_PATH = "Tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
 OUTPUT_DIR = "tsai_131k_tokenizer"
 TARGET_VOCAB_SIZE = 131072  # 2^17
 NUM_RESERVED = 250
@@ -400,6 +400,11 @@ def main():
                 "single_word": t["single_word"],
                 "special": t["special"],
             }
+        # Update core token references to match our special tokens
+        config["bos_token"] = "<|begin_of_text|>"
+        config["eos_token"] = "<|end_of_text|>"
+        config["pad_token"] = "<|pad|>"
+        config["unk_token"] = "<|unk|>"
 
         with open(config_dst, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
@@ -408,7 +413,8 @@ def main():
     special_tokens_map = {
         "bos_token": "<|begin_of_text|>",
         "eos_token": "<|end_of_text|>",
-        "pad_token": "<|end_of_text|>",
+        "pad_token": "<|pad|>",
+        "unk_token": "<|unk|>",
     }
     with open(os.path.join(OUTPUT_DIR, "special_tokens_map.json"), "w", encoding="utf-8") as f:
         json.dump(special_tokens_map, f, indent=2, ensure_ascii=False)
