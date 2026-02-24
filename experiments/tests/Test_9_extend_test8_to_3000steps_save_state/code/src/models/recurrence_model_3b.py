@@ -1724,13 +1724,13 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 5, eps: float = 1e-6) -> t
     Dispatches to fused Triton kernel (single launch) when available,
     falling back to PyTorch for CPU or when Triton is absent.
 
-    FIX-PERF-06: Removed the `not torch.is_grad_enabled()` guard.
-    The Triton kernel is pure computation with no autograd hooks, so it
-    is safe inside torch.enable_grad() contexts (e.g. reversible backward
-    recomputation pass). Previously the backward path fell back to 20
-    separate PyTorch kernel launches per sublayer instead of 1 Triton call.
+    IMPORTANT: Skip Triton when grad is enabled — Triton kernels don't track
+    autograd, which breaks the reversible midpoint backward recompute.
+    The forward pass (under torch.no_grad) uses the fast Triton path;
+    the backward recompute (under torch.enable_grad) uses PyTorch for
+    correct gradient flow through MHC coefficients.
     """
-    if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda:
+    if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda and not torch.is_grad_enabled():
         # Stable exp: subtract max along last dim before passing to kernel
         logits_stable = logits - logits.amax(dim=-1, keepdim=True)
         try:
