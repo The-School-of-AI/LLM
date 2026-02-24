@@ -1,22 +1,15 @@
 data:
-  # bin/idx pre-tokenized shard loader (set loader_type: "bin_idx" to activate)
-  loader_type: "bin_idx"         # "hf" = HuggingFace datasets (default), "bin_idx" = pre-tokenized shards
-  shard_dir: data/wikitext_shards/            # path to train shard dir (required when loader_type=bin_idx)
-  eval_shard_dir: null       # path to eval shard dir (optional; skip eval if null)
-  tokenizer_dir: src/tokenizer        # path to tokenizer dir for hash validation (auto-detected if null)
-  validate_tokenizer: true   # hard-fail on tokenizer hash/token ID mismatch
-
   dataset_name: "wikitext"
   dataset_config: "wikitext-103-raw-v1"
   tokenize_num_proc: 8
-  max_length: 4096
+  max_length: 512
   num_workers: 16
   tokenized_dataset_path: null
   dataset_cache_dir: null
   local_nvme_cache_dir: null
   require_local_nvme: false
   pack_into_blocks: true
-  block_sizes: [4096]
+  block_sizes: [512]
   block_size_counts: null
   domain_column: null
   concat_across_domains: false
@@ -24,7 +17,7 @@ data:
 
 training:
   num_epochs: 1
-  max_train_steps: 20
+  max_train_steps: 1000
   max_eval_steps: null
   log_interval: 1
   seed: 42
@@ -32,23 +25,19 @@ training:
   require_gsa_triton: true
   require_fused_kernels: false
   metrics_jsonl_path: "../results/run/metrics.jsonl"
-  # Kernel profiler: list global step numbers to profile (e.g. [10, 11, 12]).
-  # Outputs profile_report.txt + profile.jsonl next to metrics_jsonl_path.
-  # Set to [] or omit to disable (zero overhead when disabled).
-  profile_steps: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
 
 deepspeed:
-  config_path: "../deepspeed/zero-2-dense-bf16-test14-1000steps.json"
+  config_path: "../deepspeed/zero-2-dense-bf16-test13-1000steps.json"
   local_rank: -1
 
 model:
-  tokenizer_name: null
+  tokenizer_name: "Qwen/Qwen2.5-0.5B"
   embedding_type: "kronecker"
   model_variant: "reversible"
 
 checkpoint:
   output_dir: "../results/run/checkpoints"
-  save_checkpoint: false
+  save_checkpoint: true
   checkpoint_interval: 500
   keep_last_n_checkpoints: 2
   resume_from_checkpoint: null

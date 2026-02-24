@@ -1,11 +1,4 @@
 data:
-  # bin/idx pre-tokenized shard loader (set loader_type: "bin_idx" to activate)
-  loader_type: "bin_idx"         # "hf" = HuggingFace datasets (default), "bin_idx" = pre-tokenized shards
-  shard_dir: data/wikitext_shards/            # path to train shard dir (required when loader_type=bin_idx)
-  eval_shard_dir: null       # path to eval shard dir (optional; skip eval if null)
-  tokenizer_dir: src/tokenizer        # path to tokenizer dir for hash validation (auto-detected if null)
-  validate_tokenizer: true   # hard-fail on tokenizer hash/token ID mismatch
-
   dataset_name: "wikitext"
   dataset_config: "wikitext-103-raw-v1"
   tokenize_num_proc: 8
@@ -31,6 +24,8 @@ training:
   init_model_path: "../results/init/model_init.pt"
   require_gsa_triton: true
   require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 4.0
   metrics_jsonl_path: "../results/run/metrics.jsonl"
   # Kernel profiler: list global step numbers to profile (e.g. [10, 11, 12]).
   # Outputs profile_report.txt + profile.jsonl next to metrics_jsonl_path.

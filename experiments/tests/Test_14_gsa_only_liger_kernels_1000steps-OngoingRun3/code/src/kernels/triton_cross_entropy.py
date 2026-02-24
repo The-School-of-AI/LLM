@@ -18,6 +18,14 @@ import torch
 import triton
 import triton.language as tl
 
+try:
+    from src.profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    @contextmanager
+    def kernel_region(name: str):
+        yield
+
 
 # -----------------------------------------------------------------------------
 # Forward (1D grid over B blocks, streams vocab tiles)
@@ -25,10 +33,11 @@ import triton.language as tl
 
 @triton.autotune(
     configs=[
-        triton.Config({"BLOCK_B": 16, "BLOCK_V": 8192,  "BLOCK_H": 256}, num_warps=8, num_stages=4),
-        triton.Config({"BLOCK_B": 32, "BLOCK_V": 16384, "BLOCK_H": 256}, num_warps=8, num_stages=3),
-        triton.Config({"BLOCK_B": 16, "BLOCK_V": 16384, "BLOCK_H": 256}, num_warps=8, num_stages=4),
-        triton.Config({"BLOCK_B": 32, "BLOCK_V": 8192,  "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        # Capping BLOCK_V x BLOCK_H <= 1,048,576 (Triton numel limit)
+        triton.Config({"BLOCK_B": 16, "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 32, "BLOCK_V": 2048, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 16, "BLOCK_V": 2048, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 32, "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
     ],
     key=["V", "H"],
 )
@@ -56,7 +65,7 @@ def _fwd_stream_kernel(
     s = tl.zeros((BLOCK_B,), tl.float32)
     ylog = tl.zeros((BLOCK_B,), tl.float32)
 
-    for v0 in tl.static_range(0, V, BLOCK_V):
+    for v0 in range(0, V, BLOCK_V):
         v_ids = v0 + tl.arange(0, BLOCK_V)
         v_mask = v_ids < V
 
@@ -105,9 +114,10 @@ def _fwd_stream_kernel(
 
 @triton.autotune(
     configs=[
-        triton.Config({"BLOCK_B": 16, "BLOCK_V": 8192, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        # Capping BLOCK_V x BLOCK_H <= 1,048,576
         triton.Config({"BLOCK_B": 16, "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
-        triton.Config({"BLOCK_B": 8,  "BLOCK_V": 8192, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 8,  "BLOCK_V": 4096, "BLOCK_H": 256}, num_warps=8, num_stages=3),
+        triton.Config({"BLOCK_B": 16, "BLOCK_V": 2048, "BLOCK_H": 256}, num_warps=8, num_stages=3),
     ],
     key=["V", "H"],
 )
@@ -226,12 +236,13 @@ class _UltimateFusedLinearCE_V33(torch.autograd.Function):
         def grid_fwd(meta):
             return (triton.cdiv(B, meta["BLOCK_B"]),)
 
-        _fwd_stream_kernel[grid_fwd](
-            x, weight, target, lse, ylog,
-            B, H, V, ignore_index,
-            x.stride(0), x.stride(1),
-            weight.stride(0), weight.stride(1),
-        )
+        with kernel_region("ce.fwd_stream"):
+            _fwd_stream_kernel[grid_fwd](
+                x, weight, target, lse, ylog,
+                B, H, V, ignore_index,
+                x.stride(0), x.stride(1),
+                weight.stride(0), weight.stride(1),
+            )
 
         active = (target != ignore_index)
         n_non_ignore = max(int(active.sum().item()), 1)
@@ -268,14 +279,15 @@ class _UltimateFusedLinearCE_V33(torch.autograd.Function):
         def grid_bwd(meta):
             return (triton.cdiv(B, meta["BLOCK_B"]), triton.cdiv(V, meta["BLOCK_V"]))
 
-        _bwd_tile_kernel[grid_bwd](
-            x, weight, target, lse, dX32, dW32, scale_tensor,
-            B, H, V, ctx.ignore_index,
-            x.stride(0), x.stride(1),
-            weight.stride(0), weight.stride(1),
-            dX32.stride(0), dX32.stride(1),
-            dW32.stride(0), dW32.stride(1),
-        )
+        with kernel_region("ce.bwd_tile"):
+            _bwd_tile_kernel[grid_bwd](
+                x, weight, target, lse, dX32, dW32, scale_tensor,
+                B, H, V, ctx.ignore_index,
+                x.stride(0), x.stride(1),
+                weight.stride(0), weight.stride(1),
+                dX32.stride(0), dX32.stride(1),
+                dW32.stride(0), dW32.stride(1),
+            )
 
         return dX32.to(x.dtype), dW32.to(weight.dtype), None, None, None
 

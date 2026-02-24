@@ -22,14 +22,6 @@ import triton
 import triton.language as tl
 HAS_TRITON = True
 
-try:
-    from src.profiler import kernel_region
-except ImportError:
-    from contextlib import contextmanager
-    @contextmanager
-    def kernel_region(name: str):
-        yield
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Forward kernel (IDENTICAL to V1)
@@ -463,21 +455,20 @@ if HAS_TRITON:
             BLOCK_D = triton.next_power_of_2(D)
             grid = (B * H, triton.cdiv(T, BLOCK_Q))
 
-            with kernel_region("gsa.sparse_attn.fwd"):
-                _sparse_attn_fwd_kernel[grid](
-                    q, k, v, indices, mask,
-                    out, lse,
-                    B, T, T_kv, H, D, k_sel,
-                    q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-                    k.stride(0), k.stride(1), k.stride(2), k.stride(3),
-                    v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                    indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
-                    mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
-                    out.stride(0), out.stride(1), out.stride(2), out.stride(3),
-                    scale,
-                    BLOCK_Q=BLOCK_Q, BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
-                    num_warps=4, num_stages=2,  # 18,990 tok/sec baseline
-                )
+            _sparse_attn_fwd_kernel[grid](
+                q, k, v, indices, mask,
+                out, lse,
+                B, T, T_kv, H, D, k_sel,
+                q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+                k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+                v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+                indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
+                mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
+                out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+                scale,
+                BLOCK_Q=BLOCK_Q, BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
+                num_warps=4, num_stages=2,  # 18,990 tok/sec baseline
+            )
 
             out_typed = out.to(q.dtype)
             ctx.save_for_backward(q, k, v, indices, mask, out, lse)
@@ -503,44 +494,41 @@ if HAS_TRITON:
 
             # ── Step 1: delta[b,h,q] = sum_d(O * dO) ─────────────────
             delta = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
-            with kernel_region("gsa.sparse_attn.bwd_preprocess"):
-                _sparse_attn_bwd_preprocess[grid](
-                    out_fp32, do, delta,
-                    T, H, D,
-                    out_fp32.stride(0), out_fp32.stride(1), out_fp32.stride(2), out_fp32.stride(3),
-                    do.stride(0), do.stride(1), do.stride(2), do.stride(3),
-                    BLOCK_D=BLOCK_D,
-                )
+            _sparse_attn_bwd_preprocess[grid](
+                out_fp32, do, delta,
+                T, H, D,
+                out_fp32.stride(0), out_fp32.stride(1), out_fp32.stride(2), out_fp32.stride(3),
+                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                BLOCK_D=BLOCK_D,
+            )
 
             # ── Step 2: dQ (query-major, no atomics — same as V1) ─────
             dq = torch.empty_like(q, dtype=torch.float32)
-            with kernel_region("gsa.sparse_attn.bwd_dq"):
-                _sparse_attn_bwd_dq_kernel[grid](
-                    q, k, v, do,
-                    indices, mask,
-                    lse, delta,
-                    dq,
-                    T, T_kv, H, D, k_sel,
-                    q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-                    k.stride(0), k.stride(1), k.stride(2), k.stride(3),
-                    v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                    do.stride(0), do.stride(1), do.stride(2), do.stride(3),
-                    indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
-                    mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
-                    dq.stride(0), dq.stride(1), dq.stride(2), dq.stride(3),
-                    scale,
-                    BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,  # 18,990 baseline: BK=128 (from fwd)
-                )
+            _sparse_attn_bwd_dq_kernel[grid](
+                q, k, v, do,
+                indices, mask,
+                lse, delta,
+                dq,
+                T, T_kv, H, D, k_sel,
+                q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+                k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+                v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
+                mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
+                dq.stride(0), dq.stride(1), dq.stride(2), dq.stride(3),
+                scale,
+                BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,  # 18,990 baseline: BK=128 (from fwd)
+            )
 
             # ── Step 3: Build inverse index (key → queries) ──────────
-            with kernel_region("gsa.sparse_attn.bwd_inv_index"):
-                inv_queries, inv_count, inv_offset = _build_inverse_index(
-                    indices, mask, T_kv
-                )
+            inv_queries, inv_count, inv_offset = _build_inverse_index(
+                indices, mask, T_kv
+            )
 
             # ── Step 4: dK/dV via KEY-MAJOR kernel (ZERO atomics!) ───
             SPLIT_K = 16  # Distribute hot keys across up to 16 thread blocks
-
+            
             # Workspace shape: [SPLIT_K, B, T_kv, H, D]
             dk_workspace = torch.zeros(SPLIT_K, B, T_kv, H, D, device=q.device, dtype=torch.float32)
             dv_workspace = torch.zeros(SPLIT_K, B, T_kv, H, D, device=q.device, dtype=torch.float32)
@@ -548,32 +536,30 @@ if HAS_TRITON:
             BLOCK_Q_INNER = 8  # Process 8 queries per inner loop iteration
 
             grid_dkdv = (B * H, T_kv, SPLIT_K)
-            with kernel_region("gsa.sparse_attn.bwd_dkdv"):
-                _sparse_attn_bwd_dkdv_keymajor_splitk_kernel[grid_dkdv](
-                    q, k, v, do,
-                    lse, delta,
-                    dk_workspace, dv_workspace,
-                    inv_queries, inv_count, inv_offset,
-                    T, T_kv, H, D,
-                    q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-                    k.stride(0), k.stride(1), k.stride(2), k.stride(3),
-                    v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                    do.stride(0), do.stride(1), do.stride(2), do.stride(3),
-                    dk_workspace.stride(0), dk_workspace.stride(1), dk_workspace.stride(2), dk_workspace.stride(3), dk_workspace.stride(4),
-                    dv_workspace.stride(0), dv_workspace.stride(1), dv_workspace.stride(2), dv_workspace.stride(3), dv_workspace.stride(4),
-                    inv_queries.stride(0),  # stride_inv_b
-                    inv_count.stride(0),    # stride_cnt_b
-                    inv_offset.stride(0),   # stride_off_b
-                    scale,
-                    BLOCK_Q_INNER=BLOCK_Q_INNER, BLOCK_D=BLOCK_D,
-                    num_warps=4, num_stages=1,
-                )
+            _sparse_attn_bwd_dkdv_keymajor_splitk_kernel[grid_dkdv](
+                q, k, v, do,
+                lse, delta,
+                dk_workspace, dv_workspace,
+                inv_queries, inv_count, inv_offset,
+                T, T_kv, H, D,
+                q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+                k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+                v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                dk_workspace.stride(0), dk_workspace.stride(1), dk_workspace.stride(2), dk_workspace.stride(3), dk_workspace.stride(4),
+                dv_workspace.stride(0), dv_workspace.stride(1), dv_workspace.stride(2), dv_workspace.stride(3), dv_workspace.stride(4),
+                inv_queries.stride(0),  # stride_inv_b
+                inv_count.stride(0),    # stride_cnt_b
+                inv_offset.stride(0),   # stride_off_b
+                scale,
+                BLOCK_Q_INNER=BLOCK_Q_INNER, BLOCK_D=BLOCK_D,
+                num_warps=4, num_stages=1,
+            )
 
             # ── Step 5: Reduce SPLIT_K workspace ───────────────────────
             # High-speed PyTorch C++ reduction (memory bound, <2ms)
-            with kernel_region("gsa.sparse_attn.bwd_splitk_reduce"):
-                dk = dk_workspace.sum(dim=0)
-                dv = dv_workspace.sum(dim=0)
+            dk = dk_workspace.sum(dim=0)
+            dv = dv_workspace.sum(dim=0)
 
             return dq.to(q.dtype), dk.to(k.dtype), dv.to(v.dtype), None, None, None
 

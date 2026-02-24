@@ -20,7 +20,7 @@ from tqdm import tqdm
 # Never materialises [B*T, vocab] logits (saves ~17 GB per step).
 # ZERO FALLBACK — if this import fails, training crashes immediately.
 from .kernels.triton_cross_entropy import FusedLinearCrossEntropyLoss as _FusedLinearCE
-# _fused_ce is initialized inside train_epoch
+# _fused_ce is initialized inside train_epoch using max_chunk_gb from config
 
 from contextlib import contextmanager
 
@@ -31,8 +31,6 @@ from .profiler import StepProfiler
 @contextmanager
 def _null_ctx():
     yield
-
-
 try:
     from deepspeed.profiling.flops_profiler import FlopsProfiler
 except Exception:  # pragma: no cover - fallback for lightweight environments
@@ -192,7 +190,7 @@ def train_epoch(
         if i < start_step:
             continue
         if i == profile_step:
-            print("Profile started")
+            print ("Profile started")
             prof.start_profile()
 
         # ── Profiler: start step ─────────────────────────────────────────────

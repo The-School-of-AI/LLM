@@ -21,9 +21,6 @@ __all__ = [
     # Data utilities
     "get_tokenizer",
     "get_dataloaders",
-    # Data utilities — pre-tokenized .bin/.idx shards
-    "build_bin_idx_dataloader",
-    "compute_tokenizer_hash",
     # Training utilities
     "train_epoch",
     "evaluate",
