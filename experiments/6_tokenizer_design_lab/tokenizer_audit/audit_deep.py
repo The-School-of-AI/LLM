@@ -119,7 +119,7 @@ def main():
         print(f"  [ISSUE] {len(missing_ids)} missing IDs in vocab")
         issues.append(f"{len(missing_ids)} missing token IDs")
     else:
-        print(f"  [OK] All IDs 0-131071 present, no gaps")
+        print("  [OK] All IDs 0-131071 present, no gaps")
     
     if duplicate_ids:
         print(f"  [ISSUE] {len(duplicate_ids)} duplicate IDs")
