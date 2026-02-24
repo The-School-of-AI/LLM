@@ -159,7 +159,7 @@ The following table categorizes our shortlisted datasets by their legal risk and
 ---
 
 
-## 4. NCERT Books Dataset (Educational / India-specific)
+## 3. NCERT Books Dataset (Educational / India-specific)
 
 **High-quality curriculum-aligned dataset for education + grounded Indian knowledge**
 
