@@ -240,20 +240,26 @@ def benchmark_forward_backward(
 
 
 def benchmark_kernel_only(
+    make_inputs_fn,
     kernel_fn,
-    args: tuple,
     warmup: int,
     iters: int,
     label: str,
     backward: bool = True,
 ) -> Dict[str, float]:
-    """Benchmark a raw kernel function (no model wrapper)."""
+    """Benchmark a raw kernel function (no model wrapper).
+    
+    make_inputs_fn: callable that returns a fresh tuple of input tensors each call.
+    This ensures no retain_graph issues with kernels that free saved tensors.
+    """
     # Warmup
     for _ in range(warmup):
-        inputs = tuple(a.clone().requires_grad_(True) if a.requires_grad else a for a in args)
+        inputs = make_inputs_fn()
         out = kernel_fn(*inputs)
         if backward:
             out.sum().backward()
+        del inputs, out
+        torch.cuda.empty_cache()
 
     torch.cuda.synchronize()
     torch.cuda.reset_peak_memory_stats()
@@ -262,7 +268,7 @@ def benchmark_kernel_only(
     bwd_times = []
 
     for _ in range(iters):
-        inputs = tuple(a.clone().requires_grad_(True) if a.requires_grad else a for a in args)
+        inputs = make_inputs_fn()
         torch.cuda.synchronize()
 
         t0 = time.perf_counter()
@@ -282,6 +288,7 @@ def benchmark_kernel_only(
             t3 = t1
 
         fwd_times.append((t1 - t0) * 1000)
+        del inputs, out
 
     peak_mem = torch.cuda.max_memory_allocated() / 1e9
     drop = max(1, iters // 10)
@@ -371,18 +378,21 @@ def run_benchmark(cfg: BenchConfig):
         try:
             from fla.ops.gated_delta_rule import chunk_gated_delta_rule
 
-            q = torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True)
-            k = torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True)
-            v = torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True)
-            g = torch.randn(B, T, H, device=device, dtype=torch.float32, requires_grad=True)
-            beta = torch.sigmoid(torch.randn(B, T, H, device=device, dtype=torch.float32, requires_grad=True))
+            def make_fla_inputs():
+                return (
+                    torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True),
+                    torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True),
+                    torch.randn(B, T, H, D, device=device, dtype=torch.float32, requires_grad=True),
+                    torch.randn(B, T, H, device=device, dtype=torch.float32, requires_grad=True),
+                    torch.rand(B, T, H, device=device, dtype=torch.float32, requires_grad=True),  # beta in [0,1]
+                )
 
             def fla_fn(q, k, v, g, beta):
                 o, _ = chunk_gated_delta_rule(q, k, v, g, beta, scale=1.0, output_final_state=False)
                 return o
 
             fla_result = benchmark_kernel_only(
-                fla_fn, (q, k, v, g, beta),
+                make_fla_inputs, fla_fn,
                 cfg.warmup_iters, cfg.bench_iters, f"fla_raw_T{T}"
             )
             fla_result["seq_len"] = T
@@ -394,15 +404,18 @@ def run_benchmark(cfg: BenchConfig):
 
         # Raw Flash Attention (SDPA)
         try:
-            q = torch.randn(B, H, T, D, device=device, dtype=dtype, requires_grad=True)
-            k = torch.randn(B, H, T, D, device=device, dtype=dtype, requires_grad=True)
-            v = torch.randn(B, H, T, D, device=device, dtype=dtype, requires_grad=True)
+            def make_sdpa_inputs():
+                return (
+                    torch.randn(B, H, T, D, device=device, dtype=dtype, requires_grad=True),
+                    torch.randn(B, H, T, D, device=device, dtype=dtype, requires_grad=True),
+                    torch.randn(B, H, T, D, device=device, dtype=dtype, requires_grad=True),
+                )
 
             def sdpa_fn(q, k, v):
                 return F.scaled_dot_product_attention(q, k, v, is_causal=True)
 
             sdpa_result = benchmark_kernel_only(
-                sdpa_fn, (q, k, v),
+                make_sdpa_inputs, sdpa_fn,
                 cfg.warmup_iters, cfg.bench_iters, f"sdpa_raw_T{T}"
             )
             sdpa_result["seq_len"] = T
