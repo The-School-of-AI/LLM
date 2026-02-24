@@ -1720,7 +1720,7 @@ class MoEFFN(nn.Module):
         else:
             sorted_out = torch.empty(0, D, device=device, dtype=dtype)
 
-        weighted_out = sorted_out * sorted_weights.unsqueeze(-1)
+        weighted_out = (sorted_out * sorted_weights.unsqueeze(-1)).to(dtype)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
         routed_out.scatter_add_(
             0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out
