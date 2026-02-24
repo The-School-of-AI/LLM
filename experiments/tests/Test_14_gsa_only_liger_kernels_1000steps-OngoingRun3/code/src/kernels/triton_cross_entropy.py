@@ -209,7 +209,9 @@ class _UltimateFusedLinearCE_V33(torch.autograd.Function):
         B, H = x.shape
         V, _ = weight.shape
 
-        if H != 4096 or V != 131072:
+        # Relaxed check: Triton kernel handles arbitrary V. 
+        # We cap at 256k just as a safe harbor for the current unrolling.
+        if H != 4096 or V > 256000:
             ctx.use_torch = True
             ctx.ignore_index, ctx.reduction = ignore_index, reduction
             ctx.save_for_backward(x, weight, target)
@@ -244,9 +246,12 @@ class _UltimateFusedLinearCE_V33(torch.autograd.Function):
     def backward(ctx, grad_output):
         if getattr(ctx, "use_torch", False):
             x, weight, target = ctx.saved_tensors
-            logits = x @ weight.t()
-            loss = torch.nn.functional.cross_entropy(logits, target, ignore_index=ctx.ignore_index, reduction=ctx.reduction)
-            dx, dw = torch.autograd.grad(loss, (x, weight), grad_outputs=grad_output)
+            with torch.enable_grad():
+                x = x.detach().requires_grad_(True)
+                weight = weight.detach().requires_grad_(True)
+                logits = x @ weight.t()
+                loss = torch.nn.functional.cross_entropy(logits, target, ignore_index=ctx.ignore_index, reduction=ctx.reduction)
+                dx, dw = torch.autograd.grad(loss, (x, weight), grad_outputs=grad_output)
             return dx, dw, None, None, None
 
         x, weight, target, lse = ctx.saved_tensors
@@ -275,7 +280,7 @@ class _UltimateFusedLinearCE_V33(torch.autograd.Function):
         return dX32.to(x.dtype), dW32.to(weight.dtype), None, None, None
 
 class FusedLinearCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, ignore_index: int = -100, reduction: str = "mean"):
+    def __init__(self, ignore_index: int = -100, reduction: str = "mean", **kwargs):
         super().__init__()
         self.ignore_index = ignore_index
         self.reduction = reduction
