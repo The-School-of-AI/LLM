@@ -6,7 +6,7 @@ This repository contains the data curation strategy and sourcing manifest for th
 ## 🚀 Strategy Overview
 
 The training follows a **staged pre-training curriculum**:
-1.  **Foundation Phase:** Utilizing **DOLMA v1.7** and **IndicCorp v2** to build a broad base of world knowledge, code, and basic multilingual fluency.
+1.  **Foundation Phase:** Utilizing **DOLMA v1.7** to build a broad base of world knowledge, code, and basic multilingual fluency.
 2.  **Annealing/Specialization Phase:** Shifting the weight to **Dolma 3 Dolmino** and **Sangraha (Verified)** to sharpen logical reasoning, mathematical proficiency, and native-level Indic script performance.
 
 ---
@@ -34,7 +34,7 @@ The training follows a **staged pre-training curriculum**:
 * **Papers**: [Dolma (2402.00159)](https://arxiv.org/abs/2402.00159) | [OLMo 3 (2512.13961)](https://arxiv.org/abs/2512.13961)
 
 ### 2. Indic Sovereignty
-* **Sangraha & IndicCorp v2**: Sourced from AI4Bharat. These are critical for our competitive advantage in the Indian market.
+* **Sangraha**: Sourced from AI4Bharat. This is critical for our competitive advantage in the Indian market.
 * **Key Innovation**: Sangraha includes **40% Synthetic data**, where high-quality English textbooks and Wiki articles were translated into Indic languages to provide high-token-quality depth for low-resource languages.
 * **Papers**: [IndicLLMSuite (2403.06350)](https://arxiv.org/abs/2403.06350) | [IndicBERTv2 (2305.10672)](https://arxiv.org/abs/2305.10672)
 
@@ -44,12 +44,10 @@ The training follows a **staged pre-training curriculum**:
 
 ### Filters & Pre-processing
 * **Sangraha**: Utilize the `verified` and `synthetic` slices. Apply olmOCR for any additional PDF ingestion.
-* **IndicCorp**: High HTML/Boilerplate cleaning required for legacy web scrapes.
 * **Dolma**: Already heavily filtered; use the official **Dolma Toolkit** for PII masking.
 
 ### Download & Access
 * **Sangraha**: `ai4bharat/sangraha` [HF Link](https://huggingface.co/datasets/ai4bharat/sangraha)
-* **IndicCorp v2**: `ai4bharat/IndicCorpV2` [HF Link](https://huggingface.co/datasets/ai4bharat/IndicCorpV2)
 * **Dolmino**: `allenai/dolma3_dolmino_mix-100B-1125` [HF Link](https://huggingface.co/datasets/allenai/dolma3_dolmino_mix-100B-1125)
 * **Dolma**: `allenai/dolma` [HF Link](https://huggingface.co/datasets/allenai/dolma)
 
