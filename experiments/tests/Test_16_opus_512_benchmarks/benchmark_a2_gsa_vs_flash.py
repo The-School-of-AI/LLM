@@ -136,25 +136,23 @@ class GSABench(nn.Module):
         scale_attn = 1.0 / math.sqrt(D)
 
         # ── Step 3: Sparse Attention (gather + attend to selected keys) ──
-        # Gather selected K, V using top_indices
-        # top_indices: [B, T, k_limit] → need to gather from K, V: [B, T, H, D]
-        idx_expanded = top_indices.unsqueeze(2).unsqueeze(-1).expand(B, T, H, k_limit, D)  # [B, T, H, k, D]
-        k_selected = torch.gather(
-            k.unsqueeze(2).expand(B, T, H, T, D),      # [B, T, H, T, D] — expanded view
-            dim=3,                                        # gather along T dimension
-            index=idx_expanded                            # [B, T, H, k, D]
-        )  # [B, T, H, k, D]
-        v_selected = torch.gather(
-            v.unsqueeze(2).expand(B, T, H, T, D),
-            dim=3,
-            index=idx_expanded
-        )  # [B, T, H, k, D]
+        # Gather selected K, V using top_indices via advanced indexing
+        # top_indices: [B, T, k_limit] — key positions to attend to per query
+        # k, v: [B, T, H, D]
+        # Want: k_selected[b, t, j, h, d] = k[b, top_indices[b, t, j], h, d]
+        batch_idx = torch.arange(B, device=x.device).view(B, 1, 1)  # [B, 1, 1]
+        k_selected = k[batch_idx, top_indices]  # [B, T, k_limit, H, D]
+        v_selected = v[batch_idx, top_indices]  # [B, T, k_limit, H, D]
+
+        # Rearrange to [B, T, H, k_limit, D] for attention
+        k_selected = k_selected.permute(0, 1, 3, 2, 4)  # [B, T, H, k, D]
+        v_selected = v_selected.permute(0, 1, 3, 2, 4)  # [B, T, H, k, D]
 
         # Sparse attention: Q @ K_selected^T → softmax → @ V_selected
         attn_scores = torch.matmul(
-            q.unsqueeze(3),          # [B, T, H, 1, D]
-            k_selected.transpose(-1, -2)  # [B, T, H, D, k]
-        ).squeeze(3) * scale_attn    # [B, T, H, k]
+            q.unsqueeze(3),                # [B, T, H, 1, D]
+            k_selected.transpose(-1, -2)   # [B, T, H, D, k]
+        ).squeeze(3) * scale_attn          # [B, T, H, k]
 
         attn_weights = F.softmax(attn_scores, dim=-1)  # [B, T, H, k]
 
