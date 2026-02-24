@@ -1,1 +1,3 @@
-from .checkpoint_registry import CheckpointRegistry
+from .checkpoint_registry import CheckpointRegistry as CheckpointRegistry
+
+__all__ = ["CheckpointRegistry"]

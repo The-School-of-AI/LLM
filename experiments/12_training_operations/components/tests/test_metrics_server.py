@@ -1,7 +1,6 @@
 
 import time
 import json
-import threading
 import tempfile
 import os
 import urllib.request
@@ -11,7 +10,6 @@ def test_metrics_server():
     """End-to-end test for the custom metrics server (no Prometheus dependency)."""
 
     # Write a minimal config to a temp file
-    config_content = '{"training": {"metrics_port": 18999}}'
     config_fd, config_path = tempfile.mkstemp(suffix=".yaml")
     with os.fdopen(config_fd, "w") as f:
         # yaml-compatible JSON

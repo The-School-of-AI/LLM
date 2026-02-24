@@ -1,6 +1,5 @@
 
 import time
-import os
 import requests
 import json
 from pathlib import Path
@@ -21,7 +20,7 @@ class Watchdog:
         self.loss_threshold = loss_threshold
         self.running = True
         
-        print(f"✓ Watchdog Initialized")
+        print("✓ Watchdog Initialized")
         print(f"  Monitoring: {self.metrics_url}")
         print(f"  Control File: {self.control_file}")
         print(f"  Loss Threshold: {self.loss_threshold}")

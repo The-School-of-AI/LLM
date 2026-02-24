@@ -13,7 +13,6 @@ import os
 import ssl
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
 
 
 PROTECTED_TAGS = frozenset(["growth", "lora", "release_candidate"])

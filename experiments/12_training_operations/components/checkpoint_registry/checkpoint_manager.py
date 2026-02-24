@@ -22,7 +22,7 @@ class CheckpointManager:
         
         self.metadata = {'checkpoints': [], 'latest': None}
         
-        print(f"✓ CheckpointManager initialized")
+        print("✓ CheckpointManager initialized")
         print(f"  S3: s3://{self.bucket}/{self.prefix}{self.run_name}/")
         print(f"  Local: {self.local_dir}")
     
@@ -50,7 +50,7 @@ class CheckpointManager:
             
             s3_key = f"{self.prefix}{self.run_name}/{checkpoint_name}"
             self.s3_client.upload_file(str(local_path), self.bucket, s3_key)
-            print(f"  ✓ Uploaded to S3")
+            print("  ✓ Uploaded to S3")
             
             checkpoint_info = {
                 'name': checkpoint_name,

@@ -87,7 +87,7 @@ class SystemMetricsCollector:
         # Baseline for delta counters (network bytes)
         self._prev_net = self._snapshot_net()
 
-        print(f"✓ SystemMetricsCollector initialized")
+        print("✓ SystemMetricsCollector initialized")
         print(f"  Log file : {self.log_file}")
         print(f"  Interval : {self.interval}s")
         print(f"  GPU      : {self._gpu_available} ({self._gpu_count} devices)")

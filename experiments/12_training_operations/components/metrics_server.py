@@ -263,7 +263,7 @@ class MetricsServer:
             try:
                 self.cpu_usage.set(psutil.cpu_percent(interval=1))
                 self.memory_usage.set(psutil.virtual_memory().percent)
-            except:
+            except Exception:
                 pass
             time.sleep(5)
 

@@ -1,1 +1,3 @@
-from .collector import SystemMetricsCollector
+from .collector import SystemMetricsCollector as SystemMetricsCollector
+
+__all__ = ["SystemMetricsCollector"]

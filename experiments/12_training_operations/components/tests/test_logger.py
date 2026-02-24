@@ -1,5 +1,4 @@
 
-import numpy as np
 import time
 from components.json_logger import JSONLogger
 import shutil

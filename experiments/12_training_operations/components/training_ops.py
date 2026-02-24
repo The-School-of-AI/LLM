@@ -28,16 +28,13 @@ Preflight checks:
 """
 
 import base64
-import json
 import os
 import shutil
 import ssl
 import subprocess
 import sys
-import time
 import urllib.request
 import urllib.error
-from pathlib import Path
 
 from components.train_logger.json_logger import JSONLogger
 from components.system_metrics.collector import SystemMetricsCollector
@@ -256,7 +253,7 @@ class TrainingOps:
         except Exception as e:
             print(f"⚠ Preflight: ClickHouse not reachable at {self._clickhouse_url}")
             print(f"  ({e})")
-            print(f"  Vector will buffer data until ClickHouse recovers.")
+            print("  Vector will buffer data until ClickHouse recovers.")
 
     # ------------------------------------------------------------------
     # Training loop API
@@ -460,7 +457,7 @@ class TrainingOps:
             )
         except Exception as e:
             print(f"⚠ TrainingOps: direct checkpoint registry insert failed: {e}")
-            print(f"  (durable path: JSONL → Vector will deliver it)")
+            print("  (durable path: JSONL → Vector will deliver it)")
 
         # 3. Live metrics
         self.metrics_server.record_checkpoint(duration_s, success=True)

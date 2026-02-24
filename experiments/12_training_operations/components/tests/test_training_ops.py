@@ -4,7 +4,6 @@ Integration test for TrainingOps — verifies the full pipeline:
 """
 
 import json
-import os
 import time
 import urllib.request
 from pathlib import Path
@@ -92,10 +91,10 @@ def test_training_ops():
     print(f"✓ {log_file.name}: {len(lines)} lines written")
 
     # Check checkpoint event is in the logs
-    ckpt_lines = [l for l in lines if l.get("context", {}).get("event") == "checkpoint_saved"]
+    ckpt_lines = [line for line in lines if line.get("context", {}).get("event") == "checkpoint_saved"]
     assert len(ckpt_lines) == 1, f"Expected 1 checkpoint event, got {len(ckpt_lines)}"
     assert ckpt_lines[0]["context"]["s3_key"] == f"s3://test-bucket/{run_id}/ckpt_step_4.pt"
-    print(f"✓ Checkpoint event found in JSONL with correct s3_key")
+    print("✓ Checkpoint event found in JSONL with correct s3_key")
 
     # ---- 6. Verify CheckpointRegistry in ClickHouse ----
     print("\n--- Checking ClickHouse checkpoint registry ---")
@@ -116,10 +115,10 @@ def test_training_ops():
     time.sleep(3)
     if sys_file.exists():
         with open(sys_file) as f:
-            sys_lines = [l for l in f if l.strip()]
+            sys_lines = [line for line in f if line.strip()]
         print(f"✓ System metrics file: {len(sys_lines)} lines")
     else:
-        print(f"⚠ System metrics file not yet written (may need more time)")
+        print("⚠ System metrics file not yet written (may need more time)")
 
     # ---- 8. Shutdown ----
     print("\n--- Shutting down ---")
