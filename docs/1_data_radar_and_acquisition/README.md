@@ -49,7 +49,6 @@ The following table categorizes our shortlisted datasets by their legal risk and
 
 | License Type | Examples | Key Requirements | Permissions | Risk Level |
 | :--- | :--- | :--- | :--- | :--- |
-| **CC0 / Public Domain** | **IndicCorp v2** | None. | No restrictions. Use, modify, and distribute freely. | **Very Low** |
 | **ODC-BY / CC-BY-4.0** | **Dolma**, **Sangraha** | Attribution. | Use and modify freely; must credit the original source. | **Low** |
 | **CC-BY-SA** | **Wikipedia** | Share-Alike. | Any derivative model or data must use the same license. | **Medium** |
 | **CC-BY-NC** | **Certain Research Sets** | Non-Commercial. | Strictly for research; cannot be used in paid products. | **High** |
@@ -159,54 +158,6 @@ The following table categorizes our shortlisted datasets by their legal risk and
 
 ---
 
-## 3. IndicCorp v2 (AI4Bharat)
-
-**Strong baseline Indic dataset, widely used but older and noisier**
-
-| Attribute | Details |
-|----------|---------|
-| **Dataset Type** | Monolingual Indic web scrape |
-| **Languages Covered** | 24 Indic languages |
-| **Token Scale** | ~20.9B tokens |
-| **License** | CC-0 (Public Domain) |
-| **Primary Use** | Legacy/base Indic pretraining |
-
-### 🔗 Hugging Face Link
-➡️ https://huggingface.co/datasets/ai4bharat/IndicCorpV2
-
-**Data Quality & Processing**
-
-- Requires HTML + boilerplate cleaning
-
-- Deduplication: sentence-level MinHash
-
-- Noise includes navigational + repetitive news text
-
-**Contamination & Noise**
-
-- Repetitive headers: ~10–15%
-
-- Typical web contamination: ~2–3%
-
-**Benchmarks Supported**
-
-- IndicXTREME
-- IndicGLUE
-
-**Stakeholder Score (1–5)**
-
-| Category              | Score       |
-| --------------------- | ----------- |
-| **Indic Coverage**        | ⭐⭐⭐⭐☆ (4)   |
-| **Freshness**            | ⭐⭐⭐☆☆ (3)   |
-| **Cleanliness**           | ⭐⭐⭐☆☆ (3–4) |
-| **Licensing Flexibility** | ⭐⭐⭐⭐⭐ (5)   |
-
-❌ No English subset included
-
-⚠ Older release compared to Sangraha
-
----
 
 ## 4. NCERT Books Dataset (Educational / India-specific)
 
@@ -269,7 +220,6 @@ The following table categorizes our shortlisted datasets by their legal risk and
 |--------|--------|---------------|----------|------------|----------|
 | **Dolma** | ~2T eff | ⭐⭐⭐⭐☆ | ⭐⭐⭐⭐☆ | ⭐⭐⭐⭐☆ | General foundation pretraining |
 | **Sangraha** | ~251B | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Indic-specialized pretraining |
-| **IndicCorp v2** | ~21B | ⭐⭐⭐⭐☆ | ⭐⭐⭐☆☆ | ⭐⭐⭐☆☆ | Legacy Indic baseline |
 | **NCERT Books** | Small | ⭐⭐⭐⭐☆ | ⭐⭐⭐⭐☆ | ⭐⭐⭐⭐⭐ | Education mid-training |
 
 **Final Dataset Risk Summary**
@@ -278,7 +228,6 @@ The following table categorizes our shortlisted datasets by their legal risk and
 | ---------------- | ------------ | -------------- | ------------------ | ----------------------------------------- |
 | **Dolma**        | Low–Medium   | Medium         | Low                | Strong general base, attribution required |
 | **Sangraha**     | Low          | Low            | Very Low           | Best Indic dataset, clean + recent        |
-| **IndicCorp v2** | Very Low     | Medium         | Medium             | Older scrape, noisier text                |
 | **NCERT Books**  | Medium       | Medium–High    | Low                | Needs redistribution/license verification |
 
 ---
@@ -287,6 +236,5 @@ The following table categorizes our shortlisted datasets by their legal risk and
 
 - **Foundation Backbone Dataset:** **Dolma**
 - **Primary Indic Dataset:** **Sangraha**
-- **Supplementary Indic Dataset:** IndicCorp v2
 - **Domain-Specific Add-on:** NCERT Books
 
