@@ -1094,7 +1094,6 @@ class GatedDeltaNet(nn.Module):
                     beta=beta,  # (B, T, num_heads, 1)
                     D=self.D,  # (num_heads,)
                     num_heads=self.num_heads,
-                    chunk_size=_chunk_size,
                 )
             except Exception as e:
                 import warnings
