@@ -21,12 +21,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import struct
 import tempfile
 import time
-import shutil
-from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
@@ -49,8 +49,10 @@ SPDL_IDX_HEADER_FMT = "<II"  # version + dtype_size = 8 bytes
 # S3 / Local File Helpers
 # ---------------------------------------------------------------------------
 
+
 def is_s3_uri(uri: str) -> bool:
     return uri.startswith("s3://")
+
 
 def parse_s3_url(url: str) -> Tuple[str, str]:
     """Parse s3://bucket/key -> (bucket, key)."""
@@ -59,11 +61,13 @@ def parse_s3_url(url: str) -> Tuple[str, str]:
         raise ValueError(f"Invalid S3 URL: {url}")
     return parsed.netloc, parsed.path.lstrip("/")
 
+
 def download_to_temp(s3, uri: str, tmp_dir: str) -> str:
     """Download an S3 object to a local temp file, or return local path if already local."""
     if is_s3_uri(uri):
         if s3 is None:
             import boto3
+
             s3 = boto3.client("s3")
         bucket, key = parse_s3_url(uri)
         basename = os.path.basename(key)
@@ -72,11 +76,13 @@ def download_to_temp(s3, uri: str, tmp_dir: str) -> str:
         return local_path
     return uri
 
+
 def upload_file(s3, local_path: str, dst_uri: str) -> None:
     """Upload a local file to S3 or copy to local destination."""
     if is_s3_uri(dst_uri):
         if s3 is None:
             import boto3
+
             s3 = boto3.client("s3")
         bucket, key = parse_s3_url(dst_uri)
         s3.upload_file(local_path, bucket, key)
@@ -84,11 +90,13 @@ def upload_file(s3, local_path: str, dst_uri: str) -> None:
         os.makedirs(os.path.dirname(dst_uri), exist_ok=True)
         shutil.copy2(local_path, dst_uri)
 
+
 def key_exists(s3, uri: str) -> bool:
     """Check if an S3 key or local file/dir exists."""
     if is_s3_uri(uri):
         if s3 is None:
             import boto3
+
             s3 = boto3.client("s3")
         bucket, key = parse_s3_url(uri)
         try:
@@ -98,12 +106,14 @@ def key_exists(s3, uri: str) -> bool:
             return False
     return os.path.exists(uri)
 
+
 def list_parquet_files(s3, uri: str) -> List[str]:
     """List all .parquet files under an S3 prefix or a local folder."""
     files = []
     if is_s3_uri(uri):
         if s3 is None:
             import boto3
+
             s3 = boto3.client("s3")
         bucket, prefix = parse_s3_url(uri)
         paginator = s3.get_paginator("list_objects_v2")
@@ -126,6 +136,7 @@ def list_parquet_files(s3, uri: str) -> List[str]:
 # ---------------------------------------------------------------------------
 # Tokenizer
 # ---------------------------------------------------------------------------
+
 
 def get_tokenizer(tokenizer_path: Optional[str] = None):
     """Load the tokenizer."""
@@ -160,6 +171,7 @@ def tokenize_function(
 # ---------------------------------------------------------------------------
 # Shard Flusher
 # ---------------------------------------------------------------------------
+
 
 class ShardWriter:
     """Accumulates packed blocks and flushes 512 MB shards."""
@@ -279,9 +291,11 @@ class ShardWriter:
         }
         self.shard_stats.append(stats)
 
-        print(f"    [UPLOADED] {shard_name}: "
-              f"{num_blocks:,} blocks, "
-              f"{file_size / 1024 / 1024:.1f} MB")
+        print(
+            f"    [UPLOADED] {shard_name}: "
+            f"{num_blocks:,} blocks, "
+            f"{file_size / 1024 / 1024:.1f} MB"
+        )
 
         self.shard_idx += 1
         self.accumulated_blocks = []
@@ -297,6 +311,7 @@ class ShardWriter:
 # Curriculum Processor
 # ---------------------------------------------------------------------------
 
+
 def process_coreset_file(
     s3_client,
     coreset_uri: str,
@@ -306,17 +321,21 @@ def process_coreset_file(
     tmp_dir: str,
 ) -> dict:
     """Process a single coreset parquet file."""
-    
-    filename = os.path.basename(urlparse(coreset_uri).path) if is_s3_uri(coreset_uri) else os.path.basename(coreset_uri)
+
+    filename = (
+        os.path.basename(urlparse(coreset_uri).path)
+        if is_s3_uri(coreset_uri)
+        else os.path.basename(coreset_uri)
+    )
     # Output folder = filename without extension (e.g. "batch001")
     coreset_name = os.path.splitext(filename)[0]
-    
+
     print(f"\nProcessing Coreset: {filename}")
     print(f"Output folder: {dst_base_uri.rstrip('/')}/{coreset_name}/")
 
     # Download Coreset (or use locally)
     local_path = download_to_temp(s3_client, coreset_uri, tmp_dir)
-    
+
     try:
         df = pd.read_parquet(local_path)
     except Exception as e:
@@ -342,7 +361,9 @@ def process_coreset_file(
         shard_size_mb=args.shard_size_mb,
         tmp_dir=tmp_dir,
         vocab_size=len(tokenizer),
-        pad_token_id=tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0,
+        pad_token_id=tokenizer.pad_token_id
+        if tokenizer.pad_token_id is not None
+        else 0,
         eos_token_id=tokenizer.eos_token_id,
     )
 
@@ -352,9 +373,9 @@ def process_coreset_file(
 
     # Group by source URL to batch S3 downloads
     grouped_sources = df.groupby(args.url_col)
-    
+
     print(f"  Unique source files to fetch: {len(grouped_sources)}")
-    
+
     for src_url, group in grouped_sources:
         try:
             if is_s3_uri(src_url):
@@ -367,7 +388,11 @@ def process_coreset_file(
             continue
 
         valid_ids = set(group[args.coreset_id_col].unique())
-        print(f"  Fetching {basename} ({len(valid_ids)} target chunks)... ", end="", flush=True)
+        print(
+            f"  Fetching {basename} ({len(valid_ids)} target chunks)... ",
+            end="",
+            flush=True,
+        )
 
         # Download source parquet
         local_src = download_to_temp(s3_client, src_url, tmp_dir)
@@ -376,15 +401,15 @@ def process_coreset_file(
         try:
             # 1. Load Parquet
             src_df = pd.read_parquet(local_src)
-            
+
             # 2. Filter by ID
             if args.src_id_col not in src_df.columns:
                 print(f"SKIP (missing ID col '{args.src_id_col}')")
                 continue
-            
+
             # Keep rows where ID is in our valid_ids set
             df_filtered = src_df[src_df[args.src_id_col].isin(valid_ids)]
-            
+
             if df_filtered.empty:
                 print("SKIP (0 matches)")
                 continue
@@ -401,21 +426,22 @@ def process_coreset_file(
                 num_proc=min(args.num_proc, 4),
                 remove_columns=raw_dataset.column_names,
             )
-            
+
             # 4. Pack into buffer
             doc_count = 0
             for example in tokenized:
                 ids = example.get("input_ids")
-                if not ids: continue
+                if not ids:
+                    continue
                 doc_count += 1
-                
+
                 buffer.extend(ids)
                 if writer.eos_token_id is not None:
                     buffer.append(writer.eos_token_id)
-                
+
                 while len(buffer) >= args.block_size:
-                    writer.add_block(buffer[:args.block_size])
-                    del buffer[:args.block_size]
+                    writer.add_block(buffer[: args.block_size])
+                    del buffer[: args.block_size]
 
             total_docs += doc_count
             elapsed = time.perf_counter() - t0
@@ -429,23 +455,33 @@ def process_coreset_file(
 
     if buffer:
         if not getattr(args, "drop_remainder", False):
-            pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+            pad_token_id = (
+                tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+            )
             pad_len = args.block_size - len(buffer)
-            print(f"  [Info] Padded final block with {pad_len} PAD tokens (preserved {len(buffer)} tokens).")
+            print(
+                f"  [Info] Padded final block with {pad_len} PAD tokens (preserved {len(buffer)} tokens)."
+            )
             buffer.extend([pad_token_id] * pad_len)
             writer.add_block(buffer)
         else:
             eos_token_id = tokenizer.eos_token_id
             dropped_tokens = len(buffer)
-            dropped_finished_rows = buffer.count(eos_token_id) if eos_token_id is not None else 0
-            partial_row = 1 if (eos_token_id is None or buffer[-1] != eos_token_id) else 0
+            dropped_finished_rows = (
+                buffer.count(eos_token_id) if eos_token_id is not None else 0
+            )
+            partial_row = (
+                1 if (eos_token_id is None or buffer[-1] != eos_token_id) else 0
+            )
             dropped_rows = dropped_finished_rows + partial_row
-            print(f"  [Warning] Dropped remainder intentionally: {dropped_tokens} tokens (approx {dropped_rows} rows dropped/truncated).")
+            print(
+                f"  [Warning] Dropped remainder intentionally: {dropped_tokens} tokens (approx {dropped_rows} rows dropped/truncated)."
+            )
 
     # Flush remaining blocks
     shard_stats = writer.finalize()
     total_time = time.perf_counter() - t0_start
-    
+
     return {
         "coreset_file": filename,
         "coreset_name": coreset_name,
@@ -462,39 +498,56 @@ def process_coreset_file(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def parse_args():
     p = argparse.ArgumentParser(description="S3 Curriculum Tokenizer")
-    
+
     # Paths
-    p.add_argument("--coreset-uri", required=True, help="S3 URI or local path to coreset parquet file OR folder prefix")
-    p.add_argument("--dst-uri", required=True, help="Destination S3 URI or local prefix")
+    p.add_argument(
+        "--coreset-uri",
+        required=True,
+        help="S3 URI or local path to coreset parquet file OR folder prefix",
+    )
+    p.add_argument(
+        "--dst-uri", required=True, help="Destination S3 URI or local prefix"
+    )
     p.add_argument("--tokenizer-path", default=None, help="Tokenizer path")
-    
+
     # Column mappings
-    p.add_argument("--url-col", default="source_url", help="Column for source parquet S3 URL")
-    p.add_argument("--coreset-id-col", default="chunk_id", help="Column for ID in coreset")
+    p.add_argument(
+        "--url-col", default="source_url", help="Column for source parquet S3 URL"
+    )
+    p.add_argument(
+        "--coreset-id-col", default="chunk_id", help="Column for ID in coreset"
+    )
     p.add_argument("--src-id-col", default="id", help="Column for ID in source parquet")
-    p.add_argument("--text-col", default="text", help="Column containing text in source parquet")
+    p.add_argument(
+        "--text-col", default="text", help="Column containing text in source parquet"
+    )
 
     # Config
     p.add_argument("--block-size", type=int, default=4096)
     p.add_argument("--shard-size-mb", type=int, default=512)
     p.add_argument("--num-proc", type=int, default=8)
-    p.add_argument("--drop-remainder", action="store_true",
-                   help="Drop tail blocks shorter than --block-size instead of padding.")
+    p.add_argument(
+        "--drop-remainder",
+        action="store_true",
+        help="Drop tail blocks shorter than --block-size instead of padding.",
+    )
     p.add_argument("--tmp-dir", default=None)
-    
+
     return p.parse_args()
 
 
 def main():
     args = parse_args()
-    
+
     # Setup
     s3 = None
     if is_s3_uri(args.coreset_uri) or getattr(args, "dst_uri", "").startswith("s3://"):
         try:
             import boto3
+
             s3 = boto3.client("s3")
         except Exception as e:
             print(f"S3 setup warn: {e}")
@@ -502,12 +555,12 @@ def main():
     tmp_base = args.tmp_dir or tempfile.gettempdir()
     tmp_dir = os.path.join(tmp_base, "tokenize_curriculum_tmp")
     os.makedirs(tmp_dir, exist_ok=True)
-    
-    print("="*70)
+
+    print("=" * 70)
     print("Curriculum Tokenizer (Multi-File)")
     print(f"Coreset Input: {args.coreset_uri}")
     print(f"Output Base:   {args.dst_uri}")
-    print("="*70)
+    print("=" * 70)
 
     # Load Tokenizer
     tokenizer = get_tokenizer(args.tokenizer_path)
@@ -520,21 +573,20 @@ def main():
         # Assume prefix/folder -> list files
         print(f"Listing parquet files under {args.coreset_uri} ...")
         target_files = list_parquet_files(s3, args.coreset_uri)
-    
+
     print(f"Found {len(target_files)} coreset files to process.")
-    
+
     all_stats = []
-    
+
     try:
         for idx, uri in enumerate(target_files):
             print(f"\n--- File {idx+1}/{len(target_files)} ---")
             stats = process_coreset_file(
-                s3, uri, args.dst_uri,
-                tokenizer, args, tmp_dir
+                s3, uri, args.dst_uri, tokenizer, args, tmp_dir
             )
             if stats:
                 all_stats.append(stats)
-            
+
         # Global Manifest (optional summary)
         manifest = {
             "format": "curriculum_megatron_bin_idx",
@@ -547,14 +599,14 @@ def main():
             "total_shards": sum(d.get("num_shards", 0) for d in all_stats),
             "timestamp": time.time(),
         }
-        
+
         manifest_path = os.path.join(tmp_dir, "manifest.json")
         with open(manifest_path, "w") as f:
             json.dump(manifest, f, indent=2)
-            
+
         manifest_uri = f"{args.dst_uri.rstrip('/')}/manifest.json"
         upload_file(s3, manifest_path, manifest_uri)
-        
+
         print(f"\nSaved global manifest to {manifest_uri}")
         print("Done.")
 
@@ -564,6 +616,7 @@ def main():
             os.rmdir(tmp_dir)
         except Exception:
             pass
+
 
 if __name__ == "__main__":
     main()

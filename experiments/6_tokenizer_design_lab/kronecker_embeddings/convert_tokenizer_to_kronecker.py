@@ -15,14 +15,13 @@ Author: Generated for GPT-OSS tokenizer conversion
 Date: 2026-02-09
 """
 
-import json
 import argparse
+import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-
 # Import local Kronecker encoder
 from kronecker_decoder import KroneckerConfig, KroneckerEmbeddings
 
@@ -39,16 +38,16 @@ def load_tokenizer_vocab(tokenizer_path: str) -> Tuple[Dict[str, int], List[dict
     """
     print(f"Loading tokenizer from: {tokenizer_path}")
 
-    with open(tokenizer_path, 'r', encoding='utf-8') as f:
+    with open(tokenizer_path, "r", encoding="utf-8") as f:
         tokenizer_data = json.load(f)
 
     # Extract vocabulary from model section
-    model = tokenizer_data.get('model', {})
-    vocab = model.get('vocab', {})
+    model = tokenizer_data.get("model", {})
+    vocab = model.get("vocab", {})
 
     # Extract special tokens
-    added_tokens = tokenizer_data.get('added_tokens', [])
-    special_tokens = [t for t in added_tokens if t.get('special', False)]
+    added_tokens = tokenizer_data.get("added_tokens", [])
+    special_tokens = [t for t in added_tokens if t.get("special", False)]
 
     print(f"  Loaded {len(vocab)} regular tokens")
     print(f"  Loaded {len(special_tokens)} special tokens")
@@ -72,17 +71,17 @@ def decode_token_string(token: str) -> str:
         Decoded token string
     """
     # Handle byte tokens like <0x00>, <0xAB>, etc.
-    if token.startswith('<0x') and token.endswith('>') and len(token) == 6:
+    if token.startswith("<0x") and token.endswith(">") and len(token) == 6:
         try:
             byte_val = int(token[3:5], 16)
-            return bytes([byte_val]).decode('utf-8', errors='replace')
+            return bytes([byte_val]).decode("utf-8", errors="replace")
         except (ValueError, UnicodeDecodeError):
             return token
 
     # Replace HuggingFace special characters
-    decoded = token.replace('Ġ', ' ')   # Leading space
-    decoded = decoded.replace('Ċ', '\n')  # Newline
-    decoded = decoded.replace('ĉ', '\t')  # Tab
+    decoded = token.replace("Ġ", " ")  # Leading space
+    decoded = decoded.replace("Ċ", "\n")  # Newline
+    decoded = decoded.replace("ĉ", "\t")  # Tab
 
     return decoded
 
@@ -91,7 +90,7 @@ def generate_kronecker_embeddings(
     vocab: Dict[str, int],
     special_tokens: List[dict],
     encoder: KroneckerEmbeddings,
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
 ) -> Tuple[np.ndarray, Dict[int, str]]:
     """
     Generate Kronecker embeddings for all tokens.
@@ -110,8 +109,8 @@ def generate_kronecker_embeddings(
 
     # Add special tokens first (they have explicit IDs)
     for st in special_tokens:
-        token_id = st['id']
-        content = st['content']
+        token_id = st["id"]
+        content = st["content"]
         all_tokens[token_id] = content
 
     # Add regular vocab (token_str -> id)
@@ -143,7 +142,7 @@ def generate_kronecker_embeddings(
             token_str = all_tokens[token_id]
 
             # Check if special token
-            is_special = any(st['id'] == token_id for st in special_tokens)
+            is_special = any(st["id"] == token_id for st in special_tokens)
 
             if is_special:
                 # For special tokens, use the content directly (e.g., "<|begin_of_text|>")
@@ -166,7 +165,9 @@ def generate_kronecker_embeddings(
         if (token_id + 1) % 10000 == 0:
             print(f"  Processed {token_id + 1}/{vocab_size} tokens...")
 
-    print(f"  Completed: {processed} tokens processed, {skipped} gaps, {special_count} special tokens")
+    print(
+        f"  Completed: {processed} tokens processed, {skipped} gaps, {special_count} special tokens"
+    )
 
     return embeddings, all_tokens
 
@@ -175,7 +176,7 @@ def save_outputs(
     embeddings: np.ndarray,
     vocab_size: int,
     special_tokens: List[dict],
-    output_dir: Path
+    output_dir: Path,
 ):
     """
     Save embeddings and config to files.
@@ -201,12 +202,12 @@ def save_outputs(
         "pos_dim": 32,
         "encoding": "byte-level",
         "length_normalized": True,
-        "special_token_ids": [st['id'] for st in special_tokens],
+        "special_token_ids": [st["id"] for st in special_tokens],
         "special_token_count": len(special_tokens),
     }
 
     config_path = output_dir / "gptoss_kronecker_config.json"
-    with open(config_path, 'w', encoding='utf-8') as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
     print(f"Saved config to: {config_path}")
 
@@ -215,7 +216,7 @@ def verify_embeddings(
     embeddings: np.ndarray,
     id_to_token: Dict[int, str],
     encoder: KroneckerEmbeddings,
-    num_samples: int = 20
+    num_samples: int = 20,
 ):
     """
     Verify embeddings by checking encoding/decoding consistency.
@@ -236,7 +237,9 @@ def verify_embeddings(
 
     # Sample random token IDs from valid range
     np.random.seed(42)
-    sample_ids = np.random.choice(valid_ids, size=min(num_samples, len(valid_ids)), replace=False)
+    sample_ids = np.random.choice(
+        valid_ids, size=min(num_samples, len(valid_ids)), replace=False
+    )
 
     passed = 0
     failed = 0
@@ -269,10 +272,16 @@ def verify_embeddings(
             failed += 1
 
         # Truncate for display and make ASCII-safe
-        display_token = ascii(decoded_str[:20]) if len(decoded_str) > 20 else ascii(decoded_str)
-        display_decoded = ascii(decoded_back[:20]) if len(decoded_back) > 20 else ascii(decoded_back)
+        display_token = (
+            ascii(decoded_str[:20]) if len(decoded_str) > 20 else ascii(decoded_str)
+        )
+        display_decoded = (
+            ascii(decoded_back[:20]) if len(decoded_back) > 20 else ascii(decoded_back)
+        )
 
-        print(f"  {status} ID {token_id:6d}: {display_token:30s} -> {display_decoded:30s} | match={match}")
+        print(
+            f"  {status} ID {token_id:6d}: {display_token:30s} -> {display_decoded:30s} | match={match}"
+        )
 
     print(f"\nResults: {passed}/{passed + failed} passed")
 
@@ -283,29 +292,26 @@ def verify_embeddings(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert GPT-OSS tokenizer to Kronecker embeddings")
+    parser = argparse.ArgumentParser(
+        description="Convert GPT-OSS tokenizer to Kronecker embeddings"
+    )
     parser.add_argument(
-        '--tokenizer',
+        "--tokenizer",
         type=str,
-        default='../tsai_131k_tokenizer/tokenizer.json',
-        help='Path to tokenizer.json'
+        default="../tsai_131k_tokenizer/tokenizer.json",
+        help="Path to tokenizer.json",
     )
     parser.add_argument(
-        '--output-dir',
-        type=str,
-        default='.',
-        help='Output directory for embeddings'
+        "--output-dir", type=str, default=".", help="Output directory for embeddings"
     )
     parser.add_argument(
-        '--verify',
-        action='store_true',
-        help='Run verification after generation'
+        "--verify", action="store_true", help="Run verification after generation"
     )
     parser.add_argument(
-        '--limit',
+        "--limit",
         type=int,
         default=None,
-        help='Limit number of tokens to process (for testing)'
+        help="Limit number of tokens to process (for testing)",
     )
 
     args = parser.parse_args()
@@ -330,10 +336,12 @@ def main():
         POS_DIM=32,
         D=8192,
         length_normalize=True,
-        truncate_long_words=True
+        truncate_long_words=True,
     )
     encoder = KroneckerEmbeddings(cfg)
-    print(f"Kronecker config: CHAR_DIM={cfg.CHAR_DIM}, POS_DIM={cfg.POS_DIM}, D={cfg.D}")
+    print(
+        f"Kronecker config: CHAR_DIM={cfg.CHAR_DIM}, POS_DIM={cfg.POS_DIM}, D={cfg.D}"
+    )
     print()
 
     # Load tokenizer

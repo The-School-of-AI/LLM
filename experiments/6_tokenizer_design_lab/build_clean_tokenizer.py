@@ -24,11 +24,8 @@ import csv
 import json
 import os
 
-from special_tokens import (
-    BASE_SPECIAL_TOKENS,
-    ADDITIONAL_SPECIAL_TOKENS,
-    NUM_ADDITIONAL_SPECIAL,
-)
+from special_tokens import (ADDITIONAL_SPECIAL_TOKENS, BASE_SPECIAL_TOKENS,
+                            NUM_ADDITIONAL_SPECIAL)
 
 BASE_GPTOSS_PATH = "Tokenizer_metrics/tokenizers/gptoss_tokenizer.json"
 OUTPUT_DIR = "tsai_131k_tokenizer"
@@ -36,13 +33,16 @@ TARGET_VOCAB_SIZE = 131072  # 2^17
 NUM_RESERVED = 250
 MAX_TOKEN_LEN = 32
 
+
 # ---------------------------------------------------------------------------
 # GPT-2 byte encoding
 # ---------------------------------------------------------------------------
 def _build_gpt2_maps():
-    bs = (list(range(ord("!"), ord("~") + 1)) +
-          list(range(ord("¡"), ord("¬") + 1)) +
-          list(range(ord("®"), ord("ÿ") + 1)))
+    bs = (
+        list(range(ord("!"), ord("~") + 1))
+        + list(range(ord("¡"), ord("¬") + 1))
+        + list(range(ord("®"), ord("ÿ") + 1))
+    )
     cs = list(bs)
     n = 0
     for b in range(256):
@@ -52,7 +52,9 @@ def _build_gpt2_maps():
             n += 1
     return {chr(c): b for b, c in zip(bs, cs)}
 
+
 _CHAR_TO_BYTE = _build_gpt2_maps()
+
 
 def decode_gpt2(token: str) -> str:
     try:
@@ -66,48 +68,83 @@ def decode_gpt2(token: str) -> str:
 # Blocked language scripts (non-English, non-Indic)
 # ---------------------------------------------------------------------------
 BLOCKED_RANGES = [
-    (0x0370, 0x03FF, "Greek"), (0x1F00, 0x1FFF, "Greek Extended"),
-    (0x0400, 0x04FF, "Cyrillic"), (0x0500, 0x052F, "Cyrillic Supplement"),
-    (0x2DE0, 0x2DFF, "Cyrillic Extended-A"), (0xA640, 0xA69F, "Cyrillic Extended-B"),
-    (0x0530, 0x058F, "Armenian"), (0xFB13, 0xFB17, "Armenian Ligatures"),
-    (0x10A0, 0x10FF, "Georgian"), (0x2D00, 0x2D2F, "Georgian Supplement"),
-    (0x0590, 0x05FF, "Hebrew"), (0xFB1D, 0xFB4F, "Hebrew Presentation"),
-    (0x0600, 0x06FF, "Arabic"), (0x0750, 0x077F, "Arabic Supplement"),
-    (0x08A0, 0x08FF, "Arabic Extended-A"), (0xFB50, 0xFDFF, "Arabic Pres-A"),
+    (0x0370, 0x03FF, "Greek"),
+    (0x1F00, 0x1FFF, "Greek Extended"),
+    (0x0400, 0x04FF, "Cyrillic"),
+    (0x0500, 0x052F, "Cyrillic Supplement"),
+    (0x2DE0, 0x2DFF, "Cyrillic Extended-A"),
+    (0xA640, 0xA69F, "Cyrillic Extended-B"),
+    (0x0530, 0x058F, "Armenian"),
+    (0xFB13, 0xFB17, "Armenian Ligatures"),
+    (0x10A0, 0x10FF, "Georgian"),
+    (0x2D00, 0x2D2F, "Georgian Supplement"),
+    (0x0590, 0x05FF, "Hebrew"),
+    (0xFB1D, 0xFB4F, "Hebrew Presentation"),
+    (0x0600, 0x06FF, "Arabic"),
+    (0x0750, 0x077F, "Arabic Supplement"),
+    (0x08A0, 0x08FF, "Arabic Extended-A"),
+    (0xFB50, 0xFDFF, "Arabic Pres-A"),
     (0xFE70, 0xFEFF, "Arabic Pres-B"),
-    (0x0700, 0x074F, "Syriac"), (0x0780, 0x07BF, "Thaana"),
-    (0x07C0, 0x07FF, "NKo"), (0x0840, 0x085F, "Mandaic"),
-    (0x0E00, 0x0E7F, "Thai"), (0x0E80, 0x0EFF, "Lao"),
-    (0x1780, 0x17FF, "Khmer"), (0x19E0, 0x19FF, "Khmer Symbols"),
-    (0x0F00, 0x0FFF, "Tibetan"), (0x1800, 0x18AF, "Mongolian"),
-    (0x1700, 0x171F, "Tagalog"), (0x1720, 0x173F, "Hanunoo"),
-    (0x1740, 0x175F, "Buhid"), (0x1760, 0x177F, "Tagbanwa"),
-    (0x3000, 0x303F, "CJK Symbols"), (0x3040, 0x309F, "Hiragana"),
-    (0x30A0, 0x30FF, "Katakana"), (0x31F0, 0x31FF, "Katakana Ext"),
-    (0x3100, 0x312F, "Bopomofo"), (0x31A0, 0x31BF, "Bopomofo Ext"),
-    (0x3190, 0x319F, "Kanbun"), (0x31C0, 0x31EF, "CJK Strokes"),
-    (0x3200, 0x32FF, "Enclosed CJK"), (0x3300, 0x33FF, "CJK Compatibility"),
-    (0x3400, 0x4DBF, "CJK Ext-A"), (0x4E00, 0x9FFF, "CJK Unified"),
-    (0xF900, 0xFAFF, "CJK Compat Ideographs"), (0xFE30, 0xFE4F, "CJK Compat Forms"),
-    (0x20000, 0x2A6DF, "CJK Ext-B"), (0x2A700, 0x2B73F, "CJK Ext-C"),
-    (0x2B740, 0x2B81F, "CJK Ext-D"), (0x2B820, 0x2CEAF, "CJK Ext-E"),
-    (0x2CEB0, 0x2EBEF, "CJK Ext-F"), (0x30000, 0x3134F, "CJK Ext-G"),
-    (0x1100, 0x11FF, "Hangul Jamo"), (0x3130, 0x318F, "Hangul Compat Jamo"),
-    (0xA960, 0xA97F, "Hangul Jamo Ext-A"), (0xAC00, 0xD7AF, "Hangul Syllables"),
+    (0x0700, 0x074F, "Syriac"),
+    (0x0780, 0x07BF, "Thaana"),
+    (0x07C0, 0x07FF, "NKo"),
+    (0x0840, 0x085F, "Mandaic"),
+    (0x0E00, 0x0E7F, "Thai"),
+    (0x0E80, 0x0EFF, "Lao"),
+    (0x1780, 0x17FF, "Khmer"),
+    (0x19E0, 0x19FF, "Khmer Symbols"),
+    (0x0F00, 0x0FFF, "Tibetan"),
+    (0x1800, 0x18AF, "Mongolian"),
+    (0x1700, 0x171F, "Tagalog"),
+    (0x1720, 0x173F, "Hanunoo"),
+    (0x1740, 0x175F, "Buhid"),
+    (0x1760, 0x177F, "Tagbanwa"),
+    (0x3000, 0x303F, "CJK Symbols"),
+    (0x3040, 0x309F, "Hiragana"),
+    (0x30A0, 0x30FF, "Katakana"),
+    (0x31F0, 0x31FF, "Katakana Ext"),
+    (0x3100, 0x312F, "Bopomofo"),
+    (0x31A0, 0x31BF, "Bopomofo Ext"),
+    (0x3190, 0x319F, "Kanbun"),
+    (0x31C0, 0x31EF, "CJK Strokes"),
+    (0x3200, 0x32FF, "Enclosed CJK"),
+    (0x3300, 0x33FF, "CJK Compatibility"),
+    (0x3400, 0x4DBF, "CJK Ext-A"),
+    (0x4E00, 0x9FFF, "CJK Unified"),
+    (0xF900, 0xFAFF, "CJK Compat Ideographs"),
+    (0xFE30, 0xFE4F, "CJK Compat Forms"),
+    (0x20000, 0x2A6DF, "CJK Ext-B"),
+    (0x2A700, 0x2B73F, "CJK Ext-C"),
+    (0x2B740, 0x2B81F, "CJK Ext-D"),
+    (0x2B820, 0x2CEAF, "CJK Ext-E"),
+    (0x2CEB0, 0x2EBEF, "CJK Ext-F"),
+    (0x30000, 0x3134F, "CJK Ext-G"),
+    (0x1100, 0x11FF, "Hangul Jamo"),
+    (0x3130, 0x318F, "Hangul Compat Jamo"),
+    (0xA960, 0xA97F, "Hangul Jamo Ext-A"),
+    (0xAC00, 0xD7AF, "Hangul Syllables"),
     (0xD7B0, 0xD7FF, "Hangul Jamo Ext-B"),
-    (0x1200, 0x137F, "Ethiopic"), (0x1380, 0x139F, "Ethiopic Supplement"),
-    (0x2D80, 0x2DDF, "Ethiopic Extended"), (0x13A0, 0x13FF, "Cherokee"),
-    (0x1400, 0x167F, "Canadian Aboriginal"), (0x1680, 0x169F, "Ogham"),
-    (0x16A0, 0x16FF, "Runic"), (0xA500, 0xA63F, "Vai"),
-    (0xA6A0, 0xA6FF, "Bamum"), (0x2D30, 0x2D7F, "Tifinagh"),
-    (0x1000, 0x109F, "Myanmar"), (0xAA60, 0xAA7F, "Myanmar Ext-A"),
+    (0x1200, 0x137F, "Ethiopic"),
+    (0x1380, 0x139F, "Ethiopic Supplement"),
+    (0x2D80, 0x2DDF, "Ethiopic Extended"),
+    (0x13A0, 0x13FF, "Cherokee"),
+    (0x1400, 0x167F, "Canadian Aboriginal"),
+    (0x1680, 0x169F, "Ogham"),
+    (0x16A0, 0x16FF, "Runic"),
+    (0xA500, 0xA63F, "Vai"),
+    (0xA6A0, 0xA6FF, "Bamum"),
+    (0x2D30, 0x2D7F, "Tifinagh"),
+    (0x1000, 0x109F, "Myanmar"),
+    (0xAA60, 0xAA7F, "Myanmar Ext-A"),
     (0xA9E0, 0xA9FF, "Myanmar Ext-B"),
-    (0xA000, 0xA48F, "Yi Syllables"), (0xA490, 0xA4CF, "Yi Radicals"),
+    (0xA000, 0xA48F, "Yi Syllables"),
+    (0xA490, 0xA4CF, "Yi Radicals"),
 ]
 
 # Indic ranges (to identify for moving to end)
 INDIC_RANGES = [
-    (0x0900, 0x097F), (0xA8E0, 0xA8FF),  # Devanagari
+    (0x0900, 0x097F),
+    (0xA8E0, 0xA8FF),  # Devanagari
     (0x0980, 0x09FF),  # Bengali
     (0x0A00, 0x0A7F),  # Gurmukhi
     (0x0A80, 0x0AFF),  # Gujarati
@@ -149,41 +186,47 @@ def build_special_tokens(start_id: int):
 
     # Base special tokens
     for content in BASE_SPECIAL_TOKENS:
-        tokens.append({
-            "id": current_id,
-            "content": content,
-            "single_word": False,
-            "lstrip": False,
-            "rstrip": False,
-            "normalized": False,
-            "special": True,
-        })
+        tokens.append(
+            {
+                "id": current_id,
+                "content": content,
+                "single_word": False,
+                "lstrip": False,
+                "rstrip": False,
+                "normalized": False,
+                "special": True,
+            }
+        )
         current_id += 1
 
     # Additional special tokens (FIM, Vision, etc.)
     for content in ADDITIONAL_SPECIAL_TOKENS:
-        tokens.append({
-            "id": current_id,
-            "content": content,
-            "single_word": False,
-            "lstrip": False,
-            "rstrip": False,
-            "normalized": False,
-            "special": True,
-        })
+        tokens.append(
+            {
+                "id": current_id,
+                "content": content,
+                "single_word": False,
+                "lstrip": False,
+                "rstrip": False,
+                "normalized": False,
+                "special": True,
+            }
+        )
         current_id += 1
 
     # Reserved tokens
     for i in range(NUM_RESERVED):
-        tokens.append({
-            "id": current_id,
-            "content": f"<|reserved_{i}|>",
-            "single_word": False,
-            "lstrip": False,
-            "rstrip": False,
-            "normalized": False,
-            "special": True,
-        })
+        tokens.append(
+            {
+                "id": current_id,
+                "content": f"<|reserved_{i}|>",
+                "single_word": False,
+                "lstrip": False,
+                "rstrip": False,
+                "normalized": False,
+                "special": True,
+            }
+        )
         current_id += 1
 
     return tokens
@@ -351,7 +394,9 @@ def main():
     print(f"    Final vocab size: {len(final_vocab):,}")
     print(f"    General: IDs 0-{general_end_id}")
     print(f"    Indic: IDs {general_end_id + 1}-{indic_end_id}")
-    print(f"    Special (base+additional+reserved): IDs {special_start_id}-{special_end_id}")
+    print(
+        f"    Special (base+additional+reserved): IDs {special_start_id}-{special_end_id}"
+    )
 
     # Filter merges again for final vocab
     print("\n[9] Final merge filtering...")
@@ -383,7 +428,9 @@ def main():
         json.dump(new_tokenizer, f, ensure_ascii=False)
 
     # Copy and update tokenizer_config.json
-    config_src = os.path.join(os.path.dirname(BASE_GPTOSS_PATH), "tokenizer_config.json")
+    config_src = os.path.join(
+        os.path.dirname(BASE_GPTOSS_PATH), "tokenizer_config.json"
+    )
     config_dst = os.path.join(OUTPUT_DIR, "tokenizer_config.json")
     if os.path.exists(config_src):
         with open(config_src, encoding="utf-8") as f:
@@ -416,17 +463,26 @@ def main():
         "pad_token": "<|pad|>",
         "unk_token": "<|unk|>",
     }
-    with open(os.path.join(OUTPUT_DIR, "special_tokens_map.json"), "w", encoding="utf-8") as f:
+    with open(
+        os.path.join(OUTPUT_DIR, "special_tokens_map.json"), "w", encoding="utf-8"
+    ) as f:
         json.dump(special_tokens_map, f, indent=2, ensure_ascii=False)
 
     # Write reports
-    with open(os.path.join(OUTPUT_DIR, "build_report.csv"), "w", newline="", encoding="utf-8") as f:
+    with open(
+        os.path.join(OUTPUT_DIR, "build_report.csv"), "w", newline="", encoding="utf-8"
+    ) as f:
         writer = csv.writer(f)
         writer.writerow(["token", "old_id", "new_id", "tier"])
         for token, old_id, new_id, tier in token_mapping:
             writer.writerow([token, old_id, new_id, tier])
 
-    with open(os.path.join(OUTPUT_DIR, "removed_tokens.csv"), "w", newline="", encoding="utf-8") as f:
+    with open(
+        os.path.join(OUTPUT_DIR, "removed_tokens.csv"),
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as f:
         writer = csv.writer(f)
         writer.writerow(["token", "reason"])
         for token, reason in removed_tokens.items():
@@ -442,6 +498,7 @@ def main():
     print("\n[11] Validating...")
     try:
         from tokenizers import Tokenizer
+
         tok = Tokenizer.from_file(os.path.join(OUTPUT_DIR, "tokenizer.json"))
 
         tests = [
