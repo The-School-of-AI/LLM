@@ -1,0 +1,31 @@
+name: Scanner CI
+
+on:
+  push:
+    paths:
+      - "experiments/5_data_qa_and_leakage_control/collected/**"
+  pull_request:
+    paths:
+      - "experiments/5_data_qa_and_leakage_control/collected/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: experiments/5_data_qa_and_leakage_control/collected
+        # Install core deps only — skip faiss/sentence-transformers for CI speed.
+        # The smoke test runs N-gram + MinHash only (semantic gracefully disabled).
+        run: pip install tqdm datasketch rich
+
+      - name: Run smoke test
+        working-directory: experiments/5_data_qa_and_leakage_control/collected
+        run: python tests/smoke_test.py

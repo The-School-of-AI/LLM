@@ -3,14 +3,15 @@
 ## 60-Second Setup
 ```bash
 # 1. Navigate to scanner project
-cd /home/ubuntu/LLM/experiments/5_data_qa_and_leakage_control/collected
+cd collected/
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
 # 3. If benchmarks are missing, download once
 python scripts/download_benchmarks.py
-cp benchmark_registry/*_test.jsonl benchmarks/
+# Optional: write to a custom location
+# python scripts/download_benchmarks.py --output-dir /data/benchmarks
 
 # 4. Scan your data
 python scripts/scan.py your_data.jsonl "Team Name" "Batch ID"
@@ -40,7 +41,7 @@ python scripts/scan.py your_data.jsonl "Team Name" "Batch ID"
 ## Need Help?
 
 - **Setup issues:** Check `README.md` prerequisites
-- **Format questions:** See `tests/realistic_10k.jsonl` for example
+- **Format questions:** Each line must be `{"text": "your sample here"}`
 - **Team support:** Slack #team5-data-qa
 
 ---

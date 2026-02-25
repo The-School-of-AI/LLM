@@ -1,10 +1,15 @@
+"""Download and cache benchmark datasets from the Hugging Face Hub.
+
+Usage:
+    python scripts/download_benchmarks.py
+    python scripts/download_benchmarks.py --output-dir /data/benchmarks
+"""
+
+import argparse
 import json
 from pathlib import Path
 
 from datasets import load_dataset
-
-OUTPUT_DIR = Path("benchmarks")
-OUTPUT_DIR.mkdir(exist_ok=True)
 
 # config can be: None | str | list[str] (list = multiple configs concatenated into one file)
 BBH_TASKS = [
@@ -47,7 +52,7 @@ MATH_SUBJECTS = [
     "precalculus",
 ]
 
-benchmarks = {
+BENCHMARKS = {
     # Original
     "mmlu": ("cais/mmlu", "all", "test"),
     "hellaswag": ("Rowan/hellaswag", None, "validation"),
@@ -88,48 +93,73 @@ TEXT_FIELDS = [
     "ctx",
 ]
 
-failed = []
 
-
-def load_configs(dataset_id, configs, split):
-    """Load multiple configs and yield all items."""
+def load_configs(dataset_id: str, configs: list[str], split: str):
+    """Load multiple dataset configs and yield all items."""
     for cfg in configs:
         ds = load_dataset(dataset_id, cfg, split=split)
         yield from ds
 
 
-for name, (dataset_id, config, split) in benchmarks.items():
-    print(f"\n📥 Downloading {name}...")
+def download_all(output_dir: Path) -> None:
+    """Download all benchmarks and write them as JSONL files.
 
-    try:
-        output_file = OUTPUT_DIR / f"{name}_test.jsonl"
-        count = 0
+    Args:
+        output_dir: Directory where ``*_test.jsonl`` files are written.
+            Created automatically if it does not exist.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    failed: list[tuple[str, str]] = []
 
-        with open(output_file, "w") as f:
-            if isinstance(config, list):
-                items = load_configs(dataset_id, config, split)
-            elif config:
-                items = load_dataset(dataset_id, config, split=split)
-            else:
-                items = load_dataset(dataset_id, split=split)
+    for name, (dataset_id, config, split) in BENCHMARKS.items():
+        print(f"\n📥 Downloading {name}...")
 
-            for item in items:
-                text = next(
-                    (item[field] for field in TEXT_FIELDS if field in item), str(item)
-                )
-                f.write(json.dumps({"question": text, "source": name}) + "\n")
-                count += 1
+        try:
+            output_file = output_dir / f"{name}_test.jsonl"
+            count = 0
 
-        print(f"✅ {name}: {count} samples → {output_file}")
+            with open(output_file, "w", encoding="utf-8") as f:
+                if isinstance(config, list):
+                    items = load_configs(dataset_id, config, split)
+                elif config:
+                    items = load_dataset(dataset_id, config, split=split)
+                else:
+                    items = load_dataset(dataset_id, split=split)
 
-    except Exception as e:
-        print(f"❌ {name}: {e}")
-        failed.append((name, str(e)))
+                for item in items:
+                    text = next(
+                        (item[field] for field in TEXT_FIELDS if field in item),
+                        str(item),
+                    )
+                    f.write(json.dumps({"question": text, "source": name}) + "\n")
+                    count += 1
 
-print("\n" + "=" * 50)
-if failed:
-    print(f"⚠️  {len(failed)} failed:")
-    for name, err in failed:
-        print(f"   {name}: {err}")
-else:
-    print("✅ All benchmarks downloaded successfully!")
+            print(f"✅ {name}: {count} samples → {output_file}")
+
+        except Exception as e:
+            print(f"❌ {name}: {e}")
+            failed.append((name, str(e)))
+
+    print("\n" + "=" * 50)
+    if failed:
+        print(f"⚠️  {len(failed)} failed:")
+        for name, err in failed:
+            print(f"   {name}: {err}")
+    else:
+        print("✅ All benchmarks downloaded successfully!")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Download benchmark datasets.")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("benchmarks"),
+        help="Directory to write benchmark JSONL files (default: benchmarks/)",
+    )
+    args = parser.parse_args()
+    download_all(args.output_dir)
+
+
+if __name__ == "__main__":
+    main()

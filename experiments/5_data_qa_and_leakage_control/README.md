@@ -15,7 +15,7 @@ In this repository, the runnable scanner project is under:
 Use this exact flow:
 
 ```bash
-cd /home/ubuntu/LLM/experiments/5_data_qa_and_leakage_control/collected
+cd experiments/5_data_qa_and_leakage_control/collected
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -174,6 +174,7 @@ collected/
 │
 ├── core/                       # Detection engine
 │   ├── __init__.py
+│   ├── utils.py                # Shared text normalisation
 │   ├── registry.py             # Benchmark loader
 │   ├── detectors.py            # N-gram + MinHash + Semantic detectors
 │   └── scanner.py              # Main scanning orchestrator
@@ -264,7 +265,7 @@ Each layer only flags samples **not already caught** by a stricter layer above i
 
 ### Installation
 ```bash
-cd /home/ubuntu/LLM/experiments/5_data_qa_and_leakage_control/collected
+cd experiments/5_data_qa_and_leakage_control/collected
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -431,6 +432,15 @@ done
 - [x] Semantic layer (MiniLM + FAISS, batch processing)
 - [x] 14 benchmarks indexed
 - [x] Confidence scores are real computed values
+- [x] Full type hints and docstrings across all modules
+- [x] Configurable reports path and sample limit
+- [x] Benchmarks path validation with actionable error messages
+- [x] `--output-dir` CLI flag for download script
+- [x] Git commit hash embedded in every report
+- [x] Unique `run_id` per scan, registered with config + input file before detection starts
+- [x] Failure classification (`INVALID_INPUT` / `OUT_OF_MEMORY` / `UNEXPECTED_ERROR`)
+- [x] Replay script — reconstruct exact command from any past `run_id`
+- [x] GitHub Actions CI gate on scanner code changes
 
 ### Phase 2: System 2 (Training Monitor)
 - [ ] Checkpoint evaluation framework
