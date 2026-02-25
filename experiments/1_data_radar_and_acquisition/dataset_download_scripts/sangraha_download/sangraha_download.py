@@ -1,13 +1,24 @@
-import boto3
-from huggingface_hub import list_repo_files, HfApi
 import argparse
-import requests
 from io import BytesIO
 
+import boto3
+import requests
+from huggingface_hub import list_repo_files
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Download dataset from Hugging Face and upload to S3")
-    parser.add_argument('--category', choices=['verified', 'synthetic','unverified'], required=True, help='Choose the category: verified, synthetic, or unverified')
-    parser.add_argument('--lang', help='Specify the language if category is language (e.g., hindi)')
+    parser = argparse.ArgumentParser(
+        description="Download dataset from Hugging Face and upload to S3"
+    )
+    parser.add_argument(
+        "--category",
+        choices=["verified", "synthetic", "unverified"],
+        required=True,
+        help="Choose the category: verified, synthetic, or unverified",
+    )
+    parser.add_argument(
+        "--lang", help="Specify the language if category is language (e.g., hindi)"
+    )
     args = parser.parse_args()
 
     # Configuration
@@ -16,20 +27,22 @@ def main():
     repo_type = "dataset"
 
     # Determine prefix
-    if args.category == 'verified':
-        prefix = 'verified/'
+    if args.category == "verified":
+        prefix = "verified/"
     else:
         parser.error("Invalid category")
     if not args.lang:
-            parser.error("--lang is required ")
+        parser.error("--lang is required ")
     else:
-        prefix = prefix+ args.lang + '/'
-    
-    print ("Starting the download and upload process...")
-    print (f"Category: {args.category}, Language: {args.lang if args.lang else 'N/A'}, Prefix: {prefix}")
+        prefix = prefix + args.lang + "/"
+
+    print("Starting the download and upload process...")
+    print(
+        f"Category: {args.category}, Language: {args.lang if args.lang else 'N/A'}, Prefix: {prefix}"
+    )
 
     # Initialize S3 client
-    s3 = boto3.client('s3')
+    s3 = boto3.client("s3")
 
     # Get list of files in the repo and filter by prefix
     all_files = list_repo_files(repo_id, repo_type=repo_type)
@@ -57,6 +70,7 @@ def main():
             print(f"Successfully uploaded {filename} to s3://{bucket}/{s3_key}")
         except Exception as e:
             print(f"Error processing {filename}: {e}")
+
 
 if __name__ == "__main__":
     main()
