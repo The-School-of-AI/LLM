@@ -4,6 +4,13 @@ import torch.distributed as dist
 from torch.func import functional_call
 from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
+try:
+    from ..profiler import time_region
+except ImportError:
+    from contextlib import contextmanager
+    @contextmanager
+    def time_region(name): yield
+
 
 class _ForceWrapper(nn.Module):
     """
@@ -21,7 +28,7 @@ class _ForceWrapper(nn.Module):
 
 class MidpointFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, p_prev, p_cur, two_h, a, module, attention_mask, param_keys, buffer_keys, *flat_tensors):
+    def forward(ctx, p_prev, p_cur, two_h, a, module, label, attention_mask, param_keys, buffer_keys, *flat_tensors):
         """
         Implements generalized reversible midpoint:
             p_next = a*p_prev + (1-a)*p_cur + two_h * f(p_cur)
@@ -46,6 +53,7 @@ class MidpointFunction(torch.autograd.Function):
         ctx.two_h = float(two_h)
         ctx.a = float(a)
         ctx.module = module
+        ctx.label = label
         ctx.attention_mask = attention_mask_detached
         ctx.param_keys = param_keys
         ctx.buffer_keys = buffer_keys
@@ -53,7 +61,8 @@ class MidpointFunction(torch.autograd.Function):
         ctx.n_buffers = len(buffer_keys)
 
         with torch.no_grad():
-            delta, aux = functional_call(module, (params, buffers), (p_cur, attention_mask), tie_weights=True)
+            with time_region(f"{label}.fwd"):
+                delta, aux = functional_call(module, (params, buffers), (p_cur, attention_mask), tie_weights=True)
             p_next = (ctx.a * p_prev) + ((1.0 - ctx.a) * p_cur) + (ctx.two_h * delta)
 
         return p_next, aux
@@ -87,7 +96,8 @@ class MidpointFunction(torch.autograd.Function):
             buffers_dict = {f"layer.{k}": v for k, v in zip(ctx.buffer_keys, buffer_tensors)}
 
             # 1) Use tie_weights=True in both forward and backward
-            delta, aux = functional_call(ctx.module, (params_req, buffers_dict), (p_cur_req, ctx.attention_mask), tie_weights=True)
+            with time_region(f"{ctx.label}.bwd"):
+                delta, aux = functional_call(ctx.module, (params_req, buffers_dict), (p_cur_req, ctx.attention_mask), tie_weights=True)
 
             if grad_aux is None:
                 # aux may be scalar or tensor
@@ -126,9 +136,10 @@ class MidpointFunction(torch.autograd.Function):
 
 
 class MidpointBlock(nn.Module):
-    def __init__(self, block: nn.Module, step_size: float, a: float):
+    def __init__(self, block: nn.Module, step_size: float, a: float, label: str = "layer"):
         super().__init__()
         self.block = block
+        self.label = label
         self.wrapper = _ForceWrapper(block)
 
         # two_h corresponds to 2h in the leapfrog form
@@ -151,6 +162,7 @@ class MidpointBlock(nn.Module):
             self.two_h,
             self.a,
             self.wrapper,
+            self.label,
             attention_mask,
             self.param_keys,
             self.buffer_keys,
@@ -190,7 +202,7 @@ class ReversibleMidpointStack(nn.Module):
         self.bootstrap = bootstrap
 
         self.bootstrap_layer = blocks[0]
-        self.mid_layers = nn.ModuleList([MidpointBlock(b, step_size=self.h, a=self.a) for b in blocks[1:]])
+        self.mid_layers = nn.ModuleList([MidpointBlock(b, step_size=self.h, a=self.a, label=f"layer{i+1}") for i, b in enumerate(blocks[1:])])
 
         self.step_count = 0
 
@@ -204,9 +216,11 @@ class ReversibleMidpointStack(nn.Module):
             # Gradient checkpointing: bootstrap runs WITH autograd; without checkpoint, a Python
             # for-loop over T tokens retains ~160 MB per step (v_outer, k_outer, S, etc.) → T*160MB OOM.
             # See MEMORY_OOM_REPORT in docs/ or scripts/diagnose_memory.py.
-            delta0, aux0 = grad_checkpoint(
-                lambda p: self.bootstrap_layer.force(p, attention_mask=attention_mask), p_cur, use_reentrant=False
-            )
+            def _bootstrap_fwd(p):
+                with time_region("layer0.fwd"):
+                    return self.bootstrap_layer.force(p, attention_mask=attention_mask)
+
+            delta0, aux0 = grad_checkpoint(_bootstrap_fwd, p_cur, use_reentrant=False)
         # else:
         #     # Euler kick start: p_cur = p_prev + h*delta(p_prev)
         #     delta0, aux0 = self.bootstrap_layer.force(p_prev)
@@ -216,9 +230,11 @@ class ReversibleMidpointStack(nn.Module):
         else:
             # HALF-STEP Euler bootstrap (paper-consistent + stable for h=0.25, a=0.5)
             # Gradient checkpointing: same as no_kick — avoids T-step autograd retention (see above).
-            delta0, aux0 = grad_checkpoint(
-                lambda p: self.bootstrap_layer.force(p, attention_mask=attention_mask), p_prev, use_reentrant=False
-            )
+            def _bootstrap_fwd(p):
+                with time_region("layer0.fwd"):
+                    return self.bootstrap_layer.force(p, attention_mask=attention_mask)
+
+            delta0, aux0 = grad_checkpoint(_bootstrap_fwd, p_prev, use_reentrant=False)
             if self.training and self.noise_eps > 0:
                 delta0 = delta0 + self.noise_eps * torch.randn_like(delta0)
 

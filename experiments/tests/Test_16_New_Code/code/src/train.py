@@ -141,7 +141,7 @@ def train_epoch(
     start_step=0,
     global_step=0,
     metrics_jsonl_path=None,
-    max_chunk_gb=4.0,
+    max_chunk_gb=16.0,
     profiler: "StepProfiler | None" = None,
     profile_steps: "set | None" = None,
     profile_output_dir: "str | None" = None,
@@ -177,17 +177,17 @@ def train_epoch(
     # Auto-create a profiler if profile_steps were provided but no instance passed.
     _owns_profiler = False
     if profiler is None and profile_steps:
-        local_rank = getattr(model_engine, "local_rank", 0)
+        _rank = dist.get_rank() if dist.is_initialized() else 0
         _pout = profile_output_dir or (os.path.dirname(metrics_jsonl_path) if metrics_jsonl_path else "results/run")
         profiler = StepProfiler(
-            rank=local_rank,
+            rank=_rank,
             profile_steps=set(profile_steps),
             output_dir=_pout,
         )
         profiler.activate()
         profiler.register_model(model_engine.module)
         _owns_profiler = True
-        print_rank_0(f"[profiler] Enabled for steps: {sorted(profile_steps)}")
+        print_rank_0(f"[profiler] Enabled for rank {_rank} on steps: {sorted(profile_steps)}")
 
     # Only show progress bar on main process
     #   Remove TQDM overhead from the hot loop
@@ -255,265 +255,252 @@ def train_epoch(
             
             if is_profile_step:
                 profiler.start_step(global_step + 1, tokens=tokens_global)
-     
-            # Measure step wall-clock time
-            step_start_time = time.time()
             
-            # Initialize step stats (No locals() trickery)
-            loss_ntp_value = loss_mtp_value = loss_aux_value = 0.0
-            loss_ntp = loss_mtp = aux_term = None
-            gpu_util = gpu_mem_used = gpu_mem_total = None
-            cpu_util = cpu_mem_used = cpu_mem_total = None
+            step_total_ctx = profiler.phase("step_total") if is_profile_step else _null_ctx()
+            with step_total_ctx:
+                # Measure step wall-clock time
+                step_start_time = time.time()
+            
+                # Initialize step stats (No locals() trickery)
+                loss_ntp_value = loss_mtp_value = loss_aux_value = 0.0
+                loss_ntp = loss_mtp = aux_term = None
+                gpu_util = gpu_mem_used = gpu_mem_total = None
+                cpu_util = cpu_mem_used = cpu_mem_total = None
 
 
-            # ── Data Transfer (Non-Blocking) ────────────────────────────────────
-            # PERFORMANCE-FIX: Avoid context manager overhead on 99% of steps
-            dataload_ctx = profiler.phase("dataloader") if is_profile_step else _null_ctx()
-            with dataload_ctx:
-                # Use pre-sliced tensors from CPU collator
-                x_input = batch.get("x_input").to(model_engine.device, non_blocking=True) if "x_input" in batch else batch["input_ids"].to(model_engine.device, non_blocking=True)
-                y_ntp = batch.get("y_ntp").to(model_engine.device, non_blocking=True) if "y_ntp" in batch else None
-                y_mtp = batch.get("y_mtp").to(model_engine.device, non_blocking=True) if "y_mtp" in batch else None
-                attention_mask_x = batch.get("attention_mask_x").to(model_engine.device, non_blocking=True) if "attention_mask_x" in batch else batch.get("attention_mask").to(model_engine.device, non_blocking=True)
-                
-                # Recurrence path uses fused_ce; labels are unused on GPU
-                labels = None
-                if not uses_custom_forward:
-                    labels = batch.get("labels").to(model_engine.device, non_blocking=True) if "labels" in batch else None
+                # ── Data Transfer (Non-Blocking) ────────────────────────────────────
+                # PERFORMANCE-FIX: Avoid context manager overhead on 99% of steps
+                dataload_ctx = profiler.phase("dataloader") if is_profile_step else _null_ctx()
+                with dataload_ctx:
+                    # Use pre-sliced tensors from CPU collator
+                    x_input = batch.get("x_input").to(model_engine.device, non_blocking=True) if "x_input" in batch else batch["input_ids"].to(model_engine.device, non_blocking=True)
+                    y_ntp = batch.get("y_ntp").to(model_engine.device, non_blocking=True) if "y_ntp" in batch else None
+                    y_mtp = batch.get("y_mtp").to(model_engine.device, non_blocking=True) if "y_mtp" in batch else None
+                    attention_mask_x = batch.get("attention_mask_x").to(model_engine.device, non_blocking=True) if "attention_mask_x" in batch else batch.get("attention_mask").to(model_engine.device, non_blocking=True)
+                    
+                    # Recurrence path uses fused_ce; labels are unused on GPU
+                    labels = None
+                    if not uses_custom_forward:
+                        labels = batch.get("labels").to(model_engine.device, non_blocking=True) if "labels" in batch else None
 
 
-            # ── Value Diagnostic (Step 1 Only) ──────────────────────────────────
-            if global_step == 0 and is_main_process():
-                # Fetch first 5 tokens to verify alignment
-                _xi = x_input[0, :5].cpu().tolist()
-                _yn = y_ntp[0, :5].cpu().tolist() if y_ntp is not None else []
-                _ym = y_mtp[0, :5].cpu().tolist() if y_mtp is not None else []
-                print_rank_0(f"[TOKEN CHECK] Step 1 Batch 0:\n"
-                             f"  x_input[:5]: {_xi}\n"
-                             f"  y_ntp[:5]:   {_yn}\n"
-                             f"  y_mtp[:5]:   {_ym}")
-            if (global_step + 1) in [1, 2, 3]:
-                torch.cuda.reset_peak_memory_stats(model_engine.device)
-                mem_before = torch.cuda.memory_allocated(model_engine.device) / 1e9
-                print_rank_0(f"\n[MEMORY] Before forward pass: {mem_before:.2f}GB")
-
-            # Forward pass
-            if uses_custom_forward:
-                # FIX: Call model_engine(...) not model_engine.module(...)
-                fwd_ctx = profiler.phase("forward") if is_profile_step else _null_ctx()
-                with fwd_ctx:
-                    # DIAGNOSTIC: Check MTP visibility on Step 1
-                    if global_step == 0 and is_main_process():
-                        has_mtp = getattr(model_engine.module, "mtp_block", None) is not None
-                        print_rank_0(f"[DIAGNOSTIC] Step 1: MTP block enabled={has_mtp}, y_ntp is None={y_ntp is None}")
-
-                    h_ntp, h_mtp, aux_loss = model_engine(
-                        x_input,
-                        next_token_ids=y_ntp,
-                        attention_mask=attention_mask_x,
-                        return_loss=True,
-                        return_memory=False,
-                        prev_memory_stream=None,
-                        return_hidden=True,
-                    )
-
-
-                # Memory profiling after forward
+                # ── Value Diagnostic (Step 1 Only) ──────────────────────────────────
+                if global_step == 0 and is_main_process():
+                    # Fetch first 5 tokens to verify alignment
+                    _xi = x_input[0, :5].cpu().tolist()
+                    _yn = y_ntp[0, :5].cpu().tolist() if y_ntp is not None else []
+                    _ym = y_mtp[0, :5].cpu().tolist() if y_mtp is not None else []
+                    print_rank_0(f"[TOKEN CHECK] Step 1 Batch 0:\n"
+                                 f"  x_input[:5]: {_xi}\n"
+                                 f"  y_ntp[:5]:   {_yn}\n"
+                                 f"  y_mtp[:5]:   {_ym}")
                 if (global_step + 1) in [1, 2, 3]:
-                    mem_after_fwd = torch.cuda.memory_allocated(model_engine.device) / 1e9
-                    mem_peak = torch.cuda.max_memory_allocated(model_engine.device) / 1e9
-                    print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
-                    print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
+                    torch.cuda.reset_peak_memory_stats(model_engine.device)
+                    mem_before = torch.cuda.memory_allocated(model_engine.device) / 1e9
+                    print_rank_0(f"\n[MEMORY] Before forward pass: {mem_before:.2f}GB")
 
-                # 3. FusedLinearCE: fuses lm_head matmul + CE in one chunked kernel.
-                # Never materialises [B*T, vocab] logits. Zero fallback.
-                lm_weight = model_engine.module.lm_head.weight  # [V, H]
-                B_seq, T_seq, H_dim = h_ntp.shape
-                vocab_size = lm_weight.shape[0]
+                # Forward pass
+                if uses_custom_forward:
+                    # FIX: Call model_engine(...) not model_engine.module(...)
+                    fwd_ctx = profiler.phase("forward") if is_profile_step else _null_ctx()
+                    with fwd_ctx:
+                        # DIAGNOSTIC: Check MTP visibility on Step 1
+                        if global_step == 0 and is_main_process():
+                            has_mtp = getattr(model_engine.module, "mtp_block", None) is not None
+                            print_rank_0(f"[DIAGNOSTIC] Step 1: MTP block enabled={has_mtp}, y_ntp is None={y_ntp is None}")
 
-                fused_ce_ctx = profiler.phase("fused_ce") if is_profile_step else _null_ctx()
-                with fused_ce_ctx:
-                    loss_ntp = fused_ce_fn(
-                        h_ntp.view(-1, H_dim),          # [B*T, H]
-                        lm_weight,                       # [V, H]
-                        y_ntp.view(-1),                  # [B*T]
-                    )
-                if (global_step + 1) in [1, 2, 3]:
-                    mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
-                    print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
-
-                loss_mtp = None
-                if h_mtp is not None:
-                    B_m, T_m, H_m = h_mtp.shape
-                    fused_ce_mtp_ctx = profiler.phase("fused_ce_mtp") if is_profile_step else _null_ctx()
-                    with fused_ce_mtp_ctx:
-                        loss_mtp = fused_ce_fn(
-                            h_mtp.view(-1, H_m),         # [B*T, H]
-                            lm_weight,                   # [V, H]
-                            y_mtp.view(-1),              # [B*T]
+                        h_ntp, h_mtp, aux_loss = model_engine(
+                            x_input,
+                            next_token_ids=y_ntp,
+                            attention_mask=attention_mask_x,
+                            return_loss=True,
+                            return_memory=False,
+                            prev_memory_stream=None,
+                            return_hidden=True,
                         )
 
-                # 4. NaN Watchdog — HARD CRASH (FIX: was silently continuing, corrupting weights)
-                if torch.isnan(loss_ntp) or (loss_mtp is not None and torch.isnan(loss_mtp)) or \
-                        (aux_loss is not None and torch.isnan(aux_loss)):
-                    raise RuntimeError(
-                        f"NaN detected at epoch {epoch}, step {i}: "
-                        f"loss_ntp={loss_ntp.item():.4f}, "
-                        f"loss_mtp={loss_mtp.item():.4f if loss_mtp is not None else 'None'}"
-                    )
 
-                # 5. Combine Loss (NTP + 0.3*MTP + aux)
-                loss = loss_ntp
-                if loss_mtp is not None:
-                    loss = loss + 0.3 * loss_mtp
-                if aux_loss is not None and aux_loss.numel() > 0:
-                    # Defensive scalarization: some model variants may return
-                    # Defensive scalarization
-                    aux_term = aux_loss if aux_loss.numel() == 1 else aux_loss.mean()
-                    loss += aux_term
-            else:
-                # Standard transformer model
-                fwd_ctx = profiler.phase("forward") if is_profile_step else _null_ctx()
-                with fwd_ctx:
-                    outputs = model_engine(x_input, attention_mask=attention_mask_x, labels=labels)
-                loss = outputs.loss
+                    # Memory profiling after forward
+                    if (global_step + 1) in [1, 2, 3]:
+                        mem_after_fwd = torch.cuda.memory_allocated(model_engine.device) / 1e9
+                        mem_peak = torch.cuda.max_memory_allocated(model_engine.device) / 1e9
+                        print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
+                        print_rank_0(f"[MEMORY] Forward allocated: {(mem_after_fwd - mem_before):.2f}GB")
 
+                    # 3. FusedLinearCE: fuses lm_head matmul + CE in one chunked kernel.
+                    # Never materialises [B*T, vocab] logits. Zero fallback.
+                    lm_weight = model_engine.module.lm_head.weight  # [V, H]
+                    B_seq, T_seq, H_dim = h_ntp.shape
+                    vocab_size = lm_weight.shape[0]
 
-            # Backward pass
-            backward_ctx = profiler.phase("backward") if is_profile_step else _null_ctx()
-            with backward_ctx:
-                model_engine.backward(loss)
+                    fused_ce_ctx = profiler.phase("fused_ce") if is_profile_step else _null_ctx()
+                    with fused_ce_ctx:
+                        loss_ntp = fused_ce_fn(
+                            h_ntp.view(-1, H_dim),          # [B*T, H]
+                            lm_weight,                       # [V, H]
+                            y_ntp.view(-1),                  # [B*T]
+                        )
+                    if (global_step + 1) in [1, 2, 3]:
+                        mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
+                        print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
 
-            # Update weights (includes allreduce in ZeRO-1)
-            optimizer_ctx = profiler.phase("optim_step") if is_profile_step else _null_ctx()
-            with optimizer_ctx:
-                model_engine.step()
+                    loss_mtp = None
+                    if h_mtp is not None:
+                        B_m, T_m, H_m = h_mtp.shape
+                        fused_ce_mtp_ctx = profiler.phase("fused_ce_mtp") if is_profile_step else _null_ctx()
+                        with fused_ce_mtp_ctx:
+                            loss_mtp = fused_ce_fn(
+                                h_mtp.view(-1, H_m),         # [B*T, H]
+                                lm_weight,                   # [V, H]
+                                y_mtp.view(-1),              # [B*T]
+                            )
 
-            # End profiling record for this step
-            if is_profile_step:
-                profiler.end_step(tokens=tokens_global)
+                    # 4. NaN Watchdog — HARD CRASH (FIX: was silently continuing, corrupting weights)
+                    if torch.isnan(loss_ntp) or (loss_mtp is not None and torch.isnan(loss_mtp)) or \
+                            (aux_loss is not None and torch.isnan(aux_loss)):
+                        raise RuntimeError(
+                            f"NaN detected at epoch {epoch}, step {i}: "
+                            f"loss_ntp={loss_ntp.item():.4f}, "
+                            f"loss_mtp={loss_mtp.item():.4f if loss_mtp is not None else 'None'}"
+                        )
 
-            # Silent GPU accumulation
-            total_loss_t += loss.detach()
-            steps += 1
-            global_step += 1
-
-
-            # ── Metrics aggregation (Weaponized) ───────────────────────────────
-            step_dt_ms = (time.time() - step_start_time) * 1000.0
-            tokens_per_sec = tokens_global / (step_dt_ms / 1000.0) if step_dt_ms > 0 else 0.0
-
-            # LOGGING TAX: Fetch loss.item() only if logging is active
-            loss_val = 0.0
-            if log_per_step or (i % log_interval == 0):
-                loss_val = float(loss.item())
-
-            # Only perform expensive syncs/comms on log interval
-            if log_per_step or (i % log_interval == 0):
-                # Removed i > 0 guard to ensure step 0 initializes learning_rate/avg_loss
-                metrics_aggregation_ctx = profiler.phase("metrics_aggregation") if is_profile_step else _null_ctx()
-                with metrics_aggregation_ctx:
-                    with torch.no_grad():
-                        learning_rate = _get_learning_rate(model_engine)
-                        # Pull accurate average loss from GPU using accurate step count
-                        avg_loss_val = (total_loss_t / steps).item()
-
-                        # Compute sub-losses only for logging interval
-                        loss_ntp_value = float(loss_ntp.item()) if loss_ntp is not None else loss_val
-                        loss_mtp_value = float(loss_mtp.item()) if loss_mtp is not None else 0.0
-                        loss_aux_value = float(aux_term.item()) if aux_term is not None else 0.0
+                    # 5. Combine Loss (NTP + 0.3*MTP + aux)
+                    loss = loss_ntp
+                    if loss_mtp is not None:
+                        loss = loss + 0.3 * loss_mtp
+                    if aux_loss is not None and aux_loss.numel() > 0:
+                        # Defensive scalarization
+                        aux_term = aux_loss if aux_loss.numel() == 1 else aux_loss.mean()
+                        loss += aux_term
+                else:
+                    # Standard transformer model
+                    fwd_ctx = profiler.phase("forward") if is_profile_step else _null_ctx()
+                    with fwd_ctx:
+                        outputs = model_engine(x_input, attention_mask=attention_mask_x, labels=labels)
+                    loss = outputs.loss
 
 
-                # PERFORMANCE-FIX: Only collect system metrics for steps 1, 2, 3 in test mode
-                # Tracked by global_step to stay consistent across resumes
-                # COMMENT: Change this to every 1000 steps later on
-                do_system_metrics = enable_system_metrics and (global_step in [1, 2, 3])
-                
-                if do_system_metrics:
-                    system_metrics_ctx = profiler.phase("system_metrics") if is_profile_step else _null_ctx()
-                    with system_metrics_ctx:
-                        vm = psutil.virtual_memory()
-                        cpu_util = psutil.cpu_percent(interval=None)
-                        cpu_mem_used = vm.used / (1024**3)
-                        cpu_mem_total = vm.total / (1024**3)
-                        if _NVML_AVAILABLE and is_main_process() and torch.cuda.is_available():
-                            try:
-                                n_devices = pynvml.nvmlDeviceGetCount()
-                                gpu_rows = []
-                                for idx in range(n_devices):
-                                    handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
-                                    used_gb = pynvml.nvmlDeviceGetMemoryInfo(handle).used / (1024**3)
-                                    total_gb = pynvml.nvmlDeviceGetMemoryInfo(handle).total / (1024**3)
-                                    util = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
-                                    gpu_rows.append((idx, util, used_gb, total_gb))
-                                device_index = model_engine.local_rank if hasattr(model_engine, "local_rank") else torch.cuda.current_device()
-                                _, gpu_util, gpu_mem_used, gpu_mem_total = next((r for r in gpu_rows if r[0] == int(device_index)), (0, 0, 0, 0))
-                            except Exception: pass
+                # Backward pass
+                backward_ctx = profiler.phase("backward") if is_profile_step else _null_ctx()
+                with backward_ctx:
+                    model_engine.backward(loss)
 
-            if do_profile and i == 2:
-                print("Profile stopped (Step 2)")
-                prof.stop_profile()
-                prof.print_model_profile(profile_step=i)
-                prof.end_profile()
+                # Update weights (includes allreduce in ZeRO-1)
+                optimizer_ctx = profiler.phase("optim_step") if is_profile_step else _null_ctx()
+                with optimizer_ctx:
+                    model_engine.step()
+
+                # Silent GPU accumulation
+                total_loss_t += loss.detach()
+                steps += 1
 
 
-            if is_main_process():
-                # Consolidation: only print and process heavy stats on log_interval
-                # FIX-PERF: log_interval is 1 in test mode; use 10*log_interval for expensive logs to keep console clean
-                # COMMENT: change 10*log_interval back once test mode is over
-                is_log_step = (i % log_interval == 0)
-                is_heavy_log_step = (i > 0 and i % (10 * log_interval) == 0)
-                
-                if is_log_step:
-                    msg = (f"{_format_log_timestamp()} | step {global_step} | "
-                           f"L:{loss_val:.4f} (ntp:{loss_ntp_value:.4f}, mtp:{loss_mtp_value:.4f}) | "
-                           f"tok/sec: {tokens_per_sec:9.2f} | dt: {step_dt_ms:.2f}ms")
-                    print(msg)
+                # ── Metrics aggregation (Weaponized) ───────────────────────────────
+                step_dt_ms = (time.time() - step_start_time) * 1000.0
+                tokens_per_sec = tokens_global / (step_dt_ms / 1000.0) if step_dt_ms > 0 else 0.0
 
+                # LOGGING TAX: Fetch loss.item() only if logging is active
+                loss_val = 0.0
+                if log_per_step or (i % log_interval == 0):
+                    loss_val = float(loss.item())
+
+                # Only perform expensive syncs/comms on log interval
+                if log_per_step or (i % log_interval == 0):
+                    # Removed i > 0 guard to ensure step 0 initializes learning_rate/avg_loss
+                    metrics_aggregation_ctx = profiler.phase("metrics_aggregation") if is_profile_step else _null_ctx()
+                    with metrics_aggregation_ctx:
+                        with torch.no_grad():
+                            learning_rate = _get_learning_rate(model_engine)
+                            # Pull accurate average loss from GPU using accurate step count
+                            avg_loss_val = (total_loss_t / steps).item()
+
+                            # Compute sub-losses only for logging interval
+                            loss_ntp_value = float(loss_ntp.item()) if loss_ntp is not None else loss_val
+                            loss_mtp_value = float(loss_mtp.item()) if loss_mtp is not None else 0.0
+                            loss_aux_value = float(aux_term.item()) if aux_term is not None else 0.0
+
+
+                    # PERFORMANCE-FIX: Only collect system metrics for steps 1, 2, 3 in test mode
+                    # Tracked by global_step to stay consistent across resumes
+                    do_system_metrics = enable_system_metrics and (global_step in [1, 2, 3])
+                    
+                    if do_system_metrics:
+                        system_metrics_ctx = profiler.phase("system_metrics") if is_profile_step else _null_ctx()
+                        with system_metrics_ctx:
+                            vm = psutil.virtual_memory()
+                            cpu_util = psutil.cpu_percent(interval=None)
+                            cpu_mem_used = vm.used / (1024**3)
+                            cpu_mem_total = vm.total / (1024**3)
+                            if _NVML_AVAILABLE and is_main_process() and torch.cuda.is_available():
+                                try:
+                                    n_devices = pynvml.nvmlDeviceGetCount()
+                                    gpu_rows = []
+                                    for idx in range(n_devices):
+                                        handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
+                                        used_gb = pynvml.nvmlDeviceGetMemoryInfo(handle).used / (1024**3)
+                                        total_gb = pynvml.nvmlDeviceGetMemoryInfo(handle).total / (1024**3)
+                                        util = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
+                                        gpu_rows.append((idx, util, used_gb, total_gb))
+                                    device_index = model_engine.local_rank if hasattr(model_engine, "local_rank") else torch.cuda.current_device()
+                                    _, gpu_util, gpu_mem_used, gpu_mem_total = next((r for r in gpu_rows if r[0] == int(device_index)), (0, 0, 0, 0))
+                                except Exception:
+                                    pass
+
+                    is_heavy_log_step = (global_step % 100 == 0)
                     _append_jsonl_buffered(
                         metrics_file,
                         {
                             "phase": "train", "epoch": epoch, "step": i, "global_step": global_step,
-                            "loss": avg_loss_val, "loss_ntp": loss_ntp_value, "loss2": loss_mtp_value, 
+                            "loss": loss_val, "loss_ntp": loss_ntp_value, "loss2": loss_mtp_value,
                             "r_loss": loss_aux_value, "lr": learning_rate, "dt_ms": step_dt_ms,
                             "tokens_per_sec": tokens_per_sec, "tokens": tokens_global,
                             "gpu_util": gpu_util, "gpu_mem_used_gb": gpu_mem_used,
                             "cpu_util": cpu_util, "cpu_mem_used_gb": cpu_mem_used,
                         },
                     )
-                    if is_heavy_log_step or (global_step in [0, 1, 2, 3]):
+                    if metrics_file is not None and (is_heavy_log_step or (global_step in [0, 1, 2, 3])):
                         metrics_file.flush() # Flush on interval OR early diagnostic steps
 
-            # Save checkpoint periodically
-            if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:
-                ckpt_ctx = profiler.phase("checkpoint_save") if is_profile_step else _null_ctx()
-                with ckpt_ctx:
-                    checkpoint_tag = f"epoch{epoch}_step{i + 1}"
-                    print_rank_0(
-                        f"\nSaving checkpoint at epoch {epoch}, step {i + 1}, global_step {global_step}..."
-                    )
-
-                    # Client state to save with checkpoint
-                    client_state = {
-                        "epoch": epoch,
-                        "step": i + 1,
-                        "global_step": global_step,
-                        "loss": loss_val,
-                    }
-
-                    if checkpoint_manager:
-                        # Use S3CheckpointManager (will upload to S3 in background)
-                        checkpoint_manager.save_checkpoint(
-                            model_engine,
-                            step=global_step,
-                            tag=checkpoint_tag,
-                            client_state=client_state,
+                # Save checkpoint periodically
+                checkpoint_saved = False
+                if checkpoint_interval is not None and (i + 1) % checkpoint_interval == 0:
+                    ckpt_ctx = profiler.phase("checkpoint_save") if is_profile_step else _null_ctx()
+                    with ckpt_ctx:
+                        checkpoint_tag = f"epoch{epoch}_step{i + 1}"
+                        print_rank_0(
+                            f"\nSaving checkpoint at epoch {epoch}, step {i + 1}, global_step {global_step}..."
                         )
-                    elif output_dir:
-                        # Use basic checkpoint saving
-                        save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
 
-            i += 1
+                        # Client state to save with checkpoint
+                        client_state = {
+                            "epoch": epoch,
+                            "step": i + 1,
+                            "global_step": global_step,
+                            "loss": loss_val,
+                        }
+
+                        if checkpoint_manager:
+                            # Use S3CheckpointManager (will upload to S3 in background)
+                            checkpoint_manager.save_checkpoint(
+                                model_engine,
+                                step=global_step,
+                                tag=checkpoint_tag,
+                                client_state=client_state,
+                            )
+                        elif output_dir:
+                            # Use basic checkpoint saving
+                            save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
+                        checkpoint_saved = True
+
+                # CRITICAL: global_step increment happened too early before; now at bottom.
+                global_step += 1
+                i += 1
+
+            # ── END OF STEP ──
+            # This is the absolute bottom. Now finalize profiling.
+            if is_profile_step:
+                # pass total tokens accurately
+                profiler.end_step(tokens=tokens_global)
 
     finally:
         if metrics_file:
@@ -525,11 +512,21 @@ def train_epoch(
     print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
 
     # ── Profiler: write reports and clean up ─────────────────────────────────
-    if profiler is not None and profiler._history:
+    if profiler is not None:
         _pout = profile_output_dir or (os.path.dirname(metrics_jsonl_path) if metrics_jsonl_path else "results/run")
-        profiler.write_report(os.path.join(_pout, "profile_report.txt"))
-        profiler.write_jsonl(os.path.join(_pout, "profile.jsonl"))
-        print_rank_0(f"[profiler] Report written to {_pout}/profile_report.txt")
+        _pout_abs = os.path.abspath(_pout)
+        
+        if profiler._history:
+            # write_report and write_jsonl internally check for rank == 0
+            profiler.write_report(os.path.join(_pout, "profile_report.txt"))
+            profiler.write_jsonl(os.path.join(_pout, "profile.jsonl"))
+            if is_main_process():
+                print_rank_0(f"\n[profiler] Reports generated in: {_pout_abs}")
+                print_rank_0(f"[profiler]   - Summary: {os.path.join(_pout_abs, 'profile_report.txt')}")
+                print_rank_0(f"[profiler]   - JSONL:   {os.path.join(_pout_abs, 'profile.jsonl')}")
+        elif is_main_process():
+            print_rank_0("[profiler] No history collected. Check 'profile_steps' in config.")
+
     if _owns_profiler and profiler is not None:
         profiler.deactivate()
 

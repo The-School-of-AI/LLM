@@ -282,15 +282,23 @@ class StepRecord:
     regions: Dict[str, float] = field(default_factory=dict)  # name → ms
     region_counts: Dict[str, int] = field(default_factory=dict)  # name → count
     start_timestamp: float = 0.0  # Wall clock for this step
+    pending_regions: List[_CUDARegion] = field(default_factory=list)
 
-    def add(self, name: str, ms: float):
-        """Record a region timing, accumulating if called multiple times."""
-        if name in self.regions:
-            self.regions[name] += ms
-            self.region_counts[name] += 1
-        else:
-            self.regions[name] = ms
-            self.region_counts[name] = 1
+    def add_region(self, region: _CUDARegion):
+        self.pending_regions.append(region)
+
+    def finalize(self):
+        """Calculate timings for all pending regions after a global sync."""
+        for r in self.pending_regions:
+            ms = r.elapsed_ms()
+            name = r.name
+            if name in self.regions:
+                self.regions[name] += ms
+                self.region_counts[name] += 1
+            else:
+                self.regions[name] = ms
+                self.region_counts[name] = 1
+        self.pending_regions.clear()
     
     def to_json_row(self) -> Dict[str, Any]:
         """Convert to JSON-serializable dict with count info."""
@@ -467,20 +475,25 @@ class StepProfiler:
         """
         if not self._recording or self._current is None:
             return
-        self._recording = False
+        
         if tokens:
             self._current.tokens = tokens
         
-        # Force CUDA sync so all event elapsed_time() calls are ready
+        # 1) Force CUDA sync so ALL pending events are finished on GPU
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         
+        # 2) Finalize all regions (now they are guaranteed to be ready)
+        self._current.finalize()
+        
+        # 3) Record step history
         self._history.append(self._current)
         
-        # Immediately write this step's record to JSONL (async or sync)
+        # 4) Immediately write this step's record to JSONL (async or sync)
         if self.rank == 0 and self._jsonl_path:
             self._write_step_async(self._current)
         
+        self._recording = False
         self._current = None
     
     def _write_step_async(self, record: StepRecord):
@@ -516,16 +529,11 @@ class StepProfiler:
     # ── internal accumulation ─────────────────────────────────────────────────
 
     def _record_region(self, region: _CUDARegion):
-        """Accumulate timing for a region (supports multiple calls per region)."""
+        """Store region for lazy calculation."""
         if self._current is None:
-            return
-        try:
-            ms = region.elapsed_ms()
-            self._current.add(region.name, ms)
-        except Exception:
-            pass  # never crash training
-        finally:
             region.release()
+            return
+        self._current.add_region(region)
 
     # ── reporting ─────────────────────────────────────────────────────────────
 
@@ -610,39 +618,6 @@ class StepProfiler:
         lines.append(f"  ({n} step(s) averaged, {avg_tokens:.0f} tokens/step)")
         lines.append("=" * 90)
 
-        # ── Phase summary ────────────────────────────────────────────────────
-        phase_keys = [
-            "dataloader",
-            "forward",
-            "gsa_leak_allreduce",
-            "fused_ce",
-            "fused_ce_mtp",
-            "backward",
-            "optim_step",
-            "token_count_allreduce",
-            "system_metrics",
-            "log_write",
-            "checkpoint_save",
-        ]
-        lines.append("\n── Step Phases ──────────────────────────────────────────────────")
-        lines.append(f"  {'Region':<30}  {'ms':>8}  {'%step':>7}")
-        lines.append(f"  {'-'*30}  {'-'*8}  {'-'*7}")
-        step_total = avgs.get("step_total", sum(avgs.get(k, 0) for k in phase_keys) or 1)
-        for k in phase_keys + ["step_total"]:
-            if k in avgs:
-                pct = 100.0 * avgs[k] / step_total
-                lines.append(f"  {k:<30}  {avgs[k]:>8.1f}  {pct:>6.1f}%")
-
-        # ── Per-layer summary ────────────────────────────────────────────────
-        lines.append("\n── Per-Layer Forward (ms) ───────────────────────────────────────")
-        lines.append(f"  {'Layer':<38}  {'fwd ms':>8}")
-        lines.append(f"  {'-'*38}  {'-'*8}")
-        layer_keys = sorted(k for k in avgs if k.startswith("layer") and k.endswith(".fwd"))
-        for k in layer_keys:
-            lines.append(f"  {k:<38}  {avgs[k]:>8.2f}")
-        if "mtp_block.fwd" in avgs:
-            lines.append(f"  {'mtp_block.fwd':<38}  {avgs['mtp_block.fwd']:>8.2f}")
-
         # ── Kernel-level breakdown ────────────────────────────────────────────
         # Aggregate kernel types across layers
         kernel_types = ["deltanet", "gsa", "sinkhorn_attn", "sinkhorn_mlp", "mlp",
@@ -667,6 +642,40 @@ class StepProfiler:
             lines.append(f"  {'-'*30}  {'-'*10}")
             for ktype, total_ms in sorted(kernel_totals.items(), key=lambda x: -x[1]):
                 lines.append(f"  {ktype:<30}  {total_ms:>10.2f}")
+
+        # ── Phase summary ────────────────────────────────────────────────────
+        phase_keys = [
+            "dataloader",
+            "forward",
+            "fused_ce",
+            "fused_ce_mtp",
+            "backward",
+            "optim_step",
+            "metrics_aggregation",
+            "token_count_allreduce",
+            "system_metrics",
+            "log_write",
+            "checkpoint_save"
+        ]
+        lines.append("\n── Step Phases ──────────────────────────────────────────────────")
+        lines.append(f"  {'Region':<30}  {'ms':>8}  {'%step':>7}")
+        lines.append(f"  {'-'*30}  {'-'*8}  {'-'*7}")
+        step_total = avgs.get("step_total", sum(avgs.get(k, 0) for k in phase_keys) or 1)
+        for k in phase_keys + ["step_total"]:
+            if k in avgs:
+                pct = 100.0 * avgs[k] / step_total
+                lines.append(f"  {k:<30}  {avgs[k]:>8.1f}  {pct:>6.1f}%")
+
+        # ── Per-layer summary ────────────────────────────────────────────────
+        lines.append("\n── Per-Layer Forward (ms) ───────────────────────────────────────")
+        lines.append(f"  {'Layer':<38}  {'fwd ms':>8}")
+        lines.append(f"  {'-'*38}  {'-'*8}")
+        layer_keys = sorted(k for k in avgs if k.startswith("layer") and k.endswith(".fwd"))
+        for k in layer_keys:
+            lines.append(f"  {k:<38}  {avgs[k]:>8.2f}")
+        if "mtp_block.fwd" in avgs:
+            lines.append(f"  {'mtp_block.fwd':<38}  {avgs['mtp_block.fwd']:>8.2f}")
+
 
         # ── Sub-kernel / granular regions (NEW) ───────────────────────────────
         lines.append("\n── Granular Kernel Operations (avg per call) ────────────────────")

@@ -17,6 +17,16 @@ import triton
 import triton.language as tl
 import torch.nn.functional as F
 
+# Import profiling helpers
+try:
+    from ..profiler import kernel_region
+except ImportError:
+    # Fallback: no-op context manager
+    from contextlib import contextmanager
+    @contextmanager
+    def kernel_region(name: str):
+        yield
+
 
 # =============================================================================
 # Reference (Unfused) for correctness + benchmark oracle
@@ -494,31 +504,32 @@ class TritonDeltaEntranceV18(torch.autograd.Function):
 
         out_dtype = tl.bfloat16 if q.dtype == torch.bfloat16 else tl.float16
 
-        _delta_entrance_fwd_token_kernel[grid](
-            q, k, v,
-            wq, wk, wv,
-            cos, sin,
-            mask_u8,
-            qo, ko, vo,
-            inv_nq, inv_nk,
+        with kernel_region("delta_entrance_fwd"):
+            _delta_entrance_fwd_token_kernel[grid](
+                q, k, v,
+                wq, wk, wv,
+                cos, sin,
+                mask_u8,
+                qo, ko, vo,
+                inv_nq, inv_nk,
 
-            q.stride(0), q.stride(1), q.stride(2),
-            k.stride(0), k.stride(1), k.stride(2),
-            v.stride(0), v.stride(1), v.stride(2),
-            qo.stride(0), qo.stride(1), qo.stride(2), qo.stride(3),
-            mask_u8.stride(0), mask_u8.stride(1),
-            inv_nq.stride(0), inv_nq.stride(1), inv_nq.stride(2),
+                q.stride(0), q.stride(1), q.stride(2),
+                k.stride(0), k.stride(1), k.stride(2),
+                v.stride(0), v.stride(1), v.stride(2),
+                qo.stride(0), qo.stride(1), qo.stride(2), qo.stride(3),
+                mask_u8.stride(0), mask_u8.stride(1),
+                inv_nq.stride(0), inv_nq.stride(1), inv_nq.stride(2),
 
-            B, T, C, H, D,
+                B, T, C, H, D,
 
-            BLOCK_DH=BLOCK_DH,
-            EPS=eps,
-            OUT_DTYPE=out_dtype,
+                BLOCK_DH=BLOCK_DH,
+                EPS=eps,
+                OUT_DTYPE=out_dtype,
 
-            # tuning knobs
-            num_warps=4,
-            num_stages=2,
-        )
+                # tuning knobs
+                num_warps=4,
+                num_stages=2,
+            )
 
         ctx.save_for_backward(q, k, v, wq, wk, wv, cos, sin, mask_u8, inv_nq, inv_nk)
         ctx.eps = eps
@@ -542,26 +553,27 @@ class TritonDeltaEntranceV18(torch.autograd.Function):
         BLOCK_DH = D // 2
         grid = (T, B * H)
 
-        _delta_entrance_bwd_token_kernel[grid](
-            q, k, v, wq, wk, wv, cos, sin, mask_u8,
-            inv_nq, inv_nk,
-            dqo, dko, dvo,
-            dq, dk, dv,
-            dwq, dwk, dwv,
+        with kernel_region("delta_entrance_bwd"):
+            _delta_entrance_bwd_token_kernel[grid](
+                q, k, v, wq, wk, wv, cos, sin, mask_u8,
+                inv_nq, inv_nk,
+                dqo, dko, dvo,
+                dq, dk, dv,
+                dwq, dwk, dwv,
 
-            q.stride(0), q.stride(1), q.stride(2),
-            k.stride(0), k.stride(1), k.stride(2),
-            v.stride(0), v.stride(1), v.stride(2),
-            dqo.stride(0), dqo.stride(1), dqo.stride(2), dqo.stride(3),
-            mask_u8.stride(0), mask_u8.stride(1),
-            inv_nq.stride(0), inv_nq.stride(1), inv_nq.stride(2),
+                q.stride(0), q.stride(1), q.stride(2),
+                k.stride(0), k.stride(1), k.stride(2),
+                v.stride(0), v.stride(1), v.stride(2),
+                dqo.stride(0), dqo.stride(1), dqo.stride(2), dqo.stride(3),
+                mask_u8.stride(0), mask_u8.stride(1),
+                inv_nq.stride(0), inv_nq.stride(1), inv_nq.stride(2),
 
-            B, T, C, H, D,
-            BLOCK_DH=BLOCK_DH,
-            EPS=eps,
-            num_warps=4,
-            num_stages=2,
-        )
+                B, T, C, H, D,
+                BLOCK_DH=BLOCK_DH,
+                EPS=eps,
+                num_warps=4,
+                num_stages=2,
+            )
 
         return (
             dq.to(q.dtype), dk.to(k.dtype), dv.to(v.dtype),
