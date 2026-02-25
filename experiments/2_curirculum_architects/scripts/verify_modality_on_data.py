@@ -1,9 +1,9 @@
 import io
 import os
-import random
 import sys
 
-import pandas as pd
+import pyarrow.parquet as pq
+from curriculum_extractor.metrics.modality import ModalityMetric
 
 # Force UTF-8 for stdout
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -11,15 +11,10 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 # Add project root to path
 sys.path.append(os.getcwd())
 
-from curriculum_extractor.metrics.modality import ModalityMetric
-
 
 # Mock config since ModalityMetric might expect it, though it usually just needs it for init
 class MockConfig:
     pass
-
-
-import pyarrow.parquet as pq
 
 
 def main():
@@ -115,7 +110,7 @@ def main():
         pct = (count / len(records)) * 100
         print(f"{key}: {count} ({pct:.2f}%)")
         if examples[key]:
-            print(f"  Examples:")
+            print("  Examples:")
             for i, ex in enumerate(examples[key]):
                 print(f"    {i+1}. {ex}...")  # Safe print handled by sys.stdout wrap
         print("-" * 30)

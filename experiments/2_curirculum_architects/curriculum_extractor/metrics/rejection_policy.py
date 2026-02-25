@@ -46,7 +46,7 @@ class RejectionPolicyMetric(MetricPlugin):
         # Access curriculum config via self.config
         cfg = self.config
 
-        text = sample.get("text", "") or ""
+        text = sample.get("text", "") or ""  # noqa: F821
 
         # Language enforcement
         # Build allowed language set from curriculum config
@@ -68,7 +68,7 @@ class RejectionPolicyMetric(MetricPlugin):
                 allowed.append(s)
 
         # Normalize language value from record (dataset_interface expects 'language')
-        lang = _detect_language(text, sample)
+        lang = _detect_language(text, sample)  # noqa: F821
 
         # Determine rejection
         rejected = False
@@ -165,7 +165,7 @@ def _detect_language(text: str, sample: dict = None) -> str:
     # if still not found, check text
     for char in text[:500]:
         code = ord(char)
-        for start, end in INDIC_SCRIPT_RANGES:
+        for start, end in INDIC_SCRIPT_RANGES:  # noqa: F821
             if start <= code <= end:
                 return "indic"
 

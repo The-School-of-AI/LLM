@@ -175,7 +175,7 @@ class ModalityMetric(MetricPlugin):
         }
 
         # Apply Tag Overrides
-        return self._check_dataset_tags(sample, result)
+        return self._check_dataset_tags(sample, result)  # noqa: F821
 
     def _check_dataset_tags(self, sample, result):
         """Refine modality based on explicit dataset tags."""

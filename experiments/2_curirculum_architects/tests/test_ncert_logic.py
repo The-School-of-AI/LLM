@@ -1,8 +1,5 @@
 import pytest
-from curriculum_tags.metrics.band_assignment import (
-    BandAssignmentConfig,
-    BandAssignmentMetric,
-)
+from curriculum_tags.metrics.band_assignment import BandAssignmentMetric
 from curriculum_tags.metrics.domain import DomainMetric
 from curriculum_tags.metrics.modality import ModalityMetric
 

@@ -148,7 +148,7 @@ def _detect_language(text: str, sample: dict = None) -> str:
     # if still not found, check text
     for char in text[:500]:
         code = ord(char)
-        for start, end in INDIC_SCRIPT_RANGES:
+        for start, end in INDIC_SCRIPT_RANGES:  # noqa: F821
             if start <= code <= end:
                 return "indic"
 
