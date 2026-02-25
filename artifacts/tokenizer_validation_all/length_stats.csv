@@ -1,0 +1,4 @@
+count,dataset,len_max,len_mean,len_p50,len_p90,len_p95,len_p99,roundtrip_mismatch_rate_top200,unk_rate_mean
+630140,pretraining,233006,1438.0751150537976,971,2583,3814,8242,0.0,0.0
+128,golden,12617,615.6171875,486,1042,1367,2549,0.0,0.0
+89508,sft,1038,377.8871385797917,321,541,631,727,0.0,0.0
