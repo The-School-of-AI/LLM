@@ -1,6 +1,7 @@
 """Shared utilities for the contamination scanner."""
 
 import subprocess
+from pathlib import Path
 
 
 def get_git_info() -> dict[str, str]:
@@ -19,23 +20,25 @@ def get_git_info() -> dict[str, str]:
           or unstaged), ``"false"`` otherwise, or ``"unknown"`` on error.
     """
     repo_dir = str(__file__)
+    # Run git commands from the module's directory, not the file path itself.
+    repo_cwd = Path(repo_dir).resolve().parent
     try:
         commit = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
-            cwd=repo_dir,
+            cwd=repo_cwd,
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
 
         dirty_output = subprocess.check_output(
             ["git", "status", "--porcelain"],
-            cwd=repo_dir,
+            cwd=repo_cwd,
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
 
         return {"commit": commit, "dirty": str(bool(dirty_output)).lower()}
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError):
         return {"commit": "unknown", "dirty": "unknown"}
 
 
