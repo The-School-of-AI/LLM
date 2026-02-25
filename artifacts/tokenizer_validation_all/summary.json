@@ -21,7 +21,9 @@
       "len_p99": 8242,
       "len_max": 233006,
       "unk_rate_mean": 0.0,
-      "roundtrip_mismatch_rate_top200": 0.0
+      "byte_fallback_rate_mean": 0.1277974710404917,
+      "roundtrip_mismatch_rate_top200": 0.0,
+      "special_token_leakage_count": 0
     },
     {
       "dataset": "golden",
@@ -33,7 +35,9 @@
       "len_p99": 2549,
       "len_max": 12617,
       "unk_rate_mean": 0.0,
-      "roundtrip_mismatch_rate_top200": 0.0
+      "byte_fallback_rate_mean": 0.17247971065543,
+      "roundtrip_mismatch_rate_top200": 0.0,
+      "special_token_leakage_count": 0
     },
     {
       "dataset": "sft",
@@ -45,7 +49,9 @@
       "len_p99": 727,
       "len_max": 1038,
       "unk_rate_mean": 0.0,
-      "roundtrip_mismatch_rate_top200": 0.0
+      "byte_fallback_rate_mean": 0.1969000544629636,
+      "roundtrip_mismatch_rate_top200": 0.0,
+      "special_token_leakage_count": 0
     }
   ],
   "sft_masking": {

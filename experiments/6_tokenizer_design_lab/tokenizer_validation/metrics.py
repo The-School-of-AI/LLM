@@ -47,3 +47,18 @@ def length_stats(lengths: Iterable[int]) -> LengthStats:
         p99=_percentile(vals, 0.99),
         max_len=vals[-1],
     )
+
+
+def analyze_byte_fallback(input_ids: list[int], byte_ids: set[int]) -> float:
+    """
+    Returns the fraction of tokens that are byte fallbacks.
+    """
+    if not input_ids:
+        return 0.0
+        
+    byte_count = 0
+    for token_id in input_ids:
+        if token_id in byte_ids:
+            byte_count += 1
+            
+    return byte_count / len(input_ids)

@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
 
 
@@ -63,7 +64,7 @@ def check_compression_by_language(tokenizer: PreTrainedTokenizerFast, parquet_pa
         return
 
     results = []
-    for lang, group in df.groupby("language"):
+    for lang, group in tqdm(df.groupby("language"), desc="Calculating compression ratios", total=df["language"].nunique()):
         texts = group["text"].tolist()
         if not texts:
             continue
@@ -88,6 +89,38 @@ def check_compression_by_language(tokenizer: PreTrainedTokenizerFast, parquet_pa
     print()
 
 
+def check_duplicate_decode_collisions(tokenizer: PreTrainedTokenizerFast):
+    print("=== Duplicate Decode Collision Check ===")
+    vocab = tokenizer.get_vocab()
+    
+    # We want to find cases where two DIFFERENT single tokens decode to the EXACT SAME string.
+    # This often happens with redundant whitespace tokens, or capitalization edge cases.
+    decode_map = {}
+    collisions = []
+    
+    # Check the first 10,000 tokens to save time, or check all if fast enough
+    print(f"Checking {len(vocab)} tokens for decode collisions...")
+    for token_str, token_id in vocab.items():
+        # skip special tokens and byte fallbacks for this check
+        if token_id in tokenizer.all_special_ids or len(token_str) == 1 or token_str.startswith("<0x"):
+            continue
+            
+        decoded = tokenizer.decode([token_id])
+        if not decoded.strip():
+            continue # skip purely whitespace or empty decodes
+            
+        if decoded in decode_map:
+            collisions.append((decoded, decode_map[decoded], token_str))
+        else:
+            decode_map[decoded] = token_str
+            
+    print(f"Found {len(collisions)} decode collisions.")
+    if collisions:
+        print("Sample collisions (decoded_string -> [token_A, token_B]):")
+        for c in collisions[:10]:
+            print(f"  {c[0]!r} -> [{c[1]!r}, {c[2]!r}]")
+    print()
+
 def main():
     ap = argparse.ArgumentParser(description="Run qualitative checks on tokenizer behavior.")
     ap.add_argument("--tokenizer-dir", type=Path, default=Path("experiments/6_tokenizer_design_lab/tsai_131k_tokenizer"))
@@ -105,6 +138,7 @@ def main():
     check_prompt_injection(tokenizer)
     check_numeric_tokenization(tokenizer)
     check_whitespace_prefix(tokenizer)
+    check_duplicate_decode_collisions(tokenizer)
     check_compression_by_language(tokenizer, args.parquet_path, args.sample_size)
 
 

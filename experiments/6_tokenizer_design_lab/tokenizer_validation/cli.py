@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 if __package__:
     from .datasets import SampledText, sample_golden, sample_pretraining, sample_sft
-    from .metrics import length_stats
+    from .metrics import analyze_byte_fallback, length_stats
     from .sft_template import render_chat, try_split_prompt_answer
 else:
     # Allows running this file directly:
@@ -21,7 +21,7 @@ else:
     _THIS_DIR = Path(__file__).resolve().parent
     sys.path.insert(0, str(_THIS_DIR))
     from datasets import SampledText, sample_golden, sample_pretraining, sample_sft
-    from metrics import length_stats
+    from metrics import analyze_byte_fallback, length_stats
     from sft_template import render_chat, try_split_prompt_answer
 
 
@@ -78,13 +78,29 @@ def validate_dataset(
 
     lengths: list[int] = []
     unk_rates: list[float] = []
+    byte_rates: list[float] = []
     mismatches: list[dict[str, Any]] = []
+
+    # Track special token leakage in raw text (especially for pretraining)
+    special_ids = set(tokenizer.all_special_ids)
+    special_leakage_count = 0
+
+    # Pre-compute byte token IDs for this vocab (assume len(token)==1 means fallback byte token in BPE)
+    vocab = tokenizer.get_vocab()
+    byte_ids = {v for k, v in vocab.items() if len(k) == 1 or k.startswith("<0x")}
 
     for i, t in enumerate(tqdm(texts, desc=f"tokenize:{name}", leave=False)):
         enc = tokenizer(t, add_special_tokens=False, truncation=False)
         input_ids = enc["input_ids"]
         lengths.append(len(input_ids))
         unk_rates.append(_unk_rate(input_ids, unk_id=unk_id))
+        byte_rates.append(analyze_byte_fallback(input_ids, byte_ids))
+
+        # Check if any special token IDs were produced by tokenizing this raw text
+        # (For SFT, we expect special tokens because we injected them via template, so we skip leakage counting for SFT)
+        if name != "sft":
+            if any(tid in special_ids for tid in input_ids):
+                special_leakage_count += 1
 
         dec = tokenizer.decode(input_ids, skip_special_tokens=False)
         is_ascii = all(ord(ch) < 128 for ch in t)
@@ -106,6 +122,7 @@ def validate_dataset(
 
     stats = length_stats(lengths)
     avg_unk = sum(unk_rates) / len(unk_rates) if unk_rates else 0.0
+    avg_byte = sum(byte_rates) / len(byte_rates) if byte_rates else 0.0
     mismatch_rate = (len(mismatches) / len(texts)) if texts else 0.0
 
     # write artifacts
@@ -123,7 +140,9 @@ def validate_dataset(
         "len_p99": stats.p99,
         "len_max": stats.max_len,
         "unk_rate_mean": avg_unk,
+        "byte_fallback_rate_mean": avg_byte,
         "roundtrip_mismatch_rate_top200": mismatch_rate,
+        "special_token_leakage_count": special_leakage_count if name != "sft" else 0,
     }
 
 
