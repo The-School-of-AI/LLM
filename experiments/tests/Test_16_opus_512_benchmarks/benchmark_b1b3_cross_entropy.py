@@ -98,74 +98,98 @@ def bench_fn(fn, warmup, iters, label):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_b1_ce_comparison(cfg):
-    """Compare standard CE vs Triton fused CE from codebase."""
+    """Compare standard CE vs codebase fused CE (FusedLinearCrossEntropyLoss)."""
     device = torch.device("cuda")
     dtype = cfg.dtype
-    V = cfg.vocab_size
+    D, V = cfg.hidden_size, cfg.vocab_size
 
     print(f"\n{'━'*80}")
-    print(f"  B1: Standard PyTorch CE vs Triton Fused CE")
-    print(f"  Vocab: {V} | dtype={cfg.dtype_str}")
+    print(f"  B1: Standard (lm_head + PyTorch CE) vs Codebase Fused Linear CE")
+    print(f"  Codebase CE fuses lm_head + CE into one Triton kernel (chunks internally)")
+    print(f"  Vocab: {V} | Hidden: {D} | dtype={cfg.dtype_str}")
     print(f"{'━'*80}")
 
-    # Check for Triton CE from codebase
-    triton_ce = None
+    # Check for codebase FusedLinearCE
+    fused_ce_cls = None
     try:
-        from src.kernels.triton_cross_entropy import triton_cross_entropy
-        triton_ce = triton_cross_entropy
-        print("  ✅ Triton fused CE available from codebase")
+        from src.kernels.triton_cross_entropy import FusedLinearCrossEntropyLoss
+        fused_ce_cls = FusedLinearCrossEntropyLoss
+        print("  ✅ Codebase FusedLinearCrossEntropyLoss available (Triton)")
     except Exception as e:
-        print(f"  ⚠️  Triton CE unavailable: {e}")
+        print(f"  ⚠️  Codebase fused CE unavailable: {e}")
+
+    # Check for Liger
+    liger_ce_cls = None
+    try:
+        from liger_kernel.ops.fused_linear_cross_entropy import LigerFusedLinearCrossEntropyLoss
+        liger_ce_cls = LigerFusedLinearCrossEntropyLoss
+        print("  ✅ Liger FusedLinearCrossEntropyLoss available")
+    except Exception as e:
+        print(f"  ⚠️  Liger unavailable: {e}")
 
     results = []
+    lm_head_weight = torch.randn(V, D, device=device, dtype=dtype)
 
-    print(f"\n  {'Seq Len':>8}  {'Method':>16}  {'Time (ms)':>10}  {'Mem (GB)':>10}  {'Speedup':>8}")
-    print(f"  {'─'*8}  {'─'*16}  {'─'*10}  {'─'*10}  {'─'*8}")
+    print(f"\n  {'Seq Len':>8}  {'Method':>22}  {'Time (ms)':>10}  {'Mem (GB)':>10}  {'Speedup':>8}")
+    print(f"  {'─'*8}  {'─'*22}  {'─'*10}  {'─'*10}  {'─'*8}")
 
     for T in cfg.seq_lens:
         B = cfg.batch_size
-        N = B * T  # total tokens
+        N = B * T
 
-        # Standard PyTorch CE
-        def pytorch_ce():
-            logits = torch.randn(N, V, device=device, dtype=dtype, requires_grad=True)
-            targets = torch.randint(0, V, (N,), device=device)
-            loss = F.cross_entropy(logits, targets)
-            loss.backward()
-
+        # Method 1: Separate lm_head + PyTorch CE
+        sep_result = None
         try:
-            pt_result = bench_fn(pytorch_ce, cfg.warmup_iters, cfg.bench_iters, f"pytorch_T{T}")
-            results.append({"seq_len": T, "method": "PyTorch CE", **pt_result})
-        except Exception as e:
-            print(f"  {T:>8}  {'PyTorch CE':>16}  FAILED: {e}")
-            pt_result = None
-
-        # Triton fused CE (from codebase)
-        tri_result = None
-        if triton_ce is not None:
-            def triton_ce_fn():
-                logits = torch.randn(N, V, device=device, dtype=dtype, requires_grad=True)
+            def separate_ce():
+                h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
                 targets = torch.randint(0, V, (N,), device=device)
-                loss = triton_ce(logits, targets)
+                logits = F.linear(h, lm_head_weight)
+                loss = F.cross_entropy(logits, targets)
                 loss.backward()
 
+            sep_result = bench_fn(separate_ce, cfg.warmup_iters, cfg.bench_iters, f"separate_T{T}")
+            results.append({"seq_len": T, "method": "Separate", **sep_result})
+            print(f"  {T:>8}  {'Separate (lm+CE)':>22}  {sep_result['avg_ms']:>10.2f}  {sep_result['peak_mem_gb']:>10.2f}")
+        except Exception as e:
+            print(f"  {T:>8}  {'Separate (lm+CE)':>22}  OOM ❌")
+
+        # Method 2: Codebase FusedLinearCE (Triton)
+        if fused_ce_cls is not None:
             try:
-                tri_result = bench_fn(triton_ce_fn, cfg.warmup_iters, cfg.bench_iters, f"triton_T{T}")
-                results.append({"seq_len": T, "method": "Triton CE", **tri_result})
+                fused_ce = fused_ce_cls(max_chunk_gb=2.0)
+
+                def codebase_fused():
+                    h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
+                    targets = torch.randint(0, V, (N,), device=device)
+                    loss = fused_ce(h, lm_head_weight, targets)
+                    loss.backward()
+
+                fused_result = bench_fn(codebase_fused, cfg.warmup_iters, cfg.bench_iters, f"fused_T{T}")
+                results.append({"seq_len": T, "method": "Codebase FusedCE", **fused_result})
+                speedup = sep_result['avg_ms'] / fused_result['avg_ms'] if sep_result else 0
+                print(f"  {T:>8}  {'Codebase FusedCE':>22}  {fused_result['avg_ms']:>10.2f}  {fused_result['peak_mem_gb']:>10.2f}  {speedup:>7.2f}×")
             except Exception as e:
-                print(f"  {T:>8}  {'Triton CE':>16}  FAILED: {e}")
-                tri_result = None
+                print(f"  {T:>8}  {'Codebase FusedCE':>22}  FAILED: {e}")
 
-        # Print comparison
-        if pt_result:
-            print(f"  {T:>8}  {'PyTorch CE':>16}  {pt_result['avg_ms']:>10.2f}  {pt_result['peak_mem_gb']:>10.2f}")
-        if tri_result:
-            speedup = pt_result['avg_ms'] / tri_result['avg_ms'] if pt_result else 0
-            print(f"  {T:>8}  {'Triton CE':>16}  {tri_result['avg_ms']:>10.2f}  {tri_result['peak_mem_gb']:>10.2f}  {speedup:>7.2f}×")
-        if not tri_result and pt_result:
-            print(f"  {T:>8}  {'Triton CE':>16}  N/A")
+        # Method 3: Liger FusedLinearCE
+        if liger_ce_cls is not None:
+            try:
+                liger_ce = liger_ce_cls()
+
+                def liger_fused():
+                    h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
+                    targets = torch.randint(0, V, (N,), device=device)
+                    loss = liger_ce(h, lm_head_weight, targets)
+                    loss.backward()
+
+                liger_result = bench_fn(liger_fused, cfg.warmup_iters, cfg.bench_iters, f"liger_T{T}")
+                results.append({"seq_len": T, "method": "Liger FusedCE", **liger_result})
+                speedup = sep_result['avg_ms'] / liger_result['avg_ms'] if sep_result else 0
+                print(f"  {T:>8}  {'Liger FusedCE':>22}  {liger_result['avg_ms']:>10.2f}  {liger_result['peak_mem_gb']:>10.2f}  {speedup:>7.2f}×")
+            except Exception as e:
+                print(f"  {T:>8}  {'Liger FusedCE':>22}  FAILED: {e}")
+
         print()
-
         torch.cuda.empty_cache()
 
     return results
@@ -176,109 +200,11 @@ def run_b1_ce_comparison(cfg):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_b2_fused_linear_ce(cfg):
-    """Compare separate lm_head+CE vs Liger FusedLinearCE."""
-    device = torch.device("cuda")
-    dtype = cfg.dtype
-    D, V = cfg.hidden_size, cfg.vocab_size
-
+    """B2 is now covered by B1 (which compares separate vs fused). Return empty."""
     print(f"\n{'━'*80}")
-    print(f"  B2: Separate (lm_head → CE) vs FusedLinearCE")
-    print(f"  This is the key comparison: does fusing the projection save time?")
-    print(f"  lm_head: {D} → {V} | dtype={cfg.dtype_str}")
+    print(f"  B2: (Covered by B1 — separate vs fused comparison already done)")
     print(f"{'━'*80}")
-
-    # Check for Liger FusedLinearCE
-    liger_available = False
-    try:
-        from liger_kernel.ops.fused_linear_cross_entropy import LigerFusedLinearCrossEntropyLoss
-        liger_available = True
-        print("  ✅ Liger FusedLinearCE available")
-    except Exception as e:
-        print(f"  ⚠️  Liger unavailable: {e}")
-
-    # Check for codebase Triton CE
-    triton_ce = None
-    try:
-        from src.kernels.triton_cross_entropy import triton_cross_entropy
-        triton_ce = triton_cross_entropy
-        print("  ✅ Triton CE available (for separate path)")
-    except Exception:
-        pass
-
-    results = []
-
-    print(f"\n  {'Seq Len':>8}  {'Method':>22}  {'Time (ms)':>10}  {'Mem (GB)':>10}  {'Speedup':>8}")
-    print(f"  {'─'*8}  {'─'*22}  {'─'*10}  {'─'*10}  {'─'*8}")
-
-    lm_head = nn.Linear(D, V, bias=False, device=device, dtype=dtype)
-    lm_head_weight = lm_head.weight.data  # [V, D]
-
-    for T in cfg.seq_lens:
-        B = cfg.batch_size
-        N = B * T
-
-        # Method 1: Separate lm_head + PyTorch CE
-        def separate_ce():
-            h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
-            targets = torch.randint(0, V, (N,), device=device)
-            logits = F.linear(h, lm_head_weight)
-            loss = F.cross_entropy(logits, targets)
-            loss.backward()
-
-        try:
-            sep_result = bench_fn(separate_ce, cfg.warmup_iters, cfg.bench_iters, f"separate_T{T}")
-            results.append({"seq_len": T, "method": "Separate", **sep_result})
-        except Exception as e:
-            print(f"  {T:>8}  {'Separate':>22}  FAILED: {e}")
-            sep_result = None
-
-        # Method 2: Separate lm_head + Triton CE
-        tri_sep_result = None
-        if triton_ce is not None:
-            def separate_triton_ce():
-                h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
-                targets = torch.randint(0, V, (N,), device=device)
-                logits = F.linear(h, lm_head_weight)
-                loss = triton_ce(logits, targets)
-                loss.backward()
-
-            try:
-                tri_sep_result = bench_fn(separate_triton_ce, cfg.warmup_iters, cfg.bench_iters, f"sep_triton_T{T}")
-                results.append({"seq_len": T, "method": "Separate+TritonCE", **tri_sep_result})
-            except Exception as e:
-                tri_sep_result = None
-
-        # Method 3: Liger FusedLinearCE
-        liger_result = None
-        if liger_available:
-            fused_ce = LigerFusedLinearCrossEntropyLoss()
-
-            def fused_linear_ce():
-                h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
-                targets = torch.randint(0, V, (N,), device=device)
-                loss = fused_ce(h, lm_head_weight, targets)
-                loss.backward()
-
-            try:
-                liger_result = bench_fn(fused_linear_ce, cfg.warmup_iters, cfg.bench_iters, f"fused_T{T}")
-                results.append({"seq_len": T, "method": "FusedLinearCE", **liger_result})
-            except Exception as e:
-                print(f"  {T:>8}  {'FusedLinearCE':>22}  FAILED: {e}")
-
-        # Print results
-        if sep_result:
-            print(f"  {T:>8}  {'Separate (lm+CE)':>22}  {sep_result['avg_ms']:>10.2f}  {sep_result['peak_mem_gb']:>10.2f}")
-        if tri_sep_result:
-            sp = sep_result['avg_ms'] / tri_sep_result['avg_ms'] if sep_result else 0
-            print(f"  {T:>8}  {'Separate+TritonCE':>22}  {tri_sep_result['avg_ms']:>10.2f}  {tri_sep_result['peak_mem_gb']:>10.2f}  {sp:>7.2f}×")
-        if liger_result:
-            sp = sep_result['avg_ms'] / liger_result['avg_ms'] if sep_result else 0
-            print(f"  {T:>8}  {'Liger FusedLinearCE':>22}  {liger_result['avg_ms']:>10.2f}  {liger_result['peak_mem_gb']:>10.2f}  {sp:>7.2f}×")
-        print()
-
-        torch.cuda.empty_cache()
-
-    return results
+    return []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -296,7 +222,7 @@ def run_b3_memory(cfg):
 
     print(f"\n{'━'*80}")
     print(f"  B3: Peak Memory Comparison at T={T}")
-    print(f"  Key question: Does FusedLinearCE avoid materializing [N, V] logits?")
+    print(f"  Key question: Does FusedLinearCE avoid materializing [{N}, {V}] logits?")
     print(f"  Logit tensor size: [{N}, {V}] = {N * V * 2 / 1e9:.2f} GB (fp16)")
     print(f"{'━'*80}")
 
@@ -305,53 +231,61 @@ def run_b3_memory(cfg):
     methods = {}
 
     # Separate
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-    h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
-    targets = torch.randint(0, V, (N,), device=device)
-    logits = F.linear(h, lm_head_weight)
-    loss = F.cross_entropy(logits, targets)
-    loss.backward()
-    methods["Separate (lm+CE)"] = torch.cuda.max_memory_allocated() / 1e9
-    del h, targets, logits, loss
-    torch.cuda.empty_cache()
-
-    # Triton CE
     try:
-        from src.kernels.triton_cross_entropy import triton_cross_entropy
+        torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
         targets = torch.randint(0, V, (N,), device=device)
         logits = F.linear(h, lm_head_weight)
-        loss = triton_cross_entropy(logits, targets)
+        loss = F.cross_entropy(logits, targets)
         loss.backward()
-        methods["Separate+TritonCE"] = torch.cuda.max_memory_allocated() / 1e9
+        methods["Separate (lm+CE)"] = torch.cuda.max_memory_allocated() / 1e9
         del h, targets, logits, loss
         torch.cuda.empty_cache()
     except Exception:
-        pass
+        methods["Separate (lm+CE)"] = float('inf')
 
-    # Liger FusedLinearCE
+    # Codebase FusedLinearCE
     try:
-        from liger_kernel.ops.fused_linear_cross_entropy import LigerFusedLinearCrossEntropyLoss
-        fused_ce = LigerFusedLinearCrossEntropyLoss()
+        from src.kernels.triton_cross_entropy import FusedLinearCrossEntropyLoss
+        fused_ce = FusedLinearCrossEntropyLoss(max_chunk_gb=2.0)
+        torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
         targets = torch.randint(0, V, (N,), device=device)
         loss = fused_ce(h, lm_head_weight, targets)
         loss.backward()
-        methods["Liger FusedLinearCE"] = torch.cuda.max_memory_allocated() / 1e9
+        methods["Codebase FusedCE"] = torch.cuda.max_memory_allocated() / 1e9
         del h, targets, loss
         torch.cuda.empty_cache()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  (Codebase FusedCE skipped: {e})")
+
+    # Liger FusedLinearCE
+    try:
+        from liger_kernel.ops.fused_linear_cross_entropy import LigerFusedLinearCrossEntropyLoss
+        liger_ce = LigerFusedLinearCrossEntropyLoss()
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
+        targets = torch.randint(0, V, (N,), device=device)
+        loss = liger_ce(h, lm_head_weight, targets)
+        loss.backward()
+        methods["Liger FusedCE"] = torch.cuda.max_memory_allocated() / 1e9
+        del h, targets, loss
+        torch.cuda.empty_cache()
+    except Exception as e:
+        print(f"  (Liger FusedCE skipped: {e})")
 
     print(f"\n  {'Method':>22}  {'Peak Mem (GB)':>14}  {'Savings':>10}")
     print(f"  {'─'*22}  {'─'*14}  {'─'*10}")
     baseline = list(methods.values())[0] if methods else 0
     for name, mem in methods.items():
-        saved = f"{baseline - mem:.2f} GB" if mem < baseline else "baseline"
-        print(f"  {name:>22}  {mem:>14.2f}  {saved:>10}")
+        if mem == float('inf'):
+            print(f"  {name:>22}  {'OOM':>14}")
+        else:
+            saved = f"{baseline - mem:.2f} GB" if mem < baseline else "baseline"
+            print(f"  {name:>22}  {mem:>14.2f}  {saved:>10}")
 
     return methods
 
