@@ -1212,18 +1212,36 @@ class MHCSublayer(nn.Module):
         self.sublayer = sublayer
         self.norm = norm
         self.coeffs = MHCCoeffs(d_model=d_model, n_streams=n_streams, iters=iters)
+        # Profiler labels — overridden by Model1B.__init__ after construction.
+        # time_region is zero-overhead when profiler is inactive (1 global read + branch).
+        self._prof_coeffs_label: str = ""
+        self._prof_sublayer_label: str = ""
 
     def forward(self, x_stream: torch.Tensor, attention_mask=None):
-        H_pre, H_post, H_res = self.coeffs(x_stream)
+        _pcl = self._prof_coeffs_label
+        _psl = self._prof_sublayer_label
+
+        if _pcl:
+            with time_region(_pcl):
+                H_pre, H_post, H_res = self.coeffs(x_stream)
+        else:
+            H_pre, H_post, H_res = self.coeffs(x_stream)
 
         x_in = (x_stream * H_pre.unsqueeze(-1)).sum(dim=2)
         x_in = self.norm(x_in)
 
         aux_loss = None
-        if attention_mask is None:
-            out = self.sublayer(x_in)
+        if _psl:
+            with time_region(_psl):
+                if attention_mask is None:
+                    out = self.sublayer(x_in)
+                else:
+                    out = self.sublayer(x_in, attention_mask)
         else:
-            out = self.sublayer(x_in, attention_mask)
+            if attention_mask is None:
+                out = self.sublayer(x_in)
+            else:
+                out = self.sublayer(x_in, attention_mask)
 
         if isinstance(out, tuple):
             y, aux_loss = out
@@ -1500,6 +1518,14 @@ class Model1B(nn.Module):
         self.layers = nn.ModuleList(layers)
         self.layer_types = layer_types
 
+        # Profiler labels for per-layer sub-component timing (zero-cost when inactive)
+        for i, layer in enumerate(layers):
+            kt = layer_types[i]  # "deltanet" or "gsa"
+            layer.attn_block._prof_coeffs_label = f"layer{i}.sinkhorn_attn.fwd"
+            layer.attn_block._prof_sublayer_label = f"layer{i}.{kt}.fwd"
+            layer.mlp_block._prof_coeffs_label = f"layer{i}.sinkhorn_mlp.fwd"
+            layer.mlp_block._prof_sublayer_label = f"layer{i}.mlp.fwd"
+
         # Reversible Midpoint Integration
         from .reversible_ops_midpoint import ReversibleMidpointStack
         self.stack = ReversibleMidpointStack(
@@ -1515,6 +1541,10 @@ class Model1B(nn.Module):
         # MTP Block
         if config.enable_mtp:
             self.mtp_block = MTPTransformerBlock(config)
+            self.mtp_block.attn_block._prof_coeffs_label = "mtp_block.sinkhorn_attn.fwd"
+            self.mtp_block.attn_block._prof_sublayer_label = "mtp_block.gsa.fwd"
+            self.mtp_block.mlp_block._prof_coeffs_label = "mtp_block.sinkhorn_mlp.fwd"
+            self.mtp_block.mlp_block._prof_sublayer_label = "mtp_block.mlp.fwd"
         else:
             self.mtp_block = None
 

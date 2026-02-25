@@ -120,11 +120,12 @@ class MidpointFunction(torch.autograd.Function):
         grad_params = grads[1:]
         grad_params = [g if g is not None else torch.zeros_like(t) for g, t in zip(grad_params, param_tensors)]
 
-        # Return grads for (p_prev, p_cur, two_h, a, module, param_keys, buffer_keys, *flat_tensors)
+        # Return grads for (p_prev, p_cur, two_h, a, module, label, attention_mask, param_keys, buffer_keys, *flat_tensors)
         # Non-tensor args -> None
         grad_two_h = None
         grad_a = None
         grad_module = None
+        grad_label = None
         grad_attention_mask = None
         grad_param_keys = None
         grad_buffer_keys = None
@@ -132,7 +133,19 @@ class MidpointFunction(torch.autograd.Function):
         # buffers are non-diff
         grad_buffers = (None,) * n_buffers
 
-        return (grad_p_prev, grad_p_cur, grad_two_h, grad_a, grad_module, grad_attention_mask, grad_param_keys, grad_buffer_keys, *grad_params, *grad_buffers)
+        return (
+            grad_p_prev,
+            grad_p_cur,
+            grad_two_h,
+            grad_a,
+            grad_module,
+            grad_label,
+            grad_attention_mask,
+            grad_param_keys,
+            grad_buffer_keys,
+            *grad_params,
+            *grad_buffers
+        )
 
 
 class MidpointBlock(nn.Module):
