@@ -764,25 +764,24 @@ class GatedDeltaNet(nn.Module):
         v = self.v_proj(x)
         g = self.g_proj(x)
 
-        # ── Kernel Integration ───────────────────────────────────────────────
-        # Fuses: causal depthwise conv(4) + SiLU + mask + L2Norm + RoPE
-        if fused_delta_entrance is None:
-            raise RuntimeError("fused_delta_entrance kernel is required but missing or failed to load.")
+        # ── Separate PyTorch ops (conv1d → L2Norm → RoPE → mask) ────────────
+        q = self.q_conv1d(q)
+        k = self.k_conv1d(k)
+        v = self.v_conv1d(v)
 
-        mask_flat = token_keep.to(dtype=x.dtype) if token_keep is not None else torch.ones((B, T), device=device, dtype=x.dtype)
-        #   Consumes pre-broadcasted RoPE from centralized cache
-        cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-
-        # The kernel will return (B, T, H, D)
-        q, k, v = fused_delta_entrance(
-            q, k, v,
-            self.q_conv1d.conv.weight.squeeze(1),
-            self.k_conv1d.conv.weight.squeeze(1),
-            self.v_conv1d.conv.weight.squeeze(1),
-            cos, sin, mask_flat
-        )
-
+        q = q.view(B, T, self.num_heads, self.head_dim)
+        k = k.view(B, T, self.num_heads, self.head_dim)
+        v = v.view(B, T, self.num_heads, self.head_dim)
         g = g.view(B, T, self.num_heads, self.head_dim)
+
+        # L2 Normalization MUST happen first, otherwise it destroys the RoPE rotational structure
+        q = F.normalize(q, p=2, dim=-1)
+        k = F.normalize(k, p=2, dim=-1)
+
+        cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
+        q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
+        k = self.rotary_emb._apply_rotary(k, _cos_b, _sin_b)
+
         beta = torch.sigmoid(self.b_proj(x)).unsqueeze(-1)  # (B, T, num_heads, 1)
         gk = self.gk_proj(x)
         A = torch.exp(self.A_log)
@@ -790,7 +789,9 @@ class GatedDeltaNet(nn.Module):
 
         if token_keep is not None:
             token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
-            # q, k, v already masked via fused_delta_entrance
+            q = q * token_keep_f
+            k = k * token_keep_f
+            v = v * token_keep_f
             g = g * token_keep_f
             beta = beta * token_keep_f
             alpha = alpha * token_keep_f + (1.0 - token_keep_f)
@@ -1212,18 +1213,36 @@ class MHCSublayer(nn.Module):
         self.sublayer = sublayer
         self.norm = norm
         self.coeffs = MHCCoeffs(d_model=d_model, n_streams=n_streams, iters=iters)
+        # Profiler labels — overridden by Model1B.__init__ after construction.
+        # time_region is zero-overhead when profiler is inactive (1 global read + branch).
+        self._prof_coeffs_label: str = ""
+        self._prof_sublayer_label: str = ""
 
     def forward(self, x_stream: torch.Tensor, attention_mask=None):
-        H_pre, H_post, H_res = self.coeffs(x_stream)
+        _pcl = self._prof_coeffs_label
+        _psl = self._prof_sublayer_label
+
+        if _pcl:
+            with time_region(_pcl):
+                H_pre, H_post, H_res = self.coeffs(x_stream)
+        else:
+            H_pre, H_post, H_res = self.coeffs(x_stream)
 
         x_in = (x_stream * H_pre.unsqueeze(-1)).sum(dim=2)
         x_in = self.norm(x_in)
 
         aux_loss = None
-        if attention_mask is None:
-            out = self.sublayer(x_in)
+        if _psl:
+            with time_region(_psl):
+                if attention_mask is None:
+                    out = self.sublayer(x_in)
+                else:
+                    out = self.sublayer(x_in, attention_mask)
         else:
-            out = self.sublayer(x_in, attention_mask)
+            if attention_mask is None:
+                out = self.sublayer(x_in)
+            else:
+                out = self.sublayer(x_in, attention_mask)
 
         if isinstance(out, tuple):
             y, aux_loss = out
@@ -1500,6 +1519,14 @@ class Model1B(nn.Module):
         self.layers = nn.ModuleList(layers)
         self.layer_types = layer_types
 
+        # Profiler labels for per-layer sub-component timing (zero-cost when inactive)
+        for i, layer in enumerate(layers):
+            kt = layer_types[i]  # "deltanet" or "gsa"
+            layer.attn_block._prof_coeffs_label = f"layer{i}.sinkhorn_attn.fwd"
+            layer.attn_block._prof_sublayer_label = f"layer{i}.{kt}.fwd"
+            layer.mlp_block._prof_coeffs_label = f"layer{i}.sinkhorn_mlp.fwd"
+            layer.mlp_block._prof_sublayer_label = f"layer{i}.mlp.fwd"
+
         # Reversible Midpoint Integration
         from .reversible_ops_midpoint import ReversibleMidpointStack
         self.stack = ReversibleMidpointStack(
@@ -1515,6 +1542,10 @@ class Model1B(nn.Module):
         # MTP Block
         if config.enable_mtp:
             self.mtp_block = MTPTransformerBlock(config)
+            self.mtp_block.attn_block._prof_coeffs_label = "mtp_block.sinkhorn_attn.fwd"
+            self.mtp_block.attn_block._prof_sublayer_label = "mtp_block.gsa.fwd"
+            self.mtp_block.mlp_block._prof_coeffs_label = "mtp_block.sinkhorn_mlp.fwd"
+            self.mtp_block.mlp_block._prof_sublayer_label = "mtp_block.mlp.fwd"
         else:
             self.mtp_block = None
 
