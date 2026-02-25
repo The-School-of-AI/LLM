@@ -35,7 +35,9 @@ def load_registry(reports_path: Path) -> list[dict]:
 
 def find_run(records: list[dict], run_id: str) -> dict:
     """Return the STARTED record for the given run_id."""
-    started = [r for r in records if r.get("run_id") == run_id and r.get("status") == "STARTED"]
+    started = [
+        r for r in records if r.get("run_id") == run_id and r.get("status") == "STARTED"
+    ]
     if not started:
         print(f"Error: no STARTED record found for run_id '{run_id}'")
         print("Available run IDs:")
@@ -49,7 +51,8 @@ def find_run(records: list[dict], run_id: str) -> dict:
 def find_outcome(records: list[dict], run_id: str) -> dict | None:
     """Return the COMPLETED or FAILED record for the given run_id."""
     outcomes = [
-        r for r in records
+        r
+        for r in records
         if r.get("run_id") == run_id and r.get("status") in ("COMPLETED", "FAILED")
     ]
     return outcomes[-1] if outcomes else None
@@ -101,11 +104,13 @@ def main() -> None:
 
     print("\nTo replay this run on the same commit:")
     print(f"  git checkout {commit}")
-    print(f"  python scripts/scan.py \"{input_file}\" \"{team}\" \"{dataset}\"")
+    print(f'  python scripts/scan.py "{input_file}" "{team}" "{dataset}"')
     print()
 
     if commit == "unknown":
-        print("Warning: commit was not recorded — exact code state cannot be guaranteed.")
+        print(
+            "Warning: commit was not recorded — exact code state cannot be guaranteed."
+        )
 
     if args.execute:
         if not Path(input_file).exists():

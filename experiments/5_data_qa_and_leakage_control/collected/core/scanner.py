@@ -114,7 +114,9 @@ class ContaminationScanner:
         """
         run_id = str(uuid.uuid4())
         self._register_run(
-            run_id, team_name, batch_name,
+            run_id,
+            team_name,
+            batch_name,
             status="STARTED",
             input_file=str(Path(filepath).resolve()),
             config=self.config,
@@ -123,16 +125,34 @@ class ContaminationScanner:
         try:
             return self._run_scan(run_id, filepath, team_name, batch_name)
         except FileNotFoundError as exc:
-            self._register_run(run_id, team_name, batch_name,
-                               status="FAILED", failure_type="INVALID_INPUT", error=str(exc))
+            self._register_run(
+                run_id,
+                team_name,
+                batch_name,
+                status="FAILED",
+                failure_type="INVALID_INPUT",
+                error=str(exc),
+            )
             raise
         except MemoryError as exc:
-            self._register_run(run_id, team_name, batch_name,
-                               status="FAILED", failure_type="OUT_OF_MEMORY", error=str(exc))
+            self._register_run(
+                run_id,
+                team_name,
+                batch_name,
+                status="FAILED",
+                failure_type="OUT_OF_MEMORY",
+                error=str(exc),
+            )
             raise
         except Exception as exc:
-            self._register_run(run_id, team_name, batch_name,
-                               status="FAILED", failure_type="UNEXPECTED_ERROR", error=str(exc))
+            self._register_run(
+                run_id,
+                team_name,
+                batch_name,
+                status="FAILED",
+                failure_type="UNEXPECTED_ERROR",
+                error=str(exc),
+            )
             raise
 
     def _run_scan(
@@ -191,7 +211,11 @@ class ContaminationScanner:
                     "layer": "N-GRAM",
                     "severity": "CRITICAL",
                     "count": len(
-                        {m["idx"] for matches in ngram_matches.values() for m in matches}
+                        {
+                            m["idx"]
+                            for matches in ngram_matches.values()
+                            for m in matches
+                        }
                     ),
                     "benchmarks": list(ngram_matches.keys()),
                     "contaminated_samples": sample_details[: self._sample_limit],
@@ -323,7 +347,9 @@ class ContaminationScanner:
         self._save_report(report)
         self._save_contaminated_list(report, contaminated_samples)
         self._register_run(
-            run_id, team_name, batch_name,
+            run_id,
+            team_name,
+            batch_name,
             status="COMPLETED",
             result=report["status"],
             contaminated_count=report["contaminated_count"],
@@ -449,7 +475,9 @@ class ContaminationScanner:
             return
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = self._reports_path / f"{report['dataset']}_CONTAMINATED_{timestamp}.jsonl"
+        filename = (
+            self._reports_path / f"{report['dataset']}_CONTAMINATED_{timestamp}.jsonl"
+        )
 
         with open(filename, "w", encoding="utf-8") as f:
             for details in contaminated_samples.values():
