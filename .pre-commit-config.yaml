@@ -21,6 +21,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-json
+        exclude: tsconfig.*\.json$
   
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.35.1

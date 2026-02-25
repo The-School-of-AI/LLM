@@ -1,0 +1,24 @@
+# TLS certificates (generated per-deployment)
+components/clickhouse/tls/*.crt
+components/clickhouse/tls/*.key
+
+# ClickHouse users config (contains password hashes — generated per-deployment)
+components/clickhouse/users.d/p12-users.xml
+
+# Environment files
+.env
+*.env
+components/clickhouse/training-instance.env
+components/clickhouse/dashboard.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Training artifacts
+checkpoints/
+/tmp/training_logs/
+
+# OS
+.DS_Store
