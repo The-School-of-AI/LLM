@@ -42,7 +42,7 @@ Defines the **expected upstream chunk schema** consumed by the coreset pipeline 
 | `sensitive_markers` | list[str] | Output metadata | Defaults to `[]` |
 | `start_offset` | int | Output metadata | Defaults to `0` |
 
-## Observed schema: `data/outputv2/b0_shard_0.jsonl`
+## Chunk file Schema:
 
 This file is a **metadata-only** chunk pool: it does **not** include `chunk_text` or `token_ids`. All keys below appear on every row.
 
