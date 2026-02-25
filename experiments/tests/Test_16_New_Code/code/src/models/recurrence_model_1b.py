@@ -498,10 +498,15 @@ class PureHybridEmbeddingTorch(nn.Module):
     def __init__(self, vocab_words: List[str], pf_codec: KroneckerEmbeddings):
         super().__init__()
         PF_table = pf_codec.encode_batch(vocab_words)  # (vocab_size, D)
-        PF_np = PF_table.astype(np.float32)
+        PF_np = pf_codec.encode_batch(vocab_words)          # keep whatever it returns
+        if PF_np.dtype != np.float32:
+            PF_np = PF_np.astype(np.float32, copy=False)    # avoid copy if already float32
+
+        pf_tensor = torch.from_numpy(PF_np).to(torch.bfloat16)
+        self.register_buffer("PF_table", pf_tensor, persistent=False)
+        del PF_np
         # MEMORY: PF_table is (vocab_size, 8192) bf16 -> ~2GB resident VRAM on GPU.
         # Required for fast Kronecker fetches. Set persistent=False to avoid checkpoint bloat.
-        self.register_buffer("PF_table", pf_tensor, persistent=False)
 
 
     def forward(self, token_ids):
@@ -934,7 +939,7 @@ class GatedSparseAttention(nn.Module):
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
         is_reconstruct = self.training and torch.is_grad_enabled()
 
-        if is_reconstruct:
+        if is_reconstruct and self._cached_base_idx is not None:
             base_idx, keep_mask = self._cached_base_idx, self._cached_keep_mask
             k_limit = base_idx.size(-1)
             # Clear slot after use
