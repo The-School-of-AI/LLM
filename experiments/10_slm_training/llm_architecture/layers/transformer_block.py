@@ -15,50 +15,45 @@ across layers as the paper (arXiv:2512.24880v2) intends.  Expansion
 happens once before the first layer and collapse once after the last.
 """
 
+import sys
+from typing import Any, Optional, Tuple
+
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple, Any
 
-import sys
-sys.path.append('..')
+sys.path.append("..")
 
+from components.attention.deepseek_gsa import DeepSeekGSA, DeepSeekGSAConfig
+from components.attention.deepseek_sparse_attention import \
+    DeepSeekSparseAttention
+from components.attention.gated_sparse_attention import GatedSparseAttention
 # Import all attention variants
 from components.attention.grouped_query_attention import GroupedQueryAttention
-from components.attention.gated_sparse_attention import GatedSparseAttention
-from components.attention.deepseek_gsa import DeepSeekGSA, DeepSeekGSAConfig
-from components.attention.deepseek_sparse_attention import DeepSeekSparseAttention
-
 # Import FFN
 from components.ffn.swiglu_ffn import SwiGLUFFN
-
 # Import normalization
 from components.normalization.rms_norm import RMSNorm
+
 # Use Triton-optimized version when available
 try:
     from components.kernels.triton_normalization import TritonRMSNorm
+
     USE_TRITON_NORM = True
 except ImportError:
     USE_TRITON_NORM = False
     TritonRMSNorm = RMSNorm  # Fallback
 
 # Import connections
-from components.connections.mhc import (
-    MHCSublayerConnection,
-    ResidualConnection
-)
-
+from components.connections.mhc import (MHCSublayerConnection,
+                                        ResidualConnection)
 # Import config
-from config.model_config import (
-    ModelConfig,
-    AttentionType,
-    FFNType,
-    ConnectionType
-)
-
+from config.model_config import (AttentionType, ConnectionType, FFNType,
+                                 ModelConfig)
 
 # =============================================================================
 # Shared helpers for creating attention / FFN from config
 # =============================================================================
+
 
 def _create_attention(config: ModelConfig, layer_idx: int) -> nn.Module:
     """Create attention module based on config."""
@@ -66,15 +61,15 @@ def _create_attention(config: ModelConfig, layer_idx: int) -> nn.Module:
     pos_config = config.position
 
     common_args = {
-        'hidden_size': config.hidden_size,
-        'num_attention_heads': attn_config.num_attention_heads,
-        'num_key_value_heads': attn_config.num_key_value_heads,
-        'head_dim': attn_config.head_dim,
-        'max_position_embeddings': config.max_position_embeddings,
-        'rope_theta': pos_config.rope_theta,
-        'attention_dropout': attn_config.attention_dropout,
-        'attention_bias': attn_config.attention_bias,
-        'layer_idx': layer_idx
+        "hidden_size": config.hidden_size,
+        "num_attention_heads": attn_config.num_attention_heads,
+        "num_key_value_heads": attn_config.num_key_value_heads,
+        "head_dim": attn_config.head_dim,
+        "max_position_embeddings": config.max_position_embeddings,
+        "rope_theta": pos_config.rope_theta,
+        "attention_dropout": attn_config.attention_dropout,
+        "attention_bias": attn_config.attention_bias,
+        "layer_idx": layer_idx,
     }
 
     if attn_config.attention_type == AttentionType.GROUPED_QUERY:
@@ -92,6 +87,7 @@ def _create_attention(config: ModelConfig, layer_idx: int) -> nn.Module:
 
     elif attn_config.attention_type == AttentionType.DEEPSEEK_GSA:
         from config.model_config import PositionEmbeddingType
+
         use_yarn = pos_config.position_type == PositionEmbeddingType.YARN
 
         gsa_config = DeepSeekGSAConfig(
@@ -101,17 +97,21 @@ def _create_attention(config: ModelConfig, layer_idx: int) -> nn.Module:
             head_dim=attn_config.head_dim,
             indexer_dim=attn_config.gsa_indexer_dim,
             num_indexer_heads=attn_config.gsa_num_indexer_heads,
-            indexer_activation=getattr(attn_config, 'gsa_indexer_activation', 'sigmoid'),
+            indexer_activation=getattr(
+                attn_config, "gsa_indexer_activation", "sigmoid"
+            ),
             k_base=attn_config.gsa_k_base,
             k_min=attn_config.gsa_k_min,
             k_max=attn_config.gsa_k_max,
-            use_adaptive_k=getattr(attn_config, 'gsa_use_adaptive_k', True),
-            adaptive_k_method=getattr(attn_config, 'gsa_adaptive_k_method', 'variance'),
-            adaptive_k_temperature=getattr(attn_config, 'gsa_adaptive_k_temperature', 1.0),
-            use_value_gate=getattr(attn_config, 'gsa_use_value_gate', True),
-            use_output_gate=getattr(attn_config, 'gsa_use_output_gate', True),
-            gate_activation=getattr(attn_config, 'gsa_gate_activation', 'sigmoid'),
-            gate_bias_init=getattr(attn_config, 'gsa_gate_bias_init', 0.5),
+            use_adaptive_k=getattr(attn_config, "gsa_use_adaptive_k", True),
+            adaptive_k_method=getattr(attn_config, "gsa_adaptive_k_method", "variance"),
+            adaptive_k_temperature=getattr(
+                attn_config, "gsa_adaptive_k_temperature", 1.0
+            ),
+            use_value_gate=getattr(attn_config, "gsa_use_value_gate", True),
+            use_output_gate=getattr(attn_config, "gsa_use_output_gate", True),
+            gate_activation=getattr(attn_config, "gsa_gate_activation", "sigmoid"),
+            gate_bias_init=getattr(attn_config, "gsa_gate_bias_init", 0.5),
             max_position_embeddings=config.max_position_embeddings,
             rope_theta=pos_config.rope_theta,
             use_yarn=use_yarn,
@@ -126,7 +126,7 @@ def _create_attention(config: ModelConfig, layer_idx: int) -> nn.Module:
             attention_bias=attn_config.attention_bias,
             num_layers=config.num_hidden_layers,
             layer_idx=layer_idx,
-            use_triton_kernels=getattr(attn_config, 'gsa_use_triton_kernels', True),
+            use_triton_kernels=getattr(attn_config, "gsa_use_triton_kernels", True),
         )
         return DeepSeekGSA(gsa_config)
 
@@ -149,13 +149,14 @@ def _create_ffn(config: ModelConfig) -> nn.Module:
         hidden_size=config.hidden_size,
         intermediate_size=ffn_config.intermediate_size,
         bias=ffn_config.ffn_bias,
-        dropout=ffn_config.ffn_dropout
+        dropout=ffn_config.ffn_dropout,
     )
 
 
 # =============================================================================
 # Standard TransformerBlock (Residual connections)
 # =============================================================================
+
 
 class TransformerBlock(nn.Module):
     """
@@ -173,9 +174,13 @@ class TransformerBlock(nn.Module):
         self.layer_idx = layer_idx
         self.hidden_size = config.hidden_size
 
-        self.input_layernorm = TritonRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = TritonRMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
         self.attention = _create_attention(config, layer_idx)
-        self.post_attention_layernorm = TritonRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = TritonRMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
         self.ffn = _create_ffn(config)
 
         self.attn_connection = ResidualConnection(dropout=config.hidden_dropout)
@@ -189,7 +194,7 @@ class TransformerBlock(nn.Module):
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         output_attentions: bool = False,
         use_cache: bool = False,
-        **kwargs
+        **kwargs,
     ) -> Tuple[torch.Tensor, ...]:
         residual = hidden_states
 
@@ -202,7 +207,7 @@ class TransformerBlock(nn.Module):
             past_key_value=past_key_value,
             output_attentions=output_attentions,
             use_cache=use_cache,
-            **kwargs
+            **kwargs,
         )
         hidden_states = self.attn_connection(residual, attn_output)
 
@@ -223,6 +228,7 @@ class TransformerBlock(nn.Module):
 # =============================================================================
 # MHC TransformerBlock (persistent n-stream, paper arXiv:2512.24880v2)
 # =============================================================================
+
 
 class MHCTransformerBlock(nn.Module):
     """
@@ -248,8 +254,12 @@ class MHCTransformerBlock(nn.Module):
         conn_config = config.connection
 
         # Norms operate on the C-dim aggregated input
-        self.input_layernorm = TritonRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = TritonRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = TritonRMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
+        self.post_attention_layernorm = TritonRMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
 
         # Sublayers
         self.attention = _create_attention(config, layer_idx)
@@ -273,7 +283,7 @@ class MHCTransformerBlock(nn.Module):
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         output_attentions: bool = False,
         use_cache: bool = False,
-        **kwargs
+        **kwargs,
     ) -> Tuple[torch.Tensor, ...]:
         """
         Args:
@@ -297,11 +307,13 @@ class MHCTransformerBlock(nn.Module):
             past_key_value=past_key_value,
             output_attentions=output_attentions,
             use_cache=use_cache,
-            **kwargs
+            **kwargs,
         )
 
         # Step 3: mHC residual -> updated n-stream
-        hidden_states = self.attn_mhc.apply_residual(hidden_states, attn_output, attn_cache)
+        hidden_states = self.attn_mhc.apply_residual(
+            hidden_states, attn_output, attn_cache
+        )
 
         # --- FFN sublayer ---
         # Step 1: Aggregate n streams -> [B, S, C]
@@ -312,7 +324,9 @@ class MHCTransformerBlock(nn.Module):
         ffn_output = self.ffn(normed)
 
         # Step 3: mHC residual -> updated n-stream
-        hidden_states = self.ffn_mhc.apply_residual(hidden_states, ffn_output, ffn_cache)
+        hidden_states = self.ffn_mhc.apply_residual(
+            hidden_states, ffn_output, ffn_cache
+        )
 
         outputs = (hidden_states,)
         if output_attentions:
@@ -325,6 +339,7 @@ class MHCTransformerBlock(nn.Module):
 # =============================================================================
 # TransformerBlockList
 # =============================================================================
+
 
 class TransformerBlockList(nn.Module):
     """
@@ -347,15 +362,19 @@ class TransformerBlockList(nn.Module):
 
         if self.use_mhc:
             self.expansion_rate = int(config.connection.mhc_expansion_rate)
-            self.layers = nn.ModuleList([
-                MHCTransformerBlock(config, layer_idx)
-                for layer_idx in range(config.num_hidden_layers)
-            ])
+            self.layers = nn.ModuleList(
+                [
+                    MHCTransformerBlock(config, layer_idx)
+                    for layer_idx in range(config.num_hidden_layers)
+                ]
+            )
         else:
-            self.layers = nn.ModuleList([
-                TransformerBlock(config, layer_idx)
-                for layer_idx in range(config.num_hidden_layers)
-            ])
+            self.layers = nn.ModuleList(
+                [
+                    TransformerBlock(config, layer_idx)
+                    for layer_idx in range(config.num_hidden_layers)
+                ]
+            )
 
     def _expand(self, x: torch.Tensor) -> torch.Tensor:
         """Expand [B, S, C] -> [B, S, n, C] by replicating across streams."""
@@ -374,7 +393,7 @@ class TransformerBlockList(nn.Module):
         output_attentions: bool = False,
         output_hidden_states: bool = False,
         use_cache: bool = False,
-        **kwargs
+        **kwargs,
     ) -> Tuple[torch.Tensor, ...]:
         """
         Forward pass through all layers.
@@ -396,7 +415,9 @@ class TransformerBlockList(nn.Module):
                 h = self._collapse(hidden_states) if self.use_mhc else hidden_states
                 all_hidden_states += (h,)
 
-            past_key_value = past_key_values[idx] if past_key_values is not None else None
+            past_key_value = (
+                past_key_values[idx] if past_key_values is not None else None
+            )
 
             layer_outputs = layer(
                 hidden_states=hidden_states,
@@ -405,7 +426,7 @@ class TransformerBlockList(nn.Module):
                 past_key_value=past_key_value,
                 output_attentions=output_attentions,
                 use_cache=use_cache,
-                **kwargs
+                **kwargs,
             )
 
             hidden_states = layer_outputs[0]

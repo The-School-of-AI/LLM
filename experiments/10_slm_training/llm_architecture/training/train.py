@@ -17,75 +17,77 @@ Supports two configuration modes:
 CLI arguments always override config file values.
 """
 
-import os
-import sys
-import time
+import argparse
+import inspect
 import json
 import math
-import inspect
+import os
 import signal
-import argparse
-from pathlib import Path
+import sys
+import time
+from dataclasses import asdict, dataclass, fields
 from datetime import datetime
-from dataclasses import dataclass, asdict, fields
-from typing import Optional, Dict, Any, List, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, Dataset
-from torch.amp import autocast, GradScaler
 import yaml
+from torch.amp import GradScaler, autocast
+from torch.utils.data import DataLoader, Dataset
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.model_config import ModelConfig, get_preset_config, PRESET_CONFIGS
+from config.model_config import PRESET_CONFIGS, ModelConfig, get_preset_config
 from models.llm import create_model_from_config
 
 
 def load_config_from_yaml(config_path: str) -> Tuple[ModelConfig, Dict[str, Any]]:
     """
     Load model and training config from YAML file.
-    
+
     Args:
         config_path: Path to YAML configuration file
-        
+
     Returns:
         Tuple of (ModelConfig, training_config_dict)
     """
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         config_data = yaml.safe_load(f)
-    
+
     # Extract training config (if present)
-    training_data = config_data.pop('training', {})
-    
+    training_data = config_data.pop("training", {})
+
     # Load model config
     model_config = ModelConfig.from_dict(config_data)
-    
+
     return model_config, training_data
 
 
-def training_config_from_dict(data: Dict[str, Any]) -> 'TrainingConfig':
+def training_config_from_dict(data: Dict[str, Any]) -> "TrainingConfig":
     """
     Create TrainingConfig from dictionary, ignoring unknown keys.
-    
+
     Args:
         data: Dictionary with training configuration values
-        
+
     Returns:
         TrainingConfig instance
     """
     # Get valid field names from TrainingConfig
     valid_fields = {f.name for f in fields(TrainingConfig)}
-    
+
     # Filter to only valid fields
     filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-    
+
     return TrainingConfig(**filtered_data)
 
 
-def align_model_context_to_seq_length(model_config: ModelConfig, seq_length: int) -> None:
+def align_model_context_to_seq_length(
+    model_config: ModelConfig, seq_length: int
+) -> None:
     """
     Ensure model positional capacity matches requested training sequence length.
 
@@ -203,9 +205,15 @@ class TrainingConfig:
 
     # torch.compile (PyTorch 2.0+)
     use_torch_compile: bool = False
-    torch_compile_mode: str = "max-autotune-no-cudagraphs"  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
-    torch_compile_fullgraph: bool = False  # enforce no graph breaks (stricter but faster)
-    torch_compile_dynamic: bool = False  # allow dynamic shapes (slower compile, flexible shapes)
+    torch_compile_mode: str = (
+        "max-autotune-no-cudagraphs"  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
+    )
+    torch_compile_fullgraph: bool = (
+        False  # enforce no graph breaks (stricter but faster)
+    )
+    torch_compile_dynamic: bool = (
+        False  # allow dynamic shapes (slower compile, flexible shapes)
+    )
     torch_compile_backend: str = "inductor"  # inductor (default), cudagraphs, etc.
 
     # Experiment
@@ -216,6 +224,7 @@ class TrainingConfig:
 @dataclass
 class TrainingMetrics:
     """Metrics tracked during training."""
+
     step: int = 0
     epoch: int = 0
     loss: float = 0.0
@@ -225,7 +234,7 @@ class TrainingMetrics:
     grad_norm: float = 0.0
     tokens_seen: int = 0
     elapsed_time: float = 0.0
-    
+
     # Loss components (for MTP)
     main_loss: Optional[float] = None
     aux_loss: Optional[float] = None
@@ -233,40 +242,40 @@ class TrainingMetrics:
 
 class MetricsLogger:
     """Logs training metrics to file and console."""
-    
+
     def __init__(self, log_dir: str, experiment_name: str):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_file = self.log_dir / f"{experiment_name}_{timestamp}.jsonl"
         self.metrics_history: List[Dict] = []
-        
+
     def log(self, metrics: TrainingMetrics):
         """Log metrics."""
         metrics_dict = asdict(metrics)
         self.metrics_history.append(metrics_dict)
-        
+
         # Write to file
-        with open(self.log_file, 'a') as f:
-            f.write(json.dumps(metrics_dict) + '\n')
-    
+        with open(self.log_file, "a") as f:
+            f.write(json.dumps(metrics_dict) + "\n")
+
     def save_summary(self, config: Dict, final_metrics: TrainingMetrics):
         """Save training summary."""
         summary = {
-            'config': config,
-            'final_metrics': asdict(final_metrics),
-            'history_length': len(self.metrics_history)
+            "config": config,
+            "final_metrics": asdict(final_metrics),
+            "history_length": len(self.metrics_history),
         }
-        
-        summary_file = self.log_file.with_suffix('.summary.json')
-        with open(summary_file, 'w') as f:
+
+        summary_file = self.log_file.with_suffix(".summary.json")
+        with open(summary_file, "w") as f:
             json.dump(summary, f, indent=2)
 
 
 class LRScheduler:
     """Learning rate scheduler with warmup."""
-    
+
     def __init__(
         self,
         optimizer: torch.optim.Optimizer,
@@ -274,7 +283,7 @@ class LRScheduler:
         max_steps: int,
         max_lr: float,
         min_lr: float,
-        style: str = "cosine"
+        style: str = "cosine",
     ):
         self.optimizer = optimizer
         self.warmup_steps = warmup_steps
@@ -283,36 +292,40 @@ class LRScheduler:
         self.min_lr = min_lr
         self.style = style
         self.current_step = 0
-        
+
     def step(self) -> float:
         """Update learning rate and return current value."""
         self.current_step += 1
         lr = self.get_lr()
-        
+
         for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
-            
+            param_group["lr"] = lr
+
         return lr
-    
+
     def get_lr(self) -> float:
         """Calculate current learning rate."""
         step = self.current_step
-        
+
         # Warmup phase
         if step < self.warmup_steps:
             return self.max_lr * step / self.warmup_steps
-        
+
         # Decay phase
         if self.style == "constant":
             return self.max_lr
-        
-        progress = (step - self.warmup_steps) / max(1, self.max_steps - self.warmup_steps)
+
+        progress = (step - self.warmup_steps) / max(
+            1, self.max_steps - self.warmup_steps
+        )
         progress = min(1.0, progress)
-        
+
         if self.style == "linear":
             return self.min_lr + (self.max_lr - self.min_lr) * (1 - progress)
         elif self.style == "cosine":
-            return self.min_lr + (self.max_lr - self.min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
+            return self.min_lr + (self.max_lr - self.min_lr) * 0.5 * (
+                1 + math.cos(math.pi * progress)
+            )
         else:
             return self.max_lr
 
@@ -346,7 +359,9 @@ class TrainingController:
         except (AttributeError, OSError):
             self._interactive = False
 
-        print("[Controls] Ctrl+C to pause | While paused: Enter=resume, 'stop'=save & exit\n")
+        print(
+            "[Controls] Ctrl+C to pause | While paused: Enter=resume, 'stop'=save & exit\n"
+        )
 
     def pause(self):
         """Pause training. Called from SIGINT handler."""
@@ -388,7 +403,7 @@ class TrainingController:
                 self._resume()
                 return
 
-            if line == 'stop':
+            if line == "stop":
                 self.request_stop()
                 return
             else:
@@ -431,41 +446,37 @@ class TrainingController:
 class RandomTextDataset(Dataset):
     """
     Random dataset for testing/development.
-    
+
     In production, replace with real tokenized dataset.
     """
-    
+
     def __init__(
-        self,
-        vocab_size: int,
-        seq_length: int,
-        num_samples: int,
-        seed: int = 42
+        self, vocab_size: int, seq_length: int, num_samples: int, seed: int = 42
     ):
         self.vocab_size = vocab_size
         self.seq_length = seq_length
         self.num_samples = num_samples
-        
+
         # Pre-generate for reproducibility
         torch.manual_seed(seed)
         self.data = torch.randint(0, vocab_size, (num_samples, seq_length))
-        
+
     def __len__(self) -> int:
         return self.num_samples
-    
+
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         tokens = self.data[idx]
         return {
-            'input_ids': tokens,
+            "input_ids": tokens,
             # Model forward already shifts for next-token prediction.
-            'labels': tokens.clone()
+            "labels": tokens.clone(),
         }
 
 
 class Trainer:
     """
     Main trainer class.
-    
+
     Handles:
     - Training loop
     - Gradient accumulation
@@ -473,14 +484,14 @@ class Trainer:
     - Checkpointing
     - Metrics logging
     """
-    
+
     def __init__(
         self,
         model: nn.Module,
         train_dataloader: DataLoader,
         training_config: TrainingConfig,
         model_config: ModelConfig,
-        eval_dataloader: Optional[DataLoader] = None
+        eval_dataloader: Optional[DataLoader] = None,
     ):
         self.model = model
         self.train_dataloader = train_dataloader
@@ -497,7 +508,9 @@ class Trainer:
             except Exception as e:
                 print(f"Warning: gradient checkpointing enable failed: {e}")
         else:
-            print("Info: Model does not expose gradient_checkpointing_enable(); continuing.")
+            print(
+                "Info: Model does not expose gradient_checkpointing_enable(); continuing."
+            )
 
         # torch.compile - apply AFTER device placement & gradient checkpointing,
         # BEFORE optimizer creation (named_parameters works through compile wrapper)
@@ -513,30 +526,30 @@ class Trainer:
             max_steps=training_config.max_steps,
             max_lr=training_config.learning_rate,
             min_lr=training_config.min_learning_rate,
-            style=training_config.lr_decay_style
+            style=training_config.lr_decay_style,
         )
 
         # Mixed precision - CUDA supports both float16 and bfloat16, MPS supports float16 only
         self.use_amp = training_config.use_amp and (
-            self.device.type == "cuda" or
-            (self.device.type == "mps" and training_config.amp_dtype == "float16")
+            self.device.type == "cuda"
+            or (self.device.type == "mps" and training_config.amp_dtype == "float16")
         )
         self.amp_dtype = getattr(torch, training_config.amp_dtype)
 
         # GradScaler only works with CUDA float16
         scaler_enabled = (
-            self.use_amp and
-            self.device.type == "cuda" and
-            training_config.amp_dtype == "float16"
+            self.use_amp
+            and self.device.type == "cuda"
+            and training_config.amp_dtype == "float16"
         )
         self.scaler = GradScaler("cuda", enabled=scaler_enabled)
-        
+
         # Logging
         self.logger = MetricsLogger(
             log_dir=training_config.checkpoint_dir,
-            experiment_name=training_config.experiment_name
+            experiment_name=training_config.experiment_name,
         )
-        
+
         # Pause controller
         self.pause_controller = TrainingController()
 
@@ -544,28 +557,36 @@ class Trainer:
         self.global_step = 0
         self.epoch = 0
         self.tokens_seen = 0
-        self.best_loss = float('inf')
+        self.best_loss = float("inf")
         self.start_time = None
         self._compile_safe_retry_attempted = False
         self._compile_eager_fallback_done = False
-        
+
     def _apply_torch_compile(self, training_config: TrainingConfig):
         """Apply torch.compile to the model if enabled and available."""
         if not training_config.use_torch_compile:
             return
 
-        if not hasattr(torch, 'compile'):
-            print("Warning: torch.compile not available (requires PyTorch 2.0+), skipping")
+        if not hasattr(torch, "compile"):
+            print(
+                "Warning: torch.compile not available (requires PyTorch 2.0+), skipping"
+            )
             return
 
         # torch.compile on MPS has limited support
         if self.device.type == "mps":
-            print("Warning: torch.compile has limited MPS support. "
-                  "If you hit errors, disable with --no-torch-compile or use CUDA.")
+            print(
+                "Warning: torch.compile has limited MPS support. "
+                "If you hit errors, disable with --no-torch-compile or use CUDA."
+            )
 
         mode = training_config.torch_compile_mode
         fullgraph = training_config.torch_compile_fullgraph
-        dynamic = training_config.torch_compile_dynamic if training_config.torch_compile_dynamic else None
+        dynamic = (
+            training_config.torch_compile_dynamic
+            if training_config.torch_compile_dynamic
+            else None
+        )
         backend = training_config.torch_compile_backend
 
         # Inductor max-autotune can fail on very long contexts due Triton index
@@ -576,8 +597,10 @@ class Trainer:
             and training_config.seq_length >= 32768
             and mode in {"max-autotune", "max-autotune-no-cudagraphs"}
         ):
-            print(f"Warning: seq_length={training_config.seq_length} with mode='{mode}' can crash "
-                  "Inductor/Triton autotuning on large BMM shapes.")
+            print(
+                f"Warning: seq_length={training_config.seq_length} with mode='{mode}' can crash "
+                "Inductor/Triton autotuning on large BMM shapes."
+            )
             print("  Auto-switching to torch.compile mode='default' for stability.")
             mode = "default"
             training_config.torch_compile_mode = mode
@@ -587,14 +610,16 @@ class Trainer:
         # aux_logits) from the same hidden state, causing CUDAGraphs to overwrite
         # earlier buffers. Auto-downgrade to max-autotune-no-cudagraphs.
         cudagraph_modes = {"reduce-overhead", "max-autotune"}
-        raw_model = getattr(self.model, '_orig_mod', self.model)
+        raw_model = getattr(self.model, "_orig_mod", self.model)
         has_mtp_outputs = (
             getattr(raw_model, "mtp_loss", None) is not None
             or getattr(raw_model, "mtp_block", None) is not None
         )
         if mode in cudagraph_modes and has_mtp_outputs:
-            print(f"Warning: '{mode}' mode uses CUDAGraphs which is incompatible with "
-                  "Multi-Token Prediction (buffer reuse overwrites MTP head outputs).")
+            print(
+                f"Warning: '{mode}' mode uses CUDAGraphs which is incompatible with "
+                "Multi-Token Prediction (buffer reuse overwrites MTP head outputs)."
+            )
             print("  Auto-switching to max-autotune-no-cudagraphs mode.")
             mode = "max-autotune-no-cudagraphs"
             training_config.torch_compile_mode = mode
@@ -603,10 +628,12 @@ class Trainer:
         # Use only torch.set_float32_matmul_precision (the public API) to avoid
         # mixing legacy and new internal APIs, which crashes Inductor's max-autotune.
         if self.device.type == "cuda":
-            torch.set_float32_matmul_precision('high')
+            torch.set_float32_matmul_precision("high")
 
-        print(f"Applying torch.compile(mode='{mode}', backend='{backend}', "
-              f"fullgraph={fullgraph}, dynamic={dynamic})...")
+        print(
+            f"Applying torch.compile(mode='{mode}', backend='{backend}', "
+            f"fullgraph={fullgraph}, dynamic={dynamic})..."
+        )
 
         try:
             self.model = torch.compile(
@@ -616,7 +643,9 @@ class Trainer:
                 fullgraph=fullgraph,
                 dynamic=dynamic,
             )
-            print("Model compiled successfully (first forward pass will be slower due to compilation)")
+            print(
+                "Model compiled successfully (first forward pass will be slower due to compilation)"
+            )
         except Exception as e:
             print(f"Warning: torch.compile failed: {e}")
             print("Continuing without compilation.")
@@ -645,8 +674,10 @@ class Trainer:
         raw_model = getattr(self.model, "_orig_mod", self.model)
         backend = self.config.torch_compile_backend
         safe_mode = "default"
-        print(f"Retrying torch.compile with safer settings: mode='{safe_mode}', backend='{backend}', "
-              "fullgraph=False, dynamic=None")
+        print(
+            f"Retrying torch.compile with safer settings: mode='{safe_mode}', backend='{backend}', "
+            "fullgraph=False, dynamic=None"
+        )
         try:
             self.model = torch.compile(
                 raw_model,
@@ -706,12 +737,14 @@ class Trainer:
         Returns:
             (loss, loss_dict) tuple
         """
-        raw_model = getattr(self.model, '_orig_mod', self.model)
+        raw_model = getattr(self.model, "_orig_mod", self.model)
         mtp_loss_fn = getattr(raw_model, "mtp_loss", None)
         logits, aux_logits, aux_residual = self._extract_output_tensors(outputs)
 
         if logits is None:
-            raise ValueError("Model outputs do not contain logits/logits_ntp for loss computation.")
+            raise ValueError(
+                "Model outputs do not contain logits/logits_ntp for loss computation."
+            )
 
         if mtp_loss_fn is not None and aux_logits is not None:
             loss, loss_dict = mtp_loss_fn(logits, aux_logits, labels)
@@ -723,7 +756,7 @@ class Trainer:
         main_loss = F.cross_entropy(
             shift_logits.view(-1, shift_logits.size(-1)),
             shift_labels.view(-1),
-            ignore_index=-100
+            ignore_index=-100,
         )
         loss = main_loss
         loss_dict = {"main_loss": main_loss}
@@ -735,9 +768,11 @@ class Trainer:
             mtp_min_len = min(mtp_shift_logits.size(1), mtp_shift_labels.size(1))
             if mtp_min_len > 0:
                 mtp_loss = F.cross_entropy(
-                    mtp_shift_logits[:, :mtp_min_len].reshape(-1, mtp_shift_logits.size(-1)),
+                    mtp_shift_logits[:, :mtp_min_len].reshape(
+                        -1, mtp_shift_logits.size(-1)
+                    ),
                     mtp_shift_labels[:, :mtp_min_len].reshape(-1),
-                    ignore_index=-100
+                    ignore_index=-100,
                 )
                 mtp_weight = getattr(getattr(raw_model, "config", None), "head", None)
                 mtp_weight = getattr(mtp_weight, "mtp_loss_weight", 1.0)
@@ -811,32 +846,32 @@ class Trainer:
         # Separate parameters with and without weight decay
         decay_params = []
         no_decay_params = []
-        
+
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
-            if 'bias' in name or 'norm' in name or 'embedding' in name:
+            if "bias" in name or "norm" in name or "embedding" in name:
                 no_decay_params.append(param)
             else:
                 decay_params.append(param)
-        
+
         optimizer_groups = [
-            {'params': decay_params, 'weight_decay': self.config.weight_decay},
-            {'params': no_decay_params, 'weight_decay': 0.0}
+            {"params": decay_params, "weight_decay": self.config.weight_decay},
+            {"params": no_decay_params, "weight_decay": 0.0},
         ]
-        
+
         return torch.optim.AdamW(
             optimizer_groups,
             lr=self.config.learning_rate,
             betas=(self.config.beta1, self.config.beta2),
-            eps=self.config.eps
+            eps=self.config.eps,
         )
-    
+
     def train(self) -> TrainingMetrics:
         """Run training loop."""
         self.model.train()
         self.start_time = time.time()
-        
+
         print(f"\n{'='*60}")
         print(f"Starting Training: {self.config.experiment_name}")
         print(f"{'='*60}")
@@ -848,9 +883,13 @@ class Trainer:
         print(f"Parameters: {num_params / 1e9:.2f}B")
         print(f"Device: {self.device}")
         print(f"Max steps: {self.config.max_steps}")
-        print(f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}")
+        print(
+            f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}"
+        )
         if self.config.use_torch_compile:
-            print(f"torch.compile: mode={self.config.torch_compile_mode}, backend={self.config.torch_compile_backend}")
+            print(
+                f"torch.compile: mode={self.config.torch_compile_mode}, backend={self.config.torch_compile_backend}"
+            )
         print(f"{'='*60}\n")
 
         # Start pause controller
@@ -861,6 +900,7 @@ class Trainer:
         #   2nd Ctrl+C -> stop & save (if paused)
         #   3rd Ctrl+C -> force exit
         original_sigint = signal.getsignal(signal.SIGINT)
+
         def _sigint_handler(signum, frame):
             ctrl = self.pause_controller
             if ctrl.stop_requested:
@@ -874,6 +914,7 @@ class Trainer:
             else:
                 # Running -> pause
                 ctrl.pause()
+
         signal.signal(signal.SIGINT, _sigint_handler)
 
         accumulation_loss = 0.0
@@ -894,21 +935,29 @@ class Trainer:
                 self.epoch += 1
                 data_iter = iter(self.train_dataloader)
                 batch = next(data_iter)
-            
+
             # Move to device
-            input_ids = batch['input_ids'].to(self.device)
-            labels = batch['labels'].to(self.device)
-            
+            input_ids = batch["input_ids"].to(self.device)
+            labels = batch["labels"].to(self.device)
+
             def _run_forward():
                 # Mark step boundary for CUDAGraphs (only needed in CUDAGraph modes).
                 _cudagraph_modes = {"reduce-overhead", "max-autotune"}
-                _uses_cudagraphs = (self.config.use_torch_compile
-                                    and self.config.torch_compile_mode in _cudagraph_modes)
-                if _uses_cudagraphs and hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
+                _uses_cudagraphs = (
+                    self.config.use_torch_compile
+                    and self.config.torch_compile_mode in _cudagraph_modes
+                )
+                if _uses_cudagraphs and hasattr(
+                    torch.compiler, "cudagraph_mark_step_begin"
+                ):
                     torch.compiler.cudagraph_mark_step_begin()
 
                 # Forward pass with device-aware autocast
-                with autocast(device_type=self.device.type, enabled=self.use_amp, dtype=self.amp_dtype):
+                with autocast(
+                    device_type=self.device.type,
+                    enabled=self.use_amp,
+                    dtype=self.amp_dtype,
+                ):
                     if _uses_cudagraphs:
                         # CUDAGraph modes — compute loss outside compiled graph
                         # to avoid buffer reuse errors.
@@ -917,7 +966,9 @@ class Trainer:
                             include_labels=False,
                         )
                         outputs = self.model(**forward_inputs)
-                        micro_loss_local, loss_dict_local = self._compute_loss(outputs, labels)
+                        micro_loss_local, loss_dict_local = self._compute_loss(
+                            outputs, labels
+                        )
                     else:
                         # default / max-autotune-no-cudagraphs / non-compiled: standard forward
                         forward_inputs = self._build_forward_inputs(
@@ -928,7 +979,9 @@ class Trainer:
                         outputs = self.model(**forward_inputs)
                         micro_loss_local = outputs.loss
                         loss_dict_local = outputs.loss_dict
-                    loss_local = micro_loss_local / self.config.gradient_accumulation_steps
+                    loss_local = (
+                        micro_loss_local / self.config.gradient_accumulation_steps
+                    )
 
                 return loss_local, micro_loss_local, loss_dict_local
 
@@ -948,12 +1001,12 @@ class Trainer:
 
             accumulation_loss += micro_loss.item()
             if loss_dict is not None:
-                accumulation_main_loss += loss_dict.get('main_loss', micro_loss).item()
+                accumulation_main_loss += loss_dict.get("main_loss", micro_loss).item()
                 aux_key = None
-                if 'aux_total' in loss_dict:
-                    aux_key = 'aux_total'
-                elif 'aux_loss' in loss_dict:
-                    aux_key = 'aux_loss'
+                if "aux_total" in loss_dict:
+                    aux_key = "aux_total"
+                elif "aux_loss" in loss_dict:
+                    aux_key = "aux_loss"
                 if aux_key is not None:
                     accumulation_aux_loss += loss_dict[aux_key].item()
             accumulation_steps += 1
@@ -965,8 +1018,7 @@ class Trainer:
                     self.scaler.unscale_(self.optimizer)
 
                 grad_norm = torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.gradient_clip
+                    self.model.parameters(), self.config.gradient_clip
                 ).item()
 
                 # Optimizer step
@@ -975,33 +1027,38 @@ class Trainer:
                     self.scaler.update()
                 else:
                     self.optimizer.step()
-                
+
                 self.optimizer.zero_grad()
-                
+
                 # LR update
                 current_lr = self.lr_scheduler.step()
-                
+
                 # Update counters
                 self.global_step += 1
                 tokens_in_step = (
-                    self.config.batch_size *
-                    self.config.seq_length *
-                    self.config.gradient_accumulation_steps
+                    self.config.batch_size
+                    * self.config.seq_length
+                    * self.config.gradient_accumulation_steps
                 )
                 self.tokens_seen += tokens_in_step
-                
+
                 # Calculate metrics (subtract pause time within this step)
-                step_pause_delta = self.pause_controller.total_pause_time - step_pause_snapshot
+                step_pause_delta = (
+                    self.pause_controller.total_pause_time - step_pause_snapshot
+                )
                 step_time = time.time() - step_start_time - step_pause_delta
                 step_time = max(step_time, 1e-6)  # Avoid division by zero
                 tokens_per_second = tokens_in_step / step_time
                 samples_per_second = (
-                    self.config.batch_size *
-                    self.config.gradient_accumulation_steps
+                    self.config.batch_size * self.config.gradient_accumulation_steps
                 ) / step_time
-                
+
                 # Log metrics (exclude pause time from elapsed)
-                active_elapsed = time.time() - self.start_time - self.pause_controller.total_pause_time
+                active_elapsed = (
+                    time.time()
+                    - self.start_time
+                    - self.pause_controller.total_pause_time
+                )
                 metrics = TrainingMetrics(
                     step=self.global_step,
                     epoch=self.epoch,
@@ -1011,29 +1068,33 @@ class Trainer:
                     samples_per_second=samples_per_second,
                     grad_norm=grad_norm,
                     tokens_seen=self.tokens_seen,
-                    elapsed_time=active_elapsed
+                    elapsed_time=active_elapsed,
                 )
-                
+
                 # Add averaged MTP loss components if available
                 if loss_dict is not None:
-                    metrics.main_loss = accumulation_main_loss / max(1, accumulation_steps)
-                    if 'aux_total' in loss_dict or 'aux_loss' in loss_dict:
-                        metrics.aux_loss = accumulation_aux_loss / max(1, accumulation_steps)
-                
+                    metrics.main_loss = accumulation_main_loss / max(
+                        1, accumulation_steps
+                    )
+                    if "aux_total" in loss_dict or "aux_loss" in loss_dict:
+                        metrics.aux_loss = accumulation_aux_loss / max(
+                            1, accumulation_steps
+                        )
+
                 self.logger.log(metrics)
-                
+
                 # Console logging
                 if self.global_step % self.config.log_interval == 0:
                     self._print_progress(metrics)
-                
+
                 # Checkpointing
                 if self.global_step % self.config.save_interval == 0:
                     self._save_checkpoint(metrics)
-                
+
                 # Update best loss
                 if metrics.loss < self.best_loss:
                     self.best_loss = metrics.loss
-                
+
                 # Reset accumulation
                 accumulation_loss = 0.0
                 accumulation_main_loss = 0.0
@@ -1048,7 +1109,7 @@ class Trainer:
 
                 step_start_time = time.time()
                 step_pause_snapshot = self.pause_controller.total_pause_time
-        
+
         # Restore original signal handler and stop pause controller
         signal.signal(signal.SIGINT, original_sigint)
         self.pause_controller.shutdown()
@@ -1061,17 +1122,20 @@ class Trainer:
             epoch=self.epoch,
             loss=self.best_loss,
             tokens_seen=self.tokens_seen,
-            elapsed_time=active_time
+            elapsed_time=active_time,
         )
 
         self._save_checkpoint(final_metrics, is_final=True)
         self.logger.save_summary(
-            config=asdict(self.config),
-            final_metrics=final_metrics
+            config=asdict(self.config), final_metrics=final_metrics
         )
 
         wall_time = time.time() - self.start_time
-        status = "Training Stopped (checkpoint saved)" if stopped_early else "Training Complete!"
+        status = (
+            "Training Stopped (checkpoint saved)"
+            if stopped_early
+            else "Training Complete!"
+        )
         print(f"\n{'='*60}")
         print(status)
         print(f"{'='*60}")
@@ -1083,15 +1147,19 @@ class Trainer:
             print(f"Total pause time: {total_pause_time:.1f}s")
         print(f"Wall clock time: {wall_time:.1f}s")
         print(f"{'='*60}\n")
-        
+
         return final_metrics
-    
+
     def _print_progress(self, metrics: TrainingMetrics):
         """Print training progress."""
         eta_seconds = (self.config.max_steps - metrics.step) * (
             metrics.elapsed_time / max(1, metrics.step)
         )
-        eta_str = f"{eta_seconds/3600:.1f}h" if eta_seconds > 3600 else f"{eta_seconds/60:.1f}m"
+        eta_str = (
+            f"{eta_seconds/3600:.1f}h"
+            if eta_seconds > 3600
+            else f"{eta_seconds/60:.1f}m"
+        )
 
         # Build loss string: show model loss and MTP loss separately when available
         if metrics.main_loss is not None and metrics.aux_loss is not None:
@@ -1116,34 +1184,36 @@ class Trainer:
             f"Grad: {metrics.grad_norm:.2f} | "
             f"ETA: {eta_str}"
         )
-    
+
     def _save_checkpoint(self, metrics: TrainingMetrics, is_final: bool = False):
         """Save training checkpoint."""
         checkpoint_dir = Path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        
+
         if is_final:
             checkpoint_path = checkpoint_dir / f"{self.config.experiment_name}_final.pt"
         else:
-            checkpoint_path = checkpoint_dir / f"{self.config.experiment_name}_step{metrics.step}.pt"
-        
+            checkpoint_path = (
+                checkpoint_dir / f"{self.config.experiment_name}_step{metrics.step}.pt"
+            )
+
         # Access underlying model if torch.compiled (state_dict works either way,
         # but saving the unwrapped state_dict is cleaner for portability)
-        raw_model = getattr(self.model, '_orig_mod', self.model)
+        raw_model = getattr(self.model, "_orig_mod", self.model)
 
         checkpoint = {
-            'step': self.global_step,
-            'epoch': self.epoch,
-            'model_state_dict': raw_model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'lr_scheduler_step': self.lr_scheduler.current_step,
-            'metrics': asdict(metrics),
-            'model_config': self.model_config.to_dict(),
-            'training_config': asdict(self.config),
-            'best_loss': self.best_loss,
-            'tokens_seen': self.tokens_seen
+            "step": self.global_step,
+            "epoch": self.epoch,
+            "model_state_dict": raw_model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "lr_scheduler_step": self.lr_scheduler.current_step,
+            "metrics": asdict(metrics),
+            "model_config": self.model_config.to_dict(),
+            "training_config": asdict(self.config),
+            "best_loss": self.best_loss,
+            "tokens_seen": self.tokens_seen,
         }
-        
+
         torch.save(checkpoint, checkpoint_path)
         print(f"  💾 Saved checkpoint: {checkpoint_path}")
 
@@ -1151,71 +1221,71 @@ class Trainer:
 def run_training(
     model_preset: str = "1b-base",
     training_config: Optional[TrainingConfig] = None,
-    model_config_overrides: Optional[Dict] = None
+    model_config_overrides: Optional[Dict] = None,
 ) -> Tuple[nn.Module, TrainingMetrics]:
     """
     Run training with specified configuration.
-    
+
     Args:
         model_preset: Model preset name
         training_config: Training configuration
         model_config_overrides: Overrides for model config
-        
+
     Returns:
         Trained model and final metrics
     """
     # Set seed
     if training_config is None:
         training_config = TrainingConfig()
-    
+
     torch.manual_seed(training_config.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(training_config.seed)
-    
+
     # Create model config
     model_config = get_preset_config(model_preset)
     if model_config_overrides:
         for key, value in model_config_overrides.items():
             if hasattr(model_config, key):
                 # Handle nested dataclass configs (attention, position, ffn, etc.)
-                if hasattr(value, '__dataclass_fields__'):
+                if hasattr(value, "__dataclass_fields__"):
                     setattr(model_config, key, value)
                 else:
                     setattr(model_config, key, value)
 
     # Keep model positional capacity aligned with requested training length.
     align_model_context_to_seq_length(model_config, training_config.seq_length)
-    
+
     # Create model
     model = create_model_from_config(model_config)
-    
+
     # Create dataset
     dataset = RandomTextDataset(
         vocab_size=model_config.vocab_size,
         seq_length=training_config.seq_length,
         num_samples=training_config.max_steps * training_config.batch_size * 2,
-        seed=training_config.seed
+        seed=training_config.seed,
     )
-    
+
     dataloader = DataLoader(
         dataset,
         batch_size=training_config.batch_size,
         shuffle=True,
         num_workers=4,
-        pin_memory=True
+        pin_memory=True,
     )
-    
+
     # Create trainer
     trainer = Trainer(
         model=model,
         train_dataloader=dataloader,
         training_config=training_config,
-        model_config=model_config
+        model_config=model_config,
     )
-    
+
     # Train
     final_metrics = trainer.train()
-    
+
     return model, final_metrics
 
 
@@ -1237,24 +1307,24 @@ Examples:
   python train.py --config ../configs/1b_gsa.yaml --learning-rate 1e-4 --device cuda
 
 Note: CLI arguments always override config file values.
-        """
+        """,
     )
-    
+
     # Configuration source (mutually exclusive conceptually, but --config takes precedence)
     parser.add_argument(
         "--config",
         type=str,
         default=None,
-        help="Path to YAML config file (e.g., configs/1b_base.yaml). Takes precedence over --preset."
+        help="Path to YAML config file (e.g., configs/1b_base.yaml). Takes precedence over --preset.",
     )
     parser.add_argument(
         "--preset",
         type=str,
         default="1b-base",
         choices=list(PRESET_CONFIGS.keys()),
-        help="Model preset (used if --config not provided)"
+        help="Model preset (used if --config not provided)",
     )
-    
+
     # Training (can override config file)
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
@@ -1269,7 +1339,7 @@ Note: CLI arguments always override config file values.
         type=str,
         default=None,
         choices=["auto", "cuda", "mps", "cpu"],
-        help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu"
+        help="Device to use: auto (best available), cuda, mps (Apple Silicon), or cpu",
     )
 
     # GSA-specific overrides for memory tuning
@@ -1277,42 +1347,47 @@ Note: CLI arguments always override config file values.
         "--gsa-k-base",
         type=int,
         default=None,
-        help="Override GSA k_base (default: from preset, try 256-512 for long sequences)"
+        help="Override GSA k_base (default: from preset, try 256-512 for long sequences)",
     )
     parser.add_argument(
         "--gsa-k-max",
         type=int,
         default=None,
-        help="Override GSA k_max (default: from preset, try 512-1024 for long sequences)"
+        help="Override GSA k_max (default: from preset, try 512-1024 for long sequences)",
     )
     parser.add_argument(
         "--no-triton",
         action="store_true",
-        help="Disable Triton kernels (use PyTorch fallback for GSA)"
+        help="Disable Triton kernels (use PyTorch fallback for GSA)",
     )
 
     # torch.compile
     parser.add_argument(
         "--use-torch-compile",
         action="store_true",
-        help="Enable torch.compile() for graph optimization (requires PyTorch 2.0+)"
+        help="Enable torch.compile() for graph optimization (requires PyTorch 2.0+)",
     )
     parser.add_argument(
         "--torch-compile-mode",
         type=str,
         default=None,
-        choices=["default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"],
-        help="torch.compile mode: default (safe), max-autotune-no-cudagraphs (recommended), max-autotune (+ CUDAGraphs), reduce-overhead (CUDAGraphs only)"
+        choices=[
+            "default",
+            "reduce-overhead",
+            "max-autotune",
+            "max-autotune-no-cudagraphs",
+        ],
+        help="torch.compile mode: default (safe), max-autotune-no-cudagraphs (recommended), max-autotune (+ CUDAGraphs), reduce-overhead (CUDAGraphs only)",
     )
     parser.add_argument(
         "--torch-compile-fullgraph",
         action="store_true",
-        help="Enforce full-graph compilation (no graph breaks). Fails if model has unsupported ops."
+        help="Enforce full-graph compilation (no graph breaks). Fails if model has unsupported ops.",
     )
     parser.add_argument(
         "--torch-compile-dynamic",
         action="store_true",
-        help="Enable dynamic shapes in torch.compile (slower compile, flexible input shapes)"
+        help="Enable dynamic shapes in torch.compile (slower compile, flexible input shapes)",
     )
 
     # Experiment
@@ -1331,7 +1406,11 @@ Note: CLI arguments always override config file values.
         # YAML config mode
         print(f"Loading configuration from: {args.config}")
         model_config, training_dict = load_config_from_yaml(args.config)
-        training_config = training_config_from_dict(training_dict) if training_dict else TrainingConfig()
+        training_config = (
+            training_config_from_dict(training_dict)
+            if training_dict
+            else TrainingConfig()
+        )
     else:
         # Preset mode (legacy)
         print(f"Using preset: {args.preset}")
@@ -1379,37 +1458,37 @@ Note: CLI arguments always override config file values.
     torch.manual_seed(training_config.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(training_config.seed)
-    
+
     # Create model
     model = create_model_from_config(model_config)
-    
+
     # Create dataset
     dataset = RandomTextDataset(
         vocab_size=model_config.vocab_size,
         seq_length=training_config.seq_length,
         num_samples=training_config.max_steps * training_config.batch_size * 2,
-        seed=training_config.seed
+        seed=training_config.seed,
     )
-    
+
     dataloader = DataLoader(
         dataset,
         batch_size=training_config.batch_size,
         shuffle=True,
         num_workers=4,
-        pin_memory=True
+        pin_memory=True,
     )
-    
+
     # Create trainer
     trainer = Trainer(
         model=model,
         train_dataloader=dataloader,
         training_config=training_config,
-        model_config=model_config
+        model_config=model_config,
     )
-    
+
     # Train
     metrics = trainer.train()
-    
+
     print(f"\nTraining complete! Final loss: {metrics.loss:.4f}")
 
 

@@ -18,14 +18,15 @@ Architecture based on:
 - Null Experts: Data sparsity ρ=0.5
 """
 
+import logging
+import math
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
-import math
-import numpy as np
-from typing import List, Optional, Dict
-from dataclasses import dataclass
 
 # Note: Importing for backwards compatibility - we define KroneckerEmbeddings inline
 # from kronecker_se_decoder import PFConfig, PFCodec
@@ -34,6 +35,7 @@ from dataclasses import dataclass
 # ============================================================================
 # Kronecker Product Embeddings (formerly PFCodec)
 # ============================================================================
+
 
 @dataclass
 class KroneckerConfig:
@@ -54,15 +56,18 @@ class KroneckerConfig:
     - POS_DIM: 32 (max 32 bytes per token)
     - D: 32 × 256 = 8192 dimensions
     """
+
     CHAR_DIM: int = 256  # Byte vocabulary (0-255)
-    POS_DIM: int = 32    # Max token length in bytes
-    D: int = 8192        # CHAR_DIM × POS_DIM = 256 × 32
+    POS_DIM: int = 32  # Max token length in bytes
+    D: int = 8192  # CHAR_DIM × POS_DIM = 256 × 32
     length_normalize: bool = True
     truncate_long_words: bool = True
 
     def __post_init__(self):
         assert self.CHAR_DIM == 256, "CHAR_DIM must be 256 for byte-level encoding"
-        assert self.D == self.CHAR_DIM * self.POS_DIM, f"D ({self.D}) must equal CHAR_DIM × POS_DIM ({self.CHAR_DIM} × {self.POS_DIM})"
+        assert (
+            self.D == self.CHAR_DIM * self.POS_DIM
+        ), f"D ({self.D}) must equal CHAR_DIM × POS_DIM ({self.CHAR_DIM} × {self.POS_DIM})"
 
 
 class KroneckerEmbeddings:
@@ -92,6 +97,7 @@ class KroneckerEmbeddings:
 
     Note: Cannot tie with lm_head (8192 != hidden_size=4096)
     """
+
     def __init__(self, cfg: KroneckerConfig):
         self.cfg = cfg
         self.CHAR_DIM = cfg.CHAR_DIM
@@ -118,13 +124,13 @@ class KroneckerEmbeddings:
         # Try decoding at truncation point and move back if invalid
         for end in range(max_bytes, max(max_bytes - 4, 0) - 1, -1):
             try:
-                byte_seq[:end].decode('utf-8')
+                byte_seq[:end].decode("utf-8")
                 return byte_seq[:end]
             except UnicodeDecodeError:
                 continue
 
         # Fallback: return empty if can't find valid truncation
-        return b''
+        return b""
 
     def encode_word(self, word: str) -> np.ndarray:
         """
@@ -151,14 +157,16 @@ class KroneckerEmbeddings:
             return np.zeros((self.D,), dtype=np.float32)
 
         # Convert to UTF-8 bytes
-        byte_seq = word.encode('utf-8')
+        byte_seq = word.encode("utf-8")
 
         # Truncate if needed (UTF-8 safe)
         if len(byte_seq) > self.POS_DIM:
             if self.cfg.truncate_long_words:
                 byte_seq = self._utf8_safe_truncate(byte_seq, self.POS_DIM)
             else:
-                raise ValueError(f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}")
+                raise ValueError(
+                    f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}"
+                )
 
         L = len(byte_seq)
         if L == 0:
@@ -172,7 +180,7 @@ class KroneckerEmbeddings:
 
         # Length normalization
         if self.cfg.length_normalize:
-            M *= (1.0 / math.sqrt(L))
+            M *= 1.0 / math.sqrt(L)
 
         return M.reshape(self.D)
 
@@ -217,11 +225,11 @@ class KroneckerEmbeddings:
         # Convert bytes to string
         byte_seq = bytes(bytes_list)
         try:
-            return byte_seq.decode('utf-8')
+            return byte_seq.decode("utf-8")
         except UnicodeDecodeError:
             # Should never happen with properly encoded data
             # But handle gracefully just in case
-            return byte_seq.decode('utf-8', errors='replace')
+            return byte_seq.decode("utf-8", errors="replace")
 
     def encode_batch(self, words: List[str]) -> np.ndarray:
         """Encode a batch of words."""
@@ -241,8 +249,10 @@ PFConfig = KroneckerConfig
 # CONFIGURATION
 # ============================================================================
 
+
 class ModelConfig:
     """1B Dense Model Configuration"""
+
     # Architecture
     vocab_size = 131072  # 2^17
     hidden_size = 4096
@@ -306,6 +316,7 @@ class ModelConfig:
 # Embedding Layer (Kronecker Product)
 # ============================================================================
 
+
 class PureHybridEmbeddingTorch(nn.Module):
     """
     Pure Kronecker Product Embedding.
@@ -326,6 +337,7 @@ class PureHybridEmbeddingTorch(nn.Module):
 
     Note: Embedding tying NOT possible (D=8192 != hidden_size=4096)
     """
+
     def __init__(self, vocab_words: List[str], pf_codec: KroneckerEmbeddings):
         super().__init__()
         PF_table = pf_codec.encode_batch(vocab_words)  # (vocab_size, D)
@@ -358,8 +370,10 @@ class PureHybridEmbeddingTorch(nn.Module):
 # Core Components
 # ============================================================================
 
+
 class RMSNorm(nn.Module):
     """Root Mean Square Layer Normalization (bf16-safe)."""
+
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.eps = eps
@@ -385,8 +399,15 @@ class RotaryEmbedding(nn.Module):
 
     Reference: https://arxiv.org/abs/2309.00071
     """
-    def __init__(self, dim: int, max_position_embeddings: int = 8192, base: int = 10000,
-                 original_max_position_embeddings: int = 8192, scaling_factor: float = 32.0):
+
+    def __init__(
+        self,
+        dim: int,
+        max_position_embeddings: int = 8192,
+        base: int = 10000,
+        original_max_position_embeddings: int = 8192,
+        scaling_factor: float = 32.0,
+    ):
         super().__init__()
         self.dim = dim
         self.base = base
@@ -401,7 +422,9 @@ class RotaryEmbedding(nn.Module):
             ext_ratio = max_position_embeddings / original_max_position_embeddings
             # Use a gentler scaling exponent for YARN (typically around 1.0)
             scaled_base = base * (ext_ratio ** (dim / (dim - 2)))
-            print(f"   🧶 YARN RoPE: Scaling base {base} -> {scaled_base:.0f} for {max_position_embeddings:,} context")
+            print(
+                f"   🧶 YARN RoPE: Scaling base {base} -> {scaled_base:.0f} for {max_position_embeddings:,} context"
+            )
         else:
             scaled_base = base
 
@@ -414,7 +437,7 @@ class RotaryEmbedding(nn.Module):
         # beta_fast: controls high-freq behavior (extrapolation)
         # beta_slow: controls low-freq behavior (interpolation)
         self.beta_fast = 32  # High frequencies (extrapolate)
-        self.beta_slow = 1   # Low frequencies (interpolate)
+        self.beta_slow = 1  # Low frequencies (interpolate)
 
         # Compute interpolation weights (mscale) for each frequency
         freq_extra = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
@@ -422,7 +445,9 @@ class RotaryEmbedding(nn.Module):
         # High frequencies (small wavelengths) get less interpolation
         wavelen = 2 * math.pi / freq_extra
         # Ramp function: 0 at beta_fast, 1 at beta_slow
-        ramp = torch.clamp((wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1)
+        ramp = torch.clamp(
+            (wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1
+        )
         self.register_buffer("mscale", ramp)  # Interpolation weight per frequency
 
         self._set_cos_sin_cache(max_position_embeddings)
@@ -445,9 +470,11 @@ class RotaryEmbedding(nn.Module):
     def _apply_rotary(x, cos, sin):
         x1, x2 = x[..., ::2], x[..., 1::2]
         return torch.cat(
-            (x1 * cos[..., ::2] - x2 * sin[..., ::2],
-             x1 * sin[..., ::2] + x2 * cos[..., ::2]),
-            dim=-1
+            (
+                x1 * cos[..., ::2] - x2 * sin[..., ::2],
+                x1 * sin[..., ::2] + x2 * cos[..., ::2],
+            ),
+            dim=-1,
         )
 
 
@@ -455,27 +482,30 @@ class RotaryEmbedding(nn.Module):
 # Helper Modules for Gated DeltaNet
 # ============================================================================
 
+
 class ShortConvolution(nn.Module):
     """
     Short convolution layer with causal padding.
     Used in Gated DeltaNet for local context integration.
     """
-    def __init__(self, dim, conv_size=4, activation='silu'):
+
+    def __init__(self, dim, conv_size=4, activation="silu"):
         super().__init__()
         self.conv_size = conv_size
         self.conv = nn.Conv1d(
-            dim, dim,
+            dim,
+            dim,
             kernel_size=conv_size,
             padding=conv_size - 1,  # Causal padding
-            groups=dim  # Depthwise convolution
+            groups=dim,  # Depthwise convolution
         )
-        self.activation = nn.SiLU() if activation == 'silu' else nn.Identity()
+        self.activation = nn.SiLU() if activation == "silu" else nn.Identity()
 
     def forward(self, x):
         # x: (B, T, D)
         x = x.transpose(1, 2)  # (B, D, T)
         x = self.conv(x)
-        x = x[:, :, :-(self.conv_size - 1)]  # Remove extra padding for causality
+        x = x[:, :, : -(self.conv_size - 1)]  # Remove extra padding for causality
         x = x.transpose(1, 2)  # (B, T, D)
         return self.activation(x)
 
@@ -488,6 +518,7 @@ class RMSNorm(nn.Module):
     in bf16 training (bf16 max ~65504, x² can overflow). Uses rsqrt instead of
     sqrt+div for better GPU throughput (1 op instead of 2).
     """
+
     def __init__(self, dim, eps=1e-6):
         super().__init__()
         self.eps = eps
@@ -511,6 +542,7 @@ class FusedRMSNormSwishGate(nn.Module):
     Supports arbitrary leading dimensions — works with both
     (B, T, D) and (B, T, H, D) inputs for vectorized per-head usage.
     """
+
     def __init__(self, dim, eps=1e-6):
         super().__init__()
         self.norm = RMSNorm(dim, eps)
@@ -524,6 +556,7 @@ class FusedRMSNormSwishGate(nn.Module):
 # ============================================================================
 # Gated DeltaNet (75% of layers) - O(N) Linear Attention
 # ============================================================================
+
 
 class GatedDeltaNet(nn.Module):
     """
@@ -540,12 +573,21 @@ class GatedDeltaNet(nn.Module):
     - L2 normalization: For Q/K stability (NOT softmax)
     - Short convolutions: Local context integration (kernel_size=4)
     """
-    def __init__(self, hidden_size, num_heads, head_dim,
-                 max_seq_len=262144, rope_base=10000,
-                 rope_original_max=8192, rope_scaling_factor=32.0,
-                 conv_size=4, use_output_norm=True,
-                 delta_recurrence_mode: str = "sequential",
-                 delta_chunk_size: int = 64):
+
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        head_dim,
+        max_seq_len=262144,
+        rope_base=10000,
+        rope_original_max=8192,
+        rope_scaling_factor=32.0,
+        conv_size=4,
+        use_output_norm=True,
+        delta_recurrence_mode: str = "sequential",
+        delta_chunk_size: int = 64,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -559,7 +601,9 @@ class GatedDeltaNet(nn.Module):
                 f"delta_recurrence_mode must be 'sequential' or 'parallel_scan', got {self.delta_recurrence_mode!r}"
             )
         if self.delta_chunk_size < 1:
-            raise ValueError(f"delta_chunk_size must be >= 1, got {self.delta_chunk_size}")
+            raise ValueError(
+                f"delta_chunk_size must be >= 1, got {self.delta_chunk_size}"
+            )
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
@@ -572,13 +616,23 @@ class GatedDeltaNet(nn.Module):
         self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
 
         # Gate projections for alpha/beta computation
-        self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)  # Beta writing strength
-        self.gk_proj = nn.Linear(hidden_size, num_heads, bias=True)  # For alpha computation
+        self.b_proj = nn.Linear(
+            hidden_size, num_heads, bias=True
+        )  # Beta writing strength
+        self.gk_proj = nn.Linear(
+            hidden_size, num_heads, bias=True
+        )  # For alpha computation
 
         # Short convolutions for local context
-        self.q_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
-        self.k_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
-        self.v_conv1d = ShortConvolution(value_dim, conv_size=conv_size, activation='silu')
+        self.q_conv1d = ShortConvolution(
+            key_dim, conv_size=conv_size, activation="silu"
+        )
+        self.k_conv1d = ShortConvolution(
+            key_dim, conv_size=conv_size, activation="silu"
+        )
+        self.v_conv1d = ShortConvolution(
+            value_dim, conv_size=conv_size, activation="silu"
+        )
 
         # Alpha decay parameters (per-head)
         # Paper: A initialized uniform(0, 16), then log for exponential parameterization
@@ -600,7 +654,7 @@ class GatedDeltaNet(nn.Module):
             max_position_embeddings=max_seq_len,
             base=rope_base,
             original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
+            scaling_factor=rope_scaling_factor,
         )
 
         # Output normalization with gating
@@ -653,7 +707,9 @@ class GatedDeltaNet(nn.Module):
 
         return A, B
 
-    def _delta_rule_recurrence_sequential(self, q, k, v, alpha, beta, B, T, device, dtype):
+    def _delta_rule_recurrence_sequential(
+        self, q, k, v, alpha, beta, B, T, device, dtype
+    ):
         """Chunked recurrence with sequential timesteps (baseline behavior)."""
         H = self.num_heads
         d = self.head_dim
@@ -676,11 +732,11 @@ class GatedDeltaNet(nn.Module):
             chunk_len = end - start
 
             # Slice chunk tensors (contiguous slice, no copy)
-            q_c = q[:, :, start:end, :]      # (B, H, C, d)
-            k_c = k[:, :, start:end, :]      # (B, H, C, d)
-            v_c = v[:, :, start:end, :]      # (B, H, C, d)
+            q_c = q[:, :, start:end, :]  # (B, H, C, d)
+            k_c = k[:, :, start:end, :]  # (B, H, C, d)
+            v_c = v[:, :, start:end, :]  # (B, H, C, d)
             alpha_c = alpha[:, :, start:end, 0]  # (B, H, C)
-            beta_c = beta[:, :, start:end, 0]    # (B, H, C)
+            beta_c = beta[:, :, start:end, 0]  # (B, H, C)
 
             # D residual: D * (q · k) * v — fully vectorized over chunk
             # (B, H, C, d) * (B, H, C, d) -> sum over d -> (B, H, C, 1)
@@ -691,17 +747,17 @@ class GatedDeltaNet(nn.Module):
             for t_local in range(chunk_len):
                 t_abs = start + t_local
 
-                q_t = q_c[:, :, t_local, :]      # (B, H, d)
-                k_t = k_c[:, :, t_local, :]      # (B, H, d)
-                v_t = v_c[:, :, t_local, :]      # (B, H, d)
+                q_t = q_c[:, :, t_local, :]  # (B, H, d)
+                k_t = k_c[:, :, t_local, :]  # (B, H, d)
+                v_t = v_c[:, :, t_local, :]  # (B, H, d)
                 alpha_t = alpha_c[:, :, t_local].view(B, H, 1, 1)  # (B, H, 1, 1)
-                beta_t = beta_c[:, :, t_local].view(B, H, 1, 1)    # (B, H, 1, 1)
+                beta_t = beta_c[:, :, t_local].view(B, H, 1, 1)  # (B, H, 1, 1)
 
                 # Query current state: o_t = q_t @ S
-                o_t = torch.einsum('bhd,bhde->bhe', q_t, S)  # (B, H, d)
+                o_t = torch.einsum("bhd,bhde->bhe", q_t, S)  # (B, H, d)
 
                 # Add pre-computed D residual
-                o[: , :, t_abs, :] = o_t + d_residual[:, :, t_local, :]
+                o[:, :, t_abs, :] = o_t + d_residual[:, :, t_local, :]
 
                 # Update state: S = alpha * S + beta * v @ k^T
                 v_outer = v_t.unsqueeze(-1) * k_t.unsqueeze(-2)  # (B, H, d, d)
@@ -709,7 +765,9 @@ class GatedDeltaNet(nn.Module):
 
         return o
 
-    def _delta_rule_recurrence_parallel_scan(self, q, k, v, alpha, beta, B, T, device, dtype):
+    def _delta_rule_recurrence_parallel_scan(
+        self, q, k, v, alpha, beta, B, T, device, dtype
+    ):
         """
         Chunked recurrence with per-chunk associative prefix scan.
 
@@ -739,7 +797,7 @@ class GatedDeltaNet(nn.Module):
             # Keep exact baseline semantics used in sequential path:
             # the recurrence consumes the trailing index 0.
             alpha_c = alpha[:, :, start:end, 0].unsqueeze(-1)  # (B, H, C, 1)
-            beta_c = beta[:, :, start:end, 0].unsqueeze(-1)    # (B, H, C, 1)
+            beta_c = beta[:, :, start:end, 0].unsqueeze(-1)  # (B, H, C, 1)
 
             qk_dot = (q_c * k_c).sum(dim=-1, keepdim=True)  # (B, H, C, 1)
             d_residual = D_weight * qk_dot * v_c
@@ -755,7 +813,9 @@ class GatedDeltaNet(nn.Module):
             A_shift = torch.cat(
                 [torch.ones_like(A_prefix[:, :, :1, :, :]), A_prefix[:, :, :-1, :, :]],
                 dim=2,
-            ).squeeze(-1)  # (B, H, C, 1)
+            ).squeeze(
+                -1
+            )  # (B, H, C, 1)
             B_shift = torch.cat(
                 [torch.zeros_like(B_prefix[:, :, :1, :, :]), B_prefix[:, :, :-1, :, :]],
                 dim=2,
@@ -772,8 +832,12 @@ class GatedDeltaNet(nn.Module):
 
     def _delta_rule_recurrence(self, q, k, v, alpha, beta, B, T, device, dtype):
         if self.delta_recurrence_mode == "parallel_scan":
-            return self._delta_rule_recurrence_parallel_scan(q, k, v, alpha, beta, B, T, device, dtype)
-        return self._delta_rule_recurrence_sequential(q, k, v, alpha, beta, B, T, device, dtype)
+            return self._delta_rule_recurrence_parallel_scan(
+                q, k, v, alpha, beta, B, T, device, dtype
+            )
+        return self._delta_rule_recurrence_sequential(
+            q, k, v, alpha, beta, B, T, device, dtype
+        )
 
     def forward(self, x, attention_mask=None):
         """
@@ -825,7 +889,9 @@ class GatedDeltaNet(nn.Module):
         # 7. Compute alpha (decay parameter) - Paper Equation 10
         gk = self.gk_proj(x)  # (B, T, num_heads)
         A = -torch.exp(self.A_log)  # Negative for decay
-        alpha = A.view(1, 1, self.num_heads) * F.softplus(gk + self.dt_bias).unsqueeze(-1)
+        alpha = A.view(1, 1, self.num_heads) * F.softplus(gk + self.dt_bias).unsqueeze(
+            -1
+        )
         alpha = torch.sigmoid(alpha)  # (B, T, num_heads, 1)
 
         # 8. Transpose for computation: (B, T, H, d) -> (B, H, T, d)
@@ -858,6 +924,7 @@ class GatedDeltaNet(nn.Module):
 # Gated Sparse Attention (25% of layers) - From test model
 # ============================================================================
 
+
 class GatedSparseAttention(nn.Module):
     """
     Gated Sparse Attention (GSA) - arXiv:2601.15305v1
@@ -865,10 +932,21 @@ class GatedSparseAttention(nn.Module):
     Implements adaptive sparse attention with gating for quality.
     Used for 25% of layers to complement DeltaNet's efficiency.
     """
-    def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
-                 k_base=512, k_min=32, k_max=1024, indexer_heads=4,
-                 rope_original_max=8192, rope_scaling_factor=32.0,
-                 emit_flash2_note: bool = False):
+
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        max_seq_len=262144,
+        rope_base=10000,
+        k_base=512,
+        k_min=32,
+        k_max=1024,
+        indexer_heads=4,
+        rope_original_max=8192,
+        rope_scaling_factor=32.0,
+        emit_flash2_note: bool = False,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -909,14 +987,23 @@ class GatedSparseAttention(nn.Module):
             max_position_embeddings=max_seq_len,
             base=rope_base,
             original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
+            scaling_factor=rope_scaling_factor,
         )
 
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.W_Iq, self.W_Ik, self.W_Iw, self.W_q, self.W_k, self.W_v,
-                  self.o_proj, self.W_gv, self.W_go]:
+        for m in [
+            self.W_Iq,
+            self.W_Ik,
+            self.W_Iw,
+            self.W_q,
+            self.W_k,
+            self.W_v,
+            self.o_proj,
+            self.W_gv,
+            self.W_go,
+        ]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
         nn.init.zeros_(self.gate_bias)
 
@@ -947,7 +1034,9 @@ class GatedSparseAttention(nn.Module):
             positions = torch.arange(T, device=device)
             # Shape: [1, T, 1] compared to [1, 1, T] -> broadcasts to [1, T, T]
             causal_mask_broadcast = positions.view(1, -1, 1) >= positions.view(1, 1, -1)
-            importance_score_masked = importance_score.masked_fill(~causal_mask_broadcast, 0.0)
+            importance_score_masked = importance_score.masked_fill(
+                ~causal_mask_broadcast, 0.0
+            )
             causal_mask = causal_mask_broadcast  # Store for later use
         else:
             importance_score_masked = importance_score
@@ -957,7 +1046,11 @@ class GatedSparseAttention(nn.Module):
         var_t = importance_score_masked.var(dim=-1, unbiased=False)
 
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = self.training and torch.is_grad_enabled() and getattr(self, "_saved_selection", None) is not None
+        is_reversible_reconstruct = (
+            self.training
+            and torch.is_grad_enabled()
+            and getattr(self, "_saved_selection", None) is not None
+        )
 
         if is_reversible_forward:
             var_t_mean = var_t.mean().detach()
@@ -973,7 +1066,9 @@ class GatedSparseAttention(nn.Module):
             k_t = k_t_float.floor().clamp(min=self.k_min, max=self.k_max).long()
 
             if T > 1:
-                importance_for_selection = importance_score.masked_fill(~causal_mask, -float('inf'))
+                importance_for_selection = importance_score.masked_fill(
+                    ~causal_mask, -float("inf")
+                )
             else:
                 importance_for_selection = importance_score
 
@@ -982,7 +1077,9 @@ class GatedSparseAttention(nn.Module):
             if T > sink_size:
                 sink_mask = torch.zeros_like(importance_for_selection, dtype=torch.bool)
                 sink_mask[:, :, :sink_size] = True
-                importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
+                importance_for_selection = importance_for_selection.masked_fill(
+                    sink_mask, float("inf")
+                )
 
             # Use dynamic k_limit in eager mode (lower memory/compute).
             # During compilation, keep static k_limit to avoid Tensor.item graph breaks.
@@ -1052,10 +1149,7 @@ class GatedSparseAttention(nn.Module):
             self._flash2_note_emitted = True
 
         o_sparse = F.scaled_dot_product_attention(
-            q, k, v,
-            attn_mask=bias_mask.unsqueeze(1),
-            dropout_p=0.0,
-            is_causal=False
+            q, k, v, attn_mask=bias_mask.unsqueeze(1), dropout_p=0.0, is_causal=False
         )
 
         o_sparse = o_sparse.transpose(1, 2).contiguous().view(B, T, self.hidden_size)
@@ -1070,9 +1164,13 @@ class GatedSparseAttention(nn.Module):
 # MoE with Null Experts (from test model)
 # ============================================================================
 
+
 class MoEGate(nn.Module):
     """Router gate for MoE with null experts."""
-    def __init__(self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5):
+
+    def __init__(
+        self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5
+    ):
         super().__init__()
         self.num_experts = num_experts
         self.top_k = top_k
@@ -1091,7 +1189,9 @@ class MoEGate(nn.Module):
         B, T, D = x.shape
 
         real_logits = self.gate(x) + self.logit_bias
-        null_logits = self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        null_logits = (
+            self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        )
         logits = torch.cat([real_logits, null_logits], dim=-1)
 
         probs = F.softmax(logits, dim=-1)
@@ -1110,7 +1210,7 @@ class MoEGate(nn.Module):
         L_bal = self.total_slots * torch.sum(f * P)
 
         lse = torch.logsumexp(logits, dim=-1)
-        L_z = (lse ** 2).mean()
+        L_z = (lse**2).mean()
 
         aux_loss = 2e-2 * L_bal + 1e-3 * L_z
 
@@ -1119,8 +1219,16 @@ class MoEGate(nn.Module):
 
 class MoEFFN(nn.Module):
     """MoE FFN with null experts (batched tensor implementation)."""
-    def __init__(self, d_model: int, d_hidden: int, num_experts: int = 270, top_k: int = 10,
-                 dropout: float = 0.0, data_sparsity: float = 0.5):
+
+    def __init__(
+        self,
+        d_model: int,
+        d_hidden: int,
+        num_experts: int = 270,
+        top_k: int = 10,
+        dropout: float = 0.0,
+        data_sparsity: float = 0.5,
+    ):
         super().__init__()
         self.d_model = d_model
         self.d_hidden = d_hidden
@@ -1208,7 +1316,9 @@ class MoEFFN(nn.Module):
 
         weighted_out = sorted_out * sorted_weights.to(sorted_out.dtype).unsqueeze(-1)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
-        routed_out.scatter_add_(0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out)
+        routed_out.scatter_add_(
+            0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out
+        )
 
         y = shared_out + routed_out.view(B, T, D)
         return y, aux_loss
@@ -1216,8 +1326,16 @@ class MoEFFN(nn.Module):
 
 class LightningMLP(nn.Module):
     """MLP wrapper using MoEFFN."""
-    def __init__(self, hidden_size, intermediate_size, num_experts, num_shared_experts, top_k,
-                 data_sparsity=0.5):
+
+    def __init__(
+        self,
+        hidden_size,
+        intermediate_size,
+        num_experts,
+        num_shared_experts,
+        top_k,
+        data_sparsity=0.5,
+    ):
         super().__init__()
         self.moe = MoEFFN(
             d_model=hidden_size,
@@ -1225,7 +1343,7 @@ class LightningMLP(nn.Module):
             num_experts=num_experts,
             top_k=top_k,
             dropout=0.0,
-            data_sparsity=data_sparsity
+            data_sparsity=data_sparsity,
         )
 
     def forward(self, x):
@@ -1236,9 +1354,11 @@ class LightningMLP(nn.Module):
 # mHC (Multi-Head Composition) - From test model
 # ============================================================================
 
+
 @torch.jit.script
-def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6,
-                    tol: float = 1e-4) -> torch.Tensor:
+def sinkhorn_knopp(
+    logits: torch.Tensor, iters: int = 20, eps: float = 1e-6, tol: float = 1e-4
+) -> torch.Tensor:
     """
     Doubly-stochastic matrix via Sinkhorn-Knopp with early stopping.
 
@@ -1267,6 +1387,7 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6,
 
 class MHCCoeffs(nn.Module):
     """Produces routing coefficients for mHC."""
+
     def __init__(self, d_model: int, n_streams: int = 4, iters: int = 20):
         super().__init__()
         self.d_model = d_model
@@ -1312,7 +1433,15 @@ class MHCCoeffs(nn.Module):
 
 class MHCSublayer(nn.Module):
     """Wrap sublayer with mHC residual routing."""
-    def __init__(self, d_model: int, n_streams: int, sublayer: nn.Module, norm: nn.Module, iters: int = 20):
+
+    def __init__(
+        self,
+        d_model: int,
+        n_streams: int,
+        sublayer: nn.Module,
+        norm: nn.Module,
+        iters: int = 20,
+    ):
         super().__init__()
         self.d_model = d_model
         self.n = n_streams
@@ -1347,11 +1476,13 @@ class MHCSublayer(nn.Module):
 # Decoder Layer (Hybrid DeltaNet + GSA)
 # ============================================================================
 
+
 class LightningDecoderLayer(nn.Module):
     """
     Decoder layer that can be either DeltaNet or GSA.
     Type is determined at initialization.
     """
+
     def __init__(self, config: ModelConfig, layer_type: str):
         super().__init__()
         self.layer_type = layer_type  # "deltanet" or "gsa"
@@ -1370,7 +1501,9 @@ class LightningDecoderLayer(nn.Module):
                 rope_scaling_factor=config.rope_scaling_factor,
                 conv_size=4,
                 use_output_norm=True,
-                delta_recurrence_mode=getattr(config, "delta_recurrence_mode", "sequential"),
+                delta_recurrence_mode=getattr(
+                    config, "delta_recurrence_mode", "sequential"
+                ),
                 delta_chunk_size=getattr(config, "delta_chunk_size", 64),
             )
         elif layer_type == "gsa":
@@ -1396,7 +1529,7 @@ class LightningDecoderLayer(nn.Module):
             num_experts=config.num_real_experts,
             num_shared_experts=1,
             top_k=config.top_k,
-            data_sparsity=config.data_sparsity
+            data_sparsity=config.data_sparsity,
         )
 
         # mHC Wrappers
@@ -1465,7 +1598,9 @@ class LightningDecoderLayer(nn.Module):
 
         total_aux = None
         if aux1 is not None or aux2 is not None:
-            total_aux = (aux1 if aux1 is not None else 0) + (aux2 if aux2 is not None else 0)
+            total_aux = (aux1 if aux1 is not None else 0) + (
+                aux2 if aux2 is not None else 0
+            )
 
         return x_stream, total_aux
 
@@ -1474,8 +1609,10 @@ class LightningDecoderLayer(nn.Module):
 # Multi-Token Prediction Block
 # ============================================================================
 
+
 class MTPTransformerBlock(nn.Module):
     """MTP block for predicting t+2 from [h_t; emb_{t+1}]."""
+
     def __init__(self, config: ModelConfig):
         super().__init__()
 
@@ -1483,7 +1620,9 @@ class MTPTransformerBlock(nn.Module):
         self.hidden_size = config.hidden_size
 
         # Fusion layer
-        self.fusion_proj = nn.Linear(config.hidden_size * 2, config.hidden_size, bias=False)
+        self.fusion_proj = nn.Linear(
+            config.hidden_size * 2, config.hidden_size, bias=False
+        )
 
         # Core sublayers (using DeltaNet for efficiency)
         self.attn = GatedDeltaNet(
@@ -1496,7 +1635,9 @@ class MTPTransformerBlock(nn.Module):
             rope_scaling_factor=config.rope_scaling_factor,
             conv_size=4,
             use_output_norm=True,
-            delta_recurrence_mode=getattr(config, "delta_recurrence_mode", "sequential"),
+            delta_recurrence_mode=getattr(
+                config, "delta_recurrence_mode", "sequential"
+            ),
             delta_chunk_size=getattr(config, "delta_chunk_size", 64),
         )
 
@@ -1506,7 +1647,7 @@ class MTPTransformerBlock(nn.Module):
             num_experts=config.num_real_experts,
             num_shared_experts=1,
             top_k=config.top_k,
-            data_sparsity=config.data_sparsity
+            data_sparsity=config.data_sparsity,
         )
 
         # mHC Wrappers
@@ -1559,8 +1700,14 @@ class MTPTransformerBlock(nn.Module):
         x = self.fusion_proj(x)
 
         # Expand to streams
-        x_stream = torch.zeros(batch_size, seq_len, self.n_streams, self.hidden_size,
-                              device=x.device, dtype=x.dtype)
+        x_stream = torch.zeros(
+            batch_size,
+            seq_len,
+            self.n_streams,
+            self.hidden_size,
+            device=x.device,
+            dtype=x.dtype,
+        )
         x_stream[:, :, 0, :] = x
 
         # mHC blocks (ignore aux_loss)
@@ -1577,6 +1724,7 @@ class MTPTransformerBlock(nn.Module):
 # Complete 70B Model
 # ============================================================================
 
+
 class Model70B(nn.Module):
     """
     70B Model with Hybrid Gated DeltaNet + Gated Sparse Attention.
@@ -1587,7 +1735,14 @@ class Model70B(nn.Module):
     - 270 real + 270 null experts, top-k=10 dynamic
     - 256k context length target
     """
-    def __init__(self, config: ModelConfig, embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
+
+    def __init__(
+        self,
+        config: ModelConfig,
+        embedding_type="kronecker",
+        bpe_vocab=None,
+        pf_codec=None,
+    ):
         super().__init__()
 
         self.config = config
@@ -1602,9 +1757,13 @@ class Model70B(nn.Module):
         # Embeddings
         if self.embedding_type == "kronecker":
             if bpe_vocab is None or pf_codec is None:
-                raise ValueError("bpe_vocab and pf_codec required for Kronecker embeddings")
+                raise ValueError(
+                    "bpe_vocab and pf_codec required for Kronecker embeddings"
+                )
 
-            self.kronecker_embeddings = PureHybridEmbeddingTorch(bpe_vocab, pf_codec).module()
+            self.kronecker_embeddings = PureHybridEmbeddingTorch(
+                bpe_vocab, pf_codec
+            ).module()
             D_pf = pf_codec.D
             self.pf_to_model = nn.Linear(D_pf, config.hidden_size, bias=False)
             self.embed_norm = RMSNorm(config.hidden_size)
@@ -1639,7 +1798,7 @@ class Model70B(nn.Module):
         # Optional torch.compile on attention sublayers for kernel fusion
         compile_count = 0
         compile_gsa_count = 0
-        if getattr(config, 'use_compile', False):
+        if getattr(config, "use_compile", False):
             for layer, layer_type in zip(self.layers, self.layer_types):
                 if self.compile_target == "deltanet" and layer_type != "deltanet":
                     continue
@@ -1650,6 +1809,7 @@ class Model70B(nn.Module):
 
         # Reversible Midpoint Integration
         from reversible_ops_midpoint import ReversibleMidpointStack
+
         self.stack = ReversibleMidpointStack(
             self.layers,
             step_size=0.25,
@@ -1663,12 +1823,12 @@ class Model70B(nn.Module):
         # MTP Block
         if config.enable_mtp:
             self.mtp_block = MTPTransformerBlock(config)
-            if getattr(config, 'use_compile', False) and self.compile_mtp:
+            if getattr(config, "use_compile", False) and self.compile_mtp:
                 self.mtp_block.enable_compile(mode=self.compile_mode)
         else:
             self.mtp_block = None
 
-        if getattr(config, 'use_compile', False):
+        if getattr(config, "use_compile", False):
             mtp_compiled = 1 if (self.mtp_block is not None and self.compile_mtp) else 0
             deltanet_compiled = compile_count - compile_gsa_count
             print(
@@ -1687,7 +1847,9 @@ class Model70B(nn.Module):
         if self.use_kronecker and self.pf_to_model is not None:
             pf_to_model_std = 0.02 / math.sqrt(self._D_pf)
             self.pf_to_model.weight.data.normal_(mean=0.0, std=pf_to_model_std)
-            print(f"   🔧 pf_to_model (8192→{config.hidden_size}) initialized with std={pf_to_model_std:.6f}")
+            print(
+                f"   🔧 pf_to_model (8192→{config.hidden_size}) initialized with std={pf_to_model_std:.6f}"
+            )
 
         # Print configuration
         total_params = sum(p.numel() for p in self.parameters())
@@ -1708,16 +1870,34 @@ class Model70B(nn.Module):
         if self.use_kronecker:
             print(f"\n   📐 Kronecker Embeddings:")
             print(f"      POS_DIM=32 x CHAR_DIM=256 = D=8192")
-            print(f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)")
-            print(f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})")
-            print(f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})")
+            print(
+                f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)"
+            )
+            print(
+                f"      pf_to_model: {embedding_params:.1f}M params (8192 × {config.hidden_size})"
+            )
+            print(
+                f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})"
+            )
         print(f"\n   Total Layers: {config.num_layers}")
-        print(f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention")
-        print(f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse")
+        print(
+            f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention"
+        )
+        print(
+            f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse"
+        )
         print(f"\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
-        print(f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots")
-        print(f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})")
-        print(f"   MTP: {config.mtp_num_predictions} predictions" if config.enable_mtp else "   MTP: Disabled")
+        print(
+            f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots"
+        )
+        print(
+            f"   Top-k: {config.top_k} (dynamic, avg 5 with ρ={config.data_sparsity})"
+        )
+        print(
+            f"   MTP: {config.mtp_num_predictions} predictions"
+            if config.enable_mtp
+            else "   MTP: Disabled"
+        )
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
         print(f"   Target Active: ~3.1B parameters")
 
@@ -1739,8 +1919,9 @@ class Model70B(nn.Module):
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
-    def forward(self, input_ids, next_token_ids=None, attention_mask=None,
-                return_loss=False):
+    def forward(
+        self, input_ids, next_token_ids=None, attention_mask=None, return_loss=False
+    ):
         """
         Forward pass with Multi-Token Prediction.
 
@@ -1790,7 +1971,9 @@ class Model70B(nn.Module):
 
             if self.use_kronecker:
                 next_emb = self.kronecker_embeddings(next_ids_use)
-                next_emb = self.pf_to_model(next_emb.to(dtype=self.pf_to_model.weight.dtype))
+                next_emb = self.pf_to_model(
+                    next_emb.to(dtype=self.pf_to_model.weight.dtype)
+                )
                 next_emb = self.embed_norm(next_emb)
             else:
                 next_emb = self.token_embed(next_ids_use)
@@ -1807,6 +1990,7 @@ class Model70B(nn.Module):
 # Factory Function
 # ============================================================================
 
+
 def create_model_70b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
     """
     Create 70B model with default configuration.
@@ -1820,12 +2004,14 @@ def create_model_70b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
         Model70B instance
     """
     config = ModelConfig()
-    return Model70B(config, embedding_type=embedding_type, bpe_vocab=bpe_vocab, pf_codec=pf_codec)
+    return Model70B(
+        config, embedding_type=embedding_type, bpe_vocab=bpe_vocab, pf_codec=pf_codec
+    )
 
 
 if __name__ == "__main__":
     # Calculate actual metrics from weight_calculator.py
-    from weight_calculator import LightningConfig, LightningCalculator
+    from weight_calculator import LightningCalculator, LightningConfig
 
     config_calc = LightningConfig(
         vocab_size=131072,
@@ -1856,10 +2042,12 @@ if __name__ == "__main__":
     report_df, _ = calc.generate_report(num_experts)
 
     # Extract actual values
-    active_row = report_df[report_df['Component'] == 'TOTAL ACTIVE PARAMETERS']
-    total_row = report_df[report_df['Component'] == 'TOTAL MODEL PARAMETERS']
-    active_params = float(str(active_row['Total Contribution'].iloc[0]).replace(' B', ''))
-    total_params = float(str(total_row['Total Contribution'].iloc[0]).replace(' B', ''))
+    active_row = report_df[report_df["Component"] == "TOTAL ACTIVE PARAMETERS"]
+    total_row = report_df[report_df["Component"] == "TOTAL MODEL PARAMETERS"]
+    active_params = float(
+        str(active_row["Total Contribution"].iloc[0]).replace(" B", "")
+    )
+    total_params = float(str(total_row["Total Contribution"].iloc[0]).replace(" B", ""))
     sparsity = total_params / active_params
 
     config = ModelConfig()
@@ -1872,8 +2060,12 @@ if __name__ == "__main__":
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
     print(f"\nAttention Mix:")
-    print(f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context")
-    print(f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality")
+    print(
+        f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context"
+    )
+    print(
+        f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality"
+    )
     print(f"\nModel Type:")
     if num_experts == 0:
         print(f"  DENSE MODEL (No MoE)")
@@ -1883,8 +2075,12 @@ if __name__ == "__main__":
         print(f"  Real Experts: {num_experts}")
         print(f"  Null Experts: {num_experts} (ρ={config.data_sparsity})")
         print(f"  Total slots: {config.total_expert_slots}")
-        print(f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})")
-        print(f"  Shared Expert FFN: {config.shared_expert_intermediate_size} (always active)")
+        print(
+            f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})"
+        )
+        print(
+            f"  Shared Expert FFN: {config.shared_expert_intermediate_size} (always active)"
+        )
         print(f"  Routed Expert FFN: {config.expert_intermediate_size} (sparse)")
     print(f"\nContext: {config.max_seq_len:,} tokens")
     print("=" * 80)

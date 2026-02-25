@@ -9,49 +9,59 @@ Target: 1B Parameter Model
 Inspired by: Qwen3 1.7B, SmolLM2, LLaMA 3, DeepSeek V3
 """
 
-from dataclasses import dataclass, field, fields
-from typing import Optional, Literal, List, Dict, Any
-from enum import Enum
 import json
-import yaml
+from dataclasses import dataclass, field, fields
+from enum import Enum
 from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional
+
+import yaml
 
 
 class AttentionType(Enum):
     """Available attention mechanisms."""
-    GROUPED_QUERY = "grouped_query"      # GQA (default, like Qwen3/LLaMA3)
-    GATED_SPARSE = "gated_sparse"        # GSA from paper 2601.15305v1 (original implementation)
-    DEEPSEEK_GSA = "deepseek_gsa"        # DeepSeek-style GSA (corrected implementation)
+
+    GROUPED_QUERY = "grouped_query"  # GQA (default, like Qwen3/LLaMA3)
+    GATED_SPARSE = (
+        "gated_sparse"  # GSA from paper 2601.15305v1 (original implementation)
+    )
+    DEEPSEEK_GSA = "deepseek_gsa"  # DeepSeek-style GSA (corrected implementation)
     DEEPSEEK_SPARSE = "deepseek_sparse"  # DeepSeek V3 MLA
-    GATED_DELTANET = "gated_deltanet"    # Gated DeltaNet O(N) linear attention (2412.06464)
-    REFERENCE_GSA = "reference_gsa"       # Reference GSA matching Test_Code
+    GATED_DELTANET = (
+        "gated_deltanet"  # Gated DeltaNet O(N) linear attention (2412.06464)
+    )
+    REFERENCE_GSA = "reference_gsa"  # Reference GSA matching Test_Code
 
 
 class PositionEmbeddingType(Enum):
     """Position embedding types."""
-    ROPE = "rope"           # Standard RoPE
-    YARN = "yarn"           # YaRN for extended context
-    ALIBI = "alibi"         # ALiBi (alternative)
+
+    ROPE = "rope"  # Standard RoPE
+    YARN = "yarn"  # YaRN for extended context
+    ALIBI = "alibi"  # ALiBi (alternative)
 
 
 class FFNType(Enum):
     """Feed-forward network types."""
-    SWIGLU = "swiglu"       # SwiGLU (default)
-    GELU = "gelu"           # Standard GELU
-    MOE = "moe"             # Mixture of Experts
+
+    SWIGLU = "swiglu"  # SwiGLU (default)
+    GELU = "gelu"  # Standard GELU
+    MOE = "moe"  # Mixture of Experts
 
 
 class ConnectionType(Enum):
     """Layer connection types."""
-    RESIDUAL = "residual"   # Standard residual
-    MHC = "mhc"             # Manifold Hyper-Connections (2512.24880)
-    MHC_V2 = "mhc_v2"      # MHC V2 (norm inside, matching Test_Code)
+
+    RESIDUAL = "residual"  # Standard residual
+    MHC = "mhc"  # Manifold Hyper-Connections (2512.24880)
+    MHC_V2 = "mhc_v2"  # MHC V2 (norm inside, matching Test_Code)
 
 
 class EmbeddingType(Enum):
     """Embedding types."""
-    STANDARD = "standard"       # Standard nn.Embedding
-    KRONECKER = "kronecker"     # Kronecker product embeddings (D=8192)
+
+    STANDARD = "standard"  # Standard nn.Embedding
+    KRONECKER = "kronecker"  # Kronecker product embeddings (D=8192)
 
 
 @dataclass
@@ -62,66 +72,70 @@ class AttentionConfig:
     attention_type: AttentionType = AttentionType.GROUPED_QUERY
 
     # Common GQA params (used for GQA layers and GSA layers)
-    num_attention_heads: int = 16      # Q heads
-    num_key_value_heads: int = 2       # KV heads for GQA (16Q / 2KV)
-    head_dim: int = 256                # Per-head dimension
+    num_attention_heads: int = 16  # Q heads
+    num_key_value_heads: int = 2  # KV heads for GQA (16Q / 2KV)
+    head_dim: int = 256  # Per-head dimension
     attention_dropout: float = 0.0
-    attention_bias: bool = False       # Modern LLMs don't use bias
+    attention_bias: bool = False  # Modern LLMs don't use bias
 
     # --- DeltaNet Configuration (arXiv:2412.06464) ---
     # Gated DeltaNet: O(N) linear attention with gated delta rule
-    delta_v_heads: int = 32            # V/O heads (hidden_size / delta_head_dim)
-    delta_qk_heads: int = 16           # QK heads (delta_v_heads / 2)
-    delta_head_dim: int = 128          # Head dimension for DeltaNet
-    delta_gate_dim: int = 384          # Beta gate dimension (9.4% of hidden_size)
+    delta_v_heads: int = 32  # V/O heads (hidden_size / delta_head_dim)
+    delta_qk_heads: int = 16  # QK heads (delta_v_heads / 2)
+    delta_head_dim: int = 128  # Head dimension for DeltaNet
+    delta_gate_dim: int = 384  # Beta gate dimension (9.4% of hidden_size)
 
     # --- GSA Configuration (arXiv:2601.15305v1) ---
     # GSA layers use full MHA: num_heads × head_dim = hidden_size
-    gsa_num_heads: int = 16            # GSA attention heads
-    gsa_head_dim: int = 256            # GSA head dimension
-    gsa_indexer_dim: int = 64          # d_I: Low-dim indexer projection
-    gsa_num_indexer_heads: int = 4     # H_I: Number of indexer heads
-    gsa_k_base: int = 512              # Base selection budget
-    gsa_k_min: int = 32               # Minimum k (high confidence)
-    gsa_k_max: int = 1024             # Maximum k (low confidence)
+    gsa_num_heads: int = 16  # GSA attention heads
+    gsa_head_dim: int = 256  # GSA head dimension
+    gsa_indexer_dim: int = 64  # d_I: Low-dim indexer projection
+    gsa_num_indexer_heads: int = 4  # H_I: Number of indexer heads
+    gsa_k_base: int = 512  # Base selection budget
+    gsa_k_min: int = 32  # Minimum k (high confidence)
+    gsa_k_max: int = 1024  # Maximum k (low confidence)
 
     # --- Mixer Configuration ---
     # Hybrid DeltaNet + GSA per-layer mixing
-    mixer_delta_ratio: float = 0.75    # 75% DeltaNet layers
-    mixer_gsa_ratio: float = 0.25      # 25% GSA layers
+    mixer_delta_ratio: float = 0.75  # 75% DeltaNet layers
+    mixer_gsa_ratio: float = 0.25  # 25% GSA layers
 
     # DeepSeek GSA specific (corrected implementation)
-    gsa_use_adaptive_k: bool = True              # Enable adaptive k selection
-    gsa_adaptive_k_method: str = "variance"      # "variance", "entropy", or "learned"
-    gsa_adaptive_k_temperature: float = 1.0      # Temperature for adaptive scaling
-    gsa_use_value_gate: bool = True              # Enable G2 (value gate)
-    gsa_use_output_gate: bool = True             # Enable G1 (output gate)
-    gsa_gate_activation: str = "sigmoid"         # Gate activation function
-    gsa_gate_bias_init: float = 0.5              # Initial gate bias
-    gsa_indexer_activation: str = "sigmoid"      # Indexer activation ("sigmoid" or "relu")
-    gsa_use_triton_kernels: bool = True          # Use Triton kernels for long sequences (if available)
-    gsa_sparse_backend: str = "auto"             # "auto", "triton", "pytorch", "flash", "dense"
-    gsa_triton_min_seq_len: int = 512            # Use Triton only above this seq length in auto mode
-    gsa_prefer_flash: bool = True                # Prefer Flash/Efficient SDPA backend on CUDA
-    gsa_sdpa_chunk_size: int = 16                # Query chunk size for SDPA sparse gather path
+    gsa_use_adaptive_k: bool = True  # Enable adaptive k selection
+    gsa_adaptive_k_method: str = "variance"  # "variance", "entropy", or "learned"
+    gsa_adaptive_k_temperature: float = 1.0  # Temperature for adaptive scaling
+    gsa_use_value_gate: bool = True  # Enable G2 (value gate)
+    gsa_use_output_gate: bool = True  # Enable G1 (output gate)
+    gsa_gate_activation: str = "sigmoid"  # Gate activation function
+    gsa_gate_bias_init: float = 0.5  # Initial gate bias
+    gsa_indexer_activation: str = "sigmoid"  # Indexer activation ("sigmoid" or "relu")
+    gsa_use_triton_kernels: bool = (
+        True  # Use Triton kernels for long sequences (if available)
+    )
+    gsa_sparse_backend: str = "auto"  # "auto", "triton", "pytorch", "flash", "dense"
+    gsa_triton_min_seq_len: int = (
+        512  # Use Triton only above this seq length in auto mode
+    )
+    gsa_prefer_flash: bool = True  # Prefer Flash/Efficient SDPA backend on CUDA
+    gsa_sdpa_chunk_size: int = 16  # Query chunk size for SDPA sparse gather path
 
     # DeepSeek Sparse Attention specific
-    ds_compressed_dim: int = 512      # Compressed KV dimension
-    ds_rope_head_dim: int = 32        # RoPE dimension for decoupled attention
+    ds_compressed_dim: int = 512  # Compressed KV dimension
+    ds_rope_head_dim: int = 32  # RoPE dimension for decoupled attention
     ds_num_shared_experts: int = 1
-    ds_q_lora_rank: int = 0           # 0 = no LoRA compression
+    ds_q_lora_rank: int = 0  # 0 = no LoRA compression
 
 
 @dataclass
 class PositionConfig:
     """Configuration for position embeddings."""
-    
+
     position_type: PositionEmbeddingType = PositionEmbeddingType.ROPE
-    
+
     # RoPE params
     rope_theta: float = 10000.0
     rope_scaling_factor: float = 1.0
-    
+
     # YaRN specific params (for extended context)
     yarn_scale: float = 1.0
     yarn_original_max_position: int = 4096
@@ -136,16 +150,18 @@ class FFNConfig:
     """Configuration for feed-forward networks."""
 
     ffn_type: FFNType = FFNType.SWIGLU
-    intermediate_size: int = 2048      # Dense shared expert FFN (FFN=2048)
+    intermediate_size: int = 2048  # Dense shared expert FFN (FFN=2048)
     ffn_dropout: float = 0.0
     ffn_bias: bool = False
 
     # MoE specific
-    moe_num_experts: int = 0           # 0 = dense model (no routed experts)
+    moe_num_experts: int = 0  # 0 = dense model (no routed experts)
     moe_num_experts_per_tok: int = 0
-    moe_expert_intermediate_size: Optional[int] = None  # Routed expert FFN width; defaults to intermediate_size
+    moe_expert_intermediate_size: Optional[int] = (
+        None  # Routed expert FFN width; defaults to intermediate_size
+    )
     moe_aux_loss_coef: float = 0.01
-    moe_data_sparsity: float = 0.5    # Null expert data sparsity (rho)
+    moe_data_sparsity: float = 0.5  # Null expert data sparsity (rho)
 
 
 @dataclass
@@ -174,21 +190,25 @@ class ConnectionConfig:
     connection_type: ConnectionType = ConnectionType.MHC
 
     # mHC parameters (from DeepSeek paper 2512.24880v2)
-    mhc_expansion_rate: int = 4        # n: number of streams (paper uses 4, use 2 for memory savings)
-    mhc_alpha_init: float = 0.01       # α: gating factor init (paper uses 0.01)
-    mhc_sinkhorn_iters: int = 20       # Sinkhorn-Knopp iterations (paper uses 20)
+    mhc_expansion_rate: int = (
+        4  # n: number of streams (paper uses 4, use 2 for memory savings)
+    )
+    mhc_alpha_init: float = 0.01  # α: gating factor init (paper uses 0.01)
+    mhc_sinkhorn_iters: int = 20  # Sinkhorn-Knopp iterations (paper uses 20)
 
 
 @dataclass
 class EmbeddingConfig:
     """Configuration for embedding layer."""
+
     embedding_type: EmbeddingType = EmbeddingType.STANDARD
-    kronecker_pf_dim: int = 8192    # D = CHAR_DIM(256) * POS_DIM(32)
+    kronecker_pf_dim: int = 8192  # D = CHAR_DIM(256) * POS_DIM(32)
 
 
 @dataclass
 class IntegrationConfig:
     """Configuration for reversible integration."""
+
     use_reversible: bool = False
     step_size: float = 0.25
     a: float = 0.5
@@ -209,8 +229,8 @@ class HeadConfig:
 
     # Multi-token prediction (DeepSeek style)
     use_multi_token_prediction: bool = True
-    num_predict_tokens: int = 2    # MTP layers (1 backbone NTP + 1 MTP = 2 predictions)
-    mtp_loss_weight: float = 0.3   # Weight for auxiliary MTP loss
+    num_predict_tokens: int = 2  # MTP layers (1 backbone NTP + 1 MTP = 2 predictions)
+    mtp_loss_weight: float = 0.3  # Weight for auxiliary MTP loss
     mtp_block_type: str = "full_transformer"  # "full_transformer" or "linear"
 
     # Weight tying
@@ -232,14 +252,14 @@ class ModelConfig:
     model_version: str = "1.0.0"
 
     # Core architecture
-    vocab_size: int = 131072           # 2^17, divisible by 64
-    hidden_size: int = 4096            # Effective hidden dimension
-    num_hidden_layers: int = 8         # Backbone layers
+    vocab_size: int = 131072  # 2^17, divisible by 64
+    hidden_size: int = 4096  # Effective hidden dimension
+    num_hidden_layers: int = 8  # Backbone layers
     max_position_embeddings: int = 8192
 
     # Normalization
     rms_norm_eps: float = 1e-6
-    use_pre_norm: bool = True          # Pre-LayerNorm (modern standard)
+    use_pre_norm: bool = True  # Pre-LayerNorm (modern standard)
 
     # Initialization
     initializer_range: float = 0.02
@@ -258,20 +278,35 @@ class ModelConfig:
 
     # Precision
     dtype: str = "bfloat16"  # bfloat16, float16, float32
-    
+
     def __post_init__(self):
         """Validate and adjust configuration."""
         # Ensure GQA head_dim consistency: Q_heads × head_dim == hidden_size
-        if self.attention.head_dim * self.attention.num_attention_heads != self.hidden_size:
-            self.attention.head_dim = self.hidden_size // self.attention.num_attention_heads
+        if (
+            self.attention.head_dim * self.attention.num_attention_heads
+            != self.hidden_size
+        ):
+            self.attention.head_dim = (
+                self.hidden_size // self.attention.num_attention_heads
+            )
 
         # Ensure DeltaNet V heads consistency: V_heads × delta_head_dim == hidden_size
-        if self.attention.delta_v_heads * self.attention.delta_head_dim != self.hidden_size:
-            self.attention.delta_v_heads = self.hidden_size // self.attention.delta_head_dim
+        if (
+            self.attention.delta_v_heads * self.attention.delta_head_dim
+            != self.hidden_size
+        ):
+            self.attention.delta_v_heads = (
+                self.hidden_size // self.attention.delta_head_dim
+            )
 
         # Ensure GSA head consistency: gsa_num_heads × gsa_head_dim == hidden_size
-        if self.attention.gsa_num_heads * self.attention.gsa_head_dim != self.hidden_size:
-            self.attention.gsa_num_heads = self.hidden_size // self.attention.gsa_head_dim
+        if (
+            self.attention.gsa_num_heads * self.attention.gsa_head_dim
+            != self.hidden_size
+        ):
+            self.attention.gsa_num_heads = (
+                self.hidden_size // self.attention.gsa_head_dim
+            )
 
         # Ensure mixer ratios sum to 1.0
         total_ratio = self.attention.mixer_delta_ratio + self.attention.mixer_gsa_ratio
@@ -282,8 +317,10 @@ class ModelConfig:
         if self.ffn.ffn_type == FFNType.SWIGLU and self.ffn.intermediate_size == 0:
             # SwiGLU optimal: hidden_size * 8/3, rounded to multiple of 256
             self.ffn.intermediate_size = int(self.hidden_size * 8 / 3)
-            self.ffn.intermediate_size = ((self.ffn.intermediate_size + 255) // 256) * 256
-            
+            self.ffn.intermediate_size = (
+                (self.ffn.intermediate_size + 255) // 256
+            ) * 256
+
     @property
     def num_deltanet_layers(self) -> int:
         """Number of DeltaNet layers (75% by default)."""
@@ -335,20 +372,23 @@ class ModelConfig:
         # Norms per layer (4: pre-attn, post-attn, pre-ffn, post-ffn)
         norm_params = 4 * H
 
-        total_layer_params = total_mixer + (ffn_params + norm_params) * self.num_hidden_layers
+        total_layer_params = (
+            total_mixer + (ffn_params + norm_params) * self.num_hidden_layers
+        )
 
         # Final norm
         final_norm = H
 
         return embed_params + total_layer_params + head_params + final_norm
-    
+
     @property
     def num_parameters_billions(self) -> float:
         """Parameters in billions."""
         return self.num_parameters / 1e9
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
+
         def enum_to_str(obj):
             if isinstance(obj, Enum):
                 return obj.value
@@ -356,87 +396,96 @@ class ModelConfig:
                 return {k: enum_to_str(v) for k, v in obj.items()}
             elif isinstance(obj, (list, tuple)):
                 return [enum_to_str(item) for item in obj]
-            elif hasattr(obj, '__dataclass_fields__'):
+            elif hasattr(obj, "__dataclass_fields__"):
                 return {k: enum_to_str(v) for k, v in obj.__dict__.items()}
             return obj
-            
+
         return enum_to_str(self.__dict__)
-    
+
     def save(self, path: str):
         """Save configuration to file."""
         path = Path(path)
         data = self.to_dict()
-        
-        if path.suffix == '.json':
-            with open(path, 'w') as f:
+
+        if path.suffix == ".json":
+            with open(path, "w") as f:
                 json.dump(data, f, indent=2)
-        elif path.suffix in ['.yaml', '.yml']:
-            with open(path, 'w') as f:
+        elif path.suffix in [".yaml", ".yml"]:
+            with open(path, "w") as f:
                 yaml.dump(data, f, default_flow_style=False)
         else:
             raise ValueError(f"Unsupported format: {path.suffix}")
-            
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ModelConfig':
+    def from_dict(cls, data: Dict[str, Any]) -> "ModelConfig":
         """Create from dictionary."""
         # Filter out non-model config keys (e.g., training config)
         valid_fields = {f.name for f in fields(cls)}
         data = {k: v for k, v in data.items() if k in valid_fields}
-        
+
         # Convert string enums back
-        if 'attention' in data:
-            if 'attention_type' in data['attention']:
-                data['attention']['attention_type'] = AttentionType(data['attention']['attention_type'])
-            data['attention'] = AttentionConfig(**data['attention'])
-            
-        if 'position' in data:
-            if 'position_type' in data['position']:
-                data['position']['position_type'] = PositionEmbeddingType(data['position']['position_type'])
-            data['position'] = PositionConfig(**data['position'])
-            
-        if 'ffn' in data:
-            if 'ffn_type' in data['ffn']:
-                data['ffn']['ffn_type'] = FFNType(data['ffn']['ffn_type'])
-            data['ffn'] = FFNConfig(**data['ffn'])
-            
-        if 'connection' in data:
-            if 'connection_type' in data['connection']:
-                data['connection']['connection_type'] = ConnectionType(data['connection']['connection_type'])
-            data['connection'] = ConnectionConfig(**data['connection'])
-            
-        if 'head' in data:
-            data['head'] = HeadConfig(**data['head'])
+        if "attention" in data:
+            if "attention_type" in data["attention"]:
+                data["attention"]["attention_type"] = AttentionType(
+                    data["attention"]["attention_type"]
+                )
+            data["attention"] = AttentionConfig(**data["attention"])
 
-        if 'embedding' in data:
-            if 'embedding_type' in data['embedding']:
-                data['embedding']['embedding_type'] = EmbeddingType(data['embedding']['embedding_type'])
-            data['embedding'] = EmbeddingConfig(**data['embedding'])
+        if "position" in data:
+            if "position_type" in data["position"]:
+                data["position"]["position_type"] = PositionEmbeddingType(
+                    data["position"]["position_type"]
+                )
+            data["position"] = PositionConfig(**data["position"])
 
-        if 'integration' in data:
-            data['integration'] = IntegrationConfig(**data['integration'])
+        if "ffn" in data:
+            if "ffn_type" in data["ffn"]:
+                data["ffn"]["ffn_type"] = FFNType(data["ffn"]["ffn_type"])
+            data["ffn"] = FFNConfig(**data["ffn"])
+
+        if "connection" in data:
+            if "connection_type" in data["connection"]:
+                data["connection"]["connection_type"] = ConnectionType(
+                    data["connection"]["connection_type"]
+                )
+            data["connection"] = ConnectionConfig(**data["connection"])
+
+        if "head" in data:
+            data["head"] = HeadConfig(**data["head"])
+
+        if "embedding" in data:
+            if "embedding_type" in data["embedding"]:
+                data["embedding"]["embedding_type"] = EmbeddingType(
+                    data["embedding"]["embedding_type"]
+                )
+            data["embedding"] = EmbeddingConfig(**data["embedding"])
+
+        if "integration" in data:
+            data["integration"] = IntegrationConfig(**data["integration"])
 
         return cls(**data)
-    
+
     @classmethod
-    def load(cls, path: str) -> 'ModelConfig':
+    def load(cls, path: str) -> "ModelConfig":
         """Load configuration from file."""
         path = Path(path)
-        
-        if path.suffix == '.json':
-            with open(path, 'r') as f:
+
+        if path.suffix == ".json":
+            with open(path, "r") as f:
                 data = json.load(f)
-        elif path.suffix in ['.yaml', '.yml']:
-            with open(path, 'r') as f:
+        elif path.suffix in [".yaml", ".yml"]:
+            with open(path, "r") as f:
                 data = yaml.safe_load(f)
         else:
             raise ValueError(f"Unsupported format: {path.suffix}")
-            
+
         return cls.from_dict(data)
 
 
 # =============================================================================
 # Preset Configurations
 # =============================================================================
+
 
 def get_1b_base_config() -> ModelConfig:
     """
@@ -490,8 +539,8 @@ def get_1b_base_config() -> ModelConfig:
         ),
         ffn=FFNConfig(
             ffn_type=FFNType.SWIGLU,
-            intermediate_size=2048,    # FFN=2048 (dense shared expert)
-            moe_num_experts=0,         # Dense model, no routed experts
+            intermediate_size=2048,  # FFN=2048 (dense shared expert)
+            moe_num_experts=0,  # Dense model, no routed experts
             moe_num_experts_per_tok=0,
         ),
         connection=ConnectionConfig(
@@ -513,12 +562,12 @@ def get_1b_gsa_config() -> ModelConfig:
     config.model_name = "LLM-1B-GSA"
     config.attention.attention_type = AttentionType.GATED_SPARSE
     # Indexer parameters (Table 1 in paper)
-    config.attention.gsa_indexer_dim = 64       # d_I
+    config.attention.gsa_indexer_dim = 64  # d_I
     config.attention.gsa_num_indexer_heads = 4  # H_I
     # Adaptive sparsity parameters
-    config.attention.gsa_k_base = 2048          # Base selection budget
-    config.attention.gsa_k_min = 256            # Min k (confident)
-    config.attention.gsa_k_max = 4096           # Max k (uncertain)
+    config.attention.gsa_k_base = 2048  # Base selection budget
+    config.attention.gsa_k_min = 256  # Min k (confident)
+    config.attention.gsa_k_max = 4096  # Max k (uncertain)
     return config
 
 
@@ -544,9 +593,9 @@ def get_1b_deepseek_gsa_config() -> ModelConfig:
     config.attention.gsa_indexer_activation = "sigmoid"
     # Adaptive sparsity - defaults tuned for CUDA with good VRAM
     # k values scale memory linearly: O(batch * seq * k * heads * head_dim)
-    config.attention.gsa_k_base = 512   # Good balance for 40GB+ GPUs
-    config.attention.gsa_k_min = 64     # Minimum tokens to attend to
-    config.attention.gsa_k_max = 1024   # Cap for very long sequences
+    config.attention.gsa_k_base = 512  # Good balance for 40GB+ GPUs
+    config.attention.gsa_k_min = 64  # Minimum tokens to attend to
+    config.attention.gsa_k_max = 1024  # Cap for very long sequences
     config.attention.gsa_use_adaptive_k = True
     config.attention.gsa_adaptive_k_method = "variance"
     config.attention.gsa_adaptive_k_temperature = 1.0
@@ -759,15 +808,15 @@ def get_1b_reference_config() -> ModelConfig:
 PRESET_CONFIGS = {
     "1b-base": get_1b_base_config,
     "1b-gsa": get_1b_gsa_config,
-    "1b-deepseek-gsa": get_1b_deepseek_gsa_config,        # DeepSeek-style GSA (recommended)
+    "1b-deepseek-gsa": get_1b_deepseek_gsa_config,  # DeepSeek-style GSA (recommended)
     "1b-deepseek-gsa-128k": get_1b_deepseek_gsa_128k_config,  # 128K context
     "1b-deepseek-gsa-256k": get_1b_deepseek_gsa_256k_config,  # 256K context
-    "1b-deepseek": get_1b_deepseek_config,                # DeepSeek MLA
+    "1b-deepseek": get_1b_deepseek_config,  # DeepSeek MLA
     "1b-mhc": get_1b_mhc_config,
     "1b-mtp": get_1b_mtp_config,
     "1b-yarn": get_1b_yarn_config,
     "1b-full": get_1b_full_config,
-    "1b-reference": get_1b_reference_config,               # Test_Code reference architecture
+    "1b-reference": get_1b_reference_config,  # Test_Code reference architecture
 }
 
 

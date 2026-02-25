@@ -44,9 +44,15 @@ def get_best_device(preferred: str = "auto") -> torch.device:
             return torch.device("mps")
         return torch.device("cpu")
     if preferred == "cuda":
-        return torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        return (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
     if preferred == "mps":
-        return torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
+        return (
+            torch.device("mps")
+            if torch.backends.mps.is_available()
+            else torch.device("cpu")
+        )
     return torch.device("cpu")
 
 
@@ -193,7 +199,9 @@ def print_architecture_report(config: Any, strict: bool) -> None:
     print("=" * 72)
     print(f"Backbone Layers: {config.num_layers}")
     print(f"MTP Layers: {config.mtp_num_predictions - 1}")
-    print(f"Total Computational Layers: {config.num_layers + config.mtp_num_predictions - 1}")
+    print(
+        f"Total Computational Layers: {config.num_layers + config.mtp_num_predictions - 1}"
+    )
     print(f"Delta/GSA Split: {config.num_deltanet_layers}/{config.num_gsa_layers}")
     if bad_lines:
         print("\nMISMATCHES:")
@@ -214,7 +222,7 @@ def build_kronecker_artifacts(tokenizer, pf_dim: int):
     from model_1b import KroneckerConfig, KroneckerEmbeddings
 
     vocab_size = len(tokenizer)
-    approx_pf_gb = (vocab_size * pf_dim * 2) / (1024 ** 3)  # bf16 table
+    approx_pf_gb = (vocab_size * pf_dim * 2) / (1024**3)  # bf16 table
     print(
         f"[Kronecker] Building PF table for vocab_size={vocab_size}, D={pf_dim}. "
         f"Approx bf16 buffer size: ~{approx_pf_gb:.2f} GB"
@@ -345,11 +353,13 @@ def train(
             next_token_ids = input_ids[:, 1:].contiguous()
             last_input_ids = input_ids
 
-            autocast_enabled = (
-                use_amp
-                and ((device.type == "cuda") or (device.type == "mps" and amp_dtype == torch.float16))
+            autocast_enabled = use_amp and (
+                (device.type == "cuda")
+                or (device.type == "mps" and amp_dtype == torch.float16)
             )
-            with autocast(device_type=device.type, enabled=autocast_enabled, dtype=amp_dtype):
+            with autocast(
+                device_type=device.type, enabled=autocast_enabled, dtype=amp_dtype
+            ):
                 logits_ntp, logits_mtp, aux_loss = model(
                     input_ids=input_ids,
                     next_token_ids=next_token_ids,
@@ -379,7 +389,9 @@ def train(
 
         if scaler.is_enabled():
             scaler.unscale_(optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip).item()
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            model.parameters(), gradient_clip
+        ).item()
 
         lr = lr_for_step(global_step + 1)
         for group in optimizer.param_groups:
@@ -476,7 +488,9 @@ def evaluate(
     print("Evaluation")
     print("=" * 72)
     print(f"batches={seen}")
-    print(f"loss={avg_total:.4f} main={avg_main:.4f} mtp={avg_mtp:.4f} aux={avg_aux:.4f}")
+    print(
+        f"loss={avg_total:.4f} main={avg_main:.4f} mtp={avg_mtp:.4f} aux={avg_aux:.4f}"
+    )
     print(f"main_perplexity={ppl:.4f}")
     print("=" * 72 + "\n")
 
@@ -486,12 +500,27 @@ def main() -> None:
         description="Train/test model_1b.py on WikiText-2 with GPT-2 tokenizer",
     )
     parser.add_argument("--tokenizer", type=str, default="gpt2")
-    parser.add_argument("--embedding-type", type=str, default="standard", choices=["standard", "kronecker"])
+    parser.add_argument(
+        "--embedding-type",
+        type=str,
+        default="standard",
+        choices=["standard", "kronecker"],
+    )
     parser.add_argument("--strict-arch", action="store_true")
 
     # Dataset
-    parser.add_argument("--train-split", type=str, default="train", choices=["train", "validation", "test"])
-    parser.add_argument("--eval-split", type=str, default="validation", choices=["train", "validation", "test"])
+    parser.add_argument(
+        "--train-split",
+        type=str,
+        default="train",
+        choices=["train", "validation", "test"],
+    )
+    parser.add_argument(
+        "--eval-split",
+        type=str,
+        default="validation",
+        choices=["train", "validation", "test"],
+    )
     parser.add_argument("--seq-length", type=int, default=256)
     parser.add_argument("--stride", type=int, default=None)
     parser.add_argument("--max-train-tokens", type=int, default=None)
@@ -518,9 +547,13 @@ def main() -> None:
     parser.add_argument("--eval-batches", type=int, default=0, help="0 disables eval")
 
     # Runtime
-    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "mps", "cpu"])
+    parser.add_argument(
+        "--device", type=str, default="auto", choices=["auto", "cuda", "mps", "cpu"]
+    )
     parser.add_argument("--no-amp", action="store_true")
-    parser.add_argument("--amp-dtype", type=str, default="bfloat16", choices=["bfloat16", "float16"])
+    parser.add_argument(
+        "--amp-dtype", type=str, default="bfloat16", choices=["bfloat16", "float16"]
+    )
     parser.add_argument("--num-workers", type=int, default=None)
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument("--persistent-workers", action="store_true")
@@ -533,7 +566,9 @@ def main() -> None:
 
     fallback_used = ensure_reversible_ops_midpoint()
     if fallback_used:
-        print("[Compat] reversible_ops_midpoint not found, using sequential fallback stack.")
+        print(
+            "[Compat] reversible_ops_midpoint not found, using sequential fallback stack."
+        )
 
     from model_1b import Model70B, ModelConfig
 
@@ -578,7 +613,9 @@ def main() -> None:
         max_tokens=args.max_train_tokens,
     )
     stride = args.seq_length if args.stride is None else args.stride
-    train_dataset = TokenBlockDataset(train_tokens, seq_length=args.seq_length, stride=stride)
+    train_dataset = TokenBlockDataset(
+        train_tokens, seq_length=args.seq_length, stride=stride
+    )
     if len(train_dataset) == 0:
         raise ValueError("Not enough training tokens for selected seq-length.")
 
@@ -590,7 +627,9 @@ def main() -> None:
             add_eos=True,
             max_tokens=args.max_eval_tokens,
         )
-        eval_dataset = TokenBlockDataset(eval_tokens, seq_length=args.seq_length, stride=stride)
+        eval_dataset = TokenBlockDataset(
+            eval_tokens, seq_length=args.seq_length, stride=stride
+        )
         if len(eval_dataset) == 0:
             raise ValueError("Not enough eval tokens for selected seq-length.")
     else:
@@ -605,7 +644,9 @@ def main() -> None:
         print("[AMP] MPS supports float16 autocast only. Overriding amp_dtype=float16.")
         args.amp_dtype = "float16"
 
-    num_workers = args.num_workers if args.num_workers is not None else get_optimal_num_workers()
+    num_workers = (
+        args.num_workers if args.num_workers is not None else get_optimal_num_workers()
+    )
     pin_memory = device.type == "cuda"
     persistent_workers = args.persistent_workers and num_workers > 0
 
@@ -646,7 +687,9 @@ def main() -> None:
 
     if args.embedding_type == "kronecker":
         bpe_vocab, pf_codec = build_kronecker_artifacts(tokenizer, pf_dim=8192)
-        model = Model70B(config, embedding_type="kronecker", bpe_vocab=bpe_vocab, pf_codec=pf_codec)
+        model = Model70B(
+            config, embedding_type="kronecker", bpe_vocab=bpe_vocab, pf_codec=pf_codec
+        )
     else:
         model = Model70B(config, embedding_type="standard")
 

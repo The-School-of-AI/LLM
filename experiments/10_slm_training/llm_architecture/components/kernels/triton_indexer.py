@@ -5,13 +5,15 @@ This kernel computes indexer scores efficiently on GPU using Triton.
 Based on the GSA paper implementation (arXiv:2601.15305v1).
 """
 
-import torch
 from typing import Optional
+
+import torch
 
 # Check for Triton availability
 try:
     import triton
     import triton.language as tl
+
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
@@ -20,6 +22,7 @@ except ImportError:
 
 
 if HAS_TRITON:
+
     @triton.jit
     def _sigmoid(x):
         """Manual sigmoid: 1/(1+exp(-x)), universally supported in Triton."""
@@ -28,14 +31,31 @@ if HAS_TRITON:
     @triton.jit
     def _gated_indexer_fwd_kernel(
         # Pointers to matrices
-        Q_ptr, K_ptr, W_ptr, B_ptr, OUT_ptr,
+        Q_ptr,
+        K_ptr,
+        W_ptr,
+        B_ptr,
+        OUT_ptr,
         # Matrix dimensions
-        batch_size, seq_q, seq_kv, n_heads, d_idx,
+        batch_size,
+        seq_q,
+        seq_kv,
+        n_heads,
+        d_idx,
         # Strides
-        stride_qb, stride_qq, stride_qh, stride_qd,
-        stride_kb, stride_kk, stride_kd,
-        stride_wb, stride_wq, stride_wh,
-        stride_ob, stride_oq, stride_ok,
+        stride_qb,
+        stride_qq,
+        stride_qh,
+        stride_qd,
+        stride_kb,
+        stride_kk,
+        stride_kd,
+        stride_wb,
+        stride_wq,
+        stride_wh,
+        stride_ob,
+        stride_oq,
+        stride_ok,
         # Scale factor
         scale,
         # Causal mask flag
@@ -72,13 +92,24 @@ if HAS_TRITON:
         for h in range(n_heads):
             # Load query block for this head
             # Q shape: [batch, seq_q, n_heads, d_idx]
-            q_ptrs = Q_ptr + pid_b * stride_qb + q_offs[:, None] * stride_qq + h * stride_qh + d_offs[None, :] * stride_qd
+            q_ptrs = (
+                Q_ptr
+                + pid_b * stride_qb
+                + q_offs[:, None] * stride_qq
+                + h * stride_qh
+                + d_offs[None, :] * stride_qd
+            )
             q_mask = (q_offs[:, None] < seq_q) & (d_offs[None, :] < d_idx)
             q = tl.load(q_ptrs, mask=q_mask, other=0.0).to(tl.float32)
 
             # Load key block (shared across heads)
             # K shape: [batch, seq_kv, d_idx]
-            k_ptrs = K_ptr + pid_b * stride_kb + k_offs[:, None] * stride_kk + d_offs[None, :] * stride_kd
+            k_ptrs = (
+                K_ptr
+                + pid_b * stride_kb
+                + k_offs[:, None] * stride_kk
+                + d_offs[None, :] * stride_kd
+            )
             k_mask = (k_offs[:, None] < seq_kv) & (d_offs[None, :] < d_idx)
             k = tl.load(k_ptrs, mask=k_mask, other=0.0).to(tl.float32)
 
@@ -104,10 +135,15 @@ if HAS_TRITON:
         # Apply causal mask if needed
         if use_causal:
             causal_mask = q_offs[:, None] >= k_offs[None, :]
-            acc = tl.where(causal_mask, acc, float('-inf'))
+            acc = tl.where(causal_mask, acc, float("-inf"))
 
         # Store output
-        out_ptrs = OUT_ptr + pid_b * stride_ob + q_offs[:, None] * stride_oq + k_offs[None, :] * stride_ok
+        out_ptrs = (
+            OUT_ptr
+            + pid_b * stride_ob
+            + q_offs[:, None] * stride_oq
+            + k_offs[None, :] * stride_ok
+        )
         out_mask = (q_offs[:, None] < seq_q) & (k_offs[None, :] < seq_kv)
         tl.store(out_ptrs, acc, mask=out_mask)
 
@@ -117,10 +153,10 @@ _warned_indexer_failure = False
 
 
 def triton_gated_indexer(
-    q: torch.Tensor,   # [batch, seq_q, n_heads, d_idx]
-    k: torch.Tensor,   # [batch, seq_kv, d_idx]
-    w: torch.Tensor,   # [batch, seq_q, n_heads]
-    b: torch.Tensor,   # [n_heads]
+    q: torch.Tensor,  # [batch, seq_q, n_heads, d_idx]
+    k: torch.Tensor,  # [batch, seq_kv, d_idx]
+    w: torch.Tensor,  # [batch, seq_q, n_heads]
+    b: torch.Tensor,  # [n_heads]
     scale: float = 1.0,
     causal: bool = True,
 ) -> torch.Tensor:
@@ -165,21 +201,43 @@ def triton_gated_indexer(
     try:
         # Launch kernel
         _gated_indexer_fwd_kernel[grid](
-            q, k, w, b, out,
-            batch_size, seq_q, seq_kv, n_heads, d_idx,
-            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-            k.stride(0), k.stride(1), k.stride(2),
-            w.stride(0), w.stride(1), w.stride(2),
-            out.stride(0), out.stride(1), out.stride(2),
+            q,
+            k,
+            w,
+            b,
+            out,
+            batch_size,
+            seq_q,
+            seq_kv,
+            n_heads,
+            d_idx,
+            q.stride(0),
+            q.stride(1),
+            q.stride(2),
+            q.stride(3),
+            k.stride(0),
+            k.stride(1),
+            k.stride(2),
+            w.stride(0),
+            w.stride(1),
+            w.stride(2),
+            out.stride(0),
+            out.stride(1),
+            out.stride(2),
             scale,
             causal,
-            BLOCK_Q=BLOCK_Q, BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
+            BLOCK_Q=BLOCK_Q,
+            BLOCK_K=BLOCK_K,
+            BLOCK_D=BLOCK_D,
         )
     except Exception as e:
         # Fall back to PyTorch implementation (warn once only)
         if not _warned_indexer_failure:
             import warnings
-            warnings.warn(f"Triton indexer kernel failed: {e}. Falling back to PyTorch.")
+
+            warnings.warn(
+                f"Triton indexer kernel failed: {e}. Falling back to PyTorch."
+            )
             _warned_indexer_failure = True
         out = pytorch_gated_indexer(q, k, w, b, scale, causal)
 
@@ -187,10 +245,10 @@ def triton_gated_indexer(
 
 
 def pytorch_gated_indexer(
-    q: torch.Tensor,   # [batch, seq_q, n_heads, d_idx]
-    k: torch.Tensor,   # [batch, seq_kv, d_idx]
-    w: torch.Tensor,   # [batch, seq_q, n_heads]
-    b: torch.Tensor,   # [n_heads]
+    q: torch.Tensor,  # [batch, seq_q, n_heads, d_idx]
+    k: torch.Tensor,  # [batch, seq_kv, d_idx]
+    w: torch.Tensor,  # [batch, seq_q, n_heads]
+    b: torch.Tensor,  # [n_heads]
     scale: float = 1.0,
     causal: bool = True,
 ) -> torch.Tensor:
@@ -212,7 +270,7 @@ def pytorch_gated_indexer(
     seq_kv = k.shape[1]
 
     # Compute QK scores per head: [batch, n_heads, seq_q, seq_kv]
-    raw_scores = torch.einsum('bqhd,bkd->bhqk', q, k) * scale
+    raw_scores = torch.einsum("bqhd,bkd->bhqk", q, k) * scale
 
     # Add bias: [n_heads, 1, 1]
     bias_expanded = b.view(1, -1, 1, 1)
@@ -232,6 +290,8 @@ def pytorch_gated_indexer(
         query_positions = torch.arange(seq_q, device=q.device)
         key_positions = torch.arange(seq_kv, device=q.device)
         causal_invalid = key_positions.unsqueeze(0) > query_positions.unsqueeze(1)
-        final_scores = final_scores.masked_fill(causal_invalid.unsqueeze(0), float('-inf'))
+        final_scores = final_scores.masked_fill(
+            causal_invalid.unsqueeze(0), float("-inf")
+        )
 
     return final_scores

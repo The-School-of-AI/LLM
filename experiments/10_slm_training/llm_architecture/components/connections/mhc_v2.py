@@ -19,9 +19,10 @@ Performance optimizations:
 - TritonRMSNorm: fused variance + rsqrt + mul
 """
 
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple
 
 # ============================================================================
 # Triton imports with graceful fallback
@@ -29,12 +30,14 @@ from typing import Optional, Tuple
 
 try:
     from components.kernels.triton_normalization import TritonRMSNorm
+
     _HAS_TRITON_NORM = True
 except ImportError:
     _HAS_TRITON_NORM = False
 
 try:
     from components.kernels.triton_sinkhorn import triton_sinkhorn_knopp
+
     _HAS_TRITON_SINKHORN = True
 except ImportError:
     _HAS_TRITON_SINKHORN = False
@@ -44,8 +47,11 @@ except ImportError:
 # Sinkhorn-Knopp (JIT-compiled fallback for CPU / non-CUDA)
 # ============================================================================
 
+
 @torch.jit.script
-def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6) -> torch.Tensor:
+def sinkhorn_knopp(
+    logits: torch.Tensor, iters: int = 20, eps: float = 1e-6
+) -> torch.Tensor:
     """Doubly-stochastic matrix via Sinkhorn-Knopp."""
     M = torch.exp(logits).clamp_min(eps)
     for _ in range(iters):
@@ -54,7 +60,9 @@ def sinkhorn_knopp(logits: torch.Tensor, iters: int = 20, eps: float = 1e-6) -> 
     return M
 
 
-def _sinkhorn_dispatch(logits: torch.Tensor, iters: int, eps: float = 1e-6) -> torch.Tensor:
+def _sinkhorn_dispatch(
+    logits: torch.Tensor, iters: int, eps: float = 1e-6
+) -> torch.Tensor:
     """Dispatch Sinkhorn to Triton (CUDA) or JIT (CPU) backend."""
     if _HAS_TRITON_SINKHORN and logits.is_cuda:
         try:
@@ -71,6 +79,7 @@ def _sinkhorn_dispatch(logits: torch.Tensor, iters: int, eps: float = 1e-6) -> t
 if _HAS_TRITON_NORM:
     RMSNorm = TritonRMSNorm
 else:
+
     class RMSNorm(nn.Module):
         """RMS Layer Normalization."""
 
@@ -88,6 +97,7 @@ else:
 # ============================================================================
 # MHC Coefficients (matching Test_Code MHCCoeffs)
 # ============================================================================
+
 
 class MHCCoeffsV2(nn.Module):
     """
@@ -150,7 +160,7 @@ class MHCCoeffsV2(nn.Module):
         res_logits = self.alpha_res * self.phi_res(x_flat)
         res_logits = res_logits.view(B, T, n, n) + self.b_res
 
-        H_pre = torch.sigmoid(pre_logits)          # (B, T, n)
+        H_pre = torch.sigmoid(pre_logits)  # (B, T, n)
         H_post = 2.0 * torch.sigmoid(post_logits)  # (B, T, n) scaled to [0, 2]
         H_res = _sinkhorn_dispatch(res_logits, iters=self.iters)  # (B, T, n, n)
 
@@ -160,6 +170,7 @@ class MHCCoeffsV2(nn.Module):
 # ============================================================================
 # MHC Sublayer Wrapper V2 (matching Test_Code MHCSublayer)
 # ============================================================================
+
 
 class MHCSublayerV2(nn.Module):
     """
@@ -182,8 +193,14 @@ class MHCSublayerV2(nn.Module):
     7. Return: x_res + y_stream, aux_loss
     """
 
-    def __init__(self, d_model: int, n_streams: int, sublayer: nn.Module,
-                 norm: nn.Module, iters: int = 20):
+    def __init__(
+        self,
+        d_model: int,
+        n_streams: int,
+        sublayer: nn.Module,
+        norm: nn.Module,
+        iters: int = 20,
+    ):
         super().__init__()
         self.d_model = d_model
         self.n = n_streams

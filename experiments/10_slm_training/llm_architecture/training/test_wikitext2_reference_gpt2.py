@@ -11,26 +11,21 @@ ReferenceLLM has:
 import argparse
 import math
 import random
+# Add repo root to path
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+import yaml
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, Dataset
-import yaml
 
-# Add repo root to path
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.model_config import (
-    ConnectionType,
-    EmbeddingType,
-    ModelConfig,
-    PRESET_CONFIGS,
-    get_preset_config,
-)
+from config.model_config import (PRESET_CONFIGS, ConnectionType, EmbeddingType,
+                                 ModelConfig, get_preset_config)
 from models.reference_llm import ReferenceLLM, ReferenceLLMOutput
 
 try:
@@ -57,9 +52,15 @@ def get_best_device(preferred: str = "auto") -> torch.device:
             return torch.device("mps")
         return torch.device("cpu")
     if preferred == "cuda":
-        return torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        return (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
     if preferred == "mps":
-        return torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
+        return (
+            torch.device("mps")
+            if torch.backends.mps.is_available()
+            else torch.device("cpu")
+        )
     return torch.device("cpu")
 
 
@@ -81,7 +82,9 @@ def load_config_from_yaml(config_path: str) -> Tuple[ModelConfig, Dict[str, Any]
     return model_config, training_data
 
 
-def align_model_context_to_seq_length(model_config: ModelConfig, seq_length: int) -> None:
+def align_model_context_to_seq_length(
+    model_config: ModelConfig, seq_length: int
+) -> None:
     if seq_length <= model_config.max_position_embeddings:
         return
 
@@ -187,7 +190,11 @@ def architecture_checks(config: ModelConfig) -> Tuple[List[str], List[str]]:
     check("ffn.moe_num_experts", config.ffn.moe_num_experts, 0)
     check("ffn.moe_num_experts_per_tok", config.ffn.moe_num_experts_per_tok, 0)
     check("gsa_indexer_dim(d_idx)", config.attention.gsa_indexer_dim, 32)
-    check("connection_type", config.connection.connection_type.value, ConnectionType.MHC_V2.value)
+    check(
+        "connection_type",
+        config.connection.connection_type.value,
+        ConnectionType.MHC_V2.value,
+    )
     check("mhc_alpha_init", config.connection.mhc_alpha_init, 0.1)
     check("integration.use_reversible", config.integration.use_reversible, True)
     check("head.num_predict_tokens", config.head.num_predict_tokens, 2)
@@ -209,7 +216,9 @@ def print_architecture_report(config: ModelConfig, strict: bool) -> None:
     print("=" * 72)
     print(f"Backbone Layers: {config.num_hidden_layers}")
     print(f"MTP Layers: {config.head.num_predict_tokens - 1}")
-    print(f"Total Computational Layers: {config.num_hidden_layers + config.head.num_predict_tokens - 1}")
+    print(
+        f"Total Computational Layers: {config.num_hidden_layers + config.head.num_predict_tokens - 1}"
+    )
     print(f"Delta/GSA Split: {config.num_deltanet_layers}/{config.num_gsa_layers}")
     print(f"Estimated Params: {config.num_parameters_billions:.3f}B")
 
@@ -235,12 +244,13 @@ def print_architecture_report(config: ModelConfig, strict: bool) -> None:
 
 
 def build_kronecker_artifacts(tokenizer, model_config: ModelConfig):
-    from components.embeddings.kronecker_embedding import KroneckerConfig, KroneckerEmbeddings
+    from components.embeddings.kronecker_embedding import (KroneckerConfig,
+                                                           KroneckerEmbeddings)
 
     vocab_size = model_config.vocab_size
     pf_dim = model_config.embedding.kronecker_pf_dim
 
-    approx_pf_gb = (vocab_size * pf_dim * 2) / (1024 ** 3)  # bf16 table
+    approx_pf_gb = (vocab_size * pf_dim * 2) / (1024**3)  # bf16 table
     print(
         f"[Kronecker] Building PF table for vocab_size={vocab_size}, D={pf_dim}. "
         f"Approx GPU/CPU buffer size (bf16): ~{approx_pf_gb:.2f} GB"
@@ -313,7 +323,9 @@ def train_reference(
 
     if use_torch_compile:
         if not hasattr(torch, "compile"):
-            print("[torch.compile] Not available in this PyTorch build; continuing without compile.")
+            print(
+                "[torch.compile] Not available in this PyTorch build; continuing without compile."
+            )
         else:
             mode = torch_compile_mode
             dynamic = torch_compile_dynamic if torch_compile_dynamic else None
@@ -321,16 +333,18 @@ def train_reference(
 
             # CUDAGraph modes are unstable with MTP multi-output heads.
             cudagraph_modes = {"reduce-overhead", "max-autotune"}
-            if mode in cudagraph_modes and getattr(eager_model, "mtp_block", None) is not None:
+            if (
+                mode in cudagraph_modes
+                and getattr(eager_model, "mtp_block", None) is not None
+            ):
                 print(
                     f"[torch.compile] mode='{mode}' uses CUDAGraphs and is unstable with MTP. "
                     "Switching to 'max-autotune-no-cudagraphs'."
                 )
                 mode = "max-autotune-no-cudagraphs"
 
-            if (
-                getattr(eager_model, "stack", None) is not None
-                and getattr(eager_model.stack, "use_checkpoint", False)
+            if getattr(eager_model, "stack", None) is not None and getattr(
+                eager_model.stack, "use_checkpoint", False
             ):
                 print(
                     "[torch.compile] Reversible checkpoint stack detected. "
@@ -352,7 +366,9 @@ def train_reference(
                 print("[torch.compile] Model compiled successfully.")
                 compile_active = True
             except Exception as exc:
-                print(f"[torch.compile] Compile failed ({exc}); continuing in eager mode.")
+                print(
+                    f"[torch.compile] Compile failed ({exc}); continuing in eager mode."
+                )
                 run_model = eager_model
 
     optimizer = torch.optim.AdamW(
@@ -408,12 +424,9 @@ def train_reference(
             labels = batch["labels"].to(device)
             next_token_ids = input_ids[:, 1:].contiguous()
 
-            autocast_enabled = (
-                use_amp
-                and (
-                    (device.type == "cuda")
-                    or (device.type == "mps" and amp_dtype == torch.float16)
-                )
+            autocast_enabled = use_amp and (
+                (device.type == "cuda")
+                or (device.type == "mps" and amp_dtype == torch.float16)
             )
             with autocast(
                 device_type=device.type,
@@ -428,7 +441,9 @@ def train_reference(
                     )
                 except Exception as exc:
                     if compile_active and _is_torch_compile_error(exc):
-                        short_msg = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+                        short_msg = (
+                            str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+                        )
                         print(
                             f"[torch.compile] Runtime compile failure ({type(exc).__name__}: {short_msg}). "
                             "Falling back to eager mode."
@@ -453,7 +468,9 @@ def train_reference(
                         "Please verify model architecture wiring."
                     )
                 if outputs.loss is None:
-                    raise RuntimeError("Model returned no loss even though labels were provided.")
+                    raise RuntimeError(
+                        "Model returned no loss even though labels were provided."
+                    )
 
                 loss = outputs.loss / gradient_accumulation_steps
 
@@ -474,7 +491,9 @@ def train_reference(
 
         if scaler.is_enabled():
             scaler.unscale_(optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(eager_model.parameters(), gradient_clip).item()
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            eager_model.parameters(), gradient_clip
+        ).item()
 
         lr = lr_for_step(global_step + 1)
         for group in optimizer.param_groups:
@@ -488,15 +507,29 @@ def train_reference(
         optimizer.zero_grad(set_to_none=True)
 
         global_step += 1
-        tokens_seen += input_ids.shape[0] * input_ids.shape[1] * gradient_accumulation_steps
+        tokens_seen += (
+            input_ids.shape[0] * input_ids.shape[1] * gradient_accumulation_steps
+        )
 
         if global_step % log_interval == 0 or global_step == 1:
             elapsed = max(1e-6, time.time() - start_time)
             tps = tokens_seen / elapsed
             avg_total = accum_total_loss / max(1, accum_micro_steps)
-            avg_main = accum_main_loss / max(1, accum_micro_steps) if accum_main_loss > 0 else 0.0
-            avg_mtp = accum_mtp_loss / max(1, accum_micro_steps) if accum_mtp_loss > 0 else 0.0
-            avg_aux = accum_aux_loss / max(1, accum_micro_steps) if accum_aux_loss > 0 else 0.0
+            avg_main = (
+                accum_main_loss / max(1, accum_micro_steps)
+                if accum_main_loss > 0
+                else 0.0
+            )
+            avg_mtp = (
+                accum_mtp_loss / max(1, accum_micro_steps)
+                if accum_mtp_loss > 0
+                else 0.0
+            )
+            avg_aux = (
+                accum_aux_loss / max(1, accum_micro_steps)
+                if accum_aux_loss > 0
+                else 0.0
+            )
 
             print(
                 f"step={global_step:5d}/{max_steps} "
@@ -526,11 +559,18 @@ def main() -> None:
         choices=list(PRESET_CONFIGS.keys()),
         help="Model preset if --config is not provided",
     )
-    parser.add_argument("--strict-arch", action="store_true", help="Fail on architecture mismatch")
+    parser.add_argument(
+        "--strict-arch", action="store_true", help="Fail on architecture mismatch"
+    )
 
     # Tokenizer / dataset
     parser.add_argument("--tokenizer", type=str, default="gpt2")
-    parser.add_argument("--dataset-split", type=str, default="train", choices=["train", "validation", "test"])
+    parser.add_argument(
+        "--dataset-split",
+        type=str,
+        default="train",
+        choices=["train", "validation", "test"],
+    )
     parser.add_argument("--seq-length", type=int, default=None)
     parser.add_argument("--stride", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
@@ -556,9 +596,13 @@ def main() -> None:
     parser.add_argument("--beta2", type=float, default=None)
     parser.add_argument("--eps", type=float, default=None)
     parser.add_argument("--gradient-clip", type=float, default=None)
-    parser.add_argument("--device", type=str, default=None, choices=["auto", "cuda", "mps", "cpu"])
+    parser.add_argument(
+        "--device", type=str, default=None, choices=["auto", "cuda", "mps", "cpu"]
+    )
     parser.add_argument("--no-amp", action="store_true")
-    parser.add_argument("--amp-dtype", type=str, default=None, choices=["bfloat16", "float16"])
+    parser.add_argument(
+        "--amp-dtype", type=str, default=None, choices=["bfloat16", "float16"]
+    )
     parser.add_argument("--log-interval", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
 
@@ -580,7 +624,12 @@ def main() -> None:
         "--torch-compile-mode",
         type=str,
         default=None,
-        choices=["default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"],
+        choices=[
+            "default",
+            "reduce-overhead",
+            "max-autotune",
+            "max-autotune-no-cudagraphs",
+        ],
         help="torch.compile mode.",
     )
     parser.add_argument(
@@ -728,7 +777,9 @@ def main() -> None:
     if args.no_flash_sdpa:
         model_config.attention.gsa_prefer_flash = False
     if args.gsa_sdpa_chunk_size is not None:
-        model_config.attention.gsa_sdpa_chunk_size = max(1, int(args.gsa_sdpa_chunk_size))
+        model_config.attention.gsa_sdpa_chunk_size = max(
+            1, int(args.gsa_sdpa_chunk_size)
+        )
 
     align_model_context_to_seq_length(model_config, train_cfg["seq_length"])
     print_architecture_report(model_config, strict=args.strict_arch)
@@ -762,20 +813,30 @@ def main() -> None:
         max_tokens=args.max_tokens,
     )
     stride = train_cfg["seq_length"] if args.stride is None else args.stride
-    dataset = TokenBlockDataset(token_ids, seq_length=train_cfg["seq_length"], stride=stride)
+    dataset = TokenBlockDataset(
+        token_ids, seq_length=train_cfg["seq_length"], stride=stride
+    )
     if len(dataset) == 0:
         raise ValueError(
             "Not enough tokens for selected seq_length. "
             "Reduce --seq-length or increase --max-tokens."
         )
 
-    num_workers = args.num_workers if args.num_workers is not None else get_optimal_num_workers()
+    num_workers = (
+        args.num_workers if args.num_workers is not None else get_optimal_num_workers()
+    )
     device = get_best_device(train_cfg["device"])
     pin_memory = device.type == "cuda"
     persistent_workers = args.persistent_workers and num_workers > 0
 
-    if device.type == "mps" and train_cfg["use_amp"] and train_cfg["amp_dtype"] != "float16":
-        print("[AMP] MPS supports float16 autocast only. Overriding amp_dtype to float16.")
+    if (
+        device.type == "mps"
+        and train_cfg["use_amp"]
+        and train_cfg["amp_dtype"] != "float16"
+    ):
+        print(
+            "[AMP] MPS supports float16 autocast only. Overriding amp_dtype to float16."
+        )
         train_cfg["amp_dtype"] = "float16"
     if device.type == "cpu" and train_cfg["use_amp"]:
         print("[AMP] CPU autocast disabled for this script.")

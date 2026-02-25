@@ -12,19 +12,19 @@ Components:
 - MTPTransformerBlock: Full transformer block for MTP (fusion + DeltaNet + MLP + mHC)
 """
 
-import torch
-import torch.nn as nn
 from typing import Optional, Tuple
 
+import torch
+import torch.nn as nn
 from components.attention.gated_deltanet import GatedDeltaNet
 from components.attention.reference_gsa import ReferenceGSA
+from components.connections.mhc_v2 import MHCCoeffsV2, MHCSublayerV2, RMSNorm
 from components.ffn.moe_ffn import LightningMLP, MoEFFN, MoEGate
-from components.connections.mhc_v2 import MHCSublayerV2, MHCCoeffsV2, RMSNorm
-
 
 # ============================================================================
 # Decoder Layer (Hybrid DeltaNet + GSA)
 # ============================================================================
+
 
 class LightningDecoderLayer(nn.Module):
     """
@@ -62,7 +62,7 @@ class LightningDecoderLayer(nn.Module):
                 rope_original_max=pos_config.yarn_original_max_position,
                 rope_scaling_factor=pos_config.rope_scaling_factor,
                 conv_size=4,
-                use_output_norm=True
+                use_output_norm=True,
             )
         elif layer_type == "gsa":
             attn = ReferenceGSA(
@@ -92,8 +92,10 @@ class LightningDecoderLayer(nn.Module):
             num_experts=ffn_config.moe_num_experts,
             num_shared_experts=1,
             top_k=ffn_config.moe_num_experts_per_tok,
-            data_sparsity=getattr(ffn_config, 'moe_data_sparsity', 0.5),
-            expert_intermediate_size=getattr(ffn_config, 'moe_expert_intermediate_size', None),
+            data_sparsity=getattr(ffn_config, "moe_data_sparsity", 0.5),
+            expert_intermediate_size=getattr(
+                ffn_config, "moe_expert_intermediate_size", None
+            ),
         )
 
         # mHC Wrappers (norm is INSIDE MHCSublayerV2)
@@ -164,7 +166,9 @@ class LightningDecoderLayer(nn.Module):
 
         total_aux = None
         if aux1 is not None or aux2 is not None:
-            total_aux = (aux1 if aux1 is not None else 0) + (aux2 if aux2 is not None else 0)
+            total_aux = (aux1 if aux1 is not None else 0) + (
+                aux2 if aux2 is not None else 0
+            )
 
         return x_stream, total_aux
 
@@ -172,6 +176,7 @@ class LightningDecoderLayer(nn.Module):
 # ============================================================================
 # Multi-Token Prediction Block (Full Transformer)
 # ============================================================================
+
 
 class MTPTransformerBlock(nn.Module):
     """
@@ -217,7 +222,7 @@ class MTPTransformerBlock(nn.Module):
             rope_original_max=pos_config.yarn_original_max_position,
             rope_scaling_factor=pos_config.rope_scaling_factor,
             conv_size=4,
-            use_output_norm=True
+            use_output_norm=True,
         )
 
         mlp = LightningMLP(
@@ -226,8 +231,10 @@ class MTPTransformerBlock(nn.Module):
             num_experts=ffn_config.moe_num_experts,
             num_shared_experts=1,
             top_k=ffn_config.moe_num_experts_per_tok,
-            data_sparsity=getattr(ffn_config, 'moe_data_sparsity', 0.5),
-            expert_intermediate_size=getattr(ffn_config, 'moe_expert_intermediate_size', None),
+            data_sparsity=getattr(ffn_config, "moe_data_sparsity", 0.5),
+            expert_intermediate_size=getattr(
+                ffn_config, "moe_expert_intermediate_size", None
+            ),
         )
 
         sinkhorn_iters = conn_config.mhc_sinkhorn_iters
@@ -278,8 +285,14 @@ class MTPTransformerBlock(nn.Module):
         x = self.fusion_proj(x)
 
         # Sparse stream initialization (only stream 0 gets input)
-        x_stream = torch.zeros(batch_size, seq_len, self.n_streams, self.hidden_size,
-                               device=x.device, dtype=x.dtype)
+        x_stream = torch.zeros(
+            batch_size,
+            seq_len,
+            self.n_streams,
+            self.hidden_size,
+            device=x.device,
+            dtype=x.dtype,
+        )
         x_stream[:, :, 0, :] = x
 
         # mHC blocks (ignore aux_loss)

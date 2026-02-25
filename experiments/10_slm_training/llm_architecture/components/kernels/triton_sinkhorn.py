@@ -18,13 +18,15 @@ Performance:
 - All intermediate results stay in SRAM/registers
 """
 
-import torch
 from typing import Optional
+
+import torch
 
 # Check for Triton availability
 try:
     import triton
     import triton.language as tl
+
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
@@ -33,19 +35,20 @@ except ImportError:
 
 
 if HAS_TRITON:
+
     @triton.jit
     def _sinkhorn_kernel(
         # Pointers
-        H_ptr,          # Input:  raw H_res values [..., n, n]
-        out_ptr,        # Output: doubly stochastic [..., n, n]
+        H_ptr,  # Input:  raw H_res values [..., n, n]
+        out_ptr,  # Output: doubly stochastic [..., n, n]
         # Dimensions
-        num_matrices,   # Total number of n x n matrices (B * S)
-        n,              # Matrix dimension (expansion_rate, typically 4)
+        num_matrices,  # Total number of n x n matrices (B * S)
+        n,  # Matrix dimension (expansion_rate, typically 4)
         # Hyperparameters
         eps: tl.constexpr,
         num_iters: tl.constexpr,
         # Strides (row-major within each n x n matrix)
-        stride_mat,     # Stride between matrices (= n * n for contiguous)
+        stride_mat,  # Stride between matrices (= n * n for contiguous)
         # Meta
         N_SQ: tl.constexpr,  # n * n, must be power-of-2 padded
     ):

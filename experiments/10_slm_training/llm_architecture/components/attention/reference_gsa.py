@@ -16,23 +16,19 @@ Key differences from existing GSA implementations:
 Reference: arXiv:2601.15305v1
 """
 
-from contextlib import nullcontext
 import warnings
+from contextlib import nullcontext
 from typing import Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from components.attention.gated_deltanet import DeltaNetRotaryEmbedding
 
 try:
-    from components.kernels import (
-        HAS_TRITON,
-        triton_sparse_attention,
-        pytorch_sparse_attention,
-        triton_gated_indexer,
-    )
+    from components.kernels import (HAS_TRITON, pytorch_sparse_attention,
+                                    triton_gated_indexer,
+                                    triton_sparse_attention)
 except ImportError:
     HAS_TRITON = False
     triton_sparse_attention = None
@@ -40,7 +36,8 @@ except ImportError:
     triton_gated_indexer = None
 
 try:
-    from torch.nn.attention import sdpa_kernel, SDPBackend
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
     HAS_SDPA_BACKEND = True
 except Exception:
     sdpa_kernel = None
@@ -59,11 +56,24 @@ class ReferenceGSA(nn.Module):
     Returns single tensor (B, T, hidden_size), NOT a tuple.
     """
 
-    def __init__(self, hidden_size, num_heads, max_seq_len=262144, rope_base=10000,
-                 k_base=512, k_min=32, k_max=1024, indexer_heads=4,
-                 rope_original_max=8192, rope_scaling_factor=32.0,
-                 use_triton_kernels=True, sparse_backend="auto",
-                 triton_min_seq_len=512, prefer_flash=True, sdpa_chunk_size=16):
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        max_seq_len=262144,
+        rope_base=10000,
+        k_base=512,
+        k_min=32,
+        k_max=1024,
+        indexer_heads=4,
+        rope_original_max=8192,
+        rope_scaling_factor=32.0,
+        use_triton_kernels=True,
+        sparse_backend="auto",
+        triton_min_seq_len=512,
+        prefer_flash=True,
+        sdpa_chunk_size=16,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -102,7 +112,7 @@ class ReferenceGSA(nn.Module):
             max_position_embeddings=max_seq_len,
             base=rope_base,
             original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
+            scaling_factor=rope_scaling_factor,
         )
 
         # Reversible integration support
@@ -146,8 +156,17 @@ class ReferenceGSA(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.W_Iq, self.W_Ik, self.W_Iw, self.W_q, self.W_k, self.W_v,
-                  self.o_proj, self.W_gv, self.W_go]:
+        for m in [
+            self.W_Iq,
+            self.W_Ik,
+            self.W_Iw,
+            self.W_q,
+            self.W_k,
+            self.W_v,
+            self.o_proj,
+            self.W_gv,
+            self.W_go,
+        ]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
         nn.init.zeros_(self.gate_bias)
 
@@ -210,8 +229,7 @@ class ReferenceGSA(nn.Module):
 
     @staticmethod
     def _gather_along_seq_efficient(
-        x: torch.Tensor,       # [B, T, H, D]
-        indices: torch.Tensor  # [B, T, K]
+        x: torch.Tensor, indices: torch.Tensor  # [B, T, H, D]  # [B, T, K]
     ) -> torch.Tensor:
         """
         Gather K/V along sequence dimension without expanding to [B, T, T, ...].
@@ -222,11 +240,11 @@ class ReferenceGSA(nn.Module):
 
     def _sparse_attention_sdpa(
         self,
-        q: torch.Tensor,        # [B, T, H, D]
-        k: torch.Tensor,        # [B, T, H, D]
-        v: torch.Tensor,        # [B, T, H, D]
+        q: torch.Tensor,  # [B, T, H, D]
+        k: torch.Tensor,  # [B, T, H, D]
+        v: torch.Tensor,  # [B, T, H, D]
         indices: torch.Tensor,  # [B, T, K]
-        mask: torch.Tensor,     # [B, T, K] bool
+        mask: torch.Tensor,  # [B, T, K] bool
         attention_mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
         """
@@ -259,15 +277,17 @@ class ReferenceGSA(nn.Module):
                 with sdpa_context:
                     for start in range(0, seq_len, chunk):
                         end = min(start + chunk, seq_len)
-                        q_chunk = q[:, start:end]             # [B, q_chunk, H, D]
-                        idx_chunk = indices[:, start:end]     # [B, q_chunk, K]
-                        mask_chunk = mask[:, start:end]       # [B, q_chunk, K]
+                        q_chunk = q[:, start:end]  # [B, q_chunk, H, D]
+                        idx_chunk = indices[:, start:end]  # [B, q_chunk, K]
+                        mask_chunk = mask[:, start:end]  # [B, q_chunk, K]
                         q_chunk_len = end - start
 
                         k_gathered = self._gather_along_seq_efficient(k, idx_chunk)
                         v_gathered = self._gather_along_seq_efficient(v, idx_chunk)
 
-                        q_sdpa = q_chunk.reshape(batch_size * q_chunk_len, n_heads, 1, self.head_dim)
+                        q_sdpa = q_chunk.reshape(
+                            batch_size * q_chunk_len, n_heads, 1, self.head_dim
+                        )
                         k_sdpa = k_gathered.permute(0, 1, 3, 2, 4).reshape(
                             batch_size * q_chunk_len, n_heads, k_selected, self.head_dim
                         )
@@ -275,12 +295,16 @@ class ReferenceGSA(nn.Module):
                             batch_size * q_chunk_len, n_heads, k_selected, self.head_dim
                         )
 
-                        attn_mask_bool = mask_chunk.reshape(batch_size * q_chunk_len, 1, 1, k_selected)
+                        attn_mask_bool = mask_chunk.reshape(
+                            batch_size * q_chunk_len, 1, 1, k_selected
+                        )
                         if additive_mask is not None:
                             additive_chunk = additive_mask[:, start:end]
-                            gathered_additive = torch.gather(additive_chunk, dim=-1, index=idx_chunk)
-                            valid_from_additive = (
-                                gathered_additive > (torch.finfo(gathered_additive.dtype).min / 2)
+                            gathered_additive = torch.gather(
+                                additive_chunk, dim=-1, index=idx_chunk
+                            )
+                            valid_from_additive = gathered_additive > (
+                                torch.finfo(gathered_additive.dtype).min / 2
                             )
                             valid_from_additive = valid_from_additive.reshape(
                                 batch_size * q_chunk_len, 1, 1, k_selected
@@ -309,11 +333,11 @@ class ReferenceGSA(nn.Module):
 
     def _sparse_attention_dense(
         self,
-        q: torch.Tensor,        # [B, T, H, D]
-        k: torch.Tensor,        # [B, T, H, D]
-        v: torch.Tensor,        # [B, T, H, D]
+        q: torch.Tensor,  # [B, T, H, D]
+        k: torch.Tensor,  # [B, T, H, D]
+        v: torch.Tensor,  # [B, T, H, D]
         indices: torch.Tensor,  # [B, T, K]
-        mask: torch.Tensor,     # [B, T, K] bool
+        mask: torch.Tensor,  # [B, T, K] bool
         attention_mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
         """
@@ -360,11 +384,11 @@ class ReferenceGSA(nn.Module):
 
     def _run_sparse_attention(
         self,
-        q: torch.Tensor,         # [B, T, H, D]
-        k: torch.Tensor,         # [B, T, H, D]
-        v: torch.Tensor,         # [B, T, H, D]
-        indices: torch.Tensor,   # [B, T, K]
-        mask: torch.Tensor,      # [B, T, K] bool
+        q: torch.Tensor,  # [B, T, H, D]
+        k: torch.Tensor,  # [B, T, H, D]
+        v: torch.Tensor,  # [B, T, H, D]
+        indices: torch.Tensor,  # [B, T, K]
+        mask: torch.Tensor,  # [B, T, K] bool
         attention_mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
         backend = self._resolve_backend(seq_len=q.size(1), device=q.device)
@@ -441,10 +465,14 @@ class ReferenceGSA(nn.Module):
             try:
                 # Triton kernel: applies sigmoid(w), sigmoid(qk*scale + bias), weighted sum
                 # Returns (B, T, T) with causal mask (future = -inf)
-                scale = 1.0 / (self.d_idx ** 0.5)
+                scale = 1.0 / (self.d_idx**0.5)
                 importance_score = triton_gated_indexer(
-                    q_I, k_I, w_raw, self.gate_bias,
-                    scale=scale, causal=True,
+                    q_I,
+                    k_I,
+                    w_raw,
+                    self.gate_bias,
+                    scale=scale,
+                    causal=True,
                 )
                 # Triton kernel already applied causal mask (-inf for future)
                 # Convert -inf positions to 0 for importance_score_masked
@@ -463,7 +491,9 @@ class ReferenceGSA(nn.Module):
             k_I_p = k_I.permute(0, 2, 1).unsqueeze(1)  # (B, 1, d_idx, T)
 
             match_logits = torch.matmul(q_I_p, k_I_p)  # (B, indexer_heads, T, T)
-            match_logits = match_logits + self.gate_bias.view(1, self.indexer_heads, 1, 1)
+            match_logits = match_logits + self.gate_bias.view(
+                1, self.indexer_heads, 1, 1
+            )
             match_gate = torch.sigmoid(match_logits)
 
             w_exp = w.permute(0, 2, 1).unsqueeze(-1)  # (B, indexer_heads, T, 1)
@@ -472,8 +502,12 @@ class ReferenceGSA(nn.Module):
             # Causal masking (memory-efficient: broadcasting trick, no T×T matrix allocation)
             if T > 1:
                 positions = torch.arange(T, device=device)
-                causal_mask_broadcast = positions.view(1, -1, 1) >= positions.view(1, 1, -1)
-                importance_score_masked = importance_score.masked_fill(~causal_mask_broadcast, 0.0)
+                causal_mask_broadcast = positions.view(1, -1, 1) >= positions.view(
+                    1, 1, -1
+                )
+                importance_score_masked = importance_score.masked_fill(
+                    ~causal_mask_broadcast, 0.0
+                )
             else:
                 importance_score_masked = importance_score
 
@@ -481,8 +515,11 @@ class ReferenceGSA(nn.Module):
         var_t = importance_score_masked.var(dim=-1, unbiased=False)
 
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
-        is_reversible_reconstruct = (self.training and torch.is_grad_enabled()
-                                     and getattr(self, "_saved_selection", None) is not None)
+        is_reversible_reconstruct = (
+            self.training
+            and torch.is_grad_enabled()
+            and getattr(self, "_saved_selection", None) is not None
+        )
 
         if is_reversible_forward:
             var_t_mean = var_t.mean().detach()
@@ -502,7 +539,7 @@ class ReferenceGSA(nn.Module):
                 importance_for_selection = importance_score
             elif T > 1:
                 importance_for_selection = importance_score.masked_fill(
-                    ~causal_mask_broadcast, -float('inf')
+                    ~causal_mask_broadcast, -float("inf")
                 )
             else:
                 importance_for_selection = importance_score
@@ -512,7 +549,9 @@ class ReferenceGSA(nn.Module):
             if T > sink_size:
                 sink_mask = torch.zeros_like(importance_for_selection, dtype=torch.bool)
                 sink_mask[:, :, :sink_size] = True
-                importance_for_selection = importance_for_selection.masked_fill(sink_mask, float('inf'))
+                importance_for_selection = importance_for_selection.masked_fill(
+                    sink_mask, float("inf")
+                )
 
             # Use static k_max upper bound instead of data-dependent k_t.max().item().
             # This avoids GPU->CPU sync and torch.compile graph breaks.

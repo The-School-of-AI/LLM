@@ -8,11 +8,13 @@ Run from: llm_architecture/
     python Test_code/verify_fixes.py
 """
 
+import sys
+import time
+
 import torch
 import torch.nn as nn
-import time
-import sys
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 from config.model_config import get_preset_config
 
@@ -25,7 +27,7 @@ def test_deltanet_chunk_parallel():
 
     from components.attention.gated_deltanet import GatedDeltaNet
 
-    device = 'cpu'
+    device = "cpu"
     dtype = torch.float32
 
     # Small model for testing
@@ -48,7 +50,9 @@ def test_deltanet_chunk_parallel():
         out = deltanet(x)
         assert out.shape == (B, T, 256), f"Shape mismatch: {out.shape} != {(B, T, 256)}"
         assert torch.isfinite(out).all(), f"Non-finite output at T={T}"
-        print(f"  T={T:4d}: output shape={out.shape}, mean={out.mean():.4f}, std={out.std():.4f} [OK]")
+        print(
+            f"  T={T:4d}: output shape={out.shape}, mean={out.mean():.4f}, std={out.std():.4f} [OK]"
+        )
 
     # Gradient check
     x = torch.randn(B, 64, 256, device=device, dtype=dtype, requires_grad=True)
@@ -57,7 +61,9 @@ def test_deltanet_chunk_parallel():
     loss.backward()
     assert x.grad is not None, "No gradient computed"
     assert torch.isfinite(x.grad).all(), "Non-finite gradients"
-    print(f"  Gradient check: grad shape={x.grad.shape}, grad_norm={x.grad.norm():.4f} [OK]")
+    print(
+        f"  Gradient check: grad shape={x.grad.shape}, grad_norm={x.grad.norm():.4f} [OK]"
+    )
 
     print("  PASSED\n")
 
@@ -112,15 +118,26 @@ def test_sequential_vs_reversible():
     logits_ntp, logits_mtp = model_seq(input_ids)
     assert logits_ntp.shape == (B, T, 1000), f"Shape mismatch: {logits_ntp.shape}"
     assert torch.isfinite(logits_ntp).all(), "Non-finite NTP logits"
-    print(f"  Sequential forward: logits shape={logits_ntp.shape}, "
-          f"mean={logits_ntp.mean():.4f} [OK]")
+    print(
+        f"  Sequential forward: logits shape={logits_ntp.shape}, "
+        f"mean={logits_ntp.mean():.4f} [OK]"
+    )
 
     # Gradient check
     labels = torch.randint(0, 1000, (B, T))
     output = model_seq(input_ids, labels=labels)
     output.loss.backward()
-    grad_norm = sum(p.grad.norm().item() ** 2 for p in model_seq.parameters() if p.grad is not None) ** 0.5
-    print(f"  Gradient check: loss={output.loss.item():.4f}, grad_norm={grad_norm:.4f} [OK]")
+    grad_norm = (
+        sum(
+            p.grad.norm().item() ** 2
+            for p in model_seq.parameters()
+            if p.grad is not None
+        )
+        ** 0.5
+    )
+    print(
+        f"  Gradient check: loss={output.loss.item():.4f}, grad_norm={grad_norm:.4f} [OK]"
+    )
 
     # Test reversible mode too
     print("\n  Creating reversible model (use_reversible=True)...")
@@ -128,10 +145,16 @@ def test_sequential_vs_reversible():
     model_rev = ReferenceLLM(config_rev, embedding_type="standard")
 
     logits_ntp_rev, _ = model_rev(input_ids)
-    assert logits_ntp_rev.shape == (B, T, 1000), f"Shape mismatch: {logits_ntp_rev.shape}"
+    assert logits_ntp_rev.shape == (
+        B,
+        T,
+        1000,
+    ), f"Shape mismatch: {logits_ntp_rev.shape}"
     assert torch.isfinite(logits_ntp_rev).all(), "Non-finite NTP logits (reversible)"
-    print(f"  Reversible forward: logits shape={logits_ntp_rev.shape}, "
-          f"mean={logits_ntp_rev.mean():.4f} [OK]")
+    print(
+        f"  Reversible forward: logits shape={logits_ntp_rev.shape}, "
+        f"mean={logits_ntp_rev.mean():.4f} [OK]"
+    )
 
     print("  PASSED\n")
 
@@ -144,7 +167,7 @@ def test_speed_comparison():
 
     from components.attention.gated_deltanet import GatedDeltaNet
 
-    device = 'cpu'
+    device = "cpu"
     dtype = torch.float32
     B, T, H, D = 1, 256, 4, 64
 
@@ -187,8 +210,12 @@ if __name__ == "__main__":
     print("ALL TESTS PASSED")
     print("=" * 60)
     print("\nSummary of changes:")
-    print("1. GatedDeltaNet: chunk-wise parallel recurrence (replaces O(T) Python loop)")
-    print("2. GatedDeltaNet: vectorized per-head output norm (replaces O(H) Python loop)")
+    print(
+        "1. GatedDeltaNet: chunk-wise parallel recurrence (replaces O(T) Python loop)"
+    )
+    print(
+        "2. GatedDeltaNet: vectorized per-head output norm (replaces O(H) Python loop)"
+    )
     print("3. ReferenceLLM: sequential forward mode (when use_reversible=False)")
     print("\nTo use sequential mode, set in config:")
     print("  integration=IntegrationConfig(use_reversible=False)")

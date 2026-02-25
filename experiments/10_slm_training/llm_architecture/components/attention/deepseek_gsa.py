@@ -23,41 +23,37 @@ Usage:
     gsa = DeepSeekGSA(config)
 """
 
+import math
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
-import math
-from typing import Optional, Tuple, Dict, Any
-from dataclasses import dataclass
 
 # Try to import RoPE from your components
 try:
-    from components.embeddings.rotary_embedding import (
-        RotaryEmbedding,
-        apply_rotary_pos_emb
-    )
+    from components.embeddings.rotary_embedding import (RotaryEmbedding,
+                                                        apply_rotary_pos_emb)
+
     HAS_ROPE = True
 except ImportError:
     HAS_ROPE = False
 
 # Try to import YaRN embedding
 try:
-    from components.embeddings.yarn_embedding import (
-        YaRNRotaryEmbedding,
-        DynamicYaRNEmbedding
-    )
+    from components.embeddings.yarn_embedding import (DynamicYaRNEmbedding,
+                                                      YaRNRotaryEmbedding)
+
     HAS_YARN = True
 except ImportError:
     HAS_YARN = False
 
 # Try to import Triton kernels
 try:
-    from components.kernels import (
-        HAS_TRITON,
-        triton_sparse_attention,
-        pytorch_sparse_attention,
-    )
+    from components.kernels import (HAS_TRITON, pytorch_sparse_attention,
+                                    triton_sparse_attention)
 except ImportError:
     HAS_TRITON = False
     triton_sparse_attention = None
@@ -116,7 +112,9 @@ class DeepSeekGSAConfig:
     layer_idx: Optional[int] = None
 
     # Triton kernel optimization
-    use_triton_kernels: bool = True  # Use Triton kernels when available for long sequences
+    use_triton_kernels: bool = (
+        True  # Use Triton kernels when available for long sequences
+    )
 
     def __post_init__(self):
         if self.head_dim is None:
@@ -154,7 +152,9 @@ class GatedLightningIndexer(nn.Module):
         self.use_causal_mask = use_causal_mask
 
         # Indexer projections
-        self.q_proj = nn.Linear(hidden_size, num_indexer_heads * indexer_dim, bias=False)
+        self.q_proj = nn.Linear(
+            hidden_size, num_indexer_heads * indexer_dim, bias=False
+        )
         self.k_proj = nn.Linear(hidden_size, indexer_dim, bias=False)
 
         # Query-dependent head weights
@@ -231,7 +231,7 @@ class GatedLightningIndexer(nn.Module):
         weights = torch.sigmoid(self.weight_proj(hidden_states))
 
         # QK scores per indexer head: [batch, n_heads, seq_q, seq_kv]
-        raw_scores = torch.einsum('bqhd,bkd->bhqk', q_idx, k_idx) * self.scale
+        raw_scores = torch.einsum("bqhd,bkd->bhqk", q_idx, k_idx) * self.scale
 
         bias_expanded = self.bias.view(1, -1, 1, 1)
         if self.activation == "sigmoid":
@@ -249,10 +249,14 @@ class GatedLightningIndexer(nn.Module):
         # Causal masking supports decode where seq_kv > seq_q.
         if self.use_causal_mask and seq_q <= seq_kv:
             kv_offset = seq_kv - seq_q
-            query_positions = kv_offset + torch.arange(seq_q, device=hidden_states.device)
+            query_positions = kv_offset + torch.arange(
+                seq_q, device=hidden_states.device
+            )
             key_positions = torch.arange(seq_kv, device=hidden_states.device)
             causal_invalid = key_positions.unsqueeze(0) > query_positions.unsqueeze(1)
-            final_scores = final_scores.masked_fill(causal_invalid.unsqueeze(0), float('-inf'))
+            final_scores = final_scores.masked_fill(
+                causal_invalid.unsqueeze(0), float("-inf")
+            )
 
         if attention_mask is not None:
             if attention_mask.dim() == 4:
@@ -333,7 +337,7 @@ class AdaptiveTopKSelector(nn.Module):
         k_effective = max(1, k_effective)
 
         # Get top-k indices
-        scores_for_topk = scores.masked_fill(scores == float('-inf'), -1e9)
+        scores_for_topk = scores.masked_fill(scores == float("-inf"), -1e9)
         _, indices = torch.topk(scores_for_topk, k_effective, dim=-1)
 
         # Create mask for variable k per token
@@ -343,7 +347,7 @@ class AdaptiveTopKSelector(nn.Module):
 
         # Also mask positions that were -inf in original scores
         gathered_scores = torch.gather(scores, -1, indices)
-        mask = mask & (gathered_scores != float('-inf'))
+        mask = mask & (gathered_scores != float("-inf"))
 
         return indices, mask, k_values
 
@@ -352,7 +356,7 @@ class AdaptiveTopKSelector(nn.Module):
         batch_size, seq_q, seq_kv = scores.shape
 
         # Mask invalid scores
-        valid_mask = scores != float('-inf')
+        valid_mask = scores != float("-inf")
         masked_scores = scores.masked_fill(~valid_mask, 0)
         valid_counts = valid_mask.sum(dim=-1).float().clamp(min=1)
 
@@ -365,11 +369,15 @@ class AdaptiveTopKSelector(nn.Module):
             # High variance → confident → low k (fewer tokens)
             # Low variance → uncertain → high k (more tokens)
             k_scale = 1.0 / (1.0 + var_normalized * self.temperature)
-            k_adaptive = self.k_base * (0.5 + k_scale)  # Range: [0.5*k_base, 1.5*k_base]
+            k_adaptive = self.k_base * (
+                0.5 + k_scale
+            )  # Range: [0.5*k_base, 1.5*k_base]
 
         elif self.method == "entropy":
             # Compute softmax entropy
-            probs = F.softmax(masked_scores.masked_fill(~valid_mask, float('-inf')), dim=-1)
+            probs = F.softmax(
+                masked_scores.masked_fill(~valid_mask, float("-inf")), dim=-1
+            )
             probs = probs.masked_fill(~valid_mask, 0)
             log_probs = torch.log(probs + 1e-10)
             entropy = -(probs * log_probs).sum(dim=-1)
@@ -478,12 +486,20 @@ class FusedGates(nn.Module):
 
         if self.use_value_gate and self.use_output_gate:
             g2_logits, g1_logits = gate_all.split([self.g2_dim, self.g1_dim], dim=-1)
-            g2 = self._apply_activation(g2_logits).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
-            g1 = self._apply_activation(g1_logits).view(batch_size, seq_len, self.num_heads, self.head_dim)
+            g2 = self._apply_activation(g2_logits).view(
+                batch_size, seq_len, self.num_kv_heads, self.head_dim
+            )
+            g1 = self._apply_activation(g1_logits).view(
+                batch_size, seq_len, self.num_heads, self.head_dim
+            )
         elif self.use_value_gate:
-            g2 = self._apply_activation(gate_all).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
+            g2 = self._apply_activation(gate_all).view(
+                batch_size, seq_len, self.num_kv_heads, self.head_dim
+            )
         elif self.use_output_gate:
-            g1 = self._apply_activation(gate_all).view(batch_size, seq_len, self.num_heads, self.head_dim)
+            g1 = self._apply_activation(gate_all).view(
+                batch_size, seq_len, self.num_heads, self.head_dim
+            )
 
         return g2, g1
 
@@ -513,10 +529,22 @@ class DeepSeekGSA(nn.Module):
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
         # QKV Projections
-        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
-        self.k_proj = nn.Linear(self.hidden_size, self.num_kv_heads * self.head_dim, bias=config.attention_bias)
-        self.v_proj = nn.Linear(self.hidden_size, self.num_kv_heads * self.head_dim, bias=config.attention_bias)
-        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=config.attention_bias)
+        self.q_proj = nn.Linear(
+            self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias
+        )
+        self.k_proj = nn.Linear(
+            self.hidden_size,
+            self.num_kv_heads * self.head_dim,
+            bias=config.attention_bias,
+        )
+        self.v_proj = nn.Linear(
+            self.hidden_size,
+            self.num_kv_heads * self.head_dim,
+            bias=config.attention_bias,
+        )
+        self.o_proj = nn.Linear(
+            self.num_heads * self.head_dim, self.hidden_size, bias=config.attention_bias
+        )
 
         # Gated Lightning Indexer
         self.indexer = GatedLightningIndexer(
@@ -567,6 +595,7 @@ class DeepSeekGSA(nn.Module):
         self.use_triton_kernels = config.use_triton_kernels and HAS_TRITON
         if config.use_triton_kernels and not HAS_TRITON:
             import warnings
+
             warnings.warn(
                 "use_triton_kernels=True but Triton is not installed. "
                 "Falling back to PyTorch implementation. "
@@ -580,8 +609,7 @@ class DeepSeekGSA(nn.Module):
         for module in [self.q_proj, self.k_proj, self.v_proj]:
             nn.init.xavier_uniform_(module.weight, gain=1.0 / math.sqrt(2))
         nn.init.xavier_uniform_(
-            self.o_proj.weight,
-            gain=1.0 / math.sqrt(2 * self.config.num_layers)
+            self.o_proj.weight, gain=1.0 / math.sqrt(2 * self.config.num_layers)
         )
 
     def _create_position_embedding(self, config: DeepSeekGSAConfig):
@@ -628,7 +656,7 @@ class DeepSeekGSA(nn.Module):
             return RotaryEmbedding(
                 dim=self.head_dim,
                 max_position_embeddings=config.max_position_embeddings,
-                base=config.rope_theta
+                base=config.rope_theta,
             )
 
     def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs=None):
@@ -639,7 +667,9 @@ class DeepSeekGSA(nn.Module):
         batch, seq_len, num_kv_heads, head_dim = x.shape
         if self.num_kv_groups == 1:
             return x
-        x = x.unsqueeze(3).expand(batch, seq_len, num_kv_heads, self.num_kv_groups, head_dim)
+        x = x.unsqueeze(3).expand(
+            batch, seq_len, num_kv_heads, self.num_kv_groups, head_dim
+        )
         return x.reshape(batch, seq_len, self.num_heads, head_dim)
 
     def _cache_to_internal_kv(
@@ -660,11 +690,20 @@ class DeepSeekGSA(nn.Module):
             )
 
         # Preferred: [B, H_kv, S, D]
-        if k_cache.size(1) == self.num_kv_heads and v_cache.size(1) == self.num_kv_heads:
-            return k_cache.transpose(1, 2).contiguous(), v_cache.transpose(1, 2).contiguous()
+        if (
+            k_cache.size(1) == self.num_kv_heads
+            and v_cache.size(1) == self.num_kv_heads
+        ):
+            return (
+                k_cache.transpose(1, 2).contiguous(),
+                v_cache.transpose(1, 2).contiguous(),
+            )
 
         # Legacy: [B, S, H_kv, D]
-        if k_cache.size(2) == self.num_kv_heads and v_cache.size(2) == self.num_kv_heads:
+        if (
+            k_cache.size(2) == self.num_kv_heads
+            and v_cache.size(2) == self.num_kv_heads
+        ):
             return k_cache, v_cache
 
         raise ValueError(
@@ -716,8 +755,10 @@ class DeepSeekGSA(nn.Module):
         past_key_value: Optional[Tuple[torch.Tensor, ...]] = None,
         output_attentions: bool = False,
         use_cache: bool = False,
-        **kwargs
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor, ...]]]:
+        **kwargs,
+    ) -> Tuple[
+        torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor, ...]]
+    ]:
         """
         Forward pass for DeepSeek GSA.
 
@@ -726,9 +767,15 @@ class DeepSeekGSA(nn.Module):
         batch_size, seq_len, _ = hidden_states.shape
 
         # === Step 1: QKV Projections ===
-        q = self.q_proj(hidden_states).view(batch_size, seq_len, self.num_heads, self.head_dim)
-        k = self.k_proj(hidden_states).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
-        v = self.v_proj(hidden_states).view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
+        q = self.q_proj(hidden_states).view(
+            batch_size, seq_len, self.num_heads, self.head_dim
+        )
+        k = self.k_proj(hidden_states).view(
+            batch_size, seq_len, self.num_kv_heads, self.head_dim
+        )
+        v = self.v_proj(hidden_states).view(
+            batch_size, seq_len, self.num_kv_heads, self.head_dim
+        )
 
         # === Step 2: Compute fused gates (single projection for G1+G2) ===
         g2, g1 = (None, None)
@@ -765,7 +812,9 @@ class DeepSeekGSA(nn.Module):
             if len(past_key_value) < 2:
                 raise ValueError("past_key_value must contain at least (k, v)")
 
-            past_k, past_v = self._cache_to_internal_kv(past_key_value[0], past_key_value[1])
+            past_k, past_v = self._cache_to_internal_kv(
+                past_key_value[0], past_key_value[1]
+            )
             k = torch.cat([past_k, k], dim=1)
             v = torch.cat([past_v, v], dim=1)
 
@@ -775,9 +824,14 @@ class DeepSeekGSA(nn.Module):
         kv_seq_len = k.shape[1]
 
         # Build indexer-key cache for full (past + current) sparse selection.
-        current_indexer_k = self.indexer.k_proj(hidden_states)  # [B, seq_len, d_indexer]
+        current_indexer_k = self.indexer.k_proj(
+            hidden_states
+        )  # [B, seq_len, d_indexer]
         if past_indexer_k is not None:
-            if past_indexer_k.size(0) != batch_size or past_indexer_k.size(-1) != self.indexer.indexer_dim:
+            if (
+                past_indexer_k.size(0) != batch_size
+                or past_indexer_k.size(-1) != self.indexer.indexer_dim
+            ):
                 raise ValueError(
                     "Invalid indexer-key cache shape. "
                     f"Expected [B, S_past, {self.indexer.indexer_dim}], got {tuple(past_indexer_k.shape)}"
@@ -822,7 +876,14 @@ class DeepSeekGSA(nn.Module):
 
         # === Step 7: Sparse Attention ===
         attn_output, attn_weights = self._sparse_attention(
-            q, k, v, selected_indices, valid_mask, attention_mask, kv_seq_len, output_attentions
+            q,
+            k,
+            v,
+            selected_indices,
+            valid_mask,
+            attention_mask,
+            kv_seq_len,
+            output_attentions,
         )
 
         # === Step 8: Output Gate (G1) ===
@@ -830,18 +891,20 @@ class DeepSeekGSA(nn.Module):
             attn_output = attn_output * g1
 
         # === Step 9: Output Projection ===
-        attn_output = attn_output.reshape(batch_size, seq_len, self.num_heads * self.head_dim)
+        attn_output = attn_output.reshape(
+            batch_size, seq_len, self.num_heads * self.head_dim
+        )
         output = self.o_proj(attn_output)
 
         return output, attn_weights, present_key_value
 
     def _sparse_attention(
         self,
-        q: torch.Tensor,         # [batch, seq_q, n_heads, d_head]
-        k: torch.Tensor,         # [batch, seq_kv, n_kv_heads, d_head]
-        v: torch.Tensor,         # [batch, seq_kv, n_kv_heads, d_head]
-        indices: torch.Tensor,   # [batch, seq_q, k_selected]
-        mask: torch.Tensor,      # [batch, seq_q, k_selected]
+        q: torch.Tensor,  # [batch, seq_q, n_heads, d_head]
+        k: torch.Tensor,  # [batch, seq_kv, n_kv_heads, d_head]
+        v: torch.Tensor,  # [batch, seq_kv, n_kv_heads, d_head]
+        indices: torch.Tensor,  # [batch, seq_q, k_selected]
+        mask: torch.Tensor,  # [batch, seq_q, k_selected]
         attention_mask: Optional[torch.Tensor],
         kv_seq_len: int,
         output_attentions: bool = False,
@@ -874,7 +937,7 @@ class DeepSeekGSA(nn.Module):
             )
             # Apply dropout (Triton kernel doesn't include dropout)
             if self.training and self.attention_dropout > 0:
-                pass # Dropout skipped in Triton path for now
+                pass  # Dropout skipped in Triton path for now
             return output, None
         else:
             # Fall back to Optimized PyTorch implementation (chunked) from kernels module
@@ -884,18 +947,25 @@ class DeepSeekGSA(nn.Module):
                 )
                 return output, None
             else:
-                 # Fall back to naive implementation (legacy)
+                # Fall back to naive implementation (legacy)
                 return self._sparse_attention_pytorch(
-                    q, k, v, indices, mask, attention_mask, kv_seq_len, output_attentions
+                    q,
+                    k,
+                    v,
+                    indices,
+                    mask,
+                    attention_mask,
+                    kv_seq_len,
+                    output_attentions,
                 )
 
     def _sparse_attention_pytorch(
         self,
-        q: torch.Tensor,         # [batch, seq_q, n_heads, d_head]
-        k: torch.Tensor,         # [batch, seq_kv, n_heads, d_head] (already repeated for GQA)
-        v: torch.Tensor,         # [batch, seq_kv, n_heads, d_head] (already repeated for GQA)
-        indices: torch.Tensor,   # [batch, seq_q, k_selected]
-        mask: torch.Tensor,      # [batch, seq_q, k_selected] (causal already applied)
+        q: torch.Tensor,  # [batch, seq_q, n_heads, d_head]
+        k: torch.Tensor,  # [batch, seq_kv, n_heads, d_head] (already repeated for GQA)
+        v: torch.Tensor,  # [batch, seq_kv, n_heads, d_head] (already repeated for GQA)
+        indices: torch.Tensor,  # [batch, seq_q, k_selected]
+        mask: torch.Tensor,  # [batch, seq_q, k_selected] (causal already applied)
         attention_mask: Optional[torch.Tensor],
         kv_seq_len: int,
         output_attentions: bool = False,
@@ -910,7 +980,9 @@ class DeepSeekGSA(nn.Module):
         seq_q = q.shape[1]
 
         # Memory-efficient gather: avoid expanding to [batch, seq_q, seq_kv, ...]
-        k_gathered = self._gather_along_seq_efficient(k, indices)  # [batch, seq_q, k_selected, n_heads, d_head]
+        k_gathered = self._gather_along_seq_efficient(
+            k, indices
+        )  # [batch, seq_q, k_selected, n_heads, d_head]
         v_gathered = self._gather_along_seq_efficient(v, indices)
 
         # Reshape for SDPA: need [batch * seq_q, n_heads, 1, d_head] for q
@@ -923,8 +995,12 @@ class DeepSeekGSA(nn.Module):
         q_sdpa = q.reshape(batch_size * seq_q, n_heads, 1, self.head_dim)
 
         # k_gathered: [batch, seq_q, k_selected, n_heads, d_head] -> [batch*seq_q, n_heads, k_selected, d_head]
-        k_sdpa = k_gathered.permute(0, 1, 3, 2, 4).reshape(batch_size * seq_q, n_heads, k_selected, self.head_dim)
-        v_sdpa = v_gathered.permute(0, 1, 3, 2, 4).reshape(batch_size * seq_q, n_heads, k_selected, self.head_dim)
+        k_sdpa = k_gathered.permute(0, 1, 3, 2, 4).reshape(
+            batch_size * seq_q, n_heads, k_selected, self.head_dim
+        )
+        v_sdpa = v_gathered.permute(0, 1, 3, 2, 4).reshape(
+            batch_size * seq_q, n_heads, k_selected, self.head_dim
+        )
 
         # Build attention mask for SDPA: [batch*seq_q, 1, 1, k_selected]
         # True = valid (opposite of the additive mask convention)
@@ -940,14 +1016,18 @@ class DeepSeekGSA(nn.Module):
         if sparse_mask is not None:
             gathered_sparse_mask = torch.gather(sparse_mask, dim=-1, index=indices)
             # Convert additive mask to boolean (valid where mask > -inf threshold)
-            padding_valid = gathered_sparse_mask > (torch.finfo(gathered_sparse_mask.dtype).min / 2)
+            padding_valid = gathered_sparse_mask > (
+                torch.finfo(gathered_sparse_mask.dtype).min / 2
+            )
             padding_valid = padding_valid.reshape(batch_size * seq_q, 1, 1, k_selected)
             attn_mask = attn_mask & padding_valid
 
         # Use SDPA — dispatches to Flash Attention / memory-efficient kernels
         dropout_p = self.attention_dropout if self.training else 0.0
         output = F.scaled_dot_product_attention(
-            q_sdpa, k_sdpa, v_sdpa,
+            q_sdpa,
+            k_sdpa,
+            v_sdpa,
             attn_mask=attn_mask,
             dropout_p=dropout_p,
             scale=self.scale,
@@ -959,8 +1039,8 @@ class DeepSeekGSA(nn.Module):
 
     def _gather_along_seq_efficient(
         self,
-        x: torch.Tensor,         # [batch, seq_kv, n_heads, d_head]
-        indices: torch.Tensor,   # [batch, seq_q, k_selected]
+        x: torch.Tensor,  # [batch, seq_kv, n_heads, d_head]
+        indices: torch.Tensor,  # [batch, seq_q, k_selected]
     ) -> torch.Tensor:
         """
         Memory-efficient gather along sequence dimension.
@@ -995,18 +1075,19 @@ class DeepSeekGSA(nn.Module):
 # Convenience factory function
 # =============================================================================
 
+
 def create_deepseek_gsa(
     hidden_size: int = 4096,
     num_attention_heads: int = 32,
     num_key_value_heads: int = 8,
-    **kwargs
+    **kwargs,
 ) -> DeepSeekGSA:
     """Factory function to create DeepSeek GSA."""
     config = DeepSeekGSAConfig(
         hidden_size=hidden_size,
         num_attention_heads=num_attention_heads,
         num_key_value_heads=num_key_value_heads,
-        **kwargs
+        **kwargs,
     )
     return DeepSeekGSA(config)
 
@@ -1053,8 +1134,10 @@ if __name__ == "__main__":
 
     # Check indexer scores
     indexer_scores = gsa.indexer(x)
-    valid_scores = indexer_scores[indexer_scores != float('-inf')]
-    print(f"\nIndexer scores range: [{valid_scores.min().item():.3f}, {valid_scores.max().item():.3f}]")
+    valid_scores = indexer_scores[indexer_scores != float("-inf")]
+    print(
+        f"\nIndexer scores range: [{valid_scores.min().item():.3f}, {valid_scores.max().item():.3f}]"
+    )
     print(f"Indexer scores should be in (0, {config.num_indexer_heads}) for sigmoid")
 
     # Parameter count

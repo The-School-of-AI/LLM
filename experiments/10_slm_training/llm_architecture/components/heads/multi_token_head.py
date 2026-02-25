@@ -18,11 +18,12 @@ Design Decisions:
 Reference: GSA (arXiv:2601.15305v1), DeepSeek 3.2 (arXiv:2512.02556v1)
 """
 
+import math
+from typing import Any, Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-from typing import Optional, Tuple, List, Dict, Any
 
 
 class LMHead(nn.Module):
@@ -47,7 +48,7 @@ class LMHead(nn.Module):
         hidden_size: int,
         vocab_size: int,
         bias: bool = False,
-        init_std: float = 0.02
+        init_std: float = 0.02,
     ):
         super().__init__()
         self.hidden_size = hidden_size
@@ -106,7 +107,7 @@ class MultiTokenPredictionHead(nn.Module):
         hidden_size: int,
         vocab_size: int,
         num_predict_tokens: int = 4,
-        init_std: float = 0.02
+        init_std: float = 0.02,
     ):
         super().__init__()
         self.hidden_size = hidden_size
@@ -119,10 +120,12 @@ class MultiTokenPredictionHead(nn.Module):
         self._init_linear(self.main_head)
 
         # Auxiliary heads for tokens t+2, t+3, ... - each untied
-        self.aux_heads = nn.ModuleList([
-            nn.Linear(hidden_size, vocab_size, bias=False)
-            for _ in range(num_predict_tokens - 1)
-        ])
+        self.aux_heads = nn.ModuleList(
+            [
+                nn.Linear(hidden_size, vocab_size, bias=False)
+                for _ in range(num_predict_tokens - 1)
+            ]
+        )
         for head in self.aux_heads:
             self._init_linear(head)
 
@@ -130,7 +133,7 @@ class MultiTokenPredictionHead(nn.Module):
         self.prediction_transform = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.GELU(),
-            nn.Linear(hidden_size, hidden_size)
+            nn.Linear(hidden_size, hidden_size),
         )
 
     def _init_linear(self, module: nn.Linear):
@@ -140,9 +143,7 @@ class MultiTokenPredictionHead(nn.Module):
             nn.init.zeros_(module.bias)
 
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        return_aux: bool = True
+        self, hidden_states: torch.Tensor, return_aux: bool = True
     ) -> Tuple[torch.Tensor, Optional[List[torch.Tensor]]]:
         """
         Compute multi-token predictions.
@@ -183,7 +184,7 @@ class MTPLoss(nn.Module):
         num_predict_tokens: int = 4,
         aux_loss_weight: float = 0.3,
         aux_decay: float = 0.9,
-        ignore_index: int = -100
+        ignore_index: int = -100,
     ):
         super().__init__()
         self.num_predict_tokens = num_predict_tokens
@@ -195,7 +196,7 @@ class MTPLoss(nn.Module):
         self,
         main_logits: torch.Tensor,
         aux_logits: Optional[List[torch.Tensor]],
-        labels: torch.Tensor
+        labels: torch.Tensor,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute MTP loss.
@@ -216,10 +217,10 @@ class MTPLoss(nn.Module):
         main_loss = F.cross_entropy(
             main_logits[:, :-1].contiguous().view(-1, main_logits.size(-1)),
             labels[:, 1:].contiguous().view(-1),
-            ignore_index=self.ignore_index
+            ignore_index=self.ignore_index,
         )
 
-        loss_dict = {'main_loss': main_loss}
+        loss_dict = {"main_loss": main_loss}
         total_loss = main_loss
 
         # Auxiliary losses (t+2, t+3, ...)
@@ -236,19 +237,19 @@ class MTPLoss(nn.Module):
                 aux_loss = F.cross_entropy(
                     aux_log[:, :-offset].contiguous().view(-1, aux_log.size(-1)),
                     labels[:, offset:].contiguous().view(-1),
-                    ignore_index=self.ignore_index
+                    ignore_index=self.ignore_index,
                 )
 
                 # Decaying weight for further predictions
-                weight = self.aux_loss_weight * (self.aux_decay ** i)
+                weight = self.aux_loss_weight * (self.aux_decay**i)
                 aux_total += weight * aux_loss
 
-                loss_dict[f'aux_loss_{offset}'] = aux_loss
+                loss_dict[f"aux_loss_{offset}"] = aux_loss
 
-            loss_dict['aux_total'] = aux_total
+            loss_dict["aux_total"] = aux_total
             total_loss = main_loss + aux_total
 
-        loss_dict['total_loss'] = total_loss
+        loss_dict["total_loss"] = total_loss
 
         return total_loss, loss_dict
 

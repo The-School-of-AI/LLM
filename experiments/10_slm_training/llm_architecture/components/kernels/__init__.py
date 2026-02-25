@@ -23,56 +23,38 @@ Usage:
 try:
     import triton
     import triton.language as tl
+
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
 
 if HAS_TRITON:
-    from .triton_sparse_attn import (
-        triton_sparse_attention,
-        pytorch_sparse_attention,
-    )
-    from .triton_indexer import (
-        triton_gated_indexer,
-    )
-    from .triton_sinkhorn import (
-        triton_sinkhorn_knopp,
-        pytorch_sinkhorn_knopp,
-    )
-    from .triton_fused_norm_gate import (
-        triton_fused_norm_silu_gate,
-        pytorch_fused_norm_silu_gate,
-        FusedRMSNormSiLUGate,
-    )
+    from .triton_fused_norm_gate import (FusedRMSNormSiLUGate,
+                                         pytorch_fused_norm_silu_gate,
+                                         triton_fused_norm_silu_gate)
+    from .triton_indexer import triton_gated_indexer
+    from .triton_sinkhorn import pytorch_sinkhorn_knopp, triton_sinkhorn_knopp
+    from .triton_sparse_attn import (pytorch_sparse_attention,
+                                     triton_sparse_attention)
 else:
     # Provide fallback functions that raise helpful errors
     def triton_sparse_attention(*args, **kwargs):
-        raise ImportError(
-            "Triton is not installed. Install with: pip install triton"
-        )
+        raise ImportError("Triton is not installed. Install with: pip install triton")
 
     def triton_gated_indexer(*args, **kwargs):
-        raise ImportError(
-            "Triton is not installed. Install with: pip install triton"
-        )
+        raise ImportError("Triton is not installed. Install with: pip install triton")
 
     def triton_sinkhorn_knopp(*args, **kwargs):
-        raise ImportError(
-            "Triton is not installed. Install with: pip install triton"
-        )
+        raise ImportError("Triton is not installed. Install with: pip install triton")
 
     def triton_fused_norm_silu_gate(*args, **kwargs):
-        raise ImportError(
-            "Triton is not installed. Install with: pip install triton"
-        )
+        raise ImportError("Triton is not installed. Install with: pip install triton")
 
     # Import PyTorch fallbacks
-    from .triton_sparse_attn import pytorch_sparse_attention
+    from .triton_fused_norm_gate import (FusedRMSNormSiLUGate,
+                                         pytorch_fused_norm_silu_gate)
     from .triton_sinkhorn import pytorch_sinkhorn_knopp
-    from .triton_fused_norm_gate import (
-        pytorch_fused_norm_silu_gate,
-        FusedRMSNormSiLUGate,
-    )
+    from .triton_sparse_attn import pytorch_sparse_attention
 
 __all__ = [
     "HAS_TRITON",

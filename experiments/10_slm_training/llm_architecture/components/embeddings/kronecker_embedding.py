@@ -18,12 +18,13 @@ Requires pf_to_model projection (8192 -> hidden_size) and embed_norm.
 Reference: Test_Code/model_1b.py lines 38-346
 """
 
+import math
+from dataclasses import dataclass
+from typing import List
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-import math
-from typing import List
-from dataclasses import dataclass
 
 
 @dataclass
@@ -36,6 +37,7 @@ class KroneckerConfig:
     - POS_DIM: 32 (max 32 bytes per token)
     - D: 32 x 256 = 8192 dimensions
     """
+
     CHAR_DIM: int = 256
     POS_DIM: int = 32
     D: int = 8192
@@ -44,8 +46,9 @@ class KroneckerConfig:
 
     def __post_init__(self):
         assert self.CHAR_DIM == 256, "CHAR_DIM must be 256 for byte-level encoding"
-        assert self.D == self.CHAR_DIM * self.POS_DIM, \
-            f"D ({self.D}) must equal CHAR_DIM x POS_DIM ({self.CHAR_DIM} x {self.POS_DIM})"
+        assert (
+            self.D == self.CHAR_DIM * self.POS_DIM
+        ), f"D ({self.D}) must equal CHAR_DIM x POS_DIM ({self.CHAR_DIM} x {self.POS_DIM})"
 
 
 class KroneckerEmbeddings:
@@ -75,11 +78,11 @@ class KroneckerEmbeddings:
             return byte_seq
         for end in range(max_bytes, max(max_bytes - 4, 0) - 1, -1):
             try:
-                byte_seq[:end].decode('utf-8')
+                byte_seq[:end].decode("utf-8")
                 return byte_seq[:end]
             except UnicodeDecodeError:
                 continue
-        return b''
+        return b""
 
     def encode_word(self, word: str) -> np.ndarray:
         """
@@ -94,13 +97,15 @@ class KroneckerEmbeddings:
         if word is None or word == "":
             return np.zeros((self.D,), dtype=np.float32)
 
-        byte_seq = word.encode('utf-8')
+        byte_seq = word.encode("utf-8")
 
         if len(byte_seq) > self.POS_DIM:
             if self.cfg.truncate_long_words:
                 byte_seq = self._utf8_safe_truncate(byte_seq, self.POS_DIM)
             else:
-                raise ValueError(f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}")
+                raise ValueError(
+                    f"Token byte length {len(byte_seq)} exceeds POS_DIM={self.POS_DIM}"
+                )
 
         L = len(byte_seq)
         if L == 0:
@@ -111,7 +116,7 @@ class KroneckerEmbeddings:
             M[byte_val, i] = 1.0
 
         if self.cfg.length_normalize:
-            M *= (1.0 / math.sqrt(L))
+            M *= 1.0 / math.sqrt(L)
 
         return M.reshape(self.D)
 
@@ -140,9 +145,9 @@ class KroneckerEmbeddings:
 
         byte_seq = bytes(bytes_list)
         try:
-            return byte_seq.decode('utf-8')
+            return byte_seq.decode("utf-8")
         except UnicodeDecodeError:
-            return byte_seq.decode('utf-8', errors='replace')
+            return byte_seq.decode("utf-8", errors="replace")
 
     def encode_batch(self, words: List[str]) -> np.ndarray:
         """Encode a batch of words."""

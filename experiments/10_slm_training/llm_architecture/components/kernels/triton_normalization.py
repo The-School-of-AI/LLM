@@ -11,14 +11,16 @@ Performance improvements over PyTorch:
 - Cuts memory bandwidth by ~50%
 """
 
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple
 
 # Check for Triton availability
 try:
     import triton
     import triton.language as tl
+
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
@@ -27,16 +29,17 @@ except ImportError:
 
 
 if HAS_TRITON:
+
     @triton.jit
     def rmsnorm_forward_kernel(
         # Pointers
-        x_ptr,          # Input tensor
-        residual_ptr,   # Residual to add (optional)
-        weight_ptr,     # RMSNorm weight
-        out_ptr,        # Output tensor
+        x_ptr,  # Input tensor
+        residual_ptr,  # Residual to add (optional)
+        weight_ptr,  # RMSNorm weight
+        out_ptr,  # Output tensor
         # Dimensions
-        n_rows,         # Batch * seq_len
-        n_cols,         # Hidden size
+        n_rows,  # Batch * seq_len
+        n_cols,  # Hidden size
         # Hyperparameters
         eps,
         # Strides
@@ -48,9 +51,9 @@ if HAS_TRITON:
     ):
         """
         Fused RMSNorm kernel with optional residual addition.
-        
+
         Computes: out = (x + residual) * rsqrt(mean((x + residual)^2) + eps) * weight
-        
+
         Args:
             x_ptr: Input tensor [n_rows, n_cols]
             residual_ptr: Optional residual [n_rows, n_cols]
@@ -66,37 +69,41 @@ if HAS_TRITON:
         """
         # Get row index
         row_idx = tl.program_id(0)
-        
+
         # Create column offsets
         col_offsets = tl.arange(0, BLOCK_SIZE)
         mask = col_offsets < n_cols
-        
+
         # Load input row
         x_ptr_row = x_ptr + row_idx * stride_x_row
         x = tl.load(x_ptr_row + col_offsets, mask=mask, other=0.0).to(tl.float32)
-        
+
         # Add residual if present
         if HAS_RESIDUAL:
-            residual = tl.load(residual_ptr + row_idx * stride_x_row + col_offsets, mask=mask, other=0.0).to(tl.float32)
+            residual = tl.load(
+                residual_ptr + row_idx * stride_x_row + col_offsets,
+                mask=mask,
+                other=0.0,
+            ).to(tl.float32)
             x = x + residual
-        
+
         # Compute RMSNorm
         # variance = mean(x^2)
         x_squared = x * x
         # Only sum over valid elements
         variance_sum = tl.sum(tl.where(mask, x_squared, 0.0), axis=0)
         variance = variance_sum / n_cols
-        
+
         # rstd = 1 / sqrt(variance + eps)
         rstd = tl.rsqrt(variance + eps)
-        
+
         # Normalize: x * rstd
         normed = x * rstd
-        
+
         # Apply weight
         weight = tl.load(weight_ptr + col_offsets, mask=mask, other=1.0).to(tl.float32)
         output = normed * weight
-        
+
         # Store output (cast back to input dtype)
         out_ptr_row = out_ptr + row_idx * stride_out_row
         tl.store(out_ptr_row + col_offsets, output, mask=mask)
@@ -110,35 +117,35 @@ def triton_rmsnorm(
 ) -> torch.Tensor:
     """
     Apply RMSNorm using Triton kernel.
-    
+
     Args:
         x: Input tensor [..., hidden_size]
         weight: Weight parameter [hidden_size]
         eps: Epsilon for numerical stability
         residual: Optional residual tensor to add before normalization
-        
+
     Returns:
         Normalized tensor of same shape as x
     """
     if not HAS_TRITON:
         raise ImportError("Triton is required for triton_rmsnorm")
-    
+
     # Flatten input to 2D
     orig_shape = x.shape
     x_2d = x.reshape(-1, x.shape[-1])
     n_rows, n_cols = x_2d.shape
-    
+
     # Allocate output
     out = torch.empty_like(x_2d)
-    
+
     # Determine block size (must be power of 2 and >= n_cols)
     BLOCK_SIZE = triton.next_power_of_2(n_cols)
     if BLOCK_SIZE < n_cols:
         BLOCK_SIZE = BLOCK_SIZE * 2
-    
+
     # Clamp to reasonable values
     BLOCK_SIZE = min(max(BLOCK_SIZE, 128), 4096)
-    
+
     # Prepare residual
     has_residual = residual is not None
     if has_residual:
@@ -146,10 +153,10 @@ def triton_rmsnorm(
         residual_ptr = residual_2d
     else:
         residual_ptr = x_2d  # Dummy pointer (won't be used)
-    
+
     # Launch kernel
     grid = (n_rows,)
-    
+
     rmsnorm_forward_kernel[grid](
         x_2d,
         residual_ptr,
@@ -163,7 +170,7 @@ def triton_rmsnorm(
         BLOCK_SIZE=BLOCK_SIZE,
         HAS_RESIDUAL=has_residual,
     )
-    
+
     # Reshape output
     return out.reshape(orig_shape)
 
@@ -176,24 +183,24 @@ def pytorch_rmsnorm(
 ) -> torch.Tensor:
     """
     PyTorch fallback for RMSNorm.
-    
+
     Args:
         x: Input tensor [..., hidden_size]
         weight: Weight parameter [hidden_size]
         eps: Epsilon for numerical stability
         residual: Optional residual tensor to add before normalization
-        
+
     Returns:
         Normalized tensor of same shape as x
     """
     # Add residual if provided
     if residual is not None:
         x = x + residual
-    
+
     # Compute RMSNorm
     variance = x.pow(2).mean(-1, keepdim=True)
     x_normed = x * torch.rsqrt(variance + eps)
-    
+
     # Apply weight
     return x_normed * weight
 
@@ -201,13 +208,13 @@ def pytorch_rmsnorm(
 class TritonRMSNorm(nn.Module):
     """
     RMSNorm using Triton kernel with automatic fallback.
-    
+
     Features:
     - Fused residual addition
     - 50% less memory bandwidth
     - 3-4x fewer kernel launches
     """
-    
+
     def __init__(
         self,
         hidden_size: int,
@@ -217,10 +224,10 @@ class TritonRMSNorm(nn.Module):
         self.hidden_size = hidden_size
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(hidden_size))
-        
+
         # Check if Triton is available
         self.use_triton = HAS_TRITON and torch.cuda.is_available()
-        
+
     def forward(
         self,
         x: torch.Tensor,
@@ -228,11 +235,11 @@ class TritonRMSNorm(nn.Module):
     ) -> torch.Tensor:
         """
         Forward pass with optional residual fusion.
-        
+
         Args:
             x: Input tensor [..., hidden_size]
             residual: Optional residual to add before normalization
-            
+
         Returns:
             Normalized tensor
         """
@@ -242,10 +249,11 @@ class TritonRMSNorm(nn.Module):
             except Exception as e:
                 # Fallback to PyTorch on error
                 import warnings
+
                 warnings.warn(f"Triton RMSNorm failed: {e}. Using PyTorch fallback.")
                 return pytorch_rmsnorm(x, self.weight, self.eps, residual)
         else:
             return pytorch_rmsnorm(x, self.weight, self.eps, residual)
-    
+
     def extra_repr(self) -> str:
-        return f'{self.hidden_size}, eps={self.eps}, triton={self.use_triton}'
+        return f"{self.hidden_size}, eps={self.eps}, triton={self.use_triton}"

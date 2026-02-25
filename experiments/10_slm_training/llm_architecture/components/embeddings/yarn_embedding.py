@@ -9,10 +9,11 @@ Reference: "YaRN: Efficient Context Window Extension of Large Language Models"
            (Peng et al., 2023)
 """
 
-import torch
-import torch.nn as nn
 import math
 from typing import Optional, Tuple
+
+import torch
+import torch.nn as nn
 
 
 class YaRNRotaryEmbedding(nn.Module):
@@ -45,7 +46,7 @@ class YaRNRotaryEmbedding(nn.Module):
         mscale: float = 1.0,
         mscale_all_dim: float = 0.0,
         device: Optional[torch.device] = None,
-        dtype: torch.dtype = torch.float32
+        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
         self.dim = dim
@@ -68,42 +69,40 @@ class YaRNRotaryEmbedding(nn.Module):
         # Pre-compute full cos/sin cache for torch.compile compatibility
         # This avoids data-dependent control flow during forward pass
         self._precompute_cos_sin_cache(max_position_embeddings, device, dtype)
-        
+
     def _compute_yarn_inv_freq(
-        self,
-        device: Optional[torch.device] = None,
-        dtype: torch.dtype = torch.float32
+        self, device: Optional[torch.device] = None, dtype: torch.dtype = torch.float32
     ) -> torch.Tensor:
         """
         Compute YaRN-adjusted inverse frequencies.
-        
+
         Uses NTK-aware interpolation with frequency mixing.
         """
         # Original RoPE frequencies
         dim_range = torch.arange(0, self.dim, 2, device=device, dtype=dtype)
         inv_freq = 1.0 / (self.base ** (dim_range / self.dim))
-        
+
         # Compute wavelengths
         low_freq_wavelen = self.original_max_position / self.beta_fast
         high_freq_wavelen = self.original_max_position / self.beta_slow
-        
+
         # Compute interpolation factors for each dimension
         wavelen = 2 * math.pi / inv_freq
-        
+
         # Ramp function: smooth transition between no-scaling and full-scaling
         ramp = (self.original_max_position / wavelen - self.beta_fast) / (
             self.beta_slow - self.beta_fast
         )
         ramp = ramp.clamp(0, 1)
-        
+
         # Apply NTK-aware interpolation
         # Low frequencies (high wavelength): interpolate
         # High frequencies (low wavelength): extrapolate
         inv_freq_interpolated = inv_freq / self.scale
         inv_freq_scaled = inv_freq_interpolated * (1 - ramp) + inv_freq * ramp
-        
+
         return inv_freq_scaled
-    
+
     def _compute_attn_scale(self) -> float:
         """
         Compute attention scaling factor.
@@ -120,10 +119,7 @@ class YaRNRotaryEmbedding(nn.Module):
             return 1.0
 
     def _precompute_cos_sin_cache(
-        self,
-        max_seq_len: int,
-        device: Optional[torch.device],
-        dtype: torch.dtype
+        self, max_seq_len: int, device: Optional[torch.device], dtype: torch.dtype
     ):
         """
         Pre-compute full cos/sin cache at initialization.
@@ -147,9 +143,7 @@ class YaRNRotaryEmbedding(nn.Module):
         self.register_buffer("sin_cached", sin_cached, persistent=False)
 
     def forward(
-        self,
-        x: torch.Tensor,
-        position_ids: Optional[torch.LongTensor] = None
+        self, x: torch.Tensor, position_ids: Optional[torch.LongTensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get YaRN rotary embeddings.
@@ -176,7 +170,7 @@ class YaRNRotaryEmbedding(nn.Module):
             sin = self.sin_cached[:seq_len].unsqueeze(0)
 
         return cos, sin
-    
+
     def get_attn_scale(self) -> float:
         """Get the attention scaling factor for use in attention."""
         return self.attn_scale
@@ -229,9 +223,7 @@ class DynamicYaRNEmbedding(nn.Module):
 
     @torch.compiler.disable  # Disable torch.compile for this method due to dynamic control flow
     def forward(
-        self,
-        x: torch.Tensor,
-        position_ids: Optional[torch.LongTensor] = None
+        self, x: torch.Tensor, position_ids: Optional[torch.LongTensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Compute dynamic YaRN embeddings based on sequence length.
@@ -281,9 +273,7 @@ class DynamicYaRNEmbedding(nn.Module):
         return cos, sin
 
     def _compute_dynamic_inv_freq(
-        self,
-        scale: float,
-        device: torch.device
+        self, scale: float, device: torch.device
     ) -> torch.Tensor:
         """Compute frequencies with dynamic scale."""
         dim_range = torch.arange(0, self.dim, 2, device=device, dtype=torch.float32)

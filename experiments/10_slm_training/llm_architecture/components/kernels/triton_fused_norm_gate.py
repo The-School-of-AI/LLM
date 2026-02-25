@@ -21,14 +21,16 @@ Eliminates 2 intermediate tensors, saving ~2x memory bandwidth.
 For DeltaNet with 6 layers * num_heads calls, this is significant.
 """
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 
 try:
     import triton
     import triton.language as tl
+
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
@@ -37,13 +39,14 @@ except ImportError:
 
 
 if HAS_TRITON:
+
     @triton.jit
     def _fused_norm_silu_gate_kernel(
         # Pointers
-        x_ptr,          # Input tensor (to be normed)
-        g_ptr,          # Gate tensor
-        weight_ptr,     # RMSNorm weight
-        out_ptr,        # Output tensor
+        x_ptr,  # Input tensor (to be normed)
+        g_ptr,  # Gate tensor
+        weight_ptr,  # RMSNorm weight
+        out_ptr,  # Output tensor
         # Dimensions
         n_rows,
         n_cols,
@@ -69,10 +72,14 @@ if HAS_TRITON:
         mask = col_offsets < n_cols
 
         # Load x row
-        x = tl.load(x_ptr + row_idx * stride_x_row + col_offsets, mask=mask, other=0.0).to(tl.float32)
+        x = tl.load(
+            x_ptr + row_idx * stride_x_row + col_offsets, mask=mask, other=0.0
+        ).to(tl.float32)
 
         # Load gate row
-        g = tl.load(g_ptr + row_idx * stride_g_row + col_offsets, mask=mask, other=0.0).to(tl.float32)
+        g = tl.load(
+            g_ptr + row_idx * stride_g_row + col_offsets, mask=mask, other=0.0
+        ).to(tl.float32)
 
         # Load weight
         w = tl.load(weight_ptr + col_offsets, mask=mask, other=1.0).to(tl.float32)
@@ -199,4 +206,4 @@ class FusedRMSNormSiLUGate(nn.Module):
         return pytorch_fused_norm_silu_gate(x, g, self.weight, self.eps)
 
     def extra_repr(self) -> str:
-        return f'{self.dim}, eps={self.eps}, triton={self.use_triton}'
+        return f"{self.dim}, eps={self.eps}, triton={self.use_triton}"

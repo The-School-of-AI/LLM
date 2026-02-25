@@ -10,10 +10,11 @@ Tests that all 5 optimizations preserve:
 Run: python test_optimizations.py
 """
 
+import os
+import sys
+
 import torch
 import torch.nn as nn
-import sys
-import os
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -127,7 +128,9 @@ def test_sinkhorn_early_stopping():
     # Small diff is expected: early stop exits before all 20 iterations.
     # This is safe because: (a) determinism is preserved (same input → same output),
     # and (b) the result is already converged (doubly-stochastic within tolerance).
-    assert max_diff_vs_fixed < 1e-3, f"Early stopping diverges too much: {max_diff_vs_fixed}"
+    assert (
+        max_diff_vs_fixed < 1e-3
+    ), f"Early stopping diverges too much: {max_diff_vs_fixed}"
 
     print("  PASSED: Deterministic, doubly-stochastic, early stop negligible diff")
     print()
@@ -153,7 +156,7 @@ def test_chunked_recurrence():
         rope_original_max=256,
         rope_scaling_factor=1.0,
         conv_size=4,
-        use_output_norm=True
+        use_output_norm=True,
     )
 
     x = torch.randn(B, T, hidden)
@@ -205,7 +208,7 @@ def test_reversibility():
     print("TEST 5: Full reversibility test with optimized model")
     print("=" * 60)
 
-    from model_1b import ModelConfig, LightningDecoderLayer
+    from model_1b import LightningDecoderLayer, ModelConfig
     from reversible_ops_midpoint import ReversibleMidpointStack
 
     config = ModelConfig()
@@ -272,7 +275,7 @@ def test_reversibility():
         if p.grad is not None:
             total_grad_norm += p.grad.norm().item() ** 2
             param_count += 1
-    total_grad_norm = total_grad_norm ** 0.5
+    total_grad_norm = total_grad_norm**0.5
     print(f"  Total gradient norm: {total_grad_norm:.6f}")
     print(f"  Parameters with gradients: {param_count}")
     assert total_grad_norm > 0, "Zero gradient norm — no learning signal!"
@@ -288,7 +291,7 @@ def test_bf16_training_loop():
     print("TEST 6: bf16 mini training loop (loss + grad_norm)")
     print("=" * 60)
 
-    from model_1b import ModelConfig, LightningDecoderLayer
+    from model_1b import LightningDecoderLayer, ModelConfig
     from reversible_ops_midpoint import ReversibleMidpointStack
 
     config = ModelConfig()
@@ -333,7 +336,9 @@ def test_bf16_training_loop():
         optimizer.zero_grad()
 
         B, T = 2, 16
-        x = torch.randn(B, T, config.n_streams, config.hidden_size, dtype=torch.bfloat16)
+        x = torch.randn(
+            B, T, config.n_streams, config.hidden_size, dtype=torch.bfloat16
+        )
 
         out, aux = stack(x)
         loss = out.float().sum() + aux.float()  # Upcast for loss computation
@@ -345,14 +350,16 @@ def test_bf16_training_loop():
         for p in stack.parameters():
             if p.grad is not None:
                 grad_norm += p.grad.float().norm().item() ** 2
-        grad_norm = grad_norm ** 0.5
+        grad_norm = grad_norm**0.5
 
         optimizer.step()
 
         losses.append(loss.item())
         print(f"  Step {step}: loss={loss.item():.4f}, grad_norm={grad_norm:.4f}")
 
-        assert torch.isfinite(torch.tensor(loss.item())), f"Non-finite loss at step {step}!"
+        assert torch.isfinite(
+            torch.tensor(loss.item())
+        ), f"Non-finite loss at step {step}!"
         assert grad_norm > 0, f"Zero gradient at step {step}!"
         assert grad_norm < 1e6, f"Exploding gradient at step {step}!"
 
@@ -366,7 +373,7 @@ def test_force_determinism():
     print("TEST 7: force() determinism (reversibility requirement)")
     print("=" * 60)
 
-    from model_1b import ModelConfig, LightningDecoderLayer
+    from model_1b import LightningDecoderLayer, ModelConfig
 
     config = ModelConfig()
     config.hidden_size = 128
@@ -435,5 +442,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nTEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

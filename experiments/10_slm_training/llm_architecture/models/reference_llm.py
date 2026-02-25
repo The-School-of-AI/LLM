@@ -24,33 +24,29 @@ Key differences from LLM class:
 - Returns tuple (logits_ntp, logits_mtp, aux_loss) not LLMOutput dataclass
 """
 
+import math
+import sys
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-from typing import Optional, Tuple, Dict, Any, List
-from dataclasses import dataclass
 
-import sys
-sys.path.append('..')
+sys.path.append("..")
 
-from components.connections.mhc_v2 import RMSNorm
-from components.integration.reversible_midpoint import ReversibleMidpointStack
-from layers.lightning_decoder import LightningDecoderLayer, MTPTransformerBlock
+from components.connections.mhc_v2 import MHCCoeffsV2, RMSNorm
 from components.ffn.moe_ffn import MoEFFN, MoEGate
-from components.connections.mhc_v2 import MHCCoeffsV2
-
-from config.model_config import (
-    ModelConfig,
-    EmbeddingType,
-    ConnectionType,
-    get_preset_config,
-)
+from components.integration.reversible_midpoint import ReversibleMidpointStack
+from config.model_config import (ConnectionType, EmbeddingType, ModelConfig,
+                                 get_preset_config)
+from layers.lightning_decoder import LightningDecoderLayer, MTPTransformerBlock
 
 
 @dataclass
 class ReferenceLLMOutput:
     """Output container for ReferenceLLM forward pass."""
+
     logits_ntp: torch.Tensor = None
     logits_mtp: Optional[torch.Tensor] = None
     aux_loss: Optional[torch.Tensor] = None
@@ -81,8 +77,13 @@ class ReferenceLLM(nn.Module):
         logits_ntp, logits_mtp = model(input_ids)
     """
 
-    def __init__(self, config: ModelConfig, embedding_type: str = "standard",
-                 bpe_vocab=None, pf_codec=None):
+    def __init__(
+        self,
+        config: ModelConfig,
+        embedding_type: str = "standard",
+        bpe_vocab=None,
+        pf_codec=None,
+    ):
         super().__init__()
 
         self.config = config
@@ -96,10 +97,16 @@ class ReferenceLLM(nn.Module):
         # ================================================================
         if self.embedding_type_str == "kronecker":
             if bpe_vocab is None or pf_codec is None:
-                raise ValueError("bpe_vocab and pf_codec required for Kronecker embeddings")
+                raise ValueError(
+                    "bpe_vocab and pf_codec required for Kronecker embeddings"
+                )
 
-            from components.embeddings.kronecker_embedding import PureHybridEmbeddingTorch
-            self.kronecker_embeddings = PureHybridEmbeddingTorch(bpe_vocab, pf_codec).module()
+            from components.embeddings.kronecker_embedding import \
+                PureHybridEmbeddingTorch
+
+            self.kronecker_embeddings = PureHybridEmbeddingTorch(
+                bpe_vocab, pf_codec
+            ).module()
             D_pf = pf_codec.D
             self.pf_to_model = nn.Linear(D_pf, config.hidden_size, bias=False)
             self.embed_norm = RMSNorm(config.hidden_size)
@@ -183,13 +190,21 @@ class ReferenceLLM(nn.Module):
         print(f"  Vocabulary: {self.vocab_size:,}")
         print(f"  Hidden Size: {config.hidden_size}")
         print(f"  Total Layers: {config.num_hidden_layers}")
-        print(f"  - DeltaNet: {num_deltanet} layers ({num_deltanet/config.num_hidden_layers*100:.0f}%)")
-        print(f"  - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_hidden_layers*100:.0f}%)")
+        print(
+            f"  - DeltaNet: {num_deltanet} layers ({num_deltanet/config.num_hidden_layers*100:.0f}%)"
+        )
+        print(
+            f"  - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_hidden_layers*100:.0f}%)"
+        )
         print(f"  Streams: {self.n_streams}")
-        print(f"  MTP: {'Enabled (Full Transformer)' if self.mtp_block else 'Disabled'}")
+        print(
+            f"  MTP: {'Enabled (Full Transformer)' if self.mtp_block else 'Disabled'}"
+        )
         print(f"  Embedding: {'Kronecker' if self.use_kronecker else 'Standard'}")
         if self.use_reversible:
-            print(f"  Integration: Reversible Midpoint (step={int_config.step_size}, a={int_config.a})")
+            print(
+                f"  Integration: Reversible Midpoint (step={int_config.step_size}, a={int_config.a})"
+            )
         else:
             print(f"  Integration: Sequential (direct forward, no reversible overhead)")
         print(f"  Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
@@ -225,8 +240,14 @@ class ReferenceLLM(nn.Module):
             x = self.token_embed(token_ids)
         return x
 
-    def forward(self, input_ids, next_token_ids=None, attention_mask=None,
-                labels=None, return_loss=False):
+    def forward(
+        self,
+        input_ids,
+        next_token_ids=None,
+        attention_mask=None,
+        labels=None,
+        return_loss=False,
+    ):
         """
         Forward pass with Multi-Token Prediction.
 
@@ -296,10 +317,10 @@ class ReferenceLLM(nn.Module):
             main_loss = F.cross_entropy(
                 shift_logits.view(-1, shift_logits.size(-1)),
                 shift_labels.view(-1),
-                ignore_index=-100
+                ignore_index=-100,
             )
 
-            loss_dict = {'main_loss': main_loss, 'aux_loss': total_aux_loss}
+            loss_dict = {"main_loss": main_loss, "aux_loss": total_aux_loss}
             loss = main_loss
 
             # MTP loss
@@ -310,17 +331,19 @@ class ReferenceLLM(nn.Module):
                 min_len = min(mtp_shift_logits.size(1), mtp_shift_labels.size(1))
                 if min_len > 0:
                     mtp_loss = F.cross_entropy(
-                        mtp_shift_logits[:, :min_len].reshape(-1, mtp_shift_logits.size(-1)),
+                        mtp_shift_logits[:, :min_len].reshape(
+                            -1, mtp_shift_logits.size(-1)
+                        ),
                         mtp_shift_labels[:, :min_len].reshape(-1),
-                        ignore_index=-100
+                        ignore_index=-100,
                     )
                     mtp_weight = self.config.head.mtp_loss_weight
                     loss = loss + mtp_weight * mtp_loss
-                    loss_dict['mtp_loss'] = mtp_loss
+                    loss_dict["mtp_loss"] = mtp_loss
 
             # Add auxiliary loss
             loss = loss + total_aux_loss
-            loss_dict['total_loss'] = loss
+            loss_dict["total_loss"] = loss
 
             return ReferenceLLMOutput(
                 logits_ntp=logits_ntp,
@@ -362,16 +385,22 @@ class ReferenceLLM(nn.Module):
 
             if top_k > 0:
                 indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
-                logits[indices_to_remove] = float('-inf')
+                logits[indices_to_remove] = float("-inf")
 
             if top_p < 1.0:
                 sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                cumulative_probs = torch.cumsum(
+                    F.softmax(sorted_logits, dim=-1), dim=-1
+                )
                 sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[
+                    ..., :-1
+                ].clone()
                 sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-                logits[indices_to_remove] = float('-inf')
+                indices_to_remove = sorted_indices_to_remove.scatter(
+                    1, sorted_indices, sorted_indices_to_remove
+                )
+                logits[indices_to_remove] = float("-inf")
 
             if do_sample:
                 probs = F.softmax(logits, dim=-1)
@@ -395,17 +424,17 @@ class ReferenceLLM(nn.Module):
     def get_model_info(self) -> Dict[str, Any]:
         """Get model configuration info."""
         return {
-            'name': self.config.model_name,
-            'parameters': self.num_parameters,
-            'parameters_billions': self.num_parameters / 1e9,
-            'hidden_size': self.config.hidden_size,
-            'num_layers': self.config.num_hidden_layers,
-            'num_deltanet_layers': self.config.num_deltanet_layers,
-            'num_gsa_layers': self.config.num_gsa_layers,
-            'vocab_size': self.config.vocab_size,
-            'max_position': self.config.max_position_embeddings,
-            'n_streams': self.n_streams,
-            'embedding_type': self.embedding_type_str,
-            'mtp_enabled': self.mtp_block is not None,
-            'reversible': self.use_reversible,
+            "name": self.config.model_name,
+            "parameters": self.num_parameters,
+            "parameters_billions": self.num_parameters / 1e9,
+            "hidden_size": self.config.hidden_size,
+            "num_layers": self.config.num_hidden_layers,
+            "num_deltanet_layers": self.config.num_deltanet_layers,
+            "num_gsa_layers": self.config.num_gsa_layers,
+            "vocab_size": self.config.vocab_size,
+            "max_position": self.config.max_position_embeddings,
+            "n_streams": self.n_streams,
+            "embedding_type": self.embedding_type_str,
+            "mtp_enabled": self.mtp_block is not None,
+            "reversible": self.use_reversible,
         }

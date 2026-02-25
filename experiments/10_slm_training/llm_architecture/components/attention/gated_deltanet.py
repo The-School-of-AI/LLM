@@ -25,15 +25,18 @@ Performance notes:
 Reference: Test_Code/model_1b.py lines 446-707
 """
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 # Try to import flash-linear-attention for optimized Gated DeltaNet Triton kernels
 # Prefer chunk_gated_delta_rule (has alpha gate) over chunk_delta_rule (no alpha)
 try:
-    from fla.ops.gated_delta_rule import chunk_gated_delta_rule as _fla_chunk_gated_delta_rule
+    from fla.ops.gated_delta_rule import \
+        chunk_gated_delta_rule as _fla_chunk_gated_delta_rule
+
     HAS_FLA = True
 except ImportError:
     HAS_FLA = False
@@ -42,6 +45,7 @@ except ImportError:
 # Try to import fused Triton kernel for RMSNorm+SiLU+Gate (3 ops -> 1 kernel)
 try:
     from components.kernels.triton_fused_norm_gate import FusedRMSNormSiLUGate
+
     _HAS_FUSED_NORM_GATE = True
 except ImportError:
     _HAS_FUSED_NORM_GATE = False
@@ -49,6 +53,7 @@ except ImportError:
 # Try to import TritonRMSNorm for standalone norm
 try:
     from components.kernels.triton_normalization import TritonRMSNorm
+
     _HAS_TRITON_NORM = True
 except ImportError:
     _HAS_TRITON_NORM = False
@@ -58,6 +63,7 @@ except ImportError:
 # Helper Modules
 # ============================================================================
 
+
 class ShortConvolution(nn.Module):
     """
     Short convolution layer with causal padding.
@@ -66,22 +72,23 @@ class ShortConvolution(nn.Module):
     Uses depthwise convolution (groups=dim) for efficiency.
     """
 
-    def __init__(self, dim, conv_size=4, activation='silu'):
+    def __init__(self, dim, conv_size=4, activation="silu"):
         super().__init__()
         self.conv_size = conv_size
         self.conv = nn.Conv1d(
-            dim, dim,
+            dim,
+            dim,
             kernel_size=conv_size,
             padding=conv_size - 1,  # Causal padding
-            groups=dim  # Depthwise convolution
+            groups=dim,  # Depthwise convolution
         )
-        self.activation = nn.SiLU() if activation == 'silu' else nn.Identity()
+        self.activation = nn.SiLU() if activation == "silu" else nn.Identity()
 
     def forward(self, x):
         # x: (B, T, D)
         x = x.transpose(1, 2)  # (B, D, T)
         x = self.conv(x)
-        x = x[:, :, :-(self.conv_size - 1)]  # Remove extra padding for causality
+        x = x[:, :, : -(self.conv_size - 1)]  # Remove extra padding for causality
         x = x.transpose(1, 2)  # (B, T, D)
         return self.activation(x)
 
@@ -95,7 +102,7 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x):
-        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
+        rms = torch.sqrt(torch.mean(x**2, dim=-1, keepdim=True) + self.eps)
         return self.weight * x / rms
 
 
@@ -129,6 +136,7 @@ class FusedRMSNormSwishGate(nn.Module):
 # YARN RoPE (self-contained, matching Test_Code)
 # ============================================================================
 
+
 class DeltaNetRotaryEmbedding(nn.Module):
     """
     YARN (Yet Another RoPE extensioN) Rotary Positional Embedding.
@@ -143,8 +151,14 @@ class DeltaNetRotaryEmbedding(nn.Module):
     Reference: https://arxiv.org/abs/2309.00071
     """
 
-    def __init__(self, dim, max_position_embeddings=8192, base=10000,
-                 original_max_position_embeddings=8192, scaling_factor=32.0):
+    def __init__(
+        self,
+        dim,
+        max_position_embeddings=8192,
+        base=10000,
+        original_max_position_embeddings=8192,
+        scaling_factor=32.0,
+    ):
         super().__init__()
         self.dim = dim
         self.base = base
@@ -170,7 +184,9 @@ class DeltaNetRotaryEmbedding(nn.Module):
         # Compute interpolation weights (mscale) for each frequency
         freq_extra = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
         wavelen = 2 * math.pi / freq_extra
-        ramp = torch.clamp((wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1)
+        ramp = torch.clamp(
+            (wavelen - self.beta_fast) / (self.beta_slow - self.beta_fast), 0, 1
+        )
         self.register_buffer("mscale", ramp)
 
         self._set_cos_sin_cache(max_position_embeddings)
@@ -192,15 +208,18 @@ class DeltaNetRotaryEmbedding(nn.Module):
         """Apply rotary embedding using interleaved pattern."""
         x1, x2 = x[..., ::2], x[..., 1::2]
         return torch.cat(
-            (x1 * cos[..., ::2] - x2 * sin[..., ::2],
-             x1 * sin[..., ::2] + x2 * cos[..., ::2]),
-            dim=-1
+            (
+                x1 * cos[..., ::2] - x2 * sin[..., ::2],
+                x1 * sin[..., ::2] + x2 * cos[..., ::2],
+            ),
+            dim=-1,
         )
 
 
 # ============================================================================
 # Gated DeltaNet (75% of layers) - O(N) Linear Attention
 # ============================================================================
+
 
 class GatedDeltaNet(nn.Module):
     """
@@ -221,10 +240,18 @@ class GatedDeltaNet(nn.Module):
     Returns single tensor (B, T, hidden_size), NOT a tuple.
     """
 
-    def __init__(self, hidden_size, num_heads, head_dim,
-                 max_seq_len=262144, rope_base=10000,
-                 rope_original_max=8192, rope_scaling_factor=32.0,
-                 conv_size=4, use_output_norm=True):
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        head_dim,
+        max_seq_len=262144,
+        rope_base=10000,
+        rope_original_max=8192,
+        rope_scaling_factor=32.0,
+        conv_size=4,
+        use_output_norm=True,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -243,13 +270,23 @@ class GatedDeltaNet(nn.Module):
         self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
 
         # Gate projections for alpha/beta computation
-        self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)  # Beta writing strength
-        self.gk_proj = nn.Linear(hidden_size, num_heads, bias=True)  # For alpha computation
+        self.b_proj = nn.Linear(
+            hidden_size, num_heads, bias=True
+        )  # Beta writing strength
+        self.gk_proj = nn.Linear(
+            hidden_size, num_heads, bias=True
+        )  # For alpha computation
 
         # Short convolutions for local context
-        self.q_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
-        self.k_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
-        self.v_conv1d = ShortConvolution(value_dim, conv_size=conv_size, activation='silu')
+        self.q_conv1d = ShortConvolution(
+            key_dim, conv_size=conv_size, activation="silu"
+        )
+        self.k_conv1d = ShortConvolution(
+            key_dim, conv_size=conv_size, activation="silu"
+        )
+        self.v_conv1d = ShortConvolution(
+            value_dim, conv_size=conv_size, activation="silu"
+        )
 
         # Alpha decay parameters (per-head)
         # Paper: A initialized uniform(0, 16), then log for exponential parameterization
@@ -270,7 +307,7 @@ class GatedDeltaNet(nn.Module):
             max_position_embeddings=max_seq_len,
             base=rope_base,
             original_max_position_embeddings=rope_original_max,
-            scaling_factor=rope_scaling_factor
+            scaling_factor=rope_scaling_factor,
         )
 
         # Output normalization with gating
@@ -291,7 +328,10 @@ class GatedDeltaNet(nn.Module):
 
     def _get_causal_mask(self, size, device):
         """Get or create cached causal mask (upper triangle = True)."""
-        if not hasattr(self, '_causal_mask_cache') or self._causal_mask_cache.size(0) < size:
+        if (
+            not hasattr(self, "_causal_mask_cache")
+            or self._causal_mask_cache.size(0) < size
+        ):
             self._causal_mask_cache = torch.triu(
                 torch.ones(size, size, device=device, dtype=torch.bool), diagonal=1
             )
@@ -331,7 +371,7 @@ class GatedDeltaNet(nn.Module):
 
         # Pre-squeeze scalars for efficiency
         alpha_sq = alpha.squeeze(-1)  # (B, H, T)
-        beta_sq = beta.squeeze(-1)    # (B, H, T)
+        beta_sq = beta.squeeze(-1)  # (B, H, T)
 
         output_chunks = []
 
@@ -344,7 +384,7 @@ class GatedDeltaNet(nn.Module):
             k_c = k[:, :, chunk_start:chunk_end, :]
             v_c = v[:, :, chunk_start:chunk_end, :]
             alpha_c = alpha_sq[:, :, chunk_start:chunk_end]  # (B, H, L)
-            beta_c = beta_sq[:, :, chunk_start:chunk_end]    # (B, H, L)
+            beta_c = beta_sq[:, :, chunk_start:chunk_end]  # (B, H, L)
 
             # --- Inter-chunk contribution: query the accumulated state S ---
             # o_inter[t] = q_c[t] @ S  (before any intra-chunk updates)
@@ -363,11 +403,15 @@ class GatedDeltaNet(nn.Module):
             # decay_matrix[i,j] = exp(cumsum[i] - cumsum[j]) for i >= j
             # Apply causal mask BEFORE exp to avoid inf * 0 = NaN
             # shape: (B, H, L, L)
-            log_decay_matrix = cumsum_log_alpha.unsqueeze(-1) - cumsum_log_alpha.unsqueeze(-2)
+            log_decay_matrix = cumsum_log_alpha.unsqueeze(
+                -1
+            ) - cumsum_log_alpha.unsqueeze(-2)
 
             # Apply causal mask: set upper triangle to -inf so exp gives 0
             causal_mask = self._get_causal_mask(L, device)
-            log_decay_matrix = log_decay_matrix.masked_fill(causal_mask.unsqueeze(0).unsqueeze(0), float('-inf'))
+            log_decay_matrix = log_decay_matrix.masked_fill(
+                causal_mask.unsqueeze(0).unsqueeze(0), float("-inf")
+            )
 
             decay_matrix = torch.exp(log_decay_matrix)
 
@@ -477,10 +521,12 @@ class GatedDeltaNet(nn.Module):
         gk = self.gk_proj(x)  # (B, T, num_heads)
         A = -torch.exp(self.A_log)  # Negative for decay
         # g_log = log(alpha) in log space, always <= 0 so alpha in (0, 1]
-        g_log = A.view(1, 1, self.num_heads) * F.softplus(gk + self.dt_bias)  # (B, T, H)
+        g_log = A.view(1, 1, self.num_heads) * F.softplus(
+            gk + self.dt_bias
+        )  # (B, T, H)
 
         # 8. Choose backend: FLA Triton kernels or chunk-wise parallel
-        use_fla = HAS_FLA and device.type == 'cuda'
+        use_fla = HAS_FLA and device.type == "cuda"
 
         if use_fla:
             # ---- FLA Triton kernel path ----
@@ -517,7 +563,9 @@ class GatedDeltaNet(nn.Module):
             else:
                 chunk_size = 128
 
-            o = self._chunk_parallel_recurrence(q_t, k_t, v_t, alpha_t, beta_t, chunk_size=chunk_size)
+            o = self._chunk_parallel_recurrence(
+                q_t, k_t, v_t, alpha_t, beta_t, chunk_size=chunk_size
+            )
             o = o.transpose(1, 2)  # (B, T, H, D)
 
         # 9. Apply output normalization with gating (VECTORIZED)

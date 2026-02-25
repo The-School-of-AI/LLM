@@ -30,13 +30,19 @@ class MoEGate(nn.Module):
     implementing data sparsity (rho parameter).
     """
 
-    def __init__(self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5):
+    def __init__(
+        self, d_model: int, num_experts: int, top_k: int, data_sparsity: float = 0.5
+    ):
         super().__init__()
         self.num_experts = num_experts
         self.top_k = top_k
         self.data_sparsity = data_sparsity
 
-        self.num_null_copies = int(num_experts * (1 - data_sparsity) / data_sparsity) if data_sparsity > 0 else num_experts
+        self.num_null_copies = (
+            int(num_experts * (1 - data_sparsity) / data_sparsity)
+            if data_sparsity > 0
+            else num_experts
+        )
         self.total_slots = num_experts + self.num_null_copies
 
         self.gate = nn.Linear(d_model, num_experts, bias=False)
@@ -49,7 +55,9 @@ class MoEGate(nn.Module):
         B, T, D = x.shape
 
         real_logits = self.gate(x) + self.logit_bias
-        null_logits = self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        null_logits = (
+            self.null_logit.unsqueeze(0).unsqueeze(0).expand(B, T, self.num_null_copies)
+        )
         logits = torch.cat([real_logits, null_logits], dim=-1)
 
         probs = F.softmax(logits, dim=-1)
@@ -68,7 +76,7 @@ class MoEGate(nn.Module):
         L_bal = self.total_slots * torch.sum(f * P)
 
         lse = torch.logsumexp(logits, dim=-1)
-        L_z = (lse ** 2).mean()
+        L_z = (lse**2).mean()
 
         aux_loss = 2e-2 * L_bal + 1e-3 * L_z
 
@@ -107,7 +115,9 @@ class MoEFFN(nn.Module):
 
         # Routed experts (only if num_experts > 0)
         if self.has_routed_experts:
-            self.gate = MoEGate(d_model, num_experts, top_k, data_sparsity=data_sparsity)
+            self.gate = MoEGate(
+                d_model, num_experts, top_k, data_sparsity=data_sparsity
+            )
             self.W_gate = nn.Parameter(
                 torch.randn(num_experts, d_model, self.expert_d_hidden) * 0.02
             )
@@ -199,7 +209,9 @@ class MoEFFN(nn.Module):
 
         weighted_out = sorted_out * sorted_weights.unsqueeze(-1)
         routed_out = torch.zeros(N, D, device=device, dtype=dtype)
-        routed_out.scatter_add_(0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out)
+        routed_out.scatter_add_(
+            0, sorted_token_indices.unsqueeze(-1).expand(-1, D), weighted_out
+        )
 
         y = shared_out + routed_out.view(B, T, D)
         return y, aux_loss
@@ -233,7 +245,7 @@ class LightningMLP(nn.Module):
             num_experts=num_experts,
             top_k=top_k,
             dropout=0.0,
-            data_sparsity=data_sparsity
+            data_sparsity=data_sparsity,
         )
 
     def forward(self, x):

@@ -20,20 +20,25 @@ With euler bootstrap for the first step:
 Reference: Test_Code/model_1b.py lines 1399-1407
 """
 
+from contextlib import nullcontext
+from typing import List, Tuple
+
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
-from typing import List, Tuple
-from contextlib import nullcontext
 
 try:
     import torch._dynamo as _dynamo
+
     _dynamo_disable = _dynamo.disable
 except Exception:
+
     def _dynamo_disable(fn=None, recursive=True):
         if fn is None:
+
             def decorator(f):
                 return f
+
             return decorator
         return fn
 
@@ -123,6 +128,7 @@ class ReversibleMidpointStack(nn.Module):
 
     def _checkpointed_euler_step(self, x, layer):
         """Euler step with gradient checkpointing."""
+
         def step_fn(x_in):
             with self._autocast_context(x_in):
                 delta, aux = layer.force(x_in)
@@ -140,6 +146,7 @@ class ReversibleMidpointStack(nn.Module):
 
     def _checkpointed_midpoint_step(self, x, layer):
         """Midpoint step with gradient checkpointing."""
+
         def step_fn(x_in):
             with self._autocast_context(x_in):
                 delta_n, aux_n = layer.force(x_in)
