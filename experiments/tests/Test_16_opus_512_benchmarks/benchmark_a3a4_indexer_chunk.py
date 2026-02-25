@@ -33,7 +33,11 @@ import torch.nn.functional as F
 def _setup_imports():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+    # Try latest code first (Test_16_New_Code with BLOCK_Q=1 sparse attn),
+    # then fall back to Test_14 variants
     candidates = [
+        os.path.join(repo_root, "experiments", "tests",
+                     "Test_16_New_Code", "code"),
         os.path.join(repo_root, "experiments", "tests",
                      "Test_14_gsa_only_liger_kernels_1000steps-28k", "code"),
         os.path.join(repo_root, "experiments", "tests",
