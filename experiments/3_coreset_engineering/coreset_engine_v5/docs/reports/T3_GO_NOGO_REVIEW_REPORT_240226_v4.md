@@ -700,19 +700,19 @@ The following are non-blocking improvements identified during the review that wo
 
 The Go/No-Go review (v4) evaluates 11 criteria for full production readiness. Here is how the codebase and this review address each:
 
-| Go/No-Go Criterion | Ref | Go/No-Go Status | Critical Review Assessment | Gap |
-|--------------------|-----|-----------------|---------------------------|-----|
-| Report accuracy & completeness | §7 | **Pass** | Numerically sound; framing issues identified (§10) | Compression ratio framing (P0-2) |
-| Charter/deliverables alignment (executed scope) | §3, §7 | **Pass** | Aligned for C4-only scope; untested for full charter | Multi-source validation needed (P0-1) |
-| Determinism & reproducibility | §4.2, §7 | **Pass** | Strong seeding/checkpoint controls; FP risk remains (§7) | Freeze curriculum (P0-3) |
-| Infra & access (EMR, EC2, EBS) | §5.1 | **Open** | `commands.sh` handles EC2 setup; no EMR orchestration (§13.2.8) | Infra not confirmed |
-| Token accounting & data contract | §5.2 | **Open** | No formal data contract document; token accounting is stats-based (§13.2.4) | No "Token Accounting Scope" doc (P1-15) |
-| Upstream scoring schema (band_score/difficulty_score) | §5.3 | **Open** | `getattr` fallbacks everywhere; no schema validation at load (§3.2, §13.2.4) | No schema enforcement (P2-22) |
-| `total_input_tokens_estimate` verification | §5.4 | **Caution** | `tools/estimate_total_tokens.py` exists; no auto-verification at startup (§13.2.5) | Manual step, not enforced (P1-10) |
-| Checkpoint & used_chunks ops discipline | §5.8 | **Caution** | Code handles per-shard dirs; no operator checklist (§8, §13.2.8) | Needs playbook (P0-5) |
-| Near-dedup & B4/B5 coverage | §5.5 | **Deferred** | Deferred — documented as Phase 2 (§4) | Accepted deferral |
-| Convergence / benchmark validation | §5.6 | **Pending** | Zero evidence (§13.2.7) | **Largest gap** (P2-16) |
-| Operational reliability (Spot, long runs) | §5.7 | **Caution** | ~20 restarts on 10GB Spot run documented; on-demand preferred (§13.2.10) | Needs documented strategy |
+| Go/No-Go Criterion | Ref | Go/No-Go Status | Critical Review Assessment | Gap | T3 Comments/Evidences |
+|--------------------|-----|-----------------|---------------------------|-----|-----------------------|
+| Report accuracy & completeness | §7 | **Pass** | Numerically sound; framing issues identified (§10) | Compression ratio framing (P0-2) | T3 Report §Token Accounting Context explicitly distinguishes single-pass corpus (136.9B) from cumulative stage exposure (458.7B). Arithmetic verified: per-stage inputs form correct decreasing chain. Section 6 "Deduplication Impact" conflates selection reduction with dedup — needs reframing. |
+| Charter/deliverables alignment (executed scope) | §3, §7 | **Pass** | Aligned for C4-only scope; untested for full charter | Multi-source validation needed (P0-1) | T3 Report §Source Scope Note: execution explicitly scoped to `source=C4` due to EMR capacity. Deliverables section confirms pipeline is implemented for full scope (curriculum loading, protected slices, multi-stage). NCERT small-dataset validation also executed on EC2 Spot. Charter's ~400B target acknowledged as "program-level" pending production config. |
+| Determinism & reproducibility | §4.2, §7 | **Pass** | Strong seeding/checkpoint controls; FP risk remains (§7) | Freeze curriculum (P0-3) | T3 Report §Determinism: fixed seed, config/curriculum hashes in manifests, checkpoint compatibility guards, engine state persisted for deterministic resume. |
+| Infra & access (EMR, EC2, EBS) | §5.1 | **Open** | `commands.sh` handles EC2 setup; no EMR orchestration (§13.2.8) | Infra not confirmed | T3 Report §Current State: "coordinate with AWS admin to provision and validate Team 3 access." Two EC2 profiles identified (`c6i.32xlarge` / `r6i.16xlarge`), ~600 GB EBS documented. EMR target: dedup+chunk+stats on ~2 TB input in ~4–5h. Full infra depends on AWS admin scheduling. `INFRA_DESIGN.md` and `validate_infra.sh` created for pre-flight checks. |
+| Token accounting & data contract | §5.2 | **Open** | No formal data contract document; token accounting is stats-based (§13.2.4) | No "Token Accounting Scope" doc (P1-15) | T3 Report §Known Constraints: "Team 3 received data without token-level allocation and rejection summary tables." Stats-level logic was added to derive per-band token signals after EMR dedup. T3 states "final authoritative token-level rejection statistics remain an upstream dependency." No formal data contract document exists. (Link to [T3 Report](https://github.com/The-School-of-AI/LLM/blob/p3/feat/stage-wise-coreset-selection_v2/experiments/3_coreset_engineering/coreset_engine_v5/docs/reports/2026-02-23_T3_REPORT.md#input-distribution-csv-backed)) Total Tokens Aggregated at a Source Level Provides Token Accounting for the coresets process. |
+| Upstream scoring schema (band_score/difficulty_score) | §5.3 | **Open** | `getattr` fallbacks everywhere; no schema validation at load (§3.2, §13.2.4) | No schema enforcement (P2-22) | T3 Report §Pipeline: "Band inference + scoring (column-driven)" — uses `band_score`, `difficulty_score`, or `band_p_*` columns when present. Token-level rarity "only applies when tokenizer artifacts like `token_ids` exist; otherwise it is skipped by design." No runtime schema validation gate; behavior on missing columns is ad-hoc `getattr` fallbacks. |
+| `total_input_tokens_estimate` verification | §5.4 | **Caution** | `tools/estimate_total_tokens.py` exists; no auto-verification at startup (§13.2.5) | Manual step, not enforced (P1-10) | T3 Run Config: `--total-tokens 136932109554` explicitly passed. T3 Report §Token Accounting: value sourced from "C4 post-dedup corpus total from T3 EMR stats." `tools/estimate_total_tokens.py` available but not auto-invoked at pipeline startup. Manual step — no enforcement or deviation check. |
+| Checkpoint & used_chunks ops discipline | §5.8 | **Caution** | Code handles per-shard dirs; no operator checklist (§8, §13.2.8) | Needs playbook (P0-5) | T3 Report §Determinism: "Checkpoint compatibility guards on resume (shards, shard-id, stage target). Persistent non-overlap store ensures stage disjointness." Run Config shows `--checkpoint-every-n-batches 50`. §Known Constraints: ~20 Spot interruption/restarts — checkpoint/resume handled every one. No operator-facing playbook or pre-flight checklist documented. |
+| Near-dedup & B4/B5 coverage | §5.5 | **Deferred** | Deferred — documented as Phase 2 (§4) | Accepted deferral | T3 Report §Known Constraints: near-dedup excluded due to data size/compute constraints and Dolma upstream dedup claims. §Coverage: C4 only has web data and web as a domain is not allowed in B4/B5 (this is as per the curriculum band policies). (Link: [curriculum.yaml](https://github.com/The-School-of-AI/LLM/blob/p3/feat/stage-wise-coreset-selection_v2/experiments/3_coreset_engineering/coreset_engine_v5/config/curriculum.yaml)) |
+| Convergence / benchmark validation | §5.6 | **Pending** | Zero evidence (§13.2.7) | **Largest gap** (P2-16) | T3 Report §Efficiency: "Efficiency evidence is positive from compression and throughput behavior. Final learning-quality confirmation remains benchmark-dependent." §Pending Final Sign-off: "Convergence comparison vs full-data training." No proxy model training or benchmark comparison has been executed. This is part of training teams charter |
+| Operational reliability (Spot, long runs) | §5.7 | **Caution** | ~20 restarts on 10GB Spot run documented; on-demand preferred (§13.2.10) | Needs documented strategy | T3 Report §Known Constraints: "~10 GB run experienced at least 20 interruption/restart events and required nearly a full day due to spot termination behavior." §Next Milestones: "provision on-demand EC2 capacity for ~24–48 hours." Team prefers on-demand for production. |
 
 ### 13.4 Production Readiness Audit
 
@@ -721,6 +721,7 @@ The Go/No-Go review (v4) evaluates 11 criteria for full production readiness. He
 The pipeline's **engineering foundation** (streaming, checkpointing, sharding, determinism) is production-grade. However, the **operational wrapper** — monitoring, runbooks, schema enforcement, dependency hygiene, and learning-quality evidence — is insufficient for a 12–14h, multi-shard production run at 2T→400B scale without significant operational risk.
 
 **To reach full production readiness, the following must be addressed:**
+
 1. Create production run playbook (§13.2.8)
 2. Add post-pipeline validation gate to `commands.sh` (auto-run `validate_coreset_outputs.py`)
 3. Add structured logging or metrics export for observability (§13.2.3)
@@ -751,22 +752,49 @@ From a **production readiness** standpoint (§13), the engineering core is solid
 
 #### P1 — Should Fix Before Scale-Up
 
-7. **Implement cross-shard overlap validation** tool to verify disjointness across shard outputs within the same stage
-8. **Compute actual preservation ratios** in `_estimate_protected_preservation()` instead of returning target values
-9. **Add structured logging or metrics export** for CloudWatch/Datadog integration during long-running production runs
-10. **Auto-verify `total_input_tokens_estimate`** at startup by sampling input files; warn if deviation > 10%
-11. **Pin production dependencies** via lockfile; split `requirements.txt` into core vs. dev; remove unused heavy deps (`torch`, `ray`, `faiss-cpu`)
-12. **Refactor `_build_stage_coreset()`** into smaller, testable methods (row parsing, output writing, manifest building)
-13. **Add integration test** with multi-source, multi-domain, multi-language synthetic dataset
-14. **Track and surface silent exception counts** per stage in the manifest
-15. **Document upstream data contract** — required vs. optional input schema and fallback behavior
+1. **Implement cross-shard overlap validation** tool to verify disjointness across shard outputs within the same stage
+2. **Compute actual preservation ratios** in `_estimate_protected_preservation()` instead of returning target values
+3. **Add structured logging or metrics export** for CloudWatch/Datadog integration during long-running production runs
+4. **Auto-verify `total_input_tokens_estimate`** at startup by sampling input files; warn if deviation > 10%
+5. **Pin production dependencies** via lockfile; split `requirements.txt` into core vs. dev; remove unused heavy deps (`torch`, `ray`, `faiss-cpu`)
+6. **Refactor `_build_stage_coreset()`** into smaller, testable methods (row parsing, output writing, manifest building)
+7. **Add integration test** with multi-source, multi-domain, multi-language synthetic dataset
+8. **Track and surface silent exception counts** per stage in the manifest
+9. **Document upstream data contract** — required vs. optional input schema and fallback behavior
 
 #### P2 — Should Fix for Long-Term Health
 
-16. **Run at least one convergence/benchmark comparison** (coreset vs. random baseline); publish results or explicitly document deferral as risk acceptance
-17. **Replace O(n²) near-dedup** with LSH-based approximate algorithm before enabling at scale
-18. **Use integer arithmetic** for scoring tie-breaks and budget allocation to guarantee cross-hardware determinism
-19. **Remove stale curriculum versions** from `config/` directory
-20. **Extract `coreset_builder.py`** into smaller modules (parser, writer, checkpoint validator)
-21. **Add sampling-based near-dedup estimation** to quantify residual redundancy in C4 without running full near-dedup
-22. **Add input schema validation gate** — verify required columns exist before processing begins
+1. **Run at least one convergence/benchmark comparison** (coreset vs. random baseline); publish results or explicitly document deferral as risk acceptance
+2. **Replace O(n²) near-dedup** with LSH-based approximate algorithm before enabling at scale
+3. **Use integer arithmetic** for scoring tie-breaks and budget allocation to guarantee cross-hardware determinism
+4. **Remove stale curriculum versions** from `config/` directory
+5. **Extract `coreset_builder.py`** into smaller modules (parser, writer, checkpoint validator)
+6. **Add sampling-based near-dedup estimation** to quantify residual redundancy in C4 without running full near-dedup
+7. **Add input schema validation gate** — verify required columns exist before processing begins
+
+## Meeting Notes
+
+### (25-02-2026) Audience - Pankaj, Sid, Balaji, Varsha, Smita, Sualeh
+
+### Key Points Discussed
+
+1. Discussion over major gaps and open points highlighted in the report
+2. P3 Working Team covered the entire process and design of coresets
+3. Questions were asked on the report
+4. Input datasets (T1/T2) and limitations were explained by P3 working team
+5. EMR script go through by Balaji
+6. Sharding process was covered and explained in detail by Pankaj
+7. Token Allocation and Rejection strategy was explained
+8. Band Inference using probability and difficulty scores was explained to the team by Sid
+9. Infra level challenges were discussed and solutions worked upon were explained
+10. Problems associated with data size and compute constraints were discussed
+11. Why C4 was choosen was covered and explained focusing on the distribution of data
+
+### Outcomes
+
+1. Share the output structure with evidences on the process (from local disk not actual S3 structure, S3 structure would resemble this with different buckets and prefixes) - Pankaj (Link: [Sample Representation of Output Structure on S3 from T1/T2/T3](https://github.com/The-School-of-AI/LLM/blob/p3/feat/stage-wise-coreset-selection_v2/experiments/3_coreset_engineering/coreset_engine_v5/docs/reports/T1_T2_T3_sample_output_structure.png))
+2. Tokenization team is trying to use the T3 dataset for there validations and process
+3. Entire coresets pipeline was covered and explained with sharding, batch streaming, checkpointing, logging, sqllite DB, deterministic processing, etc.
+4. Curriculum policies were explained once again
+5. Deterministic processing was discussed and confirmed
+6. Infra level challenges were discussed and solutions worked upon were explained
