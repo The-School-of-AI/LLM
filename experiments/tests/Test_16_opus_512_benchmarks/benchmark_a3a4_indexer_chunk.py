@@ -117,10 +117,10 @@ def run_a3_indexer_scaling(cfg: BenchConfig):
     gate_bias = nn.Parameter(torch.zeros(cfg.gsa_indexer_heads, device=device, dtype=dtype))
     variance_ema = torch.tensor(1.0, device=device)
 
-    print(f"\n  {'Seq Len':>8}  {'Indexer (ms)':>14}  {'Per Token (µs)':>16}  {'Mem (GB)':>10}  {'vs 4096':>8}")
+    print(f"\n  {'Seq Len':>8}  {'Indexer (ms)':>14}  {'Per Token (µs)':>16}  {'Mem (GB)':>10}  {'vs 512':>8}")
     print(f"  {'─'*8}  {'─'*14}  {'─'*16}  {'─'*10}  {'─'*8}")
 
-    t4096_time = None
+    t_base_time = None  # Use first seq_len as baseline
 
     for T in cfg.seq_lens:
         x = torch.randn(cfg.batch_size, T, cfg.hidden_size, device=device, dtype=dtype)
@@ -188,9 +188,9 @@ def run_a3_indexer_scaling(cfg: BenchConfig):
         avg = sum(idx_times) / len(idx_times)
         per_token = avg / T * 1000  # microseconds per token
 
-        if T == 4096:
-            t4096_time = avg
-        ratio = f"{avg/t4096_time:.2f}×" if t4096_time else "1.00×"
+        if t_base_time is None:
+            t_base_time = avg
+        ratio = f"{avg/t_base_time:.2f}×"
 
         r = {"seq_len": T, "indexer_ms": avg, "per_token_us": per_token, "peak_mem_gb": peak_mem}
         results.append(r)
