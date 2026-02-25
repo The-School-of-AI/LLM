@@ -118,7 +118,7 @@ class _FusedLinearCEFunction(torch.autograd.Function):
         return grad_input, grad_weight, None, None, None, None
 
 class FusedLinearCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, ignore_index=-100, reduction="mean", max_chunk_gb=16.0):
+    def __init__(self, ignore_index=-100, reduction="mean", max_chunk_gb=32.0):
         super().__init__()
         self.ignore_index = ignore_index
         self.reduction = reduction

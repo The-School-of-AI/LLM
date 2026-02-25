@@ -39,6 +39,7 @@ def fla_gated_delta_rule(
     beta: torch.Tensor,    # [B, T, H, 1]  (sigmoid output in [0,1])
     D: torch.Tensor,       # [H]  (per-head residual weight)
     num_heads: int,
+    g_precomputed: Optional[torch.Tensor] = None,  # [B, T, H] log-space forget gate
 ) -> torch.Tensor:
     """
     Fused DeltaNet recurrence via fla's chunk_gated_delta_rule kernel.
@@ -81,8 +82,13 @@ def fla_gated_delta_rule(
     k_f32 = k.float()
     v_f32 = v.float()
 
-    # alpha: (B, T, H, 1) -> (B, T, H) in float32 log-space
-    g = torch.log(alpha[:, :, :, 0].float().clamp(min=1e-6))
+    # PERF: Use pre-computed g in log-space when available, skipping the
+    # pointless exp() → log() round-trip (alpha = exp(g), then g = log(alpha)).
+    if g_precomputed is not None:
+        g = g_precomputed.float()  # Already [B, T, H] in log-space
+    else:
+        # Fallback: convert alpha (sigmoid output) to log-space
+        g = torch.log(alpha[:, :, :, 0].float().clamp(min=1e-6))
 
     # beta: (B, T, H, 1) -> (B, T, H) in float32
     beta_fla = beta[:, :, :, 0].float()

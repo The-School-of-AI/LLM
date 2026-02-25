@@ -1,15 +1,17 @@
-# triton_delta_entrance_v18.py
+# triton_delta_entrance_v19.py
 # =============================================================================
-# V18: "Token-Program" Delta Entrance (Forward fused)
-# Fuses: causal depthwise conv(4) + SiLU + mask + L2Norm(Q/K) + interleaved RoPE(Q/K)
+# V19: "Tile-Program" Delta Entrance (Forward fused, proper kernel)
+# Fuses: causal depthwise conv(4) + bias + SiLU + mask + L2Norm(Q/K)
+#        + interleaved RoPE(Q/K)
 #
-# Key change vs your V17:
-# - One program instance computes ONE token t for ONE (batch, head).
-# - Vector width is D/2 (even + odd lanes) so register footprint is O(D), not O(BLOCK_T*D).
-# - This avoids the giant fp32 tiles that were almost certainly spilling at large T.
+# Key changes vs V18:
+# - Tile-based: each program processes BLOCK_T tokens (not 1 token).
+#   Grid goes from (T, B*H) = 524K programs to (T/BLOCK_T, B*H) = ~8K.
+#   This drastically reduces kernel launch and scheduling overhead.
+# - Includes conv1d bias (V18 silently dropped it).
+# - Backward: existing per-token Triton kernel (V18 backward is unchanged).
 #
-# Outputs: (B, T, H, D) like your current wrapper.
-# Backward: oracle PyTorch recompute (same as your previous version).
+# Outputs: (B, T, H, D) like V18.
 # =============================================================================
 
 import torch
@@ -31,15 +33,16 @@ except ImportError:
 # =============================================================================
 # Reference (Unfused) for correctness + benchmark oracle
 # =============================================================================
-def pytorch_unfused(q, k, v, wq, wk, wv, cos, sin, mask, eps=1e-6):
+def pytorch_unfused(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask, eps=1e-6):
+    """Reference PyTorch implementation matching the fused kernel exactly."""
     B, T, C = q.shape
     D = cos.shape[1]
     H = C // D
 
-    # 1) depthwise causal conv (4 taps)
-    qc = F.conv1d(q.transpose(1, 2), wq.view(C, 1, 4), groups=C, padding=3)[..., :-3].transpose(1, 2)
-    kc = F.conv1d(k.transpose(1, 2), wk.view(C, 1, 4), groups=C, padding=3)[..., :-3].transpose(1, 2)
-    vc = F.conv1d(v.transpose(1, 2), wv.view(C, 1, 4), groups=C, padding=3)[..., :-3].transpose(1, 2)
+    # 1) depthwise causal conv (4 taps) + bias
+    qc = F.conv1d(q.transpose(1, 2), wq.view(C, 1, 4), bias=bq, groups=C, padding=3)[..., :-3].transpose(1, 2)
+    kc = F.conv1d(k.transpose(1, 2), wk.view(C, 1, 4), bias=bk, groups=C, padding=3)[..., :-3].transpose(1, 2)
+    vc = F.conv1d(v.transpose(1, 2), wv.view(C, 1, 4), bias=bv, groups=C, padding=3)[..., :-3].transpose(1, 2)
 
     # 2) gating + mask
     m = mask.unsqueeze(-1).to(q.dtype)
@@ -62,22 +65,23 @@ def pytorch_unfused(q, k, v, wq, wk, wv, cos, sin, mask, eps=1e-6):
 
 
 # =============================================================================
-# Triton Kernel (V18): one (b,h,t) per program
+# Triton Forward Kernel (V19): BLOCK_T tokens per program
 # =============================================================================
 @triton.jit
-def _delta_entrance_fwd_token_kernel(
+def _delta_entrance_fwd_tile_kernel(
     # Inputs (B, T, C)
     Q_ptr, K_ptr, V_ptr,
-    # Weights (C, 4)  (NOTE: wrapper will squeeze if (C,1,4))
+    # Weights (C, 4) — squeezed from (C, 1, 4)
     Wq_ptr, Wk_ptr, Wv_ptr,
+    # Biases (C,) — conv1d bias per channel
+    Bq_ptr, Bk_ptr, Bv_ptr,
     # RoPE tables (T, D)
     Cos_ptr, Sin_ptr,
     # Mask (B, T) uint8 0/1
     Mask_ptr,
-
     # Outputs (B, T, H, D)
     Qo_ptr, Ko_ptr, Vo_ptr,
-    # Stats (B, T, H) float32 (optional but handy)
+    # Stats (B, T, H) float32
     InvNq_ptr, InvNk_ptr,
 
     # Strides (elements)
@@ -89,200 +93,156 @@ def _delta_entrance_fwd_token_kernel(
     stride_sb, stride_st, stride_sh,
 
     # Sizes
-    B, T, C, H, D,
+    B: tl.constexpr, T: tl.constexpr, C: tl.constexpr,
+    H: tl.constexpr, D: tl.constexpr,
 
     # Meta
+    BLOCK_T: tl.constexpr,
     BLOCK_DH: tl.constexpr,   # D//2
     EPS: tl.constexpr,
     OUT_DTYPE: tl.constexpr,
 ):
-    pid_t  = tl.program_id(0)  # token index t
-    pid_bh = tl.program_id(1)  # batch-head index
+    pid_block = tl.program_id(0)  # token block index
+    pid_bh = tl.program_id(1)    # batch-head index
 
     b = pid_bh // H
     h = pid_bh % H
-    t = pid_t
+    block_start = pid_block * BLOCK_T
 
-    # bounds
-    in_bounds = (b < B) & (t < T)
-
-    # lane indices for interleaved even/odd
+    # Lane indices for interleaved even/odd
     dh = tl.arange(0, BLOCK_DH)  # 0..D/2-1
     idx_e = dh * 2
     idx_o = idx_e + 1
 
-    # channel indices in (B,T,C)
+    # Channel indices in (B, T, C)
     c_e = h * D + idx_e
     c_o = h * D + idx_o
 
-    # mask for lanes (D is even by contract, but keep safe)
     lane_e_ok = idx_e < D
     lane_o_ok = idx_o < D
 
-    # ------------------------------
-    # 1) causal depthwise conv(4)
-    # tap i corresponds to t-(3-i)
-    # ------------------------------
-    qe = tl.zeros((BLOCK_DH,), dtype=tl.float32)
-    qo = tl.zeros((BLOCK_DH,), dtype=tl.float32)
-    ke = tl.zeros((BLOCK_DH,), dtype=tl.float32)
-    ko = tl.zeros((BLOCK_DH,), dtype=tl.float32)
-    ve = tl.zeros((BLOCK_DH,), dtype=tl.float32)
-    vo = tl.zeros((BLOCK_DH,), dtype=tl.float32)
+    # Pre-load conv biases for this head's channels (reused across all tokens)
+    bias_qe = tl.load(Bq_ptr + c_e, mask=lane_e_ok, other=0.0).to(tl.float32)
+    bias_qo = tl.load(Bq_ptr + c_o, mask=lane_o_ok, other=0.0).to(tl.float32)
+    bias_ke = tl.load(Bk_ptr + c_e, mask=lane_e_ok, other=0.0).to(tl.float32)
+    bias_ko = tl.load(Bk_ptr + c_o, mask=lane_o_ok, other=0.0).to(tl.float32)
+    bias_ve = tl.load(Bv_ptr + c_e, mask=lane_e_ok, other=0.0).to(tl.float32)
+    bias_vo = tl.load(Bv_ptr + c_o, mask=lane_o_ok, other=0.0).to(tl.float32)
 
-    # Load mask scalar once
-    m = tl.load(
-        Mask_ptr + b * stride_mb + t * stride_mt,
-        mask=in_bounds,
-        other=0
-    ).to(tl.float32)
+    # Process BLOCK_T tokens sequentially
+    for t_off in tl.static_range(BLOCK_T):
+        t = block_start + t_off
+        in_bounds = (b < B) & (t < T)
 
-    for i in tl.static_range(4):
-        tap_t = t - (3 - i)
-        tap_ok = in_bounds & (tap_t >= 0) & (tap_t < T)
+        # ── 1) Causal depthwise conv (4 taps) + bias ──
+        qe = tl.zeros((BLOCK_DH,), dtype=tl.float32)
+        qo = tl.zeros((BLOCK_DH,), dtype=tl.float32)
+        ke = tl.zeros((BLOCK_DH,), dtype=tl.float32)
+        ko = tl.zeros((BLOCK_DH,), dtype=tl.float32)
+        ve = tl.zeros((BLOCK_DH,), dtype=tl.float32)
+        vo = tl.zeros((BLOCK_DH,), dtype=tl.float32)
 
-        # weights (BLOCK_DH,)
-        wqe = tl.load(Wq_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
-        wqo = tl.load(Wq_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
-        wke = tl.load(Wk_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
-        wko = tl.load(Wk_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
-        wve = tl.load(Wv_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
-        wvo = tl.load(Wv_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
-
-        # loads (BLOCK_DH,)
-        q_pe = tl.load(
-            Q_ptr + b * stride_qb + tap_t * stride_qt + c_e * stride_qc,
-            mask=(tap_ok & lane_e_ok),
-            other=0.0
-        ).to(tl.float32)
-        q_po = tl.load(
-            Q_ptr + b * stride_qb + tap_t * stride_qt + c_o * stride_qc,
-            mask=(tap_ok & lane_o_ok),
-            other=0.0
+        m = tl.load(
+            Mask_ptr + b * stride_mb + t * stride_mt,
+            mask=in_bounds, other=0
         ).to(tl.float32)
 
-        k_pe = tl.load(
-            K_ptr + b * stride_kb + tap_t * stride_kt + c_e * stride_kc,
-            mask=(tap_ok & lane_e_ok),
-            other=0.0
+        for i in tl.static_range(4):
+            tap_t = t - (3 - i)
+            tap_ok = in_bounds & (tap_t >= 0) & (tap_t < T)
+
+            # Conv weights for this tap
+            wqe = tl.load(Wq_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
+            wqo = tl.load(Wq_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
+            wke = tl.load(Wk_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
+            wko = tl.load(Wk_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
+            wve = tl.load(Wv_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
+            wvo = tl.load(Wv_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
+
+            # Input values at tap position
+            q_base = b * stride_qb + tap_t * stride_qt
+            k_base = b * stride_kb + tap_t * stride_kt
+            v_base = b * stride_vb + tap_t * stride_vt
+
+            q_pe = tl.load(Q_ptr + q_base + c_e * stride_qc, mask=(tap_ok & lane_e_ok), other=0.0).to(tl.float32)
+            q_po = tl.load(Q_ptr + q_base + c_o * stride_qc, mask=(tap_ok & lane_o_ok), other=0.0).to(tl.float32)
+            k_pe = tl.load(K_ptr + k_base + c_e * stride_kc, mask=(tap_ok & lane_e_ok), other=0.0).to(tl.float32)
+            k_po = tl.load(K_ptr + k_base + c_o * stride_kc, mask=(tap_ok & lane_o_ok), other=0.0).to(tl.float32)
+            v_pe = tl.load(V_ptr + v_base + c_e * stride_vc, mask=(tap_ok & lane_e_ok), other=0.0).to(tl.float32)
+            v_po = tl.load(V_ptr + v_base + c_o * stride_vc, mask=(tap_ok & lane_o_ok), other=0.0).to(tl.float32)
+
+            qe += q_pe * wqe
+            qo += q_po * wqo
+            ke += k_pe * wke
+            ko += k_po * wko
+            ve += v_pe * wve
+            vo += v_po * wvo
+
+        # Add conv bias
+        qe += bias_qe
+        qo += bias_qo
+        ke += bias_ke
+        ko += bias_ko
+        ve += bias_ve
+        vo += bias_vo
+
+        # ── 2) SiLU + mask ──
+        qe = (qe * tl.sigmoid(qe)) * m
+        qo = (qo * tl.sigmoid(qo)) * m
+        ke = (ke * tl.sigmoid(ke)) * m
+        ko = (ko * tl.sigmoid(ko)) * m
+        ve = (ve * tl.sigmoid(ve)) * m
+        vo = (vo * tl.sigmoid(vo)) * m
+
+        # ── 3) L2 norm over full D ──
+        q_inv = tl.rsqrt(tl.sum(qe * qe + qo * qo, axis=0) + EPS)
+        k_inv = tl.rsqrt(tl.sum(ke * ke + ko * ko, axis=0) + EPS)
+
+        qne = qe * q_inv
+        qno = qo * q_inv
+        kne = ke * k_inv
+        kno = ko * k_inv
+
+        # ── 4) Interleaved RoPE ──
+        cos_val = tl.load(
+            Cos_ptr + t * D + idx_e,
+            mask=(in_bounds & lane_e_ok), other=1.0
         ).to(tl.float32)
-        k_po = tl.load(
-            K_ptr + b * stride_kb + tap_t * stride_kt + c_o * stride_kc,
-            mask=(tap_ok & lane_o_ok),
-            other=0.0
+        sin_val = tl.load(
+            Sin_ptr + t * D + idx_e,
+            mask=(in_bounds & lane_e_ok), other=0.0
         ).to(tl.float32)
 
-        v_pe = tl.load(
-            V_ptr + b * stride_vb + tap_t * stride_vt + c_e * stride_vc,
-            mask=(tap_ok & lane_e_ok),
-            other=0.0
-        ).to(tl.float32)
-        v_po = tl.load(
-            V_ptr + b * stride_vb + tap_t * stride_vt + c_o * stride_vc,
-            mask=(tap_ok & lane_o_ok),
-            other=0.0
-        ).to(tl.float32)
+        qr_e = qne * cos_val - qno * sin_val
+        qr_o = qne * sin_val + qno * cos_val
+        kr_e = kne * cos_val - kno * sin_val
+        kr_o = kne * sin_val + kno * cos_val
 
-        qe += q_pe * wqe
-        qo += q_po * wqo
-        ke += k_pe * wke
-        ko += k_po * wko
-        ve += v_pe * wve
-        vo += v_po * wvo
+        # ── 5) Store to (B, T, H, D) interleaved ──
+        out_base = b * stride_ob + t * stride_ot + h * stride_oh
 
-    # ------------------------------
-    # 2) SiLU + mask
-    # ------------------------------
-    # SiLU(x) = x * sigmoid(x)
-    qe = (qe * tl.sigmoid(qe)) * m
-    qo = (qo * tl.sigmoid(qo)) * m
-    ke = (ke * tl.sigmoid(ke)) * m
-    ko = (ko * tl.sigmoid(ko)) * m
-    ve = (ve * tl.sigmoid(ve)) * m
-    vo = (vo * tl.sigmoid(vo)) * m
+        tl.store(Qo_ptr + out_base + idx_e * stride_od, qr_e.to(OUT_DTYPE), mask=(in_bounds & lane_e_ok))
+        tl.store(Qo_ptr + out_base + idx_o * stride_od, qr_o.to(OUT_DTYPE), mask=(in_bounds & lane_o_ok))
+        tl.store(Ko_ptr + out_base + idx_e * stride_od, kr_e.to(OUT_DTYPE), mask=(in_bounds & lane_e_ok))
+        tl.store(Ko_ptr + out_base + idx_o * stride_od, kr_o.to(OUT_DTYPE), mask=(in_bounds & lane_o_ok))
+        tl.store(Vo_ptr + out_base + idx_e * stride_od, ve.to(OUT_DTYPE), mask=(in_bounds & lane_e_ok))
+        tl.store(Vo_ptr + out_base + idx_o * stride_od, vo.to(OUT_DTYPE), mask=(in_bounds & lane_o_ok))
 
-    # ------------------------------
-    # 3) L2 norm over full D
-    # ------------------------------
-    q_inv = tl.rsqrt(tl.sum(qe * qe + qo * qo, axis=0) + EPS)
-    k_inv = tl.rsqrt(tl.sum(ke * ke + ko * ko, axis=0) + EPS)
-
-    qne = qe * q_inv
-    qno = qo * q_inv
-    kne = ke * k_inv
-    kno = ko * k_inv
-
-    # ------------------------------
-    # 4) RoPE (tables are (T, D), but only even lanes used like your PyTorch)
-    # ------------------------------
-    cos = tl.load(
-        Cos_ptr + t * D + idx_e,
-        mask=(in_bounds & lane_e_ok),
-        other=1.0
-    ).to(tl.float32)
-    sin = tl.load(
-        Sin_ptr + t * D + idx_e,
-        mask=(in_bounds & lane_e_ok),
-        other=0.0
-    ).to(tl.float32)
-
-    qr_e = qne * cos - qno * sin
-    qr_o = qne * sin + qno * cos
-    kr_e = kne * cos - kno * sin
-    kr_o = kne * sin + kno * cos
-
-    # ------------------------------
-    # 5) Store to (B, T, H, D) interleaved
-    # ------------------------------
-    out_base = b * stride_ob + t * stride_ot + h * stride_oh
-
-    tl.store(
-        Qo_ptr + out_base + idx_e * stride_od,
-        qr_e.to(OUT_DTYPE),
-        mask=(in_bounds & lane_e_ok)
-    )
-    tl.store(
-        Qo_ptr + out_base + idx_o * stride_od,
-        qr_o.to(OUT_DTYPE),
-        mask=(in_bounds & lane_o_ok)
-    )
-
-    tl.store(
-        Ko_ptr + out_base + idx_e * stride_od,
-        kr_e.to(OUT_DTYPE),
-        mask=(in_bounds & lane_e_ok)
-    )
-    tl.store(
-        Ko_ptr + out_base + idx_o * stride_od,
-        kr_o.to(OUT_DTYPE),
-        mask=(in_bounds & lane_o_ok)
-    )
-
-    tl.store(
-        Vo_ptr + out_base + idx_e * stride_od,
-        ve.to(OUT_DTYPE),
-        mask=(in_bounds & lane_e_ok)
-    )
-    tl.store(
-        Vo_ptr + out_base + idx_o * stride_od,
-        vo.to(OUT_DTYPE),
-        mask=(in_bounds & lane_o_ok)
-    )
-
-    # stats
-    s_off = b * stride_sb + t * stride_st + h * stride_sh
-    tl.store(InvNq_ptr + s_off, q_inv, mask=in_bounds)
-    tl.store(InvNk_ptr + s_off, k_inv, mask=in_bounds)
+        # Stats (for backward)
+        s_off = b * stride_sb + t * stride_st + h * stride_sh
+        tl.store(InvNq_ptr + s_off, q_inv, mask=in_bounds)
+        tl.store(InvNk_ptr + s_off, k_inv, mask=in_bounds)
 
 
 # =============================================================================
-# Triton Backward Kernel (V18): one (b,h,t) per program
+# Triton Backward Kernel: per-token (reuses V18 backward — grid (T, B*H))
 # =============================================================================
 @triton.jit
 def _delta_entrance_bwd_token_kernel(
     # Inputs
     Q_ptr, K_ptr, V_ptr,
     Wq_ptr, Wk_ptr, Wv_ptr,
+    Bq_ptr, Bk_ptr, Bv_ptr,
     Cos_ptr, Sin_ptr,
     Mask_ptr,
     # Forward Stats
@@ -292,6 +252,7 @@ def _delta_entrance_bwd_token_kernel(
     # Output Gradients
     DQ_ptr, DK_ptr, DV_ptr,
     DWq_ptr, DWk_ptr, DWv_ptr,
+    DBq_ptr, DBk_ptr, DBv_ptr,
 
     # Strides (elements)
     stride_qb, stride_qt, stride_qc,
@@ -302,7 +263,8 @@ def _delta_entrance_bwd_token_kernel(
     stride_sb, stride_st, stride_sh,
 
     # Sizes
-    B, T, C, H, D,
+    B: tl.constexpr, T: tl.constexpr, C: tl.constexpr,
+    H: tl.constexpr, D: tl.constexpr,
 
     # Meta
     BLOCK_DH: tl.constexpr,
@@ -324,9 +286,7 @@ def _delta_entrance_bwd_token_kernel(
     lane_e_ok = idx_e < D
     lane_o_ok = idx_o < D
 
-    # ------------------------------
-    # 1) Re-compute Forward intermediate (Conv -> SiLU -> Norm)
-    # ------------------------------
+    # ── 1) Re-compute Forward intermediate (Conv + bias → SiLU → Norm) ──
     qe = tl.zeros((BLOCK_DH,), dtype=tl.float32)
     qo = tl.zeros((BLOCK_DH,), dtype=tl.float32)
     ke = tl.zeros((BLOCK_DH,), dtype=tl.float32)
@@ -339,7 +299,7 @@ def _delta_entrance_bwd_token_kernel(
     for i in tl.static_range(4):
         tap_t = t - (3 - i)
         tap_ok = in_bounds & (tap_t >= 0) & (tap_t < T)
-        
+
         wqe = tl.load(Wq_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
         wqo = tl.load(Wq_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
         wke = tl.load(Wk_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
@@ -361,6 +321,15 @@ def _delta_entrance_bwd_token_kernel(
         ve += v_pe * wve
         vo += v_po * wvo
 
+    # Add conv bias
+    qe += tl.load(Bq_ptr + c_e, mask=lane_e_ok, other=0.0).to(tl.float32)
+    qo += tl.load(Bq_ptr + c_o, mask=lane_o_ok, other=0.0).to(tl.float32)
+    ke += tl.load(Bk_ptr + c_e, mask=lane_e_ok, other=0.0).to(tl.float32)
+    ko += tl.load(Bk_ptr + c_o, mask=lane_o_ok, other=0.0).to(tl.float32)
+    ve += tl.load(Bv_ptr + c_e, mask=lane_e_ok, other=0.0).to(tl.float32)
+    vo += tl.load(Bv_ptr + c_o, mask=lane_o_ok, other=0.0).to(tl.float32)
+
+    # Save pre-activation for SiLU backward
     xcq_e, xcq_o = qe, qo
     xck_e, xck_o = ke, ko
     xcv_e, xcv_o = ve, vo
@@ -378,60 +347,52 @@ def _delta_entrance_bwd_token_kernel(
     qne, qno = qe * inv_nq, qo * inv_nq
     kne, kno = ke * inv_nk, ko * inv_nk
 
-    # ------------------------------
-    # 2) RoPE Backward
-    # ------------------------------
-    cos = tl.load(Cos_ptr + t * D + idx_e, mask=(in_bounds & lane_e_ok), other=1.0).to(tl.float32)
-    sin = tl.load(Sin_ptr + t * D + idx_e, mask=(in_bounds & lane_e_ok), other=0.0).to(tl.float32)
+    # ── 2) RoPE Backward ──
+    cos_val = tl.load(Cos_ptr + t * D + idx_e, mask=(in_bounds & lane_e_ok), other=1.0).to(tl.float32)
+    sin_val = tl.load(Sin_ptr + t * D + idx_e, mask=(in_bounds & lane_e_ok), other=0.0).to(tl.float32)
 
     dqo_e = tl.load(DQo_ptr + b * stride_dqob + t * stride_dqot + h * stride_dqoh + idx_e * stride_dqod, mask=(in_bounds & lane_e_ok), other=0.0).to(tl.float32)
     dqo_o = tl.load(DQo_ptr + b * stride_dqob + t * stride_dqot + h * stride_dqoh + idx_o * stride_dqod, mask=(in_bounds & lane_o_ok), other=0.0).to(tl.float32)
     dko_e = tl.load(DKo_ptr + b * stride_dqob + t * stride_dqot + h * stride_dqoh + idx_e * stride_dqod, mask=(in_bounds & lane_e_ok), other=0.0).to(tl.float32)
     dko_o = tl.load(DKo_ptr + b * stride_dqob + t * stride_dqot + h * stride_dqoh + idx_o * stride_dqod, mask=(in_bounds & lane_o_ok), other=0.0).to(tl.float32)
 
-    dqne = dqo_e * cos + dqo_o * sin
-    dqno = -dqo_e * sin + dqo_o * cos
-    dkne = dko_e * cos + dko_o * sin
-    dkno = -dko_e * sin + dko_o * cos
+    dqne = dqo_e * cos_val + dqo_o * sin_val
+    dqno = -dqo_e * sin_val + dqo_o * cos_val
+    dkne = dko_e * cos_val + dko_o * sin_val
+    dkno = -dko_e * sin_val + dko_o * cos_val
 
-    # ------------------------------
-    # 3) L2 Norm Backward
-    # ------------------------------
+    # ── 3) L2 Norm Backward ──
     dot_q = tl.sum(qne * dqne + qno * dqno, axis=0)
     dot_k = tl.sum(kne * dkne + kno * dkno, axis=0)
 
     dqe = (dqne - qne * dot_q) * inv_nq
-    dqo = (dqno - qno * dot_q) * inv_nq
+    dqo_grad = (dqno - qno * dot_q) * inv_nq
     dke = (dkne - kne * dot_k) * inv_nk
-    dko = (dkno - kno * dot_k) * inv_nk
+    dko_grad = (dkno - kno * dot_k) * inv_nk
 
-    # ------------------------------
-    # 4) SiLU + Mask Backward
-    # ------------------------------
+    # ── 4) SiLU + Mask Backward ──
     dsqe = sqe * (1.0 + xcq_e * (1.0 - sqe)) * m
     dsqo = sqo * (1.0 + xcq_o * (1.0 - sqo)) * m
     dske = ske * (1.0 + xck_e * (1.0 - ske)) * m
     dsko = sko * (1.0 + xck_o * (1.0 - sko)) * m
-    
+
     dvo_e = tl.load(DVo_ptr + b * stride_dqob + t * stride_dqot + h * stride_dqoh + idx_e * stride_dqod, mask=(in_bounds & lane_e_ok), other=0.0).to(tl.float32)
     dvo_o = tl.load(DVo_ptr + b * stride_dqob + t * stride_dqot + h * stride_dqoh + idx_o * stride_dqod, mask=(in_bounds & lane_o_ok), other=0.0).to(tl.float32)
     dsve = sve * (1.0 + xcv_e * (1.0 - sve)) * m
     dsvo = svo * (1.0 + xcv_o * (1.0 - svo)) * m
 
     dqc_e = dqe * dsqe
-    dqc_o = dqo * dsqo
+    dqc_o = dqo_grad * dsqo
     dkc_e = dke * dske
-    dkc_o = dko * dsko
+    dkc_o = dko_grad * dsko
     dvc_e = dvo_e * dsve
     dvc_o = dvo_o * dsvo
 
-    # ------------------------------
-    # 5) Conv1d Backward & Weight Grads (Atomic)
-    # ------------------------------
+    # ── 5) Conv1d Backward: input grads + weight grads + bias grads (Atomic) ──
     for i in tl.static_range(4):
         prev_t = t - (3 - i)
         prev_ok = in_bounds & (prev_t >= 0)
-        
+
         wqe = tl.load(Wq_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
         wqo = tl.load(Wq_ptr + c_o * 4 + i, mask=lane_o_ok, other=0.0).to(tl.float32)
         wke = tl.load(Wk_ptr + c_e * 4 + i, mask=lane_e_ok, other=0.0).to(tl.float32)
@@ -441,21 +402,23 @@ def _delta_entrance_bwd_token_kernel(
 
         off_e = b * stride_qb + prev_t * stride_qt + c_e * stride_qc
         off_o = b * stride_qb + prev_t * stride_qt + c_o * stride_qc
-        
+
+        # Input gradients (atomic because multiple tokens contribute to same position)
         tl.atomic_add(DQ_ptr + off_e, (dqc_e * wqe).to(tl.float32), mask=(prev_ok & lane_e_ok))
         tl.atomic_add(DQ_ptr + off_o, (dqc_o * wqo).to(tl.float32), mask=(prev_ok & lane_o_ok))
         tl.atomic_add(DK_ptr + off_e, (dkc_e * wke).to(tl.float32), mask=(prev_ok & lane_e_ok))
         tl.atomic_add(DK_ptr + off_o, (dkc_o * wko).to(tl.float32), mask=(prev_ok & lane_o_ok))
         tl.atomic_add(DV_ptr + off_e, (dvc_e * wve).to(tl.float32), mask=(prev_ok & lane_e_ok))
         tl.atomic_add(DV_ptr + off_o, (dvc_o * wvo).to(tl.float32), mask=(prev_ok & lane_o_ok))
-        
+
+        # Weight gradients
         q_pe = tl.load(Q_ptr + off_e, mask=(prev_ok & lane_e_ok), other=0.0).to(tl.float32)
         q_po = tl.load(Q_ptr + off_o, mask=(prev_ok & lane_o_ok), other=0.0).to(tl.float32)
         k_pe = tl.load(K_ptr + off_e, mask=(prev_ok & lane_e_ok), other=0.0).to(tl.float32)
         k_po = tl.load(K_ptr + off_o, mask=(prev_ok & lane_o_ok), other=0.0).to(tl.float32)
         v_pe = tl.load(V_ptr + off_e, mask=(prev_ok & lane_e_ok), other=0.0).to(tl.float32)
         v_po = tl.load(V_ptr + off_o, mask=(prev_ok & lane_o_ok), other=0.0).to(tl.float32)
-        
+
         tl.atomic_add(DWq_ptr + c_e * 4 + i, (dqc_e * q_pe).to(tl.float32), mask=(in_bounds & lane_e_ok))
         tl.atomic_add(DWq_ptr + c_o * 4 + i, (dqc_o * q_po).to(tl.float32), mask=(in_bounds & lane_o_ok))
         tl.atomic_add(DWk_ptr + c_e * 4 + i, (dkc_e * k_pe).to(tl.float32), mask=(in_bounds & lane_e_ok))
@@ -463,14 +426,21 @@ def _delta_entrance_bwd_token_kernel(
         tl.atomic_add(DWv_ptr + c_e * 4 + i, (dvc_e * v_pe).to(tl.float32), mask=(in_bounds & lane_e_ok))
         tl.atomic_add(DWv_ptr + c_o * 4 + i, (dvc_o * v_po).to(tl.float32), mask=(in_bounds & lane_o_ok))
 
+    # Bias gradients (atomic across tokens)
+    tl.atomic_add(DBq_ptr + c_e, dqc_e.to(tl.float32), mask=(in_bounds & lane_e_ok))
+    tl.atomic_add(DBq_ptr + c_o, dqc_o.to(tl.float32), mask=(in_bounds & lane_o_ok))
+    tl.atomic_add(DBk_ptr + c_e, dkc_e.to(tl.float32), mask=(in_bounds & lane_e_ok))
+    tl.atomic_add(DBk_ptr + c_o, dkc_o.to(tl.float32), mask=(in_bounds & lane_o_ok))
+    tl.atomic_add(DBv_ptr + c_e, dvc_e.to(tl.float32), mask=(in_bounds & lane_e_ok))
+    tl.atomic_add(DBv_ptr + c_o, dvc_o.to(tl.float32), mask=(in_bounds & lane_o_ok))
 
 
 # =============================================================================
-# Autograd wrapper (forward Triton, backward oracle recompute)
+# Autograd wrapper
 # =============================================================================
-class TritonDeltaEntranceV18(torch.autograd.Function):
+class FusedDeltaEntranceV19(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, q, k, v, wq, wk, wv, cos, sin, mask, eps=1e-6):
+    def forward(ctx, q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask, eps=1e-6):
         B, T, C = q.shape
         D = cos.shape[1]
         H = C // D
@@ -500,14 +470,16 @@ class TritonDeltaEntranceV18(torch.autograd.Function):
         inv_nk = torch.empty((B, T, H), device=q.device, dtype=torch.float32)
 
         BLOCK_DH = D // 2
-        grid = (T, B * H)
+        BLOCK_T = 64  # Process 64 tokens per program
+        grid = (triton.cdiv(T, BLOCK_T), B * H)
 
         out_dtype = tl.bfloat16 if q.dtype == torch.bfloat16 else tl.float16
 
         with kernel_region("delta_entrance_fwd"):
-            _delta_entrance_fwd_token_kernel[grid](
+            _delta_entrance_fwd_tile_kernel[grid](
                 q, k, v,
                 wq, wk, wv,
+                bq, bk, bv,
                 cos, sin,
                 mask_u8,
                 qo, ko, vo,
@@ -522,26 +494,26 @@ class TritonDeltaEntranceV18(torch.autograd.Function):
 
                 B, T, C, H, D,
 
+                BLOCK_T=BLOCK_T,
                 BLOCK_DH=BLOCK_DH,
                 EPS=eps,
                 OUT_DTYPE=out_dtype,
 
-                # tuning knobs
                 num_warps=4,
                 num_stages=2,
             )
 
-        ctx.save_for_backward(q, k, v, wq, wk, wv, cos, sin, mask_u8, inv_nq, inv_nk)
+        ctx.save_for_backward(q, k, v, wq, wk, wv, bq, bk, bv,
+                              cos, sin, mask_u8, inv_nq, inv_nk)
         ctx.eps = eps
         return qo, ko, vo
 
     @staticmethod
     def backward(ctx, dqo, dko, dvo):
-        q, k, v, wq, wk, wv, cos, sin, mask_u8, inv_nq, inv_nk = ctx.saved_tensors
+        q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask_u8, inv_nq, inv_nk = ctx.saved_tensors
         B, T, C = q.shape
         D = cos.shape[1]
         H = C // D
-        eps = ctx.eps
 
         dq = torch.zeros_like(q, dtype=torch.float32)
         dk = torch.zeros_like(k, dtype=torch.float32)
@@ -549,17 +521,21 @@ class TritonDeltaEntranceV18(torch.autograd.Function):
         dwq = torch.zeros_like(wq, dtype=torch.float32)
         dwk = torch.zeros_like(wk, dtype=torch.float32)
         dwv = torch.zeros_like(wv, dtype=torch.float32)
+        dbq = torch.zeros(C, device=q.device, dtype=torch.float32)
+        dbk = torch.zeros(C, device=q.device, dtype=torch.float32)
+        dbv = torch.zeros(C, device=q.device, dtype=torch.float32)
 
         BLOCK_DH = D // 2
         grid = (T, B * H)
 
         with kernel_region("delta_entrance_bwd"):
             _delta_entrance_bwd_token_kernel[grid](
-                q, k, v, wq, wk, wv, cos, sin, mask_u8,
+                q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask_u8,
                 inv_nq, inv_nk,
                 dqo, dko, dvo,
                 dq, dk, dv,
                 dwq, dwk, dwv,
+                dbq, dbk, dbv,
 
                 q.stride(0), q.stride(1), q.stride(2),
                 k.stride(0), k.stride(1), k.stride(2),
@@ -570,7 +546,7 @@ class TritonDeltaEntranceV18(torch.autograd.Function):
 
                 B, T, C, H, D,
                 BLOCK_DH=BLOCK_DH,
-                EPS=eps,
+                EPS=ctx.eps,
                 num_warps=4,
                 num_stages=2,
             )
@@ -578,16 +554,29 @@ class TritonDeltaEntranceV18(torch.autograd.Function):
         return (
             dq.to(q.dtype), dk.to(k.dtype), dv.to(v.dtype),
             dwq.to(wq.dtype), dwk.to(wk.dtype), dwv.to(wv.dtype),
+            dbq.to(bq.dtype), dbk.to(bk.dtype), dbv.to(bv.dtype),
             None, None, None, None
         )
 
 
-def fused_delta_entrance(q, k, v, wq, wk, wv, cos, sin, mask, eps=1e-6):
-    return TritonDeltaEntranceV18.apply(q, k, v, wq, wk, wv, cos, sin, mask, eps)
+def fused_delta_entrance(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask, eps=1e-6):
+    """Fused conv1d + SiLU + mask + L2Norm + RoPE for DeltaNet pre-processing.
+
+    Args:
+        q, k, v: [B, T, C] after linear projection (before conv)
+        wq, wk, wv: [C, 1, 4] or [C, 4] conv weights (depthwise)
+        bq, bk, bv: [C] conv biases
+        cos, sin: [T, D] RoPE tables
+        mask: [B, T] attention mask (bool, uint8, or float)
+
+    Returns:
+        qo, ko, vo: [B, T, H, D] ready for FLA
+    """
+    return FusedDeltaEntranceV19.apply(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask, eps)
 
 
 # =============================================================================
-# Benchmark harness (same interface style as yours)
+# Benchmark harness
 # =============================================================================
 if __name__ == "__main__":
     import triton.testing
@@ -597,11 +586,11 @@ if __name__ == "__main__":
             x_names=["T"],
             x_vals=[512, 1024, 2048, 4096, 8192],
             line_arg="provider",
-            line_vals=["pytorch", "triton_v18"],
-            line_names=["PyTorch (Unfused)", "Triton V18 (Token-Program)"],
+            line_vals=["pytorch", "triton_v19"],
+            line_names=["PyTorch (Unfused)", "Triton V19 (Tile-Program)"],
             styles=[("red", "-"), ("green", "-")],
             ylabel="Execution Time (ms)",
-            plot_name="Delta-Entrance Performance (Forward Pass) - V18",
+            plot_name="Delta-Entrance Performance (Forward Pass) - V19",
             args={"B": 1, "H": 32, "D": 128, "dtype": torch.bfloat16},
         )
     )
@@ -615,31 +604,34 @@ if __name__ == "__main__":
         wq = torch.randn((C, 1, 4), device=device, dtype=dtype)
         wk = torch.randn((C, 1, 4), device=device, dtype=dtype)
         wv = torch.randn((C, 1, 4), device=device, dtype=dtype)
+        bq = torch.randn((C,), device=device, dtype=dtype)
+        bk = torch.randn((C,), device=device, dtype=dtype)
+        bv = torch.randn((C,), device=device, dtype=dtype)
         cos = torch.randn((T, D), device=device, dtype=dtype)
         sin = torch.randn((T, D), device=device, dtype=dtype)
         mask = torch.ones((B, T), device=device, dtype=torch.uint8)
 
-        # warmup (important for triton JIT + caching)
-        if provider == "triton_v18":
-            fused_delta_entrance(q, k, v, wq, wk, wv, cos, sin, mask)
+        # warmup
+        if provider == "triton_v19":
+            fused_delta_entrance(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask)
         else:
-            pytorch_unfused(q, k, v, wq, wk, wv, cos, sin, mask)
+            pytorch_unfused(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask)
 
         quantiles = [0.5, 0.2, 0.8]
         if provider == "pytorch":
             ms, min_ms, max_ms = triton.testing.do_bench(
-                lambda: pytorch_unfused(q, k, v, wq, wk, wv, cos, sin, mask),
+                lambda: pytorch_unfused(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask),
                 quantiles=quantiles,
             )
         else:
             ms, min_ms, max_ms = triton.testing.do_bench(
-                lambda: fused_delta_entrance(q, k, v, wq, wk, wv, cos, sin, mask),
+                lambda: fused_delta_entrance(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask),
                 quantiles=quantiles,
             )
 
         return ms, max_ms, min_ms
 
-    # quick correctness smoke test (small)
+    # Quick correctness smoke test
     B, T, H, D = 1, 256, 8, 64
     C = H * D
     dtype = torch.bfloat16
@@ -650,15 +642,17 @@ if __name__ == "__main__":
     wq = torch.randn((C, 1, 4), device=device, dtype=dtype)
     wk = torch.randn((C, 1, 4), device=device, dtype=dtype)
     wv = torch.randn((C, 1, 4), device=device, dtype=dtype)
+    bq = torch.randn((C,), device=device, dtype=dtype)
+    bk = torch.randn((C,), device=device, dtype=dtype)
+    bv = torch.randn((C,), device=device, dtype=dtype)
     cos = torch.randn((T, D), device=device, dtype=dtype)
     sin = torch.randn((T, D), device=device, dtype=dtype)
     mask = torch.ones((B, T), device=device, dtype=torch.uint8)
 
     with torch.no_grad():
-        qo_ref, ko_ref, vo_ref = pytorch_unfused(q, k, v, wq, wk, wv, cos, sin, mask)
-        qo_tri, ko_tri, vo_tri = fused_delta_entrance(q, k, v, wq, wk, wv, cos, sin, mask)
+        qo_ref, ko_ref, vo_ref = pytorch_unfused(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask)
+        qo_tri, ko_tri, vo_tri = fused_delta_entrance(q, k, v, wq, wk, wv, bq, bk, bv, cos, sin, mask)
 
-        # Compare in fp32 for tolerances
         def max_abs(a, b):
             return (a.float() - b.float()).abs().max().item()
 

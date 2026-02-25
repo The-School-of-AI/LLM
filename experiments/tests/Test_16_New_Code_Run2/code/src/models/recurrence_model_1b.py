@@ -709,15 +709,16 @@ class GatedDeltaNet(nn.Module):
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
+        self._key_dim = key_dim
+        self._value_dim = value_dim
 
-        self.q_proj = nn.Linear(hidden_size, key_dim, bias=False)
-        self.k_proj = nn.Linear(hidden_size, key_dim, bias=False)
-        self.v_proj = nn.Linear(hidden_size, value_dim, bias=False)
-        self.g_proj = nn.Linear(hidden_size, value_dim, bias=False)
+        # PERF: Fused QKV+G projection — single GEMM reads x from HBM once
+        # instead of 4 separate reads. Standard in LLaMA/GPT-2/Mistral.
+        self.qkvg_proj = nn.Linear(hidden_size, key_dim + key_dim + value_dim + value_dim, bias=False)
         self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
 
-        self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)
-        self.gk_proj = nn.Linear(hidden_size, num_heads, bias=True)
+        # PERF: Fused beta+gk projection — single GEMM instead of 2 reads of x
+        self.bgk_proj = nn.Linear(hidden_size, num_heads * 2, bias=True)
 
         self.q_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
         self.k_conv1d = ShortConvolution(key_dim, conv_size=conv_size, activation='silu')
@@ -744,13 +745,37 @@ class GatedDeltaNet(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.q_proj, self.k_proj, self.v_proj, self.g_proj, self.o_proj]:
-            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+        nn.init.normal_(self.qkvg_proj.weight, mean=0.0, std=0.02)
+        nn.init.normal_(self.o_proj.weight, mean=0.0, std=0.02)
         # STABILITY-FIX: Reduce init scale for alpha/beta gating logic
-        for m in [self.b_proj, self.gk_proj]:
-            nn.init.normal_(m.weight, mean=0.0, std=0.002)
-            if m.bias is not None:
-                nn.init.zeros_(m.bias)
+        nn.init.normal_(self.bgk_proj.weight, mean=0.0, std=0.002)
+        nn.init.zeros_(self.bgk_proj.bias)
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata,
+                               strict, missing_keys, unexpected_keys, error_msgs):
+        """Checkpoint compatibility: load old separate q/k/v/g_proj into fused qkvg_proj."""
+        q_key = prefix + 'q_proj.weight'
+        if q_key in state_dict:
+            state_dict[prefix + 'qkvg_proj.weight'] = torch.cat([
+                state_dict.pop(prefix + 'q_proj.weight'),
+                state_dict.pop(prefix + 'k_proj.weight'),
+                state_dict.pop(prefix + 'v_proj.weight'),
+                state_dict.pop(prefix + 'g_proj.weight'),
+            ], dim=0)
+
+        b_key = prefix + 'b_proj.weight'
+        if b_key in state_dict:
+            state_dict[prefix + 'bgk_proj.weight'] = torch.cat([
+                state_dict.pop(prefix + 'b_proj.weight'),
+                state_dict.pop(prefix + 'gk_proj.weight'),
+            ], dim=0)
+            state_dict[prefix + 'bgk_proj.bias'] = torch.cat([
+                state_dict.pop(prefix + 'b_proj.bias'),
+                state_dict.pop(prefix + 'gk_proj.bias'),
+            ], dim=0)
+
+        super()._load_from_state_dict(state_dict, prefix, local_metadata,
+                                       strict, missing_keys, unexpected_keys, error_msgs)
 
 
     def forward(self, x, attention_mask=None):
@@ -759,33 +784,65 @@ class GatedDeltaNet(nn.Module):
         token_keep = _token_keep_mask(attention_mask, B, T, device)
         token_keep_f = None
 
-        q = self.q_proj(x)
-        k = self.k_proj(x)
-        v = self.v_proj(x)
-        g = self.g_proj(x)
+        # ── Fused projections (single GEMM reads x once from HBM) ────────────
+        qkvg = self.qkvg_proj(x)
+        q, k, v, g = qkvg.split(
+            [self._key_dim, self._key_dim, self._value_dim, self._value_dim], dim=-1
+        )
 
-        # ── Separate PyTorch ops (conv1d → L2Norm → RoPE → mask) ────────────
-        q = self.q_conv1d(q)
-        k = self.k_conv1d(k)
-        v = self.v_conv1d(v)
+        bgk = self.bgk_proj(x)
+        b_raw, gk = bgk.split([self.num_heads, self.num_heads], dim=-1)
 
-        q = q.view(B, T, self.num_heads, self.head_dim)
-        k = k.view(B, T, self.num_heads, self.head_dim)
-        v = v.view(B, T, self.num_heads, self.head_dim)
-        g = g.view(B, T, self.num_heads, self.head_dim)
-
-        # L2 Normalization MUST happen first, otherwise it destroys the RoPE rotational structure
-        q = F.normalize(q, p=2, dim=-1)
-        k = F.normalize(k, p=2, dim=-1)
-
+        # ── Post-projection ops (conv1d → L2Norm → RoPE) ────────────
+        # Use fused Triton kernel when available (single kernel for all ops),
+        # otherwise fall back to separate PyTorch ops.
         cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-        q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
-        k = self.rotary_emb._apply_rotary(k, _cos_b, _sin_b)
+        _use_fused = (fused_delta_entrance is not None and q.is_cuda
+                      and HAS_TRITON and self.require_fused_kernel)
+        if _use_fused:
+            try:
+                # Build mask for Triton kernel
+                if token_keep is not None:
+                    _mask = token_keep
+                elif attention_mask is not None:
+                    _mask = attention_mask.bool()
+                else:
+                    _mask = torch.ones(B, T, device=device, dtype=torch.bool)
+                q, k, v = fused_delta_entrance(
+                    q, k, v,
+                    self.q_conv1d.conv.weight, self.k_conv1d.conv.weight, self.v_conv1d.conv.weight,
+                    self.q_conv1d.conv.bias, self.k_conv1d.conv.bias, self.v_conv1d.conv.bias,
+                    cos, sin, _mask,
+                )
+                # g still needs reshape (not processed by kernel)
+                g = g.view(B, T, self.num_heads, self.head_dim)
+            except Exception:
+                _use_fused = False  # Fall through to PyTorch path
 
-        beta = torch.sigmoid(self.b_proj(x)).unsqueeze(-1)  # (B, T, num_heads, 1)
-        gk = self.gk_proj(x)
+        if not _use_fused:
+            q = self.q_conv1d(q)
+            k = self.k_conv1d(k)
+            v = self.v_conv1d(v)
+
+            q = q.view(B, T, self.num_heads, self.head_dim)
+            k = k.view(B, T, self.num_heads, self.head_dim)
+            v = v.view(B, T, self.num_heads, self.head_dim)
+            g = g.view(B, T, self.num_heads, self.head_dim)
+
+            # L2 Normalization MUST happen first, otherwise it destroys the RoPE rotational structure
+            q = F.normalize(q, p=2, dim=-1)
+            k = F.normalize(k, p=2, dim=-1)
+
+            q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
+            k = self.rotary_emb._apply_rotary(k, _cos_b, _sin_b)
+
+        # ── Alpha/Beta gating (compute g in log-space to avoid exp→log round-trip) ──
+        beta = torch.sigmoid(b_raw).unsqueeze(-1)  # (B, T, num_heads, 1)
         A = torch.exp(self.A_log)
-        alpha = torch.exp(-A.view(1, 1, self.num_heads, 1) * F.softplus(gk + self.dt_bias).unsqueeze(-1))
+        # g_logspace = log(alpha) directly — FLA needs log-space, so skip the
+        # pointless exp() here followed by log() in fla_deltanet.py
+        g_logspace = -A.view(1, 1, self.num_heads) * F.softplus(gk + self.dt_bias)  # (B, T, H)
+        alpha = torch.exp(g_logspace).unsqueeze(-1)  # (B, T, H, 1) — only for masking
 
         if token_keep is not None:
             token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
@@ -810,6 +867,7 @@ class GatedDeltaNet(nn.Module):
                     o = fla_gated_delta_rule(
                         q=q, k=k, v=v, alpha=alpha, beta=beta,
                         D=self.D, num_heads=self.num_heads,
+                        g_precomputed=g_logspace,
                     )
             except Exception as e:
                 if self.require_fused_kernel:
