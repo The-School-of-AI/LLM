@@ -16,7 +16,7 @@ Confidence values in results are real computed scores, not hardcoded labels.
 ## Setup
 
 ```bash
-cd /home/ubuntu/LLM/experiments/5_data_qa_and_leakage_control/collected
+cd experiments/5_data_qa_and_leakage_control/collected
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -28,6 +28,9 @@ Downloads all benchmark test sets into `benchmarks/`. Only needed if `benchmarks
 
 ```bash
 python scripts/download_benchmarks.py
+
+# Optional: write to a custom location
+python scripts/download_benchmarks.py --output-dir /data/benchmarks
 ```
 
 ### Benchmarks included
@@ -76,12 +79,36 @@ JSONL with a `text` field on each row:
 
 - `reports/<batch_name>_<timestamp>.json` — full report with findings per layer
 - `reports/<batch_name>_CONTAMINATED_<timestamp>.jsonl` — one line per flagged sample
+- `reports/run_registry.jsonl` — permanent audit log of every run (see below)
 
 Each contaminated sample shows which layer caught it, which benchmark it matched, what it matched against, and the actual similarity score.
 
 Exit code:
 - `0` = APPROVED (no contamination found)
 - `1` = REJECTED (contamination found)
+
+## Run Registry (Audit Trail)
+
+Every scan writes at least two lines to `reports/run_registry.jsonl` — a `STARTED` entry before detection begins and a `COMPLETED` (or `FAILED`) entry at the end. This ensures every run is permanently recorded even if the process crashes.
+
+```jsonl
+{"run_id": "a3f2...", "status": "STARTED",    "team": "Team 4", "dataset": "batch_01", "scanner_commit": "86e95c...", "repo_dirty": false, "input_file": "/data/batch_01.jsonl", "config": {...}}
+{"run_id": "a3f2...", "status": "COMPLETED",  "result": "APPROVED", "total_samples": 10000, "contaminated_count": 0}
+```
+
+Failed runs are recorded with a `failure_type` field (`INVALID_INPUT`, `OUT_OF_MEMORY`, or `UNEXPECTED_ERROR`).
+
+## Replaying a Past Run
+
+```bash
+# Show what was used for a given run_id
+python scripts/replay.py <run_id>
+
+# Also re-execute the scan
+python scripts/replay.py <run_id> --execute
+```
+
+This prints the exact git commit, input file, team, config, and outcome — and the `git checkout` + `scan.py` command to reproduce it.
 
 ## Configuration
 
@@ -91,13 +118,15 @@ Pass a config dict when using the scanner programmatically:
 from core.scanner import ContaminationScanner
 
 scanner = ContaminationScanner({
-    "ngram_size": 13,              # words per n-gram (default: 13)
-    "minhash_threshold": 0.8,      # Jaccard threshold (default: 0.8)
-    "minhash_permutations": 128,   # MinHash accuracy (default: 128)
-    "semantic_threshold": 0.9,     # cosine threshold (default: 0.9)
-    "semantic_model": "all-MiniLM-L6-v2",  # embedding model
-    "semantic_batch_size": 512,    # samples per batch
-    "benchmarks_path": "benchmarks",
+    "benchmarks_path": "benchmarks",      # directory with *_test.jsonl files
+    "reports_path": "reports",            # directory where reports are written
+    "ngram_size": 13,                     # words per n-gram (default: 13)
+    "minhash_threshold": 0.8,             # Jaccard threshold (default: 0.8)
+    "minhash_permutations": 128,          # MinHash accuracy (default: 128)
+    "semantic_threshold": 0.9,            # cosine threshold (default: 0.9)
+    "semantic_model": "all-MiniLM-L6-v2", # embedding model
+    "semantic_batch_size": 512,           # samples per batch
+    "report_sample_limit": 50,            # max samples shown per layer in report
 })
 ```
 
