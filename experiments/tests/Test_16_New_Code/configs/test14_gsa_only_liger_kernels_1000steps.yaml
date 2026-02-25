@@ -18,7 +18,7 @@ data:
 training:
   num_epochs: 1
   max_train_steps: 20
-  max_eval_steps: null
+  max_eval_steps: 0
   log_interval: 1
   seed: 42
   init_model_path: "../results/init/model_init.pt"

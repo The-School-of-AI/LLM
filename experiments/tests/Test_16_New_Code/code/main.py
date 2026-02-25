@@ -567,15 +567,19 @@ def main():
             break
 
         # Evaluate on validation set
-        print_rank_0("\nEvaluating on validation set...")
-        with pipe.stage(f"epoch_{epoch}_eval"):
-            eval_loss, eval_perplexity = evaluate(
-                model_engine,
-                eval_loader,
-                phase="Validation",
-                max_steps=args.max_eval_steps,
-                metrics_jsonl_path=args.metrics_jsonl_path,
-            )
+        if args.max_eval_steps is not None and args.max_eval_steps == 0:
+            print_rank_0("\nSkipping validation as max_eval_steps is 0.")
+            eval_loss = eval_perplexity = 0.0
+        else:
+            print_rank_0("\nEvaluating on validation set...")
+            with pipe.stage(f"epoch_{epoch}_eval"):
+                eval_loss, eval_perplexity = evaluate(
+                    model_engine,
+                    eval_loader,
+                    phase="Validation",
+                    max_steps=args.max_eval_steps,
+                    metrics_jsonl_path=args.metrics_jsonl_path,
+                )
 
         # Save epoch checkpoint
         if checkpoint_manager or args.save_checkpoint:
@@ -610,15 +614,19 @@ def main():
     print_rank_0("\n[5/5] Final Evaluation...")
 
     # Evaluate on test set
-    print_rank_0("\nEvaluating on test set...")
-    with pipe.stage("final_eval_test"):
-        test_loss, test_perplexity = evaluate(
-            model_engine,
-            test_loader,
-            phase="Test",
-            max_steps=args.max_eval_steps,
-            metrics_jsonl_path=args.metrics_jsonl_path,
-        )
+    if args.max_eval_steps is not None and args.max_eval_steps == 0:
+        print_rank_0("\nSkipping final test evaluation as max_eval_steps is 0.")
+        test_loss = test_perplexity = 0.0
+    else:
+        print_rank_0("\nEvaluating on test set...")
+        with pipe.stage("final_eval_test"):
+            test_loss, test_perplexity = evaluate(
+                model_engine,
+                test_loader,
+                phase="Test",
+                max_steps=args.max_eval_steps,
+                metrics_jsonl_path=args.metrics_jsonl_path,
+            )
 
     # Test text generation
     if args.test_generation:
