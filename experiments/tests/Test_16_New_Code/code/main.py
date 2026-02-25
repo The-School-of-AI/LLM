@@ -128,6 +128,7 @@ class Config:
         self.model_variant = config_dict["model"].get(
             "model_variant", "reversible"
         )  # "reversible", "wo_rev", "diff_rec", or "lead_wo_rev"
+        self.enable_mtp = config_dict["model"].get("enable_mtp", True)
         # Checkpoint configuration
         self.output_dir = config_dict["checkpoint"]["output_dir"]
         self.save_checkpoint = config_dict["checkpoint"]["save_checkpoint"]
@@ -371,6 +372,7 @@ def main():
 
     # Create model configuration
     config = ModelConfig()
+    config.enable_mtp = args.enable_mtp
     # Update vocab size to match tokenizer
     # Use len(tokenizer) to include special tokens (pad, eos, etc.)
     vocab_size = len(tokenizer)
@@ -559,6 +561,10 @@ def main():
                 profile_steps=args.profile_steps if args.profile_steps else None,
                 profile_output_dir=os.path.dirname(args.metrics_jsonl_path) if args.metrics_jsonl_path else None,
             )
+
+        if args.max_train_steps is not None and global_step >= args.max_train_steps:
+            print_rank_0(f"\n[INFO] Total training budget of {args.max_train_steps} steps reached. Exiting.")
+            break
 
         # Evaluate on validation set
         print_rank_0("\nEvaluating on validation set...")

@@ -30,7 +30,7 @@ training:
   # Kernel profiler: list global step numbers to profile (e.g. [10, 11, 12]).
   # Outputs profile_report.txt + profile.jsonl next to metrics_jsonl_path.
   # Set to [] or omit to disable (zero overhead when disabled).
-  profile_steps: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+  profile_steps: [1,2,3]
 
 deepspeed:
   config_path: "../deepspeed/zero-2-dense-bf16-test14-1000steps.json"
@@ -40,6 +40,7 @@ model:
   tokenizer_name: null
   embedding_type: "kronecker"
   model_variant: "reversible"
+  enable_mtp: true
 
 checkpoint:
   output_dir: "../results/run/checkpoints"

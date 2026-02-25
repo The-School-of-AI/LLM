@@ -230,6 +230,11 @@ def train_epoch(
             if i < start_step:
                 i += 1
                 continue
+
+            # CRITICAL: Respect global training budget
+            if max_steps is not None and global_step >= max_steps:
+                print_rank_0(f"[INFO] Global step budget {max_steps} reached at step {global_step}. Stopping.")
+                break
                 
             if i == 0 and do_profile:
                 print_rank_0("Profile started (Steps 0-2)")
@@ -277,8 +282,8 @@ def train_epoch(
                     labels = batch.get("labels").to(model_engine.device, non_blocking=True) if "labels" in batch else None
 
 
-            # Memory profiling on first step
-            if i == 0:
+            # Memory profiling on first few steps
+            if (global_step + 1) in [1, 2, 3]:
                 torch.cuda.reset_peak_memory_stats(model_engine.device)
                 mem_before = torch.cuda.memory_allocated(model_engine.device) / 1e9
                 print_rank_0(f"\n[MEMORY] Before forward pass: {mem_before:.2f}GB")
@@ -288,6 +293,11 @@ def train_epoch(
                 # FIX: Call model_engine(...) not model_engine.module(...)
                 fwd_ctx = profiler.phase("forward") if is_profile_step else _null_ctx()
                 with fwd_ctx:
+                    # DIAGNOSTIC: Check MTP visibility on Step 1
+                    if global_step == 0 and is_main_process():
+                        has_mtp = getattr(model_engine.module, "mtp_block", None) is not None
+                        print_rank_0(f"[DIAGNOSTIC] Step 1: MTP block enabled={has_mtp}, y_ntp is None={y_ntp is None}")
+
                     h_ntp, h_mtp, aux_loss = model_engine(
                         x_input,
                         next_token_ids=y_ntp,
@@ -300,7 +310,7 @@ def train_epoch(
 
 
                 # Memory profiling after forward
-                if i == 0:
+                if (global_step + 1) in [1, 2, 3]:
                     mem_after_fwd = torch.cuda.memory_allocated(model_engine.device) / 1e9
                     mem_peak = torch.cuda.max_memory_allocated(model_engine.device) / 1e9
                     print_rank_0(f"[MEMORY] After forward pass: {mem_after_fwd:.2f}GB (peak: {mem_peak:.2f}GB)")
@@ -319,7 +329,7 @@ def train_epoch(
                         lm_weight,                       # [V, H]
                         y_ntp.view(-1),                  # [B*T]
                     )
-                if i == 0:
+                if (global_step + 1) in [1, 2, 3]:
                     mem_after_loss_ntp = torch.cuda.memory_allocated(model_engine.device) / 1e9
                     print_rank_0(f"[MEMORY] After loss_ntp: {mem_after_loss_ntp:.2f}GB")
 
@@ -447,17 +457,8 @@ def train_epoch(
                 
                 if is_log_step:
                     msg = (f"{_format_log_timestamp()} | step {global_step} | "
-                           f"loss: {loss_val:.4f} | tok/sec: {tokens_per_sec:9.2f}")
-                    
-                    if is_heavy_log_step:
-                        msg += f" | avg_loss: {avg_loss_val:.4f} | lr: {learning_rate:.2e}"
-                        
-                        if enable_system_metrics:
-                            if gpu_util is not None:
-                                msg += f", GPU Util: {gpu_util:.0f}%, GPU Mem: {gpu_mem_used:.1f}G/{gpu_mem_total:.1f}G"
-                            if cpu_util is not None:
-                                msg += f", CPU Util: {cpu_util:.0f}%, CPU Mem: {cpu_mem_used:.1f}G/{cpu_mem_total:.1f}G"
-                    
+                           f"L:{loss_val:.4f} (ntp:{loss_ntp_value:.4f}, mtp:{loss_mtp_value:.4f}) | "
+                           f"tok/sec: {tokens_per_sec:9.2f} | dt: {step_dt_ms:.2f}ms")
                     print(msg)
 
                     _append_jsonl_buffered(
@@ -503,10 +504,7 @@ def train_epoch(
                         # Use basic checkpoint saving
                         save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
 
-            if max_steps is not None and (i + 1) >= max_steps:
-                 break
-
-        i += 1
+            i += 1
 
     finally:
         if metrics_file:
