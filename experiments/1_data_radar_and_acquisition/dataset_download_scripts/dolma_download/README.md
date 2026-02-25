@@ -43,4 +43,28 @@ This folder contains scripts for downloading Dolma datasets to your local device
 - The batch script relies on `download_dolma_dataset.sh` being present in the same directory.
 - Download progress and errors will be shown in the terminal.
 
+## Handling Failures and Resuming Downloads
+
+### Per-File Logging and Job Structure
+- Each Dolma download job is triggered per dataset file (one file per job), and logs are generated for each file indicating whether the download was successful or failed.
+- Logs and audit trails are stored in the `/data/dolma/logs` directory. Check this location for detailed logs and status of each file.
+
+### Resuming After Failures
+- If a download fails (e.g., due to network or disk issues), the failed file's URL will be recorded in the logs.
+- To resume, create a new subset file (e.g., `dolma_urls_failed.txt`) containing only the URLs of the files that failed to download.
+- Rerun the batch script with this new subset file:
+  ```bash
+  ./download_dolma_all_dataset_batch.sh dolma_urls_failed.txt ./datasets/
+  ```
+- This will attempt to download only the remaining files.
+
+### Parallelization and Resource Considerations
+- You can trigger multiple download jobs in parallel to speed up the process.
+- The number of concurrent jobs you can run depends on your machine's CPU, memory, disk I/O, and especially network bandwidth.
+- For very large datasets (like Dolma), it is recommended to:
+  - Monitor system resource usage (CPU, RAM, disk, network) during downloads.
+  - Start with a small number of parallel jobs (e.g., 2-4) and increase as capacity allows.
+  - Use a robust cloud instance (e.g., AWS EC2 with high network throughput and sufficient EBS storage).
+- Always ensure you do not exceed your storage or bandwidth limits to avoid partial/corrupted downloads.
+
 For questions or issues, contact the project maintainers.
