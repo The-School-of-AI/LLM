@@ -4,8 +4,7 @@ Benchmark B1-B3: Cross-Entropy Kernel Comparison
 
 Tests different CE implementations to optimize the TRAINING step:
 
-  B1: Standard PyTorch CE vs Triton fused CE (from codebase)
-  B2: Liger FusedLinearCE (fuses lm_head + CE into one kernel) vs separate
+  B1: Standard (lm_head + PyTorch CE) vs Codebase Fused Linear CE
   B3: Memory comparison — which CE uses least VRAM?
 
 CE was 29% of step time at 4096 in profiling. At 512 it will be smaller
@@ -118,14 +117,6 @@ def run_b1_ce_comparison(cfg):
     except Exception as e:
         print(f"  ⚠️  Codebase fused CE unavailable: {e}")
 
-    # Check for Liger
-    liger_ce_cls = None
-    try:
-        from liger_kernel.ops.fused_linear_cross_entropy import LigerFusedLinearCrossEntropyLoss
-        liger_ce_cls = LigerFusedLinearCrossEntropyLoss
-        print("  ✅ Liger FusedLinearCrossEntropyLoss available")
-    except Exception as e:
-        print(f"  ⚠️  Liger unavailable: {e}")
 
     results = []
     lm_head_weight = torch.randn(V, D, device=device, dtype=dtype)
@@ -171,23 +162,6 @@ def run_b1_ce_comparison(cfg):
             except Exception as e:
                 print(f"  {T:>8}  {'Codebase FusedCE':>22}  FAILED: {e}")
 
-        # Method 3: Liger FusedLinearCE
-        if liger_ce_cls is not None:
-            try:
-                liger_ce = liger_ce_cls()
-
-                def liger_fused():
-                    h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
-                    targets = torch.randint(0, V, (N,), device=device)
-                    loss = liger_ce(h, lm_head_weight, targets)
-                    loss.backward()
-
-                liger_result = bench_fn(liger_fused, cfg.warmup_iters, cfg.bench_iters, f"liger_T{T}")
-                results.append({"seq_len": T, "method": "Liger FusedCE", **liger_result})
-                speedup = sep_result['avg_ms'] / liger_result['avg_ms'] if sep_result else 0
-                print(f"  {T:>8}  {'Liger FusedCE':>22}  {liger_result['avg_ms']:>10.2f}  {liger_result['peak_mem_gb']:>10.2f}  {speedup:>7.2f}×")
-            except Exception as e:
-                print(f"  {T:>8}  {'Liger FusedCE':>22}  FAILED: {e}")
 
         print()
         torch.cuda.empty_cache()
@@ -261,21 +235,7 @@ def run_b3_memory(cfg):
     except Exception as e:
         print(f"  (Codebase FusedCE skipped: {e})")
 
-    # Liger FusedLinearCE
-    try:
-        from liger_kernel.ops.fused_linear_cross_entropy import LigerFusedLinearCrossEntropyLoss
-        liger_ce = LigerFusedLinearCrossEntropyLoss()
-        torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
-        h = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
-        targets = torch.randint(0, V, (N,), device=device)
-        loss = liger_ce(h, lm_head_weight, targets)
-        loss.backward()
-        methods["Liger FusedCE"] = torch.cuda.max_memory_allocated() / 1e9
-        del h, targets, loss
-        torch.cuda.empty_cache()
-    except Exception as e:
-        print(f"  (Liger FusedCE skipped: {e})")
+
 
     print(f"\n  {'Method':>22}  {'Peak Mem (GB)':>14}  {'Savings':>10}")
     print(f"  {'─'*22}  {'─'*14}  {'─'*10}")
