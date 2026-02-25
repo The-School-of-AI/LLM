@@ -39,15 +39,23 @@ def test_clean_dataset_is_approved() -> None:
 
         # Input: completely unrelated text
         input_file = tmp / "clean.jsonl"
-        write_jsonl(input_file, [
-            {"id": "1", "text": "The quick brown fox jumps over the lazy dog."},
-            {"id": "2", "text": "Machine learning models require large amounts of data."},
-        ])
+        write_jsonl(
+            input_file,
+            [
+                {"id": "1", "text": "The quick brown fox jumps over the lazy dog."},
+                {
+                    "id": "2",
+                    "text": "Machine learning models require large amounts of data.",
+                },
+            ],
+        )
 
-        scanner = ContaminationScanner({
-            "benchmarks_path": str(benchmarks_dir),
-            "reports_path": str(reports_dir),
-        })
+        scanner = ContaminationScanner(
+            {
+                "benchmarks_path": str(benchmarks_dir),
+                "reports_path": str(reports_dir),
+            }
+        )
         approved, report = scanner.scan_dataset(input_file, "test-team", "clean-batch")
 
         assert approved, "Clean dataset should be APPROVED"
@@ -76,16 +84,23 @@ def test_contaminated_dataset_is_rejected() -> None:
 
         # Input: one verbatim benchmark sample + one clean sample
         input_file = tmp / "contaminated.jsonl"
-        write_jsonl(input_file, [
-            {"id": "1", "text": benchmark_question},
-            {"id": "2", "text": "An unrelated sentence about cooking pasta."},
-        ])
+        write_jsonl(
+            input_file,
+            [
+                {"id": "1", "text": benchmark_question},
+                {"id": "2", "text": "An unrelated sentence about cooking pasta."},
+            ],
+        )
 
-        scanner = ContaminationScanner({
-            "benchmarks_path": str(benchmarks_dir),
-            "reports_path": str(reports_dir),
-        })
-        approved, report = scanner.scan_dataset(input_file, "test-team", "contaminated-batch")
+        scanner = ContaminationScanner(
+            {
+                "benchmarks_path": str(benchmarks_dir),
+                "reports_path": str(reports_dir),
+            }
+        )
+        approved, report = scanner.scan_dataset(
+            input_file, "test-team", "contaminated-batch"
+        )
 
         assert not approved, "Contaminated dataset should be REJECTED"
         assert report["status"] == "REJECTED"
@@ -108,10 +123,12 @@ def test_registry_records_run() -> None:
         input_file = tmp / "input.jsonl"
         write_jsonl(input_file, [{"id": "1", "text": "Some training text."}])
 
-        scanner = ContaminationScanner({
-            "benchmarks_path": str(benchmarks_dir),
-            "reports_path": str(reports_dir),
-        })
+        scanner = ContaminationScanner(
+            {
+                "benchmarks_path": str(benchmarks_dir),
+                "reports_path": str(reports_dir),
+            }
+        )
         _, report = scanner.scan_dataset(input_file, "test-team", "registry-batch")
 
         registry = reports_dir / "run_registry.jsonl"
@@ -124,7 +141,9 @@ def test_registry_records_run() -> None:
         assert "STARTED" in statuses, "Registry must contain STARTED record"
         assert "COMPLETED" in statuses, "Registry must contain COMPLETED record"
 
-        started = next(r for r in records if r["run_id"] == run_id and r["status"] == "STARTED")
+        started = next(
+            r for r in records if r["run_id"] == run_id and r["status"] == "STARTED"
+        )
         assert "config" in started, "STARTED record must include config"
         assert "input_file" in started, "STARTED record must include input_file"
         print("✓ run registry records STARTED + COMPLETED with config and input_file")
