@@ -16,10 +16,10 @@ import json
 import sys
 from typing import Any
 
-from awsglue.utils import getResolvedOptions
-from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
 from pyspark.sql import functions as F
 from pyspark.sql.types import ArrayType, StringType, TimestampType
 from pyspark.sql.window import Window
@@ -74,7 +74,9 @@ def get_glue_args():
     args = getResolvedOptions(sys.argv, ["JOB_NAME"])
     optional = {}
     if "--INPUT_PATH" in sys.argv:
-        optional["INPUT_PATH"] = getResolvedOptions(sys.argv, ["INPUT_PATH"])["INPUT_PATH"]
+        optional["INPUT_PATH"] = getResolvedOptions(sys.argv, ["INPUT_PATH"])[
+            "INPUT_PATH"
+        ]
     else:
         optional["INPUT_PATH"] = DEFAULT_INPUT_PATH
     return args, optional
@@ -127,8 +129,17 @@ def process_samvaad(spark, input_path: str) -> None:
     df_out = df_out.withColumn(
         "id", F.concat(F.lit("samvaad_hi_"), F.row_number().over(w).cast("string"))
     ).select(
-        "id", "hash", "dataset", "domain", "source", "text", "language",
-        "metadata", "added", "created", "version"
+        "id",
+        "hash",
+        "dataset",
+        "domain",
+        "source",
+        "text",
+        "language",
+        "metadata",
+        "added",
+        "created",
+        "version",
     )
 
     record_count = df_out.count()
@@ -138,13 +149,7 @@ def process_samvaad(spark, input_path: str) -> None:
 
     output_path = f"{OUTPUT_BASE}/source=samvaad_hi"
     print(f"Writing to: {output_path}")
-    (
-        df_out
-        .write
-        .mode("overwrite")
-        .option("compression", "zstd")
-        .parquet(output_path)
-    )
+    (df_out.write.mode("overwrite").option("compression", "zstd").parquet(output_path))
     print("✓ Completed Samvaad-Hi processing")
 
 
