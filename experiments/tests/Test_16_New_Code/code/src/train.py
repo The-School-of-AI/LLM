@@ -282,7 +282,16 @@ def train_epoch(
                     labels = batch.get("labels").to(model_engine.device, non_blocking=True) if "labels" in batch else None
 
 
-            # Memory profiling on first few steps
+            # ── Value Diagnostic (Step 1 Only) ──────────────────────────────────
+            if global_step == 0 and is_main_process():
+                # Fetch first 5 tokens to verify alignment
+                _xi = x_input[0, :5].cpu().tolist()
+                _yn = y_ntp[0, :5].cpu().tolist() if y_ntp is not None else []
+                _ym = y_mtp[0, :5].cpu().tolist() if y_mtp is not None else []
+                print_rank_0(f"[TOKEN CHECK] Step 1 Batch 0:\n"
+                             f"  x_input[:5]: {_xi}\n"
+                             f"  y_ntp[:5]:   {_yn}\n"
+                             f"  y_mtp[:5]:   {_ym}")
             if (global_step + 1) in [1, 2, 3]:
                 torch.cuda.reset_peak_memory_stats(model_engine.device)
                 mem_before = torch.cuda.memory_allocated(model_engine.device) / 1e9
@@ -556,29 +565,45 @@ def evaluate(
 
     with torch.no_grad():
         for i, batch in enumerate(progress_bar):
-            # Move batch to device
-            input_ids = batch["input_ids"].to(model_engine.device, non_blocking=True)
-            attention_mask = batch["attention_mask"].to(
-                model_engine.device, non_blocking=True
-            )
-            labels = batch["labels"].to(model_engine.device, non_blocking=True)
+            # Support flexible batch keys (sliced by collator or standard)
+            x_input = batch.get("x_input")
+            y_ntp = batch.get("y_ntp")
+            y_mtp = batch.get("y_mtp")
+            attention_mask_x = batch.get("attention_mask_x")
+            labels = batch.get("labels")
+
+            # Fallback for standard transformer formatting
+            if x_input is None:
+                x_input = batch.get("input_ids")
+            if attention_mask_x is None:
+                attention_mask_x = batch.get("attention_mask")
+
+            # Move to device
+            x_input = x_input.to(model_engine.device, non_blocking=True)
+            if y_ntp is not None: y_ntp = y_ntp.to(model_engine.device, non_blocking=True)
+            if y_mtp is not None: y_mtp = y_mtp.to(model_engine.device, non_blocking=True)
+            if attention_mask_x is not None: attention_mask_x = attention_mask_x.to(model_engine.device, non_blocking=True)
+            if labels is not None: labels = labels.to(model_engine.device, non_blocking=True)
 
             # Forward pass
-            # Recurrence models use a custom forward signature (not labels=...)
             uses_custom_forward = _uses_custom_recurrence_forward(model_engine.module)
 
             if uses_custom_forward:
-                # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)
-                x_input = input_ids[:, :-2].contiguous()
-                y_ntp = input_ids[:, 1:-1].contiguous()
-                y_mtp = input_ids[:, 2:].contiguous()
+                # If the batch isn't already sliced by the collator, do it here
+                if y_ntp is None:
+                    _ids = x_input
+                    x_input = _ids[:, :-2].contiguous()
+                    y_ntp = _ids[:, 1:-1].contiguous()
+                    y_mtp = _ids[:, 2:].contiguous()
+                    if attention_mask_x is not None:
+                         attention_mask_x = attention_mask_x[:, :-2].contiguous()
                 
                 # CRITICAL FIX: Bypass DeepSpeed's autocast wrapper
-                with torch.amp.autocast('cuda',enabled=False):
+                with torch.amp.autocast('cuda', enabled=False):
                     logits_ntp, logits_mtp, aux_loss = model_engine.module(
                         x_input,
                         next_token_ids=y_ntp,
-                        attention_mask=attention_mask[:, :-2].contiguous() if attention_mask is not None else None,
+                        attention_mask=attention_mask_x.bool() if attention_mask_x is not None else None,
                         return_loss=True,
                         return_memory=False,
                         prev_memory_stream=None
@@ -601,13 +626,15 @@ def evaluate(
                     )
                 del logits_mtp
                 
-                loss = loss_ntp + 0.3 * loss_mtp
+                loss = loss_ntp
+                if loss_mtp is not None:
+                    loss = loss + 0.3 * loss_mtp
                 if aux_loss is not None and aux_loss.numel() > 0:
                     loss += aux_loss
             else:
                 # Standard transformer model
                 outputs = model_engine(
-                    input_ids, attention_mask=attention_mask, labels=labels
+                    x_input, attention_mask=attention_mask_x, labels=labels
                 )
                 loss = outputs.loss
 
