@@ -1223,9 +1223,14 @@ class MHCCoeffs(nn.Module):
 
         d_in = self.n * d_model
 
-        self.phi_pre = nn.Linear(d_in, self.n, bias=False)
-        self.phi_post = nn.Linear(d_in, self.n, bias=False)
-        self.phi_res = nn.Linear(d_in, self.n * self.n, bias=False)
+        # Fused projection: pre (n) + post (n) + res (n*n)
+        # Avoids inductor incorrectly fusing separate Linear layers on the same input
+        # (same pattern as qkvg_proj / bgk_proj / idx_proj / qkvgg_proj fusions)
+        self._pre_dim = self.n
+        self._post_dim = self.n
+        self._res_dim = self.n * self.n
+        self._phi_split = [self._pre_dim, self._post_dim, self._res_dim]
+        self.phi_fused = nn.Linear(d_in, self._pre_dim + self._post_dim + self._res_dim, bias=False)
 
         self.b_pre = nn.Parameter(torch.zeros(self.n))
         self.b_post = nn.Parameter(torch.zeros(self.n))
@@ -1237,8 +1242,18 @@ class MHCCoeffs(nn.Module):
 
         self.rms = RMSNorm(d_in)
 
-        for m in [self.phi_pre, self.phi_post, self.phi_res]:
-            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+        nn.init.normal_(self.phi_fused.weight, mean=0.0, std=0.02)
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+        """Handle old checkpoints with separate phi_pre/phi_post/phi_res weights."""
+        pre_key = prefix + "phi_pre.weight"
+        fused_key = prefix + "phi_fused.weight"
+        if pre_key in state_dict and fused_key not in state_dict:
+            w_pre = state_dict.pop(pre_key)
+            w_post = state_dict.pop(prefix + "phi_post.weight")
+            w_res = state_dict.pop(prefix + "phi_res.weight")
+            state_dict[fused_key] = torch.cat([w_pre, w_post, w_res], dim=0)
+        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
     def forward(self, x_stream: torch.Tensor):
         B, T, n, D = x_stream.shape
@@ -1246,12 +1261,18 @@ class MHCCoeffs(nn.Module):
         x_flat = self.rms(x_flat)
 
         # Cast to weight dtype to prevent float32/bfloat16 mismatch during reversible backward
-        x_flat = x_flat.to(self.phi_pre.weight.dtype)
+        x_flat = x_flat.to(self.phi_fused.weight.dtype)
 
-        pre_logits = self.alpha_pre * self.phi_pre(x_flat) + self.b_pre
-        post_logits = self.alpha_post * self.phi_post(x_flat) + self.b_post
+        # Single fused projection, then split
+        logits_all = self.phi_fused(x_flat)
+        pre_raw, post_raw, res_raw = logits_all.split(self._phi_split, dim=-1)
+        # split() creates non-contiguous views — inductor generates wrong reinterpret_tensor
+        pre_raw, post_raw, res_raw = pre_raw.contiguous(), post_raw.contiguous(), res_raw.contiguous()
 
-        res_logits = self.alpha_res * self.phi_res(x_flat)
+        pre_logits = self.alpha_pre * pre_raw + self.b_pre
+        post_logits = self.alpha_post * post_raw + self.b_post
+
+        res_logits = self.alpha_res * res_raw
         res_logits = res_logits.view(B, T, n, n) + self.b_res
 
         H_pre = torch.sigmoid(pre_logits)
