@@ -100,8 +100,9 @@ class ReferenceLLM(nn.Module):
                     "bpe_vocab and pf_codec required for Kronecker embeddings"
                 )
 
-            from components.embeddings.kronecker_embedding import \
-                PureHybridEmbeddingTorch
+            from components.embeddings.kronecker_embedding import (
+                PureHybridEmbeddingTorch,
+            )
 
             self.kronecker_embeddings = PureHybridEmbeddingTorch(
                 bpe_vocab, pf_codec

@@ -21,11 +21,12 @@ import time
 
 import torch
 import torch.nn as nn
+
 # Import existing data utilities (copied to endGame as data_utils.py)
 from data_utils import SYNTHStream
+
 # Import the 1B recurrence model
-from recurrence_model_1b import (KroneckerConfig, KroneckerEmbeddings,
-                                 create_model_1b)
+from recurrence_model_1b import KroneckerConfig, KroneckerEmbeddings, create_model_1b
 from torch.utils.data import DataLoader
 from transformers import PreTrainedTokenizerFast
 

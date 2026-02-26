@@ -25,26 +25,30 @@ import importlib.util
 
 # ── fla DeltaNet ──────────────────────────────────────────────────────
 from .fla_deltanet import fla_gated_delta_rule
+
 # ── Gated Lightning Indexer ───────────────────────────────────────────
 from .triton_indexer import pytorch_gated_indexer, triton_gated_indexer
+
 # ── Streaming Indexer (memory-efficient variance + chunked topk) ─────
-from .triton_indexer_streaming import (fused_indexer_topk,
-                                       streaming_indexer_variance)
+from .triton_indexer_streaming import fused_indexer_topk, streaming_indexer_variance
+
 # ── RMSNorm ───────────────────────────────────────────────────────────
 from .triton_rmsnorm import TritonRMSNorm, pytorch_rmsnorm, triton_rmsnorm
+
 # ── Sinkhorn-Knopp ───────────────────────────────────────────────────
 from .triton_sinkhorn import pytorch_sinkhorn_knopp, triton_sinkhorn_knopp
+
 # ── Sparse Attention ──────────────────────────────────────────────────
-from .triton_sparse_attn import (pytorch_sparse_attention,
-                                 triton_sparse_attention)
+from .triton_sparse_attn import pytorch_sparse_attention, triton_sparse_attention
 
 # ── Triton availability flag ──────────────────────────────────────────
 HAS_TRITON = importlib.util.find_spec("triton") is not None
 
 # ── fla availability flag ─────────────────────────────────────────────
 try:
-    from fla.ops.gated_delta_rule import \
-        chunk_gated_delta_rule as _check_fla  # noqa: F401
+    from fla.ops.gated_delta_rule import (  # noqa: F401
+        chunk_gated_delta_rule as _check_fla,
+    )
 
     HAS_FLA = True
     del _check_fla
