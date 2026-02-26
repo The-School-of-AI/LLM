@@ -160,7 +160,8 @@ def train_epoch(
     steps = 0
 
     # FIX-PERF-07: Use dynamic chunk size from config (default 4GB)
-    fused_ce_fn = _FusedLinearCE(ignore_index=-100, reduction='mean', max_chunk_gb=max_chunk_gb)
+    # Initialize lazily only when needed (recurrence models use fused CE).
+    fused_ce_fn = None
 
     # ── Step profiler setup ──────────────────────────────────────────────────
     # Auto-create a profiler if profile_steps were provided but no instance passed.
@@ -231,6 +232,12 @@ def train_epoch(
         loss_aux_value = None
 
         if uses_custom_forward:
+            if fused_ce_fn is None:
+                fused_ce_fn = _FusedLinearCE(
+                    ignore_index=-100,
+                    reduction='mean',
+                    max_chunk_gb=max_chunk_gb,
+                )
             # Reversible model: returns (h_ntp, h_mtp, aux_loss) hidden states
             # (NOT logits — lm_head is skipped; FusedLinearCE fuses matmul+CE below)
             x_input = input_ids[:, :-2].contiguous()

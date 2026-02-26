@@ -230,7 +230,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Test 14 (GSA-only, Liger RoPE/MLP/
 (
   cd "$CODE_DIR"
   if [[ "$DRY_RUN_LOGGING_ONLY" == "1" ]]; then
-    "$PYTHON_BIN" -u logging_smoke.py
+    "$PYTHON_BIN" -u -m deepspeed.launcher.launch --world_info='{"localhost": [0]}' --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
   else
     "${DEEPSPEED_BIN[@]:-$DEEPSPEED_BIN}" --num_gpus="$NUM_GPUS" main.py --config "$CFG"
   fi
