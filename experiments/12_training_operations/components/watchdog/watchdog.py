@@ -25,9 +25,9 @@ class Watchdog:
         self.running = True
 
         print("✓ Watchdog Initialized")
-        print(f"  Monitoring: {self.metrics_url}")
-        print(f"  Control File: {self.control_file}")
-        print(f"  Loss Threshold: {self.loss_threshold}")
+        printf("  Monitoring: {self.metrics_url}")
+        printf("  Control File: {self.control_file}")
+        printf("  Loss Threshold: {self.loss_threshold}")
 
     def check_alerts(self):
         """
@@ -48,7 +48,7 @@ class Watchdog:
                     self.trigger_pause(reason=f"Loss Divergence (Value: {value:.2f})")
 
         except Exception as e:
-            print(f"Watchdog Error connecting to metrics server: {e}")
+            printf("Watchdog Error connecting to metrics server: {e}")
 
     def trigger_pause(self, reason: str):
         """
@@ -62,8 +62,8 @@ class Watchdog:
                     "timestamp": time.time(),
                 }
                 json.dump(payload, f)
-            print(f"⛔ PAUSE TRIGGERED: {reason}")
-            print(f"   Control flag written to {self.control_file}")
+            printf("⛔ PAUSE TRIGGERED: {reason}")
+            printf("   Control flag written to {self.control_file}")
 
     def run(self):
         print("Watchdog Service Running...")

@@ -79,7 +79,7 @@ def test_vectorized_head_norm():
     out_loop = torch.stack(out_per_head, dim=2)
 
     max_diff = (out_vectorized - out_loop).abs().max().item()
-    print(f"  Max difference vectorized vs loop: {max_diff:.2e}")
+    printf("  Max difference vectorized vs loop: {max_diff:.2e}")
     assert max_diff < 1e-5, f"Vectorized and loop results differ by {max_diff}!"
 
     # Test gradient flow through vectorized path
@@ -109,7 +109,7 @@ def test_sinkhorn_early_stopping():
     out2 = sinkhorn_knopp(logits, iters=20, tol=1e-4)
 
     max_diff = (out1 - out2).abs().max().item()
-    print(f"  Determinism check (same input): max diff = {max_diff:.2e}")
+    printf("  Determinism check (same input): max diff = {max_diff:.2e}")
     assert max_diff == 0.0, "Sinkhorn is not deterministic!"
 
     # Check it's doubly stochastic
@@ -117,14 +117,14 @@ def test_sinkhorn_early_stopping():
     col_sum = out1.sum(dim=-2)
     row_err = (row_sum - 1.0).abs().max().item()
     col_err = (col_sum - 1.0).abs().max().item()
-    print(f"  Row sum error: {row_err:.2e}, Col sum error: {col_err:.2e}")
+    printf("  Row sum error: {row_err:.2e}, Col sum error: {col_err:.2e}")
     assert row_err < 1e-3, "Rows don't sum to 1!"
     assert col_err < 1e-3, "Cols don't sum to 1!"
 
     # Compare with fixed-iteration version (no early stopping)
     out_fixed = sinkhorn_knopp(logits, iters=20, tol=0.0)  # tol=0 disables early stop
     max_diff_vs_fixed = (out1 - out_fixed).abs().max().item()
-    print(f"  Early stop vs fixed 20 iters: max diff = {max_diff_vs_fixed:.2e}")
+    printf("  Early stop vs fixed 20 iters: max diff = {max_diff_vs_fixed:.2e}")
     # Small diff is expected: early stop exits before all 20 iterations.
     # This is safe because: (a) determinism is preserved (same input → same output),
     # and (b) the result is already converged (doubly-stochastic within tolerance).
@@ -182,13 +182,13 @@ def test_chunked_recurrence():
         if p.grad is not None:
             params_with_grad += 1
             if not torch.isfinite(p.grad).all():
-                print(f"  WARNING: Non-finite gradient for {name}")
+                printf("  WARNING: Non-finite gradient for {name}")
         else:
             params_without_grad += 1
 
-    print(f"  Parameters with gradients: {params_with_grad}")
-    print(f"  Parameters without gradients: {params_without_grad}")
-    print(f"  Output shape: {out.shape}")
+    printf("  Parameters with gradients: {params_with_grad}")
+    printf("  Parameters without gradients: {params_without_grad}")
+    printf("  Output shape: {out.shape}")
 
     # Test bf16
     layer_bf16 = layer.to(torch.bfloat16)
@@ -253,8 +253,8 @@ def test_reversibility():
 
     assert torch.isfinite(out).all(), "Non-finite forward output!"
     assert torch.isfinite(aux).all(), "Non-finite auxiliary loss!"
-    print(f"  Forward output shape: {out.shape}")
-    print(f"  Auxiliary loss: {aux.item():.6f}")
+    printf("  Forward output shape: {out.shape}")
+    printf("  Auxiliary loss: {aux.item():.6f}")
 
     # Test gradient flow through reversible stack
     stack.train()
@@ -276,8 +276,8 @@ def test_reversibility():
             total_grad_norm += p.grad.norm().item() ** 2
             param_count += 1
     total_grad_norm = total_grad_norm**0.5
-    print(f"  Total gradient norm: {total_grad_norm:.6f}")
-    print(f"  Parameters with gradients: {param_count}")
+    printf("  Total gradient norm: {total_grad_norm:.6f}")
+    printf("  Parameters with gradients: {param_count}")
     assert total_grad_norm > 0, "Zero gradient norm — no learning signal!"
     assert total_grad_norm < 1e6, f"Exploding gradients: {total_grad_norm}"
 
@@ -355,7 +355,7 @@ def test_bf16_training_loop():
         optimizer.step()
 
         losses.append(loss.item())
-        print(f"  Step {step}: loss={loss.item():.4f}, grad_norm={grad_norm:.4f}")
+        printf("  Step {step}: loss={loss.item():.4f}, grad_norm={grad_norm:.4f}")
 
         assert torch.isfinite(
             torch.tensor(loss.item())
@@ -403,8 +403,8 @@ def test_force_determinism():
     max_diff = (delta1 - delta2).abs().max().item()
     aux_diff = abs(aux1.item() - aux2.item())
 
-    print(f"  Delta max diff: {max_diff:.2e}")
-    print(f"  Aux diff: {aux_diff:.2e}")
+    printf("  Delta max diff: {max_diff:.2e}")
+    printf("  Aux diff: {aux_diff:.2e}")
 
     assert max_diff == 0.0, f"force() is not deterministic! Delta diff: {max_diff}"
     assert aux_diff == 0.0, f"force() aux is not deterministic! Diff: {aux_diff}"
@@ -440,7 +440,7 @@ if __name__ == "__main__":
         print("  7. bf16 training loop: finite loss and gradient norms")
 
     except Exception as e:
-        print(f"\nTEST FAILED: {e}")
+        printf("\nTEST FAILED: {e}")
         import traceback
 
         traceback.print_exc()

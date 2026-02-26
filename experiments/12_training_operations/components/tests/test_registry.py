@@ -35,14 +35,14 @@ def test_registry():
     print("\n--- Test 2: can_delete (temporary) ---")
     allowed = registry.can_delete(key_temp)
     assert allowed is True, f"Expected True, got {allowed}"
-    print(f"✓ can_delete(temporary) = {allowed}")
+    printf("✓ can_delete(temporary) = {allowed}")
 
     # ---- 3. Soft-delete the temporary checkpoint ----
     print("\n--- Test 3: mark_for_deletion (temporary) ---")
     registry.mark_for_deletion(key_temp)
     record = registry.get_checkpoint(key_temp)
     assert record["status"] == "deleted", f"Expected 'deleted', got {record['status']}"
-    print(f"✓ Status after deletion: {record['status']}")
+    printf("✓ Status after deletion: {record['status']}")
 
     # ---- 4. Register a GROWTH checkpoint (auto-protected) ----
     print("\n--- Test 4: Growth Checkpoint (protected) ---")
@@ -60,7 +60,7 @@ def test_registry():
     print("\n--- Test 5: can_delete (protected) ---")
     allowed = registry.can_delete(key_growth)
     assert allowed is False, f"Expected False, got {allowed}"
-    print(f"✓ can_delete(growth) = {allowed}")
+    printf("✓ can_delete(growth) = {allowed}")
 
     # ---- 6. mark_for_deletion on protected → ValueError ----
     print("\n--- Test 6: mark_for_deletion (protected) → error ---")
@@ -68,13 +68,13 @@ def test_registry():
         registry.mark_for_deletion(key_growth)
         assert False, "Should have raised ValueError"
     except ValueError as e:
-        print(f"✓ Correctly blocked: {e}")
+        printf("✓ Correctly blocked: {e}")
 
     # ---- 7. Unknown checkpoint → can_delete returns False ----
     print("\n--- Test 7: Unknown checkpoint ---")
     allowed = registry.can_delete("s3://bucket/nonexistent.pt")
     assert allowed is False
-    print(f"✓ can_delete(unknown) = {allowed}")
+    printf("✓ can_delete(unknown) = {allowed}")
 
     # ---- 8. list_checkpoints ----
     print("\n--- Test 8: list_checkpoints ---")
@@ -84,7 +84,7 @@ def test_registry():
 
     checkpoints = registry.list_checkpoints(run_id)
     assert len(checkpoints) >= 2, f"Expected >= 2, got {len(checkpoints)}"
-    print(f"✓ list_checkpoints returned {len(checkpoints)} registered checkpoints")
+    printf("✓ list_checkpoints returned {len(checkpoints)} registered checkpoints")
     for c in checkpoints:
         print(
             f"  step={c['step']}, tag={c['tag']}, loss={c['loss']}, s3_key={c['s3_key']}"

@@ -178,7 +178,7 @@ def process_dataset(spark, dataset_name, config):
     Sangraha schema: doc_id, text. Target schema: id, hash, dataset, domain, source, text,
     language, metadata, added, created, version.
     """
-    print(f"Processing dataset: {dataset_name}")
+    printf("Processing dataset: {dataset_name}")
     print(
         f"  Source: {config['source']}, Domain: {config['domain']}, Language: {config['language']}"
     )
@@ -186,8 +186,8 @@ def process_dataset(spark, dataset_name, config):
     dataset_gb = config.get("dataset_size_in_GB", 1.0)
     num_partitions = max(1, int((dataset_gb * 1024) / target_mb * 1.1))
 
-    print(f"  Dataset Size: {dataset_gb} GB")
-    print(f"  Target Partitions: {num_partitions}")
+    printf("  Dataset Size: {dataset_gb} GB")
+    printf("  Target Partitions: {num_partitions}")
 
     # Read Sangraha Parquet (schema: doc_id, text - Hugging Face ai4bharat/sangraha)
     df = spark.read.parquet(config["path"])
@@ -236,7 +236,7 @@ def process_dataset(spark, dataset_name, config):
     lang_2 = LANG_3_TO_2.get(config["language"], config["language"])
     source_val = f"sangraha_{lang_2}"
     output_path = f"{OUTPUT_BASE}/source={source_val}"
-    print(f"  Writing to: {output_path}")
+    printf("  Writing to: {output_path}")
     (
         df_out.write.mode(
             "overwrite"
@@ -245,7 +245,7 @@ def process_dataset(spark, dataset_name, config):
         .parquet(output_path)
     )
 
-    print(f"  ✓ Completed: {dataset_name}")
+    printf("  ✓ Completed: {dataset_name}")
 
 
 def main():
@@ -273,8 +273,8 @@ def main():
 
     print("=" * 80)
     print("Sangraha Data Normalization - Starting")
-    print(f"Output Base: {OUTPUT_BASE}")
-    print(f"Datasets Filter: {datasets_to_process}")
+    printf("Output Base: {OUTPUT_BASE}")
+    printf("Datasets Filter: {datasets_to_process}")
     print("=" * 80)
 
     # Determine which datasets to process
@@ -289,15 +289,15 @@ def main():
         ]
 
         if not datasets:
-            print(f"ERROR: No valid datasets found in filter: {datasets_to_process}")
-            print(f"Available datasets: {', '.join(DATASETS_CONFIG.keys())}")
+            printf("ERROR: No valid datasets found in filter: {datasets_to_process}")
+            printf("Available datasets: {', '.join(DATASETS_CONFIG.keys())}")
             job.commit()
             return
 
     # Process each dataset sequentially to avoid memory issues
     total = len(datasets)
     for idx, (name, config) in enumerate(datasets, 1):
-        print(f"\n[{idx}/{total}] Processing: {name}")
+        printf("\n[{idx}/{total}] Processing: {name}")
         try:
             process_dataset(spark, name, config)
 
@@ -311,7 +311,7 @@ def main():
             sc._jvm.System.gc()
 
         except Exception as e:
-            print(f"ERROR processing {name}: {str(e)}")
+            printf("ERROR processing {name}: {str(e)}")
             # Continue with next dataset instead of failing entire job
             continue
 

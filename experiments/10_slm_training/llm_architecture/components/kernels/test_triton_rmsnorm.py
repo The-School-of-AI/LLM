@@ -63,9 +63,9 @@ def test_correctness():
         ((pytorch_out - triton_out).abs() / (pytorch_out.abs() + 1e-6)).mean().item()
     )
 
-    print(f"  Max diff:      {max_diff:.2e}")
-    print(f"  Mean diff:     {mean_diff:.2e}")
-    print(f"  Relative diff: {relative_diff:.2%}")
+    printf("  Max diff:      {max_diff:.2e}")
+    printf("  Mean diff:     {mean_diff:.2e}")
+    printf("  Relative diff: {relative_diff:.2%}")
 
     # bfloat16 has ~3 decimal digits of precision, so we expect ~1e-2 to 1e-3 error
     tolerance = 0.1  # 10% tolerance for bfloat16
@@ -73,7 +73,7 @@ def test_correctness():
         print("  ✅ PASSED")
         test1_passed = True
     else:
-        print(f"  ❌ FAILED (tolerance: {tolerance})")
+        printf("  ❌ FAILED (tolerance: {tolerance})")
         test1_passed = False
 
     # Test 2: With residual
@@ -87,16 +87,16 @@ def test_correctness():
         ((pytorch_out - triton_out).abs() / (pytorch_out.abs() + 1e-6)).mean().item()
     )
 
-    print(f"  Max diff:      {max_diff:.2e}")
-    print(f"  Mean diff:     {mean_diff:.2e}")
-    print(f"  Relative diff: {relative_diff:.2%}")
+    printf("  Max diff:      {max_diff:.2e}")
+    printf("  Mean diff:     {mean_diff:.2e}")
+    printf("  Relative diff: {relative_diff:.2%}")
 
     tolerance = 0.15  # Slightly higher for residual (more ops)
     if max_diff < tolerance:
         print("  ✅ PASSED")
         test2_passed = True
     else:
-        print(f"  ❌ FAILED (tolerance: {tolerance})")
+        printf("  ❌ FAILED (tolerance: {tolerance})")
         test2_passed = False
 
     # Test 3: Compare with original RMSNorm module
@@ -116,16 +116,16 @@ def test_correctness():
         ((orig_out - triton_out).abs() / (orig_out.abs() + 1e-6)).mean().item()
     )
 
-    print(f"  Max diff:      {max_diff:.2e}")
-    print(f"  Mean diff:     {mean_diff:.2e}")
-    print(f"  Relative diff: {relative_diff:.2%}")
+    printf("  Max diff:      {max_diff:.2e}")
+    printf("  Mean diff:     {mean_diff:.2e}")
+    printf("  Relative diff: {relative_diff:.2%}")
 
     tolerance = 0.1
     if max_diff < tolerance:
         print("  ✅ PASSED")
         test3_passed = True
     else:
-        print(f"  ❌ FAILED (tolerance: {tolerance})")
+        printf("  ❌ FAILED (tolerance: {tolerance})")
         test3_passed = False
 
     all_passed = test1_passed and test2_passed and test3_passed
@@ -184,7 +184,7 @@ def benchmark_performance():
     torch.cuda.synchronize()
 
     pytorch_time = start.elapsed_time(end) / n_iters
-    print(f"  PyTorch: {pytorch_time:.3f} ms")
+    printf("  PyTorch: {pytorch_time:.3f} ms")
 
     # Benchmark Triton
     print("\nBenchmarking Triton RMSNorm...")
@@ -195,16 +195,16 @@ def benchmark_performance():
     torch.cuda.synchronize()
 
     triton_time = start.elapsed_time(end) / n_iters
-    print(f"  Triton:  {triton_time:.3f} ms")
+    printf("  Triton:  {triton_time:.3f} ms")
 
     # Compute speedup
     speedup = pytorch_time / triton_time
-    print(f"\n{'=' * 60}")
-    print(f"Speedup: {speedup:.2f}x")
+    printf("\n{'=' * 60}")
+    printf("Speedup: {speedup:.2f}x")
     if speedup > 1.0:
-        print(f"✅ Triton is {speedup:.2f}x faster!")
+        printf("✅ Triton is {speedup:.2f}x faster!")
     else:
-        print(f"⚠️  PyTorch is {1/speedup:.2f}x faster")
+        printf("⚠️  PyTorch is {1/speedup:.2f}x faster")
     print("=" * 60)
 
     return speedup
@@ -223,9 +223,9 @@ def main():
         print("\n" + "=" * 60)
         print("Summary")
         print("=" * 60)
-        print(f"✅ Correctness: PASSED")
+        printf("✅ Correctness: PASSED")
         if speedup:
-            print(f"📊 Performance: {speedup:.2f}x speedup")
+            printf("📊 Performance: {speedup:.2f}x speedup")
         print("=" * 60)
     else:
         print("\n❌ Correctness tests failed, skipping benchmark")

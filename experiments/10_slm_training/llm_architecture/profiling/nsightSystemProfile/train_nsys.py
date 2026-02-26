@@ -365,7 +365,7 @@ class Trainer:
                 print(
                     f"Profiling enabled for steps {self.profile_start}-{self.profile_end}"
                 )
-                print(f"Profiler type: {self.profiler_type}")
+                printf("Profiler type: {self.profiler_type}")
                 if self.profiler_type == "ncu":
                     print("⚠️  Note: Running with Nsight Compute (ncu)")
                     print("   CUDA Profiler API calls will be skipped")
@@ -405,17 +405,17 @@ class Trainer:
         self.model.train()
         self.start_time = time.time()
 
-        print(f"\n{'='*60}")
-        print(f"Starting Training: {self.config.experiment_name}")
-        print(f"{'='*60}")
-        print(f"Model: {self.model_config.model_name}")
-        print(f"Parameters: {self.model.num_parameters / 1e9:.2f}B")
-        print(f"Device: {self.device}")
-        print(f"Max steps: {self.config.max_steps}")
+        printf("\n{'='*60}")
+        printf("Starting Training: {self.config.experiment_name}")
+        printf("{'='*60}")
+        printf("Model: {self.model_config.model_name}")
+        printf("Parameters: {self.model.num_parameters / 1e9:.2f}B")
+        printf("Device: {self.device}")
+        printf("Max steps: {self.config.max_steps}")
         print(
             f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}"
         )
-        print(f"{'='*60}\n")
+        printf("{'='*60}\n")
 
         # Initialize loss accumulation on GPU to avoid CPU-GPU sync
         accumulation_loss = torch.zeros(1, device=self.device)
@@ -491,11 +491,11 @@ class Trainer:
                 # Profiling control
                 if self.profile_start is not None:
                     if self.global_step == self.profile_start:
-                        print(f"\n🔍 Starting CUDA profiler at step {self.global_step}")
+                        printf("\n🔍 Starting CUDA profiler at step {self.global_step}")
                         profiler.start()
                         torch.cuda.cudart().cudaProfilerStart()
                     elif self.global_step == self.profile_end:
-                        print(f"🔍 Stopping CUDA profiler at step {self.global_step}\n")
+                        printf("🔍 Stopping CUDA profiler at step {self.global_step}\n")
                         torch.cuda.cudart().cudaProfilerStop()
                         profiler.stop()
 
@@ -561,14 +561,14 @@ class Trainer:
             config=asdict(self.config), final_metrics=final_metrics
         )
 
-        print(f"\n{'='*60}")
+        printf("\n{'='*60}")
         print("Training Complete!")
-        print(f"{'='*60}")
-        print(f"Final step: {self.global_step}")
-        print(f"Best loss: {self.best_loss:.4f}")
-        print(f"Tokens seen: {self.tokens_seen:,}")
-        print(f"Total time: {time.time() - self.start_time:.1f}s")
-        print(f"{'='*60}\n")
+        printf("{'='*60}")
+        printf("Final step: {self.global_step}")
+        printf("Best loss: {self.best_loss:.4f}")
+        printf("Tokens seen: {self.tokens_seen:,}")
+        printf("Total time: {time.time() - self.start_time:.1f}s")
+        printf("{'='*60}\n")
 
         return final_metrics
 
@@ -618,7 +618,7 @@ class Trainer:
         }
 
         torch.save(checkpoint, checkpoint_path)
-        print(f"  💾 Saved checkpoint: {checkpoint_path}")
+        printf("  💾 Saved checkpoint: {checkpoint_path}")
 
 
 def run_training(
@@ -828,7 +828,7 @@ def main():
         num_workers=args.num_workers,
     )
 
-    print(f"\nTraining complete! Final loss: {metrics.loss:.4f}")
+    printf("\nTraining complete! Final loss: {metrics.loss:.4f}")
 
 
 if __name__ == "__main__":

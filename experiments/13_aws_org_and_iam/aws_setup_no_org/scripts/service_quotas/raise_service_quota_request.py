@@ -38,7 +38,7 @@ def assume(account_id):
 
 for ACCOUNT_ID in ACCOUNT_IDS:
 
-    print(f"\n========== {ACCOUNT_ID} ==========")
+    printf("\n========== {ACCOUNT_ID} ==========")
 
     try:
         sq = assume(ACCOUNT_ID)
@@ -49,7 +49,7 @@ for ACCOUNT_ID in ACCOUNT_IDS:
                 "Value"
             ]
 
-            print(f"{code} current={current} target={target}")
+            printf("{code} current={current} target={target}")
 
             if current >= target:
                 print(" -> already sufficient")
@@ -62,7 +62,7 @@ for ACCOUNT_ID in ACCOUNT_IDS:
                 )
 
                 req_id = resp["RequestedQuota"]["Id"]
-                print(f" -> request submitted | request_id={req_id}")
+                printf(" -> request submitted | request_id={req_id}")
 
             except ClientError as e:
                 if e.response["Error"]["Code"] == "ResourceAlreadyExistsException":

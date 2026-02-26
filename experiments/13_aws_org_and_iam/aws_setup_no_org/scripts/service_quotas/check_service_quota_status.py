@@ -35,7 +35,7 @@ def assume(account):
 
 for acc in ACCOUNT_IDS:
 
-    print(f"\n========== {acc} ==========")
+    printf("\n========== {acc} ==========")
 
     sq = assume(acc)
 
@@ -51,4 +51,4 @@ for acc in ACCOUNT_IDS:
         ]
         status = status_map.get(code, "NO_REQUEST")
 
-        print(f"{code} | status={status:12} | current={current}")
+        printf("{code} | status={status:12} | current={current}")

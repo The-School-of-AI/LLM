@@ -49,11 +49,11 @@ def main():
     files = [f for f in all_files if f.startswith(prefix)]
 
     if not files:
-        print(f"No files found for prefix {prefix}")
+        printf("No files found for prefix {prefix}")
         return
 
     for filename in files:
-        print(f"Streaming and uploading {filename}...")
+        printf("Streaming and uploading {filename}...")
         try:
             # Construct the raw file URL for Hugging Face datasets
             url = f"https://huggingface.co/datasets/{repo_id}/resolve/main/{filename}"
@@ -67,9 +67,9 @@ def main():
             # Upload to S3 from memory
             s3_key = f"huggingface_sangraha/{filename}"
             s3.upload_fileobj(file_obj, bucket, s3_key)
-            print(f"Successfully uploaded {filename} to s3://{bucket}/{s3_key}")
+            printf("Successfully uploaded {filename} to s3://{bucket}/{s3_key}")
         except Exception as e:
-            print(f"Error processing {filename}: {e}")
+            printf("Error processing {filename}: {e}")
 
 
 if __name__ == "__main__":

@@ -117,7 +117,7 @@ class TestModuleImports:
         """Test that DeepSpeed is installed and importable."""
         import deepspeed
 
-        print(f"✓ DeepSpeed {deepspeed.__version__} available")
+        printf("✓ DeepSpeed {deepspeed.__version__} available")
 
 
 class TestDataPipeline:
@@ -131,7 +131,7 @@ class TestDataPipeline:
         assert hasattr(tokenizer, "vocab_size")
         assert tokenizer.pad_token is not None
 
-        print(f"✓ Tokenizer loaded (vocab size: {tokenizer.vocab_size})")
+        printf("✓ Tokenizer loaded (vocab size: {tokenizer.vocab_size})")
 
     def test_tokenization_function(self):
         """Test tokenization of sample text."""
@@ -172,7 +172,7 @@ class TestModelLoading:
         num_params = sum(p.numel() for p in model.parameters())
         assert num_params > 0
 
-        print(f"✓ Model loaded ({num_params:,} parameters)")
+        printf("✓ Model loaded ({num_params:,} parameters)")
 
     def test_model_forward_pass_cpu(self):
         """Test model forward pass on CPU."""

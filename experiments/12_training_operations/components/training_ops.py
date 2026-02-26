@@ -131,7 +131,7 @@ class TrainingOps:
                 self._ssl_ctx.verify_mode = ssl.CERT_NONE
 
         print("=" * 60)
-        print(f"  P12 TrainingOps — initializing for run '{run_id}'")
+        printf("  P12 TrainingOps — initializing for run '{run_id}'")
         print("=" * 60)
 
         # ---- Preflight checks ----
@@ -189,7 +189,7 @@ class TrainingOps:
                     "  FATAL: systemctl not found; cannot verify Vector service health."
                 )
                 print()
-                print(f"  Expected active service: {self._vector_service_name}")
+                printf("  Expected active service: {self._vector_service_name}")
                 print("=" * 60)
                 sys.exit(1)
 
@@ -210,11 +210,11 @@ class TrainingOps:
             print("=" * 60)
             print("  FATAL: Vector service is not active!")
             print()
-            print(f"  Expected service: {self._vector_service_name}")
+            printf("  Expected service: {self._vector_service_name}")
             print("  Check service status:")
-            print(f"    systemctl --no-pager --full status {self._vector_service_name}")
+            printf("    systemctl --no-pager --full status {self._vector_service_name}")
             print("  Inspect logs:")
-            print(f"    journalctl -u {self._vector_service_name} -n 200 --no-pager")
+            printf("    journalctl -u {self._vector_service_name} -n 200 --no-pager")
             print("=" * 60)
             sys.exit(1)
 
@@ -236,7 +236,7 @@ class TrainingOps:
             )
             if result.returncode == 0:
                 pids = result.stdout.decode().strip().split("\n")
-                print(f"✓ Preflight: Vector is running (PID: {', '.join(pids)})")
+                printf("✓ Preflight: Vector is running (PID: {', '.join(pids)})")
                 return
         except Exception:
             pass
@@ -262,10 +262,10 @@ class TrainingOps:
             ctx = self._ssl_ctx if self._ssl_ctx else None
             with urllib.request.urlopen(req, timeout=5, context=ctx) as resp:
                 resp.read()
-            print(f"✓ Preflight: ClickHouse reachable at {self._clickhouse_url}")
+            printf("✓ Preflight: ClickHouse reachable at {self._clickhouse_url}")
         except Exception as e:
-            print(f"⚠ Preflight: ClickHouse not reachable at {self._clickhouse_url}")
-            print(f"  ({e})")
+            printf("⚠ Preflight: ClickHouse not reachable at {self._clickhouse_url}")
+            printf("  ({e})")
             print("  Vector will buffer data until ClickHouse recovers.")
 
     # ------------------------------------------------------------------
@@ -472,7 +472,7 @@ class TrainingOps:
                 metadata=metadata,
             )
         except Exception as e:
-            print(f"⚠ TrainingOps: direct checkpoint registry insert failed: {e}")
+            printf("⚠ TrainingOps: direct checkpoint registry insert failed: {e}")
             print("  (durable path: JSONL → Vector will deliver it)")
 
         # 3. Live metrics

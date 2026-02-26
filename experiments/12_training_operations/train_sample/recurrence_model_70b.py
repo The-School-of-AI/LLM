@@ -2000,8 +2000,8 @@ class Model70B(nn.Module):
         print(
             f"   🔄 Recurrence: Stream {self.recurrence_stream_idx} | λ_r={F.softplus(self.lambda_r_raw).item():.4f}"
         )
-        print(f"   Vocabulary: {self.vocab_size:,}")
-        print(f"   Hidden Size: {config.hidden_size}")
+        printf("   Vocabulary: {self.vocab_size:,}")
+        printf("   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
             print("\n   📐 Kronecker Embeddings:")
             print("      POS_DIM=32 x CHAR_DIM=256 = D=8192")
@@ -2014,14 +2014,14 @@ class Model70B(nn.Module):
             print(
                 f"      ⚠️  Embedding tying NOT possible (8192 ≠ {config.hidden_size})"
             )
-        print(f"\n   Total Layers: {config.num_layers}")
+        printf("\n   Total Layers: {config.num_layers}")
         print(
             f"   - DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) linear attention"
         )
         print(
             f"   - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse"
         )
-        print(f"\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
+        printf("\n   Context Target: {config.max_seq_len:,} tokens (YARN RoPE scaling)")
         print(
             f"   Experts: {config.num_real_experts} real + {config.num_null_experts} null = {config.total_expert_slots} slots"
         )
@@ -2033,7 +2033,7 @@ class Model70B(nn.Module):
             if config.enable_mtp
             else "   MTP: Disabled"
         )
-        print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
+        printf("\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
         print("   Active Parameters: ~4.079B (avg 5 experts × top-k routing)")
 
     def _init_weights(self, module):
@@ -2261,10 +2261,10 @@ if __name__ == "__main__":
     # Use expert override if provided, otherwise solve for optimal expert count
     if config_calc.num_experts_override is not None:
         num_experts = config_calc.num_experts_override
-        print(f"⚙️  Using manual expert override: {num_experts} total experts\n")
+        printf("⚙️  Using manual expert override: {num_experts} total experts\n")
     else:
         num_experts = calc.solve_for_experts()
-        print(f"✓ Solved for {num_experts} optimal experts\n")
+        printf("✓ Solved for {num_experts} optimal experts\n")
 
     report_df, _ = calc.generate_report(num_experts)
 
@@ -2283,9 +2283,9 @@ if __name__ == "__main__":
     print("70B MODEL ARCHITECTURE")
     print("=" * 80)
     print("\nConfiguration:")
-    print(f"  Total Params: {total_params:.3f}B")
-    print(f"  Active Params: {active_params:.3f}B")
-    print(f"  Sparsity: {sparsity:.1f}x")
+    printf("  Total Params: {total_params:.3f}B")
+    printf("  Active Params: {active_params:.3f}B")
+    printf("  Sparsity: {sparsity:.1f}x")
     print("\nAttention Mix:")
     print(
         f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context"
@@ -2294,15 +2294,15 @@ if __name__ == "__main__":
         f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality"
     )
     print("\nExperts:")
-    print(f"  Real: {num_experts}")
-    print(f"  Null: {num_experts} (ρ={config.data_sparsity})")
-    print(f"  Total slots: {config.total_expert_slots}")
+    printf("  Real: {num_experts}")
+    printf("  Null: {num_experts} (ρ={config.data_sparsity})")
+    printf("  Total slots: {config.total_expert_slots}")
     print(
         f"  Top-k: {config.top_k} (dynamic 0-{config.top_k}, avg {config_calc.num_routed_experts_active})"
     )
     print(
         f"  Shared Expert FFN: {config.shared_expert_intermediate_size} (always active)"
     )
-    print(f"  Routed Expert FFN: {config.expert_intermediate_size} (sparse)")
-    print(f"\nContext: {config.max_seq_len:,} tokens")
+    printf("  Routed Expert FFN: {config.expert_intermediate_size} (sparse)")
+    printf("\nContext: {config.max_seq_len:,} tokens")
     print("=" * 80)

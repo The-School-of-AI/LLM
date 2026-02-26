@@ -368,10 +368,10 @@ class TrainingController:
         if not self._paused:
             self._paused = True
             self._pause_start = time.time()
-            print(f"\n{'*'*60}")
+            printf("\n{'*'*60}")
             print("  TRAINING PAUSED")
             print("  Press Enter to resume | Type 'stop' to save & exit")
-            print(f"{'*'*60}")
+            printf("{'*'*60}")
 
     def request_stop(self):
         """Request graceful stop. Called from SIGINT handler or user input."""
@@ -382,9 +382,9 @@ class TrainingController:
                 self._pause_time += time.time() - self._pause_start
                 self._pause_start = None
             self._paused = False
-        print(f"\n{'*'*60}")
+        printf("\n{'*'*60}")
         print("  STOP REQUESTED  -  Saving checkpoint and exiting...")
-        print(f"{'*'*60}\n")
+        printf("{'*'*60}\n")
 
     def check_and_handle_pause(self):
         """Called once per optimizer step. Blocks while paused, reads user input.
@@ -418,9 +418,9 @@ class TrainingController:
                 self._pause_time += time.time() - self._pause_start
                 self._pause_start = None
             self._paused = False
-            print(f"\n{'*'*60}")
+            printf("\n{'*'*60}")
             print("  TRAINING RESUMED")
-            print(f"{'*'*60}\n")
+            printf("{'*'*60}\n")
 
     @property
     def stop_requested(self) -> bool:
@@ -506,7 +506,7 @@ class Trainer:
             try:
                 self.model.gradient_checkpointing_enable()
             except Exception as e:
-                print(f"Warning: gradient checkpointing enable failed: {e}")
+                printf("Warning: gradient checkpointing enable failed: {e}")
         else:
             print(
                 "Info: Model does not expose gradient_checkpointing_enable(); continuing."
@@ -647,7 +647,7 @@ class Trainer:
                 "Model compiled successfully (first forward pass will be slower due to compilation)"
             )
         except Exception as e:
-            print(f"Warning: torch.compile failed: {e}")
+            printf("Warning: torch.compile failed: {e}")
             print("Continuing without compilation.")
 
     def _is_compile_runtime_error(self, error: Exception) -> bool:
@@ -692,7 +692,7 @@ class Trainer:
             print("Safe torch.compile retry succeeded.")
             return True
         except Exception as retry_error:
-            print(f"Warning: safe torch.compile retry failed: {retry_error}")
+            printf("Warning: safe torch.compile retry failed: {retry_error}")
             return False
 
     def _fallback_to_eager(self) -> bool:
@@ -872,17 +872,17 @@ class Trainer:
         self.model.train()
         self.start_time = time.time()
 
-        print(f"\n{'='*60}")
-        print(f"Starting Training: {self.config.experiment_name}")
-        print(f"{'='*60}")
-        print(f"Model: {self.model_config.model_name}")
+        printf("\n{'='*60}")
+        printf("Starting Training: {self.config.experiment_name}")
+        printf("{'='*60}")
+        printf("Model: {self.model_config.model_name}")
         raw_model = getattr(self.model, "_orig_mod", self.model)
         num_params = getattr(raw_model, "num_parameters", None)
         if num_params is None:
             num_params = sum(p.numel() for p in raw_model.parameters())
-        print(f"Parameters: {num_params / 1e9:.2f}B")
-        print(f"Device: {self.device}")
-        print(f"Max steps: {self.config.max_steps}")
+        printf("Parameters: {num_params / 1e9:.2f}B")
+        printf("Device: {self.device}")
+        printf("Max steps: {self.config.max_steps}")
         print(
             f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}"
         )
@@ -890,7 +890,7 @@ class Trainer:
             print(
                 f"torch.compile: mode={self.config.torch_compile_mode}, backend={self.config.torch_compile_backend}"
             )
-        print(f"{'='*60}\n")
+        printf("{'='*60}\n")
 
         # Start pause controller
         self.pause_controller.start()
@@ -1136,17 +1136,17 @@ class Trainer:
             if stopped_early
             else "Training Complete!"
         )
-        print(f"\n{'='*60}")
+        printf("\n{'='*60}")
         print(status)
-        print(f"{'='*60}")
-        print(f"Final step: {self.global_step}/{self.config.max_steps}")
-        print(f"Best loss: {self.best_loss:.4f}")
-        print(f"Tokens seen: {self.tokens_seen:,}")
-        print(f"Active training time: {active_time:.1f}s")
+        printf("{'='*60}")
+        printf("Final step: {self.global_step}/{self.config.max_steps}")
+        printf("Best loss: {self.best_loss:.4f}")
+        printf("Tokens seen: {self.tokens_seen:,}")
+        printf("Active training time: {active_time:.1f}s")
         if total_pause_time > 0:
-            print(f"Total pause time: {total_pause_time:.1f}s")
-        print(f"Wall clock time: {wall_time:.1f}s")
-        print(f"{'='*60}\n")
+            printf("Total pause time: {total_pause_time:.1f}s")
+        printf("Wall clock time: {wall_time:.1f}s")
+        printf("{'='*60}\n")
 
         return final_metrics
 
@@ -1215,7 +1215,7 @@ class Trainer:
         }
 
         torch.save(checkpoint, checkpoint_path)
-        print(f"  💾 Saved checkpoint: {checkpoint_path}")
+        printf("  💾 Saved checkpoint: {checkpoint_path}")
 
 
 def run_training(
@@ -1404,7 +1404,7 @@ Note: CLI arguments always override config file values.
     # Load configuration
     if args.config:
         # YAML config mode
-        print(f"Loading configuration from: {args.config}")
+        printf("Loading configuration from: {args.config}")
         model_config, training_dict = load_config_from_yaml(args.config)
         training_config = (
             training_config_from_dict(training_dict)
@@ -1413,7 +1413,7 @@ Note: CLI arguments always override config file values.
         )
     else:
         # Preset mode (legacy)
-        print(f"Using preset: {args.preset}")
+        printf("Using preset: {args.preset}")
         model_config = get_preset_config(args.preset)
         training_config = TrainingConfig()
 
@@ -1489,7 +1489,7 @@ Note: CLI arguments always override config file values.
     # Train
     metrics = trainer.train()
 
-    print(f"\nTraining complete! Final loss: {metrics.loss:.4f}")
+    printf("\nTraining complete! Final loss: {metrics.loss:.4f}")
 
 
 if __name__ == "__main__":

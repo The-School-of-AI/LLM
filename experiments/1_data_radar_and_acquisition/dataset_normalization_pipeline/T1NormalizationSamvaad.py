@@ -84,7 +84,7 @@ def get_glue_args():
 
 def process_samvaad(spark, input_path: str) -> None:
     """Read Samvaad-Hi Parquet, format conversation to Option 1 text, normalize, write Parquet."""
-    print(f"Reading Parquet from: {input_path}")
+    printf("Reading Parquet from: {input_path}")
     df = spark.read.parquet(input_path)
 
     conv_col = None
@@ -143,12 +143,12 @@ def process_samvaad(spark, input_path: str) -> None:
     )
 
     record_count = df_out.count()
-    print(f"Records: {record_count:,}")
+    printf("Records: {record_count:,}")
     num_partitions = max(1, min(400, record_count // 5000))
     df_out = df_out.repartition(num_partitions)
 
     output_path = f"{OUTPUT_BASE}/source=samvaad_hi"
-    print(f"Writing to: {output_path}")
+    printf("Writing to: {output_path}")
     (df_out.write.mode("overwrite").option("compression", "zstd").parquet(output_path))
     print("✓ Completed Samvaad-Hi processing")
 
@@ -170,14 +170,14 @@ def main():
 
     print("=" * 80)
     print("Samvaad-Hi Data Normalization - Starting")
-    print(f"Input:  {input_path}")
-    print(f"Output: {OUTPUT_BASE}/source=samvaad_hi")
+    printf("Input:  {input_path}")
+    printf("Output: {OUTPUT_BASE}/source=samvaad_hi")
     print("=" * 80)
 
     try:
         process_samvaad(spark, input_path)
     except Exception as e:
-        print(f"ERROR: {e}")
+        printf("ERROR: {e}")
         raise
 
     print("\n" + "=" * 80)

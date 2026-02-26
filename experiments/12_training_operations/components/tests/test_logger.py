@@ -33,7 +33,7 @@ def test_logger():
     logger.close()
 
     log_file = f"{base_dir}/{run_id}_rank_0.jsonl"
-    print(f"Verifying context in {log_file}...")
+    printf("Verifying context in {log_file}...")
 
     with open(log_file, "r") as f:
         line = json.loads(f.readline())
@@ -45,7 +45,7 @@ def test_logger():
         assert ctx["routing_dist"] == [0.1, 0.9], "Missing step context"
 
         print("✓ Context Merge Verified Successfully")
-        print(f"  Merged Context: {ctx}")
+        printf("  Merged Context: {ctx}")
 
 
 if __name__ == "__main__":

@@ -876,9 +876,9 @@ if __name__ == "__main__":
     print("\nParameter breakdown (should match Table 2):")
     for k, v in params.items():
         if "percentage" in k:
-            print(f"  {k}: {v:.1f}%")
+            printf("  {k}: {v:.1f}%")
         else:
-            print(f"  {k}: {v:,}")
+            printf("  {k}: {v:,}")
 
     # Test forward pass
     print("\nTesting forward pass...")
@@ -888,8 +888,8 @@ if __name__ == "__main__":
     x = torch.randn(batch_size, seq_len, hidden_size)
     output, attn_weights, _ = gsa(x)
 
-    print(f"Input shape: {x.shape}")
-    print(f"Output shape: {output.shape}")
+    printf("Input shape: {x.shape}")
+    printf("Output shape: {output.shape}")
 
     # Verify dual gating
     value_gate = gsa.dual_gating.compute_value_gate(x)
@@ -906,6 +906,6 @@ if __name__ == "__main__":
     print(
         f"\nIndexer scores range: [{importance.min().item():.3f}, {importance.max().item():.3f}]"
     )
-    print(f"Indexer scores should be in (0, {num_indexer_heads}) after masking")
+    printf("Indexer scores should be in (0, {num_indexer_heads}) after masking")
 
     print("\n✅ GSA implementation matches paper!")

@@ -81,7 +81,7 @@ def test_training_ops():
             f"✓ /metrics: loss={data['gauges']['training_loss']}, step={data['gauges']['global_step']}, ckpt_saves={data['counters']['checkpoint_saves_total']}"
         )
     except Exception as e:
-        print(f"✗ MetricsServer check failed: {e}")
+        printf("✗ MetricsServer check failed: {e}")
         raise
 
     # ---- 5. Verify JSONL was written ----
@@ -94,7 +94,7 @@ def test_training_ops():
 
     # 5 training steps + 1 checkpoint event = 6 lines
     assert len(lines) >= 6, f"Expected >= 6 log lines, got {len(lines)}"
-    print(f"✓ {log_file.name}: {len(lines)} lines written")
+    printf("✓ {log_file.name}: {len(lines)} lines written")
 
     # Check checkpoint event is in the logs
     ckpt_lines = [
@@ -121,7 +121,7 @@ def test_training_ops():
             f"✓ ClickHouse registry: step={ckpts[0]['step']}, tag={ckpts[0]['tag']}, s3_key={ckpts[0]['s3_key']}"
         )
     except Exception as e:
-        print(f"⚠ ClickHouse registry check: {e}")
+        printf("⚠ ClickHouse registry check: {e}")
 
     # ---- 7. Verify system metrics file exists ----
     print("\n--- Checking system metrics ---")
@@ -131,7 +131,7 @@ def test_training_ops():
     if sys_file.exists():
         with open(sys_file) as f:
             sys_lines = [line for line in f if line.strip()]
-        print(f"✓ System metrics file: {len(sys_lines)} lines")
+        printf("✓ System metrics file: {len(sys_lines)} lines")
     else:
         print("⚠ System metrics file not yet written (may need more time)")
 
@@ -142,7 +142,7 @@ def test_training_ops():
     # ---- 9. Cleanup test log file ----
     if log_file.exists():
         log_file.unlink()
-        print(f"✓ Cleaned up {log_file}")
+        printf("✓ Cleaned up {log_file}")
 
     print("\n" + "=" * 60)
     print("  ✅ All TrainingOps integration tests passed!")

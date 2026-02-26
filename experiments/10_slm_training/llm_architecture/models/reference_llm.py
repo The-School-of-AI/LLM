@@ -191,28 +191,28 @@ class ReferenceLLM(nn.Module):
 
         # Print model info
         total_params = sum(p.numel() for p in self.parameters())
-        print(f"\nReferenceLLM initialized:")
-        print(f"  Vocabulary: {self.vocab_size:,}")
-        print(f"  Hidden Size: {config.hidden_size}")
-        print(f"  Total Layers: {config.num_hidden_layers}")
+        printf("\nReferenceLLM initialized:")
+        printf("  Vocabulary: {self.vocab_size:,}")
+        printf("  Hidden Size: {config.hidden_size}")
+        printf("  Total Layers: {config.num_hidden_layers}")
         print(
             f"  - DeltaNet: {num_deltanet} layers ({num_deltanet/config.num_hidden_layers*100:.0f}%)"
         )
         print(
             f"  - GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_hidden_layers*100:.0f}%)"
         )
-        print(f"  Streams: {self.n_streams}")
+        printf("  Streams: {self.n_streams}")
         print(
             f"  MTP: {'Enabled (Full Transformer)' if self.mtp_block else 'Disabled'}"
         )
-        print(f"  Embedding: {'Kronecker' if self.use_kronecker else 'Standard'}")
+        printf("  Embedding: {'Kronecker' if self.use_kronecker else 'Standard'}")
         if self.use_reversible:
             print(
                 f"  Integration: Reversible Midpoint (step={int_config.step_size}, a={int_config.a})"
             )
         else:
-            print(f"  Integration: Sequential (direct forward, no reversible overhead)")
-        print(f"  Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
+            printf("  Integration: Sequential (direct forward, no reversible overhead)")
+        printf("  Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
 
     def _init_weights(self, module):
         """Initialize weights."""

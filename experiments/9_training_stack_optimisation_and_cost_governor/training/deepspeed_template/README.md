@@ -446,10 +446,10 @@ python --version
 ```bash
 # Verify CUDA is available
 nvidia-smi
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+python -c "import torch; printf('CUDA available: {torch.cuda.is_available()}')"
 
 # Check PyTorch CUDA installation
-python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA version: {torch.version.cuda}')"
+python -c "import torch; printf('PyTorch version: {torch.__version__}'); printf('CUDA version: {torch.version.cuda}')"
 
 # Reinstall PyTorch with CUDA support if needed
 uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
@@ -508,7 +508,7 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     
     # Add your custom metrics
     accuracy = compute_accuracy(predictions, labels)
-    print(f"Accuracy: {accuracy:.4f}")
+    printf("Accuracy: {accuracy:.4f}")
 ```
 
 ## 📚 Resources

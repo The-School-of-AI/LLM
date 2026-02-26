@@ -370,11 +370,11 @@ if __name__ == "__main__":
 
         if not match:
             all_passed = False
-            print(f"      ERROR: Expected '{token}', got '{decoded}'")
+            printf("      ERROR: Expected '{token}', got '{decoded}'")
 
         if not dim_ok:
             all_passed = False
-            print(f"      ERROR: Expected shape (8192,), got {embedding.shape}")
+            printf("      ERROR: Expected shape (8192,), got {embedding.shape}")
 
     print()
 
@@ -389,7 +389,7 @@ if __name__ == "__main__":
         sample_indices = [0, 100, 500, 1000, 5000, 10000, 20000, 30000, 40000, 50000]
         gpt2_tokens = [tokenizer.decode([idx]).strip() for idx in sample_indices]
 
-        print(f"   Testing with {len(gpt2_tokens)} random GPT-2 tokens...")
+        printf("   Testing with {len(gpt2_tokens)} random GPT-2 tokens...")
         print("   " + "-" * 76)
 
         for idx, token in zip(sample_indices, gpt2_tokens):
@@ -410,7 +410,7 @@ if __name__ == "__main__":
             )
 
             if not match:
-                print(f"      Note: Expected '{token}', got '{decoded}'")
+                printf("      Note: Expected '{token}', got '{decoded}'")
 
         print("   ✓ GPT-2 tokenizer test completed")
 
@@ -483,10 +483,10 @@ if __name__ == "__main__":
 
         if not match:
             all_passed = False
-            print(f"      ❌ ERROR: Expected '{token}', got '{decoded}'")
+            printf("      ❌ ERROR: Expected '{token}', got '{decoded}'")
 
     print()
-    print(f"   ✅ Multilingual test: {multilingual_passed}/{multilingual_total} passed")
+    printf("   ✅ Multilingual test: {multilingual_passed}/{multilingual_total} passed")
     print("   ✅ Behavior: 100% lossless encoding/decoding for ALL UTF-8 text")
     print(
         "   ✅ Coverage: ASCII, Latin Extended, Chinese, Arabic, Cyrillic, Emoji, ALL scripts!"
@@ -508,9 +508,9 @@ if __name__ == "__main__":
     batch_embeddings = encoder.encode_batch(batch_tokens)
     batch_decoded = encoder.decode_batch(batch_embeddings)
 
-    print(f"   ✓ Batch shape: {batch_embeddings.shape}")
-    print(f"   ✓ Input:  {batch_tokens}")
-    print(f"   ✓ Output: {batch_decoded}")
+    printf("   ✓ Batch shape: {batch_embeddings.shape}")
+    printf("   ✓ Input:  {batch_tokens}")
+    printf("   ✓ Output: {batch_decoded}")
     batch_match = batch_tokens == batch_decoded
     print(
         f"   {'✓' if batch_match else '✗'} Batch encoding: {'PASSED' if batch_match else 'FAILED'}"
@@ -535,7 +535,7 @@ if __name__ == "__main__":
     print(
         f"      Long token  '{long_token}' (len={len(long_token)}): norm={long_norm:.4f}"
     )
-    print(f"      Norm ratio: {long_norm/short_norm:.4f} (should be ~1.0)")
+    printf("      Norm ratio: {long_norm/short_norm:.4f} (should be ~1.0)")
 
     # Property 2: Orthogonality
     token1 = "hello"
@@ -545,7 +545,7 @@ if __name__ == "__main__":
     dot_product = np.dot(emb1, emb2)
 
     print("   ✓ Orthogonality:")
-    print(f"      Dot product of '{token1}' and '{token2}': {dot_product:.6f}")
+    printf("      Dot product of '{token1}' and '{token2}': {dot_product:.6f}")
     print("      (Near-zero indicates near-orthogonality)")
 
     # Property 3: Invertibility
@@ -554,10 +554,10 @@ if __name__ == "__main__":
     test_decoded = encoder.decode_word(test_emb)
     invertible = test_token == test_decoded
 
-    print(f"   {'✓' if invertible else '✗'} Invertibility:")
-    print(f"      Original: '{test_token}'")
-    print(f"      Decoded:  '{test_decoded}'")
-    print(f"      Match: {invertible}")
+    printf("   {'✓' if invertible else '✗'} Invertibility:")
+    printf("      Original: '{test_token}'")
+    printf("      Decoded:  '{test_decoded}'")
+    printf("      Match: {invertible}")
 
     print()
 

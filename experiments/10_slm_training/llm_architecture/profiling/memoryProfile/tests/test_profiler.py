@@ -24,8 +24,8 @@ def test_profiler():
 
     # Check CUDA availability
     cuda_available = torch.cuda.is_available()
-    print(f"\nCUDA Available: {cuda_available}")
-    print(f"PyTorch Version: {torch.__version__}")
+    printf("\nCUDA Available: {cuda_available}")
+    printf("PyTorch Version: {torch.__version__}")
 
     # Create profiler config
     config = ProfilerConfig(
@@ -39,11 +39,11 @@ def test_profiler():
         repeat=1,
     )
 
-    print(f"\nProfiler Configuration:")
-    print(f"  Output: {config.output_dir}")
-    print(f"  Wait: {config.wait_steps} steps")
-    print(f"  Warmup: {config.warmup_steps} steps")
-    print(f"  Active: {config.active_steps} steps")
+    printf("\nProfiler Configuration:")
+    printf("  Output: {config.output_dir}")
+    printf("  Wait: {config.wait_steps} steps")
+    printf("  Warmup: {config.warmup_steps} steps")
+    printf("  Active: {config.active_steps} steps")
     print(
         f"  Total: {config.wait_steps + config.warmup_steps + config.active_steps} steps"
     )
@@ -59,8 +59,8 @@ def test_profiler():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 
-    print(f"\nModel Device: {device}")
-    print(f"Model Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    printf("\nModel Device: {device}")
+    printf("Model Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Start profiling
     profiler.start()
@@ -88,7 +88,7 @@ def test_profiler():
         profiler.step()
 
         if step % 2 == 0:
-            print(f"  Step {step}/{total_steps} - Loss: {loss.item():.4f}")
+            printf("  Step {step}/{total_steps} - Loss: {loss.item():.4f}")
 
         # Check if should stop
         if profiler.should_stop(step):
@@ -108,13 +108,13 @@ def test_profiler():
     print("\n" + "=" * 80)
     print("TEST COMPLETE")
     print("=" * 80)
-    print(f"\nResults saved to: {profiler.output_dir}")
-    print(f"\nTo view results:")
-    print(f"  1. TensorBoard: tensorboard --logdir={profiler.tensorboard_dir}")
+    printf("\nResults saved to: {profiler.output_dir}")
+    printf("\nTo view results:")
+    printf("  1. TensorBoard: tensorboard --logdir={profiler.tensorboard_dir}")
     print(
         f"  2. Chrome trace: chrome://tracing → Load {profiler.output_dir}/memory_profile.json"
     )
-    print(f"  3. Stack traces: cat {profiler.output_dir}/stack_trace.txt")
+    printf("  3. Stack traces: cat {profiler.output_dir}/stack_trace.txt")
     print("=" * 80)
 
 

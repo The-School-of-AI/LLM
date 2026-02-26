@@ -193,8 +193,8 @@ def test_speed_comparison():
     for _ in range(n_iters):
         _ = deltanet(x)
     elapsed = (time.time() - start) / n_iters
-    print(f"  Chunk-wise parallel: {elapsed*1000:.1f} ms/forward (T={T}, CPU)")
-    print(f"  (GPU speedup will be much larger due to parallel matmuls)")
+    printf("  Chunk-wise parallel: {elapsed*1000:.1f} ms/forward (T={T}, CPU)")
+    printf("  (GPU speedup will be much larger due to parallel matmuls)")
 
     print("  PASSED\n")
 

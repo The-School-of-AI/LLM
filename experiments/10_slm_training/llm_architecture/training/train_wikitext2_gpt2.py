@@ -251,22 +251,22 @@ class SystemMonitor:
         """Print system statistics summary with configuration details."""
         stats = self.get_stats()
 
-        print(f"\n{'='*60}")
+        printf("\n{'='*60}")
         print("Training Summary")
-        print(f"{'='*60}")
+        printf("{'='*60}")
 
         # Configuration details
         if seq_length is not None:
-            print(f"Sequence Length: {seq_length}")
+            printf("Sequence Length: {seq_length}")
 
         if model_config is not None:
-            print(f"\nModel Configuration:")
-            print(f"  Model Name: {model_config.model_name}")
-            print(f"  Vocab Size: {model_config.vocab_size:,}")
-            print(f"  Hidden Size: {model_config.hidden_size}")
-            print(f"  Num Layers: {model_config.num_hidden_layers}")
-            print(f"  Num Heads: {model_config.attention.num_attention_heads}")
-            print(f"  Max Position: {model_config.max_position_embeddings}")
+            printf("\nModel Configuration:")
+            printf("  Model Name: {model_config.model_name}")
+            printf("  Vocab Size: {model_config.vocab_size:,}")
+            printf("  Hidden Size: {model_config.hidden_size}")
+            printf("  Num Layers: {model_config.num_hidden_layers}")
+            printf("  Num Heads: {model_config.attention.num_attention_heads}")
+            printf("  Max Position: {model_config.max_position_embeddings}")
 
             # Attention config
             if hasattr(model_config, "attention"):
@@ -275,11 +275,11 @@ class SystemMonitor:
                     f"\n  Attention Type: {att.attention_type.value if hasattr(att.attention_type, 'value') else att.attention_type}"
                 )
                 if att.attention_type.value in ["gated_sparse", "deepseek_gsa"]:
-                    print(f"    GSA k_base: {att.gsa_k_base}")
-                    print(f"    GSA k_max: {att.gsa_k_max}")
+                    printf("    GSA k_base: {att.gsa_k_base}")
+                    printf("    GSA k_max: {att.gsa_k_max}")
                     if hasattr(att, "gsa_r_base"):
-                        print(f"    GSA r_base: {att.gsa_r_base}")
-                    print(f"    GSA use_triton: {att.gsa_use_triton_kernels}")
+                        printf("    GSA r_base: {att.gsa_r_base}")
+                    printf("    GSA use_triton: {att.gsa_use_triton_kernels}")
 
             # FFN config
             if hasattr(model_config, "ffn"):
@@ -289,11 +289,11 @@ class SystemMonitor:
                     if hasattr(ffn.ffn_type, "value")
                     else ffn.ffn_type
                 )
-                print(f"\n  FFN Type: {ffn_type}")
-                print(f"    Intermediate Size: {ffn.intermediate_size}")
+                printf("\n  FFN Type: {ffn_type}")
+                printf("    Intermediate Size: {ffn.intermediate_size}")
                 if ffn_type == "moe":
-                    print(f"    MoE Num Experts: {ffn.moe_num_experts}")
-                    print(f"    MoE Top-K: {ffn.moe_num_experts_per_tok}")
+                    printf("    MoE Num Experts: {ffn.moe_num_experts}")
+                    printf("    MoE Top-K: {ffn.moe_num_experts_per_tok}")
 
             # Position encoding
             if hasattr(model_config, "position"):
@@ -303,63 +303,63 @@ class SystemMonitor:
                     if hasattr(pos.position_type, "value")
                     else pos.position_type
                 )
-                print(f"\n  Position Encoding: {pos_type}")
+                printf("\n  Position Encoding: {pos_type}")
                 if pos_type == "rope":
-                    print(f"    RoPE Base: {pos.rope_theta}")
+                    printf("    RoPE Base: {pos.rope_theta}")
                 elif pos_type == "yarn":
-                    print(f"    YaRN Scale: {pos.yarn_scale}")
+                    printf("    YaRN Scale: {pos.yarn_scale}")
                     print(
                         f"    YaRN Original Max Pos: {pos.yarn_original_max_position}"
                     )
 
         # GPU Statistics
         if stats and "gpu_name" in stats:
-            print(f"\n{'─'*60}")
+            printf("\n{'─'*60}")
             print("GPU Statistics:")
-            print(f"{'─'*60}")
+            printf("{'─'*60}")
 
-            print(f"  Device: {stats['gpu_name']}")
-            print(f"  Total Memory: {stats['total_gpu_memory_gb']:.2f} GB")
+            printf("  Device: {stats['gpu_name']}")
+            printf("  Total Memory: {stats['total_gpu_memory_gb']:.2f} GB")
 
             # Peak memory usage
             if "max_memory_allocated_gb" in stats:
-                print(f"\n  Peak Memory Usage:")
-                print(f"    Allocated: {stats['max_memory_allocated_gb']:.2f} GB")
-                print(f"    Reserved:  {stats['max_memory_reserved_gb']:.2f} GB")
+                printf("\n  Peak Memory Usage:")
+                printf("    Allocated: {stats['max_memory_allocated_gb']:.2f} GB")
+                printf("    Reserved:  {stats['max_memory_reserved_gb']:.2f} GB")
                 if "total_gpu_memory_gb" in stats and stats["total_gpu_memory_gb"] > 0:
                     utilization = (
                         stats["max_memory_reserved_gb"] / stats["total_gpu_memory_gb"]
                     ) * 100
-                    print(f"    Utilization: {utilization:.1f}%")
+                    printf("    Utilization: {utilization:.1f}%")
 
             # Sampled memory statistics (allocated)
             if "gpu_memory_allocated_max" in stats:
-                print(f"\n  Memory Allocated Over Time (GB):")
-                print(f"    Max:  {stats['gpu_memory_allocated_max']:.2f}")
-                print(f"    Min:  {stats['gpu_memory_allocated_min']:.2f}")
-                print(f"    Mean: {stats['gpu_memory_allocated_mean']:.2f}")
+                printf("\n  Memory Allocated Over Time (GB):")
+                printf("    Max:  {stats['gpu_memory_allocated_max']:.2f}")
+                printf("    Min:  {stats['gpu_memory_allocated_min']:.2f}")
+                printf("    Mean: {stats['gpu_memory_allocated_mean']:.2f}")
 
             # Sampled memory statistics (reserved)
             if "gpu_memory_reserved_max" in stats:
-                print(f"\n  Memory Reserved Over Time (GB):")
-                print(f"    Max:  {stats['gpu_memory_reserved_max']:.2f}")
-                print(f"    Min:  {stats['gpu_memory_reserved_min']:.2f}")
-                print(f"    Mean: {stats['gpu_memory_reserved_mean']:.2f}")
+                printf("\n  Memory Reserved Over Time (GB):")
+                printf("    Max:  {stats['gpu_memory_reserved_max']:.2f}")
+                printf("    Min:  {stats['gpu_memory_reserved_min']:.2f}")
+                printf("    Mean: {stats['gpu_memory_reserved_mean']:.2f}")
 
             # GPU utilization
             if "gpu_utilization_max" in stats:
-                print(f"\n  GPU Utilization Over Time (%):")
-                print(f"    Max:  {stats['gpu_utilization_max']}")
-                print(f"    Min:  {stats['gpu_utilization_min']}")
-                print(f"    Mean: {stats['gpu_utilization_mean']:.1f}")
+                printf("\n  GPU Utilization Over Time (%):")
+                printf("    Max:  {stats['gpu_utilization_max']}")
+                printf("    Min:  {stats['gpu_utilization_min']}")
+                printf("    Mean: {stats['gpu_utilization_mean']:.1f}")
             else:
-                print(f"\n  GPU Utilization: Not available (install nvidia-ml-py3)")
+                printf("\n  GPU Utilization: Not available (install nvidia-ml-py3)")
 
         # CPU Statistics
         if stats and ("cpu_percent_max" in stats or "cpu_memory_gb_max" in stats):
-            print(f"\n{'─'*60}")
+            printf("\n{'─'*60}")
             print("CPU Statistics:")
-            print(f"{'─'*60}")
+            printf("{'─'*60}")
 
             if "system_total_memory_gb" in stats:
                 memory_label = (
@@ -367,34 +367,34 @@ class SystemMonitor:
                     if self.is_containerized
                     else "System Total Memory"
                 )
-                print(f"  {memory_label}: {stats['system_total_memory_gb']:.2f} GB")
+                printf("  {memory_label}: {stats['system_total_memory_gb']:.2f} GB")
 
             # CPU utilization
             if "cpu_percent_max" in stats:
-                print(f"\n  System-Wide CPU Utilization (%):")
-                print(f"    Max:  {stats['cpu_percent_max']:.1f}")
-                print(f"    Min:  {stats['cpu_percent_min']:.1f}")
-                print(f"    Mean: {stats['cpu_percent_mean']:.1f}")
+                printf("\n  System-Wide CPU Utilization (%):")
+                printf("    Max:  {stats['cpu_percent_max']:.1f}")
+                printf("    Min:  {stats['cpu_percent_min']:.1f}")
+                printf("    Mean: {stats['cpu_percent_mean']:.1f}")
 
             # Process memory usage
             if "cpu_memory_gb_max" in stats:
-                print(f"\n  Process Memory Usage (GB):")
-                print(f"    Max:  {stats['cpu_memory_gb_max']:.2f}")
-                print(f"    Min:  {stats['cpu_memory_gb_min']:.2f}")
-                print(f"    Mean: {stats['cpu_memory_gb_mean']:.2f}")
+                printf("\n  Process Memory Usage (GB):")
+                printf("    Max:  {stats['cpu_memory_gb_max']:.2f}")
+                printf("    Min:  {stats['cpu_memory_gb_min']:.2f}")
+                printf("    Mean: {stats['cpu_memory_gb_mean']:.2f}")
 
             # System memory utilization
             if "system_memory_percent_max" in stats:
-                print(f"\n  System Memory Utilization (%):")
-                print(f"    Max:  {stats['system_memory_percent_max']:.1f}")
-                print(f"    Min:  {stats['system_memory_percent_min']:.1f}")
-                print(f"    Mean: {stats['system_memory_percent_mean']:.1f}")
+                printf("\n  System Memory Utilization (%):")
+                printf("    Max:  {stats['system_memory_percent_max']:.1f}")
+                printf("    Min:  {stats['system_memory_percent_min']:.1f}")
+                printf("    Mean: {stats['system_memory_percent_mean']:.1f}")
         elif not self.psutil_available:
-            print(f"\n{'─'*60}")
+            printf("\n{'─'*60}")
             print("CPU Statistics: Not available (install psutil)")
-            print(f"{'─'*60}")
+            printf("{'─'*60}")
 
-        print(f"\n{'='*60}\n")
+        printf("\n{'='*60}\n")
 
 
 try:
@@ -711,7 +711,7 @@ Note: CLI arguments always override config file values.
     # Load configuration
     if args.config:
         # YAML config mode
-        print(f"Loading configuration from: {args.config}")
+        printf("Loading configuration from: {args.config}")
         model_config, training_dict = load_config_from_yaml(args.config)
 
         # Build training config from YAML
@@ -745,7 +745,7 @@ Note: CLI arguments always override config file values.
         )
     else:
         # Preset mode (legacy)
-        print(f"Using preset: {args.preset}")
+        printf("Using preset: {args.preset}")
         model_config = get_preset_config(args.preset)
         training_config = TrainingConfig(
             max_steps=200,
@@ -833,15 +833,15 @@ Note: CLI arguments always override config file values.
     # Persistent workers only makes sense with num_workers > 0
     use_persistent_workers = args.persistent_workers and num_workers > 0
 
-    print(f"\n{'='*60}")
+    printf("\n{'='*60}")
     print("DataLoader Configuration")
-    print(f"{'='*60}")
-    print(f"  Batch size: {training_config.batch_size}")
-    print(f"  Num workers: {num_workers}")
-    print(f"  Prefetch factor: {args.prefetch_factor}")
-    print(f"  Persistent workers: {use_persistent_workers}")
-    print(f"  Pin memory: {pin_memory}")
-    print(f"{'='*60}\n")
+    printf("{'='*60}")
+    printf("  Batch size: {training_config.batch_size}")
+    printf("  Num workers: {num_workers}")
+    printf("  Prefetch factor: {args.prefetch_factor}")
+    printf("  Persistent workers: {use_persistent_workers}")
+    printf("  Pin memory: {pin_memory}")
+    printf("{'='*60}\n")
 
     dataloader = DataLoader(
         dataset,
@@ -859,10 +859,10 @@ Note: CLI arguments always override config file values.
     # Override GSA k values if provided (for memory tuning)
     if args.gsa_k_base is not None:
         model_config.attention.gsa_k_base = args.gsa_k_base
-        print(f"[GSA] Overriding k_base to {args.gsa_k_base}")
+        printf("[GSA] Overriding k_base to {args.gsa_k_base}")
     if args.gsa_k_max is not None:
         model_config.attention.gsa_k_max = args.gsa_k_max
-        print(f"[GSA] Overriding k_max to {args.gsa_k_max}")
+        printf("[GSA] Overriding k_max to {args.gsa_k_max}")
     if args.no_triton:
         model_config.attention.gsa_use_triton_kernels = False
         print("[GSA] Triton kernels disabled, using PyTorch fallback")
