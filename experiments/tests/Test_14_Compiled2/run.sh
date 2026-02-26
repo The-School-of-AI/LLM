@@ -15,6 +15,25 @@ DEEPSPEED_BIN="${DEEPSPEED_BIN:-deepspeed}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 FORCE_REWRITE_INIT="${FORCE_REWRITE_INIT:-1}"
 
+# Resolve DeepSpeed binary/module from the Python environment being used
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "[ERROR] PYTHON_BIN not found/executable: $PYTHON_BIN" >&2
+  exit 1
+fi
+
+if ! command -v "$DEEPSPEED_BIN" >/dev/null 2>&1; then
+  _DS_FROM_PY="$($PYTHON_BIN -c 'import shutil; print(shutil.which("deepspeed") or "")' 2>/dev/null || true)"
+  if [[ -n "${_DS_FROM_PY:-}" ]]; then
+    DEEPSPEED_BIN="$_DS_FROM_PY"
+  elif "$PYTHON_BIN" -c 'import deepspeed' >/dev/null 2>&1; then
+    DEEPSPEED_BIN=("$PYTHON_BIN" -m deepspeed)
+  else
+    echo "[ERROR] DeepSpeed not found. Neither '$DEEPSPEED_BIN' is on PATH, nor is 'deepspeed' importable from $PYTHON_BIN." >&2
+    echo "        Install it in the same environment as $PYTHON_BIN (e.g. pip install -r $REPO_ROOT/requirements.txt)." >&2
+    exit 1
+  fi
+fi
+
 # --- Logging & diagnostics ---
 exec > >(tee -a "$TEST_ROOT/run_bootstrap.log") 2>&1
 echo "[run.sh] Started at $(date -u)"
@@ -100,7 +119,34 @@ if [[ -z "$VECTOR_TOML_SRC" ]]; then
   die "Vector config not found. Provide $LOCAL_ASSETS_DIR/vector.toml or set VECTOR_TOML_SRC to a valid path."
 fi
 sudo install -m 0644 "$VECTOR_TOML_SRC" /etc/t12/vector.toml
-sudo install -m 0600 "$ENV_SRC" /etc/t12/vector.env
+
+# Normalize env var names expected by /etc/t12/vector.toml
+set -a
+source "$ENV_SRC"
+set +a
+CLICKHOUSE_ENDPOINT="${CLICKHOUSE_ENDPOINT:-${CLICKHOUSE_HTTPS_ENDPOINT:-}}"
+CLICKHOUSE_CA_CERT="${CLICKHOUSE_CA_CERT:-}"
+if [[ -z "${CLICKHOUSE_CA_CERT:-}" || ! -f "$CLICKHOUSE_CA_CERT" ]]; then
+  CLICKHOUSE_CA_CERT="/etc/t12/ca.crt"
+fi
+if [[ -z "${CLICKHOUSE_ENDPOINT:-}" ]]; then
+  die "Vector env is missing CLICKHOUSE_ENDPOINT (or CLICKHOUSE_HTTPS_ENDPOINT) in: $ENV_SRC"
+fi
+if [[ -z "${CLICKHOUSE_USER:-}" || -z "${CLICKHOUSE_PASSWORD:-}" ]]; then
+  die "Vector env is missing CLICKHOUSE_USER/CLICKHOUSE_PASSWORD in: $ENV_SRC"
+fi
+if [[ ! -f "$CLICKHOUSE_CA_CERT" ]]; then
+  die "Vector env CA cert not found: $CLICKHOUSE_CA_CERT"
+fi
+
+sudo tee /etc/t12/vector.env >/dev/null <<EOF
+CLICKHOUSE_ENDPOINT=${CLICKHOUSE_ENDPOINT}
+CLICKHOUSE_USER=${CLICKHOUSE_USER}
+CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+CLICKHOUSE_CA_CERT=${CLICKHOUSE_CA_CERT}
+EOF
+sudo chmod 600 /etc/t12/vector.env
+
 # Copy to the invoking user's home with proper ownership and perms
 sudo cp /etc/t12/vector.env "$HOME/.t12.env"
 sudo chown "$(id -u)":"$(id -gn)" "$HOME/.t12.env"
@@ -172,7 +218,7 @@ fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)..."
 (
   cd "$CODE_DIR"
-  "$DEEPSPEED_BIN" --num_gpus="$NUM_GPUS" main.py --config "$CFG"
+  "${DEEPSPEED_BIN[@]:-$DEEPSPEED_BIN}" --num_gpus="$NUM_GPUS" main.py --config "$CFG"
 ) 2>&1 | tee "$RESULTS_DIR/run/train.log"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Test 14 completed"

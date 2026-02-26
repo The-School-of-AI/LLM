@@ -1,0 +1,2909 @@
+[run.sh] Started at Thu Feb 26 20:49:45 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
+Created symlink /etc/systemd/system/multi-user.target.wants/t12-vector.service → /etc/systemd/system/t12-vector.service.
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=training_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 20:49:48] Saving deterministic init model for Test 14...'
+[2026-02-26 20:49:48] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 9, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'
+[run.sh] Started at Thu Feb 26 21:02:17 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:02:24] Saving deterministic init model for Test 14...'
+[2026-02-26 21:02:24] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 137, in <module>
+    main()
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 39, in main
+    from src.data import get_tokenizer
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/__init__.py", line 10, in <module>
+    from .data import get_dataloaders, get_tokenizer
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/data.py", line 18, in <module>
+    from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
+ModuleNotFoundError: No module named 'datasets'
+[run.sh] Started at Thu Feb 26 21:04:47 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:04:50] Saving deterministic init model for Test 14...'
+[2026-02-26 21:04:50] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 137, in <module>
+    main()
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 39, in main
+    from src.data import get_tokenizer
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/__init__.py", line 10, in <module>
+    from .data import get_dataloaders, get_tokenizer
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/data.py", line 21, in <module>
+    from transformers import AutoTokenizer
+ModuleNotFoundError: No module named 'transformers'
+[run.sh] Started at Thu Feb 26 21:05:41 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:05:48] Saving deterministic init model for Test 14...'
+[2026-02-26 21:05:48] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 137, in <module>
+    main()
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 39, in main
+    from src.data import get_tokenizer
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/__init__.py", line 11, in <module>
+    from .train import (
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/train.py", line 14, in <module>
+    import psutil
+ModuleNotFoundError: No module named 'psutil'
+[run.sh] Started at Thu Feb 26 21:07:04 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:07:07] Saving deterministic init model for Test 14...'
+[2026-02-26 21:07:07] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:08:35] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 21:08:35] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=8 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+./run.sh: line 175: deepspeed: command not found
+[run.sh] Started at Thu Feb 26 21:09:44 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:09:50] Saving deterministic init model for Test 14...'
+[2026-02-26 21:09:50] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:11:28] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 21:11:28] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=1 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+./run.sh: line 175: deepspeed: command not found
+[run.sh] Started at Thu Feb 26 21:15:25 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:15:32] Saving deterministic init model for Test 14...'
+[2026-02-26 21:15:32] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:17:27] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 21:17:27] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=8 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:17:33,904] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-26 21:17:33,904] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMCwgMSwgMiwgMywgNCwgNSwgNiwgN119 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:17:39,807] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]}
+[2026-02-26 21:17:39,808] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=8, node_rank=0
+[2026-02-26 21:17:39,808] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]})
+[2026-02-26 21:17:39,808] [INFO] [launch.py:180:main] dist_world_size=8
+[2026-02-26 21:17:39,808] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+[2026-02-26 21:17:39,808] [INFO] [launch.py:272:main] process 51375 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=0', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:17:39,809] [INFO] [launch.py:272:main] process 51376 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=1', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:17:39,809] [INFO] [launch.py:272:main] process 51377 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=2', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:17:39,812] [INFO] [launch.py:272:main] process 51378 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=3', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:17:39,813] [INFO] [launch.py:272:main] process 51379 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=4', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:17:39,816] [INFO] [launch.py:272:main] process 51380 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=5', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:17:39,816] [INFO] [launch.py:272:main] process 51381 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=6', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:17:39,820] [INFO] [launch.py:272:main] process 51382 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=7', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/main.py", line 56, in <module>
+    from src.checkpoint import S3CheckpointManager
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/checkpoint.py", line 20, in <module>
+    import boto3
+ModuleNotFoundError: No module named 'boto3'
+[2026-02-26 21:18:05,831] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51375
+[2026-02-26 21:18:05,835] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51376
+[2026-02-26 21:18:05,839] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51377
+[2026-02-26 21:18:05,842] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51378
+[2026-02-26 21:18:05,846] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51379
+[2026-02-26 21:18:05,846] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51380
+[2026-02-26 21:18:05,850] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51381
+[2026-02-26 21:18:05,853] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 51382
+[2026-02-26 21:18:05,857] [ERROR] [launch.py:341:sigkill_handler] ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=7', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml'] exits with return code = 1
+[run.sh] Started at Thu Feb 26 21:18:34 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ sudo install -m 0600 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:18:41] Saving deterministic init model for Test 14...'
+[2026-02-26 21:18:41] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:20:20] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 21:20:20] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=8 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:20:26,964] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-26 21:20:26,964] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMCwgMSwgMiwgMywgNCwgNSwgNiwgN119 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:20:32,750] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]}
+[2026-02-26 21:20:32,750] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=8, node_rank=0
+[2026-02-26 21:20:32,750] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]})
+[2026-02-26 21:20:32,750] [INFO] [launch.py:180:main] dist_world_size=8
+[2026-02-26 21:20:32,750] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+[2026-02-26 21:20:32,751] [INFO] [launch.py:272:main] process 53664 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=0', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:20:32,751] [INFO] [launch.py:272:main] process 53665 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=1', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:20:32,752] [INFO] [launch.py:272:main] process 53666 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=2', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:20:32,754] [INFO] [launch.py:272:main] process 53667 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=3', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:20:32,755] [INFO] [launch.py:272:main] process 53668 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=4', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:20:32,758] [INFO] [launch.py:272:main] process 53669 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=5', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:20:32,760] [INFO] [launch.py:272:main] process 53670 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=6', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:20:32,761] [INFO] [launch.py:272:main] process 53671 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=7', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140853'
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140853'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140853'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140853'
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140854'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140854'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140854'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772140854'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+[2026-02-26 21:20:57,773] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53664
+[2026-02-26 21:20:57,774] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53665
+[2026-02-26 21:20:57,876] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53666
+[2026-02-26 21:20:57,882] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53667
+[2026-02-26 21:20:57,981] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53668
+[2026-02-26 21:20:57,985] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53669
+[2026-02-26 21:20:58,041] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53670
+[2026-02-26 21:20:58,045] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 53671
+[2026-02-26 21:20:58,048] [ERROR] [launch.py:341:sigkill_handler] ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=7', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml'] exits with return code = 1
+[run.sh] Started at Thu Feb 26 21:31:02 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:31:06] Saving deterministic init model for Test 14...'
+[2026-02-26 21:31:06] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:32:46] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 21:32:46] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=8 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:32:52,000] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-26 21:32:52,001] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMCwgMSwgMiwgMywgNCwgNSwgNiwgN119 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:32:57,723] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]}
+[2026-02-26 21:32:57,724] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=8, node_rank=0
+[2026-02-26 21:32:57,724] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]})
+[2026-02-26 21:32:57,724] [INFO] [launch.py:180:main] dist_world_size=8
+[2026-02-26 21:32:57,724] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+[2026-02-26 21:32:57,724] [INFO] [launch.py:272:main] process 60653 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=0', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:32:57,725] [INFO] [launch.py:272:main] process 60654 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=1', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:32:57,726] [INFO] [launch.py:272:main] process 60655 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=2', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:32:57,727] [INFO] [launch.py:272:main] process 60656 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=3', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:32:57,728] [INFO] [launch.py:272:main] process 60657 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=4', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:32:57,730] [INFO] [launch.py:272:main] process 60658 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=5', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:32:57,731] [INFO] [launch.py:272:main] process 60659 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=6', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:32:57,731] [INFO] [launch.py:272:main] process 60660 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=7', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141597'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141598'
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141598'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141598'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141598'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================================================================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141598'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141598'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141599'
+============================================================
+============================================================
+  FATAL: Vector service is not active!
+
+  Expected service: t12-vector.service
+  Check service status:
+    systemctl --no-pager --full status t12-vector.service
+  Inspect logs:
+    journalctl -u t12-vector.service -n 200 --no-pager
+============================================================
+[2026-02-26 21:33:22,747] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60653
+[2026-02-26 21:33:22,751] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60654
+[2026-02-26 21:33:22,755] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60655
+[2026-02-26 21:33:22,758] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60656
+[2026-02-26 21:33:22,761] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60657
+[2026-02-26 21:33:22,762] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60658
+[2026-02-26 21:33:22,765] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60659
+[2026-02-26 21:33:22,768] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 60660
+[2026-02-26 21:33:22,771] [ERROR] [launch.py:341:sigkill_handler] ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=7', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml'] exits with return code = 1
+[run.sh] Started at Thu Feb 26 21:35:52 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:35:55] Saving deterministic init model for Test 14...'
+[2026-02-26 21:35:55] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 21:37:35] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 21:37:35] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=8 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:37:41,387] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-26 21:37:41,387] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMCwgMSwgMiwgMywgNCwgNSwgNiwgN119 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 21:37:46,983] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]}
+[2026-02-26 21:37:46,983] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=8, node_rank=0
+[2026-02-26 21:37:46,983] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]})
+[2026-02-26 21:37:46,983] [INFO] [launch.py:180:main] dist_world_size=8
+[2026-02-26 21:37:46,983] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+[2026-02-26 21:37:46,984] [INFO] [launch.py:272:main] process 63839 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=0', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:37:46,984] [INFO] [launch.py:272:main] process 63840 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=1', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:37:46,985] [INFO] [launch.py:272:main] process 63841 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=2', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:37:46,988] [INFO] [launch.py:272:main] process 63842 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=3', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:37:46,989] [INFO] [launch.py:272:main] process 63843 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=4', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:37:46,990] [INFO] [launch.py:272:main] process 63844 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=5', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:37:46,992] [INFO] [launch.py:272:main] process 63845 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=6', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+[2026-02-26 21:37:46,992] [INFO] [launch.py:272:main] process 63846 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=7', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141887'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141887_rank_3.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_3.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Metrics server started on port 8000
+✓ SystemMetricsCollector started (every 5.0s)
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — ready
+============================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141887'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141887_rank_2.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_2.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141887'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141887_rank_5.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_5.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141888'
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141888_rank_1.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_1.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141888'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141888_rank_6.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_6.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141888'
+============================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141888'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141888_rank_7.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_7.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141888_rank_4.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_4.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+
+[0.5/5] Reading DeepSpeed configuration...
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772141888'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772141888_rank_0.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_0.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+Loading dataset: wikitext (wikitext-103-raw-v1)
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+    - Total tokens (with special): 131,075
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+Loading dataset: wikitext (wikitext-103-raw-v1)
+Loading dataset: wikitext (wikitext-103-raw-v1)
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+  Updated model vocab_size to match tokenizer: 131,075
+  Updated model vocab_size to match tokenizer: 131,075
+  Updated model vocab_size to match tokenizer: 131,075
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+Loading dataset: wikitext (wikitext-103-raw-v1)
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Loading dataset: wikitext (wikitext-103-raw-v1)    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Loading dataset: wikitext (wikitext-103-raw-v1)    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading dataset: wikitext (wikitext-103-raw-v1)
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Updated model vocab_size to match tokenizer: 131,075
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+  Updated model vocab_size to match tokenizer: 131,075  Updated model vocab_size to match tokenizer: 131,075
+
+
+  Updated model vocab_size to match tokenizer: 131,075
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Loading dataset: wikitext (wikitext-103-raw-v1)    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+  Updated model vocab_size to match tokenizer: 131,075
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
