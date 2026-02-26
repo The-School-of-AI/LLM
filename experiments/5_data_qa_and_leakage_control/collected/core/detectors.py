@@ -232,11 +232,13 @@ class SemanticDetector:
         self.device = self._resolve_device(device)
         self.model = SentenceTransformer(model_name, device=self.device)
         self.index = None  # populated by build_index()
+        self._faiss_gpu_resources = None
+        self._faiss_backend = "cpu"
         # Parallel list to the FAISS index: meta[i] = {"benchmark": str, "text": str}
         self.meta: list[dict[str, str]] = []
         console.print(
             f"[cyan]Semantic embeddings device:[/cyan] {self.device} "
-            f"(FAISS index: CPU in current setup)"
+            "(FAISS backend auto-selects: GPU on CUDA if available, else CPU)"
         )
 
     def _resolve_device(self, requested: str) -> str:
@@ -286,12 +288,13 @@ class SemanticDetector:
         ).astype("float32")
 
         # IndexFlatIP with normalized vectors computes cosine similarity
-        self.index = faiss.IndexFlatIP(dim)
+        self.index = self._build_faiss_index(faiss, dim)
         self.index.add(embeddings)
         self.meta = all_meta
 
         console.print(
-            f"[green]✓ Semantic index ready: {len(all_texts)} vectors[/green]\n"
+            f"[green]✓ Semantic index ready: {len(all_texts)} vectors "
+            f"(FAISS: {self._faiss_backend})[/green]\n"
         )
 
     def scan(self, texts: list[str]) -> dict[str, list[dict[str, Any]]]:
@@ -337,3 +340,38 @@ class SemanticDetector:
                     )
 
         return dict(matches)
+
+    def _build_faiss_index(self, faiss: Any, dim: int) -> Any:
+        """Create a FAISS index, preferring GPU when available/supported."""
+        cpu_index = faiss.IndexFlatIP(dim)
+
+        if self.device != "cuda":
+            self._faiss_backend = "cpu"
+            console.print("[cyan]FAISS backend:[/cyan] cpu")
+            return cpu_index
+
+        if not hasattr(faiss, "StandardGpuResources"):
+            self._faiss_backend = "cpu"
+            console.print(
+                "[yellow]FAISS GPU not available in installed package; using CPU FAISS[/yellow]"
+            )
+            return cpu_index
+
+        try:
+            num_gpus = faiss.get_num_gpus() if hasattr(faiss, "get_num_gpus") else 0
+            if num_gpus < 1:
+                self._faiss_backend = "cpu"
+                console.print("[yellow]No FAISS GPU devices found; using CPU FAISS[/yellow]")
+                return cpu_index
+
+            self._faiss_gpu_resources = faiss.StandardGpuResources()
+            gpu_index = faiss.index_cpu_to_gpu(self._faiss_gpu_resources, 0, cpu_index)
+            self._faiss_backend = "gpu:0"
+            console.print("[cyan]FAISS backend:[/cyan] gpu:0")
+            return gpu_index
+        except Exception as exc:
+            self._faiss_backend = "cpu"
+            console.print(
+                f"[yellow]FAISS GPU init failed ({exc}); using CPU FAISS[/yellow]"
+            )
+            return cpu_index
