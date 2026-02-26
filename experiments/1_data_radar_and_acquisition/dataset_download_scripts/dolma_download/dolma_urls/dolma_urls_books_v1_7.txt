@@ -1,0 +1,3 @@
+https://olmo-data.org/dolma-v1_7/books/books-0000.json.gz
+https://olmo-data.org/dolma-v1_7/books/books-0001.json.gz
+https://olmo-data.org/dolma-v1_7/books/books-0002.json.gz
