@@ -9,7 +9,11 @@ This project now supports scanning a dataset directly from S3 without downloadin
 - `scripts/S3_run.py`
   - Reads `S3_scan.json` (and optional `S3_aws.json`)
   - Auto-downloads benchmarks if missing (configurable)
+  - Auto-installs semantic runtime dependencies on first run
+    - CUDA GPU host: tries `faiss-gpu` + `sentence-transformers`
+    - Fallback/no-GPU: uses `faiss-cpu` + `sentence-transformers`
   - Runs the S3 scan wrapper with one command
+  - Supports CPU-only override (`--cpu` or `S3_FORCE_CPU=1`)
 
 - `scripts/scan_from_s3.py`
   - Streams a `.txt` file from S3 using `boto3`
@@ -28,7 +32,9 @@ This project now supports scanning a dataset directly from S3 without downloadin
   - Semantic detector now auto-selects embedding device:
     - `cuda` -> `mps` -> `cpu`
   - Prints selected semantic device at startup
-  - FAISS remains CPU in the current setup (`faiss-cpu`)
+  - FAISS backend auto-selects:
+    - GPU FAISS (`gpu:0`) on CUDA hosts if GPU FAISS is installed
+    - CPU FAISS fallback otherwise
 
 - Dependencies
   - Added `boto3` to `pyproject.toml` and `requirements.txt`
@@ -49,7 +55,7 @@ This project now supports scanning a dataset directly from S3 without downloadin
 4. Run contamination checks:
    - N-gram
    - MinHash
-   - Semantic (if installed; embeddings auto-use GPU if available)
+   - Semantic (installed automatically by `S3_run.py`; embeddings/FAISS use GPU when available)
 5. Save reports locally in `reports/`
 
 No local copy of the input dataset file is created in this flow.
@@ -100,11 +106,10 @@ uv sync --no-install-project
 Optional semantic layer (FAISS + sentence-transformers):
 
 ```bash
-# This project currently has a packaging issue for normal uv project install.
-# If you need semantic support, use your existing environment strategy carefully.
-# For now, core N-gram + MinHash will work with the command above.
-# If semantic dependencies are installed, embeddings auto-select device:
-# cuda -> mps -> cpu
+# You do not need a separate semantic install step when using scripts/S3_run.py.
+# It auto-installs semantic runtime dependencies on first run.
+# GPU hosts: tries faiss-gpu + sentence-transformers
+# CPU hosts / fallback: uses faiss-cpu + sentence-transformers
 ```
 
 ## One-Time: Download Benchmarks
@@ -132,7 +137,25 @@ This will:
 - load config
 - optionally load AWS settings
 - auto-download benchmarks if missing
+- auto-install semantic runtime dependencies (GPU/CPU-aware)
+- auto-detect semantic device / FAISS backend
 - run the S3 streaming contamination scan
+
+### CPU-Only Override (Optional)
+
+If you want to force CPU mode even on a GPU machine:
+
+```bash
+.venv/bin/python scripts/S3_run.py --cpu
+```
+
+or
+
+```bash
+S3_FORCE_CPU=1 .venv/bin/python scripts/S3_run.py
+```
+
+This forces semantic embeddings to CPU and uses CPU FAISS.
 
 ## Run the S3 Streaming Scan
 
@@ -198,5 +221,6 @@ The scanner still writes the normal outputs to `reports/`:
 - `scan_from_s3.py` currently expects a `.txt` S3 object in the same packed Q&A format as `group4.txt`.
 - If your S3 file format changes, update the regex/parser in `scripts/scan_from_s3.py`.
 - Semantic embeddings now auto-select device by default (`cuda`, else `mps`, else `cpu`).
-- In the current project setup, FAISS is still CPU (`faiss-cpu`), even when semantic embeddings run on GPU/MPS.
+- `scripts/S3_run.py` auto-installs semantic dependencies on first run, so the first run may take longer.
+- On CUDA GPU hosts, `scripts/S3_run.py` tries `faiss-gpu`; if install/init fails, the scan falls back to CPU FAISS automatically.
 - `scripts/S3_run.py` uses the current Python interpreter (`.venv/bin/python` if you launch it that way).
