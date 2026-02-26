@@ -1205,29 +1205,29 @@ def benchmark_throughput(
     print("\n" + "=" * 80)
     print("🚀 SOTA LLM THROUGHPUT BENCHMARK")
     print("=" * 80)
-    printf("Device: {device} ({device_info.get('name', 'N/A')})")
-    printf("PyTorch: {torch.__version__}")
+    print(f"Device: {device} ({device_info.get('name', 'N/A')})")
+    print(f"PyTorch: {torch.__version__}")
     if device == "cuda":
         print(
             f"CUDA: {device_info.get('cuda_version', 'N/A')} | Memory: {device_info.get('total_memory_gb', 0):.1f}GB"
         )
-    printf("Dtype: {dtype} | Batch: {batch_size} | Sequences: {seq_lengths}")
+    print(f"Dtype: {dtype} | Batch: {batch_size} | Sequences: {seq_lengths}")
     if profile:
-        printf("Profile: {profile} (model scaled)")
+        print(f"Profile: {profile} (model scaled)")
     print("=" * 80)
 
     all_results = {}
 
     for config_path in config_paths:
-        printf("\n{'='*80}")
-        printf("📋 CONFIG: {Path(config_path).name}")
+        print(f"\n{'='*80}")
+        print(f"📋 CONFIG: {Path(config_path).name}")
         print("=" * 80)
 
         config = ModelConfig.load(config_path)
         config = apply_benchmark_profile(config, profile)
 
-        printf("Model: {config.model_name}")
-        printf("  Hidden: {config.hidden_size} | Layers: {config.num_hidden_layers}")
+        print(f"Model: {config.model_name}")
+        print(f"  Hidden: {config.hidden_size} | Layers: {config.num_hidden_layers}")
         print(
             f"  Attention: {config.attention.attention_type.value} | Heads: {config.attention.num_attention_heads}/{config.attention.num_key_value_heads} | HeadDim: {config.attention.head_dim}"
         )
@@ -1238,7 +1238,7 @@ def benchmark_throughput(
             f"  Connection: {config.connection.connection_type.value} | MTP: {config.head.use_multi_token_prediction}"
         )
 
-        printf("\n🔧 Loading model...")
+        print(f"\n🔧 Loading model...")
         model = create_model_from_config(config)
         model = model.to(device)
         model = model.to(dtype=torch_dtype)
@@ -1261,7 +1261,7 @@ def benchmark_throughput(
         )
 
         # Inference benchmark
-        printf("\n{'─'*80}")
+        print(f"\n{'─'*80}")
         print("📈 INFERENCE (Forward Pass)")
         print("─" * 80)
         print(
@@ -1296,15 +1296,15 @@ def benchmark_throughput(
                 inference_results.append(result)
             except RuntimeError as e:
                 if "out of memory" in str(e).lower():
-                    printf("{seq_len:<8} OOM")
+                    print(f"{seq_len:<8} OOM")
                     reset_memory_stats(device)
                 else:
-                    printf("{seq_len:<8} ERROR: {str(e)[:40]}")
+                    print(f"{seq_len:<8} ERROR: {str(e)[:40]}")
 
         # Training benchmark
         training_results = []
         if not inference_only:
-            printf("\n{'─'*80}")
+            print(f"\n{'─'*80}")
             print("🏋️ TRAINING (Forward + Backward)")
             print("─" * 80)
             print(
@@ -1334,10 +1334,10 @@ def benchmark_throughput(
                     training_results.append(result)
                 except RuntimeError as e:
                     if "out of memory" in str(e).lower():
-                        printf("{seq_len:<8} OOM")
+                        print(f"{seq_len:<8} OOM")
                         reset_memory_stats(device)
                     else:
-                        printf("{seq_len:<8} ERROR: {str(e)[:40]}")
+                        print(f"{seq_len:<8} ERROR: {str(e)[:40]}")
 
         # Insights
         insights = generate_insights(
@@ -1355,21 +1355,21 @@ def benchmark_throughput(
             else SequenceScalingMetrics()
         )
 
-        printf("\n{'─'*80}")
+        print(f"\n{'─'*80}")
         print("💡 INSIGHTS")
         print("─" * 80)
-        printf("Bottleneck: {insights.bottleneck}")
-        printf("Memory: {insights.memory_recommendation}")
+        print(f"Bottleneck: {insights.bottleneck}")
+        print(f"Memory: {insights.memory_recommendation}")
         if insights.throughput_recommendation:
-            printf("Throughput: {insights.throughput_recommendation}")
+            print(f"Throughput: {insights.throughput_recommendation}")
         if insights.attention_insight:
-            printf("Architecture: {insights.attention_insight}")
+            print(f"Architecture: {insights.attention_insight}")
         for w in insights.warnings:
-            printf("  {w}")
+            print(f"  {w}")
 
         # Print sequence scaling analysis if available
         if len(inference_results) > 1:
-            printf("\n{'─'*80}")
+            print(f"\n{'─'*80}")
             print("📊 SEQUENCE SCALING ANALYSIS")
             print("─" * 80)
             scaling_type = (
@@ -1383,10 +1383,10 @@ def benchmark_throughput(
             print(
                 f"  Throughput Scaling Exponent: {inference_scaling.throughput_scaling_exponent:.2f}"
             )
-            printf("  Scaling Efficiency: {inference_scaling.scaling_efficiency:.2%}")
+            print(f"  Scaling Efficiency: {inference_scaling.scaling_efficiency:.2%}")
 
         # Print architecture metrics
-        printf("\n{'─'*80}")
+        print(f"\n{'─'*80}")
         print("🏗️ ARCHITECTURE BREAKDOWN")
         print("─" * 80)
         print(
@@ -1395,18 +1395,18 @@ def benchmark_throughput(
         print(
             f"  Position: {arch_metrics.position_type} (max context: {arch_metrics.max_context_length})"
         )
-        printf("  Connection: {arch_metrics.connection_type}", end="")
+        print(f"  Connection: {arch_metrics.connection_type}", end="")
         if arch_metrics.mhc_overhead_percent > 0:
-            printf(" (overhead: {arch_metrics.mhc_overhead_percent:.2f}%)")
+            print(f" (overhead: {arch_metrics.mhc_overhead_percent:.2f}%)")
         else:
             print()
-        printf("  MTP: {'Enabled' if arch_metrics.mtp_enabled else 'Disabled'}", end="")
+        print(f"  MTP: {'Enabled' if arch_metrics.mtp_enabled else 'Disabled'}", end="")
         if arch_metrics.mtp_enabled:
-            printf(" ({arch_metrics.mtp_tokens} tokens)")
+            print(f" ({arch_metrics.mtp_tokens} tokens)")
         else:
             print()
         if arch_metrics.triton_kernels_enabled:
-            printf("  Triton Kernels: Enabled (k={arch_metrics.sparse_attention_k})")
+            print(f"  Triton Kernels: Enabled (k={arch_metrics.sparse_attention_k})")
         print(
             f"  Param Distribution: Embed {arch_metrics.embedding_percent:.1f}% | Attn {arch_metrics.attention_percent:.1f}% | FFN {arch_metrics.ffn_percent:.1f}% | Head {arch_metrics.head_percent:.1f}%"
         )
@@ -1489,7 +1489,7 @@ def benchmark_throughput(
 
         with open(output_file, "w") as f:
             json.dump(output_data, f, indent=2, default=str)
-        printf("\n✅ Saved to: {output_path}")
+        print(f"\n✅ Saved to: {output_path}")
 
     print("\n" + "=" * 80)
     print("🏁 BENCHMARK COMPLETE")

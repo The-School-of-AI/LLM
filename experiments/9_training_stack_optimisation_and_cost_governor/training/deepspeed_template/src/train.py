@@ -54,14 +54,14 @@ def train_epoch(model_engine, train_loader, epoch, max_steps=None, log_interval=
 
         # Log periodically
         if i % log_interval == 0:
-            printf("Epoch {epoch}, Step {i}, Loss: {loss.item():.4f}")
+            print(f"Epoch {epoch}, Step {i}, Loss: {loss.item():.4f}")
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
             break
 
     avg_loss = total_loss / steps
-    printf("Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
+    print(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
 
     return avg_loss
 
@@ -114,7 +114,7 @@ def evaluate(model_engine, data_loader, phase="Evaluation", max_steps=None):
     avg_loss = total_loss / steps
     avg_perplexity = total_perplexity / steps
 
-    printf("{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}")
+    print(f"{phase} - Avg Loss: {avg_loss:.4f}, Avg Perplexity: {avg_perplexity:.4f}")
 
     return avg_loss, avg_perplexity
 
@@ -145,14 +145,14 @@ def generate_text(
     """
     model_engine.eval()
 
-    printf('\nGenerating text from prompt: "{prompt}"')
+    print(f'\nGenerating text from prompt: "{prompt}"')
 
     # Tokenize prompt
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"].to(model_engine.device)
     attention_mask = inputs["attention_mask"].to(model_engine.device)
 
-    printf("Input tokens: {input_ids.shape[1]}")
+    print(f"Input tokens: {input_ids.shape[1]}")
 
     # Generate
     with torch.no_grad():
@@ -180,9 +180,9 @@ def generate_text(
         else ""
     )
 
-    printf("\nGenerated {output_ids.shape[1] - input_ids.shape[1]} new tokens")
-    printf("\nFull Output:\n{full_output}")
-    printf("\nGenerated Continuation:\n{generated_text}")
+    print(f"\nGenerated {output_ids.shape[1] - input_ids.shape[1]} new tokens")
+    print(f"\nFull Output:\n{full_output}")
+    print(f"\nGenerated Continuation:\n{generated_text}")
 
     return {
         "prompt": input_text,
@@ -200,7 +200,7 @@ def save_checkpoint(model_engine, output_dir, tag="final"):
         output_dir: Directory to save checkpoint
         tag: Tag for the checkpoint
     """
-    printf("Saving checkpoint to {output_dir} with tag '{tag}'")
+    print(f"Saving checkpoint to {output_dir} with tag '{tag}'")
     model_engine.save_checkpoint(output_dir, tag=tag)
     print("Checkpoint saved successfully")
 
@@ -217,7 +217,7 @@ def load_checkpoint(model_engine, checkpoint_dir, tag="final"):
     Returns:
         The loaded checkpoint metadata
     """
-    printf("Loading checkpoint from {checkpoint_dir} with tag '{tag}'")
+    print(f"Loading checkpoint from {checkpoint_dir} with tag '{tag}'")
     _, client_sd = model_engine.load_checkpoint(checkpoint_dir, tag=tag)
     print("Checkpoint loaded successfully")
     return client_sd

@@ -1404,11 +1404,11 @@ class SmolLM(nn.Module):
         if self.use_fourier:
             embedding_params += sum(p.numel() for p in self.pf_to_model.parameters())
 
-        printf("🤖 SMOLLM ({embedding_type.upper()}):")
+        print(f"🤖 SMOLLM ({embedding_type.upper()}):")
         if self.use_fourier:
-            printf("   K (semantic anchors): {K}")
-            printf("   PF dim: {pf_codec.D} -> model dim: {hidden_size}")
-        printf("   Transformer layers: {num_hidden_layers}, heads: {num_heads}")
+            print(f"   K (semantic anchors): {K}")
+            print(f"   PF dim: {pf_codec.D} -> model dim: {hidden_size}")
+        print(f"   Transformer layers: {num_hidden_layers}, heads: {num_heads}")
         print("   Attention: Gated Sparse Attention (GSA) - arXiv:2601.15305v1")
         print(
             f"   MoE: {num_experts} experts, {num_shared_experts} shared, top-{top_k}"
@@ -1427,9 +1427,9 @@ class SmolLM(nn.Module):
             f"   🔀 Target data sparsity: {data_sparsity*100:.0f}% tokens use real experts"
         )
 
-        printf("   📊 Vocabulary size: {self.vocab_size}")
-        printf("   📊 Embedding params: {embedding_params:,}")
-        printf("   📊 Total parameters: {total_params:,}")
+        print(f"   📊 Vocabulary size: {self.vocab_size}")
+        print(f"   📊 Embedding params: {embedding_params:,}")
+        print(f"   📊 Total parameters: {total_params:,}")
 
     def lambda_e(self):
         return F.softplus(self.lambda_e_raw)

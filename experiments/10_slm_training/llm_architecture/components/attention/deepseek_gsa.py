@@ -1128,16 +1128,16 @@ if __name__ == "__main__":
     x = torch.randn(batch_size, seq_len, config.hidden_size)
     output, attn_weights, _ = gsa(x)
 
-    printf("Input shape: {x.shape}")
-    printf("Output shape: {output.shape}")
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {output.shape}")
 
     # Test fused gates
     if gsa.gates is not None:
         g2, g1 = gsa.gates(x)
         if g2 is not None:
-            printf("Value gate (G2) shape: {g2.shape}")
+            print(f"Value gate (G2) shape: {g2.shape}")
         if g1 is not None:
-            printf("Output gate (G1) shape: {g1.shape}")
+            print(f"Output gate (G1) shape: {g1.shape}")
 
     # Check indexer scores
     indexer_scores = gsa.indexer(x)
@@ -1145,10 +1145,10 @@ if __name__ == "__main__":
     print(
         f"\nIndexer scores range: [{valid_scores.min().item():.3f}, {valid_scores.max().item():.3f}]"
     )
-    printf("Indexer scores should be in (0, {config.num_indexer_heads}) for sigmoid")
+    print(f"Indexer scores should be in (0, {config.num_indexer_heads}) for sigmoid")
 
     # Parameter count
     total_params = sum(p.numel() for p in gsa.parameters())
-    printf("\nTotal parameters: {total_params:,}")
+    print(f"\nTotal parameters: {total_params:,}")
 
     print("\n✅ DeepSeek GSA implementation test passed!")

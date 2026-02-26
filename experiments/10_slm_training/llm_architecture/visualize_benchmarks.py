@@ -66,7 +66,7 @@ def load_benchmark_data(results_dir: Path) -> Dict:
                 data[profile][variant] = content
 
         except Exception as e:
-            printf("Warning: Could not load {json_file.name}: {e}")
+            print(f"Warning: Could not load {json_file.name}: {e}")
 
     return data
 
@@ -197,7 +197,7 @@ def plot_throughput_comparison(data: Dict, output_dir: Path, profile: str = "ful
         dpi=300,
         bbox_inches="tight",
     )
-    printf("✓ Saved: throughput_comparison_{profile}.png")
+    print(f"✓ Saved: throughput_comparison_{profile}.png")
     plt.close()
 
 
@@ -266,7 +266,7 @@ def plot_memory_usage(data: Dict, output_dir: Path, profile: str = "full"):
     plt.savefig(
         output_dir / f"memory_usage_{profile}.png", dpi=300, bbox_inches="tight"
     )
-    printf("✓ Saved: memory_usage_{profile}.png")
+    print(f"✓ Saved: memory_usage_{profile}.png")
     plt.close()
 
 
@@ -321,7 +321,7 @@ def plot_efficiency_metrics(data: Dict, output_dir: Path, profile: str = "full")
 
     plt.tight_layout()
     plt.savefig(output_dir / f"efficiency_{profile}.png", dpi=300, bbox_inches="tight")
-    printf("✓ Saved: efficiency_{profile}.png")
+    print(f"✓ Saved: efficiency_{profile}.png")
     plt.close()
 
 
@@ -463,7 +463,7 @@ def plot_summary_dashboard(data_full: Dict, data_tiny: Dict, output_dir: Path):
     )
 
     plt.savefig(output_dir / "benchmark_dashboard.png", dpi=300, bbox_inches="tight")
-    printf("[OK] Saved: benchmark_dashboard.png")
+    print(f"[OK] Saved: benchmark_dashboard.png")
     plt.close()
 
 
@@ -672,7 +672,7 @@ def plot_long_context_comparison(
     plt.savefig(
         output_dir / "long_context_comparison.png", dpi=300, bbox_inches="tight"
     )
-    printf("[OK] Saved: long_context_comparison.png")
+    print(f"[OK] Saved: long_context_comparison.png")
     plt.close()
 
 
@@ -700,19 +700,19 @@ def main():
     print("=" * 70)
     print("BENCHMARK VISUALIZATION")
     print("=" * 70)
-    printf("Results directory: {results_dir}")
-    printf("Output directory: {output_dir}")
+    print(f"Results directory: {results_dir}")
+    print(f"Output directory: {output_dir}")
     print()
 
     # Load data
     print("Loading benchmark data...")
     data = load_benchmark_data(results_dir)
 
-    printf("Found {len(data.get('micro', {}))} micro profile variants")
-    printf("Found {len(data.get('tiny', {}))} tiny profile variants")
-    printf("Found {len(data.get('full', {}))} full-size variants")
-    printf("Found {len(data.get('4k8k', {}))} 4k-8k context variants")
-    printf("Found {len(data.get('4k_train', {}))} 4k training variants")
+    print(f"Found {len(data.get('micro', {}))} micro profile variants")
+    print(f"Found {len(data.get('tiny', {}))} tiny profile variants")
+    print(f"Found {len(data.get('full', {}))} full-size variants")
+    print(f"Found {len(data.get('4k8k', {}))} 4k-8k context variants")
+    print(f"Found {len(data.get('4k_train', {}))} 4k training variants")
     print()
 
     # Generate plots
@@ -739,11 +739,11 @@ def main():
     print("=" * 70)
     print("VISUALIZATION COMPLETE")
     print("=" * 70)
-    printf("All plots saved to: {output_dir.absolute()}")
+    print(f"All plots saved to: {output_dir.absolute()}")
     print()
     print("Generated plots:")
     for plot_file in sorted(output_dir.glob("*.png")):
-        printf("  - {plot_file.name}")
+        print(f"  - {plot_file.name}")
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ def test_system_metrics_collector():
     for k, v in metrics.items():
         assert isinstance(v, (int, float)), f"{k} is not numeric: {type(v)}"
 
-    printf("✓ collect_once() returned {len(metrics)} metrics, all numeric")
+    print(f"✓ collect_once() returned {len(metrics)} metrics, all numeric")
 
     # ---- Test start/stop writes JSONL to disk ----
     print("\n--- Test: start/stop lifecycle ---")
@@ -58,7 +58,7 @@ def test_system_metrics_collector():
         lines = [line.strip() for line in f if line.strip()]
 
     assert len(lines) >= 2, f"Expected >= 2 lines, got {len(lines)}"
-    printf("✓ Wrote {len(lines)} JSONL lines")
+    print(f"✓ Wrote {len(lines)} JSONL lines")
 
     # ---- Test JSONL format matches training logger schema ----
     print("\n--- Test: JSONL schema compatibility ---")
@@ -86,7 +86,7 @@ def test_system_metrics_collector():
         for k, v in m.items():
             assert isinstance(v, (int, float)), f"Line {i}: {k} = {v} is not numeric"
 
-    printf("✓ All {len(lines)} lines have valid schema")
+    print(f"✓ All {len(lines)} lines have valid schema")
 
     # ---- Test timestamp is ISO 8601 UTC ----
     print("\n--- Test: timestamp format ---")
@@ -94,16 +94,16 @@ def test_system_metrics_collector():
     ts = first["timestamp"]
     assert ts.endswith("Z"), f"Timestamp not UTC: {ts}"
     assert "T" in ts, f"Timestamp not ISO format: {ts}"
-    printf("✓ Timestamp format OK: {ts}")
+    print(f"✓ Timestamp format OK: {ts}")
 
     # ---- Test network delta metrics exist ----
     print("\n--- Test: network metrics ---")
     last = json.loads(lines[-1])
     net_keys = [k for k in last["metrics"] if k.startswith("sys.net.")]
     # At least one interface should be present (unless running in a very bare container)
-    printf("  Network metric keys: {net_keys}")
+    print(f"  Network metric keys: {net_keys}")
     if net_keys:
-        printf("✓ Found {len(net_keys)} network metrics")
+        print(f"✓ Found {len(net_keys)} network metrics")
     else:
         print("⚠ No network metrics (may be expected in some environments)")
 

@@ -174,8 +174,8 @@ def save_checkpoint(
     latest_path = os.path.join(save_dir, f"{embedding_type}_latest.pt")
     torch.save(checkpoint, latest_path)
 
-    printf("💾 Checkpoint saved: {path}")
-    printf("💾 Latest checkpoint: {latest_path}")
+    print(f"💾 Checkpoint saved: {path}")
+    print(f"💾 Latest checkpoint: {latest_path}")
 
     # Register with P12 observability (if TrainingOps is available)
     if ops is not None:
@@ -215,7 +215,7 @@ def load_checkpoint(
     # If a specific checkpoint path is provided, use it directly
     if checkpoint_path is not None:
         if not os.path.exists(checkpoint_path):
-            printf("❌ Checkpoint file not found: {checkpoint_path}")
+            print(f"❌ Checkpoint file not found: {checkpoint_path}")
             return 0, 0.0
         latest_path = checkpoint_path
     else:
@@ -249,9 +249,9 @@ def load_checkpoint(
             checkpoint["model_state_dict"], strict=False
         )
         if missing_keys:
-            printf("[RESUME] Warning: Missing keys: {missing_keys[:5]}...")
+            print(f"[RESUME] Warning: Missing keys: {missing_keys[:5]}...")
         if unexpected_keys:
-            printf("[RESUME] Warning: Unexpected keys: {unexpected_keys[:5]}...")
+            print(f"[RESUME] Warning: Unexpected keys: {unexpected_keys[:5]}...")
 
         # Load optimizer state
         if optimizer is not None and "optimizer_state_dict" in checkpoint:
@@ -265,11 +265,11 @@ def load_checkpoint(
         step = checkpoint.get("step", 0)
         loss = checkpoint.get("loss", 0.0)
 
-        printf("✅ Loaded checkpoint from {latest_path} at step {step}")
+        print(f"✅ Loaded checkpoint from {latest_path} at step {step}")
         return step, loss
 
     except Exception as e:
-        printf("❌ Failed to load checkpoint: {e}")
+        print(f"❌ Failed to load checkpoint: {e}")
         import traceback
 
         traceback.print_exc()
@@ -299,9 +299,9 @@ def setup_tokenizer(tokenizer, target_vocab_size=50272, cache_dir="checkpoints_7
     cache_file = f"{cache_dir}/tokenizer_padded_{target_vocab_size}.pt"
 
     if os.path.exists(cache_file):
-        printf("   ✓ Loading cached tokenizer from {cache_file}")
+        print(f"   ✓ Loading cached tokenizer from {cache_file}")
         tokenizer = torch.load(cache_file)
-        printf("   ✓ Tokenizer loaded: {len(tokenizer):,} tokens")
+        print(f"   ✓ Tokenizer loaded: {len(tokenizer):,} tokens")
         return tokenizer
 
     print("   ⚠️  No tokenizer cache, creating padded tokenizer (takes ~30s)...")
@@ -321,22 +321,22 @@ def setup_tokenizer(tokenizer, target_vocab_size=50272, cache_dir="checkpoints_7
     base_vocab_size = len(tokenizer)
     if base_vocab_size < target_vocab_size:
         num_padding = target_vocab_size - base_vocab_size
-        printf("   🔄 Adding {num_padding:,} padding tokens in ONE batch...")
+        print(f"   🔄 Adding {num_padding:,} padding tokens in ONE batch...")
 
         # Add ALL tokens at once (much faster than batches!)
         padding_tokens = [f"<|pad_{i}|>" for i in range(num_padding)]
         tokenizer.add_special_tokens({"additional_special_tokens": padding_tokens})
 
-        printf("   ✓ Added {num_padding:,} padding tokens")
+        print(f"   ✓ Added {num_padding:,} padding tokens")
 
     # CRITICAL: Use a SEPARATE pad token, NOT eos_token!
     if tokenizer.pad_token is None:
         tokenizer.pad_token = "<|pad_0|>"
 
-    printf("   📚 Tokenizer vocab size: {len(tokenizer):,}")
+    print(f"   📚 Tokenizer vocab size: {len(tokenizer):,}")
 
     # Cache for next time
-    printf("   💾 Caching tokenizer to {cache_file}...")
+    print(f"   💾 Caching tokenizer to {cache_file}...")
     torch.save(tokenizer, cache_file)
     print("   ✓ Cached! Next run loads instantly.")
 

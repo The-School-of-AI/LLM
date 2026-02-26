@@ -84,7 +84,7 @@ def get_dataloaders(
         raise ValueError("tokenizer must be provided")
 
     # Load dataset
-    printf("Loading dataset: {dataset_name} ({dataset_config})")
+    print(f"Loading dataset: {dataset_name} ({dataset_config})")
     dataset = load_dataset(dataset_name, dataset_config)
 
     # Filter out empty examples

@@ -197,22 +197,22 @@ def print_architecture_report(config: Any, strict: bool) -> None:
     print("\n" + "=" * 72)
     print("Attached Configuration Check")
     print("=" * 72)
-    printf("Backbone Layers: {config.num_layers}")
-    printf("MTP Layers: {config.mtp_num_predictions - 1}")
+    print(f"Backbone Layers: {config.num_layers}")
+    print(f"MTP Layers: {config.mtp_num_predictions - 1}")
     print(
         f"Total Computational Layers: {config.num_layers + config.mtp_num_predictions - 1}"
     )
-    printf("Delta/GSA Split: {config.num_deltanet_layers}/{config.num_gsa_layers}")
+    print(f"Delta/GSA Split: {config.num_deltanet_layers}/{config.num_gsa_layers}")
     if bad_lines:
         print("\nMISMATCHES:")
         for line in bad_lines:
-            printf("  - {line}")
+            print(f"  - {line}")
     else:
         print("\nAll attached config checks matched.")
     if ok_lines:
         print("\nMatched checks:")
         for line in ok_lines:
-            printf("  - {line}")
+            print(f"  - {line}")
     print("=" * 72 + "\n")
     if strict and bad_lines:
         raise ValueError("Architecture mismatch with --strict-arch enabled.")
@@ -452,9 +452,9 @@ def train(
     print("\n" + "=" * 72)
     print("Training run complete")
     print("=" * 72)
-    printf("Final step: {global_step}")
-    printf("Tokens seen: {tokens_seen:,}")
-    printf("Elapsed: {elapsed:.1f}s")
+    print(f"Final step: {global_step}")
+    print(f"Tokens seen: {tokens_seen:,}")
+    print(f"Elapsed: {elapsed:.1f}s")
     print("=" * 72 + "\n")
 
 
@@ -515,11 +515,11 @@ def evaluate(
     print("\n" + "=" * 72)
     print("Evaluation")
     print("=" * 72)
-    printf("batches={seen}")
+    print(f"batches={seen}")
     print(
         f"loss={avg_total:.4f} main={avg_main:.4f} mtp={avg_mtp:.4f} aux={avg_aux:.4f}"
     )
-    printf("main_perplexity={ppl:.4f}")
+    print(f"main_perplexity={ppl:.4f}")
     print("=" * 72 + "\n")
 
 
@@ -697,8 +697,8 @@ def main() -> None:
         config.max_seq_len = args.seq_length
 
     print_architecture_report(config, strict=args.strict_arch)
-    printf("Tokenizer: {args.tokenizer} | vocab_size={len(tokenizer)}")
-    printf("Embedding mode: {args.embedding_type}")
+    print(f"Tokenizer: {args.tokenizer} | vocab_size={len(tokenizer)}")
+    print(f"Embedding mode: {args.embedding_type}")
 
     train_tokens = build_token_ids(
         split=args.train_split,
@@ -752,17 +752,17 @@ def main() -> None:
     print("\n" + "=" * 72)
     print("DataLoader")
     print("=" * 72)
-    printf("train_blocks={len(train_dataset):,}")
+    print(f"train_blocks={len(train_dataset):,}")
     if eval_dataset is not None:
-        printf("eval_blocks={len(eval_dataset):,}")
-    printf("batch_size={args.batch_size}")
-    printf("num_workers={num_workers}")
-    printf("prefetch_factor={args.prefetch_factor}")
-    printf("persistent_workers={persistent_workers}")
-    printf("pin_memory={pin_memory}")
-    printf("device={device}")
-    printf("use_compile={config.use_compile} (mode={config.compile_mode})")
-    printf("compile_target={config.compile_target} compile_mtp={config.compile_mtp}")
+        print(f"eval_blocks={len(eval_dataset):,}")
+    print(f"batch_size={args.batch_size}")
+    print(f"num_workers={num_workers}")
+    print(f"prefetch_factor={args.prefetch_factor}")
+    print(f"persistent_workers={persistent_workers}")
+    print(f"pin_memory={pin_memory}")
+    print(f"device={device}")
+    print(f"use_compile={config.use_compile} (mode={config.compile_mode})")
+    print(f"compile_target={config.compile_target} compile_mtp={config.compile_mtp}")
     print(
         f"delta_recurrence_mode={config.delta_recurrence_mode} chunk_size={config.delta_chunk_size}"
     )
@@ -818,7 +818,7 @@ def main() -> None:
         model = Model70B(config, embedding_type="standard")
 
     total_params = sum(p.numel() for p in model.parameters())
-    printf("Trainable parameters: {total_params:,} (~{total_params / 1e9:.3f}B)")
+    print(f"Trainable parameters: {total_params:,} (~{total_params / 1e9:.3f}B)")
 
     train(
         model=model,

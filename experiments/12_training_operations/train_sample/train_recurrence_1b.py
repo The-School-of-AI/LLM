@@ -33,14 +33,14 @@ from transformers import PreTrainedTokenizerFast
 
 def load_tokenizer_from_json(tokenizer_path):
     """Load tokenizer from tokenizer.json"""
-    printf("📚 Loading tokenizer from {tokenizer_path}...")
+    print(f"📚 Loading tokenizer from {tokenizer_path}...")
 
     # Load using PreTrainedTokenizerFast
     tokenizer = PreTrainedTokenizerFast(tokenizer_file=tokenizer_path)
 
     # Extract vocab
     vocab_size = tokenizer.vocab_size
-    printf("   ✓ Loaded tokenizer with {vocab_size:,} tokens")
+    print(f"   ✓ Loaded tokenizer with {vocab_size:,} tokens")
 
     # Create BPE vocab list (token strings for each ID)
     bpe_vocab = []
@@ -51,8 +51,8 @@ def load_tokenizer_from_json(tokenizer_path):
         except Exception:
             bpe_vocab.append(f"<TOKEN_{token_id}>")
 
-    printf("   ✓ Created vocabulary with {len(bpe_vocab)} tokens")
-    printf("   Sample tokens: {bpe_vocab[:10]}")
+    print(f"   ✓ Created vocabulary with {len(bpe_vocab)} tokens")
+    print(f"   Sample tokens: {bpe_vocab[:10]}")
 
     return tokenizer, bpe_vocab
 
@@ -92,7 +92,7 @@ def create_model(vocab_size, bpe_vocab, pf_codec, device):
     # Move to device
     model = model.to(device)
 
-    printf("   ✓ Model created and moved to {device}")
+    print(f"   ✓ Model created and moved to {device}")
 
     return model
 
@@ -140,13 +140,13 @@ def simple_training_loop(model, train_loader, device, num_steps=100):
         # DEBUG: Check if MTP is actually being computed
         if step == 0:
             print("\nDEBUG - Model output:")
-            printf("  logits_mtp is None: {logits_mtp is None}")
+            print(f"  logits_mtp is None: {logits_mtp is None}")
             if logits_mtp is not None:
                 print(
                     f"  logits_mtp contains NaN: {torch.isnan(logits_mtp).any().item()}"
                 )
-                printf("  logits_mtp mean: {logits_mtp.mean().item():.4f}")
-                printf("  logits_mtp std: {logits_mtp.std().item():.4f}")
+                print(f"  logits_mtp mean: {logits_mtp.mean().item():.4f}")
+                print(f"  logits_mtp std: {logits_mtp.std().item():.4f}")
 
         # Compute losses
         vocab_size = logits_ntp.size(-1)
@@ -155,23 +155,23 @@ def simple_training_loop(model, train_loader, device, num_steps=100):
 
         # DEBUG: Check shapes and perplexities
         if step == 0:
-            printf("\nDEBUG - Step {step}:")
+            print(f"\nDEBUG - Step {step}:")
             print(
                 f"  x_input shape: {x_input.shape}, y_ntp shape: {y_ntp.shape}, y_mtp shape: {y_mtp.shape}"
             )
             print(
                 f"  logits_ntp shape: {logits_ntp.shape}, logits_mtp shape: {logits_mtp.shape}"
             )
-            printf("  NTP perplexity: {torch.exp(loss_ntp).item():.2f}")
-            printf("  MTP perplexity: {torch.exp(loss_mtp).item():.2f}")
+            print(f"  NTP perplexity: {torch.exp(loss_ntp).item():.2f}")
+            print(f"  MTP perplexity: {torch.exp(loss_mtp).item():.2f}")
 
             # Check if predictions are reasonable
             ntp_preds = logits_ntp.argmax(dim=-1)
             mtp_preds = logits_mtp.argmax(dim=-1)
             ntp_acc = (ntp_preds == y_ntp).float().mean().item()
             mtp_acc = (mtp_preds == y_mtp).float().mean().item()
-            printf("  NTP accuracy: {ntp_acc:.4f}")
-            printf("  MTP accuracy: {mtp_acc:.4f}")
+            print(f"  NTP accuracy: {ntp_acc:.4f}")
+            print(f"  MTP accuracy: {mtp_acc:.4f}")
 
         # Combined loss (NTP + 0.3*MTP + aux)
         loss = loss_ntp + 0.3 * loss_mtp + aux_loss
@@ -207,7 +207,7 @@ def simple_training_loop(model, train_loader, device, num_steps=100):
                 try:
                     torch.mps.empty_cache()
                 except Exception as e:
-                    printf("Error emptying MPS cache: {e}")
+                    print(f"Error emptying MPS cache: {e}")
             elif device.type == "cuda":
                 torch.cuda.empty_cache()
 

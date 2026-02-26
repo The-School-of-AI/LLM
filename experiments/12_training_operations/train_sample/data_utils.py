@@ -43,8 +43,8 @@ def discover_chars_from_bpe_tokenizer(tokenizer, vocab_size=50272):
     chars_list = sorted(list(all_chars))
     char_to_id = {ch: i for i, ch in enumerate(chars_list)}
 
-    printf("📝 Found {len(chars_list)} unique characters in BPE vocabulary")
-    printf("📝 Sample characters: {chars_list[:20]}...")
+    print(f"📝 Found {len(chars_list)} unique characters in BPE vocabulary")
+    print(f"📝 Sample characters: {chars_list[:20]}...")
 
     return chars_list, char_to_id
 
@@ -95,8 +95,8 @@ def create_bpe_token_strings(tokenizer, vocab_size=50272):
         except Exception:
             bpe_vocab.append(f"<TOKEN_{token_id}>")
 
-    printf("📝 Created {len(bpe_vocab)} BPE token strings")
-    printf("📝 Sample tokens: {bpe_vocab[:10]}")
+    print(f"📝 Created {len(bpe_vocab)} BPE token strings")
+    print(f"📝 Sample tokens: {bpe_vocab[:10]}")
     return bpe_vocab
 
 
@@ -157,7 +157,7 @@ class SYNTHStream(IterableDataset):
             )
             sys.exit(1)
 
-        printf("📂 SYNTHStream loading from: {self.full_path}")
+        print(f"📂 SYNTHStream loading from: {self.full_path}")
 
     def _construct_text(self, ex: Dict[str, Any]) -> Optional[str]:
         """Construct training text from dataset example"""
@@ -198,7 +198,7 @@ class SYNTHStream(IterableDataset):
             full_ds = load_from_disk(self.full_path)
             full_ds = full_ds.shuffle(seed=self.seed)
 
-            printf("📊 Dataset loaded: {len(full_ds)} rows")
+            print(f"📊 Dataset loaded: {len(full_ds)} rows")
             print(
                 f"📊 Deterministic Resume: Fast-forwarding {self.start_step} steps..."
             )
@@ -206,7 +206,7 @@ class SYNTHStream(IterableDataset):
             it = iter(full_ds)
 
         except Exception as e:
-            printf("❌ Critical Error loading dataset: {e}")
+            print(f"❌ Critical Error loading dataset: {e}")
             import traceback
 
             traceback.print_exc()
@@ -343,13 +343,13 @@ class SYNTHPromptSampler:
             self.dataset = None
             return
 
-        printf("[PROMPTS] Initializing sampler from: {self.full_path}")
+        print(f"[PROMPTS] Initializing sampler from: {self.full_path}")
 
         try:
             self.dataset = load_from_disk(self.full_path)
-            printf("[PROMPTS] ✅ Loaded {len(self.dataset)} examples locally")
+            print(f"[PROMPTS] ✅ Loaded {len(self.dataset)} examples locally")
         except Exception as e:
-            printf("[PROMPTS] ❌ Failed to load local: {e}")
+            print(f"[PROMPTS] ❌ Failed to load local: {e}")
             self.dataset = None
 
     def sample_token_ids(self, n: int = 5, step: int = 0) -> List[torch.Tensor]:

@@ -278,10 +278,10 @@ class ExperimentRunner:
 
     def run_experiment(self, experiment: ExperimentConfig) -> ExperimentResult:
         """Run a single experiment."""
-        printf("\n{'='*70}")
-        printf("EXPERIMENT: {experiment.name}")
-        printf("Description: {experiment.description}")
-        printf("{'='*70}\n")
+        print(f"\n{'='*70}")
+        print(f"EXPERIMENT: {experiment.name}")
+        print(f"Description: {experiment.description}")
+        print(f"{'='*70}\n")
 
         # Create model
         model = create_model_from_config(experiment.model_config)
@@ -365,14 +365,14 @@ class ExperimentRunner:
         if experiments is None:
             experiments = self.create_experiments()
 
-        printf("\n{'#'*70}")
-        printf("# EXPERIMENT SUITE: {len(experiments)} experiments")
-        printf("# Training steps per experiment: {self.training_steps}")
-        printf("# Output directory: {self.output_dir}")
-        printf("{'#'*70}\n")
+        print(f"\n{'#'*70}")
+        print(f"# EXPERIMENT SUITE: {len(experiments)} experiments")
+        print(f"# Training steps per experiment: {self.training_steps}")
+        print(f"# Output directory: {self.output_dir}")
+        print(f"{'#'*70}\n")
 
         for i, experiment in enumerate(experiments):
-            printf("\n[{i+1}/{len(experiments)}] Running: {experiment.name}")
+            print(f"\n[{i+1}/{len(experiments)}] Running: {experiment.name}")
 
             try:
                 result = self.run_experiment(experiment)
@@ -381,7 +381,7 @@ class ExperimentRunner:
                     f"Tok/s={result.avg_tokens_per_second:,.0f}"
                 )
             except Exception as e:
-                printf("  ✗ Failed: {e}")
+                print(f"  ✗ Failed: {e}")
                 import traceback
 
                 traceback.print_exc()
@@ -439,14 +439,14 @@ class ExperimentRunner:
         with open(report_path, "w") as f:
             f.write("\n".join(report))
 
-        printf("\n📊 Report saved to: {report_path}")
+        print(f"\n📊 Report saved to: {report_path}")
 
         # Also save JSON
         json_path = self.output_dir / f"experiment_results_{self.timestamp}.json"
         with open(json_path, "w") as f:
             json.dump([asdict(r) for r in self.results], f, indent=2)
 
-        printf("📊 Results saved to: {json_path}")
+        print(f"📊 Results saved to: {json_path}")
 
 
 # Need to import these for _create_base_config

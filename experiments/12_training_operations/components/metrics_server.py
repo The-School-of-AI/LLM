@@ -268,7 +268,7 @@ class MetricsServer:
             target=self._httpd.serve_forever, daemon=True
         )
         self._http_thread.start()
-        printf("✓ Metrics server started on port {port}")
+        print(f"✓ Metrics server started on port {port}")
 
         self.running = True
         self.collection_thread = threading.Thread(

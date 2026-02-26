@@ -35,7 +35,7 @@ def test_metrics_server():
         resp = _get(f"{base}/metrics")
         assert "gauges" in resp and "counters" in resp and "info" in resp
         assert resp["gauges"]["training_loss"] == 0.0
-        printf("✓ /metrics snapshot OK (loss={resp['gauges']['training_loss']})")
+        print(f"✓ /metrics snapshot OK (loss={resp['gauges']['training_loss']})")
 
         # ---- Push some training metrics ----
         print("\n--- Test: update_training_metrics ---")
@@ -44,11 +44,11 @@ def test_metrics_server():
 
         resp = _get(f"{base}/query?metric=training_loss")
         assert resp["value"] == 2.5, f"Expected 2.5, got {resp['value']}"
-        printf("✓ /query training_loss = {resp['value']}")
+        print(f"✓ /query training_loss = {resp['value']}")
 
         resp = _get(f"{base}/query?metric=learning_rate")
         assert resp["value"] == 0.001
-        printf("✓ /query learning_rate = {resp['value']}")
+        print(f"✓ /query learning_rate = {resp['value']}")
 
         # ---- Push more and check history ----
         print("\n--- Test: /history ---")
@@ -59,7 +59,7 @@ def test_metrics_server():
 
         resp = _get(f"{base}/history?metric=training_loss&since={since_ts}")
         assert len(resp["data"]) >= 3, f"Expected >=3 points, got {len(resp['data'])}"
-        printf("✓ /history returned {len(resp['data'])} points")
+        print(f"✓ /history returned {len(resp['data'])} points")
 
         # ---- Counters ----
         print("\n--- Test: record_checkpoint ---")
@@ -88,7 +88,7 @@ def test_metrics_server():
         server.update_throughput(50000.0)
         resp = _get(f"{base}/query?metric=tokens_per_second")
         assert resp["value"] == 50000.0
-        printf("✓ tokens_per_second = {resp['value']}")
+        print(f"✓ tokens_per_second = {resp['value']}")
 
         server.stop()
         print("\n✅ All metrics server tests passed!")

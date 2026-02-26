@@ -280,7 +280,7 @@ def main():
         if torch.cuda.is_available()
         else "mps" if torch.backends.mps.is_available() else "cpu"
     )
-    printf("Device: {device}")
+    print(f"Device: {device}")
 
     # Best-effort env bootstrap for local dry-runs.
     _load_env_file_if_present(os.path.expanduser("~/.p12.env"))
@@ -295,7 +295,7 @@ def main():
     model = model.to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
-    printf("Parameters: {total_params:,} ({total_params/1e6:.1f}M)")
+    print(f"Parameters: {total_params:,} ({total_params/1e6:.1f}M)")
 
     # Synthetic data (high-util defaults for A10 24GB)
     seq_len = int(os.environ.get("DRYRUN_SEQ_LEN", "256"))
@@ -318,9 +318,9 @@ def main():
         os.environ.get("VECTOR_SERVICE_NAME", "p12-vector.service").strip() or None
     )
     if clickhouse_url is not None:
-        printf("ClickHouse endpoint: {clickhouse_url}")
+        print(f"ClickHouse endpoint: {clickhouse_url}")
     if vector_service_name is not None:
-        printf("Vector service preflight: {vector_service_name}")
+        print(f"Vector service preflight: {vector_service_name}")
     ops = TrainingOps(
         run_id=run_id,
         rank=int(os.environ.get("RANK", 0)),

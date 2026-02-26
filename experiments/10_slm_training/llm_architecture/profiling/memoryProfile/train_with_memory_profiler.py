@@ -299,8 +299,8 @@ class Trainer:
                 row_limit=20,
             )
             self.profiler = MemoryProfiler(profiler_config)
-            printf("\n📊 Profiling enabled: {profiler_config.output_dir}")
-            printf("   Will profile for {self.profiler.get_total_steps()} steps\n")
+            print(f"\n📊 Profiling enabled: {profiler_config.output_dir}")
+            print(f"   Will profile for {self.profiler.get_total_steps()} steps\n")
         else:
             self.profiler = None
 
@@ -342,19 +342,19 @@ class Trainer:
         self.model.train()
         self.start_time = time.time()
 
-        printf("\n{'='*60}")
-        printf("Starting Training: {self.config.experiment_name}")
-        printf("{'='*60}")
-        printf("Model: {self.model_config.model_name}")
-        printf("Parameters: {self.model.num_parameters / 1e9:.2f}B")
-        printf("Device: {self.device}")
-        printf("Max steps: {self.config.max_steps}")
+        print(f"\n{'='*60}")
+        print(f"Starting Training: {self.config.experiment_name}")
+        print(f"{'='*60}")
+        print(f"Model: {self.model_config.model_name}")
+        print(f"Parameters: {self.model.num_parameters / 1e9:.2f}B")
+        print(f"Device: {self.device}")
+        print(f"Max steps: {self.config.max_steps}")
         print(
             f"Batch size: {self.config.batch_size} x {self.config.gradient_accumulation_steps}"
         )
         if self.profiler:
-            printf("Profiling: Enabled ({self.profiler.get_total_steps()} steps)")
-        printf("{'='*60}\n")
+            print(f"Profiling: Enabled ({self.profiler.get_total_steps()} steps)")
+        print(f"{'='*60}\n")
 
         # Start profiler
         if self.profiler:
@@ -498,14 +498,14 @@ class Trainer:
             config=asdict(self.config), final_metrics=final_metrics
         )
 
-        printf("\n{'='*60}")
+        print(f"\n{'='*60}")
         print("Training Complete!")
-        printf("{'='*60}")
-        printf("Final step: {self.global_step}")
-        printf("Best loss: {self.best_loss:.4f}")
-        printf("Tokens seen: {self.tokens_seen:,}")
-        printf("Total time: {time.time() - self.start_time:.1f}s")
-        printf("{'='*60}\n")
+        print(f"{'='*60}")
+        print(f"Final step: {self.global_step}")
+        print(f"Best loss: {self.best_loss:.4f}")
+        print(f"Tokens seen: {self.tokens_seen:,}")
+        print(f"Total time: {time.time() - self.start_time:.1f}s")
+        print(f"{'='*60}\n")
 
         return final_metrics
 
@@ -555,7 +555,7 @@ class Trainer:
         }
 
         torch.save(checkpoint, checkpoint_path)
-        printf("  💾 Saved checkpoint: {checkpoint_path}")
+        print(f"  💾 Saved checkpoint: {checkpoint_path}")
 
 
 def run_training(
@@ -715,7 +715,7 @@ def main():
         model_preset=args.preset, training_config=training_config
     )
 
-    printf("\nTraining complete! Final loss: {metrics.loss:.4f}")
+    print(f"\nTraining complete! Final loss: {metrics.loss:.4f}")
 
 
 if __name__ == "__main__":

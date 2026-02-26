@@ -27,7 +27,7 @@ def test_yaml_syntax():
     yaml_files = list(configs_dir.glob("*.yaml"))
 
     if not yaml_files:
-        printf("  ❌ No YAML files found in {configs_dir}")
+        print(f"  ❌ No YAML files found in {configs_dir}")
         return False
 
     errors = []
@@ -35,15 +35,15 @@ def test_yaml_syntax():
         try:
             with open(yaml_file, "r") as f:
                 yaml.safe_load(f)
-            printf("  ✓ {yaml_file.name}")
+            print(f"  ✓ {yaml_file.name}")
         except yaml.YAMLError as e:
-            printf("  ❌ {yaml_file.name}: {e}")
+            print(f"  ❌ {yaml_file.name}: {e}")
             errors.append(yaml_file.name)
 
     if errors:
-        printf("  FAILED: {len(errors)} files with syntax errors")
+        print(f"  FAILED: {len(errors)} files with syntax errors")
         return False
-    printf("  PASSED: All {len(yaml_files)} YAML files valid")
+    print(f"  PASSED: All {len(yaml_files)} YAML files valid")
     return True
 
 
@@ -67,15 +67,15 @@ def test_config_loading():
 
             # Load as ModelConfig
             config = ModelConfig.from_dict(data)
-            printf("  ✓ {yaml_file.name} -> {config.model_name}")
+            print(f"  ✓ {yaml_file.name} -> {config.model_name}")
         except Exception as e:
-            printf("  ❌ {yaml_file.name}: {e}")
+            print(f"  ❌ {yaml_file.name}: {e}")
             errors.append((yaml_file.name, str(e)))
 
     if errors:
-        printf("  FAILED: {len(errors)} files failed to load")
+        print(f"  FAILED: {len(errors)} files failed to load")
         return False
-    printf("  PASSED: All {len(yaml_files)} configs load correctly")
+    print(f"  PASSED: All {len(yaml_files)} configs load correctly")
     return True
 
 
@@ -105,20 +105,20 @@ def test_training_config_section():
         training = data.get("training", {})
         if not training:
             warnings.append(f"{yaml_file.name}: No training section")
-            printf("  ⚠ {yaml_file.name}: No training section (will use defaults)")
+            print(f"  ⚠ {yaml_file.name}: No training section (will use defaults)")
             continue
 
         missing = [f for f in required_fields if f not in training]
         if missing:
-            printf("  ⚠ {yaml_file.name}: Missing {missing}")
+            print(f"  ⚠ {yaml_file.name}: Missing {missing}")
             warnings.append(f"{yaml_file.name}: Missing {missing}")
         else:
-            printf("  ✓ {yaml_file.name}: All required fields present")
+            print(f"  ✓ {yaml_file.name}: All required fields present")
 
     if warnings:
-        printf("  PASSED with {len(warnings)} warnings")
+        print(f"  PASSED with {len(warnings)} warnings")
     else:
-        printf("  PASSED: All {len(yaml_files)} configs have training sections")
+        print(f"  PASSED: All {len(yaml_files)} configs have training sections")
     return True
 
 
@@ -132,15 +132,15 @@ def test_preset_configs():
         try:
             config = get_preset_config(preset_name)
             param_count = config.num_parameters_billions
-            printf("  ✓ {preset_name}: {config.model_name} ({param_count:.2f}B params)")
+            print(f"  ✓ {preset_name}: {config.model_name} ({param_count:.2f}B params)")
         except Exception as e:
-            printf("  ❌ {preset_name}: {e}")
+            print(f"  ❌ {preset_name}: {e}")
             errors.append(preset_name)
 
     if errors:
-        printf("  FAILED: {len(errors)} presets broken")
+        print(f"  FAILED: {len(errors)} presets broken")
         return False
-    printf("  PASSED: All {len(PRESET_CONFIGS)} presets valid")
+    print(f"  PASSED: All {len(PRESET_CONFIGS)} presets valid")
     return True
 
 
@@ -190,15 +190,15 @@ def test_enum_values():
             file_errors.append(f"Invalid connection_type: {conn_type}")
 
         if file_errors:
-            printf("  ❌ {yaml_file.name}: {file_errors}")
+            print(f"  ❌ {yaml_file.name}: {file_errors}")
             errors.extend(file_errors)
         else:
-            printf("  ✓ {yaml_file.name}: All enum values valid")
+            print(f"  ✓ {yaml_file.name}: All enum values valid")
 
     if errors:
-        printf("  FAILED: {len(errors)} invalid enum values")
+        print(f"  FAILED: {len(errors)} invalid enum values")
         return False
-    printf("  PASSED: All enum values valid")
+    print(f"  PASSED: All enum values valid")
     return True
 
 
@@ -213,7 +213,7 @@ def test_cli_argument_parsing():
 
         print("  ✓ training/train.py imports successfully")
     except Exception as e:
-        printf("  ❌ training/train.py import error: {e}")
+        print(f"  ❌ training/train.py import error: {e}")
         return False
 
     # Test train_wikitext2_gpt2.py argument parsing
@@ -222,16 +222,16 @@ def test_cli_argument_parsing():
 
         print("  ✓ training/train_wikitext2_gpt2.py imports successfully")
     except Exception as e:
-        printf("  ❌ training/train_wikitext2_gpt2.py import error: {e}")
+        print(f"  ❌ training/train_wikitext2_gpt2.py import error: {e}")
         return False
 
     # Check that key functions exist
     required_funcs = ["load_config_from_yaml", "TrainingConfig", "Trainer"]
     for func_name in required_funcs:
         if hasattr(train_module, func_name):
-            printf("  ✓ {func_name} exists in train.py")
+            print(f"  ✓ {func_name} exists in train.py")
         else:
-            printf("  ❌ {func_name} missing from train.py")
+            print(f"  ❌ {func_name} missing from train.py")
             return False
 
     print("  PASSED: CLI modules valid")
@@ -262,9 +262,9 @@ def run_all_tests(verbose=False):
 
     for test_name, result in results.items():
         status = "✓ PASS" if result else "❌ FAIL"
-        printf("  {status}: {test_name}")
+        print(f"  {status}: {test_name}")
 
-    printf("\nResult: {passed}/{total} tests passed")
+    print(f"\nResult: {passed}/{total} tests passed")
 
     if passed == total:
         print("\n✅ All config validation tests passed!")

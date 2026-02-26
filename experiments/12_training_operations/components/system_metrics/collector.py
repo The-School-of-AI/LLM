@@ -88,9 +88,9 @@ class SystemMetricsCollector:
         self._prev_net = self._snapshot_net()
 
         print("✓ SystemMetricsCollector initialized")
-        printf("  Log file : {self.log_file}")
-        printf("  Interval : {self.interval}s")
-        printf("  GPU      : {self._gpu_available} ({self._gpu_count} devices)")
+        print(f"  Log file : {self.log_file}")
+        print(f"  Interval : {self.interval}s")
+        print(f"  GPU      : {self._gpu_available} ({self._gpu_count} devices)")
 
     # ------------------------------------------------------------------
     # GPU helpers
@@ -249,7 +249,7 @@ class SystemMetricsCollector:
             with open(self.log_file, "a") as f:
                 f.write(json.dumps(payload) + "\n")
         except Exception as e:
-            printf("SystemMetricsCollector write error: {e}")
+            print(f"SystemMetricsCollector write error: {e}")
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -264,7 +264,7 @@ class SystemMetricsCollector:
                 payload = self._build_payload(metrics)
                 self._write_payload(payload)
             except Exception as e:
-                printf("SystemMetricsCollector error: {e}")
+                print(f"SystemMetricsCollector error: {e}")
             time.sleep(self.interval)
 
     def set_step(self, step: int):
@@ -278,7 +278,7 @@ class SystemMetricsCollector:
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
-        printf("✓ SystemMetricsCollector started (every {self.interval}s)")
+        print(f"✓ SystemMetricsCollector started (every {self.interval}s)")
 
     def stop(self):
         self._running = False

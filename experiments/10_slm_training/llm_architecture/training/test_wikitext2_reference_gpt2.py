@@ -220,25 +220,25 @@ def print_architecture_report(config: ModelConfig, strict: bool) -> None:
     print("\n" + "=" * 72)
     print("Reference Architecture Check (Test_Code/model_1b.py targets)")
     print("=" * 72)
-    printf("Backbone Layers: {config.num_hidden_layers}")
-    printf("MTP Layers: {config.head.num_predict_tokens - 1}")
+    print(f"Backbone Layers: {config.num_hidden_layers}")
+    print(f"MTP Layers: {config.head.num_predict_tokens - 1}")
     print(
         f"Total Computational Layers: {config.num_hidden_layers + config.head.num_predict_tokens - 1}"
     )
-    printf("Delta/GSA Split: {config.num_deltanet_layers}/{config.num_gsa_layers}")
-    printf("Estimated Params: {config.num_parameters_billions:.3f}B")
+    print(f"Delta/GSA Split: {config.num_deltanet_layers}/{config.num_gsa_layers}")
+    print(f"Estimated Params: {config.num_parameters_billions:.3f}B")
 
     if bad_lines:
         print("\nMISMATCHES:")
         for line in bad_lines:
-            printf("  - {line}")
+            print(f"  - {line}")
     else:
         print("\nAll key architectural checks matched.")
 
     if ok_lines:
         print("\nMatched checks:")
         for line in ok_lines:
-            printf("  - {line}")
+            print(f"  - {line}")
 
     print("=" * 72 + "\n")
 
@@ -549,9 +549,9 @@ def train_reference(
     print("\n" + "=" * 72)
     print("Reference training run complete")
     print("=" * 72)
-    printf("Final step: {global_step}")
-    printf("Tokens seen: {tokens_seen:,}")
-    printf("Elapsed: {total_elapsed:.1f}s")
+    print(f"Final step: {global_step}")
+    print(f"Tokens seen: {tokens_seen:,}")
+    print(f"Elapsed: {total_elapsed:.1f}s")
     print("=" * 72 + "\n")
 
 
@@ -690,10 +690,10 @@ def main() -> None:
     set_seed(args.seed)
 
     if args.config:
-        printf("Loading config from: {args.config}")
+        print(f"Loading config from: {args.config}")
         model_config, training_dict = load_config_from_yaml(args.config)
     else:
-        printf("Using preset: {args.preset}")
+        print(f"Using preset: {args.preset}")
         model_config = get_preset_config(args.preset)
         training_dict = {}
 
@@ -803,8 +803,8 @@ def main() -> None:
             "Total parameter count will differ from the 1B target table."
         )
 
-    printf("Tokenizer: {args.tokenizer} | vocab_size={model_config.vocab_size}")
-    printf("Embedding mode: {embedding_type}")
+    print(f"Tokenizer: {args.tokenizer} | vocab_size={model_config.vocab_size}")
+    print(f"Embedding mode: {embedding_type}")
     print(
         "Reference GSA backend: "
         f"{model_config.attention.gsa_sparse_backend} | "
@@ -853,12 +853,12 @@ def main() -> None:
     print("\n" + "=" * 72)
     print("DataLoader")
     print("=" * 72)
-    printf("dataset_blocks={len(dataset):,}")
-    printf("batch_size={train_cfg['batch_size']}")
-    printf("num_workers={num_workers}")
-    printf("prefetch_factor={args.prefetch_factor}")
-    printf("persistent_workers={persistent_workers}")
-    printf("pin_memory={pin_memory}")
+    print(f"dataset_blocks={len(dataset):,}")
+    print(f"batch_size={train_cfg['batch_size']}")
+    print(f"num_workers={num_workers}")
+    print(f"prefetch_factor={args.prefetch_factor}")
+    print(f"persistent_workers={persistent_workers}")
+    print(f"pin_memory={pin_memory}")
     print("=" * 72 + "\n")
 
     dataloader = DataLoader(
@@ -891,7 +891,7 @@ def main() -> None:
                 "This can cause very high activation memory usage and CUDA OOM in DeltaNet."
             )
 
-    printf("Device selected: {device}")
+    print(f"Device selected: {device}")
 
     train_reference(
         model=model,

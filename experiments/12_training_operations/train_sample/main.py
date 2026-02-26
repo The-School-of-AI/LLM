@@ -135,7 +135,7 @@ def setup_fourier_codec(config, tokenizer):
 
 def create_model(config, pf_codec=None, bpe_vocab=None):
     """Create SmolLM model with specified configuration"""
-    printf("🤖 Creating SmolLM with {config.model.embedding_type} embeddings...")
+    print(f"🤖 Creating SmolLM with {config.model.embedding_type} embeddings...")
     model = SmolLM(
         vocab_size=config.model.vocab_size,
         embedding_type=config.model.embedding_type,
@@ -717,7 +717,7 @@ def main():
     # Create configuration
     config = Config.from_args(args.embedding_type, args.checkpoint_path)
 
-    printf("🚀 SMOLLM TRAINING - {config.model.embedding_type.upper()} Embeddings")
+    print(f"🚀 SMOLLM TRAINING - {config.model.embedding_type.upper()} Embeddings")
     print("=" * 80)
 
     # Load tokenizer
@@ -771,7 +771,7 @@ def main():
 
     # Load SYNTH dataset
     print("📊 Loading SYNTH dataset...")
-    printf("📊 Dataset will start from step {start_step}")
+    print(f"📊 Dataset will start from step {start_step}")
     dataset = SYNTHStream(
         tokenizer=tokenizer,
         dataset_name=config.data.dataset_name,

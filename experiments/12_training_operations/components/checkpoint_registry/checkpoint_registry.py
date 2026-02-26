@@ -79,9 +79,9 @@ class CheckpointRegistry:
         if check_connectivity_on_init:
             try:
                 self._query("SELECT 1")
-                printf("✓ CheckpointRegistry connected to {self.clickhouse_url}")
+                print(f"✓ CheckpointRegistry connected to {self.clickhouse_url}")
             except Exception as e:
-                printf("⚠ CheckpointRegistry: ClickHouse not reachable ({e})")
+                print(f"⚠ CheckpointRegistry: ClickHouse not reachable ({e})")
 
     # ------------------------------------------------------------------
     # Low-level ClickHouse HTTP helpers
@@ -158,7 +158,7 @@ class CheckpointRegistry:
         )
         result = self._query(sql).strip()
         if not result:
-            printf("⚠️  Unknown checkpoint {s3_key}. Preventing deletion.")
+            print(f"⚠️  Unknown checkpoint {s3_key}. Preventing deletion.")
             return False
 
         parts = result.split("\t")
@@ -168,7 +168,7 @@ class CheckpointRegistry:
             return True  # already soft-deleted
 
         if is_protected:
-            printf("⛔ Blocked deletion of protected checkpoint {s3_key} (tag={tag})")
+            print(f"⛔ Blocked deletion of protected checkpoint {s3_key} (tag={tag})")
             return False
 
         return True
@@ -200,7 +200,7 @@ class CheckpointRegistry:
             f"'{_esc(tag)}', 0, 'deleted', '{_esc(host)}')"
         )
         self._insert(insert_sql)
-        printf("✓ Soft-deleted checkpoint: {s3_key}")
+        print(f"✓ Soft-deleted checkpoint: {s3_key}")
 
     def get_checkpoint(self, s3_key: str) -> dict | None:
         """Return the latest state of a single checkpoint, or None."""

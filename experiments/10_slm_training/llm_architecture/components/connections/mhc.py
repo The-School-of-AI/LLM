@@ -509,29 +509,29 @@ def print_mhc_overhead(
     """Print mHC parameter overhead analysis."""
     breakdown = count_mhc_parameters_per_module(hidden_size, expansion_rate)
 
-    printf("\n{'='*60}")
-    printf("mHC Parameter Analysis")
-    printf("Configuration: n={expansion_rate}, C={hidden_size}, layers={num_layers}")
-    printf("{'='*60}")
+    print(f"\n{'='*60}")
+    print(f"mHC Parameter Analysis")
+    print(f"Configuration: n={expansion_rate}, C={hidden_size}, layers={num_layers}")
+    print(f"{'='*60}")
 
     print("\nPer mHC module breakdown:")
     for key, val in breakdown.items():
         if key != "total":
-            printf("  {key:15s}: {val:>10,}")
-    printf("  {'TOTAL':15s}: {breakdown['total']:>10,}")
+            print(f"  {key:15s}: {val:>10,}")
+    print(f"  {'TOTAL':15s}: {breakdown['total']:>10,}")
 
     # 2 mHC per layer (attention + FFN)
     per_layer = breakdown["total"] * 2
     total = per_layer * num_layers
 
-    printf("\nPer transformer layer (2 mHC): {per_layer:,}")
-    printf("Total for {num_layers} layers: {total:,}")
-    printf("Total in millions: {total / 1e6:.2f}M")
+    print(f"\nPer transformer layer (2 mHC): {per_layer:,}")
+    print(f"Total for {num_layers} layers: {total:,}")
+    print(f"Total in millions: {total / 1e6:.2f}M")
 
     # Compare to 1B model
     model_1b = 1.1e9
-    printf("\nOverhead vs 1B model: {100 * total / model_1b:.2f}%")
-    printf("{'='*60}\n")
+    print(f"\nOverhead vs 1B model: {100 * total / model_1b:.2f}%")
+    print(f"{'='*60}\n")
 
 
 # =============================================================================
@@ -554,37 +554,37 @@ if __name__ == "__main__":
     actual_params = sum(p.numel() for p in mhc.parameters())
     expected = count_mhc_parameters_per_module(hidden_size, n)["total"]
 
-    printf("Actual parameters: {actual_params:,}")
-    printf("Expected from formula: {expected:,}")
-    printf("Match: {actual_params == expected}")
+    print(f"Actual parameters: {actual_params:,}")
+    print(f"Expected from formula: {expected:,}")
+    print(f"Match: {actual_params == expected}")
 
     x = torch.randn(batch_size, seq_len, n, hidden_size)
     layer_output = torch.randn(batch_size, seq_len, hidden_size)
 
     layer_input, cache = mhc.get_aggregated_input(x)
-    printf("\nInput shape: {x.shape}")
-    printf("Layer input shape: {layer_input.shape}")
+    print(f"\nInput shape: {x.shape}")
+    print(f"Layer input shape: {layer_input.shape}")
 
     x_new = mhc.apply_cached(x, layer_output, cache)
-    printf("Output shape: {x_new.shape}")
+    print(f"Output shape: {x_new.shape}")
 
     # Verify doubly stochastic property
     H_pre, H_post, H_res = mhc.mapping(x)
-    printf("\nH_res verification:")
-    printf("  Shape: {H_res.shape}")
+    print(f"\nH_res verification:")
+    print(f"  Shape: {H_res.shape}")
     row_sums = H_res[0, 0].sum(dim=-1)
     col_sums = H_res[0, 0].sum(dim=-2)
-    printf("  Row sums (should be ~1): {row_sums.tolist()}")
-    printf("  Col sums (should be ~1): {col_sums.tolist()}")
-    printf("  All non-negative: {(H_res >= 0).all().item()}")
+    print(f"  Row sums (should be ~1): {row_sums.tolist()}")
+    print(f"  Col sums (should be ~1): {col_sums.tolist()}")
+    print(f"  All non-negative: {(H_res >= 0).all().item()}")
 
     # --- Test MHCSublayerConnection (used by transformer) ---
     print("\n--- MHCSublayerConnection ---")
     conn = MHCSublayerConnection(hidden_size=hidden_size, expansion_rate=n)
     layer_in, cache = conn.get_layer_input(x)
-    printf("  Aggregated input: {layer_in.shape}")
+    print(f"  Aggregated input: {layer_in.shape}")
     x_updated = conn.apply_residual(x, layer_output, cache)
-    printf("  Updated n-stream: {x_updated.shape}")
+    print(f"  Updated n-stream: {x_updated.shape}")
     assert x_updated.shape == x.shape, "n-stream shape must be preserved!"
     print("  Shape preserved across sublayer: OK")
 

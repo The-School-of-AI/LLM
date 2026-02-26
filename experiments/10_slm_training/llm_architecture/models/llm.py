@@ -138,12 +138,12 @@ class LLM(nn.Module):
         # Model info
         self._num_parameters = sum(p.numel() for p in self.parameters())
 
-        printf("Initialized {config.model_name}")
-        printf("  Parameters: {self._num_parameters / 1e9:.2f}B")
-        printf("  Attention: {config.attention.attention_type.value}")
-        printf("  Connection: {config.connection.connection_type.value}")
-        printf("  Position: {config.position.position_type.value}")
-        printf("  MTP: {config.head.use_multi_token_prediction}")
+        print(f"Initialized {config.model_name}")
+        print(f"  Parameters: {self._num_parameters / 1e9:.2f}B")
+        print(f"  Attention: {config.attention.attention_type.value}")
+        print(f"  Connection: {config.connection.connection_type.value}")
+        print(f"  Position: {config.position.position_type.value}")
+        print(f"  MTP: {config.head.use_multi_token_prediction}")
 
         # HF-style compatibility flag used by training scripts.
         self.gradient_checkpointing = False

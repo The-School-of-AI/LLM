@@ -203,8 +203,8 @@ class TestDeepSpeedInitialization:
         assert model_engine.zero_optimization_stage() == 2, "ZeRO stage should be 2"
 
         print("✓ DeepSpeed initialized with ZeRO Stage 2")
-        printf("  Device: {model_engine.device}")
-        printf("  ZeRO Stage: {model_engine.zero_optimization_stage()}")
+        print(f"  Device: {model_engine.device}")
+        print(f"  ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_deepspeed_initialization_stage3(self, small_model, temp_output_dir):
@@ -232,8 +232,8 @@ class TestDeepSpeedInitialization:
         assert model_engine.zero_optimization_stage() == 3, "ZeRO stage should be 3"
 
         print("✓ DeepSpeed initialized with ZeRO Stage 3")
-        printf("  Device: {model_engine.device}")
-        printf("  ZeRO Stage: {model_engine.zero_optimization_stage()}")
+        print(f"  Device: {model_engine.device}")
+        print(f"  ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
 
 class TestTrainingLoop:
@@ -272,7 +272,7 @@ class TestTrainingLoop:
         assert not torch.isnan(torch.tensor(avg_loss)), "Loss should not be NaN"
 
         print("✓ Training epoch completed successfully")
-        printf("  Average Loss: {avg_loss:.4f}")
+        print(f"  Average Loss: {avg_loss:.4f}")
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_evaluate_runs(self, small_model, small_dataloader, temp_output_dir):
@@ -308,8 +308,8 @@ class TestTrainingLoop:
         assert not torch.isnan(torch.tensor(avg_loss)), "Loss should not be NaN"
 
         print("✓ Evaluation completed successfully")
-        printf("  Average Loss: {avg_loss:.4f}")
-        printf("  Average Perplexity: {avg_perplexity:.4f}")
+        print(f"  Average Loss: {avg_loss:.4f}")
+        print(f"  Average Perplexity: {avg_perplexity:.4f}")
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_forward_backward_pass(self, small_model):
@@ -356,7 +356,7 @@ class TestTrainingLoop:
         model_engine.step()
 
         print("✓ Forward/backward pass completed successfully")
-        printf("  Loss: {loss.item():.4f}")
+        print(f"  Loss: {loss.item():.4f}")
 
 
 class TestCheckpointing:
@@ -391,8 +391,8 @@ class TestCheckpointing:
         assert len(checkpoint_files) > 0, "No checkpoint files created"
 
         print("✓ Checkpoint saved successfully")
-        printf("  Location: {checkpoint_dir}")
-        printf("  Files: {checkpoint_files}")
+        print(f"  Location: {checkpoint_dir}")
+        print(f"  Files: {checkpoint_files}")
 
 
 class TestZeROMemoryEfficiency:
@@ -446,9 +446,9 @@ class TestZeROMemoryEfficiency:
         memory_after_step = torch.cuda.memory_allocated()
 
         print("✓ Memory usage tracking completed")
-        printf("  Initial memory: {initial_memory / 1024**2:.2f} MB")
-        printf("  After initialization: {memory_after_init / 1024**2:.2f} MB")
-        printf("  After training step: {memory_after_step / 1024**2:.2f} MB")
+        print(f"  Initial memory: {initial_memory / 1024**2:.2f} MB")
+        print(f"  After initialization: {memory_after_init / 1024**2:.2f} MB")
+        print(f"  After training step: {memory_after_step / 1024**2:.2f} MB")
 
         # Basic sanity check - memory should be allocated
         assert (

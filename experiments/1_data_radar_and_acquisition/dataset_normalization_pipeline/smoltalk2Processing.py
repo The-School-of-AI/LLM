@@ -40,9 +40,9 @@ def main():
     parquet_path = (
         "/Users/jadhavsa/Downloads/ai_dataset/LLM/smola/ten_rows_file.parquet"
     )
-    printf("Loading local parquet file: {parquet_path}")
+    print(f"Loading local parquet file: {parquet_path}")
     ds = load_dataset("parquet", data_files=parquet_path, split="train")
-    printf("Loaded {len(ds)} rows.")
+    print(f"Loaded {len(ds)} rows.")
     print("First input row:")
     print(json.dumps(ds[0], indent=2, ensure_ascii=False))
 
@@ -73,10 +73,10 @@ def main():
     import pandas as pd
 
     output_path = parquet_path.replace(".parquet", "_processed.parquet")
-    printf("Writing processed data to: {output_path}")
+    print(f"Writing processed data to: {output_path}")
     df = pd.DataFrame(common_schema_ds)
     df.to_parquet(output_path, index=False)
-    printf("Done. Wrote {len(df)} rows.")
+    print(f"Done. Wrote {len(df)} rows.")
 
 
 if __name__ == "__main__":

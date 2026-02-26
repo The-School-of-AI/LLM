@@ -44,9 +44,9 @@ def generate_hash(text):
 
 def main():
     parquet_path = "/Users/jadhavsa/Downloads/ai_dataset/LLM/MegaScience/part-0.parquet"
-    printf("Loading local parquet file: {parquet_path}")
+    print(f"Loading local parquet file: {parquet_path}")
     ds = pd.read_parquet(parquet_path)
-    printf("Loaded {len(ds)} rows.")
+    print(f"Loaded {len(ds)} rows.")
     print("First input row:")
     print(json.dumps(ds.iloc[0].to_dict(), indent=2, ensure_ascii=False))
 
@@ -76,10 +76,10 @@ def main():
     print(json.dumps(records[0], indent=2, ensure_ascii=False))
 
     output_path = parquet_path.replace(".parquet", "_processed.parquet")
-    printf("Writing processed data to: {output_path}")
+    print(f"Writing processed data to: {output_path}")
     df_out = pd.DataFrame(records)
     df_out.to_parquet(output_path, index=False)
-    printf("Done. Wrote {len(df_out)} rows.")
+    print(f"Done. Wrote {len(df_out)} rows.")
 
 
 if __name__ == "__main__":

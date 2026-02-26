@@ -191,11 +191,11 @@ def process_ncert(spark, input_path: str):
         ]
     )
 
-    printf("Reading from: {input_path}")
+    print(f"Reading from: {input_path}")
     df = spark.read.option("header", "true").csv(input_path)
 
     record_count = df.count()
-    printf("Records: {record_count:,}")
+    print(f"Records: {record_count:,}")
 
     num_partitions = max(1, min(400, record_count // 10_000))
     df_repartitioned = df.repartition(num_partitions)
@@ -209,7 +209,7 @@ def process_ncert(spark, input_path: str):
     )
 
     output_path = f"{OUTPUT_BASE}/source=ncert"
-    printf("Writing to: {output_path}")
+    print(f"Writing to: {output_path}")
     (df_out.write.mode("overwrite").option("compression", "zstd").parquet(output_path))
     print("✓ Completed NCERT processing")
 
@@ -231,14 +231,14 @@ def main():
 
     print("=" * 80)
     print("NCERT Data Normalization - Starting")
-    printf("Input:  {input_path}")
-    printf("Output: {OUTPUT_BASE}/source=ncert")
+    print(f"Input:  {input_path}")
+    print(f"Output: {OUTPUT_BASE}/source=ncert")
     print("=" * 80)
 
     try:
         process_ncert(spark, input_path)
     except Exception as e:
-        printf("ERROR: {e}")
+        print(f"ERROR: {e}")
         raise
 
     print("\n" + "=" * 80)

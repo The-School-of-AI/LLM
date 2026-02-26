@@ -26,8 +26,8 @@ class CheckpointManager:
         self.metadata = {"checkpoints": [], "latest": None}
 
         print("✓ CheckpointManager initialized")
-        printf("  S3: s3://{self.bucket}/{self.prefix}{self.run_name}/")
-        printf("  Local: {self.local_dir}")
+        print(f"  S3: s3://{self.bucket}/{self.prefix}{self.run_name}/")
+        print(f"  Local: {self.local_dir}")
 
     def save_checkpoint(self, model, optimizer, step, epoch, loss, **kwargs):
         start_time = time.time()
@@ -35,7 +35,7 @@ class CheckpointManager:
         checkpoint_name = f"checkpoint_step{step}_epoch{epoch}.pt"
         local_path = self.local_dir / checkpoint_name
 
-        printf("\n[CHECKPOINT] Saving step {step}...")
+        print(f"\n[CHECKPOINT] Saving step {step}...")
 
         checkpoint_state = {
             "step": step,
@@ -49,7 +49,7 @@ class CheckpointManager:
 
         try:
             torch.save(checkpoint_state, local_path)
-            printf("  ✓ Saved locally: {checkpoint_name}")
+            print(f"  ✓ Saved locally: {checkpoint_name}")
 
             s3_key = f"{self.prefix}{self.run_name}/{checkpoint_name}"
             self.s3_client.upload_file(str(local_path), self.bucket, s3_key)
@@ -69,7 +69,7 @@ class CheckpointManager:
             self.metadata["latest"] = checkpoint_info
 
             duration = time.time() - start_time
-            printf("  ✓ Complete in {duration:.1f}s\n")
+            print(f"  ✓ Complete in {duration:.1f}s\n")
 
             metrics = get_metrics_server()
             metrics.record_checkpoint(duration, success=True)
@@ -77,7 +77,7 @@ class CheckpointManager:
             return checkpoint_info
 
         except Exception as e:
-            printf("  ✗ Checkpoint failed: {e}")
+            print(f"  ✗ Checkpoint failed: {e}")
             metrics = get_metrics_server()
             metrics.record_checkpoint(0, success=False)
             raise

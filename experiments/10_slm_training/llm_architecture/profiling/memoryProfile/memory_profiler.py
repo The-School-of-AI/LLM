@@ -218,9 +218,9 @@ class MemoryProfiler:
             self._peak_memory_bytes = 0
             self._peak_memory_step = 0
 
-        printf("✓ Memory profiler started")
-        printf("  Output: {self.output_dir}")
-        printf("  TensorBoard: {self.tensorboard_dir}")
+        print(f"✓ Memory profiler started")
+        print(f"  Output: {self.output_dir}")
+        print(f"  TensorBoard: {self.tensorboard_dir}")
         if self.config.enable_memory_snapshot:
             print(
                 f"  Memory Snapshot: ENABLED (max {self.config.snapshot_max_entries:,} entries)"
@@ -233,9 +233,9 @@ class MemoryProfiler:
                 max_entries=self.config.snapshot_max_entries
             )
             self._memory_recording_active = True
-            printf("  📊 Memory history recording started")
+            print(f"  📊 Memory history recording started")
         except Exception as e:
-            printf("  ⚠️ Could not start memory recording: {e}")
+            print(f"  ⚠️ Could not start memory recording: {e}")
             self._memory_recording_active = False
 
     def _stop_memory_recording(self):
@@ -245,7 +245,7 @@ class MemoryProfiler:
                 torch.cuda.memory._record_memory_history(enabled=None)
                 self._memory_recording_active = False
             except Exception as e:
-                printf("  ⚠️ Could not stop memory recording: {e}")
+                print(f"  ⚠️ Could not stop memory recording: {e}")
 
     def step(self):
         """
@@ -293,7 +293,7 @@ class MemoryProfiler:
 
         self.profiler.__exit__(None, None, None)
         self._is_active = False
-        printf("✓ Memory profiler stopped after {self._step_count} steps")
+        print(f"✓ Memory profiler stopped after {self._step_count} steps")
 
         # Export memory snapshot if enabled
         if self.config.enable_memory_snapshot and self._memory_recording_active:
@@ -308,27 +308,27 @@ class MemoryProfiler:
         if not torch.cuda.is_available() or not self.memory_timeline:
             return
 
-        printf("\n{'='*60}")
+        print(f"\n{'='*60}")
         print("PEAK MEMORY SUMMARY")
-        printf("{'='*60}")
+        print(f"{'='*60}")
 
         # Get final stats
         final_stats = self.memory_timeline[-1] if self.memory_timeline else None
 
         if final_stats:
-            printf("\n📊 Memory Usage at Training End:")
-            printf("   Allocated: {final_stats.allocated_gb:.2f} GB")
-            printf("   Reserved:  {final_stats.reserved_gb:.2f} GB")
-            printf("   Fragmentation: {final_stats.fragmentation_ratio*100:.1f}%")
+            print(f"\n📊 Memory Usage at Training End:")
+            print(f"   Allocated: {final_stats.allocated_gb:.2f} GB")
+            print(f"   Reserved:  {final_stats.reserved_gb:.2f} GB")
+            print(f"   Fragmentation: {final_stats.fragmentation_ratio*100:.1f}%")
 
-            printf("\n🔺 Peak Memory (entire run):")
-            printf("   Peak Allocated: {final_stats.peak_allocated_gb:.2f} GB")
-            printf("   Peak Reserved:  {final_stats.peak_reserved_gb:.2f} GB")
-            printf("   Peak occurred at step: {self._peak_memory_step}")
+            print(f"\n🔺 Peak Memory (entire run):")
+            print(f"   Peak Allocated: {final_stats.peak_allocated_gb:.2f} GB")
+            print(f"   Peak Reserved:  {final_stats.peak_reserved_gb:.2f} GB")
+            print(f"   Peak occurred at step: {self._peak_memory_step}")
 
             # Find step with minimum memory (potential optimization target)
             min_stats = min(self.memory_timeline, key=lambda s: s.allocated_bytes)
-            printf("\n📉 Minimum Memory:")
+            print(f"\n📉 Minimum Memory:")
             print(
                 f"   Min Allocated: {min_stats.allocated_gb:.2f} GB at step {min_stats.step}"
             )
@@ -339,14 +339,14 @@ class MemoryProfiler:
             variance = sum((a - avg_alloc) ** 2 for a in allocations) / len(allocations)
             std_dev = variance**0.5
 
-            printf("\n📈 Memory Variability:")
-            printf("   Average: {avg_alloc / (1024**3):.2f} GB")
-            printf("   Std Dev: {std_dev / (1024**3):.2f} GB")
+            print(f"\n📈 Memory Variability:")
+            print(f"   Average: {avg_alloc / (1024**3):.2f} GB")
+            print(f"   Std Dev: {std_dev / (1024**3):.2f} GB")
             print(
                 f"   Range: {(max(allocations) - min(allocations)) / (1024**3):.2f} GB"
             )
 
-        printf("{'='*60}\n")
+        print(f"{'='*60}\n")
 
     def should_stop(self, current_step: int) -> bool:
         """
@@ -387,7 +387,7 @@ class MemoryProfiler:
 
         # Time summary
         if sort_by.startswith("cuda") and torch.cuda.is_available():
-            printf("\nTop {row_limit} operations by CUDA time:")
+            print(f"\nTop {row_limit} operations by CUDA time:")
             print("-" * 80)
             print(
                 self.profiler.key_averages().table(
@@ -396,7 +396,7 @@ class MemoryProfiler:
             )
 
         if sort_by.startswith("cpu"):
-            printf("\nTop {row_limit} operations by CPU time:")
+            print(f"\nTop {row_limit} operations by CPU time:")
             print("-" * 80)
             print(
                 self.profiler.key_averages().table(
@@ -406,7 +406,7 @@ class MemoryProfiler:
 
         # Memory summary
         if self.config.profile_memory and torch.cuda.is_available():
-            printf("\nTop {row_limit} operations by CUDA memory:")
+            print(f"\nTop {row_limit} operations by CUDA memory:")
             print("-" * 80)
             print(
                 self.profiler.key_averages().table(
@@ -443,7 +443,7 @@ class MemoryProfiler:
             with open(output_path, "wb") as f:
                 pickle.dump(snapshot, f)
 
-            printf("✓ Memory snapshot exported to: {output_path}")
+            print(f"✓ Memory snapshot exported to: {output_path}")
             print(
                 f"  Visualize with: python -m torch.cuda._memory_viz trace_plot {output_path}"
             )
@@ -452,7 +452,7 @@ class MemoryProfiler:
             self._export_snapshot_summary(snapshot, output_path.with_suffix(".txt"))
 
         except Exception as e:
-            printf("⚠️ Could not export memory snapshot: {e}")
+            print(f"⚠️ Could not export memory snapshot: {e}")
 
     def _export_snapshot_summary(self, snapshot: Dict, output_path: Path):
         """Export human-readable summary of memory snapshot."""
@@ -479,10 +479,10 @@ class MemoryProfiler:
                 if device_traces:
                     f.write(f"\nDevice traces: {len(device_traces)}\n")
 
-            printf("✓ Snapshot summary exported to: {output_path}")
+            print(f"✓ Snapshot summary exported to: {output_path}")
 
         except Exception as e:
-            printf("⚠️ Could not export snapshot summary: {e}")
+            print(f"⚠️ Could not export snapshot summary: {e}")
 
     def export_chrome_trace(self, filename: Optional[str] = None):
         """
@@ -500,7 +500,7 @@ class MemoryProfiler:
 
         try:
             self.profiler.export_chrome_trace(str(output_path))
-            printf("✓ Chrome trace exported to: {output_path}")
+            print(f"✓ Chrome trace exported to: {output_path}")
         except RuntimeError as e:
             if "Trace is already saved" in str(e):
                 # Trace already exported by handler
@@ -532,7 +532,7 @@ class MemoryProfiler:
                 )
             )
 
-        printf("✓ Stack traces exported to: {output_path}")
+        print(f"✓ Stack traces exported to: {output_path}")
 
     def export_memory_timeline(self, filename: str = "memory_timeline.json"):
         """
@@ -574,7 +574,7 @@ class MemoryProfiler:
         with open(output_path, "w") as f:
             json.dump(timeline_data, f, indent=2)
 
-        printf("✓ Memory timeline exported to: {output_path}")
+        print(f"✓ Memory timeline exported to: {output_path}")
 
     @contextmanager
     def profile_section(self, name: str):

@@ -142,18 +142,18 @@ def main():
     print("=" * 80)
     print("DeepSpeed Training Template")
     print("=" * 80)
-    printf("DeepSpeed Version: {deepspeed.__version__}")
-    printf("PyTorch Version: {torch.__version__}")
-    printf("CUDA Available: {torch.cuda.is_available()}")
+    print(f"DeepSpeed Version: {deepspeed.__version__}")
+    print(f"PyTorch Version: {torch.__version__}")
+    print(f"CUDA Available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
-        printf("CUDA Devices: {torch.cuda.device_count()}")
+        print(f"CUDA Devices: {torch.cuda.device_count()}")
     print("\nConfiguration:")
-    printf("  Model: {args.model_name}")
-    printf("  DeepSpeed Config: {args.deepspeed_config}")
-    printf("  Batch Size: {args.batch_size}")
-    printf("  Max Length: {args.max_length}")
-    printf("  Epochs: {args.num_epochs}")
-    printf("  Random Seed: {args.seed}")
+    print(f"  Model: {args.model_name}")
+    print(f"  DeepSpeed Config: {args.deepspeed_config}")
+    print(f"  Batch Size: {args.batch_size}")
+    print(f"  Max Length: {args.max_length}")
+    print(f"  Epochs: {args.num_epochs}")
+    print(f"  Random Seed: {args.seed}")
     print("=" * 80)
 
     # ========================================
@@ -168,17 +168,17 @@ def main():
         batch_size=args.batch_size,
         max_length=args.max_length,
     )
-    printf("  Train batches: {len(train_loader)}")
-    printf("  Eval batches: {len(eval_loader)}")
-    printf("  Test batches: {len(test_loader)}")
+    print(f"  Train batches: {len(train_loader)}")
+    print(f"  Eval batches: {len(eval_loader)}")
+    print(f"  Test batches: {len(test_loader)}")
 
     # ========================================
     # Step 2: Load Model
     # ========================================
     print("\n[2/5] Loading model...")
     model = AutoModelForCausalLM.from_pretrained(args.model_name)
-    printf("  Model loaded: {args.model_name}")
-    printf("  Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"  Model loaded: {args.model_name}")
+    print(f"  Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # ========================================
     # Step 3: Initialize DeepSpeed
@@ -188,16 +188,16 @@ def main():
         args=args, model=model, model_parameters=model.parameters()
     )
     print("  DeepSpeed engine initialized")
-    printf("  Device: {model_engine.device}")
+    print(f"  Device: {model_engine.device}")
 
     # ========================================
     # Step 4: Training
     # ========================================
     print("\n[4/5] Training...")
     for epoch in range(args.num_epochs):
-        printf("\n{'='*80}")
-        printf("Epoch {epoch + 1}/{args.num_epochs}")
-        printf("{'='*80}")
+        print(f"\n{'='*80}")
+        print(f"Epoch {epoch + 1}/{args.num_epochs}")
+        print(f"{'='*80}")
 
         # Train
         train_epoch(
@@ -239,10 +239,10 @@ def main():
     print("\n" + "=" * 80)
     print("Training Complete!")
     print("=" * 80)
-    printf("Final Test Loss: {test_loss:.4f}")
-    printf("Final Test Perplexity: {test_perplexity:.4f}")
+    print(f"Final Test Loss: {test_loss:.4f}")
+    print(f"Final Test Perplexity: {test_perplexity:.4f}")
     if args.save_checkpoint:
-        printf("Checkpoint saved to: {args.output_dir}")
+        print(f"Checkpoint saved to: {args.output_dir}")
     print("=" * 80)
 
     # Cleanup

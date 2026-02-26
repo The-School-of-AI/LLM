@@ -55,7 +55,7 @@ class JSONLogger:
         self.worker_thread = threading.Thread(target=self._writer_loop, daemon=True)
         self.worker_thread.start()
 
-        printf("✓ JSONLogger initialized. Writing to: {self.log_file}")
+        print(f"✓ JSONLogger initialized. Writing to: {self.log_file}")
 
     def log_step(self, step: int, metrics: dict, context: dict = None):
         """
@@ -105,7 +105,7 @@ class JSONLogger:
                     self._flush()
 
             except Exception as e:
-                printf("CRITICAL LOGGER ERROR: {e}")
+                print(f"CRITICAL LOGGER ERROR: {e}")
 
     def _flush(self):
         """
@@ -121,7 +121,7 @@ class JSONLogger:
                     os.fsync(f.fileno())
             self.buffer = []
         except Exception as e:
-            printf("FAILED TO WRITE LOGS: {e}")
+            print(f"FAILED TO WRITE LOGS: {e}")
 
     def _json_serializer(self, obj):
         """
@@ -159,5 +159,5 @@ class JSONLogger:
         if self.buffer:
             self._flush()
         if self.dropped:
-            printf("! JSONLogger dropped {self.dropped} log entries due to full queue")
-        printf("✓ JSONLogger closed. Logs saved to {self.log_file}")
+            print(f"! JSONLogger dropped {self.dropped} log entries due to full queue")
+        print(f"✓ JSONLogger closed. Logs saved to {self.log_file}")
