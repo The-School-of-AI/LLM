@@ -28,11 +28,15 @@ Source shard reports (12):
 
 ## Overall Reduction Metrics
 
+Token accounting note: **Single-pass** uses the effective corpus size entering coreset generation (here: `1B` stage input). **Stage exposure** uses the sum of per-stage inputs (tokens can be counted multiple times across stages).
+
 | Metric | Value | Reduction |
 |--------|-------|----------|
-| Total Input Tokens | 458,727,376,426 | - |
-| Selected Tokens | 81,560,691,927 | 82.2% |
-| **Compression Ratio** | **5.62x** | **82.2%** |
+| Single-pass Corpus Tokens | 136,932,109,554 | - |
+| Cumulative Stage Exposure Tokens | 458,727,376,426 | - |
+| Selected Tokens (sum across stages) | 81,560,691,927 | 40.4% (vs single-pass) |
+| **Compression Ratio (single-pass basis)** | **1.68x** | **40.4%** |
+| **Compression Ratio (stage-exposure basis)** | **5.62x** | **82.2%** |
 | Total Input Chunks | 896,870,901 | - |
 | Selected Chunks | 112,244,531 | 87.5% |
 | **Chunk Reduction** | **7.99x** | **87.5%** |

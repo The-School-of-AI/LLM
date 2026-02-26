@@ -339,9 +339,16 @@ class AblationReporter:
         )
 
         # ===== OVERALL METRICS =====
-        total_input = sum(
-            r.get("total_input_tokens", 0) for r in stages_results.values()
-        )
+        stage_inputs = [
+            int(r.get("total_input_tokens", 0) or 0) for r in stages_results.values()
+        ]
+
+        # Token accounting:
+        # - "single-pass" corpus size is approximated as the max per-stage input
+        #   (typically the first stage input, e.g. 1B).
+        # - "cumulative stage exposure" is the sum of per-stage inputs.
+        single_pass_input_tokens = max(stage_inputs) if stage_inputs else 0
+        cumulative_stage_exposure_tokens = sum(stage_inputs)
         total_selected = sum(
             r.get("selected_tokens", 0) for r in stages_results.values()
         )
@@ -352,8 +359,15 @@ class AblationReporter:
             r.get("selected_chunks", 0) for r in stages_results.values()
         )
 
-        compression_ratio = (
-            (total_input / total_selected) if total_selected > 0 else None
+        single_pass_compression_ratio = (
+            (single_pass_input_tokens / total_selected)
+            if total_selected > 0 and single_pass_input_tokens > 0
+            else None
+        )
+        exposure_compression_ratio = (
+            (cumulative_stage_exposure_tokens / total_selected)
+            if total_selected > 0 and cumulative_stage_exposure_tokens > 0
+            else None
         )
         chunk_reduction = (
             (total_chunks_input / total_chunks_selected)
@@ -362,22 +376,46 @@ class AblationReporter:
         )
 
         report.append("## Overall Reduction Metrics\n\n")
+        report.append(
+            "Token accounting note: **Single-pass** uses the max per-stage input (typically `1B` stage input). "
+            "**Stage exposure** uses the sum of per-stage inputs (tokens can be counted multiple times across stages).\n\n"
+        )
         report.append("| Metric | Value | Reduction |\n")
         report.append("|--------|-------|----------|\n")
-        report.append(f"| Total Input Tokens | {total_input:,} | - |\n")
-        if total_input > 0:
+        report.append(
+            f"| Single-pass Corpus Tokens | {single_pass_input_tokens:,} | - |\n"
+        )
+        report.append(
+            f"| Cumulative Stage Exposure Tokens | {cumulative_stage_exposure_tokens:,} | - |\n"
+        )
+        if single_pass_input_tokens > 0:
             report.append(
-                f"| Selected Tokens | {total_selected:,} | {100*(1 - total_selected/total_input):.1f}% |\n"
+                f"| Selected Tokens (sum across stages) | {total_selected:,} | {100*(1 - total_selected/single_pass_input_tokens):.1f}% (vs single-pass) |\n"
             )
         else:
-            report.append(f"| Selected Tokens | {total_selected:,} | N/A |\n")
-        if compression_ratio and compression_ratio > 0:
-            overall_reduction = 100 * (1 - 1 / compression_ratio)
             report.append(
-                f"| **Compression Ratio** | **{compression_ratio:.2f}x** | **{overall_reduction:.1f}%** |\n"
+                f"| Selected Tokens (sum across stages) | {total_selected:,} | N/A |\n"
+            )
+
+        if single_pass_compression_ratio and single_pass_compression_ratio > 0:
+            single_pass_reduction = 100 * (1 - 1 / single_pass_compression_ratio)
+            report.append(
+                f"| **Compression Ratio (single-pass basis)** | **{single_pass_compression_ratio:.2f}x** | **{single_pass_reduction:.1f}%** |\n"
             )
         else:
-            report.append("| **Compression Ratio** | **N/A** | **N/A** |\n")
+            report.append(
+                "| **Compression Ratio (single-pass basis)** | **N/A** | **N/A** |\n"
+            )
+
+        if exposure_compression_ratio and exposure_compression_ratio > 0:
+            exposure_reduction = 100 * (1 - 1 / exposure_compression_ratio)
+            report.append(
+                f"| **Compression Ratio (stage-exposure basis)** | **{exposure_compression_ratio:.2f}x** | **{exposure_reduction:.1f}%** |\n"
+            )
+        else:
+            report.append(
+                "| **Compression Ratio (stage-exposure basis)** | **N/A** | **N/A** |\n"
+            )
         report.append(f"| Total Input Chunks | {total_chunks_input:,} | - |\n")
         if total_chunks_input > 0:
             report.append(
@@ -672,15 +710,15 @@ class AblationReporter:
         report.append("### Coreset vs Full Dataset\n\n")
         report.append("**Estimated Training Efficiency Gains:**\n\n")
 
-        if total_input > 0 and total_selected > 0:
-            speedup = total_input / total_selected
+        if single_pass_input_tokens > 0 and total_selected > 0:
+            speedup = single_pass_input_tokens / total_selected
             report.append("| Metric | Full Dataset | Coreset | Improvement |\n")
             report.append("|--------|-------------|---------|----------|\n")
             report.append(
-                f"| Tokens Processed | {total_input:,} | {total_selected:,} | {speedup:.2f}x faster |\n"
+                f"| Tokens Processed (single-pass) | {single_pass_input_tokens:,} | {total_selected:,} | {speedup:.2f}x faster |\n"
             )
             report.append(
-                f"| Training Time (est.) | ~{total_input/1e9:.1f}B tokens | ~{total_selected/1e9:.1f}B tokens | **{100*(1 - 1/speedup):.1f}% reduction** |\n"
+                f"| Training Time (est.) | ~{single_pass_input_tokens/1e9:.1f}B tokens | ~{total_selected/1e9:.1f}B tokens | **{100*(1 - 1/speedup):.1f}% reduction** |\n"
             )
             report.append(
                 f"| Compute Cost (est.) | 100% | {100/speedup:.1f}% | {100*(1 - 1/speedup):.1f}% savings |\n"
@@ -729,7 +767,7 @@ class AblationReporter:
                 f"- Chunks removed by deduplication: {total_dedup_removed:,} ({100*(1 - dedup_ratio):.2f}%)\n"
             )
             report.append(
-                f"- Chunks retained: {total_dedup_removed:,} ({dedup_ratio:.2%})\n"
+                f"- Chunks retained: {total_before_dedup - total_dedup_removed:,} ({dedup_ratio:.2%})\n"
             )
             report.append(
                 "- Redundancy elimination: Improved data quality without additional storage\n\n"
@@ -738,12 +776,12 @@ class AblationReporter:
         # ===== RECOMMENDATIONS =====
         report.append("## Recommendations\n\n")
         report.append("1. **For Production Deployment**:\n")
-        if compression_ratio and compression_ratio > 0:
+        if single_pass_compression_ratio and single_pass_compression_ratio > 0:
             report.append(
-                f"   - Use baseline coreset with {compression_ratio:.2f}x compression\n"
+                f"   - Use baseline coreset with {single_pass_compression_ratio:.2f}x compression (single-pass basis)\n"
             )
             report.append(
-                f"   - Expect {100*(1 - 1/compression_ratio):.1f}% training time reduction\n"
+                f"   - Expect {100*(1 - 1/single_pass_compression_ratio):.1f}% training time reduction\n"
             )
         else:
             report.append(

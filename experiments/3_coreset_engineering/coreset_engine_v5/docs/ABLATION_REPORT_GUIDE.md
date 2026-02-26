@@ -91,9 +91,11 @@ Overview of what the report documents and key findings.
 ```
 | Metric | Value | Reduction |
 |--------|-------|-----------|
-| Total Input Tokens | 2,000,000,000 | - |
-| Selected Tokens | 100,000,000 | 95.0% |
-| Compression Ratio | 20.0x | 95.0% |
+| Single-pass Corpus Tokens | 2,000,000,000 | - |
+| Cumulative Stage Exposure Tokens | 6,000,000,000 | - |
+| Selected Tokens (sum across stages) | 100,000,000 | 95.0% (vs single-pass) |
+| Compression Ratio (single-pass basis) | 20.0x | 95.0% |
+| Compression Ratio (stage-exposure basis) | 60.0x | 98.3% |
 | Total Input Chunks | 1,000,000 | - |
 | Selected Chunks | 50,000 | 95.0% |
 | Chunk Reduction | 20.0x | 95.0% |
@@ -249,12 +251,19 @@ from pathlib import Path
 report_path = Path("output/manifests/ablation_validation_report.md")
 report_text = report_path.read_text()
 
-# Extract compression ratio
+# Extract compression ratios
 import re
-match = re.search(r'Compression Ratio.*?(\d+\.\d+)x', report_text)
-if match:
-    compression = float(match.group(1))
-    print(f"Compression: {compression:.2f}x")
+def _extract_ratio(label: str) -> float | None:
+    # Matches markdown table rows like:
+    # | **Compression Ratio (single-pass basis)** | **1.68x** | **40.4%** |
+    pattern = rf"Compression Ratio \\({re.escape(label)}\\).*?(\\d+\\.\\d+)x"
+    m = re.search(pattern, report_text)
+    return float(m.group(1)) if m else None
+
+single_pass = _extract_ratio("single-pass basis")
+stage_exposure = _extract_ratio("stage-exposure basis")
+print(f"Single-pass compression: {single_pass:.2f}x" if single_pass else "Single-pass compression: N/A")
+print(f"Stage-exposure compression: {stage_exposure:.2f}x" if stage_exposure else "Stage-exposure compression: N/A")
 ```
 
 ### 3. Compare Across Runs

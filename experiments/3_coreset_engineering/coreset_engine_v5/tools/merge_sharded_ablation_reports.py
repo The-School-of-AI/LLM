@@ -107,6 +107,10 @@ def parse_report(text: str) -> ParsedReport:
     pr = ParsedReport()
     lines = text.splitlines()
 
+    def _clean_metric(m: str) -> str:
+        # Strip simple markdown decorations used in tables.
+        return m.replace("**", "").replace("`", "").strip()
+
     # Overall metrics table
     for i, line in enumerate(lines):
         if line.strip() == "## Overall Reduction Metrics":
@@ -121,11 +125,11 @@ def parse_report(text: str) -> ParsedReport:
             for row in table:
                 if len(row) < 2:
                     continue
-                metric = row[0]
+                metric = _clean_metric(row[0])
                 value = row[1]
-                if metric == "Total Input Tokens":
+                if metric in {"Total Input Tokens", "Cumulative Stage Exposure Tokens"}:
                     pr.total_input_tokens = _parse_int(value)
-                elif metric == "Selected Tokens":
+                elif metric.startswith("Selected Tokens"):
                     pr.total_selected_tokens = _parse_int(value)
                 elif metric == "Total Input Chunks":
                     pr.total_input_chunks = _parse_int(value)
@@ -251,12 +255,30 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
         _dt.datetime.now(_UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     )
 
-    total_input = merged.total_input_tokens
+    # Token accounting:
+    # - "single-pass" corpus size approximated as the max per-stage input
+    #   (typically the first stage input, e.g. 1B).
+    # - "cumulative stage exposure" is the sum of per-stage inputs.
+    cumulative_stage_exposure_tokens = merged.total_input_tokens
+    single_pass_input_tokens = (
+        max((st.input_tokens for st in merged.stages.values()), default=0)
+        if merged.stages
+        else 0
+    )
     total_selected = merged.total_selected_tokens
     total_chunks_in = merged.total_input_chunks
     total_chunks_sel = merged.total_selected_chunks
 
-    compression_ratio = (total_input / total_selected) if total_selected > 0 else None
+    single_pass_compression_ratio = (
+        (single_pass_input_tokens / total_selected)
+        if total_selected > 0 and single_pass_input_tokens > 0
+        else None
+    )
+    exposure_compression_ratio = (
+        (cumulative_stage_exposure_tokens / total_selected)
+        if total_selected > 0 and cumulative_stage_exposure_tokens > 0
+        else None
+    )
     chunk_reduction = (
         (total_chunks_in / total_chunks_sel) if total_chunks_sel > 0 else None
     )
@@ -279,23 +301,46 @@ def render_report(merged: ParsedReport, *, source_files: List[str]) -> str:
         report.append(f"- {f}\n")
 
     report.append("\n## Overall Reduction Metrics\n\n")
+    report.append(
+        "Token accounting note: **Single-pass** uses the max per-stage input (typically `1B` stage input). "
+        "**Stage exposure** uses the sum of per-stage inputs (tokens can be counted multiple times across stages).\n\n"
+    )
     report.append("| Metric | Value | Reduction |\n")
     report.append("|--------|-------|----------|\n")
-    report.append(f"| Total Input Tokens | {_fmt_int(total_input)} | - |\n")
-    if total_input > 0:
+    report.append(
+        f"| Single-pass Corpus Tokens | {_fmt_int(single_pass_input_tokens)} | - |\n"
+    )
+    report.append(
+        f"| Cumulative Stage Exposure Tokens | {_fmt_int(cumulative_stage_exposure_tokens)} | - |\n"
+    )
+    if single_pass_input_tokens > 0:
         report.append(
-            f"| Selected Tokens | {_fmt_int(total_selected)} | {100*(1 - total_selected/total_input):.1f}% |\n"
+            f"| Selected Tokens (sum across stages) | {_fmt_int(total_selected)} | {100*(1 - total_selected/single_pass_input_tokens):.1f}% (vs single-pass) |\n"
         )
     else:
-        report.append(f"| Selected Tokens | {_fmt_int(total_selected)} | N/A |\n")
+        report.append(
+            f"| Selected Tokens (sum across stages) | {_fmt_int(total_selected)} | N/A |\n"
+        )
 
-    if compression_ratio and compression_ratio > 0:
-        overall_reduction = 100 * (1 - 1 / compression_ratio)
+    if single_pass_compression_ratio and single_pass_compression_ratio > 0:
+        single_pass_reduction = 100 * (1 - 1 / single_pass_compression_ratio)
         report.append(
-            f"| **Compression Ratio** | **{compression_ratio:.2f}x** | **{overall_reduction:.1f}%** |\n"
+            f"| **Compression Ratio (single-pass basis)** | **{single_pass_compression_ratio:.2f}x** | **{single_pass_reduction:.1f}%** |\n"
         )
     else:
-        report.append("| **Compression Ratio** | **N/A** | **N/A** |\n")
+        report.append(
+            "| **Compression Ratio (single-pass basis)** | **N/A** | **N/A** |\n"
+        )
+
+    if exposure_compression_ratio and exposure_compression_ratio > 0:
+        exposure_reduction = 100 * (1 - 1 / exposure_compression_ratio)
+        report.append(
+            f"| **Compression Ratio (stage-exposure basis)** | **{exposure_compression_ratio:.2f}x** | **{exposure_reduction:.1f}%** |\n"
+        )
+    else:
+        report.append(
+            "| **Compression Ratio (stage-exposure basis)** | **N/A** | **N/A** |\n"
+        )
 
     report.append(f"| Total Input Chunks | {_fmt_int(total_chunks_in)} | - |\n")
     if total_chunks_in > 0:

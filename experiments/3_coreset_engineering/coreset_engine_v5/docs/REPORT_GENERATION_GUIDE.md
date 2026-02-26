@@ -22,9 +22,11 @@ python coreset_builder.py \
 ```
 | Metric | Value | Reduction |
 |--------|-------|----------|
-| Total Input Tokens | 360,000 | - |
-| Selected Tokens | 160,000 | 55.6% |
-| **Compression Ratio** | **2.25x** | **55.6%** |
+| Single-pass Corpus Tokens | 360,000 | - |
+| Cumulative Stage Exposure Tokens | 360,000 | - |
+| Selected Tokens (sum across stages) | 160,000 | 55.6% (vs single-pass) |
+| **Compression Ratio (single-pass basis)** | **2.25x** | **55.6%** |
+| **Compression Ratio (stage-exposure basis)** | **2.25x** | **55.6%** |
 ```
 
 ### 2. Stage-wise Breakdown
