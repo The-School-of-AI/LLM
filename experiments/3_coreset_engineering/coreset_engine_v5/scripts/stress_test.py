@@ -20,7 +20,6 @@ Usage:
 
 import math
 import os
-import sys
 import time
 from multiprocessing import Pool, cpu_count
 
@@ -59,7 +58,7 @@ def main():
     duration_hrs = float(os.environ.get("DURATION", "1"))
     duration = int(duration_hrs * 3600)
 
-    print(f"🔥 Stress test starting")
+    print("🔥 Stress test starting")
     print(f"   Cores to burn : {n_cores}")
     print(f"   Duration      : {duration_hrs}h ({duration}s)")
     print(f"   Scratch dir   : {scratch}")
@@ -69,9 +68,7 @@ def main():
     print(f"[1/3] CPU burn ({n_cores} cores × {duration}s)...")
     t0 = time.time()
     with Pool(n_cores) as pool:
-        results = pool.starmap(
-            cpu_burn, [(duration,)] * n_cores
-        )
+        results = pool.starmap(cpu_burn, [(duration,)] * n_cores)
     print(f"      Done in {time.time()-t0:.1f}s")
     for r in results:
         print(f"      {r}")
@@ -81,8 +78,7 @@ def main():
     print(f"\n[2/3] Allocating {alloc_mb} MB RAM...")
     t0 = time.time()
     blocks = memory_allocate(alloc_mb)
-    print(f"      Done in {time.time()-t0:.1f}s "
-          f"({len(blocks)} blocks)")
+    print(f"      Done in {time.time()-t0:.1f}s " f"({len(blocks)} blocks)")
     time.sleep(5)  # Hold for monitors to capture
     del blocks
 
@@ -96,7 +92,7 @@ def main():
         print(f"      Done in {time.time()-t0:.1f}s")
     except (PermissionError, FileNotFoundError) as e:
         print(f"      Skipped disk test: {e}")
-        print(f"      (Set SCRATCH_DIR to a writable path)")
+        print("      (Set SCRATCH_DIR to a writable path)")
 
     print("\n✅ Stress test complete!")
     print("   Now run: ./scripts/monitor_report.sh")
