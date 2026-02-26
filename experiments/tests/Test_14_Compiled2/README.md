@@ -165,3 +165,84 @@ Implementation notes (user-data adjustments):
   - `aws s3 cp s3://<bucket>/env/vector.env /etc/t12/vector.env`
   - `cp /etc/t12/vector.env /home/ubuntu/.t12.env && chown ubuntu:ubuntu /home/ubuntu/.t12.env`
 - Ensure the instance profile has `s3:GetObject` for the three object prefixes.
+
+## AMI contents and setup.sh (AWS team handoff)
+
+### What to bake into the AMI
+
+- **Vector installed** at `/usr/local/bin/vector` (>= 0.30).
+- **Systemd unit** `/etc/systemd/system/t12-vector.service` with:
+  - `EnvironmentFile=/etc/t12/vector.env`
+  - `ExecStart=/usr/local/bin/vector --config /etc/t12/vector.toml`
+- **Base tools**: `awscli`, `jq`, `curl`, `bc` (for health/scripts).
+- Create base dirs: `/etc/t12`, `/var/lib/vector` (owned by root), `/tmp/training_logs` (owned by ubuntu).
+
+The AMI should NOT contain credentials. They are provided at boot by Secrets Manager.
+
+### What setup.sh handles at boot (non-AMI artifacts)
+
+Script path: `scripts/setup.sh`
+
+- Downloads from S3 (private bucket):
+  - `certs/ca_clickhouse.crt` → `/etc/t12/ca.crt`
+  - `vector/vector.toml` → `/etc/t12/vector.toml`
+- Reads ClickHouse creds from Secrets Manager (`SECRET_ID`, default `t12/clickhouse`) and writes:
+  - `/etc/t12/vector.env`
+  - `~/.t12.env` (for the training process)
+- Restarts Vector service if present (`VECTOR_SERVICE_NAME`, default `t12-vector.service`).
+
+Configurable via env vars:
+
+- `T12_CONFIG_BUCKET` (S3 bucket name)
+- `AWS_REGION` (e.g., `us-east-1`)
+- `SECRET_ID` (default `t12/clickhouse`)
+- `VECTOR_SERVICE_NAME` (default `t12-vector.service`)
+
+### How to create/update the ClickHouse secret (assumed available)
+
+Secret id: `t12/clickhouse`
+
+Create:
+
+```bash
+aws secretsmanager create-secret \
+  --name t12/clickhouse \
+  --description "ClickHouse credentials for training sidecar" \
+  --secret-string '{"endpoint":"https://<DB_HOST_OR_IP>:8443","writer-password":"<PASSWORD>"}' \
+  --region <REGION>
+```
+
+Update:
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id t12/clickhouse \
+  --secret-string '{"endpoint":"https://<DB_HOST_OR_IP>:8443","writer-password":"<NEW_PASSWORD>"}' \
+  --region <REGION>
+```
+
+Ensure the training instance role has permission to read this secret (directly or by assuming a cross-account role, as documented in `components/sidecar_agent`).
+
+### Adjusting S3 locations
+
+Upload the following objects to your private bucket and set `T12_CONFIG_BUCKET` accordingly:
+
+- `s3://<bucket>/certs/ca_clickhouse.crt`  → `/etc/t12/ca.crt`
+- `s3://<bucket>/vector/vector.toml`       → `/etc/t12/vector.toml`
+
+Bucket requirements:
+
+- Block public access; no public ACLs.
+- Grant `s3:GetObject` only to the training instance role.
+- Use SSE-KMS where appropriate.
+
+### Training launch note
+
+Ensure the training launcher sources credentials:
+
+```bash
+# in run.sh before invoking deepspeed
+set -a
+[ -f "$HOME/.t12.env" ] && source "$HOME/.t12.env"
+set +a
+```
