@@ -2,5 +2,6 @@ tqdm
 datasketch
 rich
 datasets
+boto3
 faiss-cpu
 sentence-transformers

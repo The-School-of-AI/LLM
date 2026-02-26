@@ -49,6 +49,7 @@ class ContaminationScanner:
         minhash_permutations 128     MinHash permutation count
         semantic_threshold  0.9      Cosine threshold for semantic matching
         semantic_model      "all-MiniLM-L6-v2"  Sentence-Transformers model
+        semantic_device     "auto"   Embedding device: auto/cuda/mps/cpu
         semantic_batch_size 512      Encoding batch size
         report_sample_limit 50       Max flagged samples shown per layer in reports
         ==================  =======  ============================================
@@ -81,6 +82,7 @@ class ContaminationScanner:
             self.semantic = SemanticDetector(
                 threshold=self.config.get("semantic_threshold", 0.9),
                 model_name=self.config.get("semantic_model", "all-MiniLM-L6-v2"),
+                device=self.config.get("semantic_device", "auto"),
                 batch_size=self.config.get("semantic_batch_size", 512),
             )
             self.semantic.build_index(self.registry)
@@ -122,8 +124,51 @@ class ContaminationScanner:
             config=self.config,
         )
 
+        return self._run_with_registry(
+            run_id, filepath, team_name, batch_name, self._run_scan
+        )
+
+    def scan_records(
+        self,
+        records: list[dict[str, Any]],
+        team_name: str,
+        batch_name: str,
+        input_label: str = "in-memory-records",
+    ) -> tuple[bool, dict[str, Any]]:
+        """Scan already-loaded JSONL-style records.
+
+        Args:
+            records: List of JSON-like objects, each expected to contain a
+                ``text`` field.
+            team_name: Identifier for the submitting team.
+            batch_name: Human-readable batch name (used in report filenames).
+            input_label: Provenance string recorded in the run registry
+                (for example an S3 URI).
+        """
+        run_id = str(uuid.uuid4())
+        self._register_run(
+            run_id,
+            team_name,
+            batch_name,
+            status="STARTED",
+            input_file=input_label,
+            config=self.config,
+        )
+        return self._run_with_registry(
+            run_id, records, team_name, batch_name, self._run_scan_records
+        )
+
+    def _run_with_registry(
+        self,
+        run_id: str,
+        source: Any,
+        team_name: str,
+        batch_name: str,
+        runner: Any,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Run a scan and ensure FAILED outcomes are recorded."""
         try:
-            return self._run_scan(run_id, filepath, team_name, batch_name)
+            return runner(run_id, source, team_name, batch_name)
         except FileNotFoundError as exc:
             self._register_run(
                 run_id,
@@ -159,9 +204,18 @@ class ContaminationScanner:
         self, run_id: str, filepath: str | Path, team_name: str, batch_name: str
     ) -> tuple[bool, dict[str, Any]]:
         """Internal scan implementation — called by :meth:`scan_dataset`."""
-        console.print(f"[bold cyan]Scanning: {batch_name}[/bold cyan]\n")
-
         data = self._load_jsonl(filepath)
+        return self._run_scan_records(run_id, data, team_name, batch_name)
+
+    def _run_scan_records(
+        self,
+        run_id: str,
+        data: list[dict[str, Any]],
+        team_name: str,
+        batch_name: str,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Internal scan implementation for in-memory records."""
+        console.print(f"[bold cyan]Scanning: {batch_name}[/bold cyan]\n")
         texts = [normalize(item.get("text", str(item))) for item in data]
         ids = [item.get("id", f"sample_{i}") for i, item in enumerate(data)]
 
