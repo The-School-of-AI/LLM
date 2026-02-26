@@ -34,8 +34,9 @@ import torch.nn.functional as F
 # Try to import flash-linear-attention for optimized Gated DeltaNet Triton kernels
 # Prefer chunk_gated_delta_rule (has alpha gate) over chunk_delta_rule (no alpha)
 try:
-    from fla.ops.gated_delta_rule import \
-        chunk_gated_delta_rule as _fla_chunk_gated_delta_rule
+    from fla.ops.gated_delta_rule import (
+        chunk_gated_delta_rule as _fla_chunk_gated_delta_rule,
+    )
 
     HAS_FLA = True
 except ImportError:

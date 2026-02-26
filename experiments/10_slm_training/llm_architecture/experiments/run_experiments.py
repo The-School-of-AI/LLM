@@ -30,15 +30,22 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.model_config import (AttentionConfig, AttentionType,
-                                 ConnectionConfig, ConnectionType, FFNConfig,
-                                 FFNType, HeadConfig, ModelConfig,
-                                 PositionConfig, PositionEmbeddingType,
-                                 get_preset_config)
+from config.model_config import (
+    AttentionConfig,
+    AttentionType,
+    ConnectionConfig,
+    ConnectionType,
+    FFNConfig,
+    FFNType,
+    HeadConfig,
+    ModelConfig,
+    PositionConfig,
+    PositionEmbeddingType,
+    get_preset_config,
+)
 from models.llm import create_model_from_config
 from torch.utils.data import DataLoader
-from training.train import (RandomTextDataset, Trainer, TrainingConfig,
-                            TrainingMetrics)
+from training.train import RandomTextDataset, Trainer, TrainingConfig, TrainingMetrics
 
 
 @dataclass

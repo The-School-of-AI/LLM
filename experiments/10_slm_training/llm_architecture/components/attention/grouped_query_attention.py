@@ -24,8 +24,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 sys.path.append("../..")
-from components.embeddings.rotary_embedding import (RotaryEmbedding,
-                                                    apply_rotary_pos_emb)
+from components.embeddings.rotary_embedding import RotaryEmbedding, apply_rotary_pos_emb
 
 
 class BaseAttention(nn.Module, ABC):

@@ -13,9 +13,12 @@ import torch
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from components.kernels.triton_normalization import (HAS_TRITON, TritonRMSNorm,
-                                                     pytorch_rmsnorm,
-                                                     triton_rmsnorm)
+from components.kernels.triton_normalization import (
+    HAS_TRITON,
+    TritonRMSNorm,
+    pytorch_rmsnorm,
+    triton_rmsnorm,
+)
 from components.normalization.rms_norm import RMSNorm
 
 

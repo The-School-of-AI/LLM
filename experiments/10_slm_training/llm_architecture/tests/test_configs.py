@@ -147,8 +147,12 @@ def test_preset_configs():
 def test_enum_values():
     """Test that config enum values are valid."""
     print("\n[5/6] Testing enum values in configs...")
-    from config.model_config import (AttentionType, ConnectionType, FFNType,
-                                     PositionEmbeddingType)
+    from config.model_config import (
+        AttentionType,
+        ConnectionType,
+        FFNType,
+        PositionEmbeddingType,
+    )
 
     valid_attention = {e.value for e in AttentionType}
     valid_position = {e.value for e in PositionEmbeddingType}

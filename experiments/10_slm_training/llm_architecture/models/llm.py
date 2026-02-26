@@ -27,6 +27,7 @@ import torch.nn.functional as F
 sys.path.append("..")
 
 from components.embeddings.rotary_embedding import RotaryEmbedding
+
 # Components
 from components.embeddings.token_embedding import TokenEmbedding
 from components.embeddings.yarn_embedding import YaRNRotaryEmbedding
@@ -41,12 +42,18 @@ except ImportError:
     USE_TRITON_NORM = False
     TritonRMSNorm = RMSNorm  # Fallback
 from components.attention.grouped_query_attention import create_causal_mask
-from components.heads.multi_token_head import (LMHead, MTPLoss,
-                                               MultiTokenPredictionHead)
+from components.heads.multi_token_head import LMHead, MTPLoss, MultiTokenPredictionHead
+
 # Config
-from config.model_config import (AttentionType, ConnectionType, EmbeddingType,
-                                 ModelConfig, PositionEmbeddingType,
-                                 get_preset_config)
+from config.model_config import (
+    AttentionType,
+    ConnectionType,
+    EmbeddingType,
+    ModelConfig,
+    PositionEmbeddingType,
+    get_preset_config,
+)
+
 # Layers
 from layers.transformer_block import TransformerBlockList
 
@@ -533,8 +540,10 @@ def build_kronecker_artifacts_from_tokenizer(
     Returns:
         (bpe_vocab, pf_codec)
     """
-    from components.embeddings.kronecker_embedding import (KroneckerConfig,
-                                                           KroneckerEmbeddings)
+    from components.embeddings.kronecker_embedding import (
+        KroneckerConfig,
+        KroneckerEmbeddings,
+    )
 
     vocab_size = config.vocab_size
     pf_dim = config.embedding.kronecker_pf_dim

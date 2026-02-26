@@ -38,8 +38,12 @@ sys.path.append("..")
 from components.connections.mhc_v2 import MHCCoeffsV2, RMSNorm
 from components.ffn.moe_ffn import MoEFFN, MoEGate
 from components.integration.reversible_midpoint import ReversibleMidpointStack
-from config.model_config import (ConnectionType, EmbeddingType, ModelConfig,
-                                 get_preset_config)
+from config.model_config import (
+    ConnectionType,
+    EmbeddingType,
+    ModelConfig,
+    get_preset_config,
+)
 from layers.lightning_decoder import LightningDecoderLayer, MTPTransformerBlock
 
 
@@ -101,8 +105,9 @@ class ReferenceLLM(nn.Module):
                     "bpe_vocab and pf_codec required for Kronecker embeddings"
                 )
 
-            from components.embeddings.kronecker_embedding import \
-                PureHybridEmbeddingTorch
+            from components.embeddings.kronecker_embedding import (
+                PureHybridEmbeddingTorch,
+            )
 
             self.kronecker_embeddings = PureHybridEmbeddingTorch(
                 bpe_vocab, pf_codec

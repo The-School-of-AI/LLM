@@ -24,13 +24,15 @@ import torch.nn as nn
 sys.path.append("..")
 
 from components.attention.deepseek_gsa import DeepSeekGSA, DeepSeekGSAConfig
-from components.attention.deepseek_sparse_attention import \
-    DeepSeekSparseAttention
+from components.attention.deepseek_sparse_attention import DeepSeekSparseAttention
 from components.attention.gated_sparse_attention import GatedSparseAttention
+
 # Import all attention variants
 from components.attention.grouped_query_attention import GroupedQueryAttention
+
 # Import FFN
 from components.ffn.swiglu_ffn import SwiGLUFFN
+
 # Import normalization
 from components.normalization.rms_norm import RMSNorm
 
@@ -44,11 +46,10 @@ except ImportError:
     TritonRMSNorm = RMSNorm  # Fallback
 
 # Import connections
-from components.connections.mhc import (MHCSublayerConnection,
-                                        ResidualConnection)
+from components.connections.mhc import MHCSublayerConnection, ResidualConnection
+
 # Import config
-from config.model_config import (AttentionType, ConnectionType, FFNType,
-                                 ModelConfig)
+from config.model_config import AttentionType, ConnectionType, FFNType, ModelConfig
 
 # =============================================================================
 # Shared helpers for creating attention / FFN from config

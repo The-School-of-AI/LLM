@@ -78,8 +78,13 @@ except ImportError:
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config.model_config import (AttentionType, ConnectionType, FFNType,
-                                 ModelConfig, PositionEmbeddingType)
+from config.model_config import (
+    AttentionType,
+    ConnectionType,
+    FFNType,
+    ModelConfig,
+    PositionEmbeddingType,
+)
 from models.llm import create_model_from_config
 
 # =============================================================================
