@@ -1,0 +1,5 @@
+*.nsys-rep
+*.qdrep
+*.sqlite
+profiling_stats.txt
+*_summary.txt
