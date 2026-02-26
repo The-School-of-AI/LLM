@@ -1,16 +1,55 @@
 #!/bin/bash
 
 # ==============================================================================
-# Coreset Engine Deployment Script
+# Coreset Engine Production Run Playbook
 # ==============================================================================
-# This script automates the setup and execution of the coreset pipeline.
-# It uses 'uv' for fast, reliable dependency management.
+# Full 8-step production playbook: setup, validation, monitoring, pipeline,
+# and post-run verification.
+#
+# Steps:
+#   1. System Setup & Prerequisites
+#   2. AWS Authentication Check
+#   3. Repository Setup
+#   4. Dependency Sync (via UV)
+#   5. Infrastructure Validation (validate_infra.sh)
+#   6. Start Monitoring (monitor.sh)
+#   7. Launch Pipeline (shard.sh)
+#   8. Post-Run Validation & Reports
 #
 # Usage:
 #   Manual EC2:       ./commands.sh                                  (full setup + pipeline in background)
 #   Dry Run:          ./commands.sh --dry-run                        (validates setup, no pipeline)
 #   CI (self-hosted): ./commands.sh --foreground --skip-repo-setup   (checkout already done)
 #   CI (SSH):         ./commands.sh --foreground                     (clones repo on EC2)
+#
+# Examples:
+#
+#   # Production run on c7gd.16xlarge (defaults):
+#   export S3_BUCKET="my-bucket"
+#   ./commands.sh
+#
+#   # Dry run — preview all config without executing:
+#   export S3_BUCKET="my-bucket"
+#   ./commands.sh --dry-run
+#
+#   # Full pipeline run on a smaller instance (c6i.8xlarge, no NVMe):
+#   export S3_BUCKET="my-bucket"
+#   export EXPECTED_INSTANCE_TYPE="c6i.8xlarge"
+#   export MIN_VCPU=32
+#   export MIN_RAM_GB=60
+#   export ENABLE_NVME=false
+#   export MIN_EBS_FREE_GB=200
+#   export MIN_EBS_ROOT_GB=500
+#   ./commands.sh --foreground
+#
+#   # Override pipeline parameters:
+#   export S3_BUCKET="my-bucket"
+#   export NUM_SHARDS=4
+#   export STAGES="1B 3B"
+#   export BATCH_SIZE=50000
+#   export RESUME=true
+#   ./commands.sh --foreground
+#
 # ==============================================================================
 
 set -e # Exit immediately if a command exits with a non-zero status
@@ -54,10 +93,24 @@ BATCH_PREFETCH_AUTO_WARMUP_BATCHES="${BATCH_PREFETCH_AUTO_WARMUP_BATCHES:-5}"
 RESUME="${RESUME:-false}" 
 # ------------------------------------------------------------------------------
 
+# --- Infrastructure Validation Overrides (for validate_infra.sh) ---------------
+# These flow through to validate_infra.sh via sudo -E.
+# Less common thresholds (MAX_CPU_STEAL_PCT, MAX_NVME_LATENCY_US, MIN_NVME_IOPS,
+# MAX_EBS_AWAIT_MS, MIN_EBS_IOPS, MAX_SWAPPINESS, MIN_OPEN_FILES, MIN_S3_SPEED_MBS)
+# can be overridden directly via env vars without adding them here.
+EXPECTED_INSTANCE_TYPE="${EXPECTED_INSTANCE_TYPE:-c7gd.16xlarge}"
+MIN_VCPU="${MIN_VCPU:-64}"
+MIN_RAM_GB="${MIN_RAM_GB:-120}"
+ENABLE_NVME="${ENABLE_NVME:-}"                   # auto-detected if empty; set true/false to force
+MIN_NVME_FREE_GB="${MIN_NVME_FREE_GB:-400}"
+MIN_EBS_ROOT_GB="${MIN_EBS_ROOT_GB:-1000}"
+MIN_EBS_FREE_GB="${MIN_EBS_FREE_GB:-800}"
+# ------------------------------------------------------------------------------
+
 # ==============================================================================
 # 1. System Setup & Prerequisites
 # ==============================================================================
-echo "### [1/5] System Setup & Prerequisites ###"
+echo "### [1/8] System Setup & Prerequisites ###"
 OS_TYPE=$(uname -s)
 
 if [ "${DRY_RUN}" = "true" ]; then
@@ -90,7 +143,7 @@ fi
 # ==============================================================================
 # 2. AWS Authentication Check
 # ==============================================================================
-echo "### [2/5] AWS Authentication Check ###"
+echo "### [2/8] AWS Authentication Check ###"
 if aws sts get-caller-identity &> /dev/null; then
     echo "[OK] AWS credentials found."
 else
@@ -104,7 +157,7 @@ fi
 # ==============================================================================
 # 3. Repository Setup
 # ==============================================================================
-echo "### [3/5] Repository Setup ###"
+echo "### [3/8] Repository Setup ###"
 if [ "${SKIP_REPO_SETUP}" = "true" ]; then
     echo "[SKIP] Git clone/checkout skipped (--skip-repo-setup). Validating working directory..."
     REPO_ROOT=$(pwd)
@@ -169,8 +222,9 @@ fi
 # ==============================================================================
 # 4. Dependency Sync (via UV)
 # ==============================================================================
-echo "### [4/5] Dependency Sync (via UV) ###"
+echo "### [4/8] Dependency Sync (via UV) ###"
 EXPERIMENT_DIR="${REPO_ROOT}/experiments/3_coreset_engineering"
+ENGINE_DIR="${EXPERIMENT_DIR}/coreset_engine_v5"
 
 if [ -d "${EXPERIMENT_DIR}" ]; then
     cd "${EXPERIMENT_DIR}"
@@ -194,9 +248,56 @@ else
 fi
 
 # ==============================================================================
-# 5. Launch Pipeline
+# 5. Infrastructure Validation
 # ==============================================================================
-echo "### [5/5] Launching Pipeline ###"
+echo "### [5/8] Infrastructure Validation ###"
+VALIDATE_INFRA="${ENGINE_DIR}/scripts/validate_infra.sh"
+
+# Export infra thresholds so sudo -E passes them to validate_infra.sh
+export EXPECTED_INSTANCE_TYPE MIN_VCPU MIN_RAM_GB MIN_EBS_ROOT_GB MIN_EBS_FREE_GB
+export MIN_NVME_FREE_GB
+[ -n "${ENABLE_NVME}" ] && export ENABLE_NVME
+
+if [ "${DRY_RUN}" = "true" ]; then
+    echo "[DRY RUN] Would run: sudo -E bash ${VALIDATE_INFRA}"
+    echo "          Thresholds: instance=${EXPECTED_INSTANCE_TYPE} vcpu>=${MIN_VCPU} ram>=${MIN_RAM_GB}GB nvme=${ENABLE_NVME:-auto} ebs>=${MIN_EBS_FREE_GB}GB"
+else
+    if [ -f "${VALIDATE_INFRA}" ]; then
+        echo "Running infrastructure validation..."
+        echo "  Thresholds: instance=${EXPECTED_INSTANCE_TYPE} vcpu>=${MIN_VCPU} ram>=${MIN_RAM_GB}GB nvme=${ENABLE_NVME:-auto} ebs>=${MIN_EBS_FREE_GB}GB"
+        if sudo -E bash "${VALIDATE_INFRA}"; then
+            echo "[OK] Infrastructure validation passed."
+        else
+            echo "[ERROR] Infrastructure validation failed. Fix issues before continuing."
+            exit 1
+        fi
+    else
+        echo "[WARN] validate_infra.sh not found at ${VALIDATE_INFRA}. Skipping."
+    fi
+fi
+
+# ==============================================================================
+# 6. Start Monitoring
+# ==============================================================================
+echo "### [6/8] Start Monitoring ###"
+MONITOR_SCRIPT="${ENGINE_DIR}/scripts/monitor.sh"
+MONITOR_PID=""
+
+if [ "${DRY_RUN}" = "true" ]; then
+    echo "[DRY RUN] Would run: nohup bash ${MONITOR_SCRIPT} &"
+elif [ -f "${MONITOR_SCRIPT}" ]; then
+    echo "Starting background monitoring..."
+    nohup bash "${MONITOR_SCRIPT}" > /dev/null 2>&1 &
+    MONITOR_PID=$!
+    echo "[OK] Monitoring started (PID: ${MONITOR_PID})"
+else
+    echo "[WARN] monitor.sh not found at ${MONITOR_SCRIPT}. Skipping."
+fi
+
+# ==============================================================================
+# 7. Launch Pipeline
+# ==============================================================================
+echo "### [7/8] Launching Pipeline ###"
 cd "${REPO_ROOT}"
 
 RESUME_FLAG=""
@@ -221,6 +322,13 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "  Resume:       ${RESUME}"
         echo "  Foreground:   ${FOREGROUND}"
         echo ""
+        echo "  Infra Thresholds:"
+        echo "    Instance:   ${EXPECTED_INSTANCE_TYPE}"
+        echo "    vCPU:       >= ${MIN_VCPU}"
+        echo "    RAM:        >= ${MIN_RAM_GB} GB"
+        echo "    NVMe:       ${ENABLE_NVME:-auto} (free >= ${MIN_NVME_FREE_GB} GB)"
+        echo "    EBS Root:   >= ${MIN_EBS_ROOT_GB} GB (free >= ${MIN_EBS_FREE_GB} GB)"
+        echo ""
         echo "  Would execute:"
         echo "    bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh"
         echo "      --num-shards ${NUM_SHARDS} --stages \"${STAGES}\""
@@ -233,6 +341,10 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "      --batch-prefetch-auto-max-shard-cpu-ratio ${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO}"
         echo "      --batch-prefetch-auto-min-wait-ms ${BATCH_PREFETCH_AUTO_MIN_WAIT_MS}"
         echo "      --batch-prefetch-auto-warmup-batches ${BATCH_PREFETCH_AUTO_WARMUP_BATCHES}"
+        echo ""
+        echo "  Post-run (foreground mode only):"
+        echo "    python3 ${ENGINE_DIR}/scripts/monitor_report.py"
+        echo "    python3 ${ENGINE_DIR}/tools/validate_coreset_outputs.py --stages ${STAGES}"
         echo "=========================================="
         exit 0
 fi
@@ -240,6 +352,7 @@ fi
 if [ "${FOREGROUND}" = "true" ]; then
         # Foreground: Used by CI/SSH so exit code is tracked
         echo "Running shard.sh in foreground..."
+        PIPELINE_EXIT=0
         bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
             --num-shards ${NUM_SHARDS} \
             --stages "${STAGES}" \
@@ -256,7 +369,56 @@ if [ "${FOREGROUND}" = "true" ]; then
             --batch-prefetch-auto-max-shard-cpu-ratio ${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO} \
             --batch-prefetch-auto-min-wait-ms ${BATCH_PREFETCH_AUTO_MIN_WAIT_MS} \
             --batch-prefetch-auto-warmup-batches ${BATCH_PREFETCH_AUTO_WARMUP_BATCHES} \
-            ${RESUME_FLAG}
+            ${RESUME_FLAG} || PIPELINE_EXIT=$?
+
+        # ==========================================================================
+        # 8. Post-Run Validation & Reports
+        # ==========================================================================
+        echo "### [8/8] Post-Run Validation & Reports ###"
+
+        # 8a. Stop monitoring and generate report
+        if [ -n "${MONITOR_PID}" ] && kill -0 "${MONITOR_PID}" 2>/dev/null; then
+            echo "Stopping monitoring (PID: ${MONITOR_PID})..."
+            kill "${MONITOR_PID}" 2>/dev/null || true
+            sleep 2
+        fi
+
+        MONITOR_REPORT_PY="${ENGINE_DIR}/scripts/monitor_report.py"
+        if [ -f "${MONITOR_REPORT_PY}" ]; then
+            LOG_DIR="${LOG_DIR:-/mnt/nvme/logs}"
+            if [ -d "${LOG_DIR}" ]; then
+                echo "Generating monitoring HTML report..."
+                python3 "${MONITOR_REPORT_PY}" "${LOG_DIR}" || echo "[WARN] Monitoring report generation failed."
+            else
+                echo "[WARN] Log directory ${LOG_DIR} not found. Skipping monitoring report."
+            fi
+        fi
+
+        # 8b. Validate coreset outputs against curriculum
+        VALIDATE_OUTPUTS="${ENGINE_DIR}/tools/validate_coreset_outputs.py"
+        if [ -f "${VALIDATE_OUTPUTS}" ]; then
+            echo "Validating coreset outputs against curriculum..."
+            python3 "${VALIDATE_OUTPUTS}" \
+                --curriculum "${ENGINE_DIR}/config/curriculum.yaml" \
+                --output-dir "${ENGINE_DIR}/output/coresets" \
+                --stages ${STAGES} \
+                --format both \
+                --report-dir "${ENGINE_DIR}/output/validation_reports" \
+                || echo "[WARN] Output validation reported issues (see above)."
+        else
+            echo "[WARN] validate_coreset_outputs.py not found. Skipping output validation."
+        fi
+
+        echo ""
+        echo "=======================================================================" 
+        echo "  PRODUCTION RUN COMPLETE"
+        echo "  Pipeline exit code:  ${PIPELINE_EXIT}"
+        echo "  Manifests:           output/coresets/*/manifest_shard*.json"
+        echo "  Ablation Reports:    output/manifests/ablation_validation_report*.md"
+        echo "  Validation Reports:  ${ENGINE_DIR}/output/validation_reports/"
+        echo "  Monitoring Report:   ${LOG_DIR:-/mnt/nvme/logs}/report_*.html"
+        echo "======================================================================="
+        exit ${PIPELINE_EXIT}
 else
         # Background: Used for manual EC2 runs with nohup for SSH disconnect safety
         echo "Starting shard.sh in background via nohup..."
@@ -280,8 +442,18 @@ else
             > shard_run.log 2>&1 &
 
         echo "-----------------------------------------------------------------------"
-        echo "DEPLOYMENT COMPLETE"
-        echo "Monitor logs via: tail -f ${REPO_ROOT}/shard_run.log"
-        echo "Check process via: ps aux | grep shard.sh"
+        echo "DEPLOYMENT COMPLETE — Pipeline running in background."
+        echo "  Monitor logs:    tail -f ${REPO_ROOT}/shard_run.log"
+        echo "  Check process:   ps aux | grep shard.sh"
+        echo ""
+        echo "  After pipeline finishes, run post-run validation manually:"
+        echo "    # Stop monitoring"
+        echo "    kill \$(cat /mnt/nvme/logs/monitor.pid)"
+        echo "    # Generate monitoring report"
+        echo "    python3 ${ENGINE_DIR}/scripts/monitor_report.py"
+        echo "    # Validate coreset outputs"
+        echo "    python3 ${ENGINE_DIR}/tools/validate_coreset_outputs.py \\"
+        echo "        --curriculum ${ENGINE_DIR}/config/curriculum.yaml \\"
+        echo "        --stages ${STAGES} --format both"
         echo "-----------------------------------------------------------------------"
 fi
