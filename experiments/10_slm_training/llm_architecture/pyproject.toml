@@ -1,0 +1,62 @@
+[project]
+name = "deepseek-v32-pipeline"
+version = "1.0.0"
+description = "End-to-end DeepSeek V3.2 training pipeline with DSA, Scaled RL, and Agentic Task Synthesis"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+authors = [
+    {name = "DeepSeek Pipeline Team"}
+]
+keywords = ["deep-learning", "transformers", "moe", "reinforcement-learning", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "datasets>=4.5.0",
+    "pyyaml>=6.0.3",
+    "torch>=2.10.0",
+    "transformers>=5.0.0",
+    # System monitoring
+    "psutil>=6.1.0",        # CPU utilization and memory monitoring
+    "nvidia-ml-py3>=7.352.0",  # GPU utilization monitoring (pynvml)
+]
+
+# =============================================================================
+# Profiling Tools (System-level dependencies, NOT Python packages)
+# =============================================================================
+# The profiling scripts in profiling/ require NVIDIA tools installed separately:
+#
+# 1. Nsight Systems (timeline profiling)
+#    - Command: nsys
+#    - Install on Ubuntu (choose latest version):
+#      sudo apt-get install nsight-systems-2025.5.2
+#    - Or included in NVIDIA CUDA Toolkit 11.0+
+#    - Download: https://developer.nvidia.com/nsight-systems
+#
+# 2. Nsight Compute (kernel profiling)
+#    - Command: ncu
+#    - Install on Ubuntu (choose latest version):
+#      sudo apt-get install nsight-compute-2025.4.1
+#    - Or included in NVIDIA CUDA Toolkit 11.0+
+#    - Download: https://developer.nvidia.com/nsight-compute
+#
+# Verify installation:
+#   nsys --version
+#   ncu --version
+#
+# Note: These are apt/deb packages, not Python packages. They cannot be
+# managed via pip/uv and must be installed at the system level.
+#
+# GUI tools for local analysis (Windows/Linux/macOS):
+#   - Download Nsight Systems GUI from NVIDIA
+#   - Download Nsight Compute GUI from NVIDIA
+# =============================================================================
+
