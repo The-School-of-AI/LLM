@@ -1,0 +1,54 @@
+Using pip 25.2 from C:\Users\gupta\AppData\Local\Programs\Python\Python313\Lib\site-packages\pip (python 3.13)
+Obtaining file:///Z:/era-v4/capstone/lightning-language-models/LLM/experiments/19_reproducibility_provenance_and_experiment_tracking/repro-registry
+  Installing build dependencies: started
+  Running command pip subprocess to install build dependencies
+  Using pip 25.2 from C:\Users\gupta\AppData\Local\Programs\Python\Python313\Lib\site-packages\pip (python 3.13)
+  WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProtocolError('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))': /simple/setuptools/
+  Collecting setuptools>=61.0
+    Obtaining dependency information for setuptools>=61.0 from https://files.pythonhosted.org/packages/94/b8/f1f62a5e3c0ad2ff1d189590bfa4c46b4f3b6e49cef6f26c6ee4e575394d/setuptools-80.10.2-py3-none-any.whl.metadata
+    Using cached setuptools-80.10.2-py3-none-any.whl.metadata (6.6 kB)
+  Using cached setuptools-80.10.2-py3-none-any.whl (1.1 MB)
+  Installing collected packages: setuptools
+  Successfully installed setuptools-80.10.2
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Running command Checking if build backend supports build_editable
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Running command Getting requirements to build editable
+  error: Multiple top-level packages discovered in a flat-layout: ['repro', 'repro_cli'].
+
+  To avoid accidental inclusion of unwanted files or directories,
+  setuptools will not proceed with this build.
+
+  If you are trying to create a single distribution with multiple packages
+  on purpose, you should not rely on automatic discovery.
+  Instead, consider the following options:
+
+  1. set up custom discovery (`find` directive with `include` or `exclude`)
+  2. use a `src-layout`
+  3. explicitly set `py_modules` or `packages` with a list of names
+
+  To find more information, look for "package discovery" on setuptools docs.
+  error: subprocess-exited-with-error
+  
+  Getting requirements to build editable did not run successfully.
+  exit code: 1
+  
+  See above for output.
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  full command: 'C:\Users\gupta\AppData\Local\Programs\Python\Python313\python.exe' 'C:\Users\gupta\AppData\Local\Programs\Python\Python313\Lib\site-packages\pip\_vendor\pyproject_hooks\_in_process\_in_process.py' get_requires_for_build_editable 'C:\Users\gupta\AppData\Local\Temp\tmp8iozu263'
+  cwd: Z:\era-v4\capstone\lightning-language-models\LLM\experiments\19_reproducibility_provenance_and_experiment_tracking\repro-registry
+  Getting requirements to build editable: finished with status 'error'
+
+[notice] A new release of pip is available: 25.2 -> 26.0.1
+[notice] To update, run: python.exe -m pip install --upgrade pip
+error: subprocess-exited-with-error
+
+Getting requirements to build editable did not run successfully.
+exit code: 1
+
+See above for output.
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
