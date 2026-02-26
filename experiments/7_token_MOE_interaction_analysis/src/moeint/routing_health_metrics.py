@@ -154,9 +154,7 @@ class RouterHealthAnalyzer:
 
         num_routers = len(routing_logits)
         num_tokens = input_ids.numel()
-        routing_logits_tensor = torch.stack(
-            routing_logits
-        ).flatten(
+        routing_logits_tensor = torch.stack(routing_logits).flatten(
             start_dim=1, end_dim=2
         )  # shape: (num_routers, batch_size * seq_len, num_real_experts + num_null_experts)
         input_group_ids = (
