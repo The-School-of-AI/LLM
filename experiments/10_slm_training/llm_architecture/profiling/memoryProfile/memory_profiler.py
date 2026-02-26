@@ -233,7 +233,7 @@ class MemoryProfiler:
                 max_entries=self.config.snapshot_max_entries
             )
             self._memory_recording_active = True
-            print(f"  📊 Memory history recording started")
+            print("  📊 Memory history recording started")
         except Exception as e:
             print(f"  ⚠️ Could not start memory recording: {e}")
             self._memory_recording_active = False

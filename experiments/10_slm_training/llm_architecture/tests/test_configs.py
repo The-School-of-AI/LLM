@@ -198,7 +198,7 @@ def test_enum_values():
     if errors:
         print(f"  FAILED: {len(errors)} invalid enum values")
         return False
-    print(f"  PASSED: All enum values valid")
+    print("  PASSED: All enum values valid")
     return True
 
 
