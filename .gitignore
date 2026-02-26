@@ -150,7 +150,6 @@ stats/
 # Large Data & Partitioned Files
 part-*
 notebooks/data/
-experiments/3_coreset_engineering/notebooks/data/
 *.zip
 
 # Translations
