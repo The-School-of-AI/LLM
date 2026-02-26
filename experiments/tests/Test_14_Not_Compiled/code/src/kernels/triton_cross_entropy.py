@@ -56,7 +56,7 @@ def _fused_linear_ce_forward(_input, weight, target, ignore_index, reduction, ma
     V = weight.shape[0]
     
     # Auto chunk size - aiming for 4GB chunks for max throughput
-    elem_size = 4 
+    elem_size = 2  # BF16 logits: 2 bytes/element, kernel upcasts to FP32 internally
     max_elems = max_chunk_bytes // (V * elem_size)
     chunk_size = max(1, min(BT, int(max_elems)))
     
@@ -82,8 +82,8 @@ def _fused_linear_ce_forward(_input, weight, target, ignore_index, reduction, ma
         h_chunk = _input[start:end]
         t_chunk = target[start:end]
         
-        # BF16 Matmul (Speed!) -> Cast to FP32 (Accuracy for CE)
-        logits_chunk = (h_chunk @ weight_T).float().contiguous()
+        # BF16 matmul — kernel upcasts to FP32 on load (.float() is a no-op, saves 50% memory)
+        logits_chunk = (h_chunk @ weight_T).contiguous()
         
         loss_1d = torch.zeros(C, dtype=torch.float32, device=_input.device)
         
