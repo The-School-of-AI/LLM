@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repro-registry"
+version = "0.1.0"
+description = "Team 19 Reproducibility & Experiment Registry SDK"
+authors = [{ name = "Team 19" }]
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+  "pydantic>=2.0",
+  "pyyaml",
+  "boto3",
+  "typer"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "black",
+  "ruff"
+]
+
+[project.scripts]
+repro = "repro_cli.main:app"
