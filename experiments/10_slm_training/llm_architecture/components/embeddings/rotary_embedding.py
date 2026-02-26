@@ -8,7 +8,6 @@ Standard implementation used by LLaMA, Qwen, Mistral, etc.
 Reference: RoFormer (Su et al., 2021)
 """
 
-import math
 from typing import Optional, Tuple
 
 import torch

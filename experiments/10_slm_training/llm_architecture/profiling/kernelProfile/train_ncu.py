@@ -20,17 +20,15 @@ Features:
 import argparse
 import json
 import math
-import os
 import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, Dataset
 
@@ -497,7 +495,7 @@ class Trainer:
                             f"\n🔍 Profiling active (steps {self.profile_start}-{self.profile_end}) - ncu mode"
                         )
                     elif self.global_step == self.profile_end:
-                        print(f"🔍 Profiling complete - ncu will process results\n")
+                        print("🔍 Profiling complete - ncu will process results\n")
 
                 # Calculate metrics
                 step_time = time.time() - step_start_time

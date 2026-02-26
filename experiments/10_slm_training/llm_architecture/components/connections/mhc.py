@@ -21,12 +21,10 @@ Parameter overhead per mHC module: ~200K (NOT millions!)
 This is fundamentally different from expanding hidden dimensions!
 """
 
-import math
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 # Use Triton-fused Sinkhorn when available
 try:
@@ -510,7 +508,7 @@ def print_mhc_overhead(
     breakdown = count_mhc_parameters_per_module(hidden_size, expansion_rate)
 
     print(f"\n{'='*60}")
-    print(f"mHC Parameter Analysis")
+    print("mHC Parameter Analysis")
     print(f"Configuration: n={expansion_rate}, C={hidden_size}, layers={num_layers}")
     print(f"{'='*60}")
 
@@ -570,7 +568,7 @@ if __name__ == "__main__":
 
     # Verify doubly stochastic property
     H_pre, H_post, H_res = mhc.mapping(x)
-    print(f"\nH_res verification:")
+    print("\nH_res verification:")
     print(f"  Shape: {H_res.shape}")
     row_sums = H_res[0, 0].sum(dim=-1)
     col_sums = H_res[0, 0].sum(dim=-2)

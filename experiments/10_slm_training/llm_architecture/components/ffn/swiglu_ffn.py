@@ -16,7 +16,6 @@ Benefits:
 - Standard in all major LLMs
 """
 
-from typing import Optional
 
 import torch
 import torch.nn as nn

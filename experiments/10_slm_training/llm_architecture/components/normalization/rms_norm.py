@@ -8,7 +8,6 @@ More efficient than LayerNorm - no mean subtraction, no bias.
 Used by: LLaMA, Qwen, Mistral, DeepSeek, etc.
 """
 
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -92,9 +91,9 @@ class FusedRMSNorm(nn.Module):
         """Check if fused implementation is available."""
         try:
             # Check for flash-attn's RMSNorm
-            from flash_attn.ops.rms_norm import rms_norm
+            import flash_attn.ops.rms_norm as flash_attn_rms_norm
 
-            return True
+            return hasattr(flash_attn_rms_norm, "rms_norm")
         except ImportError:
             return False
 

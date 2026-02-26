@@ -56,7 +56,7 @@ def test_vectorized_head_norm():
     print("TEST 2: Vectorized FusedRMSNormSwishGate")
     print("=" * 60)
 
-    from model_1b import FusedRMSNormSwishGate, RMSNorm
+    from model_1b import FusedRMSNormSwishGate
 
     head_dim = 128
     num_heads = 32

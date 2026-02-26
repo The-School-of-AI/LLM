@@ -16,7 +16,7 @@ happens once before the first layer and collapse once after the last.
 """
 
 import sys
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -49,7 +49,7 @@ except ImportError:
 from components.connections.mhc import MHCSublayerConnection, ResidualConnection
 
 # Import config
-from config.model_config import AttentionType, ConnectionType, FFNType, ModelConfig
+from config.model_config import AttentionType, ConnectionType, ModelConfig
 
 # =============================================================================
 # Shared helpers for creating attention / FFN from config

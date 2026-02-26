@@ -36,24 +36,21 @@ Usage:
 import argparse
 import gc
 import json
-import math
-import os
 import statistics
 import sys
 import time
 from collections import defaultdict
-from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
 
 # Try importing Intel Extension for PyTorch (optional optimization)
 try:
-    import intel_extension_for_pytorch as ipex  # type: ignore
+    __import__("intel_extension_for_pytorch")
 
     HAS_IPEX = True
 except ImportError:
@@ -613,7 +610,7 @@ def analyze_sequence_scaling(results: List[BenchmarkResult]) -> SequenceScalingM
             metrics.memory_scaling_exponent = coef[0]
 
         # Latency scaling
-        log_lat = np.log([max(l, 0.001) for l in metrics.latencies])
+        log_lat = np.log([max(latency, 0.001) for latency in metrics.latencies])
         if len(log_seqs) > 1:
             coef = np.polyfit(log_seqs, log_lat, 1)
             metrics.latency_scaling_exponent = coef[0]
@@ -646,7 +643,7 @@ def estimate_forward_flops(config: ModelConfig) -> int:
     H = config.hidden_size
     L = config.num_hidden_layers
     V = config.vocab_size
-    I = config.ffn.intermediate_size
+    intermediate_size = config.ffn.intermediate_size
     h = config.attention.num_attention_heads
     d = config.attention.head_dim
     kv_heads = config.attention.num_key_value_heads
@@ -654,9 +651,9 @@ def estimate_forward_flops(config: ModelConfig) -> int:
     attn_qkvo = 2 * H * (h * d + 2 * kv_heads * d + H)
 
     if config.ffn.ffn_type == FFNType.SWIGLU:
-        ffn_flops = 3 * 2 * H * I
+        ffn_flops = 3 * 2 * H * intermediate_size
     else:
-        ffn_flops = 2 * 2 * H * I
+        ffn_flops = 2 * 2 * H * intermediate_size
 
     layer_flops = attn_qkvo + ffn_flops
     head_flops = 0 if config.head.tie_word_embeddings else 2 * H * V
@@ -704,12 +701,12 @@ def estimate_activation_memory(
     """Estimate activation memory in GB (for training)."""
     H = config.hidden_size
     L = config.num_hidden_layers
-    I = config.ffn.intermediate_size
+    intermediate_size = config.ffn.intermediate_size
 
     bytes_per_element = {torch.float32: 4, torch.float16: 2, torch.bfloat16: 2}.get(
         dtype, 4
     )
-    per_layer_activations = batch_size * seq_len * (H + 3 * H + H + I)
+    per_layer_activations = batch_size * seq_len * (H + 3 * H + H + intermediate_size)
     total_activation_bytes = L * per_layer_activations * bytes_per_element
     return total_activation_bytes / 1e9
 
@@ -1238,7 +1235,7 @@ def benchmark_throughput(
             f"  Connection: {config.connection.connection_type.value} | MTP: {config.head.use_multi_token_prediction}"
         )
 
-        print(f"\n🔧 Loading model...")
+        print("\n🔧 Loading model...")
         model = create_model_from_config(config)
         model = model.to(device)
         model = model.to(dtype=torch_dtype)

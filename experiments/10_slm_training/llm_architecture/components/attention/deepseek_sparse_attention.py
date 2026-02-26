@@ -27,7 +27,6 @@ import torch.nn.functional as F
 sys.path.append("../..")
 from components.embeddings.rotary_embedding import (
     RotaryEmbedding,
-    apply_rotary_pos_emb,
     apply_rotary_pos_emb_k,
     apply_rotary_pos_emb_q,
 )

@@ -26,11 +26,9 @@ import torch.nn.functional as F
 
 sys.path.append("..")
 
-from components.embeddings.rotary_embedding import RotaryEmbedding
 
 # Components
 from components.embeddings.token_embedding import TokenEmbedding
-from components.embeddings.yarn_embedding import YaRNRotaryEmbedding
 from components.normalization.rms_norm import RMSNorm
 
 # Use Triton-optimized version when available
@@ -50,7 +48,6 @@ from config.model_config import (
     ConnectionType,
     EmbeddingType,
     ModelConfig,
-    PositionEmbeddingType,
     get_preset_config,
 )
 
@@ -289,7 +286,6 @@ class LLM(nn.Module):
         device = input_ids.device
 
         # Get dtype from embeddings
-        dtype = self.embed_tokens.embedding.weight.dtype
 
         # Past length for KV cache
         past_length = (

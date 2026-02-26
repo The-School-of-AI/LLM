@@ -21,8 +21,8 @@ Usage:
 
 # Check if Triton is available
 try:
-    import triton
-    import triton.language as tl
+    __import__("triton")
+    __import__("triton.language")
 
     HAS_TRITON = True
 except ImportError:

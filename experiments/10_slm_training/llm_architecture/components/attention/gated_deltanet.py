@@ -53,9 +53,9 @@ except ImportError:
 
 # Try to import TritonRMSNorm for standalone norm
 try:
-    from components.kernels.triton_normalization import TritonRMSNorm
+    import components.kernels.triton_normalization as triton_normalization
 
-    _HAS_TRITON_NORM = True
+    _HAS_TRITON_NORM = hasattr(triton_normalization, "TritonRMSNorm")
 except ImportError:
     _HAS_TRITON_NORM = False
 

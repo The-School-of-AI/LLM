@@ -19,7 +19,6 @@ Performance optimizations:
 - TritonRMSNorm: fused variance + rsqrt + mul
 """
 
-from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn

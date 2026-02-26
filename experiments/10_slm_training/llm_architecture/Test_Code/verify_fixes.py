@@ -12,7 +12,6 @@ import sys
 import time
 
 import torch
-import torch.nn as nn
 
 sys.path.insert(0, ".")
 
@@ -194,7 +193,7 @@ def test_speed_comparison():
         _ = deltanet(x)
     elapsed = (time.time() - start) / n_iters
     print(f"  Chunk-wise parallel: {elapsed*1000:.1f} ms/forward (T={T}, CPU)")
-    print(f"  (GPU speedup will be much larger due to parallel matmuls)")
+    print("  (GPU speedup will be much larger due to parallel matmuls)")
 
     print("  PASSED\n")
 

@@ -63,7 +63,7 @@ def test_config_loading():
                 data = yaml.safe_load(f)
 
             # Extract training config (to not pass it to ModelConfig)
-            training_data = data.pop("training", {})
+            data.pop("training", {})
 
             # Load as ModelConfig
             config = ModelConfig.from_dict(data)
@@ -95,7 +95,6 @@ def test_training_config_section():
         "experiment_name",
     ]
 
-    errors = []
     warnings = []
 
     for yaml_file in yaml_files:
@@ -218,7 +217,6 @@ def test_cli_argument_parsing():
 
     # Test train_wikitext2_gpt2.py argument parsing
     try:
-        import training.train_wikitext2_gpt2 as wikitext_module
 
         print("  ✓ training/train_wikitext2_gpt2.py imports successfully")
     except Exception as e:

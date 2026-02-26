@@ -25,12 +25,11 @@ Usage:
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint as checkpoint
 
 # Try to import RoPE from your components
 try:

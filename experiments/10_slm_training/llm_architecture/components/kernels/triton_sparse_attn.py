@@ -89,7 +89,7 @@ if HAS_TRITON:
         q_start = pid_q * BLOCK_Q
 
         # Create offset arrays
-        q_offs = q_start + tl.arange(0, BLOCK_Q)
+        q_start + tl.arange(0, BLOCK_Q)
         d_offs = tl.arange(0, BLOCK_D)
         k_offs = tl.arange(0, BLOCK_K)
 

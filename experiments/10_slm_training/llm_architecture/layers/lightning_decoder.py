@@ -12,7 +12,6 @@ Components:
 - MTPTransformerBlock: Full transformer block for MTP (fusion + DeltaNet + MLP + mHC)
 """
 
-from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn

@@ -21,7 +21,6 @@ Eliminates 2 intermediate tensors, saving ~2x memory bandwidth.
 For DeltaNet with 6 layers * num_heads calls, this is significant.
 """
 
-from typing import Optional
 
 import torch
 import torch.nn as nn

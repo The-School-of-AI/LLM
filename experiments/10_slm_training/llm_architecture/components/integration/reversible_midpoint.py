@@ -21,7 +21,7 @@ Reference: Test_Code/model_1b.py lines 1399-1407
 """
 
 from contextlib import nullcontext
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn

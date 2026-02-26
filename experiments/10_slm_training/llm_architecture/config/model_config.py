@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass, field, fields
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Optional
 
 import yaml
 

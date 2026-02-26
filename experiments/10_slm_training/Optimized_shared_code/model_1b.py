@@ -18,10 +18,9 @@ Architecture based on:
 - Null Experts: Data sparsity ρ=0.5
 """
 
-import logging
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import List
 
 import numpy as np
 import torch
@@ -508,30 +507,6 @@ class ShortConvolution(nn.Module):
         x = x[:, :, : -(self.conv_size - 1)]  # Remove extra padding for causality
         x = x.transpose(1, 2)  # (B, T, D)
         return self.activation(x)
-
-
-class RMSNorm(nn.Module):
-    """
-    RMS Layer Normalization (bf16-safe, fused computation).
-
-    Upcasts to float32 for the norm computation to prevent overflow/underflow
-    in bf16 training (bf16 max ~65504, x² can overflow). Uses rsqrt instead of
-    sqrt+div for better GPU throughput (1 op instead of 2).
-    """
-
-    def __init__(self, dim, eps=1e-6):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def forward(self, x):
-        input_dtype = x.dtype
-        # Upcast to float32 for numerical stability in bf16 training
-        x_fp32 = x.to(torch.float32)
-        # Fused: rsqrt(mean(x²) + eps) is 1 op instead of sqrt + div
-        norm = x_fp32.pow(2).mean(dim=-1, keepdim=True)
-        x_normed = x_fp32 * torch.rsqrt(norm + self.eps)
-        return (self.weight * x_normed).to(input_dtype)
 
 
 class FusedRMSNormSwishGate(nn.Module):
@@ -1864,12 +1839,12 @@ class Model70B(nn.Module):
             embedding_params = self.vocab_size * config.hidden_size / 1e6
             embedding_buffer = 0
 
-        print(f"\n🤖 MODEL-1B (DENSE) INITIALIZED:")
+        print("\n🤖 MODEL-1B (DENSE) INITIALIZED:")
         print(f"   Vocabulary: {self.vocab_size:,}")
         print(f"   Hidden Size: {config.hidden_size}")
         if self.use_kronecker:
-            print(f"\n   📐 Kronecker Embeddings:")
-            print(f"      POS_DIM=32 x CHAR_DIM=256 = D=8192")
+            print("\n   📐 Kronecker Embeddings:")
+            print("      POS_DIM=32 x CHAR_DIM=256 = D=8192")
             print(
                 f"      Buffer size: {embedding_buffer:.1f}M (vocab × 8192, non-trainable)"
             )
@@ -1899,7 +1874,7 @@ class Model70B(nn.Module):
             else "   MTP: Disabled"
         )
         print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
-        print(f"   Target Active: ~3.1B parameters")
+        print("   Target Active: ~3.1B parameters")
 
     def _init_weights(self, module):
         if self.use_kronecker and self.kronecker_embeddings is not None:
@@ -2059,19 +2034,19 @@ if __name__ == "__main__":
     print(f"  Total Params: {total_params:.3f}B")
     print(f"  Active Params: {active_params:.3f}B")
     print(f"  Sparsity: {sparsity:.1f}x")
-    print(f"\nAttention Mix:")
+    print("\nAttention Mix:")
     print(
         f"  DeltaNet: {config.num_deltanet_layers} layers ({config.num_deltanet_layers/config.num_layers*100:.0f}%) - O(N) for 256k context"
     )
     print(
         f"  GSA: {config.num_gsa_layers} layers ({config.num_gsa_layers/config.num_layers*100:.0f}%) - Adaptive sparse quality"
     )
-    print(f"\nModel Type:")
+    print("\nModel Type:")
     if num_experts == 0:
-        print(f"  DENSE MODEL (No MoE)")
+        print("  DENSE MODEL (No MoE)")
         print(f"  Dense FFN intermediate: {config.shared_expert_intermediate_size}")
     else:
-        print(f"  MoE MODEL")
+        print("  MoE MODEL")
         print(f"  Real Experts: {num_experts}")
         print(f"  Null Experts: {num_experts} (ρ={config.data_sparsity})")
         print(f"  Total slots: {config.total_expert_slots}")

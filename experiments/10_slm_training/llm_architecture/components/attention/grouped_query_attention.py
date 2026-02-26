@@ -131,9 +131,9 @@ class GroupedQueryAttention(BaseAttention):
     def _check_flash_attention(self) -> bool:
         """Check if flash attention is available."""
         try:
-            from flash_attn import flash_attn_func
+            import flash_attn
 
-            return True
+            return hasattr(flash_attn, "flash_attn_func")
         except ImportError:
             return False
 

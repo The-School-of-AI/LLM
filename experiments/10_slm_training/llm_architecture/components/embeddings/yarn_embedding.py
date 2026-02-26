@@ -83,8 +83,8 @@ class YaRNRotaryEmbedding(nn.Module):
         inv_freq = 1.0 / (self.base ** (dim_range / self.dim))
 
         # Compute wavelengths
-        low_freq_wavelen = self.original_max_position / self.beta_fast
-        high_freq_wavelen = self.original_max_position / self.beta_slow
+        self.original_max_position / self.beta_fast
+        self.original_max_position / self.beta_slow
 
         # Compute interpolation factors for each dimension
         wavelen = 2 * math.pi / inv_freq

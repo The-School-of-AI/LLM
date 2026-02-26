@@ -260,7 +260,7 @@ class SystemMonitor:
             print(f"Sequence Length: {seq_length}")
 
         if model_config is not None:
-            print(f"\nModel Configuration:")
+            print("\nModel Configuration:")
             print(f"  Model Name: {model_config.model_name}")
             print(f"  Vocab Size: {model_config.vocab_size:,}")
             print(f"  Hidden Size: {model_config.hidden_size}")
@@ -323,7 +323,7 @@ class SystemMonitor:
 
             # Peak memory usage
             if "max_memory_allocated_gb" in stats:
-                print(f"\n  Peak Memory Usage:")
+                print("\n  Peak Memory Usage:")
                 print(f"    Allocated: {stats['max_memory_allocated_gb']:.2f} GB")
                 print(f"    Reserved:  {stats['max_memory_reserved_gb']:.2f} GB")
                 if "total_gpu_memory_gb" in stats and stats["total_gpu_memory_gb"] > 0:
@@ -334,26 +334,26 @@ class SystemMonitor:
 
             # Sampled memory statistics (allocated)
             if "gpu_memory_allocated_max" in stats:
-                print(f"\n  Memory Allocated Over Time (GB):")
+                print("\n  Memory Allocated Over Time (GB):")
                 print(f"    Max:  {stats['gpu_memory_allocated_max']:.2f}")
                 print(f"    Min:  {stats['gpu_memory_allocated_min']:.2f}")
                 print(f"    Mean: {stats['gpu_memory_allocated_mean']:.2f}")
 
             # Sampled memory statistics (reserved)
             if "gpu_memory_reserved_max" in stats:
-                print(f"\n  Memory Reserved Over Time (GB):")
+                print("\n  Memory Reserved Over Time (GB):")
                 print(f"    Max:  {stats['gpu_memory_reserved_max']:.2f}")
                 print(f"    Min:  {stats['gpu_memory_reserved_min']:.2f}")
                 print(f"    Mean: {stats['gpu_memory_reserved_mean']:.2f}")
 
             # GPU utilization
             if "gpu_utilization_max" in stats:
-                print(f"\n  GPU Utilization Over Time (%):")
+                print("\n  GPU Utilization Over Time (%):")
                 print(f"    Max:  {stats['gpu_utilization_max']}")
                 print(f"    Min:  {stats['gpu_utilization_min']}")
                 print(f"    Mean: {stats['gpu_utilization_mean']:.1f}")
             else:
-                print(f"\n  GPU Utilization: Not available (install nvidia-ml-py3)")
+                print("\n  GPU Utilization: Not available (install nvidia-ml-py3)")
 
         # CPU Statistics
         if stats and ("cpu_percent_max" in stats or "cpu_memory_gb_max" in stats):
@@ -371,21 +371,21 @@ class SystemMonitor:
 
             # CPU utilization
             if "cpu_percent_max" in stats:
-                print(f"\n  System-Wide CPU Utilization (%):")
+                print("\n  System-Wide CPU Utilization (%):")
                 print(f"    Max:  {stats['cpu_percent_max']:.1f}")
                 print(f"    Min:  {stats['cpu_percent_min']:.1f}")
                 print(f"    Mean: {stats['cpu_percent_mean']:.1f}")
 
             # Process memory usage
             if "cpu_memory_gb_max" in stats:
-                print(f"\n  Process Memory Usage (GB):")
+                print("\n  Process Memory Usage (GB):")
                 print(f"    Max:  {stats['cpu_memory_gb_max']:.2f}")
                 print(f"    Min:  {stats['cpu_memory_gb_min']:.2f}")
                 print(f"    Mean: {stats['cpu_memory_gb_mean']:.2f}")
 
             # System memory utilization
             if "system_memory_percent_max" in stats:
-                print(f"\n  System Memory Utilization (%):")
+                print("\n  System Memory Utilization (%):")
                 print(f"    Max:  {stats['system_memory_percent_max']:.1f}")
                 print(f"    Min:  {stats['system_memory_percent_min']:.1f}")
                 print(f"    Mean: {stats['system_memory_percent_mean']:.1f}")

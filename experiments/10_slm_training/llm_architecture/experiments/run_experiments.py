@@ -18,13 +18,12 @@ Generates comparison reports.
 
 import argparse
 import json
-import os
 import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import torch
 
@@ -41,11 +40,10 @@ from config.model_config import (
     ModelConfig,
     PositionConfig,
     PositionEmbeddingType,
-    get_preset_config,
 )
 from models.llm import create_model_from_config
 from torch.utils.data import DataLoader
-from training.train import RandomTextDataset, Trainer, TrainingConfig, TrainingMetrics
+from training.train import RandomTextDataset, Trainer, TrainingConfig
 
 
 @dataclass
@@ -421,7 +419,7 @@ class ExperimentRunner:
         report.append("\n## Best Configuration\n")
         best = sorted_results[0]
         report.append(f"**{best.name}** achieved the best loss of {best.best_loss:.4f}")
-        report.append(f"\nConfiguration:")
+        report.append("\nConfiguration:")
         for k, v in best.config_summary.items():
             report.append(f"- {k}: {v}")
 
@@ -450,7 +448,6 @@ class ExperimentRunner:
 
 
 # Need to import these for _create_base_config
-from config.model_config import FFNConfig, FFNType
 
 
 def main():

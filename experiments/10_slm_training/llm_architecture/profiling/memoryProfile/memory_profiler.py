@@ -22,11 +22,9 @@ Deliverables:
 
 """
 
-import os
 import pickle
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -218,7 +216,7 @@ class MemoryProfiler:
             self._peak_memory_bytes = 0
             self._peak_memory_step = 0
 
-        print(f"✓ Memory profiler started")
+        print("✓ Memory profiler started")
         print(f"  Output: {self.output_dir}")
         print(f"  TensorBoard: {self.tensorboard_dir}")
         if self.config.enable_memory_snapshot:
@@ -254,7 +252,6 @@ class MemoryProfiler:
         Call this after each training iteration.
         Also captures peak memory statistics.
         """
-        import time
 
         if not self._is_active:
             return
@@ -316,19 +313,19 @@ class MemoryProfiler:
         final_stats = self.memory_timeline[-1] if self.memory_timeline else None
 
         if final_stats:
-            print(f"\n📊 Memory Usage at Training End:")
+            print("\n📊 Memory Usage at Training End:")
             print(f"   Allocated: {final_stats.allocated_gb:.2f} GB")
             print(f"   Reserved:  {final_stats.reserved_gb:.2f} GB")
             print(f"   Fragmentation: {final_stats.fragmentation_ratio*100:.1f}%")
 
-            print(f"\n🔺 Peak Memory (entire run):")
+            print("\n🔺 Peak Memory (entire run):")
             print(f"   Peak Allocated: {final_stats.peak_allocated_gb:.2f} GB")
             print(f"   Peak Reserved:  {final_stats.peak_reserved_gb:.2f} GB")
             print(f"   Peak occurred at step: {self._peak_memory_step}")
 
             # Find step with minimum memory (potential optimization target)
             min_stats = min(self.memory_timeline, key=lambda s: s.allocated_bytes)
-            print(f"\n📉 Minimum Memory:")
+            print("\n📉 Minimum Memory:")
             print(
                 f"   Min Allocated: {min_stats.allocated_gb:.2f} GB at step {min_stats.step}"
             )
@@ -339,7 +336,7 @@ class MemoryProfiler:
             variance = sum((a - avg_alloc) ** 2 for a in allocations) / len(allocations)
             std_dev = variance**0.5
 
-            print(f"\n📈 Memory Variability:")
+            print("\n📈 Memory Variability:")
             print(f"   Average: {avg_alloc / (1024**3):.2f} GB")
             print(f"   Std Dev: {std_dev / (1024**3):.2f} GB")
             print(

@@ -11,7 +11,7 @@ Performance improvements over PyTorch:
 - Cuts memory bandwidth by ~50%
 """
 
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn as nn

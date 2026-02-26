@@ -60,10 +60,9 @@ class MidpointFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_p_next, grad_aux):
         p_prev, p_cur, *param_tensors = ctx.saved_tensors
-        n_params = ctx.n_params
 
         # Rebuild params/buffers for functional_call
-        params = {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_tensors)}
+        {f"layer.{k}": v for k, v in zip(ctx.param_keys, param_tensors)}
         # buffers are non-diff; we still need them for correct forward recompute
         # they come from the original module at runtime via named_buffers
         # so we recreate them here from the live module's buffers:

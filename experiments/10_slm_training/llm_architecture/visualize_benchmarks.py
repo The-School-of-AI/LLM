@@ -12,9 +12,8 @@ Usage:
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -463,7 +462,7 @@ def plot_summary_dashboard(data_full: Dict, data_tiny: Dict, output_dir: Path):
     )
 
     plt.savefig(output_dir / "benchmark_dashboard.png", dpi=300, bbox_inches="tight")
-    print(f"[OK] Saved: benchmark_dashboard.png")
+    print("[OK] Saved: benchmark_dashboard.png")
     plt.close()
 
 
@@ -672,7 +671,7 @@ def plot_long_context_comparison(
     plt.savefig(
         output_dir / "long_context_comparison.png", dpi=300, bbox_inches="tight"
     )
-    print(f"[OK] Saved: long_context_comparison.png")
+    print("[OK] Saved: long_context_comparison.png")
     plt.close()
 
 

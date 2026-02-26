@@ -39,7 +39,7 @@ def test_profiler():
         repeat=1,
     )
 
-    print(f"\nProfiler Configuration:")
+    print("\nProfiler Configuration:")
     print(f"  Output: {config.output_dir}")
     print(f"  Wait: {config.wait_steps} steps")
     print(f"  Warmup: {config.warmup_steps} steps")
@@ -109,7 +109,7 @@ def test_profiler():
     print("TEST COMPLETE")
     print("=" * 80)
     print(f"\nResults saved to: {profiler.output_dir}")
-    print(f"\nTo view results:")
+    print("\nTo view results:")
     print(f"  1. TensorBoard: tensorboard --logdir={profiler.tensorboard_dir}")
     print(
         f"  2. Chrome trace: chrome://tracing → Load {profiler.output_dir}/memory_profile.json"

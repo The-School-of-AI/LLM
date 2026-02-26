@@ -27,7 +27,7 @@ Key differences from LLM class:
 import math
 import sys
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -39,10 +39,7 @@ from components.connections.mhc_v2 import MHCCoeffsV2, RMSNorm
 from components.ffn.moe_ffn import MoEFFN, MoEGate
 from components.integration.reversible_midpoint import ReversibleMidpointStack
 from config.model_config import (
-    ConnectionType,
-    EmbeddingType,
     ModelConfig,
-    get_preset_config,
 )
 from layers.lightning_decoder import LightningDecoderLayer, MTPTransformerBlock
 
@@ -191,7 +188,7 @@ class ReferenceLLM(nn.Module):
 
         # Print model info
         total_params = sum(p.numel() for p in self.parameters())
-        print(f"\nReferenceLLM initialized:")
+        print("\nReferenceLLM initialized:")
         print(f"  Vocabulary: {self.vocab_size:,}")
         print(f"  Hidden Size: {config.hidden_size}")
         print(f"  Total Layers: {config.num_hidden_layers}")
@@ -211,7 +208,7 @@ class ReferenceLLM(nn.Module):
                 f"  Integration: Reversible Midpoint (step={int_config.step_size}, a={int_config.a})"
             )
         else:
-            print(f"  Integration: Sequential (direct forward, no reversible overhead)")
+            print("  Integration: Sequential (direct forward, no reversible overhead)")
         print(f"  Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
 
     def _init_weights(self, module):

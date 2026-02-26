@@ -18,8 +18,7 @@ Design Decisions:
 Reference: GSA (arXiv:2601.15305v1), DeepSeek 3.2 (arXiv:2512.02556v1)
 """
 
-import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn

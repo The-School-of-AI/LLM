@@ -223,7 +223,7 @@ def main():
         print("\n" + "=" * 60)
         print("Summary")
         print("=" * 60)
-        print(f"✅ Correctness: PASSED")
+        print("✅ Correctness: PASSED")
         if speedup:
             print(f"📊 Performance: {speedup:.2f}x speedup")
         print("=" * 60)

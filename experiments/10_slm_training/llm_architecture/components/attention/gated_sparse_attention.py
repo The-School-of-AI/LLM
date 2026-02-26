@@ -766,7 +766,7 @@ class GSAIndexerSparseLoss(nn.Module):
             scalar KL loss averaged over tokens.
         """
         B, L, K_total = importance_scores.shape
-        k = selected_indices.size(-1)
+        selected_indices.size(-1)
 
         # Gather subset
         idx = selected_indices
@@ -828,7 +828,7 @@ def count_gsa_parameters(
         + value_gate
         + output_gate
     )
-    total = qkv_params + output_params + gsa_overhead
+    qkv_params + output_params + gsa_overhead
 
     return {
         "base_attention": qkv_params + output_params,
