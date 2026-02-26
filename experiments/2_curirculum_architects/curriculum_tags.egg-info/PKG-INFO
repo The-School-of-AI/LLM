@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: curriculum-tags
+Version: 0.1.0
+Summary: Curriculum metadata tagging system (part of Lighting LLM project)
+Requires-Python: >=3.10
+Requires-Dist: pyarrow>=14.0.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: transformers>=4.30.0
+Requires-Dist: numpy>=1.24.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"

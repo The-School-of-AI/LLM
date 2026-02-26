@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+curriculum_tags/__init__.py
+curriculum_tags.egg-info/PKG-INFO
+curriculum_tags.egg-info/SOURCES.txt
+curriculum_tags.egg-info/dependency_links.txt
+curriculum_tags.egg-info/requires.txt
+curriculum_tags.egg-info/top_level.txt
+tests/test_difficulty_metric.py
+tests/test_metrics.py
+tests/test_modality_metric.py
+tests/test_plugin.py
+tests/test_readability_metric.py
+tests/test_tagger.py
+tests/test_yaml_loader.py
