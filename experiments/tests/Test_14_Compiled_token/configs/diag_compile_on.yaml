@@ -1,0 +1,70 @@
+## DIAGNOSTIC CONFIG — torch.compile ENABLED
+## Purpose: Test with compile ON + CUDA_LAUNCH_BLOCKING to get synchronous error trace.
+##
+## Run with: bash run_diagnostic.sh compile_on
+##
+## The CUDA_LAUNCH_BLOCKING env var (set in run_diagnostic.sh) forces synchronous
+## kernel launches, so the stack trace points to the ACTUAL failing kernel
+## instead of an unrelated later API call.
+
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-103-raw-v1"
+  tokenize_num_proc: 8
+  max_length: 4096
+  num_workers: 16
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes: [4096]
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+
+training:
+  num_epochs: 1
+  max_train_steps: 20
+  max_eval_steps: null
+  log_interval: 1
+  seed: 42
+  init_model_path: "../results/init/model_init.pt"
+  require_gsa_triton: true
+  require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 4.0
+  metrics_jsonl_path: "../results/run/diag_compile_on_metrics.jsonl"
+  # DIAGNOSTIC: compile ON
+  use_torch_compile: true
+  torch_compile_mode: "default"
+  profile_steps: []
+
+deepspeed:
+  config_path: "../deepspeed/zero-2-dense-bf16-test14-1000steps.json"
+  local_rank: -1
+
+model:
+  tokenizer_name: null
+  embedding_type: "kronecker"
+  model_variant: "reversible"
+
+checkpoint:
+  output_dir: "../results/run/checkpoints"
+  save_checkpoint: false
+  checkpoint_interval: 500
+  keep_last_n_checkpoints: 2
+  resume_from_checkpoint: null
+  resume_step: null
+
+s3:
+  enabled: false
+  bucket: null
+  prefix: "training/checkpoints"
+  region: "us-east-1"
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: "The history of artificial intelligence begins with"
