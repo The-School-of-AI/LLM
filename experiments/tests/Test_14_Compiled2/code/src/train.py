@@ -135,6 +135,7 @@ def train_epoch(
     profiler: "StepProfiler | None" = None,
     profile_steps: "set | None" = None,
     profile_output_dir: "str | None" = None,
+    ops=None,
 ):
     """
     Train the model for one epoch.
@@ -386,7 +387,9 @@ def train_epoch(
         # Optional system metrics (CPU/GPU util & memory)
         gpu_util = gpu_mem_used = gpu_mem_total = None
         cpu_util = cpu_mem_used = cpu_mem_total = None
-        if enable_system_metrics:
+        # If TrainingOps is active, SystemMetricsCollector already emits sys.* metrics.
+        # Avoid duplicating per-step GPU/CPU queries here to reduce overhead/noise.
+        if enable_system_metrics and ops is None:
             with profiler.phase("system_metrics") if profiler is not None else _null_ctx():
                 # CPU metrics
                 vm = psutil.virtual_memory()
@@ -481,7 +484,7 @@ def train_epoch(
                     f"loss: {loss_str} | loss2: {loss2_str} | r_loss: {r_loss_str} | "
                     f"lr: {lr_str} | dt: {step_dt_ms:.2f}ms | tok/sec: {tokens_per_sec:9.2f}"
                 )
-                if enable_system_metrics:
+                if enable_system_metrics and ops is None:
                     if gpu_util is not None:
                         msg += (
                             f", GPU Util: {gpu_util:.0f}%, "
@@ -521,6 +524,24 @@ def train_epoch(
                     },
                 )
 
+                # TrainingOps structured logging (best-effort)
+                if ops is not None:
+                    try:
+                        _metrics = {
+                            "loss": float(loss.item()),
+                            "loss/train": float(loss.item()),
+                            "loss/train_t_plus_1": None if loss_ntp_value is None else float(loss_ntp_value),
+                            "loss/train_t_plus_2": None if loss_mtp_value is None else float(loss_mtp_value),
+                            "loss/router_moe": None if loss_aux_value is None else float(loss_aux_value),
+                            "lr": None if learning_rate is None else float(learning_rate),
+                            "throughput/tokens_per_sec": float(tokens_per_sec),
+                            "tokens/processed_step": int(tokens),
+                            "step_time_ms": float(step_dt_ms),
+                        }
+                        ops.log_step(step=global_step, metrics=_metrics, context={"epoch": int(epoch)})
+                    except Exception:
+                        pass
+
                 # Print full GPU table (all devices) when enabled and available
                 if enable_system_metrics and is_main_process():
                     try:
@@ -559,6 +580,25 @@ def train_epoch(
                 elif output_dir:
                     # Use basic checkpoint saving
                     save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
+
+                # Log checkpoint to TrainingOps (best-effort)
+                if ops is not None:
+                    try:
+                        _ckpt_path = None
+                        if output_dir:
+                            _ckpt_path = os.path.join(output_dir, str(checkpoint_tag))
+                        ops.log_checkpoint(
+                            step=global_step,
+                            path=_ckpt_path or "",
+                            s3_key=None,
+                            loss=float(loss.item()),
+                            tag=str(checkpoint_tag),
+                            duration_s=0.0,
+                            size_bytes=0,
+                            metadata={"epoch": int(epoch), "step_in_epoch": int(i + 1)},
+                        )
+                    except Exception:
+                        pass
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:

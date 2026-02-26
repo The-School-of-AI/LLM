@@ -35,6 +35,8 @@ import os
 import time
 import warnings
 from typing import Any, Dict
+import sys
+from pathlib import Path
 
 # Reduce CUDA allocator fragmentation (helps avoid OOM in sparse attention path)
 if "PYTORCH_ALLOC_CONF" not in os.environ:
@@ -64,6 +66,21 @@ from src.models.recurrence_model_1b import (
 from src.profiler import PipelineProfiler
 from src.train import evaluate, generate_text, train_epoch
 from src.utils import print_rank_0, set_seed
+
+
+# Attempt to import TrainingOps from 12_training_operations/components
+# Adds the directory containing the 'components' package to sys.path.
+_EXPERIMENTS_DIR = Path(__file__).resolve().parents[3]
+_TRAIN_OPS_DIR = _EXPERIMENTS_DIR / "12_training_operations"
+_TRAIN_OPS_FALLBACK = Path("/tmp/training_ops_backup/12_training_operations")
+for _p in (os.environ.get("TRAINING_OPS_PATH"), str(_TRAIN_OPS_DIR), str(_TRAIN_OPS_FALLBACK)):
+    if _p and os.path.isdir(_p) and _p not in sys.path:
+        sys.path.insert(0, _p)
+        break
+try:
+    from components import TrainingOps  # type: ignore
+except Exception:
+    TrainingOps = None  # type: ignore
 
 
 class Config:
@@ -373,6 +390,37 @@ def main():
     if args.resume_from_checkpoint:
         print_rank_0(f"  Resume From: {args.resume_from_checkpoint}")
     print_rank_0("=" * 80)
+
+    # Initialize TrainingOps (observability) if available
+    ops = None
+    if 'TrainingOps' in globals() and TrainingOps is not None:
+        try:
+            run_id = f"test14_{int(time.time())}"
+            clickhouse_url = (
+                os.environ.get("CLICKHOUSE_ENDPOINT")
+                or os.environ.get("CLICKHOUSE_HTTPS_ENDPOINT")
+                or os.environ.get("CLICKHOUSE_HTTP_ENDPOINT")
+            )
+            vector_service_name = (
+                os.environ.get("VECTOR_SERVICE_NAME", "p12-vector.service").strip() or None
+            )
+            skip_vector_check = bool(int(os.environ.get("SKIP_VECTOR_CHECK", "0")))
+            ops = TrainingOps(
+                run_id=run_id,
+                rank=args.local_rank if args.local_rank >= 0 else 0,
+                clickhouse_url=clickhouse_url,
+                default_context={"model": "1b_dense", "test": "test14_compiled2"},
+                skip_vector_check=skip_vector_check,
+                vector_service_name=vector_service_name,
+            )
+            ops.log_event(
+                step=0,
+                event_type="stage_transition",
+                message="training_started",
+                payload={"config": cmd_args.config},
+            )
+        except Exception:
+            ops = None
 
     # ========================================
     # Step 0.5: Read DeepSpeed Config to Get Batch Size
@@ -693,6 +741,7 @@ def main():
                 max_chunk_gb=args.max_chunk_gb,
                 profile_steps=args.profile_steps if args.profile_steps else None,
                 profile_output_dir=os.path.dirname(args.metrics_jsonl_path) if args.metrics_jsonl_path else None,
+                ops=ops,
             )
 
         # Evaluate on validation set
@@ -797,6 +846,18 @@ def main():
         print_rank_0(f"Checkpoint saved to: {args.output_dir}")
         if checkpoint_manager:
             print_rank_0(f"S3 Bucket: s3://{args.s3_bucket}/{args.s3_prefix}")
+
+    # Shutdown TrainingOps if it was initialized
+    if 'ops' in locals() and ops is not None:
+        try:
+            ops.log_event(
+                step=global_step,
+                event_type="stage_transition",
+                message="training_completed",
+                payload={"epochs": args.num_epochs},
+            )
+        finally:
+            ops.shutdown()
     print_rank_0("=" * 80)
 
     # Write pipeline profiler reports
