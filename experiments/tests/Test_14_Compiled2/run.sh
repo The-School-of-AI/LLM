@@ -15,11 +15,30 @@ DEEPSPEED_BIN="${DEEPSPEED_BIN:-deepspeed}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 FORCE_REWRITE_INIT="${FORCE_REWRITE_INIT:-1}"
 
+# --- Logging & diagnostics ---
+exec > >(tee -a "$TEST_ROOT/run_bootstrap.log") 2>&1
+echo "[run.sh] Started at $(date -u)"
+set -x
+
+die() { echo "[ERROR] $*" >&2; exit 1; }
+check_file() { local p="$1"; [[ -f "$p" ]] || die "Expected file not found: $p"; }
+http_code() { curl -s -o /dev/null -w "%{http_code}" "$1"; }
+
+# Ensure sudo can run (will prompt once if needed)
+if ! sudo -n true 2>/dev/null; then
+  echo "[INFO] Caching sudo credentials (you may be prompted)";
+  sudo -v || die "sudo is required to install Vector and write /etc/t12";
+fi
+
 # --- Observability bootstrap (local, no S3/Secrets) ---
 LOCAL_ASSETS_DIR="$TEST_ROOT/local"
 CA_SRC="${CA_SRC:-$LOCAL_ASSETS_DIR/ca_clickhouse.crt}"
 ENV_SRC="${ENV_SRC:-$LOCAL_ASSETS_DIR/vector.env}"
 VECTOR_TOML_SRC="${VECTOR_TOML_SRC:-$REPO_ROOT/experiments/12_training_operations/components/sidecar_agent/vector.toml}"
+echo "[INFO] Using sources:"
+echo "       CA_SRC=$CA_SRC"
+echo "       ENV_SRC=$ENV_SRC"
+echo "       VECTOR_TOML_SRC=$VECTOR_TOML_SRC"
 
 # Ensure curl available (for Vector installer)
 if ! command -v curl >/dev/null 2>&1; then
@@ -31,6 +50,8 @@ if ! command -v vector >/dev/null 2>&1; then
   export HOME="${HOME:-/root}"
   curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y --prefix /usr/local
 fi
+echo "[INFO] Vector binary: $(command -v vector || echo 'not found')"
+if command -v vector >/dev/null 2>&1; then /usr/local/bin/vector --version || vector --version || true; fi
 
 # Prepare directories
 sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
@@ -49,6 +70,12 @@ sudo install -m 0644 "$CA_SRC" /etc/t12/ca.crt
 sudo install -m 0644 "$VECTOR_TOML_SRC" /etc/t12/vector.toml
 sudo install -m 0600 "$ENV_SRC" /etc/t12/vector.env
 cp /etc/t12/vector.env "$HOME/.t12.env" && chmod 600 "$HOME/.t12.env"
+
+# Verify copies
+check_file /etc/t12/ca.crt
+check_file /etc/t12/vector.toml
+check_file /etc/t12/vector.env
+check_file "$HOME/.t12.env"
 
 # Create/refresh systemd unit
 sudo tee /etc/systemd/system/t12-vector.service >/dev/null <<'UNIT'
@@ -81,10 +108,19 @@ else
   export SKIP_VECTOR_CHECK=1
 fi
 
+# Probe Vector health (best-effort)
+sleep 2
+HC=$(http_code http://127.0.0.1:8686/health || true)
+echo "[INFO] Vector health HTTP code: ${HC:-none}"
+
 # Export runtime env for training
 set -a; [ -f "$HOME/.t12.env" ] && source "$HOME/.t12.env"; set +a
 export VECTOR_SERVICE_NAME="t12-vector.service"
 export SKIP_VECTOR_CHECK="${SKIP_VECTOR_CHECK:-0}"
+
+# Final preflight before training
+check_file /etc/t12/vector.env
+check_file "$HOME/.t12.env"
 
 mkdir -p "$RESULTS_DIR/init" "$RESULTS_DIR/run"
 
