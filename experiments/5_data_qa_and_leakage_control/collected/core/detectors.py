@@ -202,6 +202,7 @@ class SemanticDetector:
         threshold: float = 0.9,
         model_name: str = "all-MiniLM-L6-v2",
         batch_size: int = 512,
+        device: str = "auto",
     ) -> None:
         """Initialize the semantic detector.
 
@@ -212,6 +213,8 @@ class SemanticDetector:
                 Defaults to ``"all-MiniLM-L6-v2"``.
             batch_size: Number of texts to encode in one forward pass.
                 Defaults to 512.
+            device: Device for semantic embeddings (`"auto"`, `"cuda"`, `"mps"`,
+                or `"cpu"`). Defaults to `"auto"`.
 
         Raises:
             ImportError: If ``sentence-transformers`` is not installed.
@@ -226,10 +229,32 @@ class SemanticDetector:
 
         self.threshold = threshold
         self.batch_size = batch_size
-        self.model = SentenceTransformer(model_name)
+        self.device = self._resolve_device(device)
+        self.model = SentenceTransformer(model_name, device=self.device)
         self.index = None  # populated by build_index()
         # Parallel list to the FAISS index: meta[i] = {"benchmark": str, "text": str}
         self.meta: list[dict[str, str]] = []
+        console.print(
+            f"[cyan]Semantic embeddings device:[/cyan] {self.device} "
+            f"(FAISS index: CPU in current setup)"
+        )
+
+    def _resolve_device(self, requested: str) -> str:
+        """Choose embedding device, defaulting to auto detection."""
+        req = requested.lower().strip()
+        if req != "auto":
+            return req
+
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                return "cuda"
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return "mps"
+        except Exception:
+            pass
+        return "cpu"
 
     def build_index(self, registry: Any) -> None:
         """Build the FAISS index from all loaded benchmarks.

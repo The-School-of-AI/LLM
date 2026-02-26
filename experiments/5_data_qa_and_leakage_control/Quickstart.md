@@ -5,16 +5,16 @@
 # 1. Navigate to scanner project
 cd collected/
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 2. Install dependencies  (uv required — install: curl -LsSf https://astral.sh/uv/install.sh | sh)
+uv sync
 
 # 3. If benchmarks are missing, download once
-python scripts/download_benchmarks.py
+uv run python scripts/download_benchmarks.py
 # Optional: write to a custom location
-# python scripts/download_benchmarks.py --output-dir /data/benchmarks
+# uv run python scripts/download_benchmarks.py --output-dir /data/benchmarks
 
 # 4. Scan your data
-python scripts/scan.py your_data.jsonl "Team Name" "Batch ID"
+uv run python scripts/scan.py your_data.jsonl "Team Name" "Batch ID"
 
 # 5. Check output
 # ✅ APPROVED = Safe to use in training

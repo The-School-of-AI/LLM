@@ -15,22 +15,29 @@ Confidence values in results are real computed scores, not hardcoded labels.
 
 ## Setup
 
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
+
 ```bash
 cd experiments/5_data_qa_and_leakage_control/collected
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+
+# Install core layers (N-gram + MinHash)
+uv sync
+
+# Also enable the Semantic layer (dense embeddings + FAISS — ~2 GB download)
+uv sync --extra semantic
 ```
+
+> **uv not installed?** Run `curl -LsSf https://astral.sh/uv/install.sh | sh` first.
 
 ## Download Benchmarks (One-Time)
 
 Downloads all benchmark test sets into `benchmarks/`. Only needed if `benchmarks/*_test.jsonl` files are missing.
 
 ```bash
-python scripts/download_benchmarks.py
+uv run python scripts/download_benchmarks.py
 
 # Optional: write to a custom location
-python scripts/download_benchmarks.py --output-dir /data/benchmarks
+uv run python scripts/download_benchmarks.py --output-dir /data/benchmarks
 ```
 
 ### Benchmarks included
@@ -57,13 +64,13 @@ python scripts/download_benchmarks.py --output-dir /data/benchmarks
 ## Run a Scan
 
 ```bash
-python scripts/scan.py <input_file.jsonl> <team_name> <batch_name>
+uv run python scripts/scan.py <input_file.jsonl> <team_name> <batch_name>
 ```
 
 Example:
 
 ```bash
-python scripts/scan.py group4.jsonl "Team 4" "group4_batch_01"
+uv run python scripts/scan.py group4.jsonl "Team 4" "group4_batch_01"
 ```
 
 ## Input Format
@@ -102,10 +109,10 @@ Failed runs are recorded with a `failure_type` field (`INVALID_INPUT`, `OUT_OF_M
 
 ```bash
 # Show what was used for a given run_id
-python scripts/replay.py <run_id>
+uv run python scripts/replay.py <run_id>
 
 # Also re-execute the scan
-python scripts/replay.py <run_id> --execute
+uv run python scripts/replay.py <run_id> --execute
 ```
 
 This prints the exact git commit, input file, team, config, and outcome — and the `git checkout` + `scan.py` command to reproduce it.
