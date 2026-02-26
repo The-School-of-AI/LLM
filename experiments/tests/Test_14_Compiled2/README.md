@@ -127,3 +127,41 @@ Add a termination notice handler (via systemd or IMDS watch) to:
 - Emit a `checkpoint_saving` event
 - Save a final checkpoint
 - Flush/shutdown Vector gracefully
+
+## Credentials delivery: Secrets Manager vs S3
+
+### Current default (what this repo assumes)
+
+- **CA cert**: pulled from S3 at boot → `/etc/t12/ca.crt`.
+- **Vector config**: pulled at boot (GitHub raw in sample; can be S3).
+- **Credentials (endpoint + writer password)**: read from **AWS Secrets Manager** (`t12/clickhouse`) via a cross-account role.
+- **Env files**: generated on-instance → `/etc/t12/vector.env` and `~/.t12.env`.
+
+This avoids baking secrets into images or public buckets, supports rotation, and provides audit trails.
+
+### S3-only mode (optional)
+
+If you prefer to avoid Secrets Manager, you can store all three artifacts in a private S3 bucket and fetch them at boot:
+
+- `s3://<bucket>/certs/ca_clickhouse.crt` → `/etc/t12/ca.crt`
+- `s3://<bucket>/vector/vector.toml` → `/etc/t12/vector.toml`
+- `s3://<bucket>/env/vector.env` → `/etc/t12/vector.env` (also copy to `~/.t12.env`)
+
+Requirements and safeguards:
+
+- Bucket-level public access blocked; no public ACLs.
+- IAM policy: allow `s3:GetObject` only to the EC2 instance role.
+- Server-side encryption (SSE-KMS) with a key policy limited to your account/team.
+- Optional: version `vector.env` and implement a small refresh timer to re-pull and `systemctl restart t12-vector` on change.
+
+Trade-offs:
+
+- **Secrets Manager (recommended):** rotation support, fine-grained audit, narrow access, simpler least-privilege for credentials. Slightly more setup (cross-account role).
+- **S3-only:** simpler single storage surface, but you must enforce private access and handle rotation/versioning manually. Increased risk if bucket policy is misconfigured.
+
+Implementation notes (user-data adjustments):
+
+- Replace the Secrets Manager block with:
+  - `aws s3 cp s3://<bucket>/env/vector.env /etc/t12/vector.env`
+  - `cp /etc/t12/vector.env /home/ubuntu/.t12.env && chown ubuntu:ubuntu /home/ubuntu/.t12.env`
+- Ensure the instance profile has `s3:GetObject` for the three object prefixes.
