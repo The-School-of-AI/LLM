@@ -24,7 +24,8 @@ from typing import Optional, Tuple
 import torch
 
 # Import the base indexer kernels
-from .triton_indexer import HAS_TRITON, pytorch_gated_indexer, triton_gated_indexer
+from .triton_indexer import (HAS_TRITON, pytorch_gated_indexer,
+                             triton_gated_indexer)
 
 # ============================================================
 # Single-Pass Chunked Indexer: Variance + TopK in one loop

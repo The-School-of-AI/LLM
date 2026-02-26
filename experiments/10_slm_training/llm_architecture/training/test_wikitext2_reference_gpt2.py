@@ -11,7 +11,6 @@ ReferenceLLM has:
 import argparse
 import math
 import random
-
 # Add repo root to path
 import sys
 import time
@@ -25,13 +24,8 @@ from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.model_config import (
-    PRESET_CONFIGS,
-    ConnectionType,
-    EmbeddingType,
-    ModelConfig,
-    get_preset_config,
-)
+from config.model_config import (PRESET_CONFIGS, ConnectionType, EmbeddingType,
+                                 ModelConfig, get_preset_config)
 from models.reference_llm import ReferenceLLM, ReferenceLLMOutput
 
 try:
@@ -250,10 +244,8 @@ def print_architecture_report(config: ModelConfig, strict: bool) -> None:
 
 
 def build_kronecker_artifacts(tokenizer, model_config: ModelConfig):
-    from components.embeddings.kronecker_embedding import (
-        KroneckerConfig,
-        KroneckerEmbeddings,
-    )
+    from components.embeddings.kronecker_embedding import (KroneckerConfig,
+                                                           KroneckerEmbeddings)
 
     vocab_size = model_config.vocab_size
     pf_dim = model_config.embedding.kronecker_pf_dim

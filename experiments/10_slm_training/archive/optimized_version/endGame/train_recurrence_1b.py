@@ -20,12 +20,11 @@ import time
 
 import torch
 import torch.nn as nn
-
 # Import existing data utilities
 from data_utils import SYNTHStream
-
 # Import the 1B recurrence model
-from recurrence_model_1b import KroneckerConfig, KroneckerEmbeddings, create_model_1b
+from recurrence_model_1b import (KroneckerConfig, KroneckerEmbeddings,
+                                 create_model_1b)
 from torch.utils.data import DataLoader
 from transformers import PreTrainedTokenizerFast
 
@@ -140,14 +139,10 @@ def detect_device_and_config(args):
 def print_kernel_status():
     """Print which kernels are available and will be used."""
     try:
-        from recurrence_model_1b import (
-            HAS_FLA,
-            HAS_TRITON,
-            fla_gated_delta_rule,
-            triton_rmsnorm,
-            triton_sinkhorn_knopp,
-            triton_sparse_attention,
-        )
+        from recurrence_model_1b import (HAS_FLA, HAS_TRITON,
+                                         fla_gated_delta_rule, triton_rmsnorm,
+                                         triton_sinkhorn_knopp,
+                                         triton_sparse_attention)
     except ImportError:
         # Kernels not imported into model — fallback
         HAS_TRITON = False

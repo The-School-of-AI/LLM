@@ -26,12 +26,9 @@ import torch.nn.functional as F
 from components.attention.gated_deltanet import DeltaNetRotaryEmbedding
 
 try:
-    from components.kernels import (
-        HAS_TRITON,
-        pytorch_sparse_attention,
-        triton_gated_indexer,
-        triton_sparse_attention,
-    )
+    from components.kernels import (HAS_TRITON, pytorch_sparse_attention,
+                                    triton_gated_indexer,
+                                    triton_sparse_attention)
 except ImportError:
     HAS_TRITON = False
     triton_sparse_attention = None

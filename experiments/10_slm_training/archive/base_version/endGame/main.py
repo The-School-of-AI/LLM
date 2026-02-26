@@ -31,18 +31,11 @@ import time
 
 import torch
 import torch.nn as nn
-
 # Import our modular components
 from config import Config
-from data import (
-    SYNTHPromptSampler,
-    SYNTHStream,
-    create_bpe_token_strings,
-    discover_chars_from_bpe_tokenizer,
-    pad_char_vocab_128,
-)
+from data import (SYNTHPromptSampler, SYNTHStream, create_bpe_token_strings,
+                  discover_chars_from_bpe_tokenizer, pad_char_vocab_128)
 from fourier_se_decoder import PFCodec, PFConfig
-
 # MODEL SELECTION: Uncomment ONE of the following imports
 # 1. Multi-Token Prediction (NTP + MTP) with Gated Sparse Attention
 # from model_gated_multitoken import SmolLM
@@ -51,22 +44,11 @@ from fourier_se_decoder import PFCodec, PFConfig
 # 3. Single-Token Prediction with Multi-Head Latent Attention (original)
 from model import SmolLM
 from torch.utils.data import DataLoader
-from training import (
-    get_learning_rate,
-    load_checkpoint,
-    save_checkpoint,
-    setup_tokenizer,
-    setup_training,
-    update_learning_rate,
-)
+from training import (get_learning_rate, load_checkpoint, save_checkpoint,
+                      setup_tokenizer, setup_training, update_learning_rate)
 from transformers import GPT2Tokenizer
-from utils import (
-    PauseHandler,
-    sample_generate_single_fast,
-    set_runtime_optimizations,
-    setup_logging,
-    sync_device,
-)
+from utils import (PauseHandler, sample_generate_single_fast,
+                   set_runtime_optimizations, setup_logging, sync_device)
 
 
 def parse_arguments():

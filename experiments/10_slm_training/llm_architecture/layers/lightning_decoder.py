@@ -12,7 +12,6 @@ Components:
 - MTPTransformerBlock: Full transformer block for MTP (fusion + DeltaNet + MLP + mHC)
 """
 
-
 import torch
 import torch.nn as nn
 from components.attention.gated_deltanet import GatedDeltaNet

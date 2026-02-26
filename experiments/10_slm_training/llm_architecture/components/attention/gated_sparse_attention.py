@@ -30,10 +30,8 @@ import torch.utils.checkpoint as checkpoint
 
 # Import RoPE if available
 try:
-    from components.embeddings.rotary_embedding import (
-        RotaryEmbedding,
-        apply_rotary_pos_emb,
-    )
+    from components.embeddings.rotary_embedding import (RotaryEmbedding,
+                                                        apply_rotary_pos_emb)
 
     HAS_ROPE = True
 except ImportError:

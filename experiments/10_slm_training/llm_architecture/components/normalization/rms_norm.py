@@ -8,7 +8,6 @@ More efficient than LayerNorm - no mean subtraction, no bias.
 Used by: LLaMA, Qwen, Mistral, DeepSeek, etc.
 """
 
-
 import torch
 import torch.nn as nn
 

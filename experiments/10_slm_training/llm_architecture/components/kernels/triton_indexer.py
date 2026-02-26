@@ -5,7 +5,6 @@ This kernel computes indexer scores efficiently on GPU using Triton.
 Based on the GSA paper implementation (arXiv:2601.15305v1).
 """
 
-
 import torch
 
 # Check for Triton availability

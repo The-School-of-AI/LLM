@@ -29,12 +29,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import torch
-from torch.profiler import (
-    ProfilerActivity,
-    profile,
-    schedule,
-    tensorboard_trace_handler,
-)
+from torch.profiler import (ProfilerActivity, profile, schedule,
+                            tensorboard_trace_handler)
 
 
 @dataclass

@@ -34,7 +34,8 @@ from contextlib import contextmanager
 import torch
 import torch.nn as nn
 from data_utils import SYNTHStream
-from recurrence_model_1b import KroneckerConfig, KroneckerEmbeddings, create_model_1b
+from recurrence_model_1b import (KroneckerConfig, KroneckerEmbeddings,
+                                 create_model_1b)
 from torch.utils.data import DataLoader
 
 # Add parent directory to path so we can import project modules
@@ -366,14 +367,10 @@ def detect_device_and_config(args):
 def print_kernel_status():
     """Print which kernels are available and will be used."""
     try:
-        from recurrence_model_1b import (
-            HAS_FLA,
-            HAS_TRITON,
-            fla_gated_delta_rule,
-            triton_rmsnorm,
-            triton_sinkhorn_knopp,
-            triton_sparse_attention,
-        )
+        from recurrence_model_1b import (HAS_FLA, HAS_TRITON,
+                                         fla_gated_delta_rule, triton_rmsnorm,
+                                         triton_sinkhorn_knopp,
+                                         triton_sparse_attention)
     except ImportError:
         HAS_TRITON = False
         HAS_FLA = False

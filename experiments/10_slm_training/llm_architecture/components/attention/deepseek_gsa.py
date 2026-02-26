@@ -33,10 +33,8 @@ import torch.nn.functional as F
 
 # Try to import RoPE from your components
 try:
-    from components.embeddings.rotary_embedding import (
-        RotaryEmbedding,
-        apply_rotary_pos_emb,
-    )
+    from components.embeddings.rotary_embedding import (RotaryEmbedding,
+                                                        apply_rotary_pos_emb)
 
     HAS_ROPE = True
 except ImportError:
@@ -44,10 +42,8 @@ except ImportError:
 
 # Try to import YaRN embedding
 try:
-    from components.embeddings.yarn_embedding import (
-        DynamicYaRNEmbedding,
-        YaRNRotaryEmbedding,
-    )
+    from components.embeddings.yarn_embedding import (DynamicYaRNEmbedding,
+                                                      YaRNRotaryEmbedding)
 
     HAS_YARN = True
 except ImportError:
@@ -55,11 +51,8 @@ except ImportError:
 
 # Try to import Triton kernels
 try:
-    from components.kernels import (
-        HAS_TRITON,
-        pytorch_sparse_attention,
-        triton_sparse_attention,
-    )
+    from components.kernels import (HAS_TRITON, pytorch_sparse_attention,
+                                    triton_sparse_attention)
 except ImportError:
     HAS_TRITON = False
     triton_sparse_attention = None

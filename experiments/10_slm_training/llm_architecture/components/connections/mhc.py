@@ -28,7 +28,8 @@ import torch.nn as nn
 
 # Use Triton-fused Sinkhorn when available
 try:
-    from components.kernels.triton_sinkhorn import HAS_TRITON as HAS_TRITON_SINKHORN
+    from components.kernels.triton_sinkhorn import \
+        HAS_TRITON as HAS_TRITON_SINKHORN
     from components.kernels.triton_sinkhorn import triton_sinkhorn_knopp
 
     _USE_TRITON_SINKHORN = HAS_TRITON_SINKHORN

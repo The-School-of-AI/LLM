@@ -153,18 +153,11 @@ import torch.nn.functional as F
 # ── Triton Kernel Imports ────────────────────────────────────────────────────
 # All kernels have automatic PyTorch fallbacks when Triton/fla unavailable.
 try:
-    from kernels import (
-        HAS_FLA,
-        HAS_TRITON,
-        TritonRMSNorm,
-        fla_gated_delta_rule,
-        pytorch_rmsnorm,
-        pytorch_sinkhorn_knopp,
-        pytorch_sparse_attention,
-        triton_rmsnorm,
-        triton_sinkhorn_knopp,
-        triton_sparse_attention,
-    )
+    from kernels import (HAS_FLA, HAS_TRITON, TritonRMSNorm,
+                         fla_gated_delta_rule, pytorch_rmsnorm,
+                         pytorch_sinkhorn_knopp, pytorch_sparse_attention,
+                         triton_rmsnorm, triton_sinkhorn_knopp,
+                         triton_sparse_attention)
 except ImportError:
     HAS_TRITON = False
     HAS_FLA = False

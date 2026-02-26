@@ -13,7 +13,6 @@ CLI arguments always override config file values.
 
 import argparse
 import random
-
 # Add repo root to path
 import sys
 from pathlib import Path
