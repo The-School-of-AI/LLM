@@ -2907,3 +2907,869 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
   Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
   Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
   Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+[run.sh] Started at Thu Feb 26 22:12:28 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:12:31] Saving deterministic init model for Test 14...'
+[2026-02-26 22:12:31] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+[run.sh] Started at Thu Feb 26 22:15:27 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:15:30] Saving deterministic init model for Test 14...'
+[2026-02-26 22:15:30] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:17:09] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 22:17:09] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=1 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 22:17:15,255] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-26 22:17:15,256] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 22:17:21,235] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0]}
+[2026-02-26 22:17:21,235] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=1, node_rank=0
+[2026-02-26 22:17:21,235] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2026-02-26 22:17:21,235] [INFO] [launch.py:180:main] dist_world_size=1
+[2026-02-26 22:17:21,235] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0
+[2026-02-26 22:17:21,236] [INFO] [launch.py:272:main] process 6891 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=0', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml']
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_gsa_only_liger_kernels_1000steps.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  torch.compile: ENABLED (mode=default)
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772144247'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772144247_rank_0.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_0.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Metrics server started on port 8000
+✓ SystemMetricsCollector started (every 5.0s)
+============================================================
+  P12 TrainingOps — ready
+============================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+  Data loading started in background (overlapping with model build + compile warmup)
+Loading dataset: wikitext (wikitext-103-raw-v1)
+[2/5] Loading model...
+
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+  Updated model vocab_size to match tokenizer: 131,075
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+Generating test split:   0%|          | 0/4358 [00:00<?, ? examples/s]Generating test split:  23%|██▎       | 1000/4358 [00:00<00:00, 9064.47 examples/s]Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 38718.68 examples/s]
+Generating train split:   0%|          | 0/1801350 [00:00<?, ? examples/s]Generating train split:   0%|          | 1000/1801350 [00:06<3:17:12, 152.16 examples/s]Generating train split:   2%|▏         | 43000/1801350 [00:06<03:14, 9058.11 examples/s]Generating train split:   5%|▌         | 99000/1801350 [00:06<01:07, 25240.30 examples/s]Generating train split:   8%|▊         | 152000/1801350 [00:06<00:36, 45565.58 examples/s]Generating train split:  13%|█▎        | 234000/1801350 [00:13<01:21, 19176.80 examples/s]Generating train split:  18%|█▊        | 317000/1801350 [00:13<00:45, 32721.04 examples/s]Generating train split:  22%|██▏       | 388000/1801350 [00:20<01:13, 19351.76 examples/s]Generating train split:  26%|██▌       | 470000/1801350 [00:20<00:44, 29842.24 examples/s]Generating train split:  31%|███       | 550000/1801350 [00:20<00:28, 43986.30 examples/s]Generating train split:  34%|███▍      | 618000/1801350 [00:27<00:52, 22484.85 examples/s]Generating train split:  39%|███▉      | 700000/1801350 [00:27<00:33, 33207.54 examples/s]Generating train split:  43%|████▎     | 772000/1801350 [00:31<00:40, 25172.79 examples/s]Generating train split:  47%|████▋     | 850000/1801350 [00:31<00:26, 36093.76 examples/s]Generating train split:  50%|█████     | 901675/1801350 [00:40<00:53, 16835.21 examples/s]Generating train split:  55%|█████▍    | 983675/1801350 [00:40<00:32, 25279.47 examples/s]Generating train split:  59%|█████▉    | 1067675/1801350 [00:40<00:19, 37328.12 examples/s]Generating train split:  63%|██████▎   | 1130675/1801350 [00:47<00:33, 20295.63 examples/s]Generating train split:  67%|██████▋   | 1208675/1801350 [00:47<00:20, 29375.49 examples/s]Generating train split:  71%|███████▏  | 1285675/1801350 [00:47<00:12, 41687.17 examples/s]Generating train split:  76%|███████▌  | 1362675/1801350 [00:48<00:07, 58692.83 examples/s]Generating train split:  80%|███████▉  | 1440675/1801350 [00:48<00:04, 81939.39 examples/s]Generating train split:  84%|████████▍ | 1517675/1801350 [00:48<00:02, 111571.62 examples/s]Generating train split:  89%|████████▉ | 1599675/1801350 [00:48<00:01, 153272.76 examples/s]Generating train split:  95%|█████████▍| 1709675/1801350 [00:48<00:00, 217932.76 examples/s]Generating train split: 100%|█████████▉| 1792675/1801350 [00:48<00:00, 276196.10 examples/s]Generating train split: 100%|██████████| 1801350/1801350 [00:48<00:00, 37059.47 examples/s] 
+Generating validation split:   0%|          | 0/3760 [00:00<?, ? examples/s]Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 347469.17 examples/s]
+Filter:   0%|          | 0/4358 [00:00<?, ? examples/s]Filter: 100%|██████████| 4358/4358 [00:00<00:00, 253752.07 examples/s]
+Filter:   0%|          | 0/1801350 [00:00<?, ? examples/s]Filter:   3%|▎         | 47000/1801350 [00:00<00:03, 456219.13 examples/s]Filter:   5%|▌         | 94000/1801350 [00:00<00:03, 454089.54 examples/s]Filter:   8%|▊         | 153000/1801350 [00:00<00:03, 415506.89 examples/s]Filter:  11%|█         | 197000/1801350 [00:00<00:03, 417819.32 examples/s]Filter:  14%|█▎        | 244000/1801350 [00:00<00:03, 431652.65 examples/s]Filter:  17%|█▋        | 309000/1801350 [00:00<00:03, 426895.49 examples/s]Filter:  20%|█▉        | 354000/1801350 [00:00<00:03, 429984.93 examples/s]Filter:  22%|██▏       | 401000/1801350 [00:00<00:03, 438710.08 examples/s]Filter:  25%|██▍       | 447000/1801350 [00:01<00:03, 442855.91 examples/s]Filter:  29%|██▊       | 515000/1801350 [00:01<00:02, 443560.59 examples/s]Filter:  31%|███       | 561000/1801350 [00:01<00:02, 444314.94 examples/s]Filter:  34%|███▎      | 607000/1801350 [00:01<00:02, 447029.76 examples/s]Filter:  36%|███▌      | 652000/1801350 [00:01<00:02, 445573.65 examples/s]Filter:  39%|███▉      | 699000/1801350 [00:01<00:02, 450133.54 examples/s]Filter:  42%|████▏     | 763000/1801350 [00:01<00:02, 437760.26 examples/s]Filter:  46%|████▌     | 828000/1801350 [00:01<00:02, 430575.50 examples/s]Filter:  49%|████▊     | 874000/1801350 [00:02<00:02, 434526.36 examples/s]Filter:  51%|█████     | 919000/1801350 [00:02<00:02, 437106.10 examples/s]Filter:  54%|█████▎    | 964000/1801350 [00:02<00:01, 437779.80 examples/s]Filter:  56%|█████▌    | 1010000/1801350 [00:02<00:01, 442305.52 examples/s]Filter:  59%|█████▉    | 1060000/1801350 [00:02<00:01, 396647.38 examples/s]Filter:  61%|██████▏   | 1106000/1801350 [00:02<00:01, 409787.52 examples/s]Filter:  65%|██████▍   | 1170000/1801350 [00:02<00:01, 412064.80 examples/s]Filter:  67%|██████▋   | 1214000/1801350 [00:02<00:01, 416394.21 examples/s]Filter:  70%|███████   | 1261000/1801350 [00:02<00:01, 427229.88 examples/s]Filter:  73%|███████▎  | 1307000/1801350 [00:03<00:01, 434293.97 examples/s]Filter:  75%|███████▌  | 1353000/1801350 [00:03<00:01, 440137.69 examples/s]Filter:  78%|███████▊  | 1398000/1801350 [00:03<00:00, 440469.54 examples/s]Filter:  80%|████████  | 1444000/1801350 [00:03<00:00, 442831.74 examples/s]Filter:  83%|████████▎ | 1490000/1801350 [00:03<00:00, 447034.21 examples/s]Filter:  86%|████████▋ | 1557000/1801350 [00:03<00:00, 441232.74 examples/s]Filter:  90%|█████████ | 1623000/1801350 [00:03<00:00, 435688.14 examples/s]Filter:  93%|█████████▎| 1667000/1801350 [00:03<00:00, 436450.69 examples/s]Filter:  95%|█████████▌| 1714000/1801350 [00:03<00:00, 441684.94 examples/s]Filter:  98%|█████████▊| 1760000/1801350 [00:04<00:00, 443447.04 examples/s]Filter: 100%|██████████| 1801350/1801350 [00:04<00:00, 432037.50 examples/s]
+Filter:   0%|          | 0/3760 [00:00<?, ? examples/s]Filter: 100%|██████████| 3760/3760 [00:00<00:00, 320377.51 examples/s]
+Tokenizing dataset for block packing...
+Map (num_proc=8):   0%|          | 0/2891 [00:00<?, ? examples/s]   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+Map (num_proc=8):  13%|█▎        | 362/2891 [00:03<00:23, 109.10 examples/s]Map (num_proc=8):  38%|███▊      | 1086/2891 [00:03<00:05, 326.95 examples/s]Map (num_proc=8):  50%|█████     | 1447/2891 [00:04<00:03, 387.45 examples/s]Map (num_proc=8):  63%|██████▎   | 1808/2891 [00:04<00:02, 503.04 examples/s]Map (num_proc=8):  75%|███████▌  | 2169/2891 [00:05<00:01, 544.00 examples/s]Map (num_proc=8):  75%|███████▌  | 2169/2891 [00:08<00:02, 251.78 examples/s]
+  Loading init model weights from: ../results/init/model_init.pt
+[run.sh] Started at Thu Feb 26 22:24:57 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:25:00] Saving deterministic init model for Test 14...'
+[2026-02-26 22:25:00] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:26:48] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 22:26:48] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ deepspeed --num_gpus=1 main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 22:26:59,118] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-26 22:26:59,119] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-26 22:27:04,826] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0]}
+[2026-02-26 22:27:04,827] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=1, node_rank=0
+[2026-02-26 22:27:04,827] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2026-02-26 22:27:04,827] [INFO] [launch.py:180:main] dist_world_size=1
+[2026-02-26 22:27:04,827] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0
+[2026-02-26 22:27:04,827] [INFO] [launch.py:272:main] process 13728 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=0', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml']
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.9.0+cu128
+CUDA Available: True
+CUDA Devices: 1
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: False
+  torch.compile: DISABLED
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  Batch Size: 4
+  Max Length: 256
+  DataLoader Workers: 0 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+============================================================
+  P12 TrainingOps — initializing for run 'test14_1772144831'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/test14_1772144831_rank_0.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_0.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Metrics server started on port 8000
+✓ SystemMetricsCollector started (every 5.0s)
+============================================================
+  P12 TrainingOps — ready
+============================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-2-dense-bf16-test14-1000steps.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+Loading dataset: wikitext (wikitext-103-raw-v1)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Tokenizing dataset with fixed truncation/padding (legacy path)...
+Map (num_proc=1):   0%|          | 0/2891 [00:00<?, ? examples/s]Map (num_proc=1):  35%|███▍      | 1000/2891 [00:01<00:02, 666.12 examples/s]Map (num_proc=1):  69%|██████▉   | 2000/2891 [00:01<00:00, 1146.86 examples/s]Map (num_proc=1): 100%|██████████| 2891/2891 [00:02<00:00, 1453.28 examples/s]Map (num_proc=1): 100%|██████████| 2891/2891 [00:02<00:00, 1174.97 examples/s]
+Map (num_proc=1):   0%|          | 0/1165029 [00:00<?, ? examples/s]Map (num_proc=1):   0%|          | 1000/1165029 [00:01<31:47, 610.12 examples/s]Map (num_proc=1):   0%|          | 2000/1165029 [00:02<18:15, 1061.91 examples/s]Map (num_proc=1):   0%|          | 3000/1165029 [00:02<13:50, 1398.86 examples/s]Map (num_proc=1):   0%|          | 4000/1165029 [00:02<11:36, 1667.99 examples/s]Map (num_proc=1):   0%|          | 5000/1165029 [00:03<10:42, 1806.59 examples/s]Map (num_proc=1):   1%|          | 6000/1165029 [00:03<10:07, 1906.72 examples/s]Map (num_proc=1):   1%|          | 7000/1165029 [00:04<09:46, 1975.06 examples/s]Map (num_proc=1):   1%|          | 8000/1165029 [00:04<09:39, 1997.91 examples/s]Map (num_proc=1):   1%|          | 9000/1165029 [00:05<09:25, 2042.71 examples/s]Map (num_proc=1):   1%|          | 10000/1165029 [00:05<09:22, 2053.23 examples/s]Map (num_proc=1):   1%|          | 11000/1165029 [00:06<09:09, 2100.00 examples/s]Map (num_proc=1):   1%|          | 12000/1165029 [00:06<08:58, 2140.85 examples/s]Map (num_proc=1):   1%|          | 13000/1165029 [00:07<08:41, 2210.04 examples/s]Map (num_proc=1):   1%|          | 14000/1165029 [00:07<08:48, 2179.53 examples/s]Map (num_proc=1):   1%|▏         | 15000/1165029 [00:08<08:44, 2191.89 examples/s]Map (num_proc=1):   1%|▏         | 16000/1165029 [00:08<08:32, 2241.19 examples/s]Map (num_proc=1):   1%|▏         | 17000/1165029 [00:08<08:43, 2193.59 examples/s]Map (num_proc=1):   2%|▏         | 18000/1165029 [00:09<08:46, 2177.85 examples/s]Map (num_proc=1):   2%|▏         | 19000/1165029 [00:10<10:47, 1769.70 examples/s]Map (num_proc=1):   2%|▏         | 20000/1165029 [00:10<10:11, 1872.44 examples/s]Map (num_proc=1):   2%|▏         | 21000/1165029 [00:11<09:57, 1914.11 examples/s]Map (num_proc=1):   2%|▏         | 22000/1165029 [00:11<09:38, 1977.03 examples/s]Map (num_proc=1):   2%|▏         | 23000/1165029 [00:12<09:19, 2040.40 examples/s]Map (num_proc=1):   2%|▏         | 24000/1165029 [00:12<09:04, 2094.43 examples/s]Map (num_proc=1):   2%|▏         | 25000/1165029 [00:13<09:04, 2095.60 examples/s]Map (num_proc=1):   2%|▏         | 26000/1165029 [00:13<09:00, 2107.86 examples/s]Map (num_proc=1):   2%|▏         | 27000/1165029 [00:13<09:01, 2100.26 examples/s]Map (num_proc=1):   2%|▏         | 28000/1165029 [00:14<09:08, 2074.61 examples/s]Map (num_proc=1):   2%|▏         | 29000/1165029 [00:14<08:54, 2123.98 examples/s]Map (num_proc=1):   3%|▎         | 30000/1165029 [00:15<08:37, 2193.89 examples/s]Map (num_proc=1):   3%|▎         | 31000/1165029 [00:15<08:15, 2290.38 examples/s]Map (num_proc=1):   3%|▎         | 32000/1165029 [00:16<08:03, 2344.75 examples/s]Map (num_proc=1):   3%|▎         | 33000/1165029 [00:16<08:06, 2326.00 examples/s]Map (num_proc=1):   3%|▎         | 34000/1165029 [00:16<07:58, 2363.30 examples/s]Map (num_proc=1):   3%|▎         | 35000/1165029 [00:17<07:54, 2382.14 examples/s]Map (num_proc=1):   3%|▎         | 36000/1165029 [00:17<08:03, 2334.85 examples/s]Map (num_proc=1):   3%|▎         | 37000/1165029 [00:18<07:57, 2362.80 examples/s]Map (num_proc=1):   3%|▎         | 38000/1165029 [00:18<07:54, 2375.42 examples/s]Map (num_proc=1):   3%|▎         | 39000/1165029 [00:19<07:57, 2357.40 examples/s]Map (num_proc=1):   3%|▎         | 40000/1165029 [00:19<07:50, 2388.96 examples/s]Map (num_proc=1):   4%|▎         | 41000/1165029 [00:19<07:54, 2368.85 examples/s]Map (num_proc=1):   4%|▎         | 42000/1165029 [00:20<07:50, 2386.56 examples/s]Map (num_proc=1):   4%|▎         | 43000/1165029 [00:20<07:53, 2367.28 examples/s]Map (num_proc=1):   4%|▍         | 44000/1165029 [00:21<07:54, 2362.98 examples/s]Map (num_proc=1):   4%|▍         | 45000/1165029 [00:21<07:46, 2402.36 examples/s]Map (num_proc=1):   4%|▍         | 46000/1165029 [00:22<07:52, 2368.40 examples/s]Map (num_proc=1):   4%|▍         | 47000/1165029 [00:22<07:47, 2390.50 examples/s]Map (num_proc=1):   4%|▍         | 48000/1165029 [00:22<07:29, 2487.27 examples/s]Map (num_proc=1):   4%|▍         | 49000/1165029 [00:23<07:32, 2463.99 examples/s]Map (num_proc=1):   4%|▍         | 50000/1165029 [00:23<07:34, 2450.67 examples/s]Map (num_proc=1):   4%|▍         | 51000/1165029 [00:24<09:02, 2053.05 examples/s]Map (num_proc=1):   4%|▍         | 52000/1165029 [00:24<08:51, 2094.65 examples/s]Map (num_proc=1):   5%|▍         | 53000/1165029 [00:25<08:32, 2169.47 examples/s]Map (num_proc=1):   5%|▍         | 54000/1165029 [00:25<08:11, 2262.35 examples/s]Map (num_proc=1):   5%|▍         | 55000/1165029 [00:25<07:56, 2329.02 examples/s]Map (num_proc=1):   5%|▍         | 56000/1165029 [00:26<08:02, 2297.22 examples/s]Map (num_proc=1):   5%|▍         | 57000/1165029 [00:26<07:52, 2343.50 examples/s]Map (num_proc=1):   5%|▍         | 58000/1165029 [00:27<08:00, 2304.98 examples/s]Map (num_proc=1):   5%|▌         | 59000/1165029 [00:27<08:03, 2287.89 examples/s]Map (num_proc=1):   5%|▌         | 60000/1165029 [00:28<08:00, 2298.82 examples/s]Map (num_proc=1):   5%|▌         | 61000/1165029 [00:28<08:07, 2266.32 examples/s]Map (num_proc=1):   5%|▌         | 62000/1165029 [00:29<08:00, 2294.66 examples/s]Map (num_proc=1):   5%|▌         | 63000/1165029 [00:29<07:43, 2378.36 examples/s]Map (num_proc=1):   5%|▌         | 64000/1165029 [00:29<07:50, 2337.91 examples/s]Map (num_proc=1):   6%|▌         | 65000/1165029 [00:30<08:14, 2225.29 examples/s]Map (num_proc=1):   6%|▌         | 66000/1165029 [00:30<07:58, 2296.46 examples/s]Map (num_proc=1):   6%|▌         | 67000/1165029 [00:31<07:56, 2302.79 examples/s]Map (num_proc=1):   6%|▌         | 68000/1165029 [00:31<08:01, 2278.18 examples/s]Map (num_proc=1):   6%|▌         | 69000/1165029 [00:32<08:02, 2272.56 examples/s]Map (num_proc=1):   6%|▌         | 70000/1165029 [00:32<08:11, 2229.16 examples/s]Map (num_proc=1):   6%|▌         | 71000/1165029 [00:33<08:10, 2229.05 examples/s]Map (num_proc=1):   6%|▌         | 72000/1165029 [00:33<07:58, 2286.63 examples/s]Map (num_proc=1):   6%|▋         | 73000/1165029 [00:33<07:56, 2290.86 examples/s]Map (num_proc=1):   6%|▋         | 74000/1165029 [00:34<08:02, 2262.65 examples/s]Map (num_proc=1):   6%|▋         | 75000/1165029 [00:34<08:02, 2256.82 examples/s]Map (num_proc=1):   7%|▋         | 76000/1165029 [00:35<08:05, 2243.32 examples/s]Map (num_proc=1):   7%|▋         | 77000/1165029 [00:35<07:58, 2275.17 examples/s]Map (num_proc=1):   7%|▋         | 78000/1165029 [00:36<07:44, 2340.66 examples/s]Map (num_proc=1):   7%|▋         | 79000/1165029 [00:36<07:53, 2295.52 examples/s]Map (num_proc=1):   7%|▋         | 80000/1165029 [00:36<07:52, 2298.37 examples/s]Map (num_proc=1):   7%|▋         | 81000/1165029 [00:37<07:57, 2272.16 examples/s]Map (num_proc=1):   7%|▋         | 82000/1165029 [00:38<09:04, 1989.01 examples/s]Map (num_proc=1):   7%|▋         | 83000/1165029 [00:38<08:46, 2053.23 examples/s]Map (num_proc=1):   7%|▋         | 84000/1165029 [00:38<08:34, 2100.08 examples/s]Map (num_proc=1):   7%|▋         | 85000/1165029 [00:39<08:28, 2123.39 examples/s]Map (num_proc=1):   7%|▋         | 86000/1165029 [00:39<08:15, 2178.62 examples/s]Map (num_proc=1):   7%|▋         | 87000/1165029 [00:40<08:05, 2218.45 examples/s]Map (num_proc=1):   8%|▊         | 88000/1165029 [00:40<07:53, 2274.79 examples/s]Map (num_proc=1):   8%|▊         | 89000/1165029 [00:41<07:36, 2355.76 examples/s]Map (num_proc=1):   8%|▊         | 90000/1165029 [00:41<07:36, 2356.37 examples/s]Map (num_proc=1):   8%|▊         | 91000/1165029 [00:41<07:39, 2339.19 examples/s]Map (num_proc=1):   8%|▊         | 92000/1165029 [00:42<07:45, 2304.03 examples/s]Map (num_proc=1):   8%|▊         | 93000/1165029 [00:42<07:36, 2349.88 examples/s]Map (num_proc=1):   8%|▊         | 94000/1165029 [00:43<07:35, 2352.85 examples/s]Map (num_proc=1):   8%|▊         | 95000/1165029 [00:43<07:34, 2353.33 examples/s]Map (num_proc=1):   8%|▊         | 96000/1165029 [00:44<07:45, 2294.99 examples/s]Map (num_proc=1):   8%|▊         | 97000/1165029 [00:44<07:49, 2272.73 examples/s]Map (num_proc=1):   8%|▊         | 98000/1165029 [00:44<07:52, 2260.04 examples/s]Map (num_proc=1):   8%|▊         | 99000/1165029 [00:45<07:58, 2228.89 examples/s]Map (num_proc=1):   9%|▊         | 100000/1165029 [00:45<08:00, 2217.57 examples/s]Map (num_proc=1):   9%|▊         | 101000/1165029 [00:46<07:58, 2225.80 examples/s]Map (num_proc=1):   9%|▉         | 102000/1165029 [00:46<07:52, 2247.97 examples/s]Map (num_proc=1):   9%|▉         | 103000/1165029 [00:47<07:55, 2234.93 examples/s]Map (num_proc=1):   9%|▉         | 104000/1165029 [00:47<07:50, 2254.41 examples/s]Map (num_proc=1):   9%|▉         | 105000/1165029 [00:48<07:53, 2236.59 examples/s]Map (num_proc=1):   9%|▉         | 106000/1165029 [00:48<07:56, 2223.41 examples/s]Map (num_proc=1):   9%|▉         | 107000/1165029 [00:49<07:54, 2227.79 examples/s]Map (num_proc=1):   9%|▉         | 108000/1165029 [00:49<07:44, 2277.96 examples/s]Map (num_proc=1):   9%|▉         | 109000/1165029 [00:49<07:45, 2266.55 examples/s]Map (num_proc=1):   9%|▉         | 110000/1165029 [00:50<07:50, 2241.41 examples/s]Map (num_proc=1):  10%|▉         | 111000/1165029 [00:50<07:49, 2244.76 examples/s]Map (num_proc=1):  10%|▉         | 112000/1165029 [00:51<07:51, 2232.17 examples/s]Map (num_proc=1):  10%|▉         | 113000/1165029 [00:51<07:41, 2281.86 examples/s]Map (num_proc=1):  10%|▉         | 114000/1165029 [00:52<07:42, 2270.81 examples/s]Map (num_proc=1):  10%|▉         | 115000/1165029 [00:52<07:53, 2216.76 examples/s]Map (num_proc=1):  10%|▉         | 116000/1165029 [00:53<07:48, 2239.59 examples/s]Map (num_proc=1):  10%|█         | 117000/1165029 [00:53<08:57, 1949.23 examples/s]Map (num_proc=1):  10%|█         | 118000/1165029 [00:54<08:37, 2024.79 examples/s]Map (num_proc=1):  10%|█         | 119000/1165029 [00:54<08:25, 2068.63 examples/s]Map (num_proc=1):  10%|█         | 120000/1165029 [00:55<08:18, 2097.20 examples/s]Map (num_proc=1):  10%|█         | 121000/1165029 [00:55<08:07, 2141.34 examples/s]Map (num_proc=1):  10%|█         | 122000/1165029 [00:55<07:58, 2180.53 examples/s]Map (num_proc=1):  11%|█         | 123000/1165029 [00:56<07:47, 2226.59 examples/s]Map (num_proc=1):  11%|█         | 124000/1165029 [00:56<07:46, 2233.33 examples/s]Map (num_proc=1):  11%|█         | 125000/1165029 [00:57<07:43, 2245.13 examples/s]Map (num_proc=1):  11%|█         | 126000/1165029 [00:57<07:40, 2255.80 examples/s]Map (num_proc=1):  11%|█         | 127000/1165029 [00:58<07:41, 2251.35 examples/s]Map (num_proc=1):  11%|█         | 128000/1165029 [00:58<07:15, 2382.86 examples/s]Map (num_proc=1):  11%|█         | 129000/1165029 [00:58<07:16, 2372.09 examples/s]Map (num_proc=1):  11%|█         | 130000/1165029 [00:59<07:34, 2279.13 examples/s]Map (num_proc=1):  11%|█         | 131000/1165029 [00:59<07:33, 2281.04 examples/s]Map (num_proc=1):  11%|█▏        | 132000/1165029 [01:00<07:25, 2316.80 examples/s]Map (num_proc=1):  11%|█▏        | 133000/1165029 [01:00<07:29, 2294.72 examples/s]Map (num_proc=1):  12%|█▏        | 134000/1165029 [01:01<07:34, 2266.05 examples/s]Map (num_proc=1):  12%|█▏        | 135000/1165029 [01:01<07:36, 2256.53 examples/s]Map (num_proc=1):  12%|█▏        | 136000/1165029 [01:02<07:30, 2281.69 examples/s]Map (num_proc=1):  12%|█▏        | 137000/1165029 [01:02<07:23, 2317.07 examples/s]Map (num_proc=1):  12%|█▏        | 138000/1165029 [01:02<07:17, 2346.43 examples/s]Map (num_proc=1):  12%|█▏        | 139000/1165029 [01:03<07:32, 2268.16 examples/s]Map (num_proc=1):  12%|█▏        | 140000/1165029 [01:03<07:35, 2252.26 examples/s]Map (num_proc=1):  12%|█▏        | 141000/1165029 [01:04<07:32, 2260.98 examples/s]Map (num_proc=1):  12%|█▏        | 142000/1165029 [01:04<07:32, 2261.75 examples/s]Map (num_proc=1):  12%|█▏        | 143000/1165029 [01:05<07:27, 2285.77 examples/s]Map (num_proc=1):  12%|█▏        | 144000/1165029 [01:05<07:36, 2234.97 examples/s]Map (num_proc=1):  12%|█▏        | 145000/1165029 [01:06<07:37, 2227.90 examples/s]Map (num_proc=1):  13%|█▎        | 146000/1165029 [01:06<07:30, 2261.56 examples/s]Map (num_proc=1):  13%|█▎        | 147000/1165029 [01:06<07:24, 2292.33 examples/s]Map (num_proc=1):  13%|█▎        | 148000/1165029 [01:07<08:42, 1947.73 examples/s]Map (num_proc=1):  13%|█▎        | 149000/1165029 [01:08<08:25, 2011.09 examples/s]Map (num_proc=1):  13%|█▎        | 150000/1165029 [01:08<08:08, 2075.81 examples/s]Map (num_proc=1):  13%|█▎        | 151000/1165029 [01:08<07:44, 2181.60 examples/s]Map (num_proc=1):  13%|█▎        | 152000/1165029 [01:09<07:34, 2226.77 examples/s]Map (num_proc=1):  13%|█▎        | 153000/1165029 [01:09<07:33, 2233.96 examples/s]Map (num_proc=1):  13%|█▎        | 154000/1165029 [01:10<07:35, 2221.79 examples/s]Map (num_proc=1):  13%|█▎        | 155000/1165029 [01:10<07:20, 2291.41 examples/s]Map (num_proc=1):  13%|█▎        | 156000/1165029 [01:10<07:11, 2339.72 examples/s]Map (num_proc=1):  13%|█▎        | 157000/1165029 [01:11<07:16, 2308.05 examples/s]Map (num_proc=1):  14%|█▎        | 158000/1165029 [01:11<07:15, 2311.82 examples/s]Map (num_proc=1):  14%|█▎        | 159000/1165029 [01:12<07:14, 2313.83 examples/s]Map (num_proc=1):  14%|█▎        | 160000/1165029 [01:12<07:10, 2332.31 examples/s]Map (num_proc=1):  14%|█▍        | 161000/1165029 [01:13<07:02, 2374.26 examples/s]Map (num_proc=1):  14%|█▍        | 162000/1165029 [01:13<07:07, 2344.05 examples/s]Map (num_proc=1):  14%|█▍        | 163000/1165029 [01:14<07:08, 2336.91 examples/s]Map (num_proc=1):  14%|█▍        | 164000/1165029 [01:14<07:16, 2293.60 examples/s]Map (num_proc=1):  14%|█▍        | 165000/1165029 [01:14<07:13, 2306.91 examples/s]Map (num_proc=1):  14%|█▍        | 166000/1165029 [01:15<07:13, 2305.25 examples/s]Map (num_proc=1):  14%|█▍        | 167000/1165029 [01:15<07:16, 2288.62 examples/s]Map (num_proc=1):  14%|█▍        | 168000/1165029 [01:16<07:34, 2193.62 examples/s]Map (num_proc=1):  15%|█▍        | 169000/1165029 [01:16<07:27, 2227.36 examples/s]Map (num_proc=1):  15%|█▍        | 170000/1165029 [01:17<07:28, 2217.46 examples/s]Map (num_proc=1):  15%|█▍        | 171000/1165029 [01:17<07:33, 2190.53 examples/s]Map (num_proc=1):  15%|█▍        | 172000/1165029 [01:18<07:31, 2200.93 examples/s]Map (num_proc=1):  15%|█▍        | 173000/1165029 [01:18<07:40, 2154.29 examples/s]Map (num_proc=1):  15%|█▍        | 174000/1165029 [01:19<07:38, 2163.47 examples/s]Map (num_proc=1):  15%|█▌        | 175000/1165029 [01:19<07:40, 2151.41 examples/s]Map (num_proc=1):  15%|█▌        | 176000/1165029 [01:19<07:40, 2147.78 examples/s]Map (num_proc=1):  15%|█▌        | 177000/1165029 [01:20<07:20, 2242.36 examples/s]Map (num_proc=1):  15%|█▌        | 178000/1165029 [01:20<07:25, 2214.92 examples/s]Map (num_proc=1):  15%|█▌        | 179000/1165029 [01:21<07:22, 2229.42 examples/s]Map (num_proc=1):  15%|█▌        | 180000/1165029 [01:21<07:15, 2263.93 examples/s]Map (num_proc=1):  16%|█▌        | 181000/1165029 [01:22<08:26, 1941.08 examples/s]Map (num_proc=1):  16%|█▌        | 182000/1165029 [01:22<07:58, 2053.42 examples/s]Map (num_proc=1):  16%|█▌        | 183000/1165029 [01:23<07:44, 2113.06 examples/s]Map (num_proc=1):  16%|█▌        | 184000/1165029 [01:23<07:25, 2201.00 examples/s]Map (num_proc=1):  16%|█▌        | 185000/1165029 [01:24<07:15, 2250.83 examples/s]Map (num_proc=1):  16%|█▌        | 186000/1165029 [01:24<07:16, 2240.49 examples/s]Map (num_proc=1):  16%|█▌        | 187000/1165029 [01:24<07:03, 2309.84 examples/s]Map (num_proc=1):  16%|█▌        | 188000/1165029 [01:25<07:07, 2283.87 examples/s]Map (num_proc=1):  16%|█▌        | 189000/1165029 [01:25<07:07, 2283.42 examples/s]Map (num_proc=1):  16%|█▋        | 190000/1165029 [01:26<07:20, 2213.85 examples/s]Map (num_proc=1):  16%|█▋        | 191000/1165029 [01:26<07:08, 2271.94 examples/s]Map (num_proc=1):  16%|█▋        | 192000/1165029 [01:27<07:05, 2286.76 examples/s]Map (num_proc=1):  17%|█▋        | 193000/1165029 [01:27<07:04, 2290.22 examples/s]Map (num_proc=1):  17%|█▋        | 194000/1165029 [01:28<07:06, 2277.33 examples/s]Map (num_proc=1):  17%|█▋        | 195000/1165029 [01:28<07:08, 2264.27 examples/s]Map (num_proc=1):  17%|█▋        | 196000/1165029 [01:28<07:05, 2276.64 examples/s]Map (num_proc=1):  17%|█▋        | 197000/1165029 [01:29<06:59, 2308.52 examples/s]Map (num_proc=1):  17%|█▋        | 198000/1165029 [01:29<07:02, 2287.26 examples/s]Map (num_proc=1):  17%|█▋        | 199000/1165029 [01:30<07:03, 2280.38 examples/s]Map (num_proc=1):  17%|█▋        | 200000/1165029 [01:30<07:01, 2291.43 examples/s]Map (num_proc=1):  17%|█▋        | 201000/1165029 [01:31<06:49, 2353.86 examples/s]Map (num_proc=1):  17%|█▋        | 202000/1165029 [01:31<06:50, 2346.18 examples/s]Map (num_proc=1):  17%|█▋        | 203000/1165029 [01:31<06:45, 2371.60 examples/s]Map (num_proc=1):  18%|█▊        | 204000/1165029 [01:32<06:54, 2321.02 examples/s]Map (num_proc=1):  18%|█▊        | 205000/1165029 [01:32<06:59, 2288.38 examples/s]Map (num_proc=1):  18%|█▊        | 206000/1165029 [01:33<07:08, 2240.62 examples/s]Map (num_proc=1):  18%|█▊        | 207000/1165029 [01:33<07:04, 2256.69 examples/s]Map (num_proc=1):  18%|█▊        | 208000/1165029 [01:34<07:00, 2278.17 examples/s]Map (num_proc=1):  18%|█▊        | 209000/1165029 [01:34<07:09, 2225.65 examples/s]Map (num_proc=1):  18%|█▊        | 210000/1165029 [01:35<07:04, 2248.95 examples/s]Map (num_proc=1):  18%|█▊        | 211000/1165029 [01:35<07:07, 2229.37 examples/s]Map (num_proc=1):  18%|█▊        | 212000/1165029 [01:36<08:09, 1948.18 examples/s]Map (num_proc=1):  18%|█▊        | 213000/1165029 [01:36<07:34, 2096.17 examples/s]Map (num_proc=1):  18%|█▊        | 214000/1165029 [01:36<07:29, 2115.39 examples/s]Map (num_proc=1):  18%|█▊        | 215000/1165029 [01:37<07:14, 2186.47 examples/s]Map (num_proc=1):  19%|█▊        | 216000/1165029 [01:37<07:08, 2212.76 examples/s]Map (num_proc=1):  19%|█▊        | 217000/1165029 [01:38<07:04, 2233.76 examples/s]Map (num_proc=1):  19%|█▊        | 218000/1165029 [01:38<06:59, 2259.34 examples/s]Map (num_proc=1):  19%|█▉        | 219000/1165029 [01:39<06:57, 2268.35 examples/s]Map (num_proc=1):  19%|█▉        | 220000/1165029 [01:39<06:58, 2256.07 examples/s]Map (num_proc=1):  19%|█▉        | 221000/1165029 [01:40<06:57, 2258.47 examples/s]Map (num_proc=1):  19%|█▉        | 222000/1165029 [01:40<06:55, 2267.82 examples/s]Map (num_proc=1):  19%|█▉        | 223000/1165029 [01:40<06:53, 2277.77 examples/s]Map (num_proc=1):  19%|█▉        | 224000/1165029 [01:41<06:56, 2261.48 examples/s]Map (num_proc=1):  19%|█▉        | 225000/1165029 [01:41<06:46, 2309.74 examples/s]Map (num_proc=1):  19%|█▉        | 226000/1165029 [01:42<06:51, 2282.88 examples/s]Map (num_proc=1):  19%|█▉        | 227000/1165029 [01:42<06:34, 2375.14 examples/s]Map (num_proc=1):  20%|█▉        | 228000/1165029 [01:43<06:40, 2338.96 examples/s]Map (num_proc=1):  20%|█▉        | 229000/1165029 [01:43<06:45, 2307.39 examples/s]Map (num_proc=1):  20%|█▉        | 230000/1165029 [01:43<06:40, 2336.84 examples/s]Map (num_proc=1):  20%|█▉        | 231000/1165029 [01:44<06:44, 2310.24 examples/s]Map (num_proc=1):  20%|█▉        | 232000/1165029 [01:44<06:50, 2275.37 examples/s]Map (num_proc=1):  20%|█▉        | 233000/1165029 [01:45<06:51, 2267.49 examples/s]Map (num_proc=1):  20%|██        | 234000/1165029 [01:45<06:41, 2316.16 examples/s]Map (num_proc=1):  20%|██        | 235000/1165029 [01:46<06:34, 2355.99 examples/s]Map (num_proc=1):  20%|██        | 236000/1165029 [01:46<06:33, 2360.70 examples/s]Map (num_proc=1):  20%|██        | 237000/1165029 [01:46<06:33, 2358.26 examples/s]Map (num_proc=1):  20%|██        | 238000/1165029 [01:47<06:40, 2313.52 examples/s]Map (num_proc=1):  21%|██        | 239000/1165029 [01:47<06:40, 2313.65 examples/s]Map (num_proc=1):  21%|██        | 240000/1165029 [01:48<06:45, 2279.80 examples/s]Map (num_proc=1):  21%|██        | 241000/1165029 [01:48<06:51, 2247.72 examples/s]Map (num_proc=1):  21%|██        | 242000/1165029 [01:49<06:45, 2275.60 examples/s]Map (num_proc=1):  21%|██        | 243000/1165029 [01:49<07:49, 1963.81 examples/s]Map (num_proc=1):  21%|██        | 244000/1165029 [01:50<07:37, 2013.99 examples/s]Map (num_proc=1):  21%|██        | 245000/1165029 [01:50<07:18, 2099.16 examples/s]Map (num_proc=1):  21%|██        | 246000/1165029 [01:51<07:02, 2174.62 examples/s]Map (num_proc=1):  21%|██        | 247000/1165029 [01:51<06:51, 2232.68 examples/s]Map (num_proc=1):  21%|██▏       | 248000/1165029 [01:52<06:57, 2198.53 examples/s]Map (num_proc=1):  21%|██▏       | 249000/1165029 [01:52<06:49, 2238.65 examples/s]Map (num_proc=1):  21%|██▏       | 250000/1165029 [01:52<06:49, 2234.03 examples/s]Map (num_proc=1):  22%|██▏       | 251000/1165029 [01:53<06:37, 2299.53 examples/s]Map (num_proc=1):  22%|██▏       | 252000/1165029 [01:53<06:34, 2314.00 examples/s]Map (num_proc=1):  22%|██▏       | 253000/1165029 [01:54<06:35, 2304.96 examples/s]Map (num_proc=1):  22%|██▏       | 254000/1165029 [01:54<06:38, 2285.52 examples/s]Map (num_proc=1):  22%|██▏       | 255000/1165029 [01:55<06:49, 2223.34 examples/s]Map (num_proc=1):  22%|██▏       | 256000/1165029 [01:55<06:43, 2251.51 examples/s]Map (num_proc=1):  22%|██▏       | 257000/1165029 [01:55<06:42, 2257.25 examples/s]Map (num_proc=1):  22%|██▏       | 258000/1165029 [01:56<06:41, 2256.60 examples/s]Map (num_proc=1):  22%|██▏       | 259000/1165029 [01:56<06:37, 2276.62 examples/s]Map (num_proc=1):  22%|██▏       | 260000/1165029 [01:57<06:37, 2274.43 examples/s]Map (num_proc=1):  22%|██▏       | 261000/1165029 [01:57<06:47, 2220.57 examples/s]Map (num_proc=1):  22%|██▏       | 262000/1165029 [01:58<06:44, 2231.57 examples/s]Map (num_proc=1):  23%|██▎       | 263000/1165029 [01:58<06:43, 2234.52 examples/s]Map (num_proc=1):  23%|██▎       | 264000/1165029 [01:59<06:49, 2200.91 examples/s]Map (num_proc=1):  23%|██▎       | 265000/1165029 [01:59<06:42, 2237.26 examples/s]Map (num_proc=1):  23%|██▎       | 266000/1165029 [01:59<06:39, 2250.79 examples/s]Map (num_proc=1):  23%|██▎       | 267000/1165029 [02:00<06:47, 2205.80 examples/s]Map (num_proc=1):  23%|██▎       | 268000/1165029 [02:00<06:46, 2206.13 examples/s]Map (num_proc=1):  23%|██▎       | 269000/1165029 [02:01<06:46, 2202.83 examples/s]Map (num_proc=1):  23%|██▎       | 270000/1165029 [02:01<06:48, 2190.90 examples/s]Map (num_proc=1):  23%|██▎       | 271000/1165029 [02:02<06:38, 2244.89 examples/s]Map (num_proc=1):  23%|██▎       | 272000/1165029 [02:02<06:32, 2276.13 examples/s]Map (num_proc=1):  23%|██▎       | 273000/1165029 [02:03<06:39, 2230.93 examples/s]Map (num_proc=1):  24%|██▎       | 274000/1165029 [02:03<06:37, 2243.17 examples/s]Map (num_proc=1):  24%|██▎       | 275000/1165029 [02:04<06:36, 2243.57 examples/s]Map (num_proc=1):  24%|██▎       | 276000/1165029 [02:04<06:34, 2252.77 examples/s]Map (num_proc=1):  24%|██▍       | 277000/1165029 [02:04<06:21, 2326.24 examples/s]Map (num_proc=1):  24%|██▍       | 278000/1165029 [02:05<07:26, 1985.11 examples/s]Map (num_proc=1):  24%|██▍       | 279000/1165029 [02:05<07:06, 2079.80 examples/s]Map (num_proc=1):  24%|██▍       | 280000/1165029 [02:06<07:01, 2099.47 examples/s]Map (num_proc=1):  24%|██▍       | 281000/1165029 [02:06<06:40, 2209.51 examples/s]Map (num_proc=1):  24%|██▍       | 282000/1165029 [02:07<06:44, 2180.94 examples/s]Map (num_proc=1):  24%|██▍       | 283000/1165029 [02:07<06:42, 2193.55 examples/s]Map (num_proc=1):  24%|██▍       | 284000/1165029 [02:08<06:40, 2202.37 examples/s]Map (num_proc=1):  24%|██▍       | 285000/1165029 [02:08<06:50, 2143.63 examples/s]Map (num_proc=1):  25%|██▍       | 286000/1165029 [02:09<06:37, 2213.34 examples/s]Map (num_proc=1):  25%|██▍       | 287000/1165029 [02:09<06:34, 2223.19 examples/s]Map (num_proc=1):  25%|██▍       | 288000/1165029 [02:10<06:32, 2233.21 examples/s]Map (num_proc=1):  25%|██▍       | 289000/1165029 [02:10<06:32, 2234.39 examples/s]Map (num_proc=1):  25%|██▍       | 290000/1165029 [02:10<06:24, 2273.40 examples/s]Map (num_proc=1):  25%|██▍       | 291000/1165029 [02:11<06:23, 2278.12 examples/s]Map (num_proc=1):  25%|██▌       | 292000/1165029 [02:11<06:22, 2281.60 examples/s]Map (num_proc=1):  25%|██▌       | 293000/1165029 [02:12<06:25, 2261.85 examples/s]Map (num_proc=1):  25%|██▌       | 294000/1165029 [02:12<06:23, 2271.81 examples/s]Map (num_proc=1):  25%|██▌       | 295000/1165029 [02:13<06:22, 2275.66 examples/s]Map (num_proc=1):  25%|██▌       | 296000/1165029 [02:13<06:17, 2304.85 examples/s]Map (num_proc=1):  25%|██▌       | 297000/1165029 [02:13<06:15, 2310.43 examples/s]Map (num_proc=1):  26%|██▌       | 298000/1165029 [02:14<06:14, 2317.60 examples/s]Map (num_proc=1):  26%|██▌       | 299000/1165029 [02:14<06:16, 2299.53 examples/s]Map (num_proc=1):  26%|██▌       | 300000/1165029 [02:15<06:18, 2286.71 examples/s]Map (num_proc=1):  26%|██▌       | 301000/1165029 [02:15<06:26, 2237.81 examples/s]Map (num_proc=1):  26%|██▌       | 302000/1165029 [02:16<06:17, 2288.41 examples/s]Map (num_proc=1):  26%|██▌       | 303000/1165029 [02:16<06:16, 2291.91 examples/s]Map (num_proc=1):  26%|██▌       | 304000/1165029 [02:16<06:13, 2305.71 examples/s]Map (num_proc=1):  26%|██▌       | 305000/1165029 [02:17<06:14, 2298.39 examples/s]Map (num_proc=1):  26%|██▋       | 306000/1165029 [02:17<06:18, 2268.36 examples/s]Map (num_proc=1):  26%|██▋       | 307000/1165029 [02:18<06:15, 2282.65 examples/s]Map (num_proc=1):  26%|██▋       | 308000/1165029 [02:18<06:08, 2324.56 examples/s]Map (num_proc=1):  27%|██▋       | 309000/1165029 [02:19<07:13, 1976.39 examples/s]Map (num_proc=1):  27%|██▋       | 310000/1165029 [02:19<06:51, 2076.12 examples/s]Map (num_proc=1):  27%|██▋       | 311000/1165029 [02:20<06:35, 2161.73 examples/s]Map (num_proc=1):  27%|██▋       | 312000/1165029 [02:20<06:25, 2210.85 examples/s]Map (num_proc=1):  27%|██▋       | 313000/1165029 [02:21<06:17, 2254.95 examples/s]Map (num_proc=1):  27%|██▋       | 314000/1165029 [02:21<06:08, 2307.74 examples/s]Map (num_proc=1):  27%|██▋       | 315000/1165029 [02:21<06:04, 2330.65 examples/s]Map (num_proc=1):  27%|██▋       | 316000/1165029 [02:22<06:03, 2337.58 examples/s]Map (num_proc=1):  27%|██▋       | 317000/1165029 [02:22<06:03, 2329.76 examples/s]Map (num_proc=1):  27%|██▋       | 318000/1165029 [02:23<06:14, 2264.38 examples/s]Map (num_proc=1):  27%|██▋       | 319000/1165029 [02:23<06:13, 2263.86 examples/s]Map (num_proc=1):  27%|██▋       | 320000/1165029 [02:24<06:18, 2232.46 examples/s]Map (num_proc=1):  28%|██▊       | 321000/1165029 [02:24<06:13, 2261.12 examples/s]Map (num_proc=1):  28%|██▊       | 322000/1165029 [02:25<06:12, 2265.76 examples/s]Map (num_proc=1):  28%|██▊       | 323000/1165029 [02:25<06:13, 2252.53 examples/s]Map (num_proc=1):  28%|██▊       | 324000/1165029 [02:25<06:08, 2279.93 examples/s]Map (num_proc=1):  28%|██▊       | 325000/1165029 [02:26<06:13, 2249.87 examples/s]Map (num_proc=1):  28%|██▊       | 326000/1165029 [02:26<06:13, 2246.65 examples/s]Map (num_proc=1):  28%|██▊       | 327000/1165029 [02:27<06:13, 2244.73 examples/s]Map (num_proc=1):  28%|██▊       | 328000/1165029 [02:27<06:05, 2292.40 examples/s]Map (num_proc=1):  28%|██▊       | 329000/1165029 [02:28<06:20, 2198.41 examples/s]Map (num_proc=1):  28%|██▊       | 330000/1165029 [02:28<06:20, 2195.42 examples/s]Map (num_proc=1):  28%|██▊       | 331000/1165029 [02:29<06:26, 2156.39 examples/s]Map (num_proc=1):  28%|██▊       | 332000/1165029 [02:29<06:12, 2234.69 examples/s]Map (num_proc=1):  29%|██▊       | 333000/1165029 [02:29<06:10, 2244.12 examples/s]Map (num_proc=1):  29%|██▊       | 334000/1165029 [02:30<06:11, 2234.52 examples/s]Map (num_proc=1):  29%|██▉       | 335000/1165029 [02:30<06:12, 2231.08 examples/s]Map (num_proc=1):  29%|██▉       | 336000/1165029 [02:31<06:08, 2246.95 examples/s]Map (num_proc=1):  29%|██▉       | 337000/1165029 [02:31<06:07, 2252.80 examples/s]Map (num_proc=1):  29%|██▉       | 338000/1165029 [02:32<06:05, 2260.55 examples/s]Map (num_proc=1):  29%|██▉       | 339000/1165029 [02:32<06:11, 2223.06 examples/s]Map (num_proc=1):  29%|██▉       | 340000/1165029 [02:33<06:05, 2259.14 examples/s]Map (num_proc=1):  29%|██▉       | 341000/1165029 [02:33<06:04, 2258.14 examples/s]Map (num_proc=1):  29%|██▉       | 342000/1165029 [02:34<06:58, 1964.79 examples/s]Map (num_proc=1):  29%|██▉       | 343000/1165029 [02:34<06:40, 2051.47 examples/s]Map (num_proc=1):  30%|██▉       | 344000/1165029 [02:35<06:32, 2093.43 examples/s]Map (num_proc=1):  30%|██▉       | 345000/1165029 [02:35<06:22, 2142.21 examples/s]Map (num_proc=1):  30%|██▉       | 346000/1165029 [02:35<06:14, 2185.32 examples/s]Map (num_proc=1):  30%|██▉       | 347000/1165029 [02:36<06:23, 2131.61 examples/s]Map (num_proc=1):  30%|██▉       | 348000/1165029 [02:36<06:16, 2169.49 examples/s]Map (num_proc=1):  30%|██▉       | 349000/1165029 [02:37<06:07, 2220.61 examples/s]Map (num_proc=1):  30%|███       | 350000/1165029 [02:37<06:04, 2234.86 examples/s]Map (num_proc=1):  30%|███       | 351000/1165029 [02:38<06:08, 2208.72 examples/s]Map (num_proc=1):  30%|███       | 352000/1165029 [02:38<05:57, 2274.82 examples/s]Map (num_proc=1):  30%|███       | 353000/1165029 [02:39<05:58, 2263.91 examples/s]Map (num_proc=1):  30%|███       | 354000/1165029 [02:39<05:54, 2285.85 examples/s]Map (num_proc=1):  30%|███       | 355000/1165029 [02:39<05:55, 2277.21 examples/s]Map (num_proc=1):  31%|███       | 356000/1165029 [02:40<05:56, 2271.65 examples/s]Map (num_proc=1):  31%|███       | 357000/1165029 [02:40<05:55, 2272.92 examples/s]Map (num_proc=1):  31%|███       | 358000/1165029 [02:41<05:53, 2281.38 examples/s]Map (num_proc=1):  31%|███       | 359000/1165029 [02:41<05:53, 2282.73 examples/s]Map (num_proc=1):  31%|███       | 360000/1165029 [02:42<05:50, 2295.03 examples/s]Map (num_proc=1):  31%|███       | 361000/1165029 [02:42<05:53, 2272.24 examples/s]Map (num_proc=1):  31%|███       | 362000/1165029 [02:43<05:59, 2236.34 examples/s]Map (num_proc=1):  31%|███       | 363000/1165029 [02:43<05:57, 2243.99 examples/s]Map (num_proc=1):  31%|███       | 364000/1165029 [02:43<05:49, 2294.28 examples/s]Map (num_proc=1):  31%|███▏      | 365000/1165029 [02:44<05:51, 2275.15 examples/s]Map (num_proc=1):  31%|███▏      | 366000/1165029 [02:44<05:50, 2282.38 examples/s]Map (num_proc=1):  32%|███▏      | 367000/1165029 [02:45<05:52, 2260.98 examples/s]Map (num_proc=1):  32%|███▏      | 368000/1165029 [02:45<05:46, 2303.26 examples/s]Map (num_proc=1):  32%|███▏      | 369000/1165029 [02:46<05:43, 2319.81 examples/s]Map (num_proc=1):  32%|███▏      | 370000/1165029 [02:46<05:34, 2375.19 examples/s]Map (num_proc=1):  32%|███▏      | 371000/1165029 [02:46<05:39, 2339.27 examples/s]Map (num_proc=1):  32%|███▏      | 372000/1165029 [02:47<05:41, 2324.89 examples/s]Map (num_proc=1):  32%|███▏      | 373000/1165029 [02:48<06:34, 2005.43 examples/s]Map (num_proc=1):  32%|███▏      | 374000/1165029 [02:48<06:21, 2071.27 examples/s]Map (num_proc=1):  32%|███▏      | 375000/1165029 [02:48<06:17, 2094.75 examples/s]Map (num_proc=1):  32%|███▏      | 376000/1165029 [02:49<06:02, 2177.76 examples/s]Map (num_proc=1):  32%|███▏      | 377000/1165029 [02:49<05:56, 2211.12 examples/s]Map (num_proc=1):  32%|███▏      | 378000/1165029 [02:50<05:43, 2289.46 examples/s]Map (num_proc=1):  33%|███▎      | 379000/1165029 [02:50<05:34, 2349.18 examples/s]Map (num_proc=1):  33%|███▎      | 380000/1165029 [02:51<05:35, 2340.88 examples/s]Map (num_proc=1):  33%|███▎      | 381000/1165029 [02:51<05:36, 2328.56 examples/s]Map (num_proc=1):  33%|███▎      | 382000/1165029 [02:51<05:31, 2363.02 examples/s]Map (num_proc=1):  33%|███▎      | 383000/1165029 [02:52<05:27, 2388.78 examples/s]Map (num_proc=1):  33%|███▎      | 384000/1165029 [02:52<05:33, 2344.18 examples/s]Map (num_proc=1):  33%|███▎      | 385000/1165029 [02:53<05:30, 2358.23 examples/s]Map (num_proc=1):  33%|███▎      | 386000/1165029 [02:53<05:31, 2351.23 examples/s]Map (num_proc=1):  33%|███▎      | 387000/1165029 [02:53<05:30, 2354.19 examples/s]Map (num_proc=1):  33%|███▎      | 388000/1165029 [02:54<05:28, 2366.63 examples/s]Map (num_proc=1):  33%|███▎      | 389000/1165029 [02:54<05:33, 2324.80 examples/s]Map (num_proc=1):  33%|███▎      | 390000/1165029 [02:55<05:43, 2258.79 examples/s]Map (num_proc=1):  34%|███▎      | 391000/1165029 [02:55<05:40, 2274.59 examples/s]Map (num_proc=1):  34%|███▎      | 392000/1165029 [02:56<05:44, 2241.16 examples/s]Map (num_proc=1):  34%|███▎      | 393000/1165029 [02:56<05:42, 2255.98 examples/s]Map (num_proc=1):  34%|███▍      | 394000/1165029 [02:57<05:43, 2241.77 examples/s]Map (num_proc=1):  34%|███▍      | 395000/1165029 [02:57<05:43, 2242.12 examples/s]Map (num_proc=1):  34%|███▍      | 396000/1165029 [02:57<05:37, 2279.38 examples/s]Map (num_proc=1):  34%|███▍      | 397000/1165029 [02:58<05:34, 2295.16 examples/s]Map (num_proc=1):  34%|███▍      | 398000/1165029 [02:58<05:39, 2257.23 examples/s]Map (num_proc=1):  34%|███▍      | 399000/1165029 [02:59<05:38, 2264.05 examples/s]Map (num_proc=1):  34%|███▍      | 400000/1165029 [02:59<05:23, 2368.26 examples/s]Map (num_proc=1):  34%|███▍      | 401000/1165029 [03:00<05:21, 2373.88 examples/s]Map (num_proc=1):  35%|███▍      | 402000/1165029 [03:00<05:13, 2433.60 examples/s]Map (num_proc=1):  35%|███▍      | 403000/1165029 [03:00<05:18, 2393.03 examples/s]Map (num_proc=1):  35%|███▍      | 404000/1165029 [03:01<06:06, 2077.19 examples/s]Map (num_proc=1):  35%|███▍      | 405000/1165029 [03:01<05:48, 2180.38 examples/s]Map (num_proc=1):  35%|███▍      | 406000/1165029 [03:02<05:40, 2228.72 examples/s]Map (num_proc=1):  35%|███▍      | 407000/1165029 [03:02<05:33, 2271.39 examples/s]Map (num_proc=1):  35%|███▌      | 408000/1165029 [03:03<05:31, 2280.60 examples/s]Map (num_proc=1):  35%|███▌      | 409000/1165029 [03:03<05:24, 2327.90 examples/s]Map (num_proc=1):  35%|███▌      | 410000/1165029 [03:04<05:21, 2351.93 examples/s]Map (num_proc=1):  35%|███▌      | 411000/1165029 [03:04<05:17, 2373.36 examples/s]Map (num_proc=1):  35%|███▌      | 412000/1165029 [03:04<05:14, 2394.45 examples/s]Map (num_proc=1):  35%|███▌      | 413000/1165029 [03:05<05:22, 2332.14 examples/s]Map (num_proc=1):  36%|███▌      | 414000/1165029 [03:05<05:20, 2343.65 examples/s]Map (num_proc=1):  36%|███▌      | 415000/1165029 [03:06<05:22, 2329.25 examples/s]Map (num_proc=1):  36%|███▌      | 416000/1165029 [03:06<05:19, 2344.07 examples/s]Map (num_proc=1):  36%|███▌      | 417000/1165029 [03:07<05:27, 2281.84 examples/s]Map (num_proc=1):  36%|███▌      | 418000/1165029 [03:07<05:24, 2299.40 examples/s]Map (num_proc=1):  36%|███▌      | 419000/1165029 [03:07<05:20, 2326.62 examples/s]Map (num_proc=1):  36%|███▌      | 420000/1165029 [03:08<05:32, 2238.53 examples/s]Map (num_proc=1):  36%|███▌      | 421000/1165029 [03:08<05:33, 2233.02 examples/s]Map (num_proc=1):  36%|███▌      | 422000/1165029 [03:09<05:30, 2246.00 examples/s]Map (num_proc=1):  36%|███▋      | 423000/1165029 [03:09<05:26, 2274.25 examples/s]Map (num_proc=1):  36%|███▋      | 424000/1165029 [03:10<05:20, 2311.62 examples/s]Map (num_proc=1):  36%|███▋      | 425000/1165029 [03:10<05:19, 2312.96 examples/s]Map (num_proc=1):  37%|███▋      | 426000/1165029 [03:10<05:16, 2336.51 examples/s]Map (num_proc=1):  37%|███▋      | 427000/1165029 [03:11<05:22, 2285.68 examples/s]Map (num_proc=1):  37%|███▋      | 428000/1165029 [03:11<05:21, 2292.85 examples/s]Map (num_proc=1):  37%|███▋      | 429000/1165029 [03:12<05:20, 2299.20 examples/s]Map (num_proc=1):  37%|███▋      | 430000/1165029 [03:12<05:23, 2271.83 examples/s]Map (num_proc=1):  37%|███▋      | 431000/1165029 [03:13<05:25, 2256.55 examples/s]Map (num_proc=1):  37%|███▋      | 432000/1165029 [03:13<05:20, 2290.63 examples/s]Map (num_proc=1):  37%|███▋      | 433000/1165029 [03:14<05:21, 2278.89 examples/s]Map (num_proc=1):  37%|███▋      | 434000/1165029 [03:14<05:17, 2300.45 examples/s]Map (num_proc=1):  37%|███▋      | 435000/1165029 [03:14<05:15, 2312.22 examples/s]Map (num_proc=1):  37%|███▋      | 436000/1165029 [03:15<05:15, 2307.63 examples/s]Map (num_proc=1):  38%|███▊      | 437000/1165029 [03:15<05:14, 2315.82 examples/s]Map (num_proc=1):  38%|███▊      | 438000/1165029 [03:16<05:14, 2312.97 examples/s]Map (num_proc=1):  38%|███▊      | 439000/1165029 [03:16<06:03, 1995.64 examples/s]Map (num_proc=1):  38%|███▊      | 440000/1165029 [03:17<05:54, 2043.24 examples/s]Map (num_proc=1):  38%|███▊      | 441000/1165029 [03:17<05:34, 2161.86 examples/s]Map (num_proc=1):  38%|███▊      | 442000/1165029 [03:18<05:32, 2175.61 examples/s]Map (num_proc=1):  38%|███▊      | 443000/1165029 [03:18<05:18, 2264.88 examples/s]Map (num_proc=1):  38%|███▊      | 444000/1165029 [03:19<05:13, 2300.49 examples/s]Map (num_proc=1):  38%|███▊      | 445000/1165029 [03:19<05:17, 2268.68 examples/s]Map (num_proc=1):  38%|███▊      | 446000/1165029 [03:19<05:14, 2287.89 examples/s]Map (num_proc=1):  38%|███▊      | 447000/1165029 [03:20<05:11, 2302.32 examples/s]Map (num_proc=1):  38%|███▊      | 448000/1165029 [03:20<05:14, 2279.92 examples/s]Map (num_proc=1):  39%|███▊      | 449000/1165029 [03:21<05:17, 2258.60 examples/s]Map (num_proc=1):  39%|███▊      | 450000/1165029 [03:21<05:23, 2209.21 examples/s]Map (num_proc=1):  39%|███▊      | 451000/1165029 [03:22<05:20, 2227.46 examples/s]Map (num_proc=1):  39%|███▉      | 452000/1165029 [03:22<05:15, 2262.55 examples/s]Map (num_proc=1):  39%|███▉      | 453000/1165029 [03:23<05:16, 2252.44 examples/s]Map (num_proc=1):  39%|███▉      | 454000/1165029 [03:23<05:15, 2250.90 examples/s]Map (num_proc=1):  39%|███▉      | 455000/1165029 [03:23<05:19, 2219.71 examples/s]Map (num_proc=1):  39%|███▉      | 456000/1165029 [03:24<05:18, 2223.32 examples/s]Map (num_proc=1):  39%|███▉      | 457000/1165029 [03:24<05:20, 2211.20 examples/s]Map (num_proc=1):  39%|███▉      | 458000/1165029 [03:25<05:19, 2212.63 examples/s]Map (num_proc=1):  39%|███▉      | 459000/1165029 [03:25<05:16, 2232.93 examples/s]Map (num_proc=1):  39%|███▉      | 460000/1165029 [03:26<05:10, 2272.85 examples/s]Map (num_proc=1):  40%|███▉      | 461000/1165029 [03:26<05:08, 2284.95 examples/s]Map (num_proc=1):  40%|███▉      | 462000/1165029 [03:26<05:03, 2317.03 examples/s]Map (num_proc=1):  40%|███▉      | 463000/1165029 [03:27<05:02, 2324.33 examples/s]Map (num_proc=1):  40%|███▉      | 464000/1165029 [03:27<05:07, 2282.43 examples/s]Map (num_proc=1):  40%|███▉      | 465000/1165029 [03:28<05:16, 2214.67 examples/s]Map (num_proc=1):  40%|███▉      | 466000/1165029 [03:28<05:16, 2208.47 examples/s]Map (num_proc=1):  40%|████      | 467000/1165029 [03:29<05:16, 2203.35 examples/s]Map (num_proc=1):  40%|████      | 468000/1165029 [03:29<05:18, 2187.69 examples/s]Map (num_proc=1):  40%|████      | 469000/1165029 [03:30<05:16, 2201.65 examples/s]Map (num_proc=1):  40%|████      | 470000/1165029 [03:30<06:07, 1890.65 examples/s]Map (num_proc=1):  40%|████      | 471000/1165029 [03:31<05:51, 1977.23 examples/s]Map (num_proc=1):  41%|████      | 472000/1165029 [03:31<05:44, 2010.15 examples/s]Map (num_proc=1):  41%|████      | 473000/1165029 [03:32<05:36, 2058.52 examples/s]Map (num_proc=1):  41%|████      | 474000/1165029 [03:32<05:32, 2080.78 examples/s]Map (num_proc=1):  41%|████      | 475000/1165029 [03:33<05:17, 2173.04 examples/s]Map (num_proc=1):  41%|████      | 476000/1165029 [03:33<05:17, 2167.04 examples/s]Map (num_proc=1):  41%|████      | 477000/1165029 [03:34<05:06, 2241.37 examples/s]Map (num_proc=1):  41%|████      | 478000/1165029 [03:34<05:04, 2257.14 examples/s]Map (num_proc=1):  41%|████      | 479000/1165029 [03:34<05:05, 2247.19 examples/s]Map (num_proc=1):  41%|████      | 480000/1165029 [03:35<05:06, 2235.93 examples/s]Map (num_proc=1):  41%|████▏     | 481000/1165029 [03:35<05:09, 2212.60 examples/s]Map (num_proc=1):  41%|████▏     | 482000/1165029 [03:36<05:08, 2214.56 examples/s]Map (num_proc=1):  41%|████▏     | 483000/1165029 [03:36<05:08, 2208.00 examples/s]Map (num_proc=1):  42%|████▏     | 484000/1165029 [03:37<05:07, 2217.18 examples/s]Map (num_proc=1):  42%|████▏     | 485000/1165029 [03:37<05:08, 2204.91 examples/s]Map (num_proc=1):  42%|████▏     | 486000/1165029 [03:38<05:08, 2203.02 examples/s]Map (num_proc=1):  42%|████▏     | 487000/1165029 [03:38<05:11, 2173.72 examples/s]Map (num_proc=1):  42%|████▏     | 488000/1165029 [03:38<05:05, 2216.64 examples/s]Map (num_proc=1):  42%|████▏     | 489000/1165029 [03:39<05:08, 2193.70 examples/s]Map (num_proc=1):  42%|████▏     | 490000/1165029 [03:39<05:03, 2223.63 examples/s]Map (num_proc=1):  42%|████▏     | 491000/1165029 [03:40<05:01, 2236.80 examples/s]Map (num_proc=1):  42%|████▏     | 492000/1165029 [03:40<04:58, 2252.44 examples/s]Map (num_proc=1):  42%|████▏     | 493000/1165029 [03:41<04:52, 2295.96 examples/s]Map (num_proc=1):  42%|████▏     | 494000/1165029 [03:41<04:56, 2263.66 examples/s]Map (num_proc=1):  42%|████▏     | 495000/1165029 [03:42<04:57, 2255.65 examples/s]Map (num_proc=1):  43%|████▎     | 496000/1165029 [03:42<04:54, 2268.60 examples/s]Map (num_proc=1):  43%|████▎     | 497000/1165029 [03:42<04:53, 2272.61 examples/s]Map (num_proc=1):  43%|████▎     | 498000/1165029 [03:43<04:57, 2241.50 examples/s]Map (num_proc=1):  43%|████▎     | 499000/1165029 [03:43<05:00, 2217.52 examples/s]Map (num_proc=1):  43%|████▎     | 500000/1165029 [03:44<05:08, 2152.40 examples/s]Map (num_proc=1):  43%|████▎     | 501000/1165029 [03:44<05:01, 2200.39 examples/s]Map (num_proc=1):  43%|████▎     | 502000/1165029 [03:45<05:00, 2203.13 examples/s]Map (num_proc=1):  43%|████▎     | 503000/1165029 [03:45<05:44, 1923.91 examples/s]Map (num_proc=1):  43%|████▎     | 504000/1165029 [03:46<05:29, 2003.27 examples/s]Map (num_proc=1):  43%|████▎     | 505000/1165029 [03:46<05:16, 2085.24 examples/s]Map (num_proc=1):  43%|████▎     | 506000/1165029 [03:47<05:04, 2162.23 examples/s]Map (num_proc=1):  44%|████▎     | 507000/1165029 [03:47<05:02, 2174.83 examples/s]Map (num_proc=1):  44%|████▎     | 508000/1165029 [03:48<05:01, 2177.96 examples/s]Map (num_proc=1):  44%|████▎     | 509000/1165029 [03:48<05:04, 2156.69 examples/s]Map (num_proc=1):  44%|████▍     | 510000/1165029 [03:49<05:03, 2158.75 examples/s]Map (num_proc=1):  44%|████▍     | 511000/1165029 [03:49<05:02, 2160.69 examples/s]Map (num_proc=1):  44%|████▍     | 512000/1165029 [03:49<04:55, 2209.19 examples/s]Map (num_proc=1):  44%|████▍     | 513000/1165029 [03:50<04:59, 2180.04 examples/s]Map (num_proc=1):  44%|████▍     | 514000/1165029 [03:50<04:54, 2212.90 examples/s]Map (num_proc=1):  44%|████▍     | 515000/1165029 [03:51<04:49, 2246.90 examples/s]Map (num_proc=1):  44%|████▍     | 516000/1165029 [03:51<04:46, 2268.19 examples/s]Map (num_proc=1):  44%|████▍     | 517000/1165029 [03:52<04:49, 2242.25 examples/s]Map (num_proc=1):  44%|████▍     | 518000/1165029 [03:52<04:50, 2229.45 examples/s]Map (num_proc=1):  45%|████▍     | 519000/1165029 [03:53<04:51, 2213.32 examples/s]Map (num_proc=1):  45%|████▍     | 520000/1165029 [03:53<04:53, 2196.69 examples/s]Map (num_proc=1):  45%|████▍     | 521000/1165029 [03:54<04:54, 2186.29 examples/s]Map (num_proc=1):  45%|████▍     | 522000/1165029 [03:54<04:55, 2173.94 examples/s]Map (num_proc=1):  45%|████▍     | 523000/1165029 [03:54<04:55, 2175.87 examples/s]Map (num_proc=1):  45%|████▍     | 524000/1165029 [03:55<04:55, 2171.67 examples/s]Map (num_proc=1):  45%|████▌     | 525000/1165029 [03:55<04:56, 2161.06 examples/s]Map (num_proc=1):  45%|████▌     | 526000/1165029 [03:56<04:55, 2163.65 examples/s]Map (num_proc=1):  45%|████▌     | 527000/1165029 [03:56<04:49, 2200.66 examples/s]Map (num_proc=1):  45%|████▌     | 528000/1165029 [03:57<04:39, 2275.14 examples/s]Map (num_proc=1):  45%|████▌     | 529000/1165029 [03:57<04:35, 2311.65 examples/s]Map (num_proc=1):  45%|████▌     | 530000/1165029 [03:58<04:33, 2323.62 examples/s]Map (num_proc=1):  46%|████▌     | 531000/1165029 [03:58<04:34, 2312.55 examples/s]Map (num_proc=1):  46%|████▌     | 532000/1165029 [03:58<04:38, 2272.25 examples/s]Map (num_proc=1):  46%|████▌     | 533000/1165029 [03:59<04:41, 2249.15 examples/s]Map (num_proc=1):  46%|████▌     | 534000/1165029 [04:00<05:28, 1922.01 examples/s]Map (num_proc=1):  46%|████▌     | 535000/1165029 [04:00<05:20, 1964.01 examples/s]Map (num_proc=1):  46%|████▌     | 536000/1165029 [04:01<05:07, 2048.69 examples/s]Map (num_proc=1):  46%|████▌     | 537000/1165029 [04:01<05:05, 2057.30 examples/s]Map (num_proc=1):  46%|████▌     | 538000/1165029 [04:01<04:59, 2090.57 examples/s]Map (num_proc=1):  46%|████▋     | 539000/1165029 [04:02<04:51, 2149.45 examples/s]Map (num_proc=1):  46%|████▋     | 540000/1165029 [04:02<04:47, 2173.36 examples/s]Map (num_proc=1):  46%|████▋     | 541000/1165029 [04:03<04:47, 2170.18 examples/s]Map (num_proc=1):  47%|████▋     | 542000/1165029 [04:03<04:45, 2178.51 examples/s]Map (num_proc=1):  47%|████▋     | 543000/1165029 [04:04<04:44, 2188.64 examples/s]Map (num_proc=1):  47%|████▋     | 544000/1165029 [04:04<04:39, 2225.65 examples/s]Map (num_proc=1):  47%|████▋     | 545000/1165029 [04:05<04:40, 2209.13 examples/s]Map (num_proc=1):  47%|████▋     | 546000/1165029 [04:05<04:48, 2146.64 examples/s]Map (num_proc=1):  47%|████▋     | 547000/1165029 [04:06<04:53, 2103.96 examples/s]Map (num_proc=1):  47%|████▋     | 548000/1165029 [04:06<04:49, 2134.61 examples/s]Map (num_proc=1):  47%|████▋     | 549000/1165029 [04:07<04:49, 2129.67 examples/s]Map (num_proc=1):  47%|████▋     | 550000/1165029 [04:07<04:45, 2154.57 examples/s]Map (num_proc=1):  47%|████▋     | 551000/1165029 [04:07<04:44, 2158.07 examples/s]Map (num_proc=1):  47%|████▋     | 552000/1165029 [04:08<04:44, 2152.11 examples/s]Map (num_proc=1):  47%|████▋     | 553000/1165029 [04:08<04:42, 2162.78 examples/s]Map (num_proc=1):  48%|████▊     | 554000/1165029 [04:09<04:45, 2139.03 examples/s]Map (num_proc=1):  48%|████▊     | 555000/1165029 [04:09<04:39, 2181.49 examples/s]Map (num_proc=1):  48%|████▊     | 556000/1165029 [04:10<04:39, 2177.46 examples/s]Map (num_proc=1):  48%|████▊     | 557000/1165029 [04:10<04:32, 2230.45 examples/s]Map (num_proc=1):  48%|████▊     | 558000/1165029 [04:11<04:33, 2217.93 examples/s]Map (num_proc=1):  48%|████▊     | 559000/1165029 [04:11<04:30, 2241.53 examples/s]Map (num_proc=1):  48%|████▊     | 560000/1165029 [04:12<04:34, 2201.64 examples/s]Map (num_proc=1):  48%|████▊     | 561000/1165029 [04:12<04:35, 2189.63 examples/s]Map (num_proc=1):  48%|████▊     | 562000/1165029 [04:12<04:36, 2178.74 examples/s]Map (num_proc=1):  48%|████▊     | 563000/1165029 [04:13<04:34, 2190.70 examples/s]Map (num_proc=1):  48%|████▊     | 564000/1165029 [04:13<04:30, 2218.91 examples/s]Map (num_proc=1):  48%|████▊     | 565000/1165029 [04:14<05:15, 1903.62 examples/s]Map (num_proc=1):  49%|████▊     | 566000/1165029 [04:15<05:05, 1962.14 examples/s]Map (num_proc=1):  49%|████▊     | 567000/1165029 [04:15<04:54, 2033.33 examples/s]Map (num_proc=1):  49%|████▉     | 568000/1165029 [04:15<04:49, 2063.66 examples/s]Map (num_proc=1):  49%|████▉     | 569000/1165029 [04:16<04:49, 2055.33 examples/s]Map (num_proc=1):  49%|████▉     | 570000/1165029 [04:16<04:48, 2065.32 examples/s]Map (num_proc=1):  49%|████▉     | 571000/1165029 [04:17<04:48, 2060.37 examples/s]Map (num_proc=1):  49%|████▉     | 572000/1165029 [04:17<04:41, 2109.42 examples/s]Map (num_proc=1):  49%|████▉     | 573000/1165029 [04:18<04:33, 2165.66 examples/s]Map (num_proc=1):  49%|████▉     | 574000/1165029 [04:18<04:28, 2204.92 examples/s]Map (num_proc=1):  49%|████▉     | 575000/1165029 [04:19<04:32, 2168.13 examples/s]Map (num_proc=1):  49%|████▉     | 576000/1165029 [04:19<04:29, 2185.19 examples/s]Map (num_proc=1):  50%|████▉     | 577000/1165029 [04:20<04:28, 2192.26 examples/s]Map (num_proc=1):  50%|████▉     | 578000/1165029 [04:20<04:31, 2164.02 examples/s]Map (num_proc=1):  50%|████▉     | 579000/1165029 [04:21<04:29, 2174.44 examples/s]Map (num_proc=1):  50%|████▉     | 580000/1165029 [04:21<04:32, 2144.87 examples/s]Map (num_proc=1):  50%|████▉     | 581000/1165029 [04:21<04:27, 2184.04 examples/s]Map (num_proc=1):  50%|████▉     | 582000/1165029 [04:22<04:23, 2212.24 examples/s]Map (num_proc=1):  50%|█████     | 583000/1165029 [04:22<04:26, 2183.41 examples/s]Map (num_proc=1):  50%|█████     | 584000/1165029 [04:23<04:36, 2104.97 examples/s]Map (num_proc=1):  50%|█████     | 585000/1165029 [04:23<04:37, 2089.00 examples/s]Map (num_proc=1):  50%|█████     | 586000/1165029 [04:24<04:34, 2107.99 examples/s]Map (num_proc=1):  50%|█████     | 587000/1165029 [04:24<04:32, 2122.69 examples/s]Map (num_proc=1):  50%|█████     | 588000/1165029 [04:25<04:33, 2109.59 examples/s]Map (num_proc=1):  51%|█████     | 589000/1165029 [04:25<04:33, 2105.51 examples/s]Map (num_proc=1):  51%|█████     | 590000/1165029 [04:26<04:28, 2143.11 examples/s]Map (num_proc=1):  51%|█████     | 591000/1165029 [04:26<04:28, 2134.14 examples/s]Map (num_proc=1):  51%|█████     | 592000/1165029 [04:27<04:34, 2085.53 examples/s]Map (num_proc=1):  51%|█████     | 593000/1165029 [04:27<04:33, 2088.96 examples/s]Map (num_proc=1):  51%|█████     | 594000/1165029 [04:28<04:30, 2110.38 examples/s]Map (num_proc=1):  51%|█████     | 595000/1165029 [04:28<04:29, 2116.87 examples/s]Map (num_proc=1):  51%|█████     | 596000/1165029 [04:28<04:18, 2201.33 examples/s]Map (num_proc=1):  51%|█████     | 597000/1165029 [04:29<04:18, 2197.67 examples/s]Map (num_proc=1):  51%|█████▏    | 598000/1165029 [04:29<04:21, 2172.33 examples/s]Map (num_proc=1):  51%|█████▏    | 599000/1165029 [04:30<04:24, 2139.18 examples/s]Map (num_proc=1):  52%|█████▏    | 600000/1165029 [04:31<05:17, 1778.03 examples/s]Map (num_proc=1):  52%|█████▏    | 601000/1165029 [04:31<05:13, 1801.36 examples/s]Map (num_proc=1):  52%|█████▏    | 602000/1165029 [04:32<05:02, 1862.54 examples/s]Map (num_proc=1):  52%|█████▏    | 603000/1165029 [04:32<04:59, 1876.67 examples/s]Map (num_proc=1):  52%|█████▏    | 604000/1165029 [04:33<05:00, 1870.04 examples/s]Map (num_proc=1):  52%|█████▏    | 605000/1165029 [04:33<05:00, 1866.75 examples/s]Map (num_proc=1):  52%|█████▏    | 606000/1165029 [04:34<04:52, 1911.12 examples/s]Map (num_proc=1):  52%|█████▏    | 607000/1165029 [04:34<04:58, 1867.36 examples/s]Map (num_proc=1):  52%|█████▏    | 608000/1165029 [04:35<04:52, 1907.57 examples/s]Map (num_proc=1):  52%|█████▏    | 609000/1165029 [04:35<04:45, 1946.19 examples/s]Map (num_proc=1):  52%|█████▏    | 610000/1165029 [04:36<04:53, 1888.13 examples/s]Map (num_proc=1):  52%|█████▏    | 611000/1165029 [04:36<04:55, 1872.78 examples/s]Map (num_proc=1):  53%|█████▎    | 612000/1165029 [04:37<04:51, 1898.54 examples/s]Map (num_proc=1):  53%|█████▎    | 613000/1165029 [04:38<04:55, 1865.83 examples/s]Map (num_proc=1):  53%|█████▎    | 614000/1165029 [04:38<04:48, 1913.07 examples/s]Map (num_proc=1):  53%|█████▎    | 615000/1165029 [04:39<04:48, 1908.75 examples/s]Map (num_proc=1):  53%|█████▎    | 616000/1165029 [04:39<04:48, 1905.20 examples/s]Map (num_proc=1):  53%|█████▎    | 617000/1165029 [04:40<04:42, 1937.19 examples/s]Map (num_proc=1):  53%|█████▎    | 618000/1165029 [04:40<04:41, 1943.47 examples/s]Map (num_proc=1):  53%|█████▎    | 619000/1165029 [04:41<04:41, 1937.18 examples/s]Map (num_proc=1):  53%|█████▎    | 620000/1165029 [04:41<04:30, 2016.07 examples/s]Map (num_proc=1):  53%|█████▎    | 621000/1165029 [04:42<04:35, 1976.38 examples/s]Map (num_proc=1):  53%|█████▎    | 622000/1165029 [04:42<04:34, 1977.16 examples/s]Map (num_proc=1):  53%|█████▎    | 623000/1165029 [04:43<04:35, 1968.45 examples/s]Map (num_proc=1):  54%|█████▎    | 624000/1165029 [04:43<04:39, 1937.45 examples/s]Map (num_proc=1):  54%|█████▎    | 625000/1165029 [04:44<04:37, 1942.65 examples/s]Map (num_proc=1):  54%|█████▎    | 626000/1165029 [04:44<04:32, 1980.84 examples/s]Map (num_proc=1):  54%|█████▍    | 627000/1165029 [04:45<04:28, 2006.05 examples/s]Map (num_proc=1):  54%|█████▍    | 628000/1165029 [04:45<04:22, 2047.16 examples/s]Map (num_proc=1):  54%|█████▍    | 629000/1165029 [04:46<04:14, 2109.16 examples/s]Map (num_proc=1):  54%|█████▍    | 630000/1165029 [04:46<04:06, 2168.62 examples/s]Map (num_proc=1):  54%|█████▍    | 631000/1165029 [04:47<04:45, 1873.27 examples/s]Map (num_proc=1):  54%|█████▍    | 632000/1165029 [04:47<04:29, 1980.66 examples/s]Map (num_proc=1):  54%|█████▍    | 633000/1165029 [04:48<04:23, 2015.88 examples/s]Map (num_proc=1):  54%|█████▍    | 634000/1165029 [04:48<04:18, 2057.80 examples/s]Map (num_proc=1):  55%|█████▍    | 635000/1165029 [04:48<04:13, 2091.09 examples/s]Map (num_proc=1):  55%|█████▍    | 636000/1165029 [04:49<04:19, 2036.42 examples/s]Map (num_proc=1):  55%|█████▍    | 637000/1165029 [04:50<04:17, 2049.34 examples/s]Map (num_proc=1):  55%|█████▍    | 638000/1165029 [04:50<04:16, 2053.97 examples/s]Map (num_proc=1):  55%|█████▍    | 639000/1165029 [04:50<04:16, 2052.80 examples/s]Map (num_proc=1):  55%|█████▍    | 640000/1165029 [04:51<04:14, 2063.28 examples/s]Map (num_proc=1):  55%|█████▌    | 641000/1165029 [04:51<04:08, 2109.07 examples/s]Map (num_proc=1):  55%|█████▌    | 642000/1165029 [04:52<04:06, 2117.95 examples/s]Map (num_proc=1):  55%|█████▌    | 643000/1165029 [04:52<04:00, 2173.77 examples/s]Map (num_proc=1):  55%|█████▌    | 644000/1165029 [04:53<03:56, 2202.28 examples/s]Map (num_proc=1):  55%|█████▌    | 645000/1165029 [04:53<04:02, 2144.82 examples/s]Map (num_proc=1):  55%|█████▌    | 646000/1165029 [04:54<04:05, 2116.69 examples/s]Map (num_proc=1):  56%|█████▌    | 647000/1165029 [04:54<04:04, 2115.08 examples/s]Map (num_proc=1):  56%|█████▌    | 648000/1165029 [04:55<04:04, 2114.23 examples/s]Map (num_proc=1):  56%|█████▌    | 649000/1165029 [04:55<04:02, 2125.45 examples/s]Map (num_proc=1):  56%|█████▌    | 650000/1165029 [04:56<04:02, 2122.28 examples/s]Map (num_proc=1):  56%|█████▌    | 651000/1165029 [04:56<04:04, 2104.89 examples/s]Map (num_proc=1):  56%|█████▌    | 652000/1165029 [04:57<04:01, 2123.43 examples/s]Map (num_proc=1):  56%|█████▌    | 653000/1165029 [04:57<04:03, 2099.58 examples/s]Map (num_proc=1):  56%|█████▌    | 654000/1165029 [04:58<04:04, 2086.27 examples/s]Map (num_proc=1):  56%|█████▌    | 655000/1165029 [04:58<04:05, 2080.52 examples/s]Map (num_proc=1):  56%|█████▋    | 656000/1165029 [04:58<03:59, 2127.66 examples/s]Map (num_proc=1):  56%|█████▋    | 657000/1165029 [04:59<04:01, 2100.43 examples/s]Map (num_proc=1):  56%|█████▋    | 658000/1165029 [04:59<04:02, 2094.68 examples/s]Map (num_proc=1):  57%|█████▋    | 659000/1165029 [05:00<04:01, 2097.42 examples/s]Map (num_proc=1):  57%|█████▋    | 660000/1165029 [05:00<04:01, 2090.09 examples/s]Map (num_proc=1):  57%|█████▋    | 661000/1165029 [05:01<04:07, 2033.73 examples/s]Map (num_proc=1):  57%|█████▋    | 662000/1165029 [05:01<04:04, 2053.70 examples/s]Map (num_proc=1):  57%|█████▋    | 663000/1165029 [05:02<04:09, 2012.99 examples/s]Map (num_proc=1):  57%|█████▋    | 664000/1165029 [05:03<04:48, 1738.27 examples/s]Map (num_proc=1):  57%|█████▋    | 665000/1165029 [05:03<04:35, 1814.21 examples/s]Map (num_proc=1):  57%|█████▋    | 666000/1165029 [05:04<04:25, 1879.78 examples/s]Map (num_proc=1):  57%|█████▋    | 667000/1165029 [05:04<04:15, 1947.05 examples/s]Map (num_proc=1):  57%|█████▋    | 668000/1165029 [05:05<04:07, 2009.21 examples/s]Map (num_proc=1):  57%|█████▋    | 669000/1165029 [05:05<03:59, 2071.35 examples/s]Map (num_proc=1):  58%|█████▊    | 670000/1165029 [05:05<03:52, 2129.26 examples/s]Map (num_proc=1):  58%|█████▊    | 671000/1165029 [05:06<03:50, 2139.18 examples/s]Map (num_proc=1):  58%|█████▊    | 672000/1165029 [05:06<03:43, 2205.34 examples/s]Map (num_proc=1):  58%|█████▊    | 673000/1165029 [05:07<03:43, 2196.94 examples/s]Map (num_proc=1):  58%|█████▊    | 674000/1165029 [05:07<03:46, 2167.64 examples/s]Map (num_proc=1):  58%|█████▊    | 675000/1165029 [05:08<03:42, 2198.83 examples/s]Map (num_proc=1):  58%|█████▊    | 676000/1165029 [05:08<03:44, 2179.11 examples/s]Map (num_proc=1):  58%|█████▊    | 677000/1165029 [05:09<03:49, 2125.45 examples/s]Map (num_proc=1):  58%|█████▊    | 678000/1165029 [05:09<03:45, 2156.23 examples/s]Map (num_proc=1):  58%|█████▊    | 679000/1165029 [05:10<03:45, 2159.70 examples/s]Map (num_proc=1):  58%|█████▊    | 680000/1165029 [05:10<03:47, 2134.52 examples/s]Map (num_proc=1):  58%|█████▊    | 681000/1165029 [05:11<03:43, 2167.03 examples/s]Map (num_proc=1):  59%|█████▊    | 682000/1165029 [05:11<03:45, 2146.69 examples/s]Map (num_proc=1):  59%|█████▊    | 683000/1165029 [05:11<03:45, 2138.43 examples/s]Map (num_proc=1):  59%|█████▊    | 684000/1165029 [05:12<03:42, 2159.07 examples/s]Map (num_proc=1):  59%|█████▉    | 685000/1165029 [05:12<03:42, 2161.27 examples/s]Map (num_proc=1):  59%|█████▉    | 686000/1165029 [05:13<03:39, 2179.80 examples/s]Map (num_proc=1):  59%|█████▉    | 687000/1165029 [05:13<03:34, 2227.73 examples/s]Map (num_proc=1):  59%|█████▉    | 688000/1165029 [05:14<03:35, 2214.52 examples/s]Map (num_proc=1):  59%|█████▉    | 689000/1165029 [05:14<03:35, 2210.43 examples/s]Map (num_proc=1):  59%|█████▉    | 690000/1165029 [05:15<03:40, 2155.09 examples/s]Map (num_proc=1):  59%|█████▉    | 691000/1165029 [05:15<03:38, 2169.81 examples/s]Map (num_proc=1):  59%|█████▉    | 692000/1165029 [05:16<03:36, 2184.51 examples/s]Map (num_proc=1):  59%|█████▉    | 693000/1165029 [05:16<03:36, 2181.74 examples/s]Map (num_proc=1):  60%|█████▉    | 694000/1165029 [05:16<03:36, 2171.40 examples/s]Map (num_proc=1):  60%|█████▉    | 695000/1165029 [05:17<04:08, 1889.99 examples/s]Map (num_proc=1):  60%|█████▉    | 696000/1165029 [05:18<03:58, 1964.24 examples/s]Map (num_proc=1):  60%|█████▉    | 697000/1165029 [05:18<03:49, 2042.22 examples/s]Map (num_proc=1):  60%|█████▉    | 698000/1165029 [05:19<03:49, 2036.41 examples/s]Map (num_proc=1):  60%|█████▉    | 699000/1165029 [05:19<03:43, 2086.84 examples/s]Map (num_proc=1):  60%|██████    | 700000/1165029 [05:19<03:40, 2106.38 examples/s]Map (num_proc=1):  60%|██████    | 701000/1165029 [05:20<03:38, 2120.25 examples/s]Map (num_proc=1):  60%|██████    | 702000/1165029 [05:20<03:39, 2110.57 examples/s]Map (num_proc=1):  60%|██████    | 703000/1165029 [05:21<03:35, 2146.13 examples/s]Map (num_proc=1):  60%|██████    | 704000/1165029 [05:21<03:32, 2173.39 examples/s]Map (num_proc=1):  61%|██████    | 705000/1165029 [05:22<03:27, 2219.38 examples/s]Map (num_proc=1):  61%|██████    | 706000/1165029 [05:22<03:28, 2197.55 examples/s]Map (num_proc=1):  61%|██████    | 707000/1165029 [05:23<03:29, 2181.71 examples/s]Map (num_proc=1):  61%|██████    | 708000/1165029 [05:23<03:33, 2137.40 examples/s]Map (num_proc=1):  61%|██████    | 709000/1165029 [05:24<03:29, 2175.31 examples/s]Map (num_proc=1):  61%|██████    | 710000/1165029 [05:24<03:26, 2202.09 examples/s]Map (num_proc=1):  61%|██████    | 711000/1165029 [05:25<03:26, 2197.40 examples/s]Map (num_proc=1):  61%|██████    | 712000/1165029 [05:25<03:29, 2162.86 examples/s]Map (num_proc=1):  61%|██████    | 713000/1165029 [05:25<03:26, 2188.21 examples/s]Map (num_proc=1):  61%|██████▏   | 714000/1165029 [05:26<03:27, 2178.46 examples/s]Map (num_proc=1):  61%|██████▏   | 715000/1165029 [05:26<03:28, 2160.45 examples/s]Map (num_proc=1):  61%|██████▏   | 716000/1165029 [05:27<03:25, 2187.40 examples/s]Map (num_proc=1):  62%|██████▏   | 717000/1165029 [05:27<03:25, 2184.90 examples/s]Map (num_proc=1):  62%|██████▏   | 718000/1165029 [05:28<03:24, 2189.81 examples/s]Map (num_proc=1):  62%|██████▏   | 719000/1165029 [05:28<03:20, 2226.23 examples/s]Map (num_proc=1):  62%|██████▏   | 720000/1165029 [05:29<03:15, 2277.90 examples/s]Map (num_proc=1):  62%|██████▏   | 721000/1165029 [05:29<03:18, 2234.99 examples/s]Map (num_proc=1):  62%|██████▏   | 722000/1165029 [05:29<03:16, 2259.28 examples/s]Map (num_proc=1):  62%|██████▏   | 723000/1165029 [05:30<03:15, 2265.70 examples/s]Map (num_proc=1):  62%|██████▏   | 724000/1165029 [05:30<03:16, 2245.80 examples/s]Map (num_proc=1):  62%|██████▏   | 725000/1165029 [05:31<03:19, 2203.50 examples/s]Map (num_proc=1):  62%|██████▏   | 726000/1165029 [05:32<03:47, 1930.62 examples/s]Map (num_proc=1):  62%|██████▏   | 727000/1165029 [05:32<03:33, 2048.47 examples/s]Map (num_proc=1):  62%|██████▏   | 728000/1165029 [05:32<03:29, 2090.81 examples/s]Map (num_proc=1):  63%|██████▎   | 729000/1165029 [05:33<03:25, 2122.62 examples/s]Map (num_proc=1):  63%|██████▎   | 730000/1165029 [05:33<03:27, 2094.74 examples/s]Map (num_proc=1):  63%|██████▎   | 731000/1165029 [05:34<03:24, 2118.95 examples/s]Map (num_proc=1):  63%|██████▎   | 732000/1165029 [05:34<03:17, 2196.34 examples/s]Map (num_proc=1):  63%|██████▎   | 733000/1165029 [05:35<03:18, 2180.69 examples/s]Map (num_proc=1):  63%|██████▎   | 734000/1165029 [05:35<03:20, 2149.13 examples/s]Map (num_proc=1):  63%|██████▎   | 735000/1165029 [05:36<03:18, 2171.81 examples/s]Map (num_proc=1):  63%|██████▎   | 736000/1165029 [05:36<03:17, 2173.97 examples/s]Map (num_proc=1):  63%|██████▎   | 737000/1165029 [05:37<03:15, 2186.69 examples/s]Map (num_proc=1):  63%|██████▎   | 738000/1165029 [05:37<03:15, 2184.47 examples/s]Map (num_proc=1):  63%|██████▎   | 739000/1165029 [05:37<03:12, 2207.64 examples/s]Map (num_proc=1):  64%|██████▎   | 740000/1165029 [05:38<03:13, 2196.92 examples/s]Map (num_proc=1):  64%|██████▎   | 741000/1165029 [05:38<03:14, 2182.22 examples/s]Map (num_proc=1):  64%|██████▎   | 742000/1165029 [05:39<03:16, 2156.62 examples/s]Map (num_proc=1):  64%|██████▍   | 743000/1165029 [05:39<03:16, 2149.37 examples/s]Map (num_proc=1):  64%|██████▍   | 744000/1165029 [05:40<03:16, 2147.99 examples/s]Map (num_proc=1):  64%|██████▍   | 745000/1165029 [05:40<03:13, 2168.06 examples/s]Map (num_proc=1):  64%|██████▍   | 746000/1165029 [05:41<03:20, 2087.48 examples/s]Map (num_proc=1):  64%|██████▍   | 747000/1165029 [05:41<03:19, 2096.71 examples/s]Map (num_proc=1):  64%|██████▍   | 748000/1165029 [05:42<03:21, 2066.33 examples/s]Map (num_proc=1):  64%|██████▍   | 749000/1165029 [05:42<03:19, 2088.53 examples/s]Map (num_proc=1):  64%|██████▍   | 750000/1165029 [05:43<03:17, 2104.31 examples/s]Map (num_proc=1):  64%|██████▍   | 751000/1165029 [05:43<03:13, 2135.41 examples/s]Map (num_proc=1):  65%|██████▍   | 752000/1165029 [05:44<03:17, 2094.80 examples/s]Map (num_proc=1):  65%|██████▍   | 753000/1165029 [05:44<03:14, 2123.86 examples/s]Map (num_proc=1):  65%|██████▍   | 754000/1165029 [05:45<03:14, 2116.49 examples/s]Map (num_proc=1):  65%|██████▍   | 755000/1165029 [05:45<03:13, 2121.76 examples/s]Map (num_proc=1):  65%|██████▍   | 756000/1165029 [05:45<03:10, 2148.15 examples/s]Map (num_proc=1):  65%|██████▍   | 757000/1165029 [05:46<03:02, 2236.82 examples/s]Map (num_proc=1):  65%|██████▌   | 758000/1165029 [05:46<02:59, 2270.57 examples/s]Map (num_proc=1):  65%|██████▌   | 759000/1165029 [05:47<02:58, 2271.84 examples/s]Map (num_proc=1):  65%|██████▌   | 760000/1165029 [05:47<03:02, 2215.81 examples/s]Map (num_proc=1):  65%|██████▌   | 761000/1165029 [05:48<03:34, 1886.85 examples/s]Map (num_proc=1):  65%|██████▌   | 762000/1165029 [05:48<03:24, 1972.71 examples/s]Map (num_proc=1):  65%|██████▌   | 763000/1165029 [05:49<03:18, 2030.16 examples/s]Map (num_proc=1):  66%|██████▌   | 764000/1165029 [05:49<03:12, 2085.41 examples/s]Map (num_proc=1):  66%|██████▌   | 765000/1165029 [05:50<03:14, 2057.17 examples/s]Map (num_proc=1):  66%|██████▌   | 766000/1165029 [05:50<03:13, 2065.33 examples/s]Map (num_proc=1):  66%|██████▌   | 767000/1165029 [05:51<03:15, 2038.91 examples/s]Map (num_proc=1):  66%|██████▌   | 768000/1165029 [05:51<03:13, 2055.22 examples/s]Map (num_proc=1):  66%|██████▌   | 769000/1165029 [05:52<03:10, 2082.65 examples/s]Map (num_proc=1):  66%|██████▌   | 770000/1165029 [05:52<03:12, 2053.92 examples/s]Map (num_proc=1):  66%|██████▌   | 771000/1165029 [05:53<03:11, 2054.60 examples/s]Map (num_proc=1):  66%|██████▋   | 772000/1165029 [05:53<03:04, 2130.73 examples/s]Map (num_proc=1):  66%|██████▋   | 773000/1165029 [05:54<03:05, 2111.02 examples/s]Map (num_proc=1):  66%|██████▋   | 774000/1165029 [05:54<03:05, 2104.24 examples/s]Map (num_proc=1):  67%|██████▋   | 775000/1165029 [05:55<03:03, 2120.44 examples/s]Map (num_proc=1):  67%|██████▋   | 776000/1165029 [05:55<03:02, 2129.84 examples/s]Map (num_proc=1):  67%|██████▋   | 777000/1165029 [05:55<02:59, 2164.36 examples/s]Map (num_proc=1):  67%|██████▋   | 778000/1165029 [05:56<02:59, 2152.46 examples/s]Map (num_proc=1):  67%|██████▋   | 779000/1165029 [05:56<02:56, 2191.19 examples/s]Map (num_proc=1):  67%|██████▋   | 780000/1165029 [05:57<02:53, 2220.83 examples/s]Map (num_proc=1):  67%|██████▋   | 781000/1165029 [05:57<02:54, 2199.90 examples/s]Map (num_proc=1):  67%|██████▋   | 782000/1165029 [05:58<02:59, 2138.79 examples/s]Map (num_proc=1):  67%|██████▋   | 783000/1165029 [05:58<02:54, 2184.91 examples/s]Map (num_proc=1):  67%|██████▋   | 784000/1165029 [05:59<02:56, 2163.35 examples/s]Map (num_proc=1):  67%|██████▋   | 785000/1165029 [05:59<02:53, 2190.33 examples/s]Map (num_proc=1):  67%|██████▋   | 786000/1165029 [06:00<02:47, 2257.64 examples/s]Map (num_proc=1):  68%|██████▊   | 787000/1165029 [06:00<02:49, 2231.05 examples/s]Map (num_proc=1):  68%|██████▊   | 788000/1165029 [06:00<02:48, 2242.19 examples/s]Map (num_proc=1):  68%|██████▊   | 789000/1165029 [06:01<02:48, 2231.69 examples/s]Map (num_proc=1):  68%|██████▊   | 790000/1165029 [06:01<02:46, 2251.30 examples/s]Map (num_proc=1):  68%|██████▊   | 791000/1165029 [06:02<02:48, 2223.72 examples/s]Map (num_proc=1):  68%|██████▊   | 792000/1165029 [06:02<03:17, 1891.90 examples/s]Map (num_proc=1):  68%|██████▊   | 793000/1165029 [06:03<03:08, 1970.77 examples/s]Map (num_proc=1):  68%|██████▊   | 794000/1165029 [06:03<02:58, 2080.92 examples/s]Map (num_proc=1):  68%|██████▊   | 795000/1165029 [06:04<03:00, 2053.86 examples/s]Map (num_proc=1):  68%|██████▊   | 796000/1165029 [06:04<02:55, 2097.39 examples/s]Map (num_proc=1):  68%|██████▊   | 797000/1165029 [06:05<02:51, 2140.10 examples/s]Map (num_proc=1):  68%|██████▊   | 798000/1165029 [06:05<02:49, 2171.05 examples/s]Map (num_proc=1):  69%|██████▊   | 799000/1165029 [06:06<02:49, 2158.48 examples/s]Map (num_proc=1):  69%|██████▊   | 800000/1165029 [06:06<02:48, 2163.29 examples/s]Map (num_proc=1):  69%|██████▉   | 801000/1165029 [06:07<02:50, 2138.90 examples/s]Map (num_proc=1):  69%|██████▉   | 802000/1165029 [06:07<02:44, 2200.27 examples/s]Map (num_proc=1):  69%|██████▉   | 803000/1165029 [06:08<02:46, 2172.26 examples/s]Map (num_proc=1):  69%|██████▉   | 804000/1165029 [06:08<02:48, 2148.92 examples/s]Map (num_proc=1):  69%|██████▉   | 805000/1165029 [06:08<02:46, 2162.84 examples/s]Map (num_proc=1):  69%|██████▉   | 806000/1165029 [06:09<02:49, 2123.08 examples/s]Map (num_proc=1):  69%|██████▉   | 807000/1165029 [06:09<02:51, 2086.99 examples/s]Map (num_proc=1):  69%|██████▉   | 808000/1165029 [06:10<02:48, 2123.46 examples/s]Map (num_proc=1):  69%|██████▉   | 809000/1165029 [06:10<02:48, 2118.98 examples/s]Map (num_proc=1):  70%|██████▉   | 810000/1165029 [06:11<02:45, 2139.34 examples/s]Map (num_proc=1):  70%|██████▉   | 811000/1165029 [06:11<02:43, 2159.26 examples/s]Map (num_proc=1):  70%|██████▉   | 812000/1165029 [06:12<02:44, 2140.09 examples/s]Map (num_proc=1):  70%|██████▉   | 813000/1165029 [06:12<02:46, 2109.23 examples/s]Map (num_proc=1):  70%|██████▉   | 814000/1165029 [06:13<02:47, 2096.29 examples/s]Map (num_proc=1):  70%|██████▉   | 815000/1165029 [06:13<02:45, 2110.39 examples/s]Map (num_proc=1):  70%|███████   | 816000/1165029 [06:14<02:42, 2151.50 examples/s]Map (num_proc=1):  70%|███████   | 817000/1165029 [06:14<02:41, 2149.50 examples/s]Map (num_proc=1):  70%|███████   | 818000/1165029 [06:15<02:41, 2146.43 examples/s]Map (num_proc=1):  70%|███████   | 819000/1165029 [06:15<02:39, 2170.74 examples/s]Map (num_proc=1):  70%|███████   | 820000/1165029 [06:15<02:39, 2161.18 examples/s]Map (num_proc=1):  70%|███████   | 821000/1165029 [06:16<02:39, 2150.43 examples/s]Map (num_proc=1):  71%|███████   | 822000/1165029 [06:16<02:42, 2116.82 examples/s]Map (num_proc=1):  71%|███████   | 823000/1165029 [06:17<02:41, 2118.08 examples/s]Map (num_proc=1):  71%|███████   | 824000/1165029 [06:17<02:41, 2117.68 examples/s]Map (num_proc=1):  71%|███████   | 825000/1165029 [06:18<03:09, 1793.70 examples/s]Map (num_proc=1):  71%|███████   | 826000/1165029 [06:19<03:05, 1823.83 examples/s]Map (num_proc=1):  71%|███████   | 827000/1165029 [06:19<02:56, 1917.40 examples/s]Map (num_proc=1):  71%|███████   | 828000/1165029 [06:20<02:51, 1970.67 examples/s]Map (num_proc=1):  71%|███████   | 829000/1165029 [06:20<02:46, 2015.81 examples/s]Map (num_proc=1):  71%|███████   | 830000/1165029 [06:21<02:48, 1993.64 examples/s]Map (num_proc=1):  71%|███████▏  | 831000/1165029 [06:21<02:41, 2063.33 examples/s]Map (num_proc=1):  71%|███████▏  | 832000/1165029 [06:22<02:41, 2059.30 examples/s]Map (num_proc=1):  72%|███████▏  | 833000/1165029 [06:22<02:40, 2069.80 examples/s]Map (num_proc=1):  72%|███████▏  | 834000/1165029 [06:22<02:41, 2052.65 examples/s]Map (num_proc=1):  72%|███████▏  | 835000/1165029 [06:23<02:41, 2046.32 examples/s]Map (num_proc=1):  72%|███████▏  | 836000/1165029 [06:23<02:40, 2052.93 examples/s]Map (num_proc=1):  72%|███████▏  | 837000/1165029 [06:24<02:39, 2052.97 examples/s]Map (num_proc=1):  72%|███████▏  | 838000/1165029 [06:24<02:34, 2117.82 examples/s]Map (num_proc=1):  72%|███████▏  | 839000/1165029 [06:25<02:36, 2084.65 examples/s]Map (num_proc=1):  72%|███████▏  | 840000/1165029 [06:25<02:33, 2110.60 examples/s]Map (num_proc=1):  72%|███████▏  | 841000/1165029 [06:26<02:32, 2125.98 examples/s]Map (num_proc=1):  72%|███████▏  | 842000/1165029 [06:26<02:31, 2127.96 examples/s]Map (num_proc=1):  72%|███████▏  | 843000/1165029 [06:27<02:29, 2154.33 examples/s]Map (num_proc=1):  72%|███████▏  | 844000/1165029 [06:27<02:32, 2109.59 examples/s]Map (num_proc=1):  73%|███████▎  | 845000/1165029 [06:28<02:30, 2119.86 examples/s]Map (num_proc=1):  73%|███████▎  | 846000/1165029 [06:28<02:28, 2144.65 examples/s]Map (num_proc=1):  73%|███████▎  | 847000/1165029 [06:29<02:28, 2142.81 examples/s]Map (num_proc=1):  73%|███████▎  | 848000/1165029 [06:29<02:29, 2127.42 examples/s]Map (num_proc=1):  73%|███████▎  | 849000/1165029 [06:30<02:30, 2093.07 examples/s]Map (num_proc=1):  73%|███████▎  | 850000/1165029 [06:30<02:33, 2057.88 examples/s]Map (num_proc=1):  73%|███████▎  | 851000/1165029 [06:31<02:29, 2104.78 examples/s]Map (num_proc=1):  73%|███████▎  | 852000/1165029 [06:31<02:28, 2110.78 examples/s]Map (num_proc=1):  73%|███████▎  | 853000/1165029 [06:31<02:26, 2135.68 examples/s]Map (num_proc=1):  73%|███████▎  | 854000/1165029 [06:32<02:24, 2159.32 examples/s]Map (num_proc=1):  73%|███████▎  | 855000/1165029 [06:32<02:26, 2110.45 examples/s]Map (num_proc=1):  73%|███████▎  | 856000/1165029 [06:33<02:50, 1811.54 examples/s]Map (num_proc=1):  74%|███████▎  | 857000/1165029 [06:34<02:44, 1877.06 examples/s]Map (num_proc=1):  74%|███████▎  | 858000/1165029 [06:34<02:40, 1907.23 examples/s]Map (num_proc=1):  74%|███████▎  | 859000/1165029 [06:35<02:35, 1966.24 examples/s]Map (num_proc=1):  74%|███████▍  | 860000/1165029 [06:35<02:34, 1976.54 examples/s]Map (num_proc=1):  74%|███████▍  | 861000/1165029 [06:36<02:31, 2006.85 examples/s]Map (num_proc=1):  74%|███████▍  | 862000/1165029 [06:36<02:28, 2046.22 examples/s]Map (num_proc=1):  74%|███████▍  | 863000/1165029 [06:37<02:26, 2064.67 examples/s]Map (num_proc=1):  74%|███████▍  | 864000/1165029 [06:37<02:26, 2056.75 examples/s]Map (num_proc=1):  74%|███████▍  | 865000/1165029 [06:37<02:22, 2111.44 examples/s]Map (num_proc=1):  74%|███████▍  | 866000/1165029 [06:38<02:21, 2119.12 examples/s]Map (num_proc=1):  74%|███████▍  | 867000/1165029 [06:38<02:19, 2136.95 examples/s]Map (num_proc=1):  75%|███████▍  | 868000/1165029 [06:39<02:18, 2138.72 examples/s]Map (num_proc=1):  75%|███████▍  | 869000/1165029 [06:39<02:18, 2137.74 examples/s]Map (num_proc=1):  75%|███████▍  | 870000/1165029 [06:40<02:18, 2124.11 examples/s]Map (num_proc=1):  75%|███████▍  | 871000/1165029 [06:40<02:16, 2152.13 examples/s]Map (num_proc=1):  75%|███████▍  | 872000/1165029 [06:41<02:14, 2179.43 examples/s]Map (num_proc=1):  75%|███████▍  | 873000/1165029 [06:41<02:16, 2136.78 examples/s]Map (num_proc=1):  75%|███████▌  | 874000/1165029 [06:42<02:14, 2166.07 examples/s]Map (num_proc=1):  75%|███████▌  | 875000/1165029 [06:42<02:17, 2109.21 examples/s]Map (num_proc=1):  75%|███████▌  | 876000/1165029 [06:43<02:18, 2088.64 examples/s]Map (num_proc=1):  75%|███████▌  | 877000/1165029 [06:43<02:17, 2092.24 examples/s]Map (num_proc=1):  75%|███████▌  | 878000/1165029 [06:44<02:16, 2103.24 examples/s]Map (num_proc=1):  75%|███████▌  | 879000/1165029 [06:44<02:16, 2098.22 examples/s]Map (num_proc=1):  76%|███████▌  | 880000/1165029 [06:45<02:16, 2089.51 examples/s]Map (num_proc=1):  76%|███████▌  | 881000/1165029 [06:45<02:15, 2100.65 examples/s]Map (num_proc=1):  76%|███████▌  | 882000/1165029 [06:46<02:16, 2071.63 examples/s]Map (num_proc=1):  76%|███████▌  | 883000/1165029 [06:46<02:15, 2088.78 examples/s]Map (num_proc=1):  76%|███████▌  | 884000/1165029 [06:46<02:12, 2117.25 examples/s]Map (num_proc=1):  76%|███████▌  | 885000/1165029 [06:47<02:11, 2131.88 examples/s]Map (num_proc=1):  76%|███████▌  | 886000/1165029 [06:47<02:13, 2083.98 examples/s]Map (num_proc=1):  76%|███████▌  | 887000/1165029 [06:48<02:31, 1832.16 examples/s]Map (num_proc=1):  76%|███████▌  | 888000/1165029 [06:49<02:26, 1888.57 examples/s]Map (num_proc=1):  76%|███████▋  | 889000/1165029 [06:49<02:22, 1942.76 examples/s]Map (num_proc=1):  76%|███████▋  | 890000/1165029 [06:49<02:14, 2048.28 examples/s]Map (num_proc=1):  76%|███████▋  | 891000/1165029 [06:50<02:10, 2096.15 examples/s]Map (num_proc=1):  77%|███████▋  | 892000/1165029 [06:50<02:08, 2118.39 examples/s]Map (num_proc=1):  77%|███████▋  | 893000/1165029 [06:51<02:05, 2159.17 examples/s]Map (num_proc=1):  77%|███████▋  | 894000/1165029 [06:51<02:06, 2146.73 examples/s]Map (num_proc=1):  77%|███████▋  | 895000/1165029 [06:52<02:04, 2163.40 examples/s]Map (num_proc=1):  77%|███████▋  | 896000/1165029 [06:52<02:03, 2176.70 examples/s]Map (num_proc=1):  77%|███████▋  | 897000/1165029 [06:53<02:03, 2163.14 examples/s]Map (num_proc=1):  77%|███████▋  | 898000/1165029 [06:53<02:00, 2224.80 examples/s]Map (num_proc=1):  77%|███████▋  | 899000/1165029 [06:54<02:00, 2198.81 examples/s]Map (num_proc=1):  77%|███████▋  | 900000/1165029 [06:54<02:02, 2166.31 examples/s]Map (num_proc=1):  77%|███████▋  | 901000/1165029 [06:55<02:05, 2109.44 examples/s]Map (num_proc=1):  77%|███████▋  | 902000/1165029 [06:55<02:03, 2125.88 examples/s]Map (num_proc=1):  78%|███████▊  | 903000/1165029 [06:56<02:04, 2106.31 examples/s]Map (num_proc=1):  78%|███████▊  | 904000/1165029 [06:56<02:03, 2116.68 examples/s]Map (num_proc=1):  78%|███████▊  | 905000/1165029 [06:56<02:01, 2144.83 examples/s]Map (num_proc=1):  78%|███████▊  | 906000/1165029 [06:57<02:01, 2133.71 examples/s]Map (num_proc=1):  78%|███████▊  | 907000/1165029 [06:57<01:58, 2180.94 examples/s]Map (num_proc=1):  78%|███████▊  | 908000/1165029 [06:58<01:58, 2171.49 examples/s]Map (num_proc=1):  78%|███████▊  | 909000/1165029 [06:58<01:58, 2154.47 examples/s]Map (num_proc=1):  78%|███████▊  | 910000/1165029 [06:59<01:58, 2147.96 examples/s]Map (num_proc=1):  78%|███████▊  | 911000/1165029 [06:59<01:54, 2210.33 examples/s]Map (num_proc=1):  78%|███████▊  | 912000/1165029 [07:00<01:56, 2165.13 examples/s]Map (num_proc=1):  78%|███████▊  | 913000/1165029 [07:00<01:56, 2160.31 examples/s]Map (num_proc=1):  78%|███████▊  | 914000/1165029 [07:01<01:57, 2130.16 examples/s]Map (num_proc=1):  79%|███████▊  | 915000/1165029 [07:01<01:57, 2133.08 examples/s]Map (num_proc=1):  79%|███████▊  | 916000/1165029 [07:02<01:56, 2135.37 examples/s]Map (num_proc=1):  79%|███████▊  | 917000/1165029 [07:02<01:55, 2144.50 examples/s]Map (num_proc=1):  79%|███████▉  | 918000/1165029 [07:02<01:54, 2148.28 examples/s]Map (num_proc=1):  79%|███████▉  | 919000/1165029 [07:03<01:54, 2148.50 examples/s]Map (num_proc=1):  79%|███████▉  | 920000/1165029 [07:03<01:56, 2106.21 examples/s]Map (num_proc=1):  79%|███████▉  | 921000/1165029 [07:04<01:56, 2100.01 examples/s]Map (num_proc=1):  79%|███████▉  | 922000/1165029 [07:05<02:11, 1852.37 examples/s]Map (num_proc=1):  79%|███████▉  | 923000/1165029 [07:05<02:05, 1924.34 examples/s]Map (num_proc=1):  79%|███████▉  | 924000/1165029 [07:06<02:04, 1943.29 examples/s]Map (num_proc=1):  79%|███████▉  | 925000/1165029 [07:06<01:59, 2006.95 examples/s]Map (num_proc=1):  79%|███████▉  | 926000/1165029 [07:07<01:58, 2012.96 examples/s]Map (num_proc=1):  80%|███████▉  | 927000/1165029 [07:07<01:55, 2053.73 examples/s]Map (num_proc=1):  80%|███████▉  | 928000/1165029 [07:07<01:51, 2118.78 examples/s]Map (num_proc=1):  80%|███████▉  | 929000/1165029 [07:08<01:52, 2095.88 examples/s]Map (num_proc=1):  80%|███████▉  | 930000/1165029 [07:08<01:53, 2076.37 examples/s]Map (num_proc=1):  80%|███████▉  | 931000/1165029 [07:09<01:52, 2084.84 examples/s]Map (num_proc=1):  80%|███████▉  | 932000/1165029 [07:09<01:50, 2114.17 examples/s]Map (num_proc=1):  80%|████████  | 933000/1165029 [07:10<01:50, 2095.78 examples/s]Map (num_proc=1):  80%|████████  | 934000/1165029 [07:10<01:48, 2126.24 examples/s]Map (num_proc=1):  80%|████████  | 935000/1165029 [07:11<01:48, 2121.97 examples/s]Map (num_proc=1):  80%|████████  | 936000/1165029 [07:11<01:49, 2091.75 examples/s]Map (num_proc=1):  80%|████████  | 937000/1165029 [07:12<01:46, 2150.49 examples/s]Map (num_proc=1):  81%|████████  | 938000/1165029 [07:12<01:46, 2126.97 examples/s]Map (num_proc=1):  81%|████████  | 939000/1165029 [07:13<01:47, 2108.61 examples/s]Map (num_proc=1):  81%|████████  | 940000/1165029 [07:13<01:46, 2107.54 examples/s]Map (num_proc=1):  81%|████████  | 941000/1165029 [07:14<01:47, 2087.51 examples/s]Map (num_proc=1):  81%|████████  | 942000/1165029 [07:14<01:46, 2101.13 examples/s]Map (num_proc=1):  81%|████████  | 943000/1165029 [07:15<01:44, 2123.32 examples/s]Map (num_proc=1):  81%|████████  | 944000/1165029 [07:15<01:43, 2140.31 examples/s]Map (num_proc=1):  81%|████████  | 945000/1165029 [07:15<01:41, 2176.29 examples/s]Map (num_proc=1):  81%|████████  | 946000/1165029 [07:16<01:40, 2182.21 examples/s]Map (num_proc=1):  81%|████████▏ | 947000/1165029 [07:16<01:43, 2116.38 examples/s]Map (num_proc=1):  81%|████████▏ | 948000/1165029 [07:17<01:43, 2097.07 examples/s]Map (num_proc=1):  81%|████████▏ | 949000/1165029 [07:17<01:41, 2128.66 examples/s]Map (num_proc=1):  82%|████████▏ | 950000/1165029 [07:18<01:41, 2119.72 examples/s]Map (num_proc=1):  82%|████████▏ | 951000/1165029 [07:18<01:42, 2082.68 examples/s]Map (num_proc=1):  82%|████████▏ | 952000/1165029 [07:19<01:41, 2094.88 examples/s]Map (num_proc=1):  82%|████████▏ | 953000/1165029 [07:19<01:54, 1847.44 examples/s]Map (num_proc=1):  82%|████████▏ | 954000/1165029 [07:20<01:49, 1928.14 examples/s]Map (num_proc=1):  82%|████████▏ | 955000/1165029 [07:20<01:45, 1993.73 examples/s]Map (num_proc=1):  82%|████████▏ | 956000/1165029 [07:21<01:44, 2001.92 examples/s]Map (num_proc=1):  82%|████████▏ | 957000/1165029 [07:21<01:42, 2031.40 examples/s]Map (num_proc=1):  82%|████████▏ | 958000/1165029 [07:22<01:37, 2113.34 examples/s]Map (num_proc=1):  82%|████████▏ | 959000/1165029 [07:22<01:39, 2060.89 examples/s]Map (num_proc=1):  82%|████████▏ | 960000/1165029 [07:23<01:37, 2112.77 examples/s]Map (num_proc=1):  82%|████████▏ | 961000/1165029 [07:23<01:35, 2131.06 examples/s]Map (num_proc=1):  83%|████████▎ | 962000/1165029 [07:24<01:34, 2146.17 examples/s]Map (num_proc=1):  83%|████████▎ | 963000/1165029 [07:24<01:34, 2128.32 examples/s]Map (num_proc=1):  83%|████████▎ | 964000/1165029 [07:25<01:34, 2130.95 examples/s]Map (num_proc=1):  83%|████████▎ | 965000/1165029 [07:25<01:32, 2151.56 examples/s]Map (num_proc=1):  83%|████████▎ | 966000/1165029 [07:26<01:31, 2186.75 examples/s]Map (num_proc=1):  83%|████████▎ | 967000/1165029 [07:26<01:30, 2182.18 examples/s]Map (num_proc=1):  83%|████████▎ | 968000/1165029 [07:26<01:30, 2182.34 examples/s]Map (num_proc=1):  83%|████████▎ | 969000/1165029 [07:27<01:29, 2202.41 examples/s]Map (num_proc=1):  83%|████████▎ | 970000/1165029 [07:27<01:26, 2251.90 examples/s]Map (num_proc=1):  83%|████████▎ | 971000/1165029 [07:28<01:27, 2212.48 examples/s]Map (num_proc=1):  83%|████████▎ | 972000/1165029 [07:28<01:27, 2211.42 examples/s]Map (num_proc=1):  84%|████████▎ | 973000/1165029 [07:29<01:27, 2184.51 examples/s]Map (num_proc=1):  84%|████████▎ | 974000/1165029 [07:29<01:27, 2189.33 examples/s]Map (num_proc=1):  84%|████████▎ | 975000/1165029 [07:30<01:27, 2168.83 examples/s]Map (num_proc=1):  84%|████████▍ | 976000/1165029 [07:30<01:26, 2178.38 examples/s]Map (num_proc=1):  84%|████████▍ | 977000/1165029 [07:31<01:26, 2180.48 examples/s]Map (num_proc=1):  84%|████████▍ | 978000/1165029 [07:31<01:25, 2190.77 examples/s]Map (num_proc=1):  84%|████████▍ | 979000/1165029 [07:31<01:23, 2231.84 examples/s]Map (num_proc=1):  84%|████████▍ | 980000/1165029 [07:32<01:23, 2212.06 examples/s]Map (num_proc=1):  84%|████████▍ | 981000/1165029 [07:32<01:21, 2265.87 examples/s]Map (num_proc=1):  84%|████████▍ | 982000/1165029 [07:33<01:23, 2189.07 examples/s]Map (num_proc=1):  84%|████████▍ | 983000/1165029 [07:33<01:23, 2190.26 examples/s]Map (num_proc=1):  84%|████████▍ | 984000/1165029 [07:34<01:20, 2235.41 examples/s]Map (num_proc=1):  85%|████████▍ | 985000/1165029 [07:34<01:20, 2233.88 examples/s]Map (num_proc=1):  85%|████████▍ | 986000/1165029 [07:35<01:31, 1947.54 examples/s]Map (num_proc=1):  85%|████████▍ | 987000/1165029 [07:35<01:29, 1995.99 examples/s]Map (num_proc=1):  85%|████████▍ | 988000/1165029 [07:36<01:27, 2021.86 examples/s]Map (num_proc=1):  85%|████████▍ | 989000/1165029 [07:36<01:25, 2051.69 examples/s]Map (num_proc=1):  85%|████████▍ | 990000/1165029 [07:37<01:25, 2052.34 examples/s]Map (num_proc=1):  85%|████████▌ | 991000/1165029 [07:37<01:22, 2117.60 examples/s]Map (num_proc=1):  85%|████████▌ | 992000/1165029 [07:38<01:21, 2110.31 examples/s]Map (num_proc=1):  85%|████████▌ | 993000/1165029 [07:38<01:19, 2151.18 examples/s]Map (num_proc=1):  85%|████████▌ | 994000/1165029 [07:38<01:18, 2183.41 examples/s]Map (num_proc=1):  85%|████████▌ | 995000/1165029 [07:39<01:16, 2216.93 examples/s]Map (num_proc=1):  85%|████████▌ | 996000/1165029 [07:39<01:15, 2247.10 examples/s]Map (num_proc=1):  86%|████████▌ | 997000/1165029 [07:40<01:13, 2285.44 examples/s]Map (num_proc=1):  86%|████████▌ | 998000/1165029 [07:40<01:12, 2317.12 examples/s]Map (num_proc=1):  86%|████████▌ | 999000/1165029 [07:41<01:09, 2397.62 examples/s]Map (num_proc=1):  86%|████████▌ | 1000000/1165029 [07:41<01:09, 2362.45 examples/s]Map (num_proc=1):  86%|████████▌ | 1001000/1165029 [07:41<01:11, 2278.52 examples/s]Map (num_proc=1):  86%|████████▌ | 1002000/1165029 [07:42<01:11, 2264.53 examples/s]Map (num_proc=1):  86%|████████▌ | 1003000/1165029 [07:42<01:10, 2297.60 examples/s]Map (num_proc=1):  86%|████████▌ | 1004000/1165029 [07:43<01:10, 2279.86 examples/s]Map (num_proc=1):  86%|████████▋ | 1005000/1165029 [07:43<01:10, 2261.07 examples/s]Map (num_proc=1):  86%|████████▋ | 1006000/1165029 [07:44<01:11, 2230.05 examples/s]Map (num_proc=1):  86%|████████▋ | 1007000/1165029 [07:44<01:10, 2238.68 examples/s]Map (num_proc=1):  87%|████████▋ | 1008000/1165029 [07:45<01:10, 2220.91 examples/s]Map (num_proc=1):  87%|████████▋ | 1009000/1165029 [07:45<01:12, 2166.82 examples/s]Map (num_proc=1):  87%|████████▋ | 1010000/1165029 [07:46<01:11, 2159.07 examples/s]Map (num_proc=1):  87%|████████▋ | 1011000/1165029 [07:46<01:10, 2173.00 examples/s]Map (num_proc=1):  87%|████████▋ | 1012000/1165029 [07:46<01:08, 2223.71 examples/s]Map (num_proc=1):  87%|████████▋ | 1013000/1165029 [07:47<01:07, 2238.32 examples/s]Map (num_proc=1):  87%|████████▋ | 1014000/1165029 [07:47<01:07, 2230.41 examples/s]Map (num_proc=1):  87%|████████▋ | 1015000/1165029 [07:48<01:06, 2253.07 examples/s]Map (num_proc=1):  87%|████████▋ | 1016000/1165029 [07:48<01:06, 2233.33 examples/s]Map (num_proc=1):  87%|████████▋ | 1017000/1165029 [07:49<01:18, 1892.23 examples/s]Map (num_proc=1):  87%|████████▋ | 1018000/1165029 [07:49<01:14, 1980.52 examples/s]Map (num_proc=1):  87%|████████▋ | 1019000/1165029 [07:50<01:10, 2069.29 examples/s]Map (num_proc=1):  88%|████████▊ | 1020000/1165029 [07:50<01:08, 2105.56 examples/s]Map (num_proc=1):  88%|████████▊ | 1021000/1165029 [07:51<01:07, 2145.58 examples/s]Map (num_proc=1):  88%|████████▊ | 1022000/1165029 [07:51<01:06, 2151.65 examples/s]Map (num_proc=1):  88%|████████▊ | 1023000/1165029 [07:52<01:04, 2188.20 examples/s]Map (num_proc=1):  88%|████████▊ | 1024000/1165029 [07:52<01:04, 2182.65 examples/s]Map (num_proc=1):  88%|████████▊ | 1025000/1165029 [07:53<01:03, 2197.58 examples/s]Map (num_proc=1):  88%|████████▊ | 1026000/1165029 [07:53<01:01, 2273.54 examples/s]Map (num_proc=1):  88%|████████▊ | 1027000/1165029 [07:53<01:01, 2228.84 examples/s]Map (num_proc=1):  88%|████████▊ | 1028000/1165029 [07:54<01:00, 2250.96 examples/s]Map (num_proc=1):  88%|████████▊ | 1029000/1165029 [07:54<01:00, 2261.64 examples/s]Map (num_proc=1):  88%|████████▊ | 1030000/1165029 [07:55<01:00, 2233.41 examples/s]Map (num_proc=1):  88%|████████▊ | 1031000/1165029 [07:55<00:59, 2251.69 examples/s]Map (num_proc=1):  89%|████████▊ | 1032000/1165029 [07:56<00:58, 2266.20 examples/s]Map (num_proc=1):  89%|████████▊ | 1033000/1165029 [07:56<00:58, 2267.02 examples/s]Map (num_proc=1):  89%|████████▉ | 1034000/1165029 [07:57<00:57, 2263.96 examples/s]Map (num_proc=1):  89%|████████▉ | 1035000/1165029 [07:57<00:57, 2267.37 examples/s]Map (num_proc=1):  89%|████████▉ | 1036000/1165029 [07:57<00:57, 2232.45 examples/s]Map (num_proc=1):  89%|████████▉ | 1037000/1165029 [07:58<00:58, 2185.97 examples/s]Map (num_proc=1):  89%|████████▉ | 1038000/1165029 [07:58<00:56, 2258.81 examples/s]Map (num_proc=1):  89%|████████▉ | 1039000/1165029 [07:59<00:58, 2166.82 examples/s]Map (num_proc=1):  89%|████████▉ | 1040000/1165029 [07:59<00:56, 2216.82 examples/s]Map (num_proc=1):  89%|████████▉ | 1041000/1165029 [08:00<00:56, 2195.37 examples/s]Map (num_proc=1):  89%|████████▉ | 1042000/1165029 [08:00<00:55, 2211.49 examples/s]Map (num_proc=1):  90%|████████▉ | 1043000/1165029 [08:01<00:55, 2213.13 examples/s]Map (num_proc=1):  90%|████████▉ | 1044000/1165029 [08:01<00:54, 2203.36 examples/s]Map (num_proc=1):  90%|████████▉ | 1045000/1165029 [08:02<00:56, 2133.24 examples/s]Map (num_proc=1):  90%|████████▉ | 1046000/1165029 [08:02<00:55, 2139.17 examples/s]Map (num_proc=1):  90%|████████▉ | 1047000/1165029 [08:02<00:54, 2158.67 examples/s]Map (num_proc=1):  90%|████████▉ | 1048000/1165029 [08:03<01:00, 1942.72 examples/s]Map (num_proc=1):  90%|█████████ | 1049000/1165029 [08:04<00:57, 2023.00 examples/s]Map (num_proc=1):  90%|█████████ | 1050000/1165029 [08:04<00:56, 2046.67 examples/s]Map (num_proc=1):  90%|█████████ | 1051000/1165029 [08:04<00:53, 2126.26 examples/s]Map (num_proc=1):  90%|█████████ | 1052000/1165029 [08:05<00:52, 2150.39 examples/s]Map (num_proc=1):  90%|█████████ | 1053000/1165029 [08:05<00:51, 2181.55 examples/s]Map (num_proc=1):  90%|█████████ | 1054000/1165029 [08:06<00:51, 2146.37 examples/s]Map (num_proc=1):  91%|█████████ | 1055000/1165029 [08:06<00:51, 2141.37 examples/s]Map (num_proc=1):  91%|█████████ | 1056000/1165029 [08:07<00:50, 2179.58 examples/s]Map (num_proc=1):  91%|█████████ | 1057000/1165029 [08:07<00:49, 2194.19 examples/s]Map (num_proc=1):  91%|█████████ | 1058000/1165029 [08:08<00:47, 2231.54 examples/s]Map (num_proc=1):  91%|█████████ | 1059000/1165029 [08:08<00:47, 2220.82 examples/s]Map (num_proc=1):  91%|█████████ | 1060000/1165029 [08:09<00:47, 2231.51 examples/s]Map (num_proc=1):  91%|█████████ | 1061000/1165029 [08:09<00:46, 2233.77 examples/s]Map (num_proc=1):  91%|█████████ | 1062000/1165029 [08:09<00:45, 2244.35 examples/s]Map (num_proc=1):  91%|█████████ | 1063000/1165029 [08:10<00:46, 2202.73 examples/s]Map (num_proc=1):  91%|█████████▏| 1064000/1165029 [08:10<00:46, 2188.31 examples/s]Map (num_proc=1):  91%|█████████▏| 1065000/1165029 [08:11<00:45, 2211.77 examples/s]Map (num_proc=1):  91%|█████████▏| 1066000/1165029 [08:11<00:44, 2217.70 examples/s]Map (num_proc=1):  92%|█████████▏| 1067000/1165029 [08:12<00:44, 2196.91 examples/s]Map (num_proc=1):  92%|█████████▏| 1068000/1165029 [08:12<00:44, 2185.49 examples/s]Map (num_proc=1):  92%|█████████▏| 1069000/1165029 [08:13<00:43, 2216.23 examples/s]Map (num_proc=1):  92%|█████████▏| 1070000/1165029 [08:13<00:43, 2175.09 examples/s]Map (num_proc=1):  92%|█████████▏| 1071000/1165029 [08:14<00:42, 2201.79 examples/s]Map (num_proc=1):  92%|█████████▏| 1072000/1165029 [08:14<00:42, 2174.12 examples/s]Map (num_proc=1):  92%|█████████▏| 1073000/1165029 [08:14<00:42, 2186.68 examples/s]Map (num_proc=1):  92%|█████████▏| 1074000/1165029 [08:15<00:41, 2188.23 examples/s]Map (num_proc=1):  92%|█████████▏| 1075000/1165029 [08:15<00:39, 2252.69 examples/s]Map (num_proc=1):  92%|█████████▏| 1076000/1165029 [08:16<00:39, 2266.69 examples/s]Map (num_proc=1):  92%|█████████▏| 1077000/1165029 [08:16<00:39, 2227.54 examples/s]Map (num_proc=1):  93%|█████████▎| 1078000/1165029 [08:17<00:38, 2239.52 examples/s]Map (num_proc=1):  93%|█████████▎| 1079000/1165029 [08:17<00:38, 2244.24 examples/s]Map (num_proc=1):  93%|█████████▎| 1080000/1165029 [08:18<00:36, 2309.91 examples/s]Map (num_proc=1):  93%|█████████▎| 1081000/1165029 [08:18<00:37, 2259.86 examples/s]Map (num_proc=1):  93%|█████████▎| 1082000/1165029 [08:18<00:36, 2248.15 examples/s]Map (num_proc=1):  93%|█████████▎| 1083000/1165029 [08:19<00:42, 1943.32 examples/s]Map (num_proc=1):  93%|█████████▎| 1084000/1165029 [08:20<00:40, 2000.98 examples/s]Map (num_proc=1):  93%|█████████▎| 1085000/1165029 [08:20<00:38, 2079.64 examples/s]Map (num_proc=1):  93%|█████████▎| 1086000/1165029 [08:20<00:37, 2123.19 examples/s]Map (num_proc=1):  93%|█████████▎| 1087000/1165029 [08:21<00:36, 2148.97 examples/s]Map (num_proc=1):  93%|█████████▎| 1088000/1165029 [08:21<00:35, 2149.37 examples/s]Map (num_proc=1):  93%|█████████▎| 1089000/1165029 [08:22<00:35, 2130.21 examples/s]Map (num_proc=1):  94%|█████████▎| 1090000/1165029 [08:22<00:35, 2142.89 examples/s]Map (num_proc=1):  94%|█████████▎| 1091000/1165029 [08:23<00:34, 2166.61 examples/s]Map (num_proc=1):  94%|█████████▎| 1092000/1165029 [08:23<00:32, 2233.29 examples/s]Map (num_proc=1):  94%|█████████▍| 1093000/1165029 [08:24<00:32, 2210.78 examples/s]Map (num_proc=1):  94%|█████████▍| 1094000/1165029 [08:24<00:32, 2210.91 examples/s]Map (num_proc=1):  94%|█████████▍| 1095000/1165029 [08:25<00:32, 2172.15 examples/s]Map (num_proc=1):  94%|█████████▍| 1096000/1165029 [08:25<00:31, 2159.80 examples/s]Map (num_proc=1):  94%|█████████▍| 1097000/1165029 [08:25<00:31, 2180.89 examples/s]Map (num_proc=1):  94%|█████████▍| 1098000/1165029 [08:26<00:31, 2146.57 examples/s]Map (num_proc=1):  94%|█████████▍| 1099000/1165029 [08:26<00:30, 2133.13 examples/s]Map (num_proc=1):  94%|█████████▍| 1100000/1165029 [08:27<00:31, 2089.83 examples/s]Map (num_proc=1):  95%|█████████▍| 1101000/1165029 [08:27<00:30, 2099.89 examples/s]Map (num_proc=1):  95%|█████████▍| 1102000/1165029 [08:28<00:30, 2087.47 examples/s]Map (num_proc=1):  95%|█████████▍| 1103000/1165029 [08:28<00:29, 2098.24 examples/s]Map (num_proc=1):  95%|█████████▍| 1104000/1165029 [08:29<00:28, 2130.44 examples/s]Map (num_proc=1):  95%|█████████▍| 1105000/1165029 [08:29<00:28, 2107.97 examples/s]Map (num_proc=1):  95%|█████████▍| 1106000/1165029 [08:30<00:27, 2120.55 examples/s]Map (num_proc=1):  95%|█████████▌| 1107000/1165029 [08:30<00:26, 2163.38 examples/s]Map (num_proc=1):  95%|█████████▌| 1108000/1165029 [08:31<00:26, 2149.85 examples/s]Map (num_proc=1):  95%|█████████▌| 1109000/1165029 [08:31<00:25, 2180.63 examples/s]Map (num_proc=1):  95%|█████████▌| 1110000/1165029 [08:32<00:25, 2165.84 examples/s]Map (num_proc=1):  95%|█████████▌| 1111000/1165029 [08:32<00:24, 2183.63 examples/s]Map (num_proc=1):  95%|█████████▌| 1112000/1165029 [08:33<00:25, 2101.35 examples/s]Map (num_proc=1):  96%|█████████▌| 1113000/1165029 [08:33<00:25, 2079.91 examples/s]Map (num_proc=1):  96%|█████████▌| 1114000/1165029 [08:34<00:28, 1822.38 examples/s]Map (num_proc=1):  96%|█████████▌| 1115000/1165029 [08:34<00:26, 1895.49 examples/s]Map (num_proc=1):  96%|█████████▌| 1116000/1165029 [08:35<00:24, 1965.72 examples/s]Map (num_proc=1):  96%|█████████▌| 1117000/1165029 [08:35<00:23, 2075.35 examples/s]Map (num_proc=1):  96%|█████████▌| 1118000/1165029 [08:36<00:22, 2110.89 examples/s]Map (num_proc=1):  96%|█████████▌| 1119000/1165029 [08:36<00:21, 2130.20 examples/s]Map (num_proc=1):  96%|█████████▌| 1120000/1165029 [08:37<00:21, 2141.72 examples/s]Map (num_proc=1):  96%|█████████▌| 1121000/1165029 [08:37<00:20, 2120.01 examples/s]Map (num_proc=1):  96%|█████████▋| 1122000/1165029 [08:37<00:19, 2198.33 examples/s]Map (num_proc=1):  96%|█████████▋| 1123000/1165029 [08:38<00:19, 2210.33 examples/s]Map (num_proc=1):  96%|█████████▋| 1124000/1165029 [08:38<00:18, 2224.94 examples/s]Map (num_proc=1):  97%|█████████▋| 1125000/1165029 [08:39<00:18, 2144.47 examples/s]Map (num_proc=1):  97%|█████████▋| 1126000/1165029 [08:39<00:18, 2136.37 examples/s]Map (num_proc=1):  97%|█████████▋| 1127000/1165029 [08:40<00:17, 2161.07 examples/s]Map (num_proc=1):  97%|█████████▋| 1128000/1165029 [08:40<00:17, 2153.97 examples/s]Map (num_proc=1):  97%|█████████▋| 1129000/1165029 [08:41<00:16, 2134.57 examples/s]Map (num_proc=1):  97%|█████████▋| 1130000/1165029 [08:41<00:16, 2171.76 examples/s]Map (num_proc=1):  97%|█████████▋| 1131000/1165029 [08:42<00:15, 2212.63 examples/s]Map (num_proc=1):  97%|█████████▋| 1132000/1165029 [08:42<00:15, 2123.79 examples/s]Map (num_proc=1):  97%|█████████▋| 1133000/1165029 [08:43<00:14, 2148.64 examples/s]Map (num_proc=1):  97%|█████████▋| 1134000/1165029 [08:43<00:14, 2141.58 examples/s]Map (num_proc=1):  97%|█████████▋| 1135000/1165029 [08:43<00:13, 2179.54 examples/s]Map (num_proc=1):  98%|█████████▊| 1136000/1165029 [08:44<00:13, 2174.10 examples/s]Map (num_proc=1):  98%|█████████▊| 1137000/1165029 [08:44<00:12, 2212.24 examples/s]Map (num_proc=1):  98%|█████████▊| 1138000/1165029 [08:45<00:12, 2228.57 examples/s]Map (num_proc=1):  98%|█████████▊| 1139000/1165029 [08:45<00:11, 2192.09 examples/s]Map (num_proc=1):  98%|█████████▊| 1140000/1165029 [08:46<00:11, 2189.48 examples/s]Map (num_proc=1):  98%|█████████▊| 1141000/1165029 [08:46<00:10, 2211.52 examples/s]Map (num_proc=1):  98%|█████████▊| 1142000/1165029 [08:47<00:10, 2257.34 examples/s]Map (num_proc=1):  98%|█████████▊| 1143000/1165029 [08:47<00:09, 2255.72 examples/s]Map (num_proc=1):  98%|█████████▊| 1144000/1165029 [08:47<00:09, 2229.74 examples/s]Map (num_proc=1):  98%|█████████▊| 1145000/1165029 [08:48<00:08, 2254.18 examples/s]Map (num_proc=1):  98%|█████████▊| 1146000/1165029 [08:48<00:08, 2272.33 examples/s]Map (num_proc=1):  98%|█████████▊| 1147000/1165029 [08:49<00:09, 1990.50 examples/s]Map (num_proc=1):  99%|█████████▊| 1148000/1165029 [08:49<00:08, 2072.05 examples/s]Map (num_proc=1):  99%|█████████▊| 1149000/1165029 [08:50<00:07, 2130.62 examples/s]Map (num_proc=1):  99%|█████████▊| 1150000/1165029 [08:50<00:07, 2121.97 examples/s]Map (num_proc=1):  99%|█████████▉| 1151000/1165029 [08:51<00:06, 2147.81 examples/s]Map (num_proc=1):  99%|█████████▉| 1152000/1165029 [08:51<00:06, 2109.77 examples/s]Map (num_proc=1):  99%|█████████▉| 1153000/1165029 [08:52<00:05, 2136.07 examples/s]Map (num_proc=1):  99%|█████████▉| 1154000/1165029 [08:52<00:05, 2134.33 examples/s]Map (num_proc=1):  99%|█████████▉| 1155000/1165029 [08:53<00:04, 2136.87 examples/s]Map (num_proc=1):  99%|█████████▉| 1156000/1165029 [08:53<00:04, 2107.04 examples/s]Map (num_proc=1):  99%|█████████▉| 1157000/1165029 [08:54<00:03, 2110.24 examples/s]Map (num_proc=1):  99%|█████████▉| 1158000/1165029 [08:54<00:03, 2092.11 examples/s]Map (num_proc=1):  99%|█████████▉| 1159000/1165029 [08:55<00:02, 2110.38 examples/s]Map (num_proc=1): 100%|█████████▉| 1160000/1165029 [08:55<00:02, 2156.90 examples/s]Map (num_proc=1): 100%|█████████▉| 1161000/1165029 [08:55<00:01, 2135.73 examples/s]Map (num_proc=1): 100%|█████████▉| 1162000/1165029 [08:56<00:01, 2148.37 examples/s]Map (num_proc=1): 100%|█████████▉| 1163000/1165029 [08:56<00:00, 2218.76 examples/s]Map (num_proc=1): 100%|█████████▉| 1164000/1165029 [08:57<00:00, 2224.90 examples/s]Map (num_proc=1): 100%|█████████▉| 1165000/1165029 [08:57<00:00, 2215.80 examples/s]Map (num_proc=1): 100%|██████████| 1165029/1165029 [08:58<00:00, 2163.45 examples/s]
+Map (num_proc=1):   0%|          | 0/2461 [00:00<?, ? examples/s]Map (num_proc=1):  41%|████      | 1000/2461 [00:01<00:02, 688.72 examples/s]Map (num_proc=1):  81%|████████▏ | 2000/2461 [00:01<00:00, 1178.73 examples/s]Map (num_proc=1): 100%|██████████| 2461/2461 [00:02<00:00, 1359.70 examples/s]Map (num_proc=1): 100%|██████████| 2461/2461 [00:02<00:00, 1113.48 examples/s]
+Distributed context: is_distributed=False, world_size=1, rank=0
+DataLoader worker config: num_workers=0, persistent_workers=False, pin_memory=True, prefetch_factor=None
+  Train batches: 291258
+  Eval batches: 616
+  Test batches: 723
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+  Updated model vocab_size to match tokenizer: 131,075
+    (tokenizer.vocab_size=131072, len(tokenizer)=131075)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+[2026-02-26 22:36:37,902] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 13728
+[2026-02-26 22:36:37,906] [ERROR] [launch.py:341:sigkill_handler] ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'main.py', '--local_rank=0', '--config', '/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml'] exits with return code = -9
+[run.sh] Started at Thu Feb 26 22:44:52 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:44:55] Saving deterministic init model for Test 14...'
+[2026-02-26 22:44:55] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:46:43] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-26 22:46:43] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ [[ 1 == \1 ]]
++ python3 -u logging_smoke.py
+============================================================
+  P12 TrainingOps — initializing for run 'logging_smoke_1772146003'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/logging_smoke_1772146003_rank_0.jsonl
+/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/components/system_metrics/collector.py:101: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_0.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Metrics server started on port 8000
+✓ SystemMetricsCollector started (every 5.0s)
+============================================================
+  P12 TrainingOps — ready
+============================================================
+
+P12 TrainingOps — shutting down...
+✓ JSONLogger closed. Logs saved to /tmp/training_logs/logging_smoke_1772146003_rank_0.jsonl
+✓ SystemMetricsCollector stopped
+✓ Metrics server stopped
+P12 TrainingOps — shutdown complete.
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-26 22:46:54] Test 14 completed'
+[2026-02-26 22:46:54] Test 14 completed
++ echo '  Init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt'
+  Init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
++ echo '  Train log:  /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log'
+  Train log:  /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ echo '  Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl'
+  Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl
