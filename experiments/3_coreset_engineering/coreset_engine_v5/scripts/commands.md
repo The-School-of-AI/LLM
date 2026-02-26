@@ -21,6 +21,11 @@ The `commands.sh` script automates the full pipeline in 8 steps:
 
 ### Prerequisites
 
+- **EMR Job (Step 0):** An AWS Admin must first run the EMR Serverless job:
+  [`emr/T3_final_emr_serverless_stats.py`](../emr/T3_final_emr_serverless_stats.py)
+  Once the EMR job completes, it generates chunked data files and source-wise stats in CSV format. These stats must be aggregated to get `TOTAL_TOKENS` and passed to `shard.sh` as a parameter.
+  - To aggregate, run: [`tools/estimate_total_tokens.py`](../tools/estimate_total_tokens.py)
+  - For distribution analysis, use: [`notebooks/distribution_plots_notebook_extended.ipynb`](../notebooks/distribution_plots_notebook_extended.ipynb) (this also creates an aggregate CSV providing `TOTAL_TOKENS`)
 - **S3_BUCKET** must be set (required)
 - SSH access to an EC2 instance (Ubuntu)
 
@@ -54,9 +59,43 @@ export S3_BUCKET="your-bucket-name"
 
 ---
 
+## Estimating TOTAL_TOKENS
+
+Before running the pipeline, estimate `TOTAL_TOKENS`
+from the post-dedup `stats/` folder on EC2. This folder
+contains one CSV file per source with token counts.
+
+```bash
+# Option 1: Python tool (aggregates across all CSVs)
+python3 tools/estimate_total_tokens.py \
+  --input-path "/mnt/nvme/stats/" \
+  --input-format csv --quiet
+
+# Option 2: Quick awk one-liner
+awk -F',' 'NR>1{s+=$COL}END{print s}' \
+  /mnt/nvme/stats/*.csv
+
+# Option 3: Distribution Notebook
+# Run notebooks/distribution_plots_notebook_extended.ipynb
+# This generates an aggregate combined_source_distribution.csv 
+# which includes total_tokens across all sources.
+
+# Then export before running commands.sh
+export TOTAL_TOKENS=4523096944
+```
+
+> [!TIP]
+> Run this after the EMR dedup process generates
+> `stats/` CSV files. The aggregate `total_tokens`
+> across all sources becomes the `TOTAL_TOKENS`
+> input for the coreset pipeline.
+
+---
+
 ## Overriding Pipeline Parameters
 
-All pipeline variables have defaults and can be overridden via environment variables:
+All pipeline variables have defaults and can be
+overridden via environment variables:
 
 ```bash
 export S3_BUCKET="your-bucket-name"

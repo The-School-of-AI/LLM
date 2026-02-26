@@ -6,6 +6,14 @@
 # Full 8-step production playbook: setup, validation, monitoring, pipeline,
 # and post-run verification.
 #
+# Prerequisites (Step 0):
+#   An AWS Admin must first run the EMR Serverless job: emr/T3_final_emr_serverless_stats.py
+#   Once the EMR job completes, it generates chunked data files and source-wise stats in CSV format.
+#   These stats must be aggregated to get TOTAL_TOKENS and passed to shard.sh as a parameter.
+#   - To aggregate TOTAL_TOKENS: run tools/estimate_total_tokens.py
+#   - For distribution analysis on bands/domains data: use notebooks/distribution_plots_notebook_extended.ipynb
+#     (This notebook also creates an aggregate CSV `combined_source_distribution.csv` that provides TOTAL_TOKENS)
+#
 # Steps:
 #   1. System Setup & Prerequisites
 #   2. AWS Authentication Check
@@ -49,6 +57,14 @@
 #   export BATCH_SIZE=50000
 #   export RESUME=true
 #   ./commands.sh --foreground
+#   # Estimate TOTAL_TOKENS from post-dedup stats/ CSVs on EC2:
+#   #   Option 1: Python tool (sums total_tokens from all source CSVs)
+#   python3 experiments/3_coreset_engineering/coreset_engine_v5/tools/estimate_total_tokens.py \
+#       --input-path "/mnt/nvme/stats/" --input-format csv --quiet
+#   #   Option 2: Quick awk one-liner across all source CSVs
+#   awk -F',' 'NR>1{s+=$COL}END{print s}' /mnt/nvme/stats/*.csv
+#   # Then export before running:
+#   export TOTAL_TOKENS=4523096944
 #
 # ==============================================================================
 
@@ -80,6 +96,10 @@ S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_p
 NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"
 TOTAL_TOKENS="${TOTAL_TOKENS:-4523096944}"
+# ^ Get TOTAL_TOKENS from post-dedup stats/ CSVs (one CSV per source):
+#   python3 ${ENGINE_DIR}/tools/estimate_total_tokens.py \
+#       --input-path "/mnt/nvme/stats/" --input-format csv --quiet
+#   Then: export TOTAL_TOKENS=<output>
 BATCH_SIZE="${BATCH_SIZE:-80000}"
 CHECKPOINT_EVERY_N_BATCHES="${CHECKPOINT_EVERY_N_BATCHES:-3}"
 USED_CACHE_MAX_ENTRIES="${USED_CACHE_MAX_ENTRIES:-0}"

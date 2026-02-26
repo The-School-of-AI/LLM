@@ -7,7 +7,7 @@
 
 version: "0.7"
 owner_team: "Team 2: Curriculum Architects"
-status: "DRAFT" # "FROZEN"
+status: "FROZEN"
 frozen_on: "2026-02-02"
 change_policy: "STRUCTURE_IMMUTABLE" # "NO_CHANGES_ALLOWED"
 
@@ -390,10 +390,30 @@ domains:
     - id: "education"
 
   band_domain_policy:
-    B0: ["web", "social", "qa"]
-    B1: ["web", "encyclopedia", "news", "social", "qa"]
-    B2: ["encyclopedia", "news", "education", "literature", "web", "qa"]
-    B3: ["science", "math", "education", "code", "literature"]
+    B0:
+      ["web", "social", "qa", "education", "language_literacy", "conversation"]
+    B1:
+      [
+        "web",
+        "encyclopedia",
+        "news",
+        "social",
+        "qa",
+        "education",
+        "language_literacy",
+        "conversation",
+      ]
+    B2:
+      [
+        "encyclopedia",
+        "news",
+        "education",
+        "literature",
+        "web",
+        "qa",
+        "conversation",
+      ]
+    B3: ["science", "math", "education", "code", "literature", "conversation"]
     B4: ["science", "math", "code", "instruction"]
     B5: ["instruction", "science", "math", "code"]
 

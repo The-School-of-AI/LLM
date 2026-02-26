@@ -5,13 +5,17 @@ This is intended to provide a practical value for:
   coreset_builder.py --total-input-tokens-estimate <N>
 
 Supported inputs:
-- JSONL (file or directory): sums row["token_count_estimate"] (fallback: len(token_ids) if present)
-- Parquet (file or directory): sums token_count_estimate column via row groups (low memory)
+- JSONL (file or directory): sums row["token_count_estimate"]
+- Parquet (file or directory): sums token_count_estimate column via row groups
+- CSV stats (file or directory): sums total_tokens column from post-dedup stats
+  (supports subdirectory-per-source layout: stats/C4/*.csv, stats/reddit/*.csv)
 
 Examples:
   python tools/estimate_total_tokens.py --input-path data/datasets/large_sample_chunks.jsonl --input-format jsonl
   python tools/estimate_total_tokens.py --input-path data/datasets --input-format jsonl
   python tools/estimate_total_tokens.py --input-path data/datasets/sample.parquet --input-format parquet
+  python tools/estimate_total_tokens.py --input-path /mnt/nvme/stats/ --input-format csv
+  python tools/estimate_total_tokens.py --input-path /mnt/nvme/stats/ --input-format csv --quiet
 
 Exit code:
 - 0 on success
@@ -21,9 +25,10 @@ Exit code:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Tuple
+from typing import Dict, Iterable, Iterator, Optional, Tuple
 
 
 def _iter_files(root: Path, suffix: str) -> Iterator[Path]:
@@ -117,6 +122,47 @@ def _estimate_parquet(paths: Iterable[Path]) -> Tuple[int, int, int]:
     return total_tokens, total_rows, bad_files
 
 
+def _estimate_csv(
+    paths: Iterable[Path],
+) -> Tuple[int, int, int, Dict[str, int]]:
+    """Sum total_tokens from post-dedup stats CSVs.
+
+    Expected CSV header includes a 'total_tokens' column.
+    Returns (total_tokens, total_rows, bad_files, per_source_totals).
+    """
+    total_tokens = 0
+    total_rows = 0
+    bad_files = 0
+    per_source: Dict[str, int] = {}
+
+    for p in paths:
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                if reader.fieldnames is None or "total_tokens" not in reader.fieldnames:
+                    bad_files += 1
+                    continue
+                file_tokens = 0
+                for row in reader:
+                    try:
+                        val = int(row.get("total_tokens") or 0)
+                        file_tokens += max(0, val)
+                        total_rows += 1
+                    except (ValueError, TypeError):
+                        pass
+                total_tokens += file_tokens
+                # Use parent dir name as source label
+                # (stats/C4/part-00000.csv -> "C4")
+                source = p.parent.name
+                if source == p.parent.parent.name:
+                    source = p.stem
+                per_source[source] = per_source.get(source, 0) + file_tokens
+        except Exception:
+            bad_files += 1
+
+    return total_tokens, total_rows, bad_files, per_source
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Estimate total tokens for streaming input datasets"
@@ -131,8 +177,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--input-format",
         type=str,
         required=True,
-        choices=["jsonl", "parquet"],
-        help="Input dataset format",
+        choices=["jsonl", "parquet", "csv"],
+        help="Input format (csv = post-dedup stats CSVs)",
     )
     parser.add_argument(
         "--quiet",
@@ -165,8 +211,29 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(int(total_tokens))
         else:
             print(
-                f"files={len(files)} rows={total_rows:,} total_tokens={total_tokens:,} bad_files={bad_files:,}"
+                f"files={len(files)} rows={total_rows:,}"
+                f" total_tokens={total_tokens:,}"
+                f" bad_files={bad_files:,}"
             )
+        return 0
+
+    if args.input_format == "csv":
+        files = list(_iter_files(root, "csv"))
+        if not files:
+            raise SystemExit(2)
+        total_tokens, total_rows, bad_files, per_source = _estimate_csv(files)
+        if args.quiet:
+            print(int(total_tokens))
+        else:
+            print(
+                f"files={len(files)} rows={total_rows:,}"
+                f" total_tokens={total_tokens:,}"
+                f" bad_files={bad_files:,}"
+            )
+            if per_source:
+                print("\nPer-source breakdown:")
+                for src in sorted(per_source, key=per_source.get, reverse=True):
+                    print(f"  {src}: {per_source[src]:,}")
         return 0
 
     raise SystemExit(2)

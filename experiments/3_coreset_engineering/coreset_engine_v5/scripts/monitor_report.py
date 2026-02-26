@@ -80,22 +80,14 @@ def parse_dstat_csv(filepath: str) -> dict:
                 read_i = col_map.get("read", 5)
                 writ_i = col_map.get("writ", 6)
                 # Convert bytes to MB/s
-                disk_read.append(
-                    float(row[read_i]) / 1048576
-                )
-                disk_write.append(
-                    float(row[writ_i]) / 1048576
-                )
+                disk_read.append(float(row[read_i]) / 1048576)
+                disk_write.append(float(row[writ_i]) / 1048576)
 
                 # dstat net columns: recv, send
                 recv_i = col_map.get("recv", 7)
                 send_i = col_map.get("send", 8)
-                net_recv.append(
-                    float(row[recv_i]) / 1048576
-                )
-                net_send.append(
-                    float(row[send_i]) / 1048576
-                )
+                net_recv.append(float(row[recv_i]) / 1048576)
+                net_send.append(float(row[send_i]) / 1048576)
             except (ValueError, IndexError):
                 continue
 
@@ -115,15 +107,14 @@ def parse_dstat_csv(filepath: str) -> dict:
 
 def compute_summary(data: dict) -> dict:
     """Compute summary statistics."""
+
     def avg(lst):
         return sum(lst) / len(lst) if lst else 0
 
     def peak(lst):
         return max(lst) if lst else 0
 
-    cpu_util = [
-        u + s for u, s in zip(data["cpu_usr"], data["cpu_sys"])
-    ]
+    cpu_util = [u + s for u, s in zip(data["cpu_usr"], data["cpu_sys"])]
 
     return {
         "samples": len(data["timestamps"]),
@@ -151,31 +142,23 @@ def check_threshold(value, op, threshold):
     return "warn"
 
 
-def generate_html(data: dict, summary: dict,
-                  log_dir: str) -> str:
+def generate_html(data: dict, summary: dict, log_dir: str) -> str:
     """Generate self-contained HTML report."""
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
     checks = [
-        ("CPU Utilization (avg)", summary["cpu_avg_util"],
-         "%", ">=", 80),
-        ("CPU Steal (peak)", summary["cpu_peak_steal"],
-         "%", "<", 1),
-        ("CPU I/O Wait (avg)", summary["cpu_avg_iowait"],
-         "%", "<", 5),
-        ("Disk Read (peak)", summary["disk_peak_read"],
-         "MB/s", ">=", 0),
-        ("Net RX (peak)", summary["net_peak_recv"],
-         "MB/s", ">=", 0),
+        ("CPU Utilization (avg)", summary["cpu_avg_util"], "%", ">=", 80),
+        ("CPU Steal (peak)", summary["cpu_peak_steal"], "%", "<", 1),
+        ("CPU I/O Wait (avg)", summary["cpu_avg_iowait"], "%", "<", 5),
+        ("Disk Read (peak)", summary["disk_peak_read"], "MB/s", ">=", 0),
+        ("Net RX (peak)", summary["net_peak_recv"], "MB/s", ">=", 0),
     ]
 
     checks_html = ""
     for name, value, unit, op, thresh in checks:
         status = check_threshold(value, op, thresh)
-        icon = {"pass": "✅", "fail": "❌",
-                "warn": "⚠️"}[status]
-        color = {"pass": "#22c55e", "fail": "#ef4444",
-                 "warn": "#eab308"}[status]
+        icon = {"pass": "✅", "fail": "❌", "warn": "⚠️"}[status]
+        color = {"pass": "#22c55e", "fail": "#ef4444", "warn": "#eab308"}[status]
         checks_html += f"""
         <tr>
           <td>{icon}</td>
@@ -408,16 +391,10 @@ def upload_to_s3(local_dir: str, s3_uri: str):
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     tar_file = f"/tmp/monitor_logs_{timestamp}.tar.gz"
 
-    subprocess.run(
-        ["tar", "czf", tar_file, "-C", local_dir, "."],
-        check=True
-    )
+    subprocess.run(["tar", "czf", tar_file, "-C", local_dir, "."], check=True)
 
     s3_dest = f"{s3_uri}/monitor_logs_{timestamp}.tar.gz"
-    subprocess.run(
-        ["aws", "s3", "cp", tar_file, s3_dest],
-        check=True
-    )
+    subprocess.run(["aws", "s3", "cp", tar_file, s3_dest], check=True)
     print(f"✅ Uploaded to {s3_dest}")
 
     # Also upload HTML report separately
@@ -425,9 +402,8 @@ def upload_to_s3(local_dir: str, s3_uri: str):
     for hf in html_files:
         s3_html = f"{s3_uri}/{hf.name}"
         subprocess.run(
-            ["aws", "s3", "cp", str(hf), s3_html,
-             "--content-type", "text/html"],
-            check=True
+            ["aws", "s3", "cp", str(hf), s3_html, "--content-type", "text/html"],
+            check=True,
         )
         print(f"✅ Uploaded {hf.name} to {s3_html}")
 
@@ -435,20 +411,17 @@ def upload_to_s3(local_dir: str, s3_uri: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate HTML monitoring report"
-    )
+    parser = argparse.ArgumentParser(description="Generate HTML monitoring report")
     parser.add_argument(
         "log_dir",
         nargs="?",
         default="/mnt/nvme/logs",
-        help="Path to monitor log directory"
+        help="Path to monitor log directory",
     )
     parser.add_argument(
         "--upload",
         metavar="S3_URI",
-        help="Upload logs and report to S3 "
-             "(e.g., s3://bucket/infra-reports)"
+        help="Upload logs and report to S3 " "(e.g., s3://bucket/infra-reports)",
     )
     args = parser.parse_args()
 
@@ -471,9 +444,7 @@ def main():
     html_content = generate_html(data, summary, args.log_dir)
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    output_path = os.path.join(
-        args.log_dir, f"report_{timestamp}.html"
-    )
+    output_path = os.path.join(args.log_dir, f"report_{timestamp}.html")
     with open(output_path, "w") as f:
         f.write(html_content)
 
