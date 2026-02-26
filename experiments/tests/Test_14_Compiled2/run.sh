@@ -101,7 +101,10 @@ if [[ -z "$VECTOR_TOML_SRC" ]]; then
 fi
 sudo install -m 0644 "$VECTOR_TOML_SRC" /etc/t12/vector.toml
 sudo install -m 0600 "$ENV_SRC" /etc/t12/vector.env
-cp /etc/t12/vector.env "$HOME/.t12.env" && chmod 600 "$HOME/.t12.env"
+# Copy to the invoking user's home with proper ownership and perms
+sudo cp /etc/t12/vector.env "$HOME/.t12.env"
+sudo chown "$(id -u)":"$(id -gn)" "$HOME/.t12.env"
+sudo chmod 600 "$HOME/.t12.env"
 
 # Verify copies
 check_file /etc/t12/ca.crt
