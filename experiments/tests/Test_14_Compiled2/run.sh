@@ -24,6 +24,24 @@ die() { echo "[ERROR] $*" >&2; exit 1; }
 check_file() { local p="$1"; [[ -f "$p" ]] || die "Expected file not found: $p"; }
 http_code() { curl -s -o /dev/null -w "%{http_code}" "$1"; }
 
+# --- Optional vendoring: bring 12_training_operations into experiments/ ---
+TRAINING_OPS_DEST="$REPO_ROOT/experiments/12_training_operations"
+if [[ ! -d "$TRAINING_OPS_DEST/components" || -z "$(ls -A "$TRAINING_OPS_DEST" 2>/dev/null)" ]]; then
+  if [[ -n "${TRAINING_OPS_SRC:-}" && -d "$TRAINING_OPS_SRC" ]]; then
+    echo "[INFO] Vendoring TrainingOps from: $TRAINING_OPS_SRC -> $TRAINING_OPS_DEST"
+    sudo mkdir -p "$TRAINING_OPS_DEST"
+    if command -v rsync >/dev/null 2>&1; then
+      sudo rsync -a --delete "$TRAINING_OPS_SRC"/ "$TRAINING_OPS_DEST"/
+    else
+      sudo cp -a "$TRAINING_OPS_SRC"/. "$TRAINING_OPS_DEST"/
+    fi
+  else
+    echo "[WARN] experiments/12_training_operations missing or empty."
+    echo "      Set TRAINING_OPS_SRC=/path/to/staging/12_training_operations and re-run,"
+    echo "      or provide $LOCAL_ASSETS_DIR/vector.toml and ENV_SRC for local-only mode."
+  fi
+fi
+
 # Ensure sudo can run (will prompt once if needed)
 if ! sudo -n true 2>/dev/null; then
   echo "[INFO] Caching sudo credentials (you may be prompted)";
@@ -34,11 +52,22 @@ fi
 LOCAL_ASSETS_DIR="$TEST_ROOT/local"
 CA_SRC="${CA_SRC:-$LOCAL_ASSETS_DIR/ca_clickhouse.crt}"
 ENV_SRC="${ENV_SRC:-$LOCAL_ASSETS_DIR/vector.env}"
-VECTOR_TOML_SRC="${VECTOR_TOML_SRC:-$REPO_ROOT/experiments/12_training_operations/components/sidecar_agent/vector.toml}"
+# Prefer a local vector.toml if present; else use repo path; else error
+_VEC_LOCAL="$LOCAL_ASSETS_DIR/vector.toml"
+_VEC_REPO="$REPO_ROOT/experiments/12_training_operations/components/sidecar_agent/vector.toml"
+if [[ -n "${VECTOR_TOML_SRC:-}" ]]; then
+  VECTOR_TOML_SRC="$VECTOR_TOML_SRC"
+elif [[ -f "$_VEC_LOCAL" ]]; then
+  VECTOR_TOML_SRC="$_VEC_LOCAL"
+elif [[ -f "$_VEC_REPO" ]]; then
+  VECTOR_TOML_SRC="$_VEC_REPO"
+else
+  VECTOR_TOML_SRC=""
+fi
 echo "[INFO] Using sources:"
 echo "       CA_SRC=$CA_SRC"
 echo "       ENV_SRC=$ENV_SRC"
-echo "       VECTOR_TOML_SRC=$VECTOR_TOML_SRC"
+echo "       VECTOR_TOML_SRC=${VECTOR_TOML_SRC:-<not found>}"
 
 # Ensure curl available (for Vector installer)
 if ! command -v curl >/dev/null 2>&1; then
@@ -67,6 +96,9 @@ fi
 
 # Copy artifacts into place
 sudo install -m 0644 "$CA_SRC" /etc/t12/ca.crt
+if [[ -z "$VECTOR_TOML_SRC" ]]; then
+  die "Vector config not found. Provide $LOCAL_ASSETS_DIR/vector.toml or set VECTOR_TOML_SRC to a valid path."
+fi
 sudo install -m 0644 "$VECTOR_TOML_SRC" /etc/t12/vector.toml
 sudo install -m 0600 "$ENV_SRC" /etc/t12/vector.env
 cp /etc/t12/vector.env "$HOME/.t12.env" && chmod 600 "$HOME/.t12.env"
