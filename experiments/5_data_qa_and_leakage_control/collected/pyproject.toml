@@ -8,20 +8,16 @@ version = "0.1.0"
 description = "Data contamination detection for LLM training datasets"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "tqdm",
     "datasketch",
     "rich",
     "datasets",
     "boto3",
-]
-
-[project.optional-dependencies]
-# Semantic detection layer (dense embeddings + FAISS vector search).
-# Required only for the third detection layer; N-gram + MinHash work without it.
-# Install with:  uv sync --extra semantic
-semantic = [
     "faiss-cpu",
     "sentence-transformers",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["core"]

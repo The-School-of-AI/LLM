@@ -123,12 +123,6 @@ def main() -> None:
         default="reports",
         help="Directory to write reports and run registry (default: reports)",
     )
-    parser.add_argument(
-        "--semantic-device",
-        default="auto",
-        choices=["auto", "cpu", "cuda", "mps"],
-        help="Semantic embedding device selection (default: auto)",
-    )
     args = parser.parse_args()
 
     if not args.s3_uri.lower().endswith(".txt"):
@@ -170,7 +164,6 @@ def main() -> None:
         {
             "benchmarks_path": args.benchmarks_dir,
             "reports_path": args.reports_dir,
-            "semantic_device": args.semantic_device,
         }
     )
     approved, _ = scanner.scan_records(

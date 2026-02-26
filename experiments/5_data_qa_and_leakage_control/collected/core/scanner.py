@@ -49,7 +49,6 @@ class ContaminationScanner:
         minhash_permutations 128     MinHash permutation count
         semantic_threshold  0.9      Cosine threshold for semantic matching
         semantic_model      "all-MiniLM-L6-v2"  Sentence-Transformers model
-        semantic_device     "auto"   Embedding device: auto/cuda/mps/cpu
         semantic_batch_size 512      Encoding batch size
         report_sample_limit 50       Max flagged samples shown per layer in reports
         ==================  =======  ============================================
@@ -82,7 +81,6 @@ class ContaminationScanner:
             self.semantic = SemanticDetector(
                 threshold=self.config.get("semantic_threshold", 0.9),
                 model_name=self.config.get("semantic_model", "all-MiniLM-L6-v2"),
-                device=self.config.get("semantic_device", "auto"),
                 batch_size=self.config.get("semantic_batch_size", 512),
             )
             self.semantic.build_index(self.registry)
