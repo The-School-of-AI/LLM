@@ -1,0 +1,10 @@
+[project]
+name = "dataset-download"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.42.44",
+    "huggingface-hub>=1.4.1",
+]

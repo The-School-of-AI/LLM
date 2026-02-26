@@ -1,0 +1,13 @@
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0000.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0001.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0002.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0003.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0004.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0005.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0006.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0007.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0008.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0009.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0010.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0011.json.gz
+https://olmo-data.org/dolma-v1_7/proof_pile_2-open_web_math/open-web-math-train-0012.json.gz
