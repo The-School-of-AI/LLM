@@ -80,8 +80,8 @@ awk -F',' 'NR>1{s+=$COL}END{print s}' \
 # This generates an aggregate combined_source_distribution.csv 
 # which includes total_tokens across all sources.
 
-# Then export before running commands.sh
-export TOTAL_TOKENS=4523096944
+# Then replace the run following command before running commands.sh
+export TOTAL_TOKENS=<replace with output of estimate_total_tokens.py(total_tokens)>
 ```
 
 > [!TIP]
@@ -101,7 +101,7 @@ overridden via environment variables:
 export S3_BUCKET="your-bucket-name"
 export NUM_SHARDS=4
 export STAGES="1B 3B"
-export TOTAL_TOKENS=4523096944
+export TOTAL_TOKENS=<replace with output of estimate_total_tokens.py(total_tokens)>
 export BATCH_SIZE=50000
 export RESUME=true
 ./commands.sh --foreground
@@ -187,7 +187,7 @@ export MIN_NVME_FREE_GB=100
 
 Steps run automatically after the pipeline completes:
 
-- Monitoring is stopped and HTML report is generated
+- Monitoring is stopped and HTML /report is generated
 - Coreset outputs are validated against curriculum
 - Summary with file locations is printed
 
@@ -209,6 +209,15 @@ python3 experiments/3_coreset_engineering/coreset_engine_v5/\
     --curriculum experiments/3_coreset_engineering/\
       coreset_engine_v5/config/curriculum.yaml \
     --stages 1B --format both
+
+
+# Merge Sharded Ablation reports in the standard manifest folder
+python3 tools/merge_sharded_ablation_reports.py --overwrite
+
+# Merge Sharded selected indices manifests
+python3 tools/merge_selected_indices.py --coreset-root output/coresets\
+  --stages 1B 3B 8B 70B
+
 ```
 
 ---
@@ -244,7 +253,7 @@ aws s3 ls s3://<bucket>/processed_dataset/curriculum_pyspark_output/
 git clone https://github.com/The-School-of-AI/LLM.git
 cd LLM
 git fetch origin
-git checkout -b p3/feat/stage-wise-coreset-selection_v2 origin/p3/feat/stage-wise-coreset-selection_v2
+git checkout -b p3/feat/stage-wise-coreset-selection_v2 origin/p3/feat/<Replace with latest branch>
 ```
 
 ### 4. Environment & Dependencies
@@ -256,7 +265,14 @@ export UV_PROJECT_ENVIRONMENT=.venv
 uv sync
 ```
 
-### 5. Run Pipeline
+### 5. Monitoring
+
+```bash
+chmod +x monitor.sh
+nohup ./monitor.sh &
+```
+
+### 6. Run Pipeline
 
 ```bash
 cd /home/ubuntu/LLM
@@ -274,6 +290,32 @@ nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
 tail -f shard_run.log
 ps aux | grep shard.sh
 ```
+### 7. Post-run steps (default)
+
+After the pipeline finishes, run post-run steps manually:
+
+```bash
+# Stop monitoring
+kill $(cat /mnt/nvme/logs/monitor.pid)
+
+# Generate monitoring HTML report
+python3 experiments/3_coreset_engineering/coreset_engine_v5/\
+  scripts/monitor_report.py
+
+# Validate coreset outputs
+python3 experiments/3_coreset_engineering/coreset_engine_v5/\
+  tools/validate_coreset_outputs.py \
+    --curriculum experiments/3_coreset_engineering/\
+      coreset_engine_v5/config/curriculum.yaml \
+    --stages 1B --format both
+
+
+# Merge Sharded Ablation reports in the standard manifest folder
+python3 tools/merge_sharded_ablation_reports.py --overwrite
+
+# Merge Sharded selected indices manifests
+python3 tools/merge_selected_indices.py --coreset-root output/coresets\
+  --stages 1B 3B 8B 70B
 
 ---
 
