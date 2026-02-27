@@ -182,6 +182,12 @@ class Config:
         self.test_generation = config_dict["generation"]["test_generation"]
         self.generation_prompt = config_dict["generation"]["generation_prompt"]
 
+        # OPUS configuration
+        from llm.opus.config import OpusConfig
+
+        opus_dict = config_dict.get("opus", {})
+        self.opus_config = OpusConfig.from_dict(opus_dict) if opus_dict else OpusConfig()
+
 
 def load_config(config_path: str = "config.yaml") -> Config:
     """

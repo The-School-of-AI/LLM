@@ -64,3 +64,25 @@ s3:
 generation:
   test_generation: false
   generation_prompt: "The history of artificial intelligence begins with"
+
+# OPUS Data Selection (arXiv:2602.05400)
+# When enabled, each training step scores N candidate samples and trains on
+# the best rho*N samples, guided by AdamW preconditioner geometry.
+opus:
+  enabled: false
+  selection_mode: "opus"
+  candidate_multiplier: 2
+  selection_ratio: 0.5
+  score_seq_len: 512
+  proxy_batch_size: 8
+  sketch_dim: 8192
+  temperature: 0.9
+  sketch_seed: 42
+  fallback_random_on_error: true
+  max_selector_time_s: 30.0
+  include_embeddings: false
+  include_lm_head: false
+  track_nonfinite_stats: true
+  zero2_exact_global_scoring: true
+  strict_shard_preconditioner: false
+  log_selection_metrics: true
