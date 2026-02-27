@@ -6,5 +6,7 @@
   "aws_profile": "",
   "benchmarks_dir": "benchmarks",
   "reports_dir": "reports",
-  "auto_download_benchmarks": true
+  "auto_download_benchmarks": true,
+  "enable_semantic": false
 }
+

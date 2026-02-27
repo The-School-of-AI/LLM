@@ -1,6 +1,9 @@
 """Detection layers: N-gram (exact), MinHash (fuzzy), and Semantic (paraphrase)."""
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+import pickle
+from pathlib import Path
 from typing import Any
 
 from datasketch import MinHash, MinHashLSH
@@ -19,13 +22,16 @@ class NGramDetector:
     catching verbatim or near-verbatim copies.
     """
 
-    def __init__(self, n: int = 13) -> None:
+    def __init__(self, n: int = 13, build_workers: int = 1) -> None:
         """Initialize the n-gram detector.
 
         Args:
             n: Size of each n-gram (number of consecutive words). Defaults to 13.
+            build_workers: Number of worker threads used to build the index.
+                Set to 1 to keep fully serial behavior.
         """
         self.n = n
+        self.build_workers = max(1, int(build_workers))
         self.index: dict[str, set[str]] = {}
 
     def build_index(self, registry: Any) -> None:
@@ -38,15 +44,30 @@ class NGramDetector:
 
         for name in registry.benchmarks.keys():
             texts = registry.get_texts(name)
-            ngrams: set[str] = set()
-
-            for text in texts:
-                ngrams.update(self._extract(text))
+            ngrams = self._extract_ngrams_for_texts(texts)
 
             self.index[name] = ngrams
             console.print(f"✓ {name}: {len(ngrams)} n-grams")
 
         console.print("[green]✓ N-gram index ready[/green]\n")
+
+    def save_index(self, filepath: str | Path) -> None:
+        """Persist the built n-gram index to disk."""
+        payload = {"n": self.n, "index": self.index}
+        with open(filepath, "wb") as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_index(self, filepath: str | Path) -> None:
+        """Load a previously persisted n-gram index."""
+        with open(filepath, "rb") as f:
+            payload = pickle.load(f)
+
+        loaded_n = payload.get("n")
+        if loaded_n != self.n:
+            raise ValueError(
+                f"N-gram cache mismatch: expected n={self.n}, found n={loaded_n}"
+            )
+        self.index = payload["index"]
 
     def _extract(self, text: str) -> list[str]:
         """Extract all overlapping n-grams from *text*.
@@ -62,6 +83,30 @@ class NGramDetector:
         if len(words) < self.n:
             return []
         return [" ".join(words[i : i + self.n]) for i in range(len(words) - self.n + 1)]
+
+    def _extract_ngrams_for_texts(self, texts: list[str]) -> set[str]:
+        """Build an n-gram set for all texts, optionally in parallel."""
+        if self.build_workers <= 1 or len(texts) < 2000:
+            ngrams: set[str] = set()
+            for text in texts:
+                ngrams.update(self._extract(text))
+            return ngrams
+
+        ngrams: set[str] = set()
+        chunk_size = max(1, len(texts) // self.build_workers)
+        chunks = [texts[i : i + chunk_size] for i in range(0, len(texts), chunk_size)]
+
+        with ThreadPoolExecutor(max_workers=self.build_workers) as executor:
+            for chunk_ngrams in executor.map(self._extract_ngrams_chunk, chunks):
+                ngrams.update(chunk_ngrams)
+        return ngrams
+
+    def _extract_ngrams_chunk(self, chunk: list[str]) -> set[str]:
+        """Extract n-grams for one chunk of texts."""
+        out: set[str] = set()
+        for text in chunk:
+            out.update(self._extract(text))
+        return out
 
     def scan(self, texts: list[str]) -> dict[str, list[dict[str, Any]]]:
         """Scan a list of candidate texts for exact n-gram matches.
@@ -97,7 +142,9 @@ class MinHashDetector:
     re-verified after the LSH candidate lookup to discard false positives.
     """
 
-    def __init__(self, threshold: float = 0.8, num_perm: int = 128) -> None:
+    def __init__(
+        self, threshold: float = 0.8, num_perm: int = 128, build_workers: int = 1
+    ) -> None:
         """Initialize the MinHash detector.
 
         Args:
@@ -105,9 +152,12 @@ class MinHashDetector:
                 Defaults to 0.8.
             num_perm: Number of MinHash permutations.  Higher values improve
                 accuracy at the cost of memory and speed.  Defaults to 128.
+            build_workers: Number of worker threads used to hash benchmark
+                texts during index build. Set to 1 for serial behavior.
         """
         self.threshold = threshold
         self.num_perm = num_perm
+        self.build_workers = max(1, int(build_workers))
         self.lsh = MinHashLSH(threshold=threshold, num_perm=num_perm)
         # Maps LSH key → {"text": str, "minhash": MinHash}
         self.keys: dict[str, dict[str, Any]] = {}
@@ -123,15 +173,56 @@ class MinHashDetector:
         for name in registry.benchmarks.keys():
             texts = registry.get_texts(name)
 
-            for idx, text in enumerate(texts):
-                mh = self._hash(text)
-                key = f"{name}_{idx}"
-                self.lsh.insert(key, mh)
-                self.keys[key] = {"text": text[:100], "minhash": mh}
+            if self.build_workers <= 1 or len(texts) < 1000:
+                for idx, text in enumerate(texts):
+                    mh = self._hash(text)
+                    key = f"{name}_{idx}"
+                    self.lsh.insert(key, mh)
+                    self.keys[key] = {"text": text[:100], "minhash": mh}
+            else:
+                chunk_size = max(1, len(texts) // self.build_workers)
+                chunks = [
+                    list(enumerate(texts[i : i + chunk_size], start=i))
+                    for i in range(0, len(texts), chunk_size)
+                ]
+                with ThreadPoolExecutor(max_workers=self.build_workers) as executor:
+                    for rows in executor.map(self._hash_chunk, chunks):
+                        for idx, text_preview, mh in rows:
+                            key = f"{name}_{idx}"
+                            self.lsh.insert(key, mh)
+                            self.keys[key] = {"text": text_preview, "minhash": mh}
 
             console.print(f"✓ {name}: {len(texts)} hashes")
 
         console.print("[green]✓ MinHash index ready[/green]\n")
+
+    def save_index(self, filepath: str | Path) -> None:
+        """Persist the built MinHash structures to disk."""
+        payload = {
+            "threshold": self.threshold,
+            "num_perm": self.num_perm,
+            "lsh": self.lsh,
+            "keys": self.keys,
+        }
+        with open(filepath, "wb") as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_index(self, filepath: str | Path) -> None:
+        """Load previously persisted MinHash structures."""
+        with open(filepath, "rb") as f:
+            payload = pickle.load(f)
+
+        cached_threshold = payload.get("threshold")
+        cached_num_perm = payload.get("num_perm")
+        if cached_threshold != self.threshold or cached_num_perm != self.num_perm:
+            raise ValueError(
+                "MinHash cache mismatch: expected "
+                f"threshold={self.threshold}, num_perm={self.num_perm}; found "
+                f"threshold={cached_threshold}, num_perm={cached_num_perm}"
+            )
+
+        self.lsh = payload["lsh"]
+        self.keys = payload["keys"]
 
     def _hash(self, text: str) -> MinHash:
         """Compute a MinHash signature from the word-bigrams of *text*.
@@ -148,6 +239,13 @@ class MinHashDetector:
             shingle = " ".join(words[i : i + 2])
             mh.update(shingle.encode("utf-8"))
         return mh
+
+    def _hash_chunk(self, chunk: list[tuple[int, str]]) -> list[tuple[int, str, MinHash]]:
+        """Hash one chunk of benchmark texts."""
+        out: list[tuple[int, str, MinHash]] = []
+        for idx, text in chunk:
+            out.append((idx, text[:100], self._hash(text)))
+        return out
 
     def scan(self, texts: list[str]) -> dict[str, list[dict[str, Any]]]:
         """Scan a list of candidate texts for fuzzy MinHash matches.
@@ -269,6 +367,25 @@ class SemanticDetector:
             f"[green]✓ Semantic index ready: {len(all_texts)} vectors[/green]\n"
         )
 
+    def save_index(self, index_path: str | Path, meta_path: str | Path) -> None:
+        """Persist FAISS index + metadata to disk."""
+        import faiss
+
+        if self.index is None:
+            raise ValueError("Semantic index is empty. Build it before saving.")
+
+        faiss.write_index(self.index, str(index_path))
+        with open(meta_path, "wb") as f:
+            pickle.dump(self.meta, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_index(self, index_path: str | Path, meta_path: str | Path) -> None:
+        """Load FAISS index + metadata from disk."""
+        import faiss
+
+        self.index = faiss.read_index(str(index_path))
+        with open(meta_path, "rb") as f:
+            self.meta = pickle.load(f)
+
     def scan(self, texts: list[str]) -> dict[str, list[dict[str, Any]]]:
         """Scan a list of candidate texts for semantic near-duplicates.
 
@@ -312,4 +429,3 @@ class SemanticDetector:
                     )
 
         return dict(matches)
-
