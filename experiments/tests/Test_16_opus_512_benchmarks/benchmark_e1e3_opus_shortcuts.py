@@ -37,8 +37,15 @@ import torch.nn.functional as F
 def _setup_imports():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
-    # Try latest code first — Compiled_new has fused projections
+    # Fused-projection code (qkvg_proj) exists in multiple dirs depending
+    # on which branch is checked out.  Search order: newest → oldest.
     candidates = [
+        os.path.join(repo_root, "experiments", "tests",
+                     "Test_14_Compiled5", "code"),
+        os.path.join(repo_root, "experiments", "tests",
+                     "Test_14_Compiled_token", "code"),
+        os.path.join(repo_root, "experiments", "tests",
+                     "aws_compile_test"),
         os.path.join(repo_root, "experiments", "tests",
                      "Test_14_Compiled_new", "code"),
         os.path.join(repo_root, "experiments", "tests",

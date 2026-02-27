@@ -39,11 +39,20 @@ def _setup_imports():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 
-    # Try latest code first — Compiled_new has fused projections (qkvg_proj),
-    # then Test_16_New_Code, then Test_14 variants
+    # Fused-projection code (qkvg_proj) exists in multiple dirs depending
+    # on which branch is checked out.  Search order: newest → oldest.
     candidates = [
+        # Rohan's branch: feature/experiments-p4d-gsa-memory-fixes
+        os.path.join(repo_root, "experiments", "tests",
+                     "Test_14_Compiled5", "code"),
+        os.path.join(repo_root, "experiments", "tests",
+                     "Test_14_Compiled_token", "code"),
+        os.path.join(repo_root, "experiments", "tests",
+                     "aws_compile_test"),               # flat layout (src/ directly)
+        # Our benchmark branch copy
         os.path.join(repo_root, "experiments", "tests",
                      "Test_14_Compiled_new", "code"),
+        # Older code (no fused projections — kept as fallback)
         os.path.join(repo_root, "experiments", "tests",
                      "Test_16_New_Code", "code"),
         os.path.join(repo_root, "experiments", "tests",
