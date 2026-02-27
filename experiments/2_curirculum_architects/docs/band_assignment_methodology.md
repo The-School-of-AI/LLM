@@ -63,7 +63,7 @@ Input (Parquet from T1)
   │
   ├─ Source Clamping ─────── (curated + erav4 only) clamp to [floor, ceiling]
   │
-  └─ Output ─────────────── bands/ (partitioned by assigned_band) + rejections/
+  └─ Output ─────────────── bands/ (partitioned by band) + rejections/
 ```
 
 ---
@@ -349,7 +349,7 @@ All three jobs write the same columns:
 | **Size** | `byte_length`, `word_count`, `unique_token_ratio`, `compression_ratio`, `token_count_estimate`, `fertility_estimate` |
 | **Rejection** (rejected only) | `is_rejected`, `rejection_reason`, `rejection_level` |
 
-Output is partitioned by `assigned_band` (or `band`) as Parquet with zstd compression.
+Output is partitioned by `band` as Parquet with zstd compression.
 
 ---
 

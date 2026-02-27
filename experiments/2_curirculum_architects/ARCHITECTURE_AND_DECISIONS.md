@@ -2,30 +2,8 @@
 
 **Team:** 2 — Curriculum Architects
 **Scope:** Curriculum policy design and difficulty-band assignment for the LLM pretraining corpus
-**Status:** Production (EMR Serverless, 3 jobs running)
+**Status:** Production (EMR Serverless, 3 jobs)
 **Last Updated:** 2026-02-21
-
----
-
-## Quick Reference
-
-If you are here to understand the final system and reproduce results, these are the three things you need:
-
-| What | File | Why |
-|------|------|-----|
-| Canonical curriculum policy | `curriculum.yaml` | Defines B0–B5 bands, growth schedule, domain policy, guardrails |
-| Main band assignment script | `pipeline/jobs/main_job.py` | Runs on EMR Serverless, covers all large-scale datasets |
-| Band assignment methodology | `docs/band_assignment_methodology.md` | Explains every formula, threshold, and design choice |
-
-**To run the pipeline end-to-end:**
-
-```bash
-# Submit to EMR Serverless (see pipeline/README.md for full config)
-aws emr-serverless start-job-run \
-  --application-id <APP_ID> \
-  --execution-role-arn <ROLE_ARN> \
-  --job-driver '{"sparkSubmit": {"entryPoint": "s3://.../main_job.py", ...}}'
-```
 
 ---
 
@@ -33,7 +11,7 @@ aws emr-serverless start-job-run \
 
 ### What Team 2 Owns
 
-From `charter.md`:
+From Team's Charter:
 
 > Design and lock a curriculum-driven data ordering and mixing strategy that maximizes learning efficiency, stability, and capability emergence across the 1B → 3B → 8B → 70B growth schedule.
 
@@ -142,7 +120,7 @@ This library is not the production Spark job — it was the design laboratory wh
 
 ### Phase 3: ProbabilisticBanding r4.0 — The First Full-Scale Spark Job
 
-**Location:** `pipeline/jobs/main_job.py` (r4.0 commit), `glue_jobs/notes/failing_job.py`
+**Location:** `pipeline/jobs/main_job.py` (r4.0 commit — see `git log pipeline/jobs/main_job.py`)
 **Infrastructure:** AWS Glue, G.2X workers × 20, FLEX execution
 
 This was the first full-scale Spark implementation and introduced the **probabilistic banding framework** that survives into production unchanged:
@@ -158,7 +136,7 @@ This "downgrade on uncertainty" principle is deliberate: when a document sits be
 
 ### Phase 4: PatternRefinement r5.0 — Glue Baseline
 
-**Location:** `pipeline/jobs/main_job.py` (r5.0 commit), `glue_jobs/claude_reviewed/v1_t2_metrics_calculator_v5.py`
+**Location:** `pipeline/jobs/main_job.py` (r5.0 commit — see `git log pipeline/jobs/main_job.py`)
 **Infrastructure:** AWS Glue, G.2X workers × 20, FLEX execution
 
 PatternRefinement r5.0 was the first stable full-scale run. Its primary contribution was a rigorous audit that removed 12 metrics and Stage 3 rejections:
@@ -284,9 +262,9 @@ PatternRefinement r5.0 ran on AWS Glue (managed Spark). The move to EMR Serverle
 
 The migration required rewriting the job submission mechanism (from Glue job configs to EMR Serverless job runs) but the PySpark code itself was identical.
 
-The intermediary migration scripts (`glue_jobs/gluetoemr.py`, `emr_serverless/gluetoemr.py`) were transitional tools used once during migration.
+The intermediary migration scripts were one-off utilities used once during migration and have since been removed.
 
-**A note on the threshold tuning in r2.7** (documented in `glue_jobs/notes/what we did.md`): The whitespace ratio threshold was raised from 0.60 to 0.75, and the non-printable ratio from 0.01 to 0.03, specifically because book-format data (with chapter breaks and Unicode formatting) was being over-rejected. This illustrates the iterative nature of the rejection policy work — every threshold was arrived at by observing false rejections on real data, not by a priori reasoning.
+**A note on the threshold tuning in ProgressiveFilter r2.7:** The whitespace ratio threshold was raised from 0.60 to 0.75, and the non-printable ratio from 0.01 to 0.03, specifically because book-format data (with chapter breaks and Unicode formatting) was being over-rejected. This illustrates the iterative nature of the rejection policy work — every threshold was arrived at by observing false rejections on real data, not by a priori reasoning. See `docs/CHANGELOG.md` for the full r2.x history.
 
 ---
 
@@ -300,7 +278,7 @@ Initial experimentation was done on **smaller dataset samples** (a few hundred t
 
 ### Production Execution
 
-On EMR Serverless, the final production runs were executed **in parallel — one job run per dataset**. Each dataset was submitted as a separate EMR Serverless job run with its own `--JOB_NAME` argument and output path under `OUTPUT_BASE`. All three jobs (main, curated datasets, student data) ran concurrently, each writing to its own `assigned_band=Bx/` partition prefix.
+On EMR Serverless, the final production runs were executed **in parallel — one job run per dataset**. Each dataset was submitted as a separate EMR Serverless job run with its own `--JOB_NAME` argument and output path under `OUTPUT_BASE`. All three jobs (main, curated datasets, student data) ran concurrently, each writing to its own `band=Bx/` partition prefix.
 
 This means:
 - The three job scripts are independent — they share no state.
@@ -331,7 +309,7 @@ T1 Output (Parquet on S3)
          └────────────────────┴──────────────────────────┘
                               │
                     Unified Output Schema
-                    (partitioned by assigned_band)
+                    (partitioned by band)
                               │
                          T3 Training Jobs
 ```
@@ -376,7 +354,7 @@ Every job writes the same column set:
 | Size | `byte_length`, `word_count`, `unique_token_ratio`, `compression_ratio`, `token_count_estimate` |
 | Rejection | `is_rejected`, `rejection_reason`, `rejection_level` (rejected docs only) |
 
-Output is partitioned by `assigned_band` as Parquet with zstd compression.
+Output is partitioned by `band` as Parquet with zstd compression.
 
 ---
 
@@ -515,24 +493,7 @@ The `domain` field is Team 1's classification (used directly in band-domain poli
 
 ### Downstream: Team 3 (Training Pipeline)
 
-Team 2's output is the input to T3's training job. T3 uses `assigned_band` to construct per-stage training batches. The output schema was deliberately kept stable across all versions to avoid requiring T3 to update.
-
-### Cross-Team Dependencies (from curriculum.yaml)
-
-```yaml
-coordination:
-  tokenizer_lab:
-    team: "Team 6"
-    required_outputs:
-      - "tokenizer_proxy_spec"           # avg_token_rank, rare_token_ratio, etc.
-      - "multi-tokenizer difficulty proxy recommendations"
-  agentic_team:
-    team: "Team 17"
-    required_outputs:
-      - "safe_agentic_trace_formats"
-      - "tool-call data staging rules"
-      - "caps and contamination risks"
-```
+Team 2's output is the input to T3's training job. T3 uses `band` to construct per-stage training batches. The output schema was deliberately kept stable across all versions to avoid requiring T3 to update.
 
 The tokenizer difficulty proxy (Team 6) is intended as a secondary validation signal — the `tokenizer` constraints in `curriculum.yaml` (avg_max, max_max, p95_max per band) are defined but not yet enforced in the pipeline. This is noted as a TODO in curriculum.yaml.
 
@@ -566,12 +527,12 @@ See `pipeline/README.md` for the full EMR Serverless job configuration (executor
 ```
 s3://your-bucket/t2-output/
 ├── bands/
-│   ├── assigned_band=B0/
-│   ├── assigned_band=B1/
-│   ├── assigned_band=B2/
-│   ├── assigned_band=B3/
-│   ├── assigned_band=B4/
-│   └── assigned_band=B5/
+│   ├── band=B0/
+│   ├── band=B1/
+│   ├── band=B2/
+│   ├── band=B3/
+│   ├── band=B4/
+│   └── band=B5/
 └── rejections/
     ├── rejection_level=1/
     └── rejection_level=2/
@@ -589,7 +550,7 @@ EMR Serverless job logs are available in CloudWatch under the application's log 
 
 ### Reproducing Results
 
-The pipeline is deterministic given the same input Parquet files. The banding algorithm uses no RNG — all scores are computed from the text and keyword hits. The same input will always produce the same `assigned_band` and `difficulty_score`.
+The pipeline is deterministic given the same input Parquet files. The banding algorithm uses no RNG — all scores are computed from the text and keyword hits. The same input will always produce the same `band` and `difficulty_score`.
 
 The only non-deterministic element is the Spark shuffle order (which partition a record ends up in), but this does not affect individual record assignments — only the order of records within each partition.
 
@@ -642,7 +603,7 @@ Per the PR checklist, structured JSON logging and log archiving were not impleme
 | File | Purpose |
 |------|---------|
 | `curriculum.yaml` | Canonical curriculum policy — single source of truth |
-| `charter.md` | Team mandate and band definitions |
+| Team's Charter | Team mandate and band definitions |
 | `src/band_assignment.yaml` | Band constraint config for `curriculum_extractor` library |
 | `src/metrics_config.yaml` | Metrics plugin config for `curriculum_extractor` library |
 
