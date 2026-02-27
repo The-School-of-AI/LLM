@@ -1,0 +1,10 @@
+# AWS CLI profile names - one per line
+# These should match profiles in ~/.aws/credentials or ~/.aws/config
+# Example:
+#   [profile prod]
+#   aws_access_key_id = ...
+#   aws_secret_access_key = ...
+
+production
+staging
+development
