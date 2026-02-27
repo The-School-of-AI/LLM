@@ -382,16 +382,25 @@ fi
 # 13. S3 Connectivity
 # ============================================================
 header "13. S3 Connectivity"
-# S3_BUCKET and S3_PREFIX already set in config block above
+
+# Debug credentials under sudo
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -z "${AWS_PROFILE:-}" ] && [ -z "${AWS_CONTAINER_CREDENTIALS_RELATIVE_URI:-}" ]; then
+  warn "S3 Credentials" "No AWS environment variables found (Identity might be missing under sudo)"
+fi
+
+# Ensure S3_PREFIX ends with a slash and no double slashes
+S3_URL="s3://${S3_BUCKET}/${S3_PREFIX%/}/"
+echo "S3 URL: $S3_URL"
 
 if command -v aws &>/dev/null; then
-  if aws s3 ls "s3://$S3_BUCKET/$S3_PREFIX" \
-    --max-items 1 &>/dev/null; then
-    pass "S3 bucket '$S3_BUCKET' accessible"
-    pass "S3 prefix '$S3_PREFIX' exists"
+  # List just 1 item to check connectivity. Capture output and status.
+  S3_CHECK=$(aws s3 ls "$S3_URL" 2>&1)
+  S3_STATUS=$?
+  if [ $S3_STATUS -eq 0 ] && [ -n "$S3_CHECK" ]; then
+    pass "S3 accessible ($S3_URL)"
   else
-    fail "S3 access" \
-      "cannot list s3://$S3_BUCKET/$S3_PREFIX"
+    S3_ERR_MSG=$(echo "$S3_CHECK" | head -n 1)
+    fail "S3 access" "cannot list $S3_URL. Error: ${S3_ERR_MSG:-empty response}"
   fi
 else
   warn "AWS CLI not installed" \
@@ -414,8 +423,7 @@ if command -v aws &>/dev/null; then
 
   # Discover first N files from the prefix
   mapfile -t S3_FILES < <(
-    aws s3 ls "s3://$S3_BUCKET/$S3_PREFIX/" \
-      --recursive 2>/dev/null \
+    aws s3 ls "$S3_URL" --recursive 2>/dev/null \
     | awk '{print $NF}' \
     | head -n "$S3_TEST_COUNT"
   )
