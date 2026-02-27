@@ -49,6 +49,29 @@ EVAL_SHARD_DIR="$(_abs_path "$_raw_eval_shard_dir")"
 # Auto-create shards if loader_type=bin_idx and shard dirs are missing/empty
 # ---------------------------------------------------------------------------
 if [[ "$LOADER_TYPE" == "bin_idx" ]]; then
+  # Try to sync pre-generated shards from S3 first
+  S3_SHARD_SOURCE="s3://t-endgame-experiment-logs-2/shards/wikitext_shards/"
+  LOCAL_SHARD_CACHE="$TEST_ROOT/data/wikitext_shards/"
+  
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Attempting to sync shards from S3..."
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')]   Source: $S3_SHARD_SOURCE"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')]   Target: $LOCAL_SHARD_CACHE"
+  
+  mkdir -p "$LOCAL_SHARD_CACHE"
+  
+  if command -v aws &> /dev/null; then
+    if aws s3 sync "$S3_SHARD_SOURCE" "$LOCAL_SHARD_CACHE" 2>&1 | tee -a "$RESULTS_DIR/run/s3_sync.log"; then
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Successfully synced shards from S3 to: $LOCAL_SHARD_CACHE"
+    else
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Warning: Failed to sync from S3 (connection/permission issue)."
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Will proceed with local shard creation if needed."
+    fi
+  else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Warning: AWS CLI not found in PATH. Skipping S3 sync."
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Will proceed with local shard creation if needed."
+  fi
+  echo ""
+
   if [[ -n "$SHARD_DIR" && ( ! -d "$SHARD_DIR" || -z "$(ls -A "$SHARD_DIR" 2>/dev/null)" ) ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Shard dir missing/empty: $SHARD_DIR — creating train shards..."
     mkdir -p "$SHARD_DIR"
