@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.42.57",
+    "flash-linear-attention>=0.4.1",
     "numpy>=2.4.2",
     "nvidia-ml-py>=13.590.48",
     "psutil>=7.2.2",
