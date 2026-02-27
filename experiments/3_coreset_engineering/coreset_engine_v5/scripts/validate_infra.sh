@@ -414,7 +414,7 @@ if command -v aws &>/dev/null; then
 
   # Discover first N files from the prefix
   mapfile -t S3_FILES < <(
-    aws s3 ls "s3://$S3_BUCKET/$S3_PREFIX" \
+    aws s3 ls "s3://$S3_BUCKET/$S3_PREFIX/" \
       --recursive 2>/dev/null \
     | awk '{print $NF}' \
     | head -n "$S3_TEST_COUNT"
