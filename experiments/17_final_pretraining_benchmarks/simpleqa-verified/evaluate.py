@@ -22,10 +22,9 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from google import genai
 from datasets import load_dataset
-
+from google import genai
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ---------------------------------------------------------------------------
 # Gemini grader — prompt and parsing (adapted from sample-reference.py)
@@ -144,7 +143,9 @@ def parse_grade_letter(response_text: str) -> str:
         return "B"
     if "NOT_ATTEMPTED" in upper or "NOT ATTEMPTED" in upper:
         return "C"
-    print(f"  [warn] Could not parse grade from: '{response_text}'. Defaulting to {DEFAULT_GRADE_IF_UNPARSEABLE}.")
+    print(
+        f"  [warn] Could not parse grade from: '{response_text}'. Defaulting to {DEFAULT_GRADE_IF_UNPARSEABLE}."
+    )
     return DEFAULT_GRADE_IF_UNPARSEABLE
 
 
@@ -171,7 +172,7 @@ def grade_with_gemini(
             if attempt == retries - 1:
                 print(f"  [warn] Gemini grading failed after {retries} attempts: {e}")
                 return DEFAULT_GRADE_IF_UNPARSEABLE, "NOT_ATTEMPTED"
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
     return DEFAULT_GRADE_IF_UNPARSEABLE, "NOT_ATTEMPTED"
 
 
@@ -203,9 +204,9 @@ def run_inference(
     prompts = [build_prompt(q) for q in questions]
     outputs = []
     total = len(prompts)
-    
+
     do_sample = temperature > 0
-    
+
     for start in range(0, total, batch_size):
         batch = prompts[start : start + batch_size]
         print(
@@ -213,9 +214,9 @@ def run_inference(
             f"{(total + batch_size - 1) // batch_size} "
             f"({start + 1}-{min(start + batch_size, total)} of {total})"
         )
-        
+
         inputs = tokenizer(batch, return_tensors="pt", padding=True).to(device)
-        
+
         with torch.no_grad():
             generated_ids = model.generate(
                 **inputs,
@@ -224,23 +225,23 @@ def run_inference(
                 do_sample=do_sample,
                 pad_token_id=tokenizer.pad_token_id,
             )
-        
+
         # Extract only the newly generated tokens
         input_len = inputs.input_ids.shape[1]
         batch_outputs = tokenizer.batch_decode(
-            generated_ids[:, input_len:], 
-            skip_special_tokens=True
+            generated_ids[:, input_len:], skip_special_tokens=True
         )
-        
+
         for text in batch_outputs:
             outputs.append(text.strip())
-            
+
     return outputs
 
 
 # ---------------------------------------------------------------------------
 # Metrics (formulas from sample-reference.py)
 # ---------------------------------------------------------------------------
+
 
 def get_accuracy_given_attempted(correct: int, incorrect: int) -> float:
     attempted = correct + incorrect
@@ -280,7 +281,9 @@ def print_summary(metrics: dict, model_name: str, elapsed: float) -> None:
     print(sep)
     print(f"  Model                    : {model_name}")
     print(f"  Total samples            : {metrics['total']}")
-    print(f"  Correct                  : {metrics['correct']}  ({metrics['accuracy']:.2f}%)")
+    print(
+        f"  Correct                  : {metrics['correct']}  ({metrics['accuracy']:.2f}%)"
+    )
     print(f"  Incorrect                : {metrics['incorrect']}")
     print(f"  Not attempted            : {metrics['not_attempted']}")
     print(f"  Accuracy (given attempt) : {metrics['accuracy_given_attempted']:.2f}%")
@@ -292,6 +295,7 @@ def print_summary(metrics: dict, model_name: str, elapsed: float) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -393,26 +397,28 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    
+
     model = AutoModelForCausalLM.from_pretrained(
-        args.model, 
-        torch_dtype=torch.float32, 
+        args.model,
+        torch_dtype=torch.float32,
         device_map=args.device,
-        trust_remote_code=True
+        trust_remote_code=True,
     )
     print(f"[inference] Generating answers for {n_samples} questions with HF ...")
     model_answers = run_inference(
-        model, 
-        tokenizer, 
-        questions, 
-        args.max_new_tokens, 
-        args.temperature, 
-        args.batch_size, 
-        args.device
+        model,
+        tokenizer,
+        questions,
+        args.max_new_tokens,
+        args.temperature,
+        args.batch_size,
+        args.device,
     )
 
     # --- Grading ---
-    print(f"[grading] Grading {n_samples} answers with Gemini ({args.gemini_model}) ...")
+    print(
+        f"[grading] Grading {n_samples} answers with Gemini ({args.gemini_model}) ..."
+    )
     results = []
     for i, (q, ref, pred, idx) in enumerate(
         zip(questions, reference_answers, model_answers, original_indices)
@@ -464,4 +470,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
