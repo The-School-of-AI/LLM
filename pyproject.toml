@@ -9,3 +9,6 @@ dependencies = [
     "pip>=26.0.1",
     "regex>=2026.1.15",
 ]
+
+[tool.uv]
+workspace = { members = ["experiments/3_coreset_engineering"] }

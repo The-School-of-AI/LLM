@@ -1,0 +1,406 @@
+# ============================================================
+# curriculum.yaml — CANONICAL CURRICULUM CONSTITUTION - AUTHORITATIVE
+# ============================================================
+# This file is the single source of truth for curriculum policy.
+# Any deviation requires escalation + re-freeze.
+# ============================================================
+
+version: "0.4"
+owner_team: "Team 2: Curriculum Architects"
+status: "DRAFT" # "FROZEN"
+frozen_on: "2026-02-02"
+change_policy: "STRUCTURE_IMMUTABLE" # "NO_CHANGES_ALLOWED"
+
+# ============================================================
+# GLOBAL CONTRACT
+# ============================================================
+global_contract:
+  guarantees:
+    determinism:
+      sampling: true
+      batch_content: true
+      data_order: true
+      fixed_seed_required: true
+    safety_defaults:
+      downgrade_on_uncertainty: true
+      upgrade_never_allowed: true
+  enforcement:
+    violation_action: "REJECT_OR_HALT"
+  rejection_reasons:
+    - "language_not_en_or_indic"
+    - "indic_not_allowed_at_stage"
+    - "agentic_not_allowed_in_band_at_stage"
+    - "below_minimum_token_threshold"
+
+# ============================================================
+# LANGUAGE & CONTEXT POLICY
+# ============================================================
+language_and_context:
+  language_policy:
+    definition_method: "hard_cap_with_stage_gating"
+    primary_languages:
+      - lang: "en"
+        max_share: 0.92
+    secondary_languages:
+      - lang: "hi"
+        max_share: 0.08
+        earliest_stage: "1B"
+    excluded_languages: ["zh", "ja", "ko", "fr", "de", "es"]
+    violation_action: "DROP_SAMPLE"
+
+  context_policy:
+    definition_method: "fixed_pretrain_context"
+    min_context_tokens: 4096
+    pretrain_context_tokens: 4096
+    short_context_pretraining: false
+    long_context_extension:
+      allowed_later: true
+      owned_by: "Post-pretraining teams"
+
+# ============================================================
+# DIFFICULTY SYSTEM (CORE OF CURRICULUM)
+# ============================================================
+difficulty_system:
+  definition_method:
+    primary: "heuristic"
+    secondary: "tokenizer_proxy"
+    audit:
+      enabled: true
+      audit_model: "small_frozen_lm"
+      scope: "spot_checks_only"
+
+  tokenizer_proxy:
+    owner_team: "Team 6: Tokenizer Lab"
+    purpose: "complexity_proxy_not_quality"
+    required_metrics:
+      - avg_token_rank
+      - rare_token_ratio
+      - tail_token_ratio
+      - symbolic_token_density
+      - structural_token_density
+
+  # Band difficulty centroids for capacity alignment
+  difficulty_centroids:
+    B0: 0.10
+    B1: 0.22
+    B2: 0.40
+    B3: 0.60
+    B4: 0.78
+    B5: 0.92
+
+  # Minimum required proportion for each band
+  floors:
+    B0: 0.10
+    B1: 0.14
+    B2: 0.18
+    B3: 0.14
+    B4: 0.06
+    B5: 0.02
+
+  # Model Capacity Configuration
+  model_capacity_config:
+    min_params: 1000000000.0 # 1B
+    max_params: 70000000000.0 # 70B
+
+  bands:
+    # avg_max: The highest allowed average token difficulty across the entire text.
+    # max_max: The highest allowed single hardest token that can appear in the text.
+    # p95_max: The highest allowed token difficulty that 95% of the text stays below, ignoring rare outliers.
+    B0:
+      name: "Nursery"
+      intent: "Surface language acquisition"
+      allowed_modalities: ["general_text"]
+      allowed_domains: ["clean_web"]
+      constraints:
+        tokenizer:
+          avg_max: 5000
+          max_max: 10000
+          p95_max: 8000
+          description: "Nursery: Very high frequency tokens, simple language"
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B1:
+      name: "Primary"
+      intent: "Fluent everyday language"
+      allowed_modalities: ["general_text", "clean_exposition"]
+      allowed_domains: ["clean_web"]
+      constraints:
+        tokenizer:
+          avg_max: 10000
+          max_max: 20000
+          p95_max: 15000
+          description: "Primary: High frequency tokens, everyday language"
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B2:
+      name: "HighSchool"
+      intent: "Structured knowledge without explicit reasoning"
+      allowed_modalities: ["general_text", "structured_knowledge"]
+      allowed_domains: ["clean_web"]
+      constraints:
+        tokenizer:
+          avg_max: 20000
+          max_max: 40000
+          p95_max: 30000
+          description: "High School: Medium frequency, structured knowledge"
+      reasoning_policy:
+        cot: "forbidden"
+        agentic: "forbidden"
+
+    B3:
+      name: "Undergraduate"
+      intent: "Reasoning emergence"
+      allowed_modalities: ["structured_knowledge", "technical_text", "code"]
+      allowed_domains: ["clean_web", "code"]
+      constraints:
+        tokenizer:
+          avg_max: 40000
+          max_max: 70000
+          p95_max: 60000
+          description: "Undergraduate: Lower frequency, technical content"
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 64
+        agentic: "forbidden"
+
+    B4:
+      name: "Graduate"
+      intent: "Explicit abstraction and algorithms"
+      allowed_modalities: ["technical_text", "math", "code"]
+      allowed_domains: ["code", "reasoning"]
+      constraints:
+        tokenizer:
+          avg_max: 70000
+          max_max: 100000
+          p95_max: 90000
+          description: "Graduate: Low frequency, complex reasoning"
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 128
+        agentic: "toy_only"
+
+    B5:
+      name: "PhD"
+      intent: "Planning and system-level reasoning"
+      allowed_modalities:
+        ["hard_reasoning", "math", "advanced_code", "planning"]
+      allowed_domains: ["code", "reasoning", "math", "agentic", "indic"]
+      constraints:
+        tokenizer:
+          avg_max: .inf
+          max_max: .inf
+          p95_max: .inf
+          description: "PhD: Very low frequency, advanced/rare terms"
+      reasoning_policy:
+        cot:
+          allowed: true
+          max_tokens: 256
+        agentic:
+          allowed: true
+          max_token_share: 0.02
+
+# TODO: Add Triggers
+# TODO: Add Signals(from benchmark team)
+
+# ============================================================
+# MODALITY SYSTEM
+# ============================================================
+modalities:
+  general_text:
+    purpose: "language fluency"
+  structured_knowledge:
+    purpose: "factual and conceptual grounding"
+  code:
+    purpose: "procedural and algorithmic reasoning"
+    allowed_languages:
+      ["python", "javascript", "typescript", "c", "cpp", "java"]
+  math:
+    purpose: "symbolic abstraction"
+  research_papers:
+    purpose: "research papers"
+  cot_reasoning:
+    purpose: "scaffolded reasoning traces"
+  agentic_traces:
+    purpose: "tool-use and planning"
+    owner_team: "Team 17"
+    status: "format_pending"
+
+# ============================================================
+# DATASET INTERFACE
+# ============================================================
+dataset_interface:
+  input_from_team1:
+    required_fields:
+      [
+        "id",
+        "text",
+        "source",
+        "added",
+        "created",
+        "metadata",
+        "domain",
+        "language",
+      ]
+  segmentation_requests_allowed: true
+  partial_rejection_allowed: true
+
+# ============================================================
+# STAGE & GROWTH SCHEDULE
+# ============================================================
+growth_schedule:
+  stages:
+    - name: "1B"
+      order: 1
+      profile: "base"
+      params: 1000000000.0 # 1B
+    - name: "3B"
+      order: 2
+      profile: "harder_shift_1"
+      params: 3000000000.0 # 3B
+    - name: "8B"
+      order: 3
+      profile: "harder_shift_2"
+      params: 8000000000.0 # 8B
+    - name: "70B"
+      order: 4
+      profile: "final_adaptive"
+      params: 70000000000.0 # 70B
+
+  stage_profiles:
+    base:
+      total_tokens: 20000000000
+      band_weights:
+        B0: 0.49
+        B1: 0.13
+        B2: 0.17
+        B3: 0.13
+        B4: 0.06
+        B5: 0.02
+      modality_weights:
+        general_text: 0.86
+        code: 0.12
+        cot_reasoning: 0.02
+        agentic_traces: 0.00
+
+    harder_shift_1:
+      total_tokens: 40000000000
+      band_weights:
+        B0: 0.43
+        B1: 0.15
+        B2: 0.19
+        B3: 0.15
+        B4: 0.06
+        B5: 0.02
+      modality_weights:
+        general_text: 0.78
+        code: 0.18
+        cot_reasoning: 0.03
+        agentic_traces: 0.01
+
+    harder_shift_2:
+      total_tokens: 100000000000
+      band_weights:
+        B0: 0.27
+        B1: 0.19
+        B2: 0.24
+        B3: 0.19
+        B4: 0.08
+        B5: 0.03
+      modality_weights:
+        general_text: 0.68
+        code: 0.24
+        cot_reasoning: 0.05
+        agentic_traces: 0.03
+
+    final_adaptive:
+      total_tokens: 240000000000
+      band_weights:
+        B0: 0.16
+        B1: 0.22
+        B2: 0.28
+        B3: 0.22
+        B4: 0.09
+        B5: 0.03
+      modality_weights:
+        general_text: 0.60
+        code: 0.28
+        cot_reasoning: 0.07
+        agentic_traces: 0.05
+    adaptive_knobs:
+      enabled: true
+      bounds:
+        band_delta_max: 0.03
+        modality_delta_max: 0.02
+
+# ============================================================
+# GUARDRAILS & SMOOTHING
+# ============================================================
+guardrails:
+  rolling_window:
+    window_tokens: 2000000
+    max_band_delta: 0.03
+    max_domain_delta: 0.05
+
+  caps:
+    cot:
+      global_max: 0.06
+    agentic:
+      global_max: 0.03
+      earliest_band: "B4"
+
+# ============================================================
+# Co-ordination
+# ============================================================
+# TODO: add logic for this
+coordination:
+  tokenizer_lab:
+    team: "Team 6"
+    required_outputs:
+      - "tokenizer_proxy_spec"
+      - "multi-tokenizer difficulty proxy recommendations"
+  agentic_team:
+    team: "Team 17"
+    required_outputs:
+      - "safe_agentic_trace_formats"
+      - "tool-call data staging rules"
+      - "caps and contamination risks"
+
+# ============================================================
+# DOMAIN GROUPING
+# ============================================================
+domains:
+  definition_method: "team1_tags_consolidated_by_team2"
+
+  domain_groups:
+    - id: "clean_web"
+    - id: "code"
+    - id: "reasoning"
+    - id: "math"
+    - id: "indic"
+    - id: "agentic"
+
+  band_domain_policy:
+    B0: ["clean_web"]
+    B1: ["clean_web"]
+    B2: ["clean_web"]
+    B3: ["clean_web", "code"]
+    B4: ["code", "reasoning"]
+    B5: ["code", "reasoning", "math", "agentic", "indic"]
+
+# ============================================================
+# EVALUATION SIGNAL INTERFACE
+# ============================================================
+evaluation_interface:
+  purpose: "guides_adaptive_knobs_only"
+  signals:
+    - name: "reasoning_eval_delta"
+      owner_team: "Benchmarking"
+    - name: "long_context_eval_delta"
+      owner_team: "Benchmarking"
+  restriction: "NO_STRUCTURAL_CHANGES_ALLOWED"
