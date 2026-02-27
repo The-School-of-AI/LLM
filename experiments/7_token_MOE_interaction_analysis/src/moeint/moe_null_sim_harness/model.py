@@ -130,7 +130,8 @@ class MoERouter(nn.Module):
         self.router_bias = nn.Parameter(torch.zeros(num_experts))
 
         # single expert logit (will be duplicated self.num_null_expert times)
-        self.null_expert_logit = nn.Parameter(torch.tensor(0.0))
+        # self.null_expert_logit = nn.Parameter(torch.tensor(0.0))
+        self.null_expert_logit = nn.Parameter(torch.tensor(-1.0)) # Starting with negative bias
 
         self.last_router_logits: Tensor | None = None
 
@@ -153,10 +154,10 @@ class MoERouter(nn.Module):
         )  # shape: (batch_size, seq_len, num_total_experts)
         self.last_router_logits = router_logits.detach()
 
-        # softmax routing
+        # softmax routing. Converts logits → routing probabilities
         router_probs = F.softmax(router_logits, dim=-1)
 
-        # top-k calculation
+        # top-k calculation. Tokens are sent to the top-k experts
         topk_weights, topk_indices = torch.topk(router_probs, self.topk, dim=-1)
 
         # null expert selections
@@ -273,6 +274,7 @@ class MoEBlock(nn.Module):
         )
 
         start = 0
+        # Expert dispatch loop. Each expert e has its own w_gate[e], w_up[e], w_down[e]
         for e in range(self.num_experts):
             end = expert_offsets[e].item()
             if end > start:
