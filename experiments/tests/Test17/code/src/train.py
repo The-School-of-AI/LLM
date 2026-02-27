@@ -131,10 +131,13 @@ def train_epoch(
     start_step=0,
     global_step=0,
     metrics_jsonl_path=None,
+    metrics_jsonl_interval=10,
     max_chunk_gb=32.0,
     profiler: "StepProfiler | None" = None,
     profile_steps: "set | None" = None,
     profile_output_dir: "str | None" = None,
+    enable_flops_profiler: bool = False,
+    flops_profile_steps: "set | None" = None,
 ):
     """
     Train the model for one epoch.
@@ -152,10 +155,10 @@ def train_epoch(
         global_step: Global step counter across all epochs
 
     Returns:
-        Tuple of (average_loss, final_global_step)
+        Tuple of (last_logged_loss, final_global_step)
     """
     model_engine.train()
-    total_loss = 0
+    last_logged_loss = None
     steps = 0
 
     # FIX-PERF-07: Use dynamic chunk size from config (default 4GB)
@@ -181,24 +184,42 @@ def train_epoch(
     progress_bar = tqdm(
         train_loader, desc=f"Epoch {epoch}", disable=not is_main_process()
     )
+    uses_custom_forward = _uses_custom_recurrence_forward(model_engine.module)
 
-    profile_step = 10
-    print_profile= True
-    prof = FlopsProfiler(model_engine)
+    world_size = (
+        dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+    )
+    tokens_per_step = None
+    flops_steps = set(flops_profile_steps or {1, 2, 3}) if enable_flops_profiler else set()
+    flops_prof = FlopsProfiler(model_engine) if flops_steps else None
+    flops_started = False
+    flops_last_step = max(flops_steps) if flops_steps else None
+    component_log_interval = 5
+    profile_last_step = (
+        max(profiler.profile_steps)
+        if profiler is not None and getattr(profiler, "profile_steps", None)
+        else None
+    )
+    profile_hooks_detached = False
+
     for i, batch in enumerate(progress_bar):
         # Skip steps if resuming
         if i < start_step:
             continue
-        if i == profile_step:
-            print ("Profile started")
-            prof.start_profile()
+        # Stop before doing extra work (avoids off-by-one extra step).
+        if max_steps is not None and steps >= max_steps:
+            break
+
+        current_step = global_step + 1
+        if flops_prof is not None and (not flops_started) and current_step in flops_steps:
+            print_rank_0(f"[flops_profiler] start at global_step={current_step}")
+            flops_prof.start_profile()
+            flops_started = True
 
         # ── Profiler: start step ─────────────────────────────────────────────
-        _batch_tokens_for_profiler = (
-            batch["attention_mask"].sum().item() if "attention_mask" in batch else 0
-        )
+        _batch_tokens_for_profiler = int(batch["input_ids"].shape[0] * batch["input_ids"].shape[1] * world_size)
         if profiler is not None:
-            profiler.start_step(global_step + 1, tokens=int(_batch_tokens_for_profiler))
+            profiler.start_step(current_step, tokens=int(_batch_tokens_for_profiler))
 
         # Measure step wall-clock time
         step_start_time = time.time()
@@ -210,10 +231,7 @@ def train_epoch(
             attention_mask = batch["attention_mask"].to(
                 model_engine.device, non_blocking=True
             )
-            labels = batch["labels"].to(model_engine.device, non_blocking=True)
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-        
+
         # Memory profiling on first step
         if i == 0:
             torch.cuda.reset_peak_memory_stats(model_engine.device)
@@ -222,12 +240,9 @@ def train_epoch(
 
         # Forward pass
         # Recurrence models use a custom forward signature (not labels=...)
-        uses_custom_forward = _uses_custom_recurrence_forward(model_engine.module)
-        gsa_leak_frac = None
-        gsa_leak_attempt_frac = None
-        loss_ntp_value = None
-        loss_mtp_value = None
-        loss_aux_value = None
+        loss_ntp_t = None
+        loss_mtp_t = None
+        loss_aux_t = None
 
         if uses_custom_forward:
             # Reversible model: returns (h_ntp, h_mtp, aux_loss) hidden states
@@ -248,30 +263,7 @@ def train_epoch(
                     prev_memory_stream=None,
                     return_hidden=True,   # Skip lm_head — we compute CE below
                 )
-            with profiler.phase("gsa_leak_allreduce") if profiler is not None else _null_ctx():
-                leak_frac_t = getattr(model_engine.module, "last_gsa_leak_fraction", None)
-                leak_attempt_t = getattr(
-                    model_engine.module, "last_gsa_leak_attempt_fraction", None
-                )
-                if leak_frac_t is not None:
-                    leak_frac_t = leak_frac_t.detach().float()
-                    if dist.is_available() and dist.is_initialized():
-                        dist.all_reduce(leak_frac_t, op=dist.ReduceOp.SUM)
-                        leak_frac_t = leak_frac_t / dist.get_world_size()
-                    gsa_leak_frac = float(leak_frac_t.item())
-                if leak_attempt_t is not None:
-                    leak_attempt_t = leak_attempt_t.detach().float()
-                    if dist.is_available() and dist.is_initialized():
-                        dist.all_reduce(leak_attempt_t, op=dist.ReduceOp.SUM)
-                        leak_attempt_t = leak_attempt_t / dist.get_world_size()
-                    gsa_leak_attempt_frac = float(leak_attempt_t.item())
-            # Regression guard: if this ever fires, sparse selection let future
-            # tokens through and the training loss is no longer trustworthy.
-            if gsa_leak_frac is not None and gsa_leak_frac > 1e-12:
-                raise RuntimeError(
-                    f"GSA causal leak regression detected: gsa_leak_fraction={gsa_leak_frac:.6e}"
-                )
-            
+
             # Memory profiling after forward
             if i == 0:
                 mem_after_fwd = torch.cuda.memory_allocated(model_engine.device) / 1e9
@@ -323,11 +315,9 @@ def train_epoch(
                 # aux tensors with more than one element.
                 aux_term = aux_loss if aux_loss.numel() == 1 else aux_loss.mean()
                 loss += aux_term
-                loss_aux_value = float(aux_term.detach().float().item())
-            else:
-                loss_aux_value = 0.0
-            loss_ntp_value = float(loss_ntp.detach().float().item())
-            loss_mtp_value = float(loss_mtp.detach().float().item()) if loss_mtp is not None else 0.0
+                loss_aux_t = aux_term.detach().float()
+            loss_ntp_t = loss_ntp.detach().float()
+            loss_mtp_t = loss_mtp.detach().float() if loss_mtp is not None else None
             
             # Memory profiling before backward
             if i == 0:
@@ -341,12 +331,17 @@ def train_epoch(
             
         else:
             # Standard transformer model
+            labels = batch.get("labels")
+            if labels is not None:
+                labels = labels.to(model_engine.device, non_blocking=True)
+            else:
+                labels = input_ids
             with profiler.phase("forward") if profiler is not None else _null_ctx():
                 outputs = model_engine(input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
-            loss_ntp_value = float(loss.detach().float().item())
-            loss_mtp_value = None
-            loss_aux_value = None
+            loss_ntp_t = loss.detach().float()
+            loss_mtp_t = None
+            loss_aux_t = None
 
         # Backward pass
         with profiler.phase("backward") if profiler is not None else _null_ctx():
@@ -363,23 +358,25 @@ def train_epoch(
         # Compute tokens per second for this step
         step_time = time.time() - step_start_time
 
+        if tokens_per_step is None:
+            tokens_per_step = int(input_ids.shape[0] * input_ids.shape[1] * world_size)
+        tokens = tokens_per_step
+
         # ── Profiler: record total step time and finalize ────────────────────
         if profiler is not None:
-            with torch.no_grad():
-                _ptoks = attention_mask.sum().float()
-                if dist.is_available() and dist.is_initialized():
-                    dist.all_reduce(_ptoks, op=dist.ReduceOp.SUM)
-                profiler._current and profiler._current.add("step_total", step_time * 1000.0)
-            profiler.end_step(tokens=int(_ptoks.item()))
+            profiler._current and profiler._current.add("step_total", step_time * 1000.0)
+            profiler.end_step(tokens=tokens)
+            if (
+                not profile_hooks_detached
+                and profile_last_step is not None
+                and current_step >= profile_last_step
+            ):
+                profiler.detach_hooks()
+                profile_hooks_detached = True
+                print_rank_0(
+                    f"[profiler] Detached model hooks after step {current_step}"
+                )
         step_dt_ms = step_time * 1000.0
-        with profiler.phase("token_count_allreduce") if profiler is not None else _null_ctx():
-            with torch.no_grad():
-                # Count tokens in this batch using attention mask (1s for real tokens)
-                tokens = attention_mask.sum().float()
-                # Aggregate across all ranks if distributed is initialized
-                if dist.is_available() and dist.is_initialized():
-                    dist.all_reduce(tokens, op=dist.ReduceOp.SUM)
-                tokens = tokens.item()
         tokens_per_sec = tokens / step_time if step_time > 0 else 0.0
         learning_rate = _get_learning_rate(model_engine)
 
@@ -433,52 +430,47 @@ def train_epoch(
                         # Fail silently if NVML query fails
                         pass
 
-        if i == profile_step:
-            print("Profile stoped\n")
-            prof.stop_profile()
-            flops = prof.get_total_flops()
-            macs = prof.get_total_macs()
-            params = prof.get_total_params()
-            if print_profile:
-                prof.print_model_profile(profile_step=profile_step)
-            prof.end_profile()
+        if flops_prof is not None and flops_started and current_step == flops_last_step:
+            print_rank_0(f"[flops_profiler] stop at global_step={current_step}")
+            flops_prof.stop_profile()
+            flops_prof.print_model_profile(profile_step=current_step)
+            flops_prof.end_profile()
+            flops_started = False
+
         # Track metrics
-        total_loss += loss.item()
         steps += 1
         global_step += 1
-
-        # Update progress bar
-        postfix = {
-            "loss": f"{loss_ntp_value:.4f}" if loss_ntp_value is not None else f"{loss.item():.4f}",
-            "global_step": global_step,
-            "toks/s": f"{tokens_per_sec:.1f}",
-        }
-        if loss_mtp_value is not None:
-            postfix["loss2"] = f"{loss_mtp_value:.4f}"
-        if loss_aux_value is not None:
-            postfix["r_loss"] = f"{loss_aux_value:.4f}"
-        if gsa_leak_frac is not None:
-            postfix["gsa_leak"] = f"{gsa_leak_frac:.6f}"
-        if gsa_leak_attempt_frac is not None:
-            postfix["gsa_leak_try"] = f"{gsa_leak_attempt_frac:.6f}"
-        if enable_system_metrics and gpu_mem_used is not None:
-            postfix["gpu_util"] = f"{gpu_util:.0f}%"
-            postfix["gpu_mem"] = f"{gpu_mem_used:.1f}G"
-        if enable_system_metrics and cpu_util is not None:
-            postfix["cpu_util"] = f"{cpu_util:.0f}%"
-            postfix["cpu_mem"] = f"{cpu_mem_used:.1f}G"
-        progress_bar.set_postfix(postfix)
+        loss_value = float(loss.detach().float().item())
+        last_logged_loss = loss_value
 
         # Log periodically
         if i % log_interval == 0:
             with profiler.phase("log_write") if profiler is not None else _null_ctx():
-                loss_str = f"{loss_ntp_value:.4f}" if loss_ntp_value is not None else "nan"
-                loss2_str = f"{loss_mtp_value:.4f}" if loss_mtp_value is not None else "nan"
-                r_loss_str = f"{loss_aux_value:.4f}" if loss_aux_value is not None else "nan"
+                log_components = (global_step % component_log_interval == 0)
+                if log_components:
+                    loss_ntp_value = (
+                        float(loss_ntp_t.item()) if loss_ntp_t is not None else float("nan")
+                    )
+                    loss_mtp_value = (
+                        float(loss_mtp_t.item()) if loss_mtp_t is not None else float("nan")
+                    )
+                    loss_aux_value = (
+                        float(loss_aux_t.item()) if loss_aux_t is not None else 0.0
+                    )
+                    loss_ntp_str = f"{loss_ntp_value:.4f}"
+                    loss2_str = f"{loss_mtp_value:.4f}"
+                    r_loss_str = f"{loss_aux_value:.4f}"
+                else:
+                    loss_ntp_value = None
+                    loss_mtp_value = None
+                    loss_aux_value = None
+                    loss_ntp_str = "n/a"
+                    loss2_str = "n/a"
+                    r_loss_str = "n/a"
                 lr_str = f"{learning_rate:.2e}" if learning_rate is not None else "nan"
                 msg = (
                     f"{_format_log_timestamp()} | step {global_step} | "
-                    f"loss: {loss_str} | loss2: {loss2_str} | r_loss: {r_loss_str} | "
+                    f"loss: {loss_value:.4f} | loss_ntp: {loss_ntp_str} | loss2: {loss2_str} | r_loss: {r_loss_str} | "
                     f"lr: {lr_str} | dt: {step_dt_ms:.2f}ms | tok/sec: {tokens_per_sec:9.2f}"
                 )
                 if enable_system_metrics:
@@ -491,35 +483,30 @@ def train_epoch(
                         msg += (
                             f", CPU Util: {cpu_util:.0f}%, "
                             f"CPU Mem: {cpu_mem_used:.1f}G/{cpu_mem_total:.1f}G"
-                        )
-                print_rank_0(msg)
-                _append_jsonl(
-                    metrics_jsonl_path,
-                    {
-                        "phase": "train",
-                        "epoch": epoch,
-                        "step": i,
-                        "global_step": global_step,
-                        "loss": float(loss.item()),
-                        "loss_ntp": None if loss_ntp_value is None else float(loss_ntp_value),
-                        "loss2": None if loss_mtp_value is None else float(loss_mtp_value),
-                        "r_loss": None if loss_aux_value is None else float(loss_aux_value),
-                        "lr": None if learning_rate is None else float(learning_rate),
-                        "dt_ms": float(step_dt_ms),
-                        "tokens_per_sec": float(tokens_per_sec),
-                        "tokens": int(tokens),
-                        "gpu_util": None if gpu_util is None else float(gpu_util),
-                        "gpu_mem_used_gb": None if gpu_mem_used is None else float(gpu_mem_used),
-                        "cpu_util": None if cpu_util is None else float(cpu_util),
-                        "cpu_mem_used_gb": None if cpu_mem_used is None else float(cpu_mem_used),
-                        "gsa_leak_fraction": None if gsa_leak_frac is None else float(gsa_leak_frac),
-                        "gsa_leak_attempt_fraction": (
-                            None
-                            if gsa_leak_attempt_frac is None
-                            else float(gsa_leak_attempt_frac)
-                        ),
-                    },
                 )
+                print_rank_0(msg)
+                if global_step % int(max(1, metrics_jsonl_interval)) == 0:
+                    _append_jsonl(
+                        metrics_jsonl_path,
+                        {
+                            "phase": "train",
+                            "epoch": epoch,
+                            "step": i,
+                            "global_step": global_step,
+                            "loss": float(loss_value),
+                            "loss_ntp": None if loss_ntp_value is None else float(loss_ntp_value),
+                            "loss2": None if loss_mtp_value is None else float(loss_mtp_value),
+                            "r_loss": None if loss_aux_value is None else float(loss_aux_value),
+                            "lr": None if learning_rate is None else float(learning_rate),
+                            "dt_ms": float(step_dt_ms),
+                            "tokens_per_sec": float(tokens_per_sec),
+                            "tokens": int(tokens),
+                            "gpu_util": None if gpu_util is None else float(gpu_util),
+                            "gpu_mem_used_gb": None if gpu_mem_used is None else float(gpu_mem_used),
+                            "cpu_util": None if cpu_util is None else float(cpu_util),
+                            "cpu_mem_used_gb": None if cpu_mem_used is None else float(cpu_mem_used),
+                        },
+                    )
 
                 # Print full GPU table (all devices) when enabled and available
                 if enable_system_metrics and is_main_process():
@@ -545,7 +532,7 @@ def train_epoch(
                     "epoch": epoch,
                     "step": i + 1,
                     "global_step": global_step,
-                    "loss": loss.item(),
+                    "loss": loss_value,
                 }
 
                 if checkpoint_manager:
@@ -560,12 +547,16 @@ def train_epoch(
                     # Use basic checkpoint saving
                     save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
 
-        # Early stopping for demo/debugging
-        if max_steps is not None and i >= max_steps:
-            break
+    if flops_prof is not None and flops_started:
+        # Ensure profiler lifecycle closes cleanly on early exit.
+        flops_prof.stop_profile()
+        flops_prof.print_model_profile(profile_step=global_step)
+        flops_prof.end_profile()
 
-    avg_loss = total_loss / steps if steps > 0 else 0
-    print_rank_0(f"Epoch {epoch} - Training Average Loss: {avg_loss:.4f}")
+    if last_logged_loss is not None:
+        print_rank_0(f"Epoch {epoch} - Last Step Loss: {last_logged_loss:.4f}")
+    else:
+        print_rank_0(f"Epoch {epoch} - No train steps executed.")
 
     # ── Profiler: write reports and clean up ─────────────────────────────────
     if profiler is not None and profiler._history:
@@ -576,7 +567,7 @@ def train_epoch(
     if _owns_profiler and profiler is not None:
         profiler.deactivate()
 
-    return avg_loss, global_step
+    return last_logged_loss, global_step
 
 
 def evaluate(
@@ -605,6 +596,7 @@ def evaluate(
 
     # Only show progress bar on main process
     progress_bar = tqdm(data_loader, desc=phase, disable=not is_main_process())
+    uses_custom_forward = _uses_custom_recurrence_forward(model_engine.module)
 
     with torch.no_grad():
         for i, batch in enumerate(progress_bar):
@@ -613,11 +605,9 @@ def evaluate(
             attention_mask = batch["attention_mask"].to(
                 model_engine.device, non_blocking=True
             )
-            labels = batch["labels"].to(model_engine.device, non_blocking=True)
 
             # Forward pass
             # Recurrence models use a custom forward signature (not labels=...)
-            uses_custom_forward = _uses_custom_recurrence_forward(model_engine.module)
 
             if uses_custom_forward:
                 # Reversible model: returns (logits_ntp, logits_mtp, aux_loss)
@@ -658,6 +648,11 @@ def evaluate(
                     loss += aux_loss
             else:
                 # Standard transformer model
+                labels = batch.get("labels")
+                if labels is not None:
+                    labels = labels.to(model_engine.device, non_blocking=True)
+                else:
+                    labels = input_ids
                 outputs = model_engine(
                     input_ids, attention_mask=attention_mask, labels=labels
                 )
@@ -667,9 +662,6 @@ def evaluate(
             total_loss += loss.item()
             total_perplexity += torch.exp(loss).item()
             steps += 1
-
-            # Update progress bar
-            progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
 
             # Early stopping for demo/debugging
             if max_steps is not None and i >= max_steps:

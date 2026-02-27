@@ -25,7 +25,7 @@ Block size policy:
 Integration with existing training stack (code/src/train.py):
   The DataLoader returned by build_bin_idx_dataloader() emits batches with the
   same schema as get_dataloaders() in data.py:
-      {"input_ids": LongTensor, "attention_mask": LongTensor, "labels": LongTensor}
+      {"input_ids": LongTensor, "attention_mask": LongTensor}
 
 Usage (single-GPU, seq_len == block_size):
     from bin_idx_dataloader import build_bin_idx_dataloader
@@ -350,7 +350,6 @@ class BinIdxDataset(IterableDataset):
         {
             "input_ids":      LongTensor [seq_len]
             "attention_mask": LongTensor [seq_len]  (all 1s — full causal mask)
-            "labels":         LongTensor [seq_len]  (copy of input_ids)
         }
 
     seq_len must be a multiple of SHARD_BLOCK_SIZE (4096):
@@ -449,7 +448,6 @@ class BinIdxDataset(IterableDataset):
                 yield {
                     "input_ids": seq,
                     "attention_mask": torch.ones(self.seq_len, dtype=torch.long),
-                    "labels": seq.clone(),
                 }
 
 
@@ -504,7 +502,7 @@ def build_bin_idx_dataloader(
         world_size:         Override world_size (default: auto-detect).
 
     Returns:
-        DataLoader emitting {"input_ids", "attention_mask", "labels"} batches.
+        DataLoader emitting {"input_ids", "attention_mask"} batches.
         drop_last=True ensures consistent batch size across all steps.
     """
     if rank is None or world_size is None:

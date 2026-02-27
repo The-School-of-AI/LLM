@@ -1216,11 +1216,16 @@ class LightningMLP(nn.Module):
             d_model=config.hidden_size,
             d_hidden=config.shared_expert_intermediate_size,
         )
+        self.aux_scalar_fastpath = os.getenv("T17_MLP_T2_AUX_SCALAR", "1") == "1"
 
     def forward(self, x):
         out = self.mlp(x)
         # Reversible stack expects (out, aux_loss); DenseMLP returns tensor only
-        aux = (out * 0.0).sum()  # zero aux with grad_fn for backprop
+        if self.aux_scalar_fastpath:
+            # Keep grad_fn with minimal work (avoid full-tensor reduction).
+            aux = out.reshape(-1)[0] * 0.0
+        else:
+            aux = (out * 0.0).sum()  # zero aux with grad_fn for backprop
         return out, aux
 
 
