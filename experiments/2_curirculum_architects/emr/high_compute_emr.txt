@@ -1,0 +1,99 @@
+#!/bin/bash
+# EMR Deployment for CPU-Intensive T2 Metrics Processing
+# Cost: ~$450-500 total | Test cost: ~$15
+
+set -e
+
+# Configuration
+CLUSTER_NAME="T2-Metrics-Production"
+KEY_NAME="your-ec2-key"
+SUBNET_ID="subnet-xxxxxxxx"
+S3_BUCKET="your-bucket-name"
+S3_SCRIPT="s3://${S3_BUCKET}/scripts/t2_metrics_calculator_v5_optimized.py"
+S3_LOGS="s3://${S3_BUCKET}/emr-logs/"
+
+# Upload script
+echo "Uploading script to S3..."
+aws s3 cp t2_metrics_calculator_v5_optimized.py $S3_SCRIPT
+
+# Create Spark config
+cat > spark-config.json << 'EOF'
+[
+  {
+    "Classification": "spark-defaults",
+    "Properties": {
+      "spark.executor.cores": "15",
+      "spark.executor.memory": "28g",
+      "spark.executor.memoryOverhead": "4g",
+      "spark.driver.memory": "28g",
+      "spark.driver.cores": "15",
+      "spark.sql.adaptive.enabled": "true",
+      "spark.sql.adaptive.coalescePartitions.enabled": "true",
+      "spark.sql.adaptive.skewJoin.enabled": "true",
+      "spark.sql.files.maxPartitionBytes": "268435456",
+      "spark.sql.adaptive.advisoryPartitionSizeInBytes": "268435456",
+      "spark.network.timeout": "600s",
+      "spark.sql.broadcastTimeout": "1200s",
+      "spark.memory.fraction": "0.8",
+      "spark.memory.storageFraction": "0.3",
+      "spark.cleaner.periodicGC.interval": "5min",
+      "spark.dynamicAllocation.enabled": "false",
+      "spark.default.parallelism": "200"
+    }
+  }
+]
+EOF
+
+# Create cluster
+echo "Creating EMR cluster..."
+CLUSTER_ID=$(aws emr create-cluster \
+    --name "$CLUSTER_NAME" \
+    --release-label emr-6.15.0 \
+    --applications Name=Spark \
+    --log-uri $S3_LOGS \
+    --ec2-attributes KeyName=$KEY_NAME,SubnetId=$SUBNET_ID \
+    --instance-groups '[
+        {
+            "Name": "Master",
+            "InstanceGroupType": "MASTER",
+            "InstanceType": "c6i.2xlarge",
+            "InstanceCount": 1,
+            "Market": "ON_DEMAND",
+            "EbsConfiguration": {
+                "EbsBlockDeviceConfigs": [{
+                    "VolumeSpecification": {"VolumeType": "gp3", "SizeInGB": 100},
+                    "VolumesPerInstance": 1
+                }]
+            }
+        },
+        {
+            "Name": "Core",
+            "InstanceGroupType": "CORE",
+            "InstanceType": "c6i.4xlarge",
+            "InstanceCount": 3,
+            "Market": "ON_DEMAND",
+            "EbsConfiguration": {
+                "EbsBlockDeviceConfigs": [{
+                    "VolumeSpecification": {"VolumeType": "gp3", "SizeInGB": 200},
+                    "VolumesPerInstance": 1
+                }]
+            }
+        }
+    ]' \
+    --configurations file://spark-config.json \
+    --service-role EMR_DefaultRole \
+    --ec2-attributes InstanceProfile=EMR_EC2_DefaultRole \
+    --query 'ClusterId' \
+    --output text)
+
+echo "Cluster ID: $CLUSTER_ID"
+echo "Waiting for cluster to be ready..."
+
+aws emr wait cluster-running --cluster-id $CLUSTER_ID
+
+echo "Cluster is ready!"
+echo ""
+echo "Next steps:"
+echo "1. Run test with pes2o: ./test_pes2o.sh $CLUSTER_ID"
+echo "2. If successful, run all datasets: ./run_all_datasets.sh $CLUSTER_ID"
+echo "3. Monitor at: https://console.aws.amazon.com/emr/home?region=us-east-1#/clusterDetails/$CLUSTER_ID"

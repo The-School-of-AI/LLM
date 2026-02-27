@@ -1,0 +1,71 @@
+#!/bin/bash
+# Production run for large datasets
+# Run ONLY after tests pass
+
+CLUSTER_ID=$1
+S3_SCRIPT="s3://your-bucket-name/scripts/t2_metrics_calculator_v5_optimized.py"
+
+if [ -z "$CLUSTER_ID" ]; then
+    echo "Usage: ./run_production.sh <cluster-id>"
+    exit 1
+fi
+
+# Add spot instances for production
+aws emr modify-instance-groups --cluster-id $CLUSTER_ID --instance-groups \
+    InstanceGroupId=$(aws emr describe-cluster --cluster-id $CLUSTER_ID --query 'Cluster.InstanceGroups[?InstanceGroupType==`TASK`].Id' --output text || echo ""),InstanceCount=0
+
+aws emr add-instance-groups --cluster-id $CLUSTER_ID --instance-groups '[
+    {
+        "Name": "Task-Spot",
+        "InstanceGroupType": "TASK",
+        "InstanceType": "c6i.4xlarge",
+        "InstanceCount": 30,
+        "Market": "SPOT",
+        "BidPrice": "0.30",
+        "EbsConfiguration": {
+            "EbsBlockDeviceConfigs": [{
+                "VolumeSpecification": {"VolumeType": "gp3", "SizeInGB": 150},
+                "VolumesPerInstance": 1
+            }]
+        }
+    }
+]'
+
+# Large datasets
+DATASETS=(
+    "cc_middle:932.2:60"
+    "cc_tail:840.1:60"
+    "refinedweb:829.3:60"
+    "cc_head:723.2:60"
+    "C4:266.7:40"
+    "Starcoder:189.8:30"
+    "reddit:158.0:30"
+)
+
+for dataset in "${DATASETS[@]}"; do
+    IFS=':' read -r SOURCE SIZE EXECUTORS <<< "$dataset"
+    
+    echo "Submitting: $SOURCE ($SIZE GB, $EXECUTORS executors)"
+    
+    aws emr add-steps \
+        --cluster-id $CLUSTER_ID \
+        --steps Type=Spark,Name="Prod-${SOURCE}",ActionOnFailure=CONTINUE,Args=[
+            --deploy-mode,cluster,
+            --master,yarn,
+            --conf,spark.executor.instances=$EXECUTORS,
+            --conf,spark.yarn.submit.waitAppCompletion=false,
+            $S3_SCRIPT,
+            --SOURCE,$SOURCE,
+            --ESTIMATED_SIZE_GB,$SIZE
+        ]
+    
+    echo "  Submitted"
+    sleep 5
+done
+
+echo ""
+echo "All production jobs submitted!"
+echo "Monitor at: https://console.aws.amazon.com/emr/home#/clusterDetails/$CLUSTER_ID"
+echo ""
+echo "Estimated completion: 48-72 hours"
+echo "Estimated cost: \$450-500"

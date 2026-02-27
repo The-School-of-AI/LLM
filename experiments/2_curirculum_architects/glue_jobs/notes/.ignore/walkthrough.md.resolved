@@ -1,0 +1,38 @@
+
+# Walkthrough - Curriculum Metrics Glue Job
+
+I have implemented the optimized Glue job to calculate curriculum metrics for your 1TB dataset.
+
+## Delivered Files
+-   [glue_jobs/metrics_calculator.py](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/metrics_calculator.py): The main Glue job script.
+-   [glue_jobs/README.md](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/README.md): Instructions for running the job and managing dependencies.
+-   [glue_jobs/tests/test_metrics_logic.py](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/tests/test_metrics_logic.py): A unittest script to verify the metric logic (requires PySpark environment).
+
+## Key Features Implemented
+1.  **Dual Output**:
+    -   **Team 1**: Raw Parquet conversion (1-to-1 folder mapping).
+    -   **Team 2**: Metrics-only dataset partitioned by `domain` and `source`.
+2.  **Optimization**:
+    -   **AQE Enabled**: `spark.sql.adaptive.enabled=true` with 128MB target partitions.
+    -   **Two-Tier Computing**:
+        -   **Tier 1**: Fast Spark Native rejection (Length, HTML, Noise).
+        -   **Tier 2**: Optimized Single-Pass Vectorized UDF for Python libraries (Tiktoken, Textstat, Zlib).
+3.  **Metrics**:
+    -   Implemented all ~60 metrics from Team 2/3.
+    -   Added **Agentic/CoT/Domain** signals (`has_code`, `has_agentic`, `agentic_density`, etc.) as requested.
+    -   Added **Derived Scores** (`structural_complexity`, `noise_score`).
+
+## How to Deploy
+1.  **Upload Script**: Upload [metrics_calculator.py](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/metrics_calculator.py) to your Glue script location in S3.
+2.  **Dependencies**:
+    -   You **MUST** pass `--additional-python-modules tiktoken,textstat` in the job parameters.
+    -   These libraries are required for the UDF to function.
+3.  **Run**:
+    ```bash
+    aws glue start-job-run \
+        --job-name <YOUR_JOB_NAME> \
+        --arguments '{"--OUTPUT_BASE_PATH_TEAM1":"s3://...", "--OUTPUT_BASE_PATH_TEAM2":"s3://...", "--additional-python-modules":"tiktoken,textstat"}'
+    ```
+
+## Verification
+I included a test script [tests/test_metrics_logic.py](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/tests/test_metrics_logic.py). You can run this in a Glue Dev Endpoint or any environment with PySpark installed to verify the transformation logic on sample data.

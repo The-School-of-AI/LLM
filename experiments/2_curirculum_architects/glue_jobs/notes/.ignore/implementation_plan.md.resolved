@@ -1,0 +1,166 @@
+
+# Implementation Plan - Curriculum Metrics Glue Job
+
+This plan outlines the creation of a strictly optimized AWS Glue job to calculate text metrics for curriculum learning on ~1TB of data.
+
+## Goal Description
+Create a standalone Glue script that processes ~1TB of raw JSON.gz data to produce two distinct outputs:
+1.  **Team 1 Output**: Converted Parquet files retaining the original input folder structure (1-to-1 mapping of dataset folders).
+2.  **Team 2 Output**: A separate metrics-only Parquet dataset, partitioned by `domain` and `external_source`.
+
+The script must prioritize efficiency, avoiding Python UDFs where possible, using short-circuit logic for rejections, and managing memory carefully to avoid OOM.
+
+## User Review Required
+> [!IMPORTANT]
+> **Output Structure**:
+> - Team 1: `s3://.../team1_output/<dataset_name>/` (Parquet, ~128MB partitions)
+> - Team 2: `s3://.../team2_output/domain=<domain>/external_source=<source>/`
+>
+> **Dependencies**: The script requires `tiktoken` for token counting. This must be passed via `--additional-python-modules`. A `README.md` will be provided with instructions.
+
+## Proposed Changes
+
+### `glue_jobs/`
+#### [NEW] [metrics_calculator.py](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/metrics_calculator.py)
+The main Glue job script.
+**Key Logic:**
+-   Iterate through datasets defined in [Datasets_details.csv](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/Datasets_details.csv) (embedded).
+-   **Step 1**: Read JSON.gz.
+-   **Metric Implementation Matrix & Optimization Strategy**
+
+*Strict adherence to [Team2_Metrics.csv](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/Team2_Metrics.csv) and [team3_metrics.csv](file:///Users/hemanthk/Desktop/llms/capstone/LLM/experiments/2_curirculum_architects/glue_jobs/team3_metrics.csv).*
+
+**Metric Implementation Matrix**
+
+**1. Native Spark SQL (Tier 1 - Regex/Length)**
+
+| Metric | Logic |
+| :--- | :--- |
+| **Physical (Team 2)** | |
+| `byte_length` | `length(encode(text, 'utf-8'))` |
+| `char_length` | `length(text)` |
+| `line_count` | `size(split(text, '\n'))` |
+| `word_count`  | `size(split(text, '\\s+'))` (Approx for fertility) |
+| `avg_line_length` | `char_length / line_count` |
+| **Structure & Quality** | |
+| `whitespace_ratio` | `length(regexp_replace(text, '[^\s]', '')) / char_length` |
+| `capitalization_ratio` | `upper_chars / alpha_chars` |
+| `punctuation_density` | `punct_chars / char_length` |
+| `symbol_density` | `(char_length - alphanum_chars) / char_length` |
+| `url_count` | Regex count `https?://` |
+| `non_printable_ratio` | `(char_length - printable_chars) / char_length` |
+| `ellipsis_count` | Regex count `\.\.\.` |
+| **Cognitive/Reasoning** | |
+| `question_density` | Count `?` |
+| `num_numeric_tokens` | Regex count `[0-9]+` |
+| `citation_count` | Regex count `\[\d+\]` |
+| `list_marker_count` | Regex count (bullets/numbers) |
+| `math_expression_count` | Regex count (LaTeX/Operators) |
+| `step_indicator_count` | Regex count (Step 1, First, etc.) |
+| `equation_density` | Regex count |
+| `reasoning_marker_density` | Regex count (therefore, thus, implies) |
+| `checklist_count` | Regex count `\[ \]` or `\[x\]` |
+| `hedging_language_ratio` | Regex count |
+| `counterargument_presence` | Regex match |
+| `visual_placeholder_count` | Regex match (`[image]`) |
+| **Agentic / CoT Signals (New)** | |
+| `agentic_markers` | Regex count (Action:, Observation:, Tool:) |
+| `cot_markers` | Regex count ("Let's think step by step", etc.) |
+| `research_paper_markers` | Regex count (Abstract, Introduction, References) |
+| **Domain Signals** | |
+| `code_block_count` | Regex count (```) |
+| `table_count_estimate` | Regex count |
+| `heading_count` | Regex count |
+| `dialogue_turn_count` | Regex count |
+| `example_density` | Regex count |
+| `few_shot_potential` | Regex match |
+| `cross_domain_analogy_markers`| Regex match |
+| **Team 3 Specific** | |
+| `html_tag_density` | `(len - len(no_tags)) / len` |
+| `boilerplate_count` | Count markers (privacy policy, etc.) |
+| `thread_fragment_indicator` | Count markers (>>, replied to) |
+| `risky_tld_count` | Regex count (spam TLDs) |
+| `code_comment_ratio` | Regex count of comment lines / total lines |
+
+**2. Fused Pandas UDF (Tier 2 - Python Libs)**
+*Vectorized Single-Pass UDF.*
+
+| Metric | Library / Logic |
+| :--- | :--- |
+| **Tokenization** | |
+| `token_count_estimate` | `tiktoken.encode` (cl100k_base) |
+| `unique_token_ratio` | `len(set(tokens)) / len(tokens)` |
+| `vocab_size` | `len(set(tokens))` |
+| `fertility` | `token_count / word_count` (Calculated inside UDF or Spark if word_count passed) |
+| `rare_word_ratio` | `sum(1 for t, c in Counter(tokens).items() if c == 1) / len(tokens)` |
+| **Lexical/Readability** | |
+| `compression_ratio` | `len(zlib.compress(text))` |
+| `flesch_reading_ease` | `textstat.flesch_reading_ease` |
+| `avg_word_length` | `mean(len(w))` |
+| `sentence_count_estimate` | Regex `len(re.findall(r'[.!?]+', text))` |
+| `avg_sentence_length` | `char_length / sentence_count` |
+
+**3. Derived Metrics (Post-Compute)**
+*Computed in Spark SQL after UDF return.*
+- `structural_complexity_score`: `(avg_sentence_length * 0.5) + (avg_word_length * 2)` (Heuristic)
+- `noise_score`: `html_tag_density + (boilerplate_count * 0.1) + symbol_density`
+- `domain_signal`: `CASE WHEN code_block_count > 2 THEN 'code' WHEN equation_density > 0.1 THEN 'math' ... ELSE 'general'`
+
+**Boolean Flags, Counts & Densities (New)**
+*All these columns will be included in the output.*
+- `has_code`: `code_block_count > 0`
+- `has_math`: `equation_density > 0.001` or `math_expression_count > 0`
+- `has_reasoning`: `reasoning_marker_density > 0.001`
+- `has_research_paper`: `research_paper_markers > 2 AND citation_count > 3`
+- `research_paper_markers`: Raw count.
+- `has_agentic`: `agentic_markers > 0`
+- `agentic_markers`: Raw count.
+- `agentic_density`: `agentic_markers / token_count_estimate`
+- `has_cot`: `cot_markers > 0`
+- `cot_markers`: Raw count.
+- `cot_density`: `cot_markers / token_count_estimate`
+- `primary_modality`: `GREATEST` check between code, math, text signals.
+
+**Explicitly Skipped**
+- `lang_detection` (Use Metadata).
+- `prop_content_words` / `information_density` (Skipped).
+- `mtld`, `num_entities_estimate`, `dependency_depth_estimate`.
+- Metrics now covered by proxies above.
+
+**Team 1 Output Format**
+-   **Schema (Exact Match)**: 
+    -   `id` (string)
+    -   `hash` (sha256 of text)
+    -   `dataset` (string)
+    -   `domain` (string)
+    -   `source` (string)
+    -   `text` (string)
+    -   `language` (string - default 'en')
+    -   `metadata` (string)
+    -   `added` (timestamp)
+    -   `created` (timestamp)
+    -   `version` (string)
+-   **Structure**: 1-to-1 mapping to input folders.
+-   **Format**: Parquet, Snappy/Zstd compressed.
+
+**Team 2 Output Format**
+-   **Schema**: `id`, `file_path`, `is_rejected`, `rejection_reason`, ... [All Metrics]
+-   **Partitioning**: `/domain=X/external_source=Y/part-0000.parquet`
+
+## Verification Plan
+
+### Automated Tests
+-   **Local PySpark Test**: `tests/test_metrics_logic.py`
+    -   **Mocking**: Mock `tiktoken` inside the test to simulate UDF outputs.
+    -   **Coverage**:
+        -   Test **Tier 1 Rejections** (Length, HTML).
+        -   Test **Tier 2 Rejections** (Tiktoken counts).
+        -   Test **Team 3 Specifics** (Boilerplate, Thread markers).
+        -   Test **Valid Row**: Ensure all 60 columns are present and populated.
+-   **Optimization**:
+    -   **AQE**: Enable Adaptive Query Execution (`spark.sql.adaptive.enabled=true`) and set `spark.sql.files.maxPartitionBytes` to **128MB**.
+    -   **Memory**: Process datasets sequentially. Unpersist dataframes immediately after use.
+    -   **Team 1 Output**: Write raw Parquet conversion first.
+    -   **Team 2 Output**: Write Metrics Parquet partitioned by `domain`/`source`.
+
+

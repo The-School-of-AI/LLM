@@ -1,0 +1,91 @@
+#!/bin/bash
+# Production run for all datasets using fast curriculum calculator
+# Expected: $50-100 total cost, 12-24 hours completion
+
+CLUSTER_ID=$1
+S3_SCRIPT="s3://your-bucket-name/scripts/t2_fast_curriculum.py"  # UPDATE
+
+if [ -z "$CLUSTER_ID" ]; then
+    echo "Usage: ./run_production_fast.sh <cluster-id>"
+    exit 1
+fi
+
+echo "=== T2 Fast Curriculum - Production Run ==="
+echo "Cluster: $CLUSTER_ID"
+echo ""
+echo "This will process ALL datasets (~4TB)"
+echo "Estimated cost: \$50-100"
+echo "Estimated time: 12-24 hours"
+echo ""
+read -p "Continue? (yes/no): " confirm
+
+if [ "$confirm" != "yes" ]; then
+    echo "Aborted."
+    exit 0
+fi
+
+# All datasets (small + large)
+DATASETS=(
+    # Large datasets
+    "cc_middle:932.2"
+    "cc_tail:840.1"
+    "refinedweb:829.3"
+    "cc_head:723.2"
+    "C4:266.7"
+    "Starcoder:189.8"
+    "reddit:158.0"
+    # Previously failed small datasets
+    "pes2o:98.8"
+    "redpajama-arxiv:24.0"
+    "stackexchange:23.3"
+)
+
+echo "Submitting ${#DATASETS[@]} jobs..."
+echo ""
+
+SUBMITTED=()
+
+for dataset in "${DATASETS[@]}"; do
+    IFS=':' read -r SOURCE SIZE <<< "$dataset"
+    
+    echo "[$((${#SUBMITTED[@]} + 1))/${#DATASETS[@]}] Submitting: $SOURCE ($SIZE GB)"
+    
+    STEP_ID=$(aws emr add-steps \
+        --cluster-id $CLUSTER_ID \
+        --steps Type=Spark,Name="Test",ActionOnFailure=CONTINUE,Args=[
+            --deploy-mode,cluster,
+            --master,yarn,
+            --conf,spark.dynamicAllocation.enabled=true,
+            --conf,spark.dynamicAllocation.maxExecutors=25,
+            $S3_SCRIPT
+        ] \
+        --query 'StepIds[0]' \
+        --output text)
+    
+    SUBMITTED+=("$SOURCE:$STEP_ID")
+    echo "  Step ID: $STEP_ID"
+    
+    # Small delay to avoid throttling
+    sleep 2
+done
+
+echo ""
+echo "╔════════════════════════════════════════╗"
+echo "║  ALL JOBS SUBMITTED                    ║"
+echo "║  Total: ${#DATASETS[@]} datasets                     ║"
+echo "╚════════════════════════════════════════╝"
+echo ""
+echo "Monitor cluster:"
+echo "  https://console.aws.amazon.com/emr/home?region=us-east-1#/clusterDetails/$CLUSTER_ID"
+echo ""
+echo "Track individual jobs:"
+for item in "${SUBMITTED[@]}"; do
+    IFS=':' read -r SRC STEP <<< "$item"
+    echo "  $SRC: Step $STEP"
+done
+echo ""
+echo "Check status:"
+echo "  aws emr list-steps --cluster-id $CLUSTER_ID --step-states RUNNING PENDING COMPLETED FAILED"
+echo ""
+echo "Estimated completion: 12-24 hours"
+echo "Estimated cost: \$50-100"
