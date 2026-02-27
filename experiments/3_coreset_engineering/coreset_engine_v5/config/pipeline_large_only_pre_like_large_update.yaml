@@ -1,0 +1,116 @@
+# Pipeline config for stricter baseline-style comparisons on updated large_sample_chunks.jsonl
+# Same as pipeline_large_only.yaml, but with isolated output paths.
+
+dedup:
+  enable_exact_dedup: true
+  enable_near_dedup: true
+  near_dedup_threshold: 0.85
+  hash_algorithm: xxhash64
+  chunk_size_for_hashing: 4096
+  parallel_workers: 32
+
+diversity:
+  enable_diversity_weighting: true
+  diversity_metric: entropy
+  rare_token_boost: 1.5
+  tail_token_boost: 2.0
+  domain_diversity_weight: 0.3
+  language_diversity_weight: 0.2
+
+selection:
+  strategy: stratified_density_aware
+  include_protected_slices: true
+  protected_preservation_override:
+    B4: 0.95
+    B5: 0.95
+    code: 0.90
+    agentic: 0.90
+    indic: 0.85
+  bucket_internal_sampling: stratified
+  non_overlap_enforcement: true
+
+curriculum:
+  curriculum_yaml_path: config/curriculum.yaml
+  freeze_curriculum: true
+  enforce_rolling_window: true
+  rolling_window_tolerance: 0.03
+  deterministic_seed: 42
+  seed_scope:
+    - sampling
+    - shuffling
+    - stage_transition
+
+io:
+  input_dataset_path: data/large_only
+  input_metadata_path: data/metadata
+  output_coreset_path: output/coresets_pre_like_large_update
+  output_manifest_path: output/manifests_pre_like_large_update
+  output_index_format: parquet
+  use_object_store: false
+  object_store_type: null
+  object_store_bucket: null
+  num_parallel_loaders: 16
+  cache_metadata: true
+  cache_dir: cache/coreset_cache
+
+validation:
+  enable_curriculum_validation: true
+  enable_coverage_validation: true
+  enable_determinism_check: true
+  enable_overlap_check: true
+  strict_mode: true
+  validation_tolerance: 0.01
+
+reproducibility:
+  enable_reproducibility_checks: true
+  save_config_hash: true
+  save_seed: true
+  save_algorithm_version: true
+  emit_reproducibility_manifest: true
+  version: "1.0.0"
+
+ablation:
+  enable_ablation_mode: false
+  ablation_variant: baseline
+  track_metrics:
+    - compression_ratio
+    - band_coverage
+    - domain_coverage
+    - protected_preservation
+    - convergence_speed
+  save_intermediate_results: true
+
+stages:
+  "1B":
+    stage_name: "1B"
+    target_tokens: 20000000000
+    enable_sft_adaptation: false
+    enable_alignment_adaptation: false
+  "3B":
+    stage_name: "3B"
+    target_tokens: 40000000000
+    enable_sft_adaptation: false
+    enable_alignment_adaptation: false
+  "8B":
+    stage_name: "8B"
+    target_tokens: 100000000000
+    enable_sft_adaptation: false
+    enable_alignment_adaptation: false
+  "70B":
+    stage_name: "70B"
+    target_tokens: 240000000000
+    enable_sft_adaptation: false
+    enable_alignment_adaptation: false
+  "SFT":
+    stage_name: "SFT"
+    target_tokens: 10000000000
+    enable_sft_adaptation: true
+    enable_alignment_adaptation: false
+  "ALIGNMENT":
+    stage_name: "ALIGNMENT"
+    target_tokens: 5000000000
+    enable_sft_adaptation: false
+    enable_alignment_adaptation: true
+
+pipeline_version: "1.0.0"
+config_name: "large-only-pre-like-large-update"

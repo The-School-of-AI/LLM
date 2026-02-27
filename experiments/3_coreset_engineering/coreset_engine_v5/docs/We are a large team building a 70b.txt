@@ -1,0 +1,456 @@
+We are a large team building a 70b llm from scratch. I am part of the team responsible to build the coresets. Within which I am responsible for developing the Coreset selection engine pipeline development I need to develop a production ready which will compress 2 trillion tokens to 40 billion tokens. Need you to generate production grade highly scalable performant coreset selection engine pipeline. The background, constraints, dependencies and other details are listed below. Use to build the code.
+
+Design consideration:
+
+The code should be designed such that the inputs from various team can be incorporated easily within the selection pipeline with minimilastic code changes during integration.
+Code to scale to process the large volume of dataset to be compressed in the shortest possible time.
+Provide recommendations in markdown file around - optimal techniques for following stages, somethings to inform downstream teams to help make our pipeline processing more efficient, any gotchas/pitfalls to pay attention to
+Suggest any recommended integration schemas which can be used as a handshake when integrating the downstream systems with our pipeline
+For ablation study, put necessary configurations in code
+Code should be highly configurable as it will be handed over to upstream team to the Training team
+selection engine pipeline code should use the curriculum yaml shared below
+The pipeline shoud be able to prepare coresets for pre-traning, SFT & alignment training stages
+Also while creating the markdown, put references of papers where such design techniques have been used . In the markdown summarize key metrics used and the models being used to train it. Preferrably put foundational models from deepseek, gemini , open ai, qwen or meta which are largely widely used in the industry
+Brief to my team is provided below
+
+Coreset selection engine pipeline development Scope:
+
+Stage-wise sampling logic
+Token budget enforcement
+Non-overlap across stages
+Stratified sampling
+Density-aware downsampling
+Stage freezing
+Typical L2 Tasks:
+
+Selection loop
+Budget accounting
+Non-overlap guarantees
+Stage locking
+Inputs will come from other teams are
+
+Clean, approved raw datasets and metadata from Team 1
+Curriculum definitions, ratios, and guardrails from Team 2
+Chunking and Metadata from team 3
+a. Chunk & metadata schema
+b. Loaders (FS / object store)
+c. Schema validation
+d. Dataset versioning
+e. Index registry
+Curriculum loader, guardrails and stability checks from team 4
+a. Difficulty bands (B0–B5)
+b. Domain group definitions
+c. Stage-wise ratios
+d. Rolling-window constraints
+e. Smoothness enforcement
+f. Curriculum diagnostics
+Signal Quality: Deduplication, Diversity & Protection -
+a. Exact & near-dedup
+b. Diversity metrics
+c. Bucket-internal scoring
+d. Protected slice rules (B4/B5, code, agentic, Indic)
+e. Coverage audits
+70B LLM Pre-training data Strategy Overview:
+
+The training follows a staged pre-training curriculum:
+
+Foundation Phase: Utilizing DOLMA v1.7 and IndicCorp v2 to build a broad base of world knowledge, code, and basic multilingual fluency.
+Annealing/Specialization Phase: Shifting the weight to Dolma 3 Dolmino and Sangraha (Verified) to sharpen logical reasoning, mathematical proficiency, and native-level Indic script performance.
+
+Curriculum Yaml
+
+A schema of the curriculum yaml is shared here. documentation ref - https://github.com/The-School-of-AI/LLM/blob/p02/feat/curriculum_design/experiments/2_curirculum_architects/README.md
+
+============================================================
+curriculum.yaml — AUTHORITATIVE & FROZEN
+============================================================
+This file is the single source of truth for curriculum policy.
+Any deviation requires escalation + re-freeze.
+============================================================
+version: "0.0.1"
+owner: "Team 2 — Curriculum Architects"
+status: "DRAFT" # "FROZEN"
+
+frozen_on: "2026-01-30"
+change_policy: "NO_CHANGES_POST_FREEZE"
+
+------------------------------------------------------------
+GLOBAL GUARANTEES
+------------------------------------------------------------
+guarantees:
+deterministic_sampling: true
+deterministic_batch_content: true
+deterministic_data_order: true
+seed_required: true
+seed_scope: ["sampling", "shuffling", "stage_transition"]
+reproducibility_enforced_by: "Team 19"
+
+------------------------------------------------------------
+LANGUAGE POLICY (HARD)
+------------------------------------------------------------
+languages:
+primary:
+- code: "en"
+max_token_share: 0.92
+secondary:
+- code: "hi"
+max_token_share: 0.08
+earliest_stage: "3B"
+explicitly_excluded:
+- "zh"
+- "ja"
+- "ko"
+- "fr"
+- "de"
+- "es"
+violation_action: "DROP_SAMPLE"
+
+------------------------------------------------------------
+CONTEXT POLICY
+------------------------------------------------------------
+context:
+min_tokens: 4096
+max_tokens_pretrain: 4096
+long_context_reserved_for_later: true
+short_context_pretraining: false
+
+------------------------------------------------------------
+TOKENIZER PROXY INTERFACE (TEAM 6 — HARD CONTRACT)
+------------------------------------------------------------
+tokenizer_proxy:
+owner_team: "Team 6"
+vocab_size: 128000
+id_semantics: "lower_id = higher_global_frequency"
+required_exports:
+- token_id
+- token_string
+- global_frequency_rank
+- frequency_percentile
+frequency_bands:
+junk:
+percentile: [0, 5]
+boilerplate:
+percentile: [5, 20]
+normal:
+percentile: [20, 80]
+rare:
+percentile: [80, 95]
+tail:
+percentile: [95, 100]
+
+------------------------------------------------------------
+PERPLEXITY DEFINITION (AUTHORITATIVE)
+------------------------------------------------------------
+perplexity:
+computation:
+model: "frozen_1.3B_reference_lm"
+context_tokens: 4096
+stride: 4096
+loss: "mean_nll"
+formula: "exp(mean_nll)"
+normalization:
+language: "en"
+length_normalized: true
+invalid_if:
+- contains_nan
+- contains_inf
+
+------------------------------------------------------------
+PERPLEXITY FILTERING RULES (HARD)
+------------------------------------------------------------
+perplexity_filters:
+global_reject:
+ppl_min: 1.1 # too repetitive / boilerplate
+ppl_max: 2000 # garbage / corrupted
+band_specific:
+B0: { ppl_range: [1.1, 30] }
+B1: { ppl_range: [10, 60] }
+B2: { ppl_range: [30, 120] }
+B3: { ppl_range: [80, 300] }
+B4: { ppl_range: [200, 800] }
+B5: { ppl_range: [400, 1500] }
+violation_action: "REJECT_SAMPLE"
+
+------------------------------------------------------------
+DIFFICULTY BAND DEFINITIONS (CANONICAL)
+------------------------------------------------------------
+difficulty_bands:
+
+B0:
+name: "Nursery"
+allowed_domains: ["clean_web", "basic_text"]
+code_allowed: false
+cot_allowed: false
+agentic_allowed: false
+tokenizer_constraints:
+max_rare_token_percent: 2
+max_tail_token_percent: 0.5
+
+B1:
+name: "Primary"
+allowed_domains: ["clean_web", "narrative"]
+code_allowed: false
+cot_allowed: false
+agentic_allowed: false
+tokenizer_constraints:
+max_rare_token_percent: 5
+max_tail_token_percent: 1
+
+B2:
+name: "HighSchool"
+allowed_domains: ["structured_knowledge", "intro_technical"]
+code_allowed: "light"
+cot_allowed: false
+agentic_allowed: false
+tokenizer_constraints:
+max_rare_token_percent: 10
+max_tail_token_percent: 2
+
+B3:
+name: "Undergraduate"
+allowed_domains: ["technical", "code", "reasoning"]
+code_allowed: true
+cot_allowed: "gated"
+agentic_allowed: false
+tokenizer_constraints:
+max_rare_token_percent: 20
+max_tail_token_percent: 5
+
+B4:
+name: "Graduate"
+allowed_domains: ["math", "algorithms", "deep_technical"]
+code_allowed: true
+cot_allowed: "allowed_capped"
+agentic_allowed: false
+tokenizer_constraints:
+min_rare_token_percent: 15
+min_tail_token_percent: 5
+
+B5:
+name: "PhD"
+allowed_domains: ["advanced_reasoning", "system_design", "agentic"]
+code_allowed: true
+cot_allowed: "allowed_capped"
+agentic_allowed: "limited"
+tokenizer_constraints:
+min_rare_token_percent: 25
+min_tail_token_percent: 10
+
+------------------------------------------------------------
+CHAIN-OF-THOUGHT (CoT) RULES
+------------------------------------------------------------
+cot_policy:
+trigger_token: "<think>"
+max_tokens:
+B3: 64
+B4: 128
+B5: 256
+sampling_weight:
+distilled_view: 0.8
+cot_view: 0.2
+
+------------------------------------------------------------
+SYNTHETIC DATA RULES (TEAM 4 INTERFACE)
+------------------------------------------------------------
+synthetic_data:
+allowed_bands: ["B3", "B4", "B5"]
+max_stage_share: 0.10
+min_stage_share: 0.05
+requires_tests_defined: true
+requires_team5_clearance: true
+
+------------------------------------------------------------
+STAGE DEFINITIONS & RATIOS (HARD NUMBERS)
+------------------------------------------------------------
+stages:
+
+"1B":
+total_tokens: 20000000000
+band_ratios:
+B0: 0.45
+B1: 0.30
+B2: 0.20
+B3: 0.05
+B4: 0.00
+B5: 0.00
+
+"3B":
+total_tokens: 40000000000
+band_ratios:
+B0: 0.25
+B1: 0.25
+B2: 0.25
+B3: 0.15
+B4: 0.10
+B5: 0.00
+
+"8B":
+total_tokens: 100000000000
+band_ratios:
+B0: 0.10
+B1: 0.20
+B2: 0.25
+B3: 0.20
+B4: 0.20
+B5: 0.05
+
+"70B":
+total_tokens: 240000000000
+band_ratios:
+B0: 0.05
+B1: 0.10
+B2: 0.20
+B3: 0.25
+B4: 0.25
+B5: 0.15
+
+------------------------------------------------------------
+ROLLING WINDOW CONSTRAINTS (ANTI-SHOCK)
+------------------------------------------------------------
+rolling_window:
+window_tokens: 1000000
+max_band_delta: 0.03
+max_domain_delta: 0.05
+enforcement: "HARD_REJECT"
+
+------------------------------------------------------------
+FAILURE MODES
+------------------------------------------------------------
+violations:
+curriculum_violation: "REJECT_SAMPLE"
+ratio_violation: "HALT_PIPELINE"
+nondeterminism_detected: "ESCALATE_TEAM19"
+tokenizer_proxy_missing: "BLOCK_TRAINING"
+
+Overall Project brief -
+
+Objective (Brief)
+Reduce the 2 trillion token raw corpus into stage-specific coresets totaling ~400B tokens (20B / 40B / 100B / 240B) while preserving representational coverage, curriculum integrity, and learning dynamics.
+
+The goal is not maximal compression, but efficient signal concentration: remove redundancy and low-value repetition while retaining the breadth, tail phenomena, and difficulty progression required for stable training and benchmark emergence.
+
+NOTE: Additional 5-10% data may be added to each stage by Synthetic Data & Self Distillation Team.
+
+DO NOT FORGET SFT, ALIGNMENT, and POST-TRAINING DATASETS
+
+Purpose (Charter)
+To make large-scale training computationally viable without collapsing the data distribution.
+
+A correct coreset:
+
+accelerates early learning
+improves signal-to-noise
+preserves rare but capability-critical content
+An incorrect coreset silently amputates the model’s future abilities.
+This team exists to prevent that failure mode.
+
+What You Must Do (Brief)
+Design and implement a deterministic coreset selection pipeline that:
+
+operates at chunk level
+produces stage-specific, non-overlapping coresets
+adheres strictly to curriculum ratios (B0–B5, domain groups)
+Enforce gradual curriculum transitions across stages:
+no abrupt ratio jumps
+smooth interpolation between milestone profiles
+Remove redundancy using cheap, scalable methods:
+exact and near-deduplication
+token-signature diversity
+stratified sampling within buckets
+Validate coresets via cheap proxy training runs and diagnostic metrics.
+Responsibilities (Charter)
+Distribution Preservation
+Preserve coverage across:
+1. curriculum difficulty bands (B0–B5)
+2. domain groups (code, math, reasoning, agentic, Indic, clean web)
+3. Ensure protected slices (especially B4/B5 reasoning, code, agentic traces) are never dropped due to density-based selection.
+
+Stage Integrity
+Produce distinct coresets per stage:
+1. no data point appears in more than one stage
+2. stages share structural buckets, not examples
+Respect target budgets exactly:
+1. 1B stage: 20B tokens
+2. 3B stage: 40B tokens
+3. 8B stage: 100B tokens
+4. MoE stage (16B active): 240B tokens
+Curriculum Smoothness
+Treat stage profiles as milestones along a continuous trajectory, not isolated regimes.
+
+Enforce rolling-window anti-spike constraints so that:
+
+no band or domain exceeds allowed share within any rolling window
+transitions between stages are gradual and monotonic
+Prevent shock effects that destabilize training or distort learning signals.
+Reproducibility
+Ensure the pipeline is:
+
+deterministic
+seed-controlled
+versioned
+Emit manifests that allow downstream teams to audit and replay selections exactly.
+Inputs
+1. Clean, approved raw datasets and metadata from Team 1
+2. Curriculum definitions, ratios, and guardrails from Team 2
+3. Early benchmark targets and proxy evaluation criteria from benchmarking teams (as available)
+
+Tools
+1. Chunking and hashing utilities
+2. Exact and near-duplicate detection (hashing, MinHash / SimHash)
+3. Token-signature analysis (token histograms, compression proxies)
+4. Optional small embedding models for limited protected slices only
+5. FAISS / clustering (restricted to small subsets)
+6. Python (NumPy, PyTorch)
+7. Visualization notebooks for coverage and ablations
+Required Submissions (Brief)
+coreset_builder.py
+Deterministic, configurable pipeline for coreset generation.
+
+Stage-wise index manifests:
+
+selected indices
+
+token counts
+
+band/domain composition
+
+seeds and config hashes
+Ablation and validation report:
+
+methods evaluated
+
+achieved reduction ratios
+
+coverage diagnostics
+
+proxy training comparisons (coreset vs full)
+Outputs (Charter)
+
+Four stage-specific coresets totaling ~400B tokens
+
+Reproducible index files and manifests
+
+Clear justification for:
+
+selection strategy
+protection rules
+curriculum adherence
+Evidence that the coreset improves efficiency without degrading learning.
+Success Criteria
+1. Coresets are approved for training use
+2. Early training converges faster or equally fast versus full data
+3. Early benchmark deltas (MMLU, code, math, agentic, Indic) are not degraded
+4. No curriculum violations or domain spikes are observed
+5. Downstream teams can consume outputs without rework
+Failure Conditions
+1. Curriculum ratios are violated
+2. Sudden domain or difficulty spikes occur
+3. B4/B5 signal is diluted or lost
+4. Proxy runs show slower learning or degraded benchmarks
+5. Results are non-deterministic or irreproducible
+Dependencies (Blocking Prerequisites)
+1. Team 1 — finalized raw dataset pool and metadata
+2. Team 2 — frozen curriculum structure, ratios, and guardrails
+Downstream Teams Blocked If Delayed
+1. Team 10 (training and scaling teams)
+2. Any team dependent on finalized training mixtures

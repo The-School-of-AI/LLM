@@ -1,0 +1,9 @@
+#uv run python training/train_wikitext2_gpt2.py --preset 1b-gsa --seq-length 256 --batch-size 1 --max-steps 100
+uv run python training/train_wikitext2_gpt2.py \
+  --preset 1b-full \
+  --device cuda \
+  --seq-length 1024 \
+  --batch-size 2 --max-steps 100 \
+  --persistent-workers \
+#  --use-torch-compile
+
