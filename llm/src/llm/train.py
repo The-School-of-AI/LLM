@@ -140,6 +140,7 @@ def train_epoch(
     profiler: "StepProfiler | None" = None,
     profile_steps: "set | None" = None,
     profile_output_dir: "str | None" = None,
+    opus_selector=None,
 ):
     """
     Train the model for one epoch.
@@ -224,6 +225,27 @@ def train_epoch(
             labels = batch["labels"].to(model_engine.device, non_blocking=True)
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
+
+        # ── OPUS Data Selection ────────────────────────────────────────────────
+        opus_metrics = None
+        if opus_selector is not None:
+            _opus_ctx = (
+                profiler.phase("opus_select") if profiler is not None else _null_ctx()
+            )
+            with _opus_ctx:
+                selected_batch, opus_metrics = opus_selector.select_batch(
+                    batch, model_engine.device
+                )
+                input_ids = selected_batch["input_ids"].to(
+                    model_engine.device, non_blocking=True
+                )
+                attention_mask = selected_batch["attention_mask"].to(
+                    model_engine.device, non_blocking=True
+                )
+                labels = selected_batch["labels"].to(
+                    model_engine.device, non_blocking=True
+                )
+                model_engine.zero_grad(set_to_none=True)
 
         # Memory profiling on first step
         mem_before = 0
@@ -399,6 +421,10 @@ def train_epoch(
         with profiler.phase("optim_step") if profiler is not None else _null_ctx():
             model_engine.step()
 
+        # OPUS: refresh preconditioner with updated optimizer state
+        if opus_selector is not None:
+            opus_selector.refresh_preconditioner()
+
         if i == 0:
             mem_after_step = torch.cuda.memory_allocated(model_engine.device) / 1e9
             print_rank_0(f"[MEMORY] After backward & step: {mem_after_step:.2f}GB")
@@ -557,53 +583,53 @@ def train_epoch(
                         )
                 print_rank_0(msg)
                 if metrics_jsonl_path is not None:
-                    _append_jsonl(
-                        metrics_jsonl_path,
-                        {
-                            "phase": "train",
-                            "epoch": epoch,
-                            "step": i,
-                            "global_step": global_step,
-                            "loss": float(loss.item()),
-                            "loss_ntp": (
-                                None
-                                if loss_ntp_value is None
-                                else float(loss_ntp_value)
-                            ),
-                            "loss2": (
-                                None
-                                if loss_mtp_value is None
-                                else float(loss_mtp_value)
-                            ),
-                            "r_loss": (
-                                None
-                                if loss_aux_value is None
-                                else float(loss_aux_value)
-                            ),
-                            "lr": (
-                                None if learning_rate is None else float(learning_rate)
-                            ),
-                            "dt_ms": float(step_dt_ms),
-                            "tokens_per_sec": float(tokens_per_sec),
-                            "tokens": int(tokens),
-                            "gpu_util": None if gpu_util is None else float(gpu_util),
-                            "gpu_mem_used_gb": (
-                                None if gpu_mem_used is None else float(gpu_mem_used)
-                            ),
-                            "cpu_util": None if cpu_util is None else float(cpu_util),
-                            "cpu_mem_used_gb": (
-                                None if cpu_mem_used is None else float(cpu_mem_used)
-                            ),
-                            "gsa_leak_fraction": (
-                                None if gsa_leak_frac is None else float(gsa_leak_frac)
-                            ),
-                            "gsa_leak_attempt_fraction": (
-                                None
-                                if gsa_leak_attempt_frac is None
-                                else float(gsa_leak_attempt_frac)
-                            ),
-                        },
-                    )
+                    metrics = {
+                        "phase": "train",
+                        "epoch": epoch,
+                        "step": i,
+                        "global_step": global_step,
+                        "loss": float(loss.item()),
+                        "loss_ntp": (
+                            None
+                            if loss_ntp_value is None
+                            else float(loss_ntp_value)
+                        ),
+                        "loss2": (
+                            None
+                            if loss_mtp_value is None
+                            else float(loss_mtp_value)
+                        ),
+                        "r_loss": (
+                            None
+                            if loss_aux_value is None
+                            else float(loss_aux_value)
+                        ),
+                        "lr": (
+                            None if learning_rate is None else float(learning_rate)
+                        ),
+                        "dt_ms": float(step_dt_ms),
+                        "tokens_per_sec": float(tokens_per_sec),
+                        "tokens": int(tokens),
+                        "gpu_util": None if gpu_util is None else float(gpu_util),
+                        "gpu_mem_used_gb": (
+                            None if gpu_mem_used is None else float(gpu_mem_used)
+                        ),
+                        "cpu_util": None if cpu_util is None else float(cpu_util),
+                        "cpu_mem_used_gb": (
+                            None if cpu_mem_used is None else float(cpu_mem_used)
+                        ),
+                        "gsa_leak_fraction": (
+                            None if gsa_leak_frac is None else float(gsa_leak_frac)
+                        ),
+                        "gsa_leak_attempt_fraction": (
+                            None
+                            if gsa_leak_attempt_frac is None
+                            else float(gsa_leak_attempt_frac)
+                        ),
+                    }
+                    if opus_metrics is not None:
+                        metrics.update(opus_metrics)
+                    _append_jsonl(metrics_jsonl_path, metrics)
 
                 # Print full GPU table (all devices) when enabled and available
                 if enable_system_metrics and is_main_process():
