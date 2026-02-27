@@ -35,3 +35,8 @@ packages = ["curriculum_tags"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v"
+
+[tool.uv.workspace]
+members = [
+    "data_explorer",
+]

@@ -1,16 +1,25 @@
 # T2 Curriculum Pipeline — Version History
 
 All version history for the band assignment pipeline, consolidated from inline docstrings.
-For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 architectural comparison see `pipeline_evolution.md`.
+For methodology details see `band_assignment_methodology.md`. For the PatternRefinement r5.0 → WeakSignals r7.1 architectural comparison see `pipeline_evolution.md`.
+
+Version naming convention: `<PhaseName> r<major>.<minor>`
+
+| Revision | Name | Infrastructure |
+|----------|------|---------------|
+| r7.1 | WeakSignals | EMR Serverless (current) |
+| r5.0 | PatternRefinement | AWS Glue |
+| r4.0 | ProbabilisticBanding | AWS Glue |
+| r2.1–r2.8 | ProgressiveFilter | AWS Glue |
 
 ---
 
-## v7.1 — Fast EMR Serverless (Production, Current)
+## WeakSignals r7.1 — EMR Serverless (Production, Current)
 
 **Script:** `pipeline/jobs/main_job.py` (current)
 **Infrastructure:** EMR Serverless (Spark standalone)
 
-**What changed from V5:**
+**What changed from PatternRefinement r5.0:**
 - Signal extraction: 20+ `regexp_count()` on full text → 61 keyword `contains()` on adaptive text sample
 - Character metrics: `regexp_replace()` → `F.translate()` (single O(n) pass, no backtracking)
 - Difficulty: 7 components (Flesch + metadata 70% override) → 4 components (vocab, length, structure, specialty)
@@ -27,12 +36,12 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V5.0 — Glue Regex-Heavy Baseline (Reference)
+## PatternRefinement r5.0 — Glue Baseline (Reference)
 
-**Script:** `pipeline/jobs/main_job.py` (V5 commit), `reference/v5_glue_metrics_calculator.py`
+**Script:** `pipeline/jobs/main_job.py` (r5.0 commit), `glue_jobs/claude_reviewed/v1_t2_metrics_calculator_v5.py`
 **Infrastructure:** AWS Glue, G.2X workers × 20, FLEX execution
 
-**Key additions over V4:**
+**Key additions over ProbabilisticBanding r4.0:**
 - Improved 9 overly broad patterns (CODE_PATTERN, MATH_PATTERN, AGENTIC_PATTERN, COT_PATTERN, REASONING_PATTERN, TABLE_PATTERN, CODE_COMMENT_PATTERN, QUESTION_PATTERN, symbol_count)
 - Removed 12 ineffective metrics (see below)
 - Removed all Stage 3 rejections (60%+ false positive rate on valid data)
@@ -63,9 +72,9 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V4.0 — Probabilistic Banding (MoE-Friendly)
+## ProbabilisticBanding r4.0 — First Full-Scale Spark Job
 
-**Script:** `pipeline/jobs/main_job.py` (V4 commit), source: `glue_jobs/notes/failing_job.py`
+**Script:** `pipeline/jobs/main_job.py` (r4.0 commit), source: `glue_jobs/notes/failing_job.py`
 **Infrastructure:** AWS Glue, G.2X workers × 20, FLEX execution
 
 **Philosophy shift:** FROM deterministic band labels TO soft probability distributions.
@@ -93,7 +102,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.8 — Training-Optimized Thresholds
+## ProgressiveFilter r2.8 — Training-Optimized Thresholds
 
 **Philosophy shift:** FROM "keep only high quality" TO "reject only extreme noise."
 - Comprehensive threshold analysis based on Dolma/Sangraha dataset characteristics
@@ -117,7 +126,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.7 — Book-Friendly Thresholds
+## ProgressiveFilter r2.7 — Book-Friendly Thresholds
 
 - Fixed excessive rejections of book content: 1610 out of 1738 books were being rejected
 - `whitespace_ratio`: 0.60 → 0.75 (books have chapter breaks and structured layout)
@@ -127,7 +136,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.6 — S3 Write Fix for FLEX
+## ProgressiveFilter r2.6 — S3 Write Fix for FLEX
 
 - Fixed `UNCLASSIFIED_ERROR: Failed to delete key intermediate data`
 - Changed write mode from `overwrite` to unique timestamped paths
@@ -136,7 +145,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.5 — Spark SQL Syntax Fix
+## ProgressiveFilter r2.5 — Spark SQL Syntax Fix
 
 - Fixed `INVALID_PARAMETER_VALUE.REGEX_GROUP_INDEX` error in `regexp_extract_all`
 - Added explicit group index parameter (`idx=0`) to all 23 `regexp_extract_all` calls
@@ -145,7 +154,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.4 — Glue FLEX Compatibility
+## ProgressiveFilter r2.4 — Glue FLEX Compatibility
 
 - Removed all forbidden `spark.conf.set()` calls for FLEX execution
 - Moved `spark.network.timeout` and `spark.sql.broadcastTimeout` to CLI `--conf`
@@ -153,7 +162,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.3 — 4TB Production Optimization
+## ProgressiveFilter r2.3 — 4TB Production Optimization
 
 - Fixed `CANNOT_MODIFY_CONFIG` error (removed forbidden `spark.memory.*` configs)
 - Increased shuffle partitions: 2000 → 8000 for 4TB scale (~512MB per partition)
@@ -164,7 +173,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.2 — Regex Optimization
+## ProgressiveFilter r2.2 — Regex Optimization
 
 - Batch regex processing: reduced string traversals from 60+ to ~10 per document
 - Stage 2: single-pass pattern extraction using `regexp_extract_all` (4 scans vs 15+)
@@ -173,7 +182,7 @@ For methodology details see `band_assignment_methodology.md`. For the V5→v7.1 
 
 ---
 
-## V2.1 — Initial Working Version
+## ProgressiveFilter r2.1 — Initial Working Version
 
 - Added `fertility_estimate`, `rare_word_ratio_estimate`, `mtld_estimate`, `information_density_estimate`
 - Added modality detection: `has_code`, `has_math`, `has_agentic`, `primary_modality`

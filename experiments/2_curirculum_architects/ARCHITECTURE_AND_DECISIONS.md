@@ -14,20 +14,18 @@ If you are here to understand the final system and reproduce results, these are 
 | What | File | Why |
 |------|------|-----|
 | Canonical curriculum policy | `curriculum.yaml` | Defines B0–B5 bands, growth schedule, domain policy, guardrails |
-| Main band assignment script | `final_scripts/t2_fast_emr_serverless_no_stats.py` | Runs on EMR Serverless, covers all large-scale datasets |
-| Band assignment methodology | `final_scripts/T2_FINAL_BAND_ASSIGNMENT_METHODOLOGY.md` | Explains every formula, threshold, and design choice |
+| Main band assignment script | `pipeline/jobs/main_job.py` | Runs on EMR Serverless, covers all large-scale datasets |
+| Band assignment methodology | `docs/band_assignment_methodology.md` | Explains every formula, threshold, and design choice |
 
 **To run the pipeline end-to-end:**
 
 ```bash
-# Submit to EMR Serverless (see final_scripts/README.md for full config)
+# Submit to EMR Serverless (see pipeline/README.md for full config)
 aws emr-serverless start-job-run \
   --application-id <APP_ID> \
   --execution-role-arn <ROLE_ARN> \
-  --job-driver '{"sparkSubmit": {"entryPoint": "s3://.../t2_fast_emr_serverless_no_stats.py", ...}}'
+  --job-driver '{"sparkSubmit": {"entryPoint": "s3://.../main_job.py", ...}}'
 ```
-
-**Cost estimate:** ~$150 for 4TB. Runtime: 8–16 hours.
 
 ---
 
@@ -126,9 +124,9 @@ The first approach was a Python-based, plugin-driven extractor. The core design 
 
 ---
 
-### Phase 2: Curriculum Extractor v2.0 (Reference Implementation)
+### Phase 2: Curriculum Extractor (Reference Implementation)
 
-**Location:** `curriculum_extractor/`
+**Location:** `src/curriculum_extractor/`
 **Status:** Production reference, not the Spark job
 
 This was a clean-room rewrite of the tag system, producing a modular library. The `RecordExtractor` class orchestrated 8 metric plugins via a frozen dataclass interface. The library is used for single-record analysis and testing.
@@ -136,31 +134,36 @@ This was a clean-room rewrite of the tag system, producing a modular library. Th
 Key improvements over Phase 1:
 - All plugin outputs are frozen dataclasses (no mutation possible downstream).
 - The L0 → L1 → L2 execution model was hardened: L0 = language + length filters, L1 = quality gates, L2 = content classification.
-- Band assignment moved from hard thresholds to probability distributions (a preview of the probabilistic framework adopted in V5).
+- Band assignment moved from hard thresholds to probability distributions (a preview of the probabilistic framework adopted in PatternRefinement r5.0).
 
 This library is not the production Spark job — it was the design laboratory where the probabilistic banding approach was worked out. The final Spark scripts implement the same logic, rewritten as native Spark operations.
 
 ---
 
-### Phase 3: V5 Glue — The Expensive Baseline
+### Phase 3: ProbabilisticBanding r4.0 — The First Full-Scale Spark Job
 
-**Location:** `glue_jobs/claude_reviewed/v1_t2_metrics_calculator_v5.py`
+**Location:** `pipeline/jobs/main_job.py` (r4.0 commit), `glue_jobs/notes/failing_job.py`
 **Infrastructure:** AWS Glue, G.2X workers × 20, FLEX execution
-**Cost:** ~$15,000 per 4TB run
-**Runtime:** 48–72 hours
 
-V5 was the first full-scale Spark implementation. It processed every document with 20+ regex patterns applied to the **full text** of each record.
-
-#### What V5 Did Right
-
-The **probabilistic banding framework** was introduced in V5 and survived unchanged into production:
+This was the first full-scale Spark implementation and introduced the **probabilistic banding framework** that survives into production unchanged:
 - A triangular weight function peaks at each band's centroid and falls to zero at distance ±0.20.
 - Content-based nudges shift band weights based on detected signals (code pushes toward B3, agentic toward B5).
 - Weights are normalized to probabilities; the final assignment is the **lowest band whose probability exceeds 15%**.
 
 This "downgrade on uncertainty" principle is deliberate: when a document sits between two bands, assign the lower one. A model trained on content slightly below its current capacity is safer than one overwhelmed by content it cannot absorb.
 
-The V5 changelog also removed 12 metrics that were found to have near-zero signal or caused false positives on valid training data:
+**What went wrong:** Several regex patterns caused catastrophic backtracking on specific document shapes, stalling executors. The run was unstable and did not complete on the full corpus. This failure directly motivated the metric audit in r5.0.
+
+---
+
+### Phase 4: PatternRefinement r5.0 — Glue Baseline
+
+**Location:** `pipeline/jobs/main_job.py` (r5.0 commit), `glue_jobs/claude_reviewed/v1_t2_metrics_calculator_v5.py`
+**Infrastructure:** AWS Glue, G.2X workers × 20, FLEX execution
+
+PatternRefinement r5.0 was the first stable full-scale run. Its primary contribution was a rigorous audit that removed 12 metrics and Stage 3 rejections:
+
+#### Metrics Removed in r5.0
 
 | Metric Removed | Why |
 |---------------|-----|
@@ -173,47 +176,42 @@ The V5 changelog also removed 12 metrics that were found to have near-zero signa
 | `num_numeric_tokens` | **Inverse** correlation with spam (code/science have more numbers) |
 | `dialogue_turn_count`, `ellipsis_count`, `citation_count`, `step_indicator_count`, `list_marker_count` | Zero usage in any rejection or band rule |
 
-**Stage 3 rejections were removed entirely** in V5. The previous Stage 3 filtered ~5% of data, but manual review showed a 60%+ false positive rate — valid training data was being discarded because readability thresholds designed for prose flagged code, structured content, and non-English scripts.
+**Stage 3 rejections were removed entirely** in r5.0. The previous Stage 3 filtered ~5% of data, but manual review showed a 60%+ false positive rate — valid training data was being discarded because readability thresholds designed for prose flagged code, structured content, and non-English scripts.
 
-#### What Went Wrong with V5
+#### What Went Wrong with PatternRefinement r5.0
 
-1. **Cost**: 20+ `regexp_count()` calls scanning the full text of every row in a 4TB dataset is expensive. The Glue G.2X cluster was CPU-bound most of the run.
-2. **Catastrophic backtracking**: Several patterns with `.*?` and alternation caused exponential regex engine backtracking on specific document shapes, stalling executors.
-3. **Regex escaping in Spark SQL**: Patterns passed through `F.expr()` required double-escaping (`\\\\`), which introduced silent bugs — some columns produced all-zero match counts for several runs before being caught.
-4. **Metadata override at 70% weight**: When source metadata contained difficulty labels ("hard", "grade: 12"), V5 blended them at 70% weight. This made band assignments opaque — the assigned band was dominated by upstream metadata quality, not by the text itself.
-
-**Cost summary for V5:** ~$15,000 per run. At the team's AWS budget, this was not sustainable for iterative development or for processing new datasets as they arrived.
+1. **Regex scaling:** 20+ `regexp_count()` calls scanning the full text of every row in a 4TB dataset is expensive. The Glue G.2X cluster was CPU-bound most of the run.
+2. **Catastrophic backtracking:** Several patterns with `.*?` and alternation caused exponential regex engine backtracking on specific document shapes, stalling executors.
+3. **Regex escaping in Spark SQL:** Patterns passed through `F.expr()` required double-escaping (`\\\\`), which introduced silent bugs — some columns produced all-zero match counts for several runs before being caught.
+4. **Metadata override at 70% weight:** When source metadata contained difficulty labels ("hard", "grade: 12"), r5.0 blended them at 70% weight. This made band assignments opaque — the assigned band was dominated by upstream metadata quality, not by the text itself.
 
 ---
 
-### Phase 4: Design Pivot — Weak Signals Approximation
+### Phase 5: Design Pivot — Weak Signals Approximation
 
-**Location:** `data_processing/design_principles.md`
+**Location:** `docs/design_principles.md`
 
-Before writing new code, the team stepped back and asked what V5 was actually doing. The answer:
+Before writing new code, the team stepped back and asked what PatternRefinement r5.0 was actually doing. The answer:
 
-> V5 is using 20+ regex patterns to detect **presence** of code/math/reasoning content, and then combining these into composite scores. But detecting presence does not require regex. A document containing `"def "`, `"import "`, and `"class "` is code — no Python syntax parsing required.
+> r5.0 is using 20+ regex patterns to detect **presence** of code/math/reasoning content, and then combining these into composite scores. But detecting presence does not require regex. A document containing `"def "`, `"import "`, and `"class "` is code — no Python syntax parsing required.
 
-The key insight is in `data_processing/design_principles.md`:
+The key insight is in `docs/design_principles.md`:
 
 > Instead of detecting code with regex, use character diversity, punctuation ratio, avg word length. Instead of complex patterns: count "def", "function", "class", "import", "return". The band assignment uses **composite scores** (sums of many weak signals), so individual false positives wash out.
 
 This is the **weak signals approximation**: replace individual strong (expensive) signals with many cheap (imprecise) signals whose aggregate is just as discriminative. The probabilistic banding framework was already designed to handle noisy inputs — the Gaussian weights and conservative assignment absorb per-signal errors.
 
-**Empirical validation from `scripts/exploration/data_analysis/analysis_summary_report_01.md`** (333,981 samples):
+**Empirical validation from `docs/analysis/analysis_summary_report_01.md`** (333,981 samples):
 - CoT density was extremely low (average 0.0039), confirming that **binary presence flags** (`has_cot`) carry the same information as density ratios.
 - Agentic density similarly low (average 0.0040). The 386 agentic samples (0.11%) were correctly floor-capped to B5 in all cases.
 - T5-vocabulary content (rare/technical tokens) was 11× more likely to reach advanced bands — confirming that vocabulary proxies (like `unique_token_ratio`) are meaningful band signals.
 
 ---
 
-### Phase 5: v7.1 Fast EMR Serverless (Production)
+### Phase 6: WeakSignals r7.1 — Production (Current)
 
-**Location:** `new_datasets/t2_fast_emr_serverless_no_stats.py` → `final_scripts/t2_fast_emr_serverless_no_stats.py`
+**Location:** `pipeline/jobs/main_job.py` (current)
 **Infrastructure:** EMR Serverless (Spark standalone)
-**Cost:** ~$100–200 per 4TB run
-**Runtime:** 8–16 hours
-**Cost reduction:** 75–100× vs V5
 
 #### What Changed
 
@@ -222,8 +220,8 @@ This is the **weak signals approximation**: replace individual strong (expensive
 Every character-level metric moved from `regexp_replace()` to `F.translate()` — a single O(n) pass with no regex engine, no backtracking:
 
 ```python
-# V5: regexp_replace(text, r'[^a-zA-Z0-9]', '')  →  expensive
-# v7.1: translate(text, ".,;:()[]{}!?", "")       →  O(n), no backtracking
+# r5.0: regexp_replace(text, r'[^a-zA-Z0-9]', '')  →  expensive
+# r7.1: translate(text, ".,;:()[]{}!?", "")         →  O(n), no backtracking
 ```
 
 Every modality signal moved from regex to `F.lower(col).contains(keyword)` over curated keyword lists:
@@ -240,7 +238,7 @@ Every modality signal moved from regex to `F.lower(col).contains(keyword)` over 
 
 **Adaptive sampling**
 
-Instead of analyzing the full text of every document, v7.1 caps the analysis window:
+Instead of analyzing the full text of every document, r7.1 caps the analysis window:
 
 | Document Size | Sample Size |
 |---------------|-------------|
@@ -274,7 +272,7 @@ composite_scores → difficulty_score → DROP component columns
 
 #### What Stayed the Same
 
-The probabilistic banding algorithm was **not changed**. The V5 algorithm was the right design; the problem was the signals feeding into it. The same triangular weights, content nudges, normalization, and lowest-credible-band selection run identically in v7.1.
+The probabilistic banding algorithm was **not changed**. The r5.0 algorithm was the right design; the problem was the signals feeding into it. The same triangular weights, content nudges, normalization, and lowest-credible-band selection run identically in r7.1.
 
 The output schema was also unchanged, so downstream T3 jobs required no modifications.
 
@@ -282,19 +280,40 @@ The output schema was also unchanged, so downstream T3 jobs required no modifica
 
 ### Infrastructure Migration: Glue → EMR Serverless
 
-V5 ran on AWS Glue (managed Spark). The move to EMR Serverless was driven by cost:
-- Glue FLEX execution with G.2X × 20 workers: ~$15,000 per 4TB run
-- EMR Serverless: ~$150 per 4TB run (same Spark logic, different infrastructure)
+PatternRefinement r5.0 ran on AWS Glue (managed Spark). The move to EMR Serverless was driven by performance control and resource efficiency — EMR Serverless gives direct control over executor memory and parallelism without Glue's overhead pricing.
 
-The migration required rewriting the job submission mechanism (from Glue job configs to EMR Serverless job runs) but the PySpark code itself was identical. EMR Serverless gave direct control over executor memory and parallelism without Glue's overhead pricing.
+The migration required rewriting the job submission mechanism (from Glue job configs to EMR Serverless job runs) but the PySpark code itself was identical.
 
 The intermediary migration scripts (`glue_jobs/gluetoemr.py`, `emr_serverless/gluetoemr.py`) were transitional tools used once during migration.
 
-**A note on the threshold tuning in V2.7** (documented in `glue_jobs/notes/what we did.md`): The whitespace ratio threshold was raised from 0.60 to 0.75, and the non-printable ratio from 0.01 to 0.03, specifically because book-format data (with chapter breaks and Unicode formatting) was being over-rejected. This illustrates the iterative nature of the rejection policy work — every threshold was arrived at by observing false rejections on real data, not by a priori reasoning.
+**A note on the threshold tuning in r2.7** (documented in `glue_jobs/notes/what we did.md`): The whitespace ratio threshold was raised from 0.60 to 0.75, and the non-printable ratio from 0.01 to 0.03, specifically because book-format data (with chapter breaks and Unicode formatting) was being over-rejected. This illustrates the iterative nature of the rejection policy work — every threshold was arrived at by observing false rejections on real data, not by a priori reasoning.
 
 ---
 
-## 4. Production Architecture: Three Jobs
+## 4. Parallel Execution Design
+
+The three production jobs were designed from the start to run in parallel across datasets. This is not just a convenience — it is how the pipeline was validated and how production runs were executed.
+
+### Development Strategy
+
+Initial experimentation was done on **smaller dataset samples** (a few hundred thousand records per source) to validate the banding logic without incurring the cost of full-corpus runs. Each dataset was processed independently through the pipeline, and band distributions were inspected before moving to full scale.
+
+### Production Execution
+
+On EMR Serverless, the final production runs were executed **in parallel — one job run per dataset**. Each dataset was submitted as a separate EMR Serverless job run with its own `--JOB_NAME` argument and output path under `OUTPUT_BASE`. All three jobs (main, curated datasets, student data) ran concurrently, each writing to its own `assigned_band=Bx/` partition prefix.
+
+This means:
+- The three job scripts are independent — they share no state.
+- Multiple datasets within the main job were also run in parallel (one EMR Serverless job per large source like RedPajama, FineWeb, Dolma).
+- The output schema is identical across all jobs, so the per-source outputs can be merged by simply pointing T3's reader at the same `OUTPUT_BASE` prefix.
+
+### Why Parallel Execution Matters for the Band Distribution
+
+Because each dataset ran independently and in parallel, the final corpus band distribution is a sum of per-dataset distributions. The source clamping in `pipeline/jobs/curated_datasets_job.py` and the B0–B2 ceiling in `pipeline/jobs/student_data_job.py` were designed with this in mind — the aggregate B0–B5 split across all sources is controlled by (a) per-dataset clamping and (b) the sampling weights in `curriculum.yaml`, not by any cross-dataset coordination at processing time.
+
+---
+
+## 5. Production Architecture: Three Jobs
 
 The final production system is three independent EMR Serverless jobs. They share the same probabilistic banding framework but differ in what data they cover and how they handle source-specific constraints.
 
@@ -304,10 +323,10 @@ T1 Output (Parquet on S3)
     ┌────┴─────────────────────┐
     │                          │                          │
  Main Job               Curated Datasets        ERAv4 Student Data
- t2_fast_emr_...        t2_curated_...          t2_erav4_...
- RedPajama, FineWeb,    HuggingFace SFT/         Student Q&A drills
- Dolma, arXiv, etc.     Math/Code datasets       Samvaad conversation
- Full B0–B5 range       Source-clamped           B0–B2 only
+ main_job.py            curated_datasets_job.py  student_data_job.py
+ RedPajama, FineWeb,    HuggingFace SFT/          Student Q&A drills
+ Dolma, arXiv, etc.     Math/Code datasets        Samvaad conversation
+ Full B0–B5 range       Source-clamped            B0–B2 only
          │                    │                          │
          └────────────────────┴──────────────────────────┘
                               │
@@ -317,11 +336,11 @@ T1 Output (Parquet on S3)
                          T3 Training Jobs
 ```
 
-### Job 1: Main Job (t2_fast_emr_serverless_no_stats.py)
+### Job 1: Main Job (`pipeline/jobs/main_job.py`)
 
 Covers the large-scale web/book/code corpus. Full B0–B5 band range. Standard 4-component difficulty formula. No source clamping — the probabilistic algorithm assigns bands freely based on text content.
 
-### Job 2: Curated Datasets (t2_curated_datasets_curriculum.py)
+### Job 2: Curated Datasets (`pipeline/jobs/curated_datasets_job.py`)
 
 Covers 17 curated instruction, preference, math, and code datasets from HuggingFace. Key differences:
 - Specialty weight in difficulty formula raised to 40% (these datasets are denser with technical signals).
@@ -340,7 +359,7 @@ Clamp ranges (selected):
 | nemotron_math | B4 | B5 | Expert math |
 | teichai / high_reasoning | B4 | B5 | High-reasoning traces |
 
-### Job 3: ERAv4 Student Data (t2_erav4_data_curriculum.py)
+### Job 3: ERAv4 Student Data (`pipeline/jobs/student_data_job.py`)
 
 Covers student-generated Q&A drills and Samvaad conversation data. Completely different difficulty formula (5 components: vocabulary, length, Q&A density, language, conversation markers). Code/math/reasoning/agentic scores are hardcoded to 0 — this data doesn't contain those modalities, so the generic signals would be noise. Clamped to B0–B2 with relaxed rejection filters (the data is pre-curated, so only extreme cases like `char_length < 5` are rejected).
 
@@ -361,7 +380,7 @@ Output is partitioned by `assigned_band` as Parquet with zstd compression.
 
 ---
 
-## 5. Quality Rejection Policy
+## 6. Quality Rejection Policy
 
 Rejection is intentionally permissive. The design target is **95–98% pass-through** — only extreme garbage is rejected, because curriculum learning handles difficulty progression better than hard filtering.
 
@@ -387,9 +406,9 @@ Stage 3 was removed. The previous Stage 3 had a 60%+ false positive rate — it 
 
 ---
 
-## 6. The Probabilistic Banding Algorithm (Full Detail)
+## 7. The Probabilistic Banding Algorithm (Full Detail)
 
-This is the core mechanism, identical across all three jobs. Reference implementation in `final_scripts/T2_FINAL_BAND_ASSIGNMENT_METHODOLOGY.md`.
+This is the core mechanism, identical across all three jobs. Full reference in `docs/band_assignment_methodology.md`.
 
 ### Step 1: Triangular Base Weights
 
@@ -443,11 +462,11 @@ assigned_band = lowest b where band_p_Bi ≥ 0.15
 
 ---
 
-## 7. Validation and Evidence
+## 8. Validation and Evidence
 
 ### Band Distribution on Sample Data
 
-From `scripts/exploration/data_analysis/analysis_summary_report_01.md` (333,981 samples, Feb 2026):
+From `docs/analysis/analysis_summary_report_01.md` (333,981 samples, Feb 2026):
 
 | Band | Count | % | Notes |
 |------|-------|---|-------|
@@ -462,7 +481,7 @@ Key finding: T5-vocabulary content (rare/technical tokens) is **11× more likely
 
 ### The NCERT Case Study: Why Band Definitions Needed Iteration
 
-From `scripts/exploration/data_analysis/ncert_band_assignment_analysis_01.md`:
+From `docs/analysis/ncert_band_assignment_analysis_01.md`:
 
 NCERT educational content initially had 90% of records classified as B0 (Nursery). The root cause: technical educational text uses **simpler sentence structures** (short declarative sentences) but **specialized vocabulary**. The naive difficulty formula assigned it B0 because it looked linguistically simple.
 
@@ -482,7 +501,7 @@ Running on EMR Serverless: ~2,200–2,500 records/second. For a 4TB corpus with 
 
 ---
 
-## 8. Upstream and Downstream
+## 9. Upstream and Downstream
 
 ### Upstream: Team 1 (Data Engineering)
 
@@ -521,7 +540,7 @@ The agentic trace format (Team 17) is similarly in `format_pending` state — ag
 
 ---
 
-## 9. Running the Pipeline
+## 10. Running the Pipeline
 
 ### Prerequisites
 
@@ -536,11 +555,11 @@ Each script reads the following arguments:
 ```bash
 --INPUT_BASE        s3://your-bucket/t1-output/
 --OUTPUT_BASE       s3://your-bucket/t2-output/
---JOB_NAME          t2_main_job_v7
+--JOB_NAME          t2_main_job_r7
 --LOG_LEVEL         INFO
 ```
 
-See `final_scripts/README.md` for the full EMR Serverless job configuration (executor memory, core count, Spark settings).
+See `pipeline/README.md` for the full EMR Serverless job configuration (executor memory, core count, Spark settings).
 
 ### Expected Outputs
 
@@ -576,7 +595,7 @@ The only non-deterministic element is the Spark shuffle order (which partition a
 
 ---
 
-## 10. Known Limitations and Future Work
+## 11. Known Limitations and Future Work
 
 ### Limitations
 
@@ -607,7 +626,7 @@ Per the PR checklist, structured JSON logging and log archiving were not impleme
 
 ---
 
-## 11. File Reference
+## 12. File Reference
 
 ### Production Pipeline
 
@@ -631,9 +650,9 @@ Per the PR checklist, structured JSON logging and log archiving were not impleme
 
 | File | Purpose |
 |------|---------|
-| `docs/CHANGELOG.md` | Complete version history V2.1 → v7.1 |
+| `docs/CHANGELOG.md` | Complete version history r2.1 → r7.1 |
 | `docs/band_assignment_methodology.md` | Full methodology with all formulas and worked example |
-| `docs/pipeline_evolution.md` | V5 vs v7.1 side-by-side comparison and rationale |
+| `docs/pipeline_evolution.md` | PatternRefinement r5.0 vs WeakSignals r7.1 side-by-side comparison |
 | `docs/band_definitions.md` | Canonical B0–B5 definitions |
 | `docs/design_principles.md` | Core design principles |
 
@@ -641,9 +660,11 @@ Per the PR checklist, structured JSON logging and log archiving were not impleme
 
 | File | Purpose |
 |------|---------|
-| `analysis/reports/analysis_summary_report_01.md` | Band distribution on 333K samples |
-| `analysis/reports/ncert_band_assignment_analysis_01.md` | NCERT domain precedence case study |
-| `analysis/reports/band_modality_dist_analysis_01.md` | Modality distribution findings |
+| `docs/analysis/analysis_summary_report_01.md` | Band distribution on 333K samples |
+| `docs/analysis/ncert_band_assignment_analysis_01.md` | NCERT domain precedence case study |
+| `docs/analysis/band_modality_dist_analysis_01.md` | Modality distribution findings |
+| `docs/analysis/analysis_summary_report_02.md` | Tokenizer level vs difficulty band analysis |
+| `docs/analysis/modality_distribution_analysis_01.md` | Modality distribution vs difficulty bands |
 
 ### Reference Libraries
 
@@ -670,3 +691,5 @@ These principles appear repeatedly across the codebase and are worth making expl
 **Source-aware clamping for curated data.** When you know a dataset's difficulty range from prior knowledge, use it. The generic formula is designed for uncurated web text; it will mis-rate edge cases in domain-specific datasets.
 
 **Stable output schema.** Downstream teams (T3) should not need to update when T2 changes its internal processing. The output schema is a public contract; internal implementation is private.
+
+**Parallel execution by design.** Each dataset is processed independently, enabling parallel EMR Serverless job runs. The aggregate corpus band distribution is controlled through per-dataset clamping and the sampling weights in `curriculum.yaml`, not by cross-dataset coordination.

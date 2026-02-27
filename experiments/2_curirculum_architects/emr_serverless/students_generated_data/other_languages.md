@@ -1,1 +1,0 @@
-Team is actively working on generating data for other languages. We are currently focusing on Hindi, Telugu, Kannada, Assamese, Marathi, Punjabi.
