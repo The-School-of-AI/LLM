@@ -80,7 +80,7 @@ MAX_SWAPPINESS="${MAX_SWAPPINESS:-1}"
 MIN_PYTHON_MAJOR="${MIN_PYTHON_MAJOR:-3}"
 MIN_PYTHON_MINOR="${MIN_PYTHON_MINOR:-10}"
 S3_BUCKET="${S3_BUCKET:-t2-datacurriculum-353}"
-S3_PREFIX="${S3_PREFIX:-processed_dataset/curriculum_pyspark_output/source=C4/}"
+S3_PREFIX="${S3_PREFIX:-processed_dataset/curriculum_pyspark_output/source=C4/bands/band=B0/}"
 S3_TEST_COUNT="${S3_TEST_COUNT:-50}"
 MIN_S3_SPEED_MBS="${MIN_S3_SPEED_MBS:-500}"
 
