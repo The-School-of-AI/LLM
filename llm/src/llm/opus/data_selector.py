@@ -111,7 +111,10 @@ class OpusDataSelector:
                     dtype=torch.bfloat16,
                 ):
                     h_score, _, _ = self.model(
-                        combined_x, return_hidden=True, return_memory=False
+                        combined_x,
+                        next_token_ids=None,  # Explicitly disable MTP for OPUS scoring (golden + raw)
+                        return_hidden=True,
+                        return_memory=False,
                     )
 
                 lm_weight = self.model.lm_head.weight
