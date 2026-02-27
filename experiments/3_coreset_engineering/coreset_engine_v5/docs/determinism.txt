@@ -1,0 +1,65 @@
+Determinism status (batch creation / chunk→batch association)
+
+For JSONL streaming, batch membership is deterministic given identical input bytes and the same --batch-size, --max-rows, --shard-id/--num-shards. The code path is:
+
+File discovery is sorted (BatchProcessor.list_input_files() sorts glob results and S3 listings).
+File-level sharding is deterministic (xxhash of path in BatchProcessor.shard_files()).
+Within a file, rows are streamed in line order (stream_chunks_from_jsonl()), and row-level sharding (when a single huge file is used) is deterministic via xxhash.xxh64() of the chunk_id (or uid/guid/id fallback).
+Batches are just fixed-size consecutive groups of emitted rows (BatchProcessor.batch_iterator()), so repeated runs produce the same chunk_id sequence per batch.
+Important nuance: batch boundaries are order-based, not hash-bucket-based. If you insert/delete a record earlier in the stream, later chunks will shift to different batch indices. Your requirement (“same dataset → same batches unless a chunk is removed”) holds for identical datasets; if a chunk is removed, shifting is expected.
+
+
+How to use
+
+Parquet determinism baseline + compare:
+
+Baseline: python [verify_batch_determinism.py](http://_vscodecontentref_/13) --input-path data/cdset --input-format parquet --batch-size 1000 --max-rows 5000 --out output/determinism/parquet_baseline.json
+Compare: python [verify_batch_determinism.py](http://_vscodecontentref_/14) --input-path data/cdset --input-format parquet --batch-size 1000 --max-rows 5000 --baseline output/determinism/parquet_baseline.json
+Stage-wise labeled report (same signatures, just duplicated under stage names):
+
+python [verify_batch_determinism.py](http://_vscodecontentref_/15) --input-path data/cdset --input-format auto --batch-size 1000 --max-rows 5000 --stages 1B 3B 8B 70B --out output/determinism/stage_wise.json --stage-report-md output/determinism/stage_wise.md
+Tests: python -m pytest -q (suite is green: 42 passed, 13 skipped)
+
+
+Added a determinism checker that compares coreset indices outputs across reruns.
+
+New tool: check_indices_determinism.py
+Takes --output-dirs dir1 dir2 ... (your rerun output folders like output_w_bandinferauto, output_wo_bandinference)
+Auto-detects coreset roots (<dir>/coresets or <dir>/output/coresets)
+Compares every indices file by relative path under stages:
+selected_indices_part_*.parquet/.jsonl, plus selected_indices.parquet/.jsonl/.csv
+Field-by-field checks: same file set, same columns, same row counts, and per-column value digests
+Optional --show-first-diff prints the first mismatching cell for small files
+Exit code 0 = deterministic, 2 = mismatch, 1 = error
+Example usage:
+
+python [check_indices_determinism.py](http://_vscodecontentref_/2) --output-dirs output_w_bandinferauto output_wo_bandinference
+python [check_indices_determinism.py](http://_vscodecontentref_/3) --output-dirs output_a output_b --stages 1B 3B --show-first-diff
+Validation:
+
+Added test: test_check_indices_determinism_tool.py
+Ran pytest -q tests/test_check_indices_determinism_tool.py → 2 passed
+If you paste the exact names/paths of your rerun folders, I can run the tool here against them and summarize any mismatching stage/part/columns.
+
+Implemented the stage-output verification you asked for by adding a --compare-outputs mode to verify_batch_determinism.py that compares two pipeline runs’ stage outputs (selected indices + manifests) stage-by-stage.
+
+New mode: --compare-outputs --outputs-a <runA/output_coreset_path> --outputs-b <runB/output_coreset_path>
+Compares per stage:
+selected_indices_part_* (or legacy selected_indices.*) by an order-independent chunk_id fingerprint + token sum
+manifest.json (stable subset of fields)
+manifest_shard*.json (unless --no-shard-manifests)
+Also fixed the test suite after your undo: updated the synthetic checkpoint/resume test domain back to a curriculum-allowed coarse domain (web) in tests/test_checkpoint_resume_equivalence.py, since domain normalization was removed earlier.
+
+How to run output comparison
+
+Compare two runs:
+python [verify_batch_determinism.py](http://_vscodecontentref_/5) --compare-outputs --outputs-a output/runA/coresets --outputs-b output/runB/coresets --out output/compare.json --outputs-report-md output/compare.md
+Limit to specific stages:
+... --stages 1B 3B 8B 70B
+Skip shard manifest comparison:
+... --no-shard-manifests
+Exit code: 0 if all stages match, 2 if any mismatch.
+
+python verify_batch_determinism.py --compare-outputs --outputs-a output1 --outputs-b output2 --out output/compare.json --outputs-report-md output/compare.md
+
+python check_indices_determinism.py --output-dirs output1 output2
