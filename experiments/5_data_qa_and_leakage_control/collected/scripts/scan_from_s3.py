@@ -123,6 +123,17 @@ def main() -> None:
         default="reports",
         help="Directory to write reports and run registry (default: reports)",
     )
+    parser.add_argument(
+        "--build-workers",
+        type=int,
+        default=None,
+        help="Worker threads for N-gram/MinHash index build (default: CPU count)",
+    )
+    parser.add_argument(
+        "--no-semantic",
+        action="store_true",
+        help="Disable semantic detector and run only N-gram + MinHash",
+    )
     args = parser.parse_args()
 
     if not args.s3_uri.lower().endswith(".txt"):
@@ -160,12 +171,15 @@ def main() -> None:
         print(f"  Parse gaps report:   {validation_report}")
     print()
 
-    scanner = ContaminationScanner(
-        {
-            "benchmarks_path": args.benchmarks_dir,
-            "reports_path": args.reports_dir,
-        }
-    )
+    scanner_config: dict[str, object] = {
+        "benchmarks_path": args.benchmarks_dir,
+        "reports_path": args.reports_dir,
+        "enable_semantic": not args.no_semantic,
+    }
+    if args.build_workers is not None:
+        scanner_config["build_workers"] = args.build_workers
+
+    scanner = ContaminationScanner(scanner_config)
     approved, _ = scanner.scan_records(
         records,
         args.team_name,

@@ -77,7 +77,7 @@ def build_scan_command(config: dict) -> list[str]:
     if missing:
         raise ValueError(f"Missing required fields in config.json: {', '.join(missing)}")
 
-    return [
+    cmd = [
         sys.executable,
         "scripts/scan_from_s3.py",
         str(config["s3_uri"]),
@@ -86,6 +86,11 @@ def build_scan_command(config: dict) -> list[str]:
         "--benchmarks-dir", str(config.get("benchmarks_dir", "benchmarks")),
         "--reports-dir", str(config.get("reports_dir", "reports")),
     ]
+    if config.get("build_workers") is not None:
+        cmd.extend(["--build-workers", str(config["build_workers"])])
+    if config.get("enable_semantic") is False:
+        cmd.append("--no-semantic")
+    return cmd
 
 
 def main() -> None:

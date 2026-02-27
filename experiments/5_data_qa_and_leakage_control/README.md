@@ -16,16 +16,25 @@ Use this exact flow:
 
 ```bash
 cd experiments/5_data_qa_and_leakage_control/collected
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/scan.py group4.jsonl "Team 4" "group4_batch_01"
+uv sync
+uv run python scripts/scan.py group4.jsonl "Team 4" "group4_batch_01"
 ```
+
+For S3 input, use:
+
+```bash
+cd experiments/5_data_qa_and_leakage_control/collected
+uv run python scripts/run.py
+```
+
+And in `collected/config.json`:
+- `"enable_semantic": true` for full 3-layer scan
+- `"enable_semantic": false` for N-gram + MinHash only
 
 If benchmarks are missing, run:
 
 ```bash
-python scripts/download_benchmarks.py
+uv run python scripts/download_benchmarks.py
 ```
 
 ---
@@ -213,14 +222,25 @@ collected/
 │   └── indicmteval_test.jsonl       # ~14,000 MT annotations (hi/ta/mr/ml/gu)
 │
 ├── scripts/                    # CLI tools
-│   ├── scan.py                 # 👈 MAIN ENTRY POINT
-│   └── download_benchmarks.py
+│   ├── run.py                  # S3 one-command runner (reads config.json)
+│   ├── scan_from_s3.py         # Direct S3 scanner entry point
+│   ├── scan.py                 # Local JSONL scanner entry point
+│   ├── scan_no_semantic.py     # Local JSONL scan (N-gram + MinHash only)
+│   ├── replay.py               # Replay metadata / rerun a past scan
+│   ├── download_benchmarks.py
+│   └── convert_txt.py
+│
+├── config.json                 # S3/team/batch settings for run.py
+├── aws.json                    # Optional AWS creds (gitignored)
+├── .cache/indexes/             # Auto-generated index caches (fingerprinted)
 │
 ├── reports/                    # Scan outputs (auto-generated)
 │   ├── *.json                  # Main reports
-│   └── *_CONTAMINATED_*.jsonl  # Lists of flagged samples
+│   ├── *_CONTAMINATED_*.jsonl  # Lists of flagged samples
+│   └── run_registry.jsonl      # Permanent run audit trail
 │
-├── requirements.txt            # Python dependencies
+├── pyproject.toml              # Project/dependency metadata
+├── uv.lock                     # Locked dependency resolution
 └── README.md                   # Local run instructions
 ```
 
@@ -283,17 +303,15 @@ Each layer only flags samples **not already caught** by a stricter layer above i
 ### Installation
 ```bash
 cd experiments/5_data_qa_and_leakage_control/collected
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uv sync
 ```
 
 ### Basic Usage
 ```bash
-python scripts/scan.py <input_file> <team_name> <batch_name>
+uv run python scripts/scan.py <input_file> <team_name> <batch_name>
 
 # Example
-python scripts/scan.py group4.jsonl "Team 4" "Batch_001"
+uv run python scripts/scan.py group4.jsonl "Team 4" "Batch_001"
 ```
 
 ### Input Format
@@ -333,7 +351,7 @@ Contamination: 0/10000 (0.00%)
 1. Prepare JSONL file with your training data
 2. Run scanner:
 ```bash
-python scripts/scan.py your_data.jsonl "Team X" "Description"
+uv run python scripts/scan.py your_data.jsonl "Team X" "Description"
 ```
 3. Check result:
    - ✅ APPROVED → Submit to training pipeline
@@ -375,7 +393,7 @@ Memory usage peaks at ~2-3GB for the full benchmark index (FAISS flat index, bat
 # Split and scan in parallel
 split -l 100000 large_file.jsonl chunk_
 for chunk in chunk_*; do
-    python scripts/scan.py "$chunk" "Team X" "$(basename $chunk)"
+    uv run python scripts/scan.py "$chunk" "Team X" "$(basename $chunk)"
 done
 ```
 
@@ -436,17 +454,17 @@ Currently scanning against **26 benchmarks** (~850k+ questions):
 
 ### "ModuleNotFoundError"
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 ### "FileNotFoundError: benchmarks/mmlu_test.jsonl"
 ```bash
-python scripts/download_benchmarks.py
+uv run python scripts/download_benchmarks.py
 ```
 
 ### Semantic detector disabled warning
 ```bash
-pip install faiss-cpu sentence-transformers
+uv sync
 ```
 Scanner runs fine without these — falls back to N-gram + MinHash only.
 
@@ -454,7 +472,7 @@ Scanner runs fine without these — falls back to N-gram + MinHash only.
 ```bash
 split -l 50000 large_file.jsonl chunk_
 for chunk in chunk_*; do
-    python scripts/scan.py "$chunk" "Team X" "$(basename $chunk)"
+    uv run python scripts/scan.py "$chunk" "Team X" "$(basename $chunk)"
 done
 ```
 

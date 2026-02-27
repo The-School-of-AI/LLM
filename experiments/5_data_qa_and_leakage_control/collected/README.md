@@ -57,7 +57,8 @@ Edit `config.json` with your S3 URI, team name, and batch name:
   "aws_profile": "",
   "benchmarks_dir": "benchmarks",
   "reports_dir": "reports",
-  "auto_download_benchmarks": true
+  "auto_download_benchmarks": true,
+  "enable_semantic": true
 }
 ```
 
@@ -77,6 +78,12 @@ Then run:
 
 ```bash
 uv run python scripts/run.py
+```
+
+To run without semantic (N-gram + MinHash only), set this in `config.json` and run the same command:
+
+```json
+"enable_semantic": false
 ```
 
 ### From a local file
@@ -142,4 +149,16 @@ Available config keys (all optional, shown with defaults):
 | `semantic_threshold` | `0.9` | Cosine similarity threshold |
 | `semantic_model` | `"all-MiniLM-L6-v2"` | Embedding model |
 | `semantic_batch_size` | `512` | Encoding batch size |
+| `enable_semantic` | `true` | Enable/disable semantic detector layer |
 | `report_sample_limit` | `50` | Max flagged samples shown per layer |
+| `build_workers` | `CPU count` | Worker threads for N-gram/MinHash index build |
+| `cache_indexes` | `true` | Reuse persisted detector indexes across runs |
+| `cache_dir` | `".cache/indexes"` | Root directory for persisted index caches |
+
+Index caching:
+- First run builds indexes and writes cache artifacts under `cache_dir/<fingerprint>/`.
+- Later runs with unchanged benchmarks + relevant config load caches automatically.
+- Any benchmark/config change generates a new fingerprint and rebuilds safely.
+
+No-semantic fast path:
+- Use `uv run python scripts/scan_no_semantic.py data.jsonl "Team Name" "batch_id"` to run only N-gram + MinHash.

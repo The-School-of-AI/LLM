@@ -1,6 +1,8 @@
 """Main scanner pipeline - orchestrates detection layers and produces reports."""
 
+import hashlib
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -61,34 +63,62 @@ class ContaminationScanner:
         self._sample_limit: int = self.config.get("report_sample_limit", 50)
         self._reports_path = Path(self.config.get("reports_path", "reports"))
         self._git_info = get_git_info()
+        self._cache_enabled = bool(self.config.get("cache_indexes", True))
+        self._cache_root = Path(self.config.get("cache_dir", ".cache/indexes"))
+        self._enable_semantic = bool(self.config.get("enable_semantic", True))
+        self._build_workers = max(
+            1, int(self.config.get("build_workers", (os.cpu_count() or 1)))
+        )
 
         # Load registry
         self.registry = BenchmarkRegistry(
             self.config.get("benchmarks_path", "benchmarks")
         ).load_all()
+        self._index_fingerprint = self._compute_index_fingerprint()
+        self._cache_dir = self._cache_root / self._index_fingerprint
 
         # Build detectors
-        self.ngram = NGramDetector(n=self.config.get("ngram_size", 13))
+        self.ngram = NGramDetector(
+            n=self.config.get("ngram_size", 13),
+            build_workers=self._build_workers,
+        )
         self.minhash = MinHashDetector(
             threshold=self.config.get("minhash_threshold", 0.8),
             num_perm=self.config.get("minhash_permutations", 128),
+            build_workers=self._build_workers,
         )
+        self.has_semantic = False
 
-        self.ngram.build_index(self.registry)
-        self.minhash.build_index(self.registry)
+        ngram_loaded = self._load_ngram_cache()
+        if not ngram_loaded:
+            self.ngram.build_index(self.registry)
+            self._save_ngram_cache()
 
-        try:
-            self.semantic = SemanticDetector(
-                threshold=self.config.get("semantic_threshold", 0.9),
-                model_name=self.config.get("semantic_model", "all-MiniLM-L6-v2"),
-                batch_size=self.config.get("semantic_batch_size", 512),
-            )
-            self.semantic.build_index(self.registry)
-            self.has_semantic = True
-        except ImportError as e:
-            console.print(f"[yellow]⚠ Semantic detector disabled: {e}[/yellow]\n")
+        minhash_loaded = self._load_minhash_cache()
+        if not minhash_loaded:
+            self.minhash.build_index(self.registry)
+            self._save_minhash_cache()
+
+        if self._enable_semantic:
+            try:
+                self.semantic = SemanticDetector(
+                    threshold=self.config.get("semantic_threshold", 0.9),
+                    model_name=self.config.get("semantic_model", "all-MiniLM-L6-v2"),
+                    batch_size=self.config.get("semantic_batch_size", 512),
+                )
+                semantic_loaded = self._load_semantic_cache()
+                if not semantic_loaded:
+                    self.semantic.build_index(self.registry)
+                    self._save_semantic_cache()
+                self.has_semantic = True
+            except ImportError as e:
+                console.print(f"[yellow]⚠ Semantic detector disabled: {e}[/yellow]\n")
+                self.has_semantic = False
+        else:
+            console.print("[yellow]⚠ Semantic detector disabled by config[/yellow]\n")
             self.has_semantic = False
 
+        self._write_cache_manifest()
         console.print("[bold green]✓ Scanner ready![/bold green]\n")
 
     def scan_dataset(
@@ -536,3 +566,136 @@ class ContaminationScanner:
                 f.write(json.dumps(details) + "\n")
 
         console.print(f"[yellow]⚠ Contaminated samples: {filename}[/yellow]")
+
+    def _compute_index_fingerprint(self) -> str:
+        """Create a stable fingerprint for benchmarks + index-relevant config."""
+        files = []
+        for path in sorted(self.registry.benchmarks_path.glob("*_test.jsonl")):
+            stat = path.stat()
+            files.append(
+                {
+                    "name": path.name,
+                    "size": stat.st_size,
+                    "mtime_ns": stat.st_mtime_ns,
+                }
+            )
+
+        payload = {
+            "schema": 1,
+            "benchmarks_path": str(self.registry.benchmarks_path.resolve()),
+            "benchmark_files": files,
+            "ngram_size": self.config.get("ngram_size", 13),
+            "minhash_threshold": self.config.get("minhash_threshold", 0.8),
+            "minhash_permutations": self.config.get("minhash_permutations", 128),
+            "semantic_threshold": self.config.get("semantic_threshold", 0.9),
+            "semantic_model": self.config.get("semantic_model", "all-MiniLM-L6-v2"),
+            "semantic_batch_size": self.config.get("semantic_batch_size", 512),
+            "enable_semantic": self._enable_semantic,
+        }
+        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _ensure_cache_dir(self) -> None:
+        """Ensure the current cache directory exists."""
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _write_cache_manifest(self) -> None:
+        """Write a small manifest to explain cache provenance."""
+        if not self._cache_enabled:
+            return
+        self._ensure_cache_dir()
+        manifest = {
+            "fingerprint": self._index_fingerprint,
+            "created_at": datetime.now().isoformat(),
+            "benchmarks_path": str(self.registry.benchmarks_path.resolve()),
+            "config": {
+                "ngram_size": self.config.get("ngram_size", 13),
+                "minhash_threshold": self.config.get("minhash_threshold", 0.8),
+                "minhash_permutations": self.config.get("minhash_permutations", 128),
+                "semantic_threshold": self.config.get("semantic_threshold", 0.9),
+                "semantic_model": self.config.get(
+                    "semantic_model", "all-MiniLM-L6-v2"
+                ),
+                "semantic_batch_size": self.config.get("semantic_batch_size", 512),
+                "enable_semantic": self._enable_semantic,
+            },
+        }
+        manifest_path = self._cache_dir / "manifest.json"
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2)
+
+    def _load_ngram_cache(self) -> bool:
+        """Load cached n-gram index when available."""
+        if not self._cache_enabled:
+            return False
+        path = self._cache_dir / "ngram.pkl"
+        if not path.exists():
+            return False
+        try:
+            self.ngram.load_index(path)
+            console.print(f"[green]✓ Loaded n-gram index cache: {path}[/green]")
+            return True
+        except Exception as exc:
+            console.print(f"[yellow]⚠ N-gram cache ignored: {exc}[/yellow]")
+            return False
+
+    def _save_ngram_cache(self) -> None:
+        """Save n-gram index cache."""
+        if not self._cache_enabled:
+            return
+        self._ensure_cache_dir()
+        path = self._cache_dir / "ngram.pkl"
+        self.ngram.save_index(path)
+        console.print(f"[green]✓ Saved n-gram index cache: {path}[/green]")
+
+    def _load_minhash_cache(self) -> bool:
+        """Load cached MinHash index when available."""
+        if not self._cache_enabled:
+            return False
+        path = self._cache_dir / "minhash.pkl"
+        if not path.exists():
+            return False
+        try:
+            self.minhash.load_index(path)
+            console.print(f"[green]✓ Loaded MinHash index cache: {path}[/green]")
+            return True
+        except Exception as exc:
+            console.print(f"[yellow]⚠ MinHash cache ignored: {exc}[/yellow]")
+            return False
+
+    def _save_minhash_cache(self) -> None:
+        """Save MinHash index cache."""
+        if not self._cache_enabled:
+            return
+        self._ensure_cache_dir()
+        path = self._cache_dir / "minhash.pkl"
+        self.minhash.save_index(path)
+        console.print(f"[green]✓ Saved MinHash index cache: {path}[/green]")
+
+    def _load_semantic_cache(self) -> bool:
+        """Load cached semantic FAISS index when available."""
+        if not self._cache_enabled:
+            return False
+        index_path = self._cache_dir / "semantic.faiss"
+        meta_path = self._cache_dir / "semantic_meta.pkl"
+        if not index_path.exists() or not meta_path.exists():
+            return False
+        try:
+            self.semantic.load_index(index_path, meta_path)
+            console.print(
+                f"[green]✓ Loaded semantic index cache: {index_path}[/green]"
+            )
+            return True
+        except Exception as exc:
+            console.print(f"[yellow]⚠ Semantic cache ignored: {exc}[/yellow]")
+            return False
+
+    def _save_semantic_cache(self) -> None:
+        """Save semantic FAISS index cache."""
+        if not self._cache_enabled:
+            return
+        self._ensure_cache_dir()
+        index_path = self._cache_dir / "semantic.faiss"
+        meta_path = self._cache_dir / "semantic_meta.pkl"
+        self.semantic.save_index(index_path, meta_path)
+        console.print(f"[green]✓ Saved semantic index cache: {index_path}[/green]")
