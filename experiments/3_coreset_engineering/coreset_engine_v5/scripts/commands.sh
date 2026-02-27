@@ -102,6 +102,7 @@ fi
 BRANCH_NAME="${BRANCH_NAME:-p3/feat/stage-wise-coreset-selection_v2}"
 S3_BUCKET="${S3_BUCKET:?ERROR: S3_BUCKET is not set. Export it before running: export S3_BUCKET=your-bucket-name}"
 S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/}"
+S3_PREFIX="${S3_PREFIX:-processed_dataset/curriculum_pyspark_output/source=C4/}"
 NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"
 TOTAL_TOKENS="${TOTAL_TOKENS:-4523096944}"
@@ -285,9 +286,6 @@ ENGINE_DIR="${EXPERIMENT_DIR}/coreset_engine_v5"
 # ==============================================================================
 echo "### [5/8] Infrastructure Validation ###"
 VALIDATE_INFRA="${ENGINE_DIR}/scripts/validate_infra.sh"
-
-# Extract prefix from S3_INPUT_PATH
-S3_PREFIX=$(echo "$S3_INPUT_PATH" | sed -e "s|^s3://${S3_BUCKET}/||")
 
 # Export infra thresholds so sudo -E passes them to validate_infra.sh
 export EXPECTED_INSTANCE_TYPE MIN_VCPU MIN_RAM_GB MIN_EBS_ROOT_GB MIN_EBS_FREE_GB
