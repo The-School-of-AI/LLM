@@ -3773,3 +3773,1091 @@ P12 TrainingOps — shutdown complete.
   Train log:  /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
 + echo '  Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl'
   Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl
+[run.sh] Started at Fri Feb 27 10:03:55 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:03:57] Saving deterministic init model for Test 14...'
+[2026-02-27 10:03:57] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   UNAVAILABLE (pip install fla)
+============================================================
+  Loading TSAI 131K tokenizer from: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,075
+    - BOS token: <|startoftext|> (ID: 131072)
+    - EOS token: <|return|> (ID: 131073)
+    - PAD token: <|endoftext|> (ID: 131074)
+   🔧 pf_to_model (8192→4096) initialized with std=0.000221
+
+🤖 MODEL-1B (DENSE) INITIALIZED:
+   Vocabulary: 131,075
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.8M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Dense FFN: 2048 intermediate (no MoE)
+   MTP: 2 predictions
+
+   Total Parameters: 1,653,115,060 (~1.65B)
+   Active Parameters: ~1.513B (100% active, no MoE sparsity)
+Saved init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
+Saved metadata: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:05:46] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-27 10:05:46] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ [[ 1 == \1 ]]
++ python3 -u -m deepspeed.launcher.launch '--world_info={"localhost": [0]}' --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/deepspeed/launcher/launch.py", line 375, in <module>
+    main()
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/deepspeed/launcher/launch.py", line 159, in main
+    world_info = base64.urlsafe_b64decode(args.world_info)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/base64.py", line 134, in urlsafe_b64decode
+    return b64decode(s)
+           ^^^^^^^^^^^^
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/base64.py", line 88, in b64decode
+    return binascii.a2b_base64(s, strict_mode=validate)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+binascii.Error: Incorrect padding
+[run.sh] Started at Fri Feb 27 10:07:24 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt ]]
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:07:26] Saving deterministic init model for Test 14...'
+[2026-02-27 10:07:26] Saving deterministic init model for Test 14...
++ python3 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py --config /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/configs/test14_logging_smoke.yaml --output /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt --meta /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init_meta.json
+Traceback (most recent call last):
+  File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/scripts/save_init_model.py", line 9, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'
+[run.sh] Started at Fri Feb 27 10:09:09 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_USER=p12_writer
++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:09:12] Dry-run mode: skipping init checkpoint generation'
+[2026-02-27 10:09:12] Dry-run mode: skipping init checkpoint generation
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:09:12] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-27 10:09:12] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ [[ 1 == \1 ]]
++ python3 -u -m deepspeed.launcher.launch '--world_info={"localhost": [0]}' --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/deepspeed/launcher/launch.py", line 375, in <module>
+    main()
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/deepspeed/launcher/launch.py", line 159, in main
+    world_info = base64.urlsafe_b64decode(args.world_info)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/base64.py", line 134, in urlsafe_b64decode
+    return b64decode(s)
+           ^^^^^^^^^^^^
+  File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/base64.py", line 88, in b64decode
+    return binascii.a2b_base64(s, strict_mode=validate)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+binascii.Error: Incorrect padding
+[run.sh] Started at Fri Feb 27 10:11:00 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_USER=p12_writer
++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:11:03] Dry-run mode: skipping init checkpoint generation'
+[2026-02-27 10:11:03] Dry-run mode: skipping init checkpoint generation
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:11:03] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-27 10:11:03] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ [[ 1 == \1 ]]
++ deepspeed --num_gpus=1 training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:11:09,331] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-27 10:11:09,331] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:11:15,188] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0]}
+[2026-02-27 10:11:15,189] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=1, node_rank=0
+[2026-02-27 10:11:15,189] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2026-02-27 10:11:15,189] [INFO] [launch.py:180:main] dist_world_size=1
+[2026-02-27 10:11:15,189] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0
+[2026-02-27 10:11:15,190] [INFO] [launch.py:272:main] process 8033 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'training_smoke.py', '--local_rank=0']
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+usage: training_smoke.py [-h] [--deepspeed_config DEEPSPEED_CONFIG]
+                         [--steps STEPS] [--seq_len SEQ_LEN]
+                         [--vocab_size VOCAB_SIZE] [--hidden_size HIDDEN_SIZE]
+                         [--metrics_jsonl_path METRICS_JSONL_PATH]
+training_smoke.py: error: unrecognized arguments: --local_rank=0
+[2026-02-27 10:11:23,191] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 8033
+[2026-02-27 10:11:23,191] [ERROR] [launch.py:341:sigkill_handler] ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'training_smoke.py', '--local_rank=0'] exits with return code = 2
+[run.sh] Started at Fri Feb 27 10:12:32 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_USER=p12_writer
++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:12:35] Dry-run mode: skipping init checkpoint generation'
+[2026-02-27 10:12:35] Dry-run mode: skipping init checkpoint generation
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:12:35] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-27 10:12:35] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ [[ 1 == \1 ]]
++ deepspeed --num_gpus=1 training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:12:41,448] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-27 10:12:41,448] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:12:47,100] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0]}
+[2026-02-27 10:12:47,100] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=1, node_rank=0
+[2026-02-27 10:12:47,100] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2026-02-27 10:12:47,100] [INFO] [launch.py:180:main] dist_world_size=1
+[2026-02-27 10:12:47,100] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0
+[2026-02-27 10:12:47,101] [INFO] [launch.py:272:main] process 9356 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'training_smoke.py', '--local_rank=0']
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+  P12 TrainingOps — initializing for run 'train_smoke_1772187173'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/train_smoke_1772187173_rank_0.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_0.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Metrics server started on port 8000
+✓ SystemMetricsCollector started (every 5.0s)
+============================================================
+  P12 TrainingOps — ready
+============================================================
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/training_smoke.py", line 139, in <module>
+[rank0]:     raise SystemExit(main())
+[rank0]:                      ^^^^^^
+[rank0]:   File "/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code/training_smoke.py", line 95, in main
+[rank0]:     engine, _, _, _ = deepspeed.initialize(
+[rank0]:                       ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/deepspeed/__init__.py", line 175, in initialize
+[rank0]:     assert config is None, "Not sure how to proceed, we were given deepspeed configs in the deepspeed arguments and deepspeed.initialize() function call"
+[rank0]:            ^^^^^^^^^^^^^^
+[rank0]: AssertionError: Not sure how to proceed, we were given deepspeed configs in the deepspeed arguments and deepspeed.initialize() function call
+[rank0]:[W227 10:12:54.490124115 ProcessGroupNCCL.cpp:1524] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+[2026-02-27 10:12:57,102] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 9356
+[2026-02-27 10:12:57,102] [ERROR] [launch.py:341:sigkill_handler] ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'training_smoke.py', '--local_rank=0'] exits with return code = 1
+[run.sh] Started at Fri Feb 27 10:14:06 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_USER=p12_writer
++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:14:09] Dry-run mode: skipping init checkpoint generation'
+[2026-02-27 10:14:09] Dry-run mode: skipping init checkpoint generation
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:14:09] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-27 10:14:09] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ [[ 1 == \1 ]]
++ deepspeed --num_gpus=1 training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:14:15,825] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-27 10:14:15,826] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:14:21,752] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0]}
+[2026-02-27 10:14:21,752] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=1, node_rank=0
+[2026-02-27 10:14:21,752] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2026-02-27 10:14:21,752] [INFO] [launch.py:180:main] dist_world_size=1
+[2026-02-27 10:14:21,752] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0
+[2026-02-27 10:14:21,753] [INFO] [launch.py:272:main] process 13468 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'training_smoke.py', '--local_rank=0']
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+  P12 TrainingOps — initializing for run 'train_smoke_1772187268'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/train_smoke_1772187268_rank_0.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_0.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Metrics server started on port 8000
+✓ SystemMetricsCollector started (every 5.0s)
+============================================================
+  P12 TrainingOps — ready
+============================================================
+Epoch 0:   0%|          | 0/3 [00:00<?, ?it/s]
+[MEMORY] Before forward pass: 0.00GB
+[MEMORY] After backward & step: 0.03GB
+Epoch 0:   0%|          | 0/3 [00:00<?, ?it/s, loss=8.4813, global_step=1, toks/s=145.0]2026-02-27 10:15:10,214 | step 1 | loss: 8.4813 | loss2: nan | r_loss: nan | lr: 3.00e-04 | dt: 441.49ms | tok/sec:    144.96
+Epoch 0:  33%|███▎      | 1/3 [00:00<00:00,  2.15it/s, loss=8.4813, global_step=1, toks/s=145.0]Epoch 0:  33%|███▎      | 1/3 [00:00<00:00,  2.15it/s, loss=8.5066, global_step=2, toks/s=20792.8]2026-02-27 10:15:10,218 | step 2 | loss: 8.5066 | loss2: nan | r_loss: nan | lr: 3.00e-04 | dt: 3.08ms | tok/sec:  20792.83
+Epoch 0:  33%|███▎      | 1/3 [00:00<00:00,  2.15it/s, loss=8.4631, global_step=3, toks/s=23431.9]2026-02-27 10:15:10,222 | step 3 | loss: 8.4631 | loss2: nan | r_loss: nan | lr: 3.00e-04 | dt: 2.73ms | tok/sec:  23431.87
+Epoch 0: 100%|██████████| 3/3 [00:00<00:00,  6.34it/s, loss=8.4631, global_step=3, toks/s=23431.9]
+Epoch 0 - Training Average Loss: 8.4837
+
+P12 TrainingOps — shutting down...
+✓ JSONLogger closed. Logs saved to /tmp/training_logs/train_smoke_1772187268_rank_0.jsonl
+✓ SystemMetricsCollector stopped
+✓ Metrics server stopped
+P12 TrainingOps — shutdown complete.
+[rank0]:[W227 10:15:17.337905938 ProcessGroupNCCL.cpp:1524] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+[2026-02-27 10:15:19,763] [INFO] [launch.py:367:main] Process 13468 exits successfully.
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:15:23] Test 14 completed'
+[2026-02-27 10:15:23] Test 14 completed
++ echo '  Init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt'
+  Init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
++ echo '  Train log:  /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log'
+  Train log:  /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ echo '  Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl'
+  Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl
+[run.sh] Started at Fri Feb 27 10:17:13 UTC 2026
++ TRAINING_OPS_DEST=/home/ubuntu/LLM/experiments/12_training_operations
++ [[ ! -d /home/ubuntu/LLM/experiments/12_training_operations/components ]]
+++ ls -A /home/ubuntu/LLM/experiments/12_training_operations
++ [[ -z .DS_Store
+components ]]
++ sudo -n true
++ LOCAL_ASSETS_DIR=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local
++ CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ _VEC_LOCAL=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ _VEC_REPO=/home/ubuntu/LLM/experiments/12_training_operations/components/sidecar_agent/vector.toml
++ [[ -n '' ]]
++ [[ -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ echo '[INFO] Using sources:'
+[INFO] Using sources:
++ echo '       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt'
+       CA_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt
++ echo '       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env'
+       ENV_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
++ echo '       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml'
+       VECTOR_TOML_SRC=/home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml
++ command -v curl
++ command -v vector
+++ command -v vector
++ echo '[INFO] Vector binary: /usr/local/bin/vector'
+[INFO] Vector binary: /usr/local/bin/vector
++ command -v vector
++ /usr/local/bin/vector --version
+vector 0.53.0 (x86_64-unknown-linux-gnu 2b51b40 2026-01-27 21:46:39.386326724)
++ sudo mkdir -p /etc/t12 /var/lib/vector /tmp/training_logs
+++ whoami
+++ id -gn
++ sudo chown ubuntu:ubuntu /tmp/training_logs
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt ]]
++ [[ ! -f /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/ca_clickhouse.crt /etc/t12/ca.crt
++ [[ -z /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml ]]
++ sudo install -m 0644 /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.toml /etc/t12/vector.toml
++ set -a
++ source /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/local/vector.env
+++ CLICKHOUSE_HTTPS_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ set +a
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_CA_CERT=/etc/p12/ca.crt
++ [[ -z /etc/p12/ca.crt ]]
++ [[ ! -f /etc/p12/ca.crt ]]
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
++ CLICKHOUSE_USER=p12_writer
++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ [[ -z https://54.174.194.76:8443 ]]
++ [[ -z p12_writer ]]
++ [[ -z trtraining_ops_writer_pass ]]
++ [[ ! -f /etc/t12/ca.crt ]]
++ sudo tee /etc/t12/vector.env
++ sudo chmod 600 /etc/t12/vector.env
++ sudo cp /etc/t12/vector.env /home/ubuntu/.t12.env
+++ id -u
+++ id -gn
++ sudo chown 1000:ubuntu /home/ubuntu/.t12.env
++ sudo chmod 600 /home/ubuntu/.t12.env
++ check_file /etc/t12/ca.crt
++ local p=/etc/t12/ca.crt
++ [[ -f /etc/t12/ca.crt ]]
++ check_file /etc/t12/vector.toml
++ local p=/etc/t12/vector.toml
++ [[ -f /etc/t12/vector.toml ]]
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ sudo tee /etc/systemd/system/t12-vector.service
++ command -v systemctl
++ sudo systemctl daemon-reload
++ sudo systemctl enable --now t12-vector
++ sleep 2
+++ http_code http://127.0.0.1:8686/health
+++ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8686/health
+++ true
++ HC=000
++ echo '[INFO] Vector health HTTP code: 000'
+[INFO] Vector health HTTP code: 000
++ set -a
++ '[' -f /home/ubuntu/.t12.env ']'
++ source /home/ubuntu/.t12.env
+++ CLICKHOUSE_ENDPOINT=https://54.174.194.76:8443
+++ CLICKHOUSE_USER=p12_writer
+++ CLICKHOUSE_PASSWORD=trtraining_ops_writer_pass
+++ CLICKHOUSE_CA_CERT=/etc/t12/ca.crt
++ set +a
++ export VECTOR_SERVICE_NAME=t12-vector.service
++ VECTOR_SERVICE_NAME=t12-vector.service
++ export SKIP_VECTOR_CHECK=0
++ SKIP_VECTOR_CHECK=0
++ check_file /etc/t12/vector.env
++ local p=/etc/t12/vector.env
++ [[ -f /etc/t12/vector.env ]]
++ check_file /home/ubuntu/.t12.env
++ local p=/home/ubuntu/.t12.env
++ [[ -f /home/ubuntu/.t12.env ]]
++ mkdir -p /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run
++ [[ 1 == \1 ]]
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:17:15] Dry-run mode: skipping init checkpoint generation'
+[2026-02-27 10:17:15] Dry-run mode: skipping init checkpoint generation
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:17:15] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...'
+[2026-02-27 10:17:15] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, no DeltaNet, 1000 steps)...
++ tee /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ cd /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/code
++ [[ 1 == \1 ]]
++ deepspeed --num_gpus=1 training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:17:21,486] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-02-27 10:17:21,486] [INFO] [runner.py:630:main] cmd = /home/ubuntu/miniconda3/envs/imagenet/bin/python3.11 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-02-27 10:17:27,069] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0]}
+[2026-02-27 10:17:27,069] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=1, node_rank=0
+[2026-02-27 10:17:27,069] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2026-02-27 10:17:27,069] [INFO] [launch.py:180:main] dist_world_size=1
+[2026-02-27 10:17:27,069] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0
+[2026-02-27 10:17:27,070] [INFO] [launch.py:272:main] process 29850 spawned with command: ['/home/ubuntu/miniconda3/envs/imagenet/bin/python3.11', '-u', 'training_smoke.py', '--local_rank=0']
+/home/ubuntu/miniconda3/envs/imagenet/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+  P12 TrainingOps — initializing for run 'train_smoke_1772187453'
+============================================================
+✓ Preflight: Vector service 't12-vector.service' is active
+✓ JSONLogger initialized. Writing to: /tmp/training_logs/train_smoke_1772187453_rank_0.jsonl
+✓ SystemMetricsCollector initialized
+  Log file : /tmp/training_logs/system_metrics_rank_0.jsonl
+  Interval : 5.0s
+  GPU      : True (1 devices)
+✓ MetricsServer initialized
+✓ Metrics server started on port 8000
+✓ SystemMetricsCollector started (every 5.0s)
+============================================================
+  P12 TrainingOps — ready
+============================================================
+Epoch 0:   0%|          | 0/3 [00:00<?, ?it/s]
+[MEMORY] Before forward pass: 0.00GB
+[MEMORY] After backward & step: 0.03GB
+Epoch 0:   0%|          | 0/3 [00:00<?, ?it/s, loss=8.5814, global_step=1, toks/s=292.0]2026-02-27 10:17:33,994 | step 1 | loss: 8.5814 | loss2: nan | r_loss: nan | lr: 3.00e-04 | dt: 219.20ms | tok/sec:    291.98
+Epoch 0:  33%|███▎      | 1/3 [00:00<00:00,  4.30it/s, loss=8.5814, global_step=1, toks/s=292.0]Epoch 0:  33%|███▎      | 1/3 [00:00<00:00,  4.30it/s, loss=8.3178, global_step=2, toks/s=22159.1]2026-02-27 10:17:33,998 | step 2 | loss: 8.3178 | loss2: nan | r_loss: nan | lr: 3.00e-04 | dt: 2.89ms | tok/sec:  22159.11
+Epoch 0:  33%|███▎      | 1/3 [00:00<00:00,  4.30it/s, loss=8.4306, global_step=3, toks/s=22330.5]2026-02-27 10:17:34,002 | step 3 | loss: 8.4306 | loss2: nan | r_loss: nan | lr: 3.00e-04 | dt: 2.87ms | tok/sec:  22330.54
+Epoch 0: 100%|██████████| 3/3 [00:00<00:00, 12.50it/s, loss=8.4306, global_step=3, toks/s=22330.5]
+Epoch 0 - Training Average Loss: 8.4433
+
+P12 TrainingOps — shutting down...
+✓ JSONLogger closed. Logs saved to /tmp/training_logs/train_smoke_1772187453_rank_0.jsonl
+✓ SystemMetricsCollector stopped
+✓ Metrics server stopped
+P12 TrainingOps — shutdown complete.
+[rank0]:[W227 10:17:40.246755377 ProcessGroupNCCL.cpp:1524] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+[2026-02-27 10:17:43,072] [INFO] [launch.py:367:main] Process 29850 exits successfully.
+++ date '+%Y-%m-%d %H:%M:%S'
++ echo '[2026-02-27 10:17:46] Test 14 completed'
+[2026-02-27 10:17:46] Test 14 completed
++ echo '  Init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt'
+  Init model: /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/init/model_init.pt
++ echo '  Train log:  /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log'
+  Train log:  /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/train.log
++ echo '  Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl'
+  Metrics:    /home/ubuntu/LLM/experiments/tests/Test_14_Compiled2/results/run/metrics.jsonl

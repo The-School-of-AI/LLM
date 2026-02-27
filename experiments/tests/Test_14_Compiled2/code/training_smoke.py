@@ -52,7 +52,14 @@ def build_synthetic_loader(batch_size: int, seq_len: int, vocab_size: int, steps
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--deepspeed_config", type=str, default="../deepspeed/smoke_train.json")
+    p = deepspeed.add_config_arguments(p)
+    p.add_argument(
+        "--local_rank",
+        type=int,
+        default=-1,
+        help="Local rank for distributed training (set by DeepSpeed launcher)",
+    )
+    p.set_defaults(deepspeed_config="../deepspeed/smoke_train.json")
     p.add_argument("--steps", type=int, default=3)
     p.add_argument("--seq_len", type=int, default=64)
     p.add_argument("--vocab_size", type=int, default=4096)
@@ -89,7 +96,7 @@ def main() -> int:
     engine, _, _, _ = deepspeed.initialize(
         model=model,
         model_parameters=model.parameters(),
-        config=args.deepspeed_config,
+        args=args,
     )
 
     loader = build_synthetic_loader(

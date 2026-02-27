@@ -45,6 +45,23 @@ if ! command -v "$DEEPSPEED_BIN" >/dev/null 2>&1; then
   fi
 fi
 
+# If PYTHON_BIN doesn't have torch, try to infer Python from the deepspeed entrypoint.
+if ! "$PYTHON_BIN" -c 'import torch' >/dev/null 2>&1; then
+  _ds_path=""
+  if [[ "${DEEPSPEED_BIN[0]:-}" == /* || "${DEEPSPEED_BIN[0]:-}" == deepspeed ]]; then
+    _ds_path="$(command -v "${DEEPSPEED_BIN[0]:-}" 2>/dev/null || true)"
+  fi
+  if [[ -n "${_ds_path:-}" && -f "$_ds_path" ]]; then
+    _shebang="$(head -n 1 "$_ds_path" 2>/dev/null || true)"
+    if [[ "$_shebang" == \#\!* ]]; then
+      _py_from_ds="${_shebang#\#!}"
+      if command -v "$_py_from_ds" >/dev/null 2>&1 && "$_py_from_ds" -c 'import torch' >/dev/null 2>&1; then
+        PYTHON_BIN="$_py_from_ds"
+      fi
+    fi
+  fi
+fi
+
 # --- Logging & diagnostics ---
 exec > >(tee -a "$TEST_ROOT/run_bootstrap.log") 2>&1
 echo "[run.sh] Started at $(date -u)"
@@ -140,6 +157,10 @@ CLICKHOUSE_CA_CERT="${CLICKHOUSE_CA_CERT:-}"
 if [[ -z "${CLICKHOUSE_CA_CERT:-}" || ! -f "$CLICKHOUSE_CA_CERT" ]]; then
   CLICKHOUSE_CA_CERT="/etc/t12/ca.crt"
 fi
+CLICKHOUSE_ENDPOINT="${CLICKHOUSE_ENDPOINT//$'\r'/}"
+CLICKHOUSE_USER="${CLICKHOUSE_USER//$'\r'/}"
+CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD//$'\r'/}"
+CLICKHOUSE_CA_CERT="${CLICKHOUSE_CA_CERT//$'\r'/}"
 if [[ -z "${CLICKHOUSE_ENDPOINT:-}" ]]; then
   die "Vector env is missing CLICKHOUSE_ENDPOINT (or CLICKHOUSE_HTTPS_ENDPOINT) in: $ENV_SRC"
 fi
@@ -216,7 +237,9 @@ check_file "$HOME/.t12.env"
 
 mkdir -p "$RESULTS_DIR/init" "$RESULTS_DIR/run"
 
-if [[ ! -f "$INIT_CKPT" || "$FORCE_REWRITE_INIT" == "1" ]]; then
+if [[ "$DRY_RUN_LOGGING_ONLY" == "1" ]]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Dry-run mode: skipping init checkpoint generation"
+elif [[ ! -f "$INIT_CKPT" || "$FORCE_REWRITE_INIT" == "1" ]]; then
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Saving deterministic init model for Test 14..."
   "$PYTHON_BIN" "$TEST_ROOT/scripts/save_init_model.py" \
     --config "$CFG" \
@@ -230,7 +253,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Test 14 (GSA-only, Liger RoPE/MLP/
 (
   cd "$CODE_DIR"
   if [[ "$DRY_RUN_LOGGING_ONLY" == "1" ]]; then
-    "$PYTHON_BIN" -u -m deepspeed.launcher.launch --world_info='{"localhost": [0]}' --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info training_smoke.py
+    "${DEEPSPEED_BIN[@]:-$DEEPSPEED_BIN}" --num_gpus=1 training_smoke.py
   else
     "${DEEPSPEED_BIN[@]:-$DEEPSPEED_BIN}" --num_gpus="$NUM_GPUS" main.py --config "$CFG"
   fi
