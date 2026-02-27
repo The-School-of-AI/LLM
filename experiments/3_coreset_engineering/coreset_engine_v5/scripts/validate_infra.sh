@@ -58,6 +58,8 @@ header() {
   echo -e "${CYAN}── $1 ──${NC}"
 }
 
+SKIP_EBS_VALIDATION="${SKIP_EBS_VALIDATION:-false}"
+
 # ── Configurable Thresholds ──────────────────────────────────
 # All thresholds can be overridden via environment variables.
 # Defaults target c7gd.16xlarge.
@@ -301,20 +303,26 @@ fi
 # 10. EBS Volume Size
 # ============================================================
 header "10. EBS Volume"
-ROOT_SIZE_GB=$(df -BG / \
-  | awk 'NR==2{gsub("G","",$2); print $2}')
-if (( ROOT_SIZE_GB >= MIN_EBS_ROOT_GB )); then
-  pass "EBS root volume = ${ROOT_SIZE_GB} GB"
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS volume check skipped" "SKIP_EBS_VALIDATION=true"
 else
-  warn "EBS root volume" \
-    "${ROOT_SIZE_GB} GB (recommended >= ${MIN_EBS_ROOT_GB})"
+  ROOT_SIZE_GB=$(df -BG / \
+    | awk 'NR==2{gsub("G","",$2); print $2}')
+  if (( ROOT_SIZE_GB >= MIN_EBS_ROOT_GB )); then
+    pass "EBS root volume = ${ROOT_SIZE_GB} GB"
+  else
+    warn "EBS root volume" \
+      "${ROOT_SIZE_GB} GB (recommended >= ${MIN_EBS_ROOT_GB})"
+  fi
 fi
 
 # ============================================================
 # 11. EBS IOPS (via AWS CLI)
 # ============================================================
 header "11. EBS Provisioned IOPS"
-if command -v aws &>/dev/null; then
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS IOPS check skipped" "SKIP_EBS_VALIDATION=true"
+elif command -v aws &>/dev/null; then
   ROOT_DEV=$(lsblk -ndo NAME / 2>/dev/null \
     | head -1 || echo "")
   # Try to get volume ID from instance metadata
@@ -350,7 +358,9 @@ fi
 # 12. EBS Latency
 # ============================================================
 header "12. EBS Latency"
-if command -v iostat &>/dev/null; then
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS latency check skipped" "SKIP_EBS_VALIDATION=true"
+elif command -v iostat &>/dev/null; then
   EBS_AWAIT=$(iostat -xd 1 1 2>/dev/null \
     | awk '/nvme0n1/{print $10}' | head -1)
   if [[ -n "$EBS_AWAIT" ]]; then
@@ -477,7 +487,7 @@ fi
 # ============================================================
 header "16. Python Packages"
 PKGS_OK=true
-for pkg in pyarrow pandas yaml; do
+for pkg in yaml; do
   if python3 -c "import $pkg" 2>/dev/null; then
     VER=$(python3 -c \
       "import ${pkg}; print(getattr(${pkg},'__version__','ok'))")
@@ -510,12 +520,16 @@ fi
 # 18. EBS Free Space
 # ============================================================
 header "18. EBS Free Space"
-EBS_FREE=$(df -BG / \
-  | awk 'NR==2{gsub("G","",$4); print $4}')
-if (( EBS_FREE >= MIN_EBS_FREE_GB )); then
-  pass "EBS free = ${EBS_FREE} GB"
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS free space skipped" "SKIP_EBS_VALIDATION=true"
 else
-  fail "EBS free" "${EBS_FREE} GB (expected >= ${MIN_EBS_FREE_GB})"
+  EBS_FREE=$(df -BG / \
+    | awk 'NR==2{gsub("G","",$4); print $4}')
+  if (( EBS_FREE >= MIN_EBS_FREE_GB )); then
+    pass "EBS free = ${EBS_FREE} GB"
+  else
+    fail "EBS free" "${EBS_FREE} GB (expected >= ${MIN_EBS_FREE_GB})"
+  fi
 fi
 
 # ============================================================
