@@ -1,0 +1,20 @@
+[project]
+name = "llm"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.42.57",
+    "numpy>=2.4.2",
+    "nvidia-ml-py>=13.590.48",
+    "psutil>=7.2.2",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "torch>=2.9.1",
+]
+
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
