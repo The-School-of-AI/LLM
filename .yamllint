@@ -8,9 +8,16 @@ rules:
   document-start: disable
 
   truthy:
-    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+    allowed-values: ["true", "false", "yes", "no", "on", "off"]
     check-keys: false
 
   trailing-spaces: disable
 
   new-line-at-end-of-file: disable
+
+  comments:
+    min-spaces-from-content: 1
+
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
