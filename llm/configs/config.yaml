@@ -1,8 +1,8 @@
 data:
   loader_type: "bin_idx"
-  shard_dir: ../data/wikitext_shards/
+  shard_dir: ../_data/wikitext_shards/
   eval_shard_dir: null
-  tokenizer_dir: src/tokenizer
+  tokenizer_dir: ../_data/tokenizer
   validate_tokenizer: true
   dataset_name: "wikitext"
   dataset_config: "wikitext-103-raw-v1"
@@ -26,12 +26,12 @@ training:
   max_eval_steps: null
   log_interval: 1
   seed: 42
-  init_model_path: "../results/init/model_init.pt"
+  init_model_path: "../_data/results/init/model_init.pt"
   require_gsa_triton: true
   require_fused_kernels: false
   use_fused_ce: true
   max_chunk_gb: 16
-  metrics_jsonl_path: "../results/run/metrics.jsonl"
+  metrics_jsonl_path: "../_data/results/run/metrics.jsonl"
   # Kernel profiler: list global step numbers to profile (e.g. [10, 11, 12]).
   # Outputs profile_report.txt + profile.jsonl next to metrics_jsonl_path.
   # Set to [] or omit to disable (zero overhead when disabled).
@@ -42,12 +42,12 @@ deepspeed:
   local_rank: -1
 
 model:
-  tokenizer_name: null
+  tokenizer_name: ../_data/tokenizer
   embedding_type: "kronecker"
   model_variant: "reversible"
 
 checkpoint:
-  output_dir: "../results/run/checkpoints"
+  output_dir: "../_data/results/run/checkpoints"
   save_checkpoint: false
   checkpoint_interval: 500
   keep_last_n_checkpoints: 2

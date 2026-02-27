@@ -31,6 +31,8 @@ print('' if val is None else str(val))
 LOADER_TYPE="$(_yaml_val loader_type)"
 _raw_shard_dir="$(_yaml_val shard_dir)"
 _raw_eval_shard_dir="$(_yaml_val eval_shard_dir)"
+_dataset_name="$(_yaml_val dataset_name)"
+_dataset_config="$(_yaml_val dataset_config)"
 
 # Resolve relative paths against config file directory (matches main.py _resolve_path)
 CFG_DIR="$(cd "$(dirname "$CFG")" && pwd)"
@@ -51,8 +53,8 @@ if [[ "$LOADER_TYPE" == "bin_idx" ]]; then
     mkdir -p "$SHARD_DIR"
     (
       uv run "$TEST_ROOT/scripts/create_shards.py" \
-        --dataset wikitext \
-        --dataset-config wikitext-103-raw-v1 \
+        --dataset "$_dataset_name" \
+        --dataset-config "$_dataset_config" \
         --split train \
         --output-dir "$SHARD_DIR" \
         --tokenizer "$TOKENIZER_DIR" \
@@ -69,8 +71,8 @@ if [[ "$LOADER_TYPE" == "bin_idx" ]]; then
     mkdir -p "$EVAL_SHARD_DIR"
     (
       uv run "$TEST_ROOT/scripts/create_shards.py" \
-        --dataset wikitext \
-        --dataset-config wikitext-103-raw-v1 \
+        --dataset "$_dataset_name" \
+        --dataset-config "$_dataset_config" \
         --split validation \
         --output-dir "$EVAL_SHARD_DIR" \
         --tokenizer "$TOKENIZER_DIR" \
@@ -84,7 +86,7 @@ if [[ "$LOADER_TYPE" == "bin_idx" ]]; then
 fi
 
 if [[ ! -f "$INIT_CKPT" || "$FORCE_REWRITE_INIT" == "1" ]]; then
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Saving deterministic init model for Test 14..."
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Saving deterministic init model..."
   uv run "$TEST_ROOT/scripts/save_init_model.py" \
     --config "$CFG" \
     --output "$INIT_CKPT" \
@@ -93,12 +95,12 @@ else
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Reusing existing init model: $INIT_CKPT"
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, bin_idx loader support)..."
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting training..."
 (
   uv run deepspeed --num_gpus="$NUM_GPUS" main.py --config "$CFG"
 ) 2>&1 | tee "$RESULTS_DIR/run/train.log"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Test 14 completed"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] completed"
 echo "  Init model:      $INIT_CKPT"
 echo "  Train log:       $RESULTS_DIR/run/train.log"
 echo "  Metrics:         $RESULTS_DIR/run/metrics.jsonl"

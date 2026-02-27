@@ -2,7 +2,7 @@
 import argparse
 import hashlib
 import json
-import sys
+import os
 from pathlib import Path
 
 import torch
@@ -40,20 +40,13 @@ def main() -> None:
     out_path = Path(args.output).resolve()
     meta_path = Path(args.meta).resolve()
 
-    test_root = cfg_path.parents[1]
-    code_dir = test_root / "code"
-    if not code_dir.exists():
-        raise FileNotFoundError(f"Missing code directory: {code_dir}")
-
-    sys.path.insert(0, str(code_dir))
-
     with cfg_path.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     seed = int(cfg["training"]["seed"])
     set_seed(seed)
 
-    tokenizer_name = cfg["model"]["tokenizer_name"]
+    tokenizer_name = _resolve_path(cfg["model"]["tokenizer_name"], cfg_path)
     embedding_type = cfg["model"].get("embedding_type", "standard")
     require_gsa_triton = bool(cfg["training"].get("require_gsa_triton", False))
 
@@ -150,6 +143,17 @@ def main() -> None:
 
     print(f"Saved init model: {out_path}")
     print(f"Saved metadata: {meta_path}")
+
+
+def _resolve_path(path, config_path):
+    if not path:
+        return path
+    if os.path.isabs(path):
+        return path
+    if config_path:
+        base = os.path.dirname(os.path.abspath(config_path))
+        return os.path.abspath(os.path.join(base, path))
+    return os.path.abspath(path)
 
 
 if __name__ == "__main__":

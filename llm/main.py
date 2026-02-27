@@ -111,7 +111,7 @@ class Config:
 
         self.shard_dir = _resolve_path(config_dict["data"].get("shard_dir"))
         self.eval_shard_dir = _resolve_path(config_dict["data"].get("eval_shard_dir"))
-        self.tokenizer_dir = config_dict["data"].get("tokenizer_dir")
+        self.tokenizer_dir = _resolve_path(config_dict["data"].get("tokenizer_dir"))
         self.validate_tokenizer = config_dict["data"].get("validate_tokenizer", True)
 
         # Training configuration
@@ -123,13 +123,15 @@ class Config:
         self.require_fused_kernels = config_dict["training"].get(
             "require_fused_kernels", False
         )
-        self.metrics_jsonl_path = config_dict["training"].get(
-            "metrics_jsonl_path", "./logs/metrics.jsonl"
+        self.metrics_jsonl_path = _resolve_path(
+            config_dict["training"].get("metrics_jsonl_path", "./logs/metrics.jsonl")
         )
         self.enable_system_metrics = config_dict["training"].get(
             "enable_system_metrics", False
         )
-        self.init_model_path = config_dict["training"].get("init_model_path")
+        self.init_model_path = _resolve_path(
+            config_dict["training"].get("init_model_path")
+        )
         self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 32.0)
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
 
@@ -140,7 +142,7 @@ class Config:
         self.profile_steps: set = set(_ps) if _ps else set()
 
         # DeepSpeed configuration
-        self.deepspeed_config = config_dict["deepspeed"]["config_path"]
+        self.deepspeed_config = _resolve_path(config_dict["deepspeed"]["config_path"])
         self.local_rank = config_dict["deepspeed"]["local_rank"]
 
         # Load batch size from DeepSpeed config
@@ -158,7 +160,7 @@ class Config:
             "model_variant", "reversible"
         )  # "reversible", "wo_rev", "diff_rec", or "lead_wo_rev"
         # Checkpoint configuration
-        self.output_dir = config_dict["checkpoint"]["output_dir"]
+        self.output_dir = _resolve_path(config_dict["checkpoint"]["output_dir"])
         self.save_checkpoint = config_dict["checkpoint"]["save_checkpoint"]
         self.checkpoint_interval = config_dict["checkpoint"]["checkpoint_interval"]
         self.keep_last_n_checkpoints = config_dict["checkpoint"][
