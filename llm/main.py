@@ -599,16 +599,19 @@ def main():
     opus_selector = None
     if args.opus_config.enabled:
         print_rank_0("\n[3.1/5] Initializing OPUS Data Selector...")
-        from llm.opus import OpusDataSelector
+        from llm.opus import OpusDataSelector, RandomInDistributionProxyProvider
 
         ds_optimizer = model_engine.optimizer
         base_optimizer = getattr(ds_optimizer, "optimizer", ds_optimizer)
+
+        # Wrap proxy loader with auto-resetting provider (handles epoch boundaries)
+        proxy_provider = RandomInDistributionProxyProvider(proxy_loader)
 
         opus_selector = OpusDataSelector(
             config=args.opus_config,
             model=model_engine.module,
             optimizer=base_optimizer,
-            proxy_loader=iter(proxy_loader),
+            proxy_loader=proxy_provider,
         )
         print_rank_0(f"  OPUS mode: {args.opus_config.selection_mode}")
         print_rank_0(f"  Selection ratio: {args.opus_config.selection_ratio}")

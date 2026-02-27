@@ -213,6 +213,18 @@ def train_epoch(
         # Measure step wall-clock time
         step_start_time = time.time()
 
+        # ── OPUS Data Selection (before device transfer to avoid wasted copy) ──
+        opus_metrics = None
+        if opus_selector is not None:
+            _opus_ctx = (
+                profiler.phase("opus_select") if profiler is not None else _null_ctx()
+            )
+            with _opus_ctx:
+                batch, opus_metrics = opus_selector.select_batch(
+                    batch, model_engine.device
+                )
+                model_engine.zero_grad(set_to_none=True)
+
         # ── Profiler: dataloader + device transfer ───────────────────────────
         _profiler_ctx = (
             profiler.phase("dataloader") if profiler is not None else _null_ctx()
@@ -225,27 +237,6 @@ def train_epoch(
             labels = batch["labels"].to(model_engine.device, non_blocking=True)
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
-
-        # ── OPUS Data Selection ────────────────────────────────────────────────
-        opus_metrics = None
-        if opus_selector is not None:
-            _opus_ctx = (
-                profiler.phase("opus_select") if profiler is not None else _null_ctx()
-            )
-            with _opus_ctx:
-                selected_batch, opus_metrics = opus_selector.select_batch(
-                    batch, model_engine.device
-                )
-                input_ids = selected_batch["input_ids"].to(
-                    model_engine.device, non_blocking=True
-                )
-                attention_mask = selected_batch["attention_mask"].to(
-                    model_engine.device, non_blocking=True
-                )
-                labels = selected_batch["labels"].to(
-                    model_engine.device, non_blocking=True
-                )
-                model_engine.zero_grad(set_to_none=True)
 
         # Memory profiling on first step
         mem_before = 0

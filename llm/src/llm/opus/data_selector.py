@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 import logging
-from typing import Any, Dict, Iterator, Tuple
+from typing import Any, Dict, Iterator, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -11,6 +11,7 @@ import torch.nn as nn
 from .config import OpusConfig
 from .ghost import GhostCollector
 from .preconditioner import AdamWPreconditionerView
+from .proxy import RandomInDistributionProxyProvider
 from .selector import OpusSelector
 
 logger = logging.getLogger(__name__)
@@ -30,12 +31,21 @@ class OpusDataSelector:
         config: OpusConfig,
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
-        proxy_loader: Iterator,
+        proxy_loader: Union[Iterator, RandomInDistributionProxyProvider],
     ):
         self.config = config
         self.model = model  # unwrapped model (e.g. model_engine.module)
         self.optimizer = optimizer
-        self.proxy_loader = proxy_loader
+        self.proxy_provider = (
+            proxy_loader
+            if isinstance(proxy_loader, RandomInDistributionProxyProvider)
+            else None
+        )
+        self.proxy_loader = (
+            proxy_loader
+            if not isinstance(proxy_loader, RandomInDistributionProxyProvider)
+            else None
+        )
         self.selector = OpusSelector(config)
         self.preconditioner = AdamWPreconditionerView(
             optimizer, strict_shard_only=config.strict_shard_preconditioner
@@ -63,18 +73,24 @@ class OpusDataSelector:
         input_ids = candidate_batch["input_ids"].to(device)
         score_ids = input_ids[:, : cfg.score_seq_len]
 
-        # Get proxy batch from the proxy loader
-        try:
-            proxy_batch = next(self.proxy_loader)
-        except StopIteration:
-            logger.warning("Proxy loader exhausted, falling back to random")
-            indices = torch.randperm(N)[:k_select]
-            return (
-                {k: v[indices] for k, v in candidate_batch.items()},
-                {"opus_mode": "fallback_random", "opus_selected_n": k_select},
+        # Get proxy batch (provider auto-resets on epoch boundary)
+        if self.proxy_provider is not None:
+            proxy_ids = self.proxy_provider.sample(
+                device=device, k=cfg.proxy_batch_size, seq_len=cfg.score_seq_len
             )
-
-        proxy_ids = proxy_batch["input_ids"][:, : cfg.score_seq_len].to(device)
+        elif self.proxy_loader is not None:
+            try:
+                proxy_batch = next(self.proxy_loader)
+            except StopIteration:
+                logger.warning("Proxy loader exhausted, falling back to random")
+                indices = torch.randperm(N)[:k_select]
+                return (
+                    {k: v[indices] for k, v in candidate_batch.items()},
+                    {"opus_mode": "fallback_random", "opus_selected_n": k_select},
+                )
+            proxy_ids = proxy_batch["input_ids"][:, : cfg.score_seq_len].to(device)
+        else:
+            raise RuntimeError("No proxy data source configured")
 
         # Concatenate candidate + proxy for a single forward+backward pass
         combined_ids = torch.cat([score_ids, proxy_ids], dim=0)
