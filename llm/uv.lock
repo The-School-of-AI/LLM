@@ -367,6 +367,32 @@ wheels = [
 ]
 
 [[package]]
+name = "fla-core"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/de/0d6bd5664ba2e711cabdde11ccb41ddcdd866c531e40900af3601bd7b8c6/fla_core-0.4.1.tar.gz", hash = "sha256:38ab28966eeadc2141b29e87c2bf72a8a4851e00af9d25bbbc3596b1fb53450d", size = 319608, upload-time = "2025-12-24T18:07:37.669Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/43/945ef69eb48a14c30fd7323d3e0b560c821ae71e6d3ef979e06a901bc3b9/fla_core-0.4.1-py3-none-any.whl", hash = "sha256:93c6afe4c80fc7bc705fa8aeea6a46d2cf2d77383f9619a41863c7114c801bab", size = 437282, upload-time = "2025-12-24T18:07:34.41Z" },
+]
+
+[[package]]
+name = "flash-linear-attention"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fla-core" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/46/83/7d8ec7ffb5229080b1c9b772338ff588cbd63282ac355ede2a12a6e174a8/flash_linear_attention-0.4.1.tar.gz", hash = "sha256:127ee7273ed15ac17f72bcf4c75e1051719d8fbe0a2d1d047e59406f36d81ee2", size = 158280, upload-time = "2025-12-24T18:07:38.812Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/63/d5/6327559a9d5b9243b10c3984f1bcef256ed2ad06d105a3bb8f7b2979659c/flash_linear_attention-0.4.1-py3-none-any.whl", hash = "sha256:d18bdfe9d1f4b424676444eac9d50fb8433b70e5d4e0e0878b20bcbcdbea57ce", size = 287415, upload-time = "2025-12-24T18:07:35.815Z" },
+]
+
+[[package]]
 name = "frozenlist"
 version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -605,6 +631,7 @@ dependencies = [
     { name = "boto3" },
     { name = "datasets" },
     { name = "deepspeed" },
+    { name = "flash-linear-attention" },
     { name = "numpy" },
     { name = "nvidia-ml-py" },
     { name = "psutil" },
@@ -619,6 +646,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.42.57" },
     { name = "datasets", specifier = ">=4.6.0" },
     { name = "deepspeed", specifier = ">=0.18.6" },
+    { name = "flash-linear-attention", specifier = ">=0.4.1" },
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "nvidia-ml-py", specifier = ">=13.590.48" },
     { name = "psutil", specifier = ">=7.2.2" },
