@@ -263,8 +263,6 @@ if HAS_TRITON:
 
         @staticmethod
         def backward(ctx, *grad_outputs):
-            # Ensure compiled forward kernels finished writing saved tensors
-            torch.cuda.synchronize()
             with kernel_region("rmsnorm_bwd_total"):
                 X_2d, W, RSTD = ctx.saved_tensors
                 BLOCK_SIZE = ctx.BLOCK_SIZE

@@ -38,29 +38,46 @@ def _liger_cross_entropy_kernel(
     loss_ptr += program_id * loss_stride
     m = float("-inf")
     d = 0.0
+
+    # Pre-load the label's logit for the loss formula: loss = log(sum(exp(x))) - x[y]
     ori_X_y = tl.load(X_ptr + y).to(tl.float32)
+
+    # ── Pass 1: Compute Log-Sum-Exp ──────────────────────────────────────────
     for i in range(0, n_cols, BLOCK_SIZE):
         X_offsets = i + tl.arange(0, BLOCK_SIZE)
-        X_block = tl.load(
-            X_ptr + X_offsets, mask=X_offsets < n_cols, other=float("-inf")
-        ).to(tl.float32)
+        mask = X_offsets < n_cols
+        X_block = tl.load(X_ptr + X_offsets, mask=mask, other=float("-inf")).to(
+            tl.float32
+        )
+
         block_max = tl.max(X_block)
         m_new = tl.maximum(m, block_max)
+        # Numerical stability: shift previous sum by the new max
         d = d * tl.exp(m - m_new) + tl.sum(tl.exp(X_block - m_new))
         m = m_new
+
     lse = m + tl.log(d)
+
+    # ── Pass 2: Write Gradients (In-place) ───────────────────────────────────
     if HAS_GRADIENTS:
+        inv_d = 1.0 / d
         for i in range(0, n_cols, BLOCK_SIZE):
             X_offsets = i + tl.arange(0, BLOCK_SIZE)
-            X_block = tl.load(
-                X_ptr + X_offsets, mask=X_offsets < n_cols, other=float("-inf")
-            ).to(tl.float32)
-            grad = tl.exp(X_block - m) / d
+            mask = X_offsets < n_cols
+            X_block = tl.load(X_ptr + X_offsets, mask=mask, other=float("-inf")).to(
+                tl.float32
+            )
+
+            # soft_max_i = exp(x_i - m) / d
+            grad = tl.exp(X_block - m) * inv_d
             grad = tl.where(X_offsets == y, grad - 1.0, grad)
+
             if reduction == "mean":
                 grad = grad / n_non_ignore
-            tl.store(X_ptr + X_offsets, grad, mask=X_offsets < n_cols)
-    tl.debug_barrier()
+
+            tl.store(X_ptr + X_offsets, grad, mask=mask)
+
+    # ── Final Loss Store ─────────────────────────────────────────────────────
     loss = lse - ori_X_y
     if reduction == "mean":
         loss = loss / n_non_ignore
@@ -74,7 +91,7 @@ def _fused_linear_ce_forward(
     V = weight.shape[0]
 
     # Auto chunk size - aiming for 4GB chunks for max throughput
-    elem_size = 2  # BF16 logits: 2 bytes/element, kernel upcasts to FP32 internally
+    elem_size = 4
     max_elems = max_chunk_bytes // (V * elem_size)
     chunk_size = max(1, min(BT, int(max_elems)))
 
@@ -101,8 +118,8 @@ def _fused_linear_ce_forward(
         h_chunk = _input[start:end]
         t_chunk = target[start:end]
 
-        # BF16 matmul — kernel upcasts to FP32 on load (.float() is a no-op, saves 50% memory)
-        logits_chunk = (h_chunk @ weight_T).contiguous()
+        # BF16 Matmul (Speed!) -> Cast to FP32 (Accuracy for CE)
+        logits_chunk = (h_chunk @ weight_T).float().contiguous()
 
         loss_1d = torch.zeros(C, dtype=torch.float32, device=_input.device)
 
@@ -143,8 +160,6 @@ class _FusedLinearCEFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, *grad_outputs):
-        # Ensure compiled forward kernels finished writing saved tensors
-        torch.cuda.synchronize()
         grad_input, grad_weight = ctx.saved_tensors
         grad_output = grad_outputs[0]
         if not torch.equal(grad_output, torch.tensor(1.0, device=grad_output.device)):
@@ -156,7 +171,7 @@ class _FusedLinearCEFunction(torch.autograd.Function):
 
 
 class FusedLinearCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, ignore_index=-100, reduction="mean", max_chunk_gb=4.0):
+    def __init__(self, ignore_index=-100, reduction="mean", max_chunk_gb=32.0):
         super().__init__()
         self.ignore_index = ignore_index
         self.reduction = reduction

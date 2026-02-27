@@ -9,39 +9,31 @@ Centralized Triton kernels and PyTorch fallbacks for:
 - DeltaNet fla wrapper (fused linear attention)
 """
 
-from .compat import HAS_FLA, HAS_TRITON
-from .fla_deltanet import fla_gated_delta_rule
-from .triton_indexer import (
-    pytorch_gated_indexer,
-    triton_gated_indexer,
-)
-from .triton_indexer_streaming import (
-    fused_indexer_topk,
-    streaming_indexer_variance,
-)
+from .compat import HAS_TRITON
+from .triton_delta_entrance import fused_delta_entrance
+from .triton_indexer import pytorch_gated_indexer, triton_gated_indexer
+from .triton_indexer_streaming import fused_indexer_topk, streaming_indexer_variance
 from .triton_rmsnorm import (
     TritonRMSNorm,
     pytorch_rmsnorm,
     triton_rmsnorm,
+    triton_rmsnorm_fwd_only,
 )
-from .triton_sinkhorn import (
-    pytorch_sinkhorn_knopp,
-    triton_sinkhorn_knopp,
-)
+from .triton_sinkhorn import pytorch_sinkhorn_knopp, triton_sinkhorn_knopp
 from .triton_sparse_attn import triton_sparse_attention_v2 as triton_sparse_attention
 
 __all__ = [
-    "HAS_FLA",
     "HAS_TRITON",
-    "fla_gated_delta_rule",
     "triton_sparse_attention",
     "triton_gated_indexer",
     "pytorch_gated_indexer",
     "triton_sinkhorn_knopp",
     "pytorch_sinkhorn_knopp",
     "triton_rmsnorm",
+    "triton_rmsnorm_fwd_only",
     "pytorch_rmsnorm",
     "TritonRMSNorm",
     "fused_indexer_topk",
     "streaming_indexer_variance",
+    "fused_delta_entrance",
 ]

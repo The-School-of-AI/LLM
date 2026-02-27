@@ -627,8 +627,8 @@ class S3CheckpointManager:
             checkpoint_dirs.sort(key=lambda x: x[0])
 
             # Remove old checkpoints
-            if len(checkpoint_dirs) > keep_last_n:
-                to_remove = checkpoint_dirs[:-keep_last_n]
+            if len(checkpoint_dirs) > keep_last_n:  # type: ignore
+                to_remove = checkpoint_dirs[:-keep_last_n]  # type: ignore
 
                 for step_num, dir_name in to_remove:
                     dir_path = os.path.join(self.config.local_checkpoint_dir, dir_name)

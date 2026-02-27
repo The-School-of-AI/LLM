@@ -14,16 +14,10 @@ class _ForceWrapper(nn.Module):
     def __init__(self, layer: nn.Module):
         super().__init__()
         self.layer = layer
-        self._sync_after_force = False  # Set True when torch.compile is active
 
     def forward(self, x, attention_mask=None):
         # must return (delta, aux)
-        result = self.layer.force(x, attention_mask=attention_mask)  # type: ignore
-        # When force() is compiled, its kernels run async. Sync here ensures
-        # they finish before the midpoint integrator reads the output tensors.
-        if self._sync_after_force:
-            torch.cuda.synchronize()
-        return result
+        return self.layer.force(x, attention_mask=attention_mask)  # type: ignore
 
 
 class MidpointFunction(torch.autograd.Function):
@@ -84,9 +78,6 @@ class MidpointFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, *grad_outputs):
-        # Ensure all async forward kernels (compiled graphs) have finished
-        # writing saved tensors before backward reads them.
-        torch.cuda.synchronize()
         # CRITICAL FIX: Retrieve saved tensors including buffers (no live module access!)
         saved_tensors = ctx.saved_tensors
         n_params = ctx.n_params
@@ -99,8 +90,7 @@ class MidpointFunction(torch.autograd.Function):
         # Rebuild params/buffers for functional_call using SAVED buffers
         buffers = {f"layer.{k}": v for k, v in zip(ctx.buffer_keys, buffer_tensors)}
 
-        grad_p_next = grad_outputs[0]
-        grad_aux = grad_outputs[1]
+        grad_p_next, grad_aux = grad_outputs
 
         # Direct paths:
         # p_next = a*p_prev + (1-a)*p_cur + two_h*delta(p_cur)
@@ -256,17 +246,10 @@ class ReversibleMidpointStack(nn.Module):
         )
 
         self.step_count = 0
-        self._compile_mode = False  # Set by enable_torch_compile()
-        self._sync_after_compile = False  # Set True when torch.compile is active
 
     def forward(self, x, attention_mask=None):
         # Bootstrap creates two states (p_prev, p_cur)
         p_prev = x
-
-        # use_reentrant=False tracks intermediate tensor saves and conflicts with
-        # torch.compile's aot_autograd (different tensor counts between forward and
-        # recomputation). use_reentrant=True just saves inputs and replays forward.
-        _reentrant = self._compile_mode
 
         if self.bootstrap == "no_kick":
             # Baseline-aligned start: p_cur = p_prev (no Euler kick)
@@ -277,10 +260,8 @@ class ReversibleMidpointStack(nn.Module):
             delta0, aux0 = grad_checkpoint(
                 lambda p: self.bootstrap_layer.force(p, attention_mask=attention_mask),  # type: ignore
                 p_cur,
-                use_reentrant=_reentrant,
+                use_reentrant=False,
             )  # type: ignore
-            if self._sync_after_compile:
-                torch.cuda.synchronize()
         # else:
         #     # Euler kick start: p_cur = p_prev + h*delta(p_prev)
         #     delta0, aux0 = self.bootstrap_layer.force(p_prev)
@@ -293,10 +274,8 @@ class ReversibleMidpointStack(nn.Module):
             delta0, aux0 = grad_checkpoint(
                 lambda p: self.bootstrap_layer.force(p, attention_mask=attention_mask),  # type: ignore
                 p_prev,
-                use_reentrant=_reentrant,
+                use_reentrant=False,
             )  # type: ignore
-            if self._sync_after_compile:
-                torch.cuda.synchronize()
             if self.training and self.noise_eps > 0:
                 delta0 = delta0 + self.noise_eps * torch.randn_like(delta0)
 

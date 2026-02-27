@@ -1,5 +1,5 @@
 """
-1B Dense Baseline Model — Test 14: DeltaNet + GSA (DDDGDDDG), no fused CE
+1B Dense Baseline Model -- Test 14: DeltaNet + GSA (DDDGDDDG), no fused CE
 
 Configuration:
 - 1.513B total parameters, 1.513B active parameters (100% dense - no MoE)
@@ -18,12 +18,13 @@ Architecture:
 - GSA: Test 14 Triton sparse attn + indexer (same kernels as before).
 - Liger: RoPE (liger_rotary_pos_emb), MLP (LigerSwiGLUMLP). No fused CE (logits only; CE in train.py).
 
-Purpose: Test 14 — Test 6/7-style hybrid with our new kernels, standard CE (no fused CE).
+Purpose: Test 14 -- Test 6/7-style hybrid with our new kernels, standard CE (no fused CE).
 """
 
 import importlib
 import logging
 import math
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# ── Profiler (optional -- zero overhead when inactive) ────────────────────────
 from llm.profiler import time_region
 
 
@@ -51,7 +53,6 @@ def _import_kernels_module():
 _kernels_module = _import_kernels_module()
 if _kernels_module is not None:
     HAS_TRITON = bool(getattr(_kernels_module, "HAS_TRITON", False))
-    HAS_FLA = bool(getattr(_kernels_module, "HAS_FLA", False))
     triton_sparse_attention = getattr(_kernels_module, "triton_sparse_attention", None)
     pytorch_sparse_attention = getattr(
         _kernels_module, "pytorch_sparse_attention", None
@@ -59,33 +60,41 @@ if _kernels_module is not None:
     triton_sinkhorn_knopp = getattr(_kernels_module, "triton_sinkhorn_knopp", None)
     pytorch_sinkhorn_knopp = getattr(_kernels_module, "pytorch_sinkhorn_knopp", None)
     triton_rmsnorm = getattr(_kernels_module, "triton_rmsnorm", None)
+    triton_rmsnorm_fwd_only = getattr(_kernels_module, "triton_rmsnorm_fwd_only", None)
     pytorch_rmsnorm = getattr(_kernels_module, "pytorch_rmsnorm", None)
     TritonRMSNorm = getattr(_kernels_module, "TritonRMSNorm", None)
     fused_indexer_topk = getattr(_kernels_module, "fused_indexer_topk", None)
-    fla_gated_delta_rule = getattr(_kernels_module, "fla_gated_delta_rule", None)
+    fused_delta_entrance = getattr(_kernels_module, "fused_delta_entrance", None)
+    triton_deltanet_post_fused = getattr(
+        _kernels_module, "triton_deltanet_post_fused", None
+    )
 else:
     HAS_TRITON = False
-    HAS_FLA = False
     triton_sparse_attention = None
     pytorch_sparse_attention = None
     triton_sinkhorn_knopp = None
     pytorch_sinkhorn_knopp = None
     triton_rmsnorm = None
+    triton_rmsnorm_fwd_only = None
     pytorch_rmsnorm = None
     TritonRMSNorm = None
     fused_indexer_topk = None
-    fla_gated_delta_rule = None
+    fused_delta_entrance = None
+    triton_deltanet_post_fused = None
 
 HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
-# ── torch.compile mode ──────────────────────────────────────────────────────
-# When True, custom Triton kernels (RMSNorm, Sinkhorn) are bypassed in favor
-# of PyTorch ops that torch.compile can fuse with surrounding operations.
-# Set by enable_torch_compile() before training starts.
-_TORCH_COMPILE_MODE = False
+# DeltaNet fused backend (required): flash-linear-attention
+try:
+    from fla.ops.gated_delta_rule import chunk_gated_delta_rule
+
+    HAS_FLA = True
+except ImportError:
+    chunk_gated_delta_rule = None
+    HAS_FLA = False
 
 
-# ── Liger ops (Test 14: RoPE, MLP only — no fused CE) ────────────────────────
+# ── Liger ops (Test 14: RoPE, MLP only -- no fused CE) ────────────────────────
 def _import_liger_ops_module():
     try:
         from . import liger_ops as liger_module
@@ -126,7 +135,7 @@ _kernel_log.info(
     f"  Triton Sparse Attn:   {'ENABLED' if HAS_TRITON and triton_sparse_attention is not None and _cuda_available else 'FALLBACK (PyTorch)'}"
 )
 _kernel_log.info(
-    f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and fla_gated_delta_rule is not None and _cuda_available else 'UNAVAILABLE (pip install fla)'}"
+    f"  fla GatedDeltaRule:   {'ENABLED' if HAS_FLA and chunk_gated_delta_rule is not None and _cuda_available else 'UNAVAILABLE (pip install fla)'}"
 )
 if not _cuda_available:
     _kernel_log.info(
@@ -149,9 +158,14 @@ def _token_keep_mask(
         return None
 
     mask = attention_mask
+    # FAST PATH: [B, T] bool already normalized by collator
+    if mask.dim() == 2 and mask.dtype == torch.bool:
+        return mask
+
     if mask.dim() == 2:
         pass
     elif mask.dim() == 3 and mask.size(1) == 1:
+
         mask = mask[:, 0, :]
     elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == 1:
         mask = mask[:, 0, 0, :]
@@ -206,7 +220,7 @@ class KroneckerConfig:
 
     Byte-Level Encoding:
     - Input: Unicode string (Python str)
-    - Process: str → UTF-8 bytes → each byte (0-255) is a token
+    - Process: str -> UTF-8 bytes -> each byte (0-255) is a token
     - Universal: 100% coverage of all UTF-8 text (Chinese, Arabic, emoji, etc.)
     - Lossless: Perfect reconstruction via bytes.decode("utf-8")
 
@@ -238,9 +252,9 @@ class KroneckerEmbeddings:
 
     Byte-Level Design:
     - Input: Unicode string (Python str)
-    - Encoding: str → UTF-8 bytes → Kronecker embeddings
+    - Encoding: str -> UTF-8 bytes -> Kronecker embeddings
     - Each byte (0-255) is treated as a valid symbol
-    - Decoding: bytes → UTF-8 decode → str
+    - Decoding: bytes -> UTF-8 decode -> str
     - 100% universal: All UTF-8 text supported (no exclusions)
 
     Properties:
@@ -296,7 +310,7 @@ class KroneckerEmbeddings:
         Encode a single token to Kronecker embedding using byte-level encoding.
 
         Process:
-        1. Convert str → UTF-8 bytes
+        1. Convert str -> UTF-8 bytes
         2. Truncate if needed (UTF-8 safe)
         3. Build byte-position matrix via Kronecker product
         4. Apply length normalization
@@ -351,7 +365,7 @@ class KroneckerEmbeddings:
         1. Reshape D-vector to 256×32 matrix
         2. Find active positions (non-zero columns)
         3. Extract byte value at each position (argmax)
-        4. Collect bytes → decode UTF-8 → str
+        4. Collect bytes -> decode UTF-8 -> str
 
         Args:
             pf_vec: Embedding vector of shape (D,)
@@ -417,7 +431,7 @@ class ModelConfig:
     hidden_size = 4096
     num_layers = 8
 
-    # Attention Mix (75% DeltaNet / 25% GSA) — DDDGDDDG pattern
+    # Attention Mix (75% DeltaNet / 25% GSA) -- DDDGDDDG pattern
     num_deltanet_layers = 6
     num_gsa_layers = 2
 
@@ -429,12 +443,12 @@ class ModelConfig:
     # GSA Configuration
     gsa_num_heads = 16  # hidden_size / attn_head_dim = 4096 / 256
     gsa_head_dim = 256
-    gsa_k_base = 128  # FIX-PERF-02: Reduced from 512 — at T=4096, 512 keys/query = 25% dense; 128 is sufficient
+    gsa_k_base = 128  # FIX-PERF-02: Reduced from 512 -- at T=4096, 512 keys/query = 25% dense; 128 is sufficient
     gsa_k_min = 32
-    gsa_k_max = 256  # FIX-PERF-02: Reduced from 1024 — limits atomic scatter in dK/dV backward kernel
+    gsa_k_max = 256  # FIX-PERF-02: Reduced from 1024 -- limits atomic scatter in dK/dV backward kernel
     gsa_indexer_heads = 4
 
-    # MoE Configuration (DENSE MODEL - No MoE) — same as Test 5 for parity
+    # MoE Configuration (DENSE MODEL - No MoE) -- same as Test 5 for parity
     num_real_experts = 0
     num_null_experts = 0
     total_expert_slots = 0
@@ -450,7 +464,7 @@ class ModelConfig:
     # mHC Configuration
     n_streams = 4
     sinkhorn_iters = (
-        20  # Keep at 20 — sufficient for mHC routing quality; do not reduce
+        20  # Keep at 20 -- sufficient for mHC routing quality; do not reduce
     )
 
     # Context and RoPE (standard RoPE)
@@ -493,12 +507,19 @@ class PureHybridEmbeddingTorch(nn.Module):
 
     def __init__(self, vocab_words: List[str], pf_codec: KroneckerEmbeddings):
         super().__init__()
-        PF_table = pf_codec.encode_batch(vocab_words)  # (vocab_size, D)
-        PF_np = PF_table.astype(np.float32)
-        pf_tensor = torch.from_numpy(PF_np).to(torch.bfloat16)
-        # FIX #27: Make PF_table non-persistent (saves ~2GB in checkpoints)
-        # Will be regenerated deterministically from vocab at load time
-        self.register_buffer("PF_table", pf_tensor, persistent=False)
+        PF_np = pf_codec.encode_batch(vocab_words)  # keep whatever it returns
+        if PF_np.dtype != np.float32:
+            PF_np = PF_np.astype(
+                np.float32, copy=False
+            )  # avoid copy if already float32
+
+        # Pre-normalize once at init so forward does gather-only.
+        pf_tensor = torch.from_numpy(PF_np)
+        pf_centered = pf_tensor - pf_tensor.mean(dim=-1, keepdim=True)
+        pf_std = pf_centered.std(dim=-1, keepdim=True) + 1e-6
+        pf_norm = (pf_centered / pf_std).to(torch.bfloat16)
+        self.register_buffer("PF_table", pf_norm, persistent=False)
+        del PF_np
 
     def forward(self, token_ids):
         """
@@ -510,12 +531,8 @@ class PureHybridEmbeddingTorch(nn.Module):
         Returns:
             Normalized embeddings (B, T, D=8192)
         """
-        PF = self.PF_table[token_ids].to(dtype=torch.float32)  # type: ignore
-        # Normalize per token (zero mean, unit std)
-        PF_centered = PF - PF.mean(dim=-1, keepdim=True)
-        PF_std = PF_centered.std(dim=-1, keepdim=True) + 1e-6
-        PFn = PF_centered / PF_std
-        return PFn
+        with time_region("embed.kronecker.gather"):
+            return self.PF_table[token_ids]  # type: ignore
 
     def module(self):
         return self
@@ -545,10 +562,10 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Triton path: Liger-style fused forward+backward (LigerRMSNormFunction in kernels).
-        # Safe with grad enabled — reversible backward uses this during recompute.
-        if self._use_triton and x.is_cuda and triton_rmsnorm is not None:
+        # Safe with grad enabled -- reversible backward uses this during recompute.
+        if self._use_triton and x.is_cuda:
             try:
-                return triton_rmsnorm(x, self.weight, self.eps)
+                return triton_rmsnorm(x, self.weight, self.eps)  # type: ignore
             except Exception:
                 pass  # Fall through to PyTorch path
 
@@ -556,7 +573,8 @@ class RMSNorm(nn.Module):
         x_f = x.float()
         norm = x_f.pow(2).mean(dim=-1, keepdim=True)
         x = x * torch.rsqrt(norm.to(x.dtype) + self.eps)
-        return self.weight * x
+        # REPRO-FIX: Cast weight to x.dtype to avoid implicit fp32 upcast in reversible recompute
+        return self.weight.to(dtype=x.dtype) * x
 
 
 class RotaryEmbedding(nn.Module):
@@ -604,14 +622,19 @@ class RotaryEmbedding(nn.Module):
         Saves 2.1GB VRAM compared to persistent caching (268MB × 8 layers).
         """
         # FIX #30: Check if cache exists (set at model forward start)
-        # FIX #39: Include dtype in cache key (default to None for backward compatibility)
-        cache_key = (seq_len, device, dtype)
+        # FIX #39: Include dtype in cache key
+        #   Include self.dim and return pre-broadcasted views if available
+        cache_key = (seq_len, device, dtype, self.dim)
         if hasattr(self, "_forward_cache") and cache_key in self._forward_cache:  # type: ignore
             return self._forward_cache[cache_key]  # type: ignore
 
         t = torch.arange(seq_len, device=device).float()
         freqs = t.unsqueeze(-1) * self.inv_freq.unsqueeze(0)  # type: ignore
-        emb = torch.cat((freqs, freqs), dim=-1)
+        # BUG-FIX: Use repeat_interleave for interleaved RoPE flavor.
+        # cat((f, f)) would result in [f0, f1, f2, f0, f1, f2] which, when sliced via [0::2],
+        # would drop all odd frequencies and repeat even ones.
+        # repeat_interleave results in [f0, f0, f1, f1, f2, f2] so [0::2] -> [f0, f1, f2].
+        emb = torch.repeat_interleave(freqs, 2, dim=-1)
 
         # FIX #42: Cast to requested dtype to match query/key precision
         # Prevents implicit upcasts and memory/bandwidth issues at 256k context
@@ -621,7 +644,14 @@ class RotaryEmbedding(nn.Module):
             cos_out = cos_out.to(dtype)
             sin_out = sin_out.to(dtype)
 
-        return cos_out, sin_out
+        # Return (cos, sin, cos_broadcast, sin_broadcast)
+        # Default broadcast if not already in cache
+        return (
+            cos_out,
+            sin_out,
+            cos_out.unsqueeze(0).unsqueeze(2),
+            sin_out.unsqueeze(0).unsqueeze(2),
+        )
 
     @staticmethod
     def _apply_rotary(x, cos, sin):
@@ -688,6 +718,14 @@ class GatedDeltaNet(nn.Module):
     O(N) linear attention with gating and alpha decay for long-context efficiency.
     Key components: alpha (decay), beta (writing strength), L2 norm on Q/K,
     short convolutions. Uses fla's chunk_gated_delta_rule when available.
+
+    References used for fused-entrance integration:
+    - FLA GatedDeltaNet layer:
+      https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/gated_deltanet.py
+    - FLA gated delta-rule kernels:
+      https://github.com/fla-org/flash-linear-attention/blob/main/fla/ops/gated_delta_rule/chunk.py
+    - NVLabs GatedDeltaNet FLA kernels:
+      https://github.com/NVlabs/GatedDeltaNet/blob/main/lit_gpt/gated_delta_rule_ops/fla_version/chunk_fla.py
     """
 
     def __init__(
@@ -710,21 +748,28 @@ class GatedDeltaNet(nn.Module):
         self.max_seq_len = max_seq_len
         self.use_output_norm = use_output_norm
         self.require_fused_kernel = require_fused_kernel
+        # Keep only the post-FLA fusion optimization path.
+        self.fuse_post_tail = True
+        # Default on: pass native dtype tensors into FLA (bf16 path).
+        # Set T17_DN_FLA_NATIVE_DTYPE=0 to force legacy fp32-cast behavior.
+        self.fla_native_dtype = os.getenv("T17_DN_FLA_NATIVE_DTYPE", "1") == "1"
+        # Optional: use Triton fused Delta Entrance (conv+mask+norm+RoPE).
+        # Keep off by default until fully validated on train + eval.
+        self.use_fused_delta_entrance = (
+            os.getenv("T17_DN_USE_DELTA_ENTRANCE", "0") == "1"
+        )
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
-        self._key_dim = key_dim
-        self._value_dim = value_dim
 
-        # PERF: Fused QKV+G projection — single GEMM reads x from HBM once
-        # instead of 4 separate reads (saves ~3ms/call on 8×H100)
-        self.qkvg_proj = nn.Linear(
-            hidden_size, key_dim + key_dim + value_dim + value_dim, bias=False
-        )
+        self.q_proj = nn.Linear(hidden_size, key_dim, bias=False)
+        self.k_proj = nn.Linear(hidden_size, key_dim, bias=False)
+        self.v_proj = nn.Linear(hidden_size, value_dim, bias=False)
+        self.g_proj = nn.Linear(hidden_size, value_dim, bias=False)
         self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
 
-        # PERF: Fused beta+gk projection — single GEMM instead of 2 reads of x
-        self.bgk_proj = nn.Linear(hidden_size, num_heads * 2, bias=True)
+        self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)
+        self.gk_proj = nn.Linear(hidden_size, num_heads, bias=True)
 
         self.q_conv1d = ShortConvolution(
             key_dim, conv_size=conv_size, activation="silu"
@@ -757,61 +802,15 @@ class GatedDeltaNet(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        nn.init.normal_(self.qkvg_proj.weight, mean=0.0, std=0.02)
-        nn.init.normal_(self.o_proj.weight, mean=0.0, std=0.02)
+        proj_modules = [self.o_proj, self.q_proj, self.k_proj, self.v_proj, self.g_proj]
+        for m in proj_modules:
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
         # STABILITY-FIX: Reduce init scale for alpha/beta gating logic
-        nn.init.normal_(self.bgk_proj.weight, mean=0.0, std=0.002)
-        nn.init.zeros_(self.bgk_proj.bias)
-
-    def _load_from_state_dict(
-        self,
-        state_dict,
-        prefix,
-        local_metadata,
-        strict,
-        missing_keys,
-        unexpected_keys,
-        error_msgs,
-    ):
-        """Checkpoint compatibility: load old separate q/k/v/g_proj into fused qkvg_proj."""
-        q_key = prefix + "q_proj.weight"
-        if q_key in state_dict:
-            state_dict[prefix + "qkvg_proj.weight"] = torch.cat(
-                [
-                    state_dict.pop(prefix + "q_proj.weight"),
-                    state_dict.pop(prefix + "k_proj.weight"),
-                    state_dict.pop(prefix + "v_proj.weight"),
-                    state_dict.pop(prefix + "g_proj.weight"),
-                ],
-                dim=0,
-            )
-
-        b_key = prefix + "b_proj.weight"
-        if b_key in state_dict:
-            state_dict[prefix + "bgk_proj.weight"] = torch.cat(
-                [
-                    state_dict.pop(prefix + "b_proj.weight"),
-                    state_dict.pop(prefix + "gk_proj.weight"),
-                ],
-                dim=0,
-            )
-            state_dict[prefix + "bgk_proj.bias"] = torch.cat(
-                [
-                    state_dict.pop(prefix + "b_proj.bias"),
-                    state_dict.pop(prefix + "gk_proj.bias"),
-                ],
-                dim=0,
-            )
-
-        super()._load_from_state_dict(
-            state_dict,
-            prefix,
-            local_metadata,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
-        )
+        gating_modules = [self.b_proj, self.gk_proj]
+        for m in gating_modules:
+            nn.init.normal_(m.weight, mean=0.0, std=0.002)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
 
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
@@ -819,48 +818,73 @@ class GatedDeltaNet(nn.Module):
         token_keep = _token_keep_mask(attention_mask, B, T, device)
         token_keep_f = None
 
-        # ── Fused projections (single GEMM reads x once from HBM) ────────────
-        qkvg = self.qkvg_proj(x)
-        q, k, v, g = qkvg.split(
-            [self._key_dim, self._key_dim, self._value_dim, self._value_dim], dim=-1
+        with time_region("deltanet.entry.proj"):
+            q_in = self.q_proj(x)
+            k_in = self.k_proj(x)
+            v_in = self.v_proj(x)
+            g = self.g_proj(x)
+
+        use_fused_entry = (
+            self.use_fused_delta_entrance
+            and fused_delta_entrance is not None
+            and q_in.is_cuda
         )
-        # split() creates non-contiguous views — inductor generates wrong reinterpret_tensor
-        q, k, v, g = q.contiguous(), k.contiguous(), v.contiguous(), g.contiguous()
+        if use_fused_entry:
+            # Reference behavior from FLA/NVLabs gated DeltaNet paths:
+            # short-conv + qk normalization + kernel-compatible inputs.
+            with time_region("deltanet.entry.fused"):
+                cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(
+                    T, device, x.dtype
+                )
+                cos_half = cos[:, 0::2].contiguous()
+                sin_half = sin[:, 0::2].contiguous()
+                q, k, v = fused_delta_entrance(
+                    q_in,
+                    k_in,
+                    v_in,
+                    self.q_conv1d.conv.weight,
+                    self.k_conv1d.conv.weight,
+                    self.v_conv1d.conv.weight,
+                    self.q_conv1d.conv.bias,
+                    self.k_conv1d.conv.bias,
+                    self.v_conv1d.conv.bias,
+                    cos_half,
+                    sin_half,
+                    None,
+                )  # type: ignore
+                g = g.view(B, T, self.num_heads, self.head_dim)
+        else:
+            # ── Separate PyTorch ops (conv1d → L2Norm → RoPE → mask) ────────────
+            with time_region("deltanet.entry.conv"):
+                q = self.q_conv1d(q_in)
+                k = self.k_conv1d(k_in)
+                v = self.v_conv1d(v_in)
 
-        q = self.q_conv1d(q)
-        k = self.k_conv1d(k)
-        v = self.v_conv1d(v)
+            with time_region("deltanet.entry.reshape"):
+                q = q.view(B, T, self.num_heads, self.head_dim)
+                k = k.view(B, T, self.num_heads, self.head_dim)
+                v = v.view(B, T, self.num_heads, self.head_dim)
+                g = g.view(B, T, self.num_heads, self.head_dim)
 
-        q = q.view(B, T, self.num_heads, self.head_dim)
-        k = k.view(B, T, self.num_heads, self.head_dim)
-        v = v.view(B, T, self.num_heads, self.head_dim)
-        g = g.view(B, T, self.num_heads, self.head_dim)
+            # L2 Normalization MUST happen first, otherwise it destroys the RoPE rotational structure
+            with time_region("deltanet.entry.norm_rope"):
+                q = F.normalize(q, p=2, dim=-1)
+                k = F.normalize(k, p=2, dim=-1)
 
-        # L2 Normalization MUST happen first, otherwise it destroys the RoPE rotational structure
-        q = F.normalize(q, p=2, dim=-1)
-        k = F.normalize(k, p=2, dim=-1)
+                cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(
+                    T, device, x.dtype
+                )
+                q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
+                k = self.rotary_emb._apply_rotary(k, _cos_b, _sin_b)
 
-        cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-        cos = cos.unsqueeze(0).unsqueeze(2)
-        sin = sin.unsqueeze(0).unsqueeze(2)
-        q = self.rotary_emb._apply_rotary(q, cos, sin)
-        k = self.rotary_emb._apply_rotary(k, cos, sin)
-
-        # ── Alpha/Beta gating (fused bgk projection + log-space g) ────────────
-        bgk = self.bgk_proj(x)
-        b_raw, gk = bgk.split([self.num_heads, self.num_heads], dim=-1)
-        b_raw, gk = b_raw.contiguous(), gk.contiguous()
-        beta = torch.sigmoid(b_raw).unsqueeze(-1)  # (B, T, num_heads, 1)
-        A = torch.exp(self.A_log)
-        # g_logspace = log(alpha) directly — FLA needs log-space, so skip the
-        # pointless exp() here followed by log() in fla_deltanet.py
-        g_logspace = -A.view(1, 1, self.num_heads) * F.softplus(
-            gk + self.dt_bias
-        )  # (B, T, H)
-        # Safety clamp: the old exp→log path had clamp(alpha, min=1e-6) before log(),
-        # which effectively clamped g to >= log(1e-6) ≈ -13.8. Preserve that safety.
-        g_logspace = g_logspace.clamp(min=-13.8)
-        alpha = torch.exp(g_logspace).unsqueeze(-1)  # (B, T, H, 1) — only for masking
+        with time_region("deltanet.entry.alpha_beta"):
+            beta = torch.sigmoid(self.b_proj(x)).unsqueeze(-1)  # (B, T, num_heads, 1)
+            gk = self.gk_proj(x)
+            A = torch.exp(self.A_log)
+            alpha = torch.exp(
+                -A.view(1, 1, self.num_heads, 1)
+                * F.softplus(gk + self.dt_bias).unsqueeze(-1)
+            )
 
         if token_keep is not None:
             token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
@@ -871,45 +895,72 @@ class GatedDeltaNet(nn.Module):
             beta = beta * token_keep_f
             alpha = alpha * token_keep_f + (1.0 - token_keep_f)
 
-        fla_available = HAS_FLA and fla_gated_delta_rule is not None and q.is_cuda
-        if self.require_fused_kernel and not fla_available:
+        fla_available = HAS_FLA and chunk_gated_delta_rule is not None and q.is_cuda
+        if not fla_available:
             raise RuntimeError(
                 "DeltaNet fused kernel is required but unavailable. "
-                f"HAS_FLA={HAS_FLA}, fla_gated_delta_rule={fla_gated_delta_rule is not None}, "
+                f"HAS_FLA={HAS_FLA}, chunk_gated_delta_rule={chunk_gated_delta_rule is not None}, "
                 f"q.is_cuda={q.is_cuda}. Install fla: pip install fla"
             )
 
-        if fla_available and fla_gated_delta_rule is not None:
-            try:
-                with time_region("deltanet.fla"):
-                    o = fla_gated_delta_rule(
-                        q=q,
-                        k=k,
-                        v=v,
-                        alpha=alpha,
-                        beta=beta,
-                        D=self.D,
-                        num_heads=self.num_heads,
-                        g_precomputed=g_logspace,
-                    )
-            except Exception as e:
-                if self.require_fused_kernel:
-                    raise RuntimeError(
-                        "DeltaNet fused kernel execution failed and fallback is disabled."
-                    ) from e
-                raise
+        # Direct fla kernel call (no local wrapper).
+        # q/k/v: [B, T, H, d], alpha/beta: [B, T, H, 1]
+        if self.fla_native_dtype:
+            q_fla = q
+            k_fla = k
+            v_fla = v
+            g_fla = torch.log(alpha[:, :, :, 0].clamp(min=1e-6))
+            beta_fla = beta[:, :, :, 0]
         else:
-            raise RuntimeError(
-                "DeltaNet requires fla (pip install fla) when require_fused_kernel=True."
-            )
+            q_fla = q.float()
+            k_fla = k.float()
+            v_fla = v.float()
+            g_fla = torch.log(alpha[:, :, :, 0].float().clamp(min=1e-6))
+            beta_fla = beta[:, :, :, 0].float()
 
-        if self.use_output_norm:
-            o_flat = o.reshape(B * T * self.num_heads, self.head_dim)
-            g_flat = g.reshape(B * T * self.num_heads, self.head_dim)
-            o_normed = self.o_norm(o_flat, g_flat)
-            o = o_normed.view(B, T, self.num_heads, self.head_dim)
+        with time_region("deltanet.fla"):
+            o_fla, _ = chunk_gated_delta_rule(
+                q_fla,
+                k_fla,  # type: ignore
+                v_fla,
+                g_fla,
+                beta_fla,
+                scale=1.0,
+                output_final_state=False,
+            )  # type: ignore
+
+        use_fused_post = (
+            self.use_output_norm
+            and self.fuse_post_tail
+            and triton_deltanet_post_fused is not None
+            and q.is_cuda
+            and (not torch.is_grad_enabled())
+        )
+        if use_fused_post:
+            with time_region("deltanet.post_fused"):
+                o = triton_deltanet_post_fused(
+                    o_fla.to(q.dtype),
+                    q,
+                    k,
+                    v,
+                    g,
+                    self.D,
+                    self.o_norm.norm.weight,
+                    eps=self.o_norm.norm.eps,
+                )  # type: ignore
         else:
-            o = o * torch.sigmoid(g)
+            # Preserve Test17 residual behavior.
+            qk_dot = (q * k).sum(dim=-1, keepdim=True)
+            d_residual = self.D.view(1, 1, self.num_heads, 1) * qk_dot * v
+            o = o_fla.to(q.dtype) + d_residual
+
+            if self.use_output_norm:
+                o_flat = o.reshape(B * T * self.num_heads, self.head_dim)
+                g_flat = g.reshape(B * T * self.num_heads, self.head_dim)
+                o_normed = self.o_norm(o_flat, g_flat)
+                o = o_normed.view(B, T, self.num_heads, self.head_dim)
+            else:
+                o = o * torch.sigmoid(g)
 
         if token_keep_f is not None:
             o = o * token_keep_f
@@ -919,22 +970,18 @@ class GatedDeltaNet(nn.Module):
 
 
 # ============================================================================
-# Gated Sparse Attention (25% of layers in Test 14 — DDDGDDDG)
+# Gated Sparse Attention (25% of layers in Test 14 -- DDDGDDDG)
 # ============================================================================
 
 
 class GatedSparseAttention(nn.Module):
     """
-    Gated Sparse Attention (GSA) - arXiv:2601.15305v1
-
-    Implements adaptive sparse attention with gating. In Test 14, layers 4 and 8
-    use GSA (DDDGDDDG); layers 1–3, 5–7 use GatedDeltaNet.
-
-    Memory complexity: O(T·k) via fused_indexer_topk chunked kernel.
+    Memory complexity: O(T*k) via fused_indexer_topk chunked kernel.
     Architecture:
-    - Shared indexer keys (W_Ik → [B, T, d_idx]) across indexer heads
+    - Shared indexer keys (W_Ik -> [B, T, d_idx]) across indexer heads
     - Per-attention-head diversity via head_importance_bias on attention logits
     - Adaptive sparsity budget k_t from variance-based heuristic
+    -   GSA Triton sparse attention kernel is REQUIRED for training throughput.
     """
 
     def __init__(
@@ -968,9 +1015,11 @@ class GatedSparseAttention(nn.Module):
         self.d_idx = (
             128  # ARCH-01: paper Table 1 specifies d_idx=128 (was 32, 4× under-spec)
         )
-        # PERF: Fused indexer projection — single GEMM instead of 3 reads of x
-        self._idx_split = [indexer_heads * self.d_idx, self.d_idx, indexer_heads]
-        self.idx_proj = nn.Linear(hidden_size, sum(self._idx_split), bias=False)
+        self.W_Iq = nn.Linear(hidden_size, indexer_heads * self.d_idx, bias=False)
+        self.W_Ik = nn.Linear(
+            hidden_size, self.d_idx, bias=False
+        )  # Shared across indexer heads
+        self.W_Iw = nn.Linear(hidden_size, indexer_heads, bias=False)
         self.gate_bias = nn.Parameter(torch.zeros(indexer_heads))
 
         self.register_buffer("variance_ema", torch.tensor(1.0))
@@ -983,9 +1032,20 @@ class GatedSparseAttention(nn.Module):
         self.register_buffer("_variance_ema_snapshot", torch.tensor(1.0))
         self.variance_alpha = 0.01
 
-        # PERF: Fused attention + gating projection — single GEMM instead of 5 reads of x
-        self.qkvgg_proj = nn.Linear(hidden_size, hidden_size * 5, bias=False)
+        # Reversibility Cache (single slot avoids Python list churn)
+        self._cached_base_idx = None
+        self._cached_keep_mask = None
+        self._q_pos_cache = None
+
+        # Attention Projections
+        self.W_q = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.W_k = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.W_v = nn.Linear(hidden_size, hidden_size, bias=False)
         self.o_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+
+        # Dual Gating
+        self.W_gv = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.W_go = nn.Linear(hidden_size, hidden_size, bias=False)
 
         # Rotary embeddings (standard RoPE)
         self.rotary_emb = RotaryEmbedding(
@@ -999,56 +1059,19 @@ class GatedSparseAttention(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.idx_proj, self.qkvgg_proj, self.o_proj]:
+        for m in [
+            self.W_Iq,
+            self.W_Ik,
+            self.W_Iw,
+            self.W_q,
+            self.W_k,
+            self.W_v,
+            self.o_proj,
+            self.W_gv,
+            self.W_go,
+        ]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
         nn.init.zeros_(self.gate_bias)
-
-    def _load_from_state_dict(
-        self,
-        state_dict,
-        prefix,
-        local_metadata,
-        strict,
-        missing_keys,
-        unexpected_keys,
-        error_msgs,
-    ):
-        """Checkpoint compatibility: load old separate projections into fused ones."""
-        # Indexer: W_Iq + W_Ik + W_Iw → idx_proj
-        iq_key = prefix + "W_Iq.weight"
-        if iq_key in state_dict:
-            state_dict[prefix + "idx_proj.weight"] = torch.cat(
-                [
-                    state_dict.pop(prefix + "W_Iq.weight"),
-                    state_dict.pop(prefix + "W_Ik.weight"),
-                    state_dict.pop(prefix + "W_Iw.weight"),
-                ],
-                dim=0,
-            )
-
-        # Attention + gates: W_q + W_k + W_v + W_gv + W_go → qkvgg_proj
-        wq_key = prefix + "W_q.weight"
-        if wq_key in state_dict:
-            state_dict[prefix + "qkvgg_proj.weight"] = torch.cat(
-                [
-                    state_dict.pop(prefix + "W_q.weight"),
-                    state_dict.pop(prefix + "W_k.weight"),
-                    state_dict.pop(prefix + "W_v.weight"),
-                    state_dict.pop(prefix + "W_gv.weight"),
-                    state_dict.pop(prefix + "W_go.weight"),
-                ],
-                dim=0,
-            )
-
-        super()._load_from_state_dict(
-            state_dict,
-            prefix,
-            local_metadata,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
-        )
 
     def forward(self, x, attention_mask=None):
         B, T, C = x.shape
@@ -1076,40 +1099,20 @@ class GatedSparseAttention(nn.Module):
         is_reversible_forward = self.training and (not torch.is_grad_enabled())
         is_reconstruct = self.training and torch.is_grad_enabled()
 
-        if not hasattr(self, "_index_cache"):
-            self._index_cache = []
-
-        if is_reconstruct and len(self._index_cache) > 0:
-            (
-                var_t,
-                k_t,
-                keep_mask,
-                base_idx,
-                leak_attempt_mask,
-                attempt_den,
-                leak_final_mask,
-                final_den,
-            ) = self._index_cache.pop(0)
+        if is_reconstruct and self._cached_base_idx is not None:
+            base_idx, keep_mask = self._cached_base_idx, self._cached_keep_mask
             k_limit = base_idx.size(-1)
-
-            self.last_gsa_leak_attempt_fraction = (
-                leak_attempt_mask.float().sum() / attempt_den
-            ).detach()
-            self.last_gsa_leak_fraction = (
-                leak_final_mask.float().sum() / final_den
-            ).detach()
+            # Clear slot after use
+            self._cached_base_idx = None
+            self._cached_keep_mask = None
         else:
-            # Lightning Indexer — O(T·k) via fused chunked kernel
+            # Lightning Indexer -- O(T*k) via fused chunked kernel
             # Uses fused_indexer_topk to avoid materializing [B, heads, T, T] importance scores.
-            # PERF: Single GEMM for all indexer projections (reads x once)
-            idx_out = self.idx_proj(x)
-            q_I_raw, k_I, w_raw = idx_out.split(self._idx_split, dim=-1)
-            q_I_raw, k_I, w_raw = (
-                q_I_raw.contiguous(),
-                k_I.contiguous(),
-                w_raw.contiguous(),
-            )
-            q_I = q_I_raw.view(B, T, self.indexer_heads, self.d_idx)  # [B, T, 4, 128]
+            q_I = self.W_Iq(x).view(
+                B, T, self.indexer_heads, self.d_idx
+            )  # [B, T, 4, 128]
+            k_I = self.W_Ik(x)  # [B, T, d_idx]
+            w_raw = self.W_Iw(x)  # [B, T, indexer_heads]
             scale_idx = 1.0 / math.sqrt(self.d_idx)
 
             if is_reversible_forward:
@@ -1127,7 +1130,7 @@ class GatedSparseAttention(nn.Module):
                 )
 
             with time_region("gsa.indexer"):
-                var_t, k_t, top_indices = fused_indexer_topk(  # type: ignore
+                var_t, k_t, top_indices = fused_indexer_topk(
                     q=q_I,
                     k=k_I,
                     w=w_raw,
@@ -1140,24 +1143,30 @@ class GatedSparseAttention(nn.Module):
                     variance_ema=ema_for_indexer,  # snapshot or live
                     is_training=False,
                     sink_size=4,
-                )
+                )  # type: ignore
 
             if is_reversible_forward:
                 var_t_mean = var_t.mean().detach()
-                if torch.distributed.is_initialized():
-                    torch.distributed.all_reduce(
-                        var_t_mean, op=torch.distributed.ReduceOp.AVG
-                    )
+                # Local EMA only (kill 2 global syncs per step)
                 self.variance_ema.mul_(0.99).add_(var_t_mean, alpha=0.01)  # type: ignore
 
             # Build per-query keep mask from adaptive k_t with strict causal safety.
             k_limit = top_indices.size(-1)
-            base_idx = top_indices.long()  # [B, T, k_limit]
-            q_pos = torch.arange(T, device=device, dtype=base_idx.dtype).view(1, T, 1)
+            #   Use int32 for indices (saves 50% bandwidth)
+            base_idx = top_indices.to(torch.int32)
+
+            # Position cache (avoids 16 arange() calls per step across layers)
+            if (
+                self._q_pos_cache is None
+                or self._q_pos_cache.size(0) != T
+                or self._q_pos_cache.device != device
+            ):
+                self._q_pos_cache = torch.arange(T, device=device, dtype=torch.int32)
+            q_pos = self._q_pos_cache.view(1, T, 1)
             causal_cap = (q_pos + 1).to(dtype=k_t.dtype)
             k_t = torch.minimum(k_t, causal_cap.squeeze(-1)).clamp(min=1)
 
-            range_k = torch.arange(k_limit, device=device)
+            range_k = torch.arange(k_limit, device=device, dtype=torch.int32)
             keep_mask = range_k.view(1, 1, -1) < k_t.unsqueeze(-1)  # [B, T, k_limit]
             causal_selected = base_idx <= q_pos
 
@@ -1166,7 +1175,9 @@ class GatedSparseAttention(nn.Module):
                 invalid_query = ~token_keep
                 if invalid_query.any():
                     fallback_idx = (
-                        torch.arange(T, device=device).view(1, T).expand(B, T)
+                        torch.arange(T, device=device, dtype=torch.int32)
+                        .view(1, T)
+                        .expand(B, T)
                     )
                     base_idx = base_idx.clone()
                     base_idx[..., 0] = torch.where(
@@ -1175,7 +1186,7 @@ class GatedSparseAttention(nn.Module):
                     causal_selected = base_idx <= q_pos
 
                 key_keep = torch.gather(
-                    token_keep, dim=1, index=base_idx.reshape(B, -1)
+                    token_keep, dim=1, index=base_idx.reshape(B, -1).long()
                 ).view(B, T, k_limit)
                 keep_mask = keep_mask & key_keep & query_keep
 
@@ -1184,65 +1195,36 @@ class GatedSparseAttention(nn.Module):
                     keep_mask = keep_mask.clone()
                     keep_mask[..., 0] = keep_mask[..., 0] | invalid_query
 
-            attempt_keep_mask = keep_mask
-            leak_attempt_mask = attempt_keep_mask & ~causal_selected
-            keep_mask = attempt_keep_mask & causal_selected
-            leak_final_mask = keep_mask & ~causal_selected
-            attempt_den = attempt_keep_mask.sum().clamp(min=1).float()
-            final_den = keep_mask.sum().clamp(min=1).float()
-
-            self.last_gsa_leak_attempt_fraction = (
-                leak_attempt_mask.float().sum() / attempt_den
-            ).detach()
-            self.last_gsa_leak_fraction = (
-                leak_final_mask.float().sum() / final_den
-            ).detach()
+            # Strict causal enforcement
+            keep_mask = keep_mask & causal_selected
 
             if is_reversible_forward:
-                self._index_cache.append(
-                    (
-                        var_t,
-                        k_t,
-                        keep_mask,
-                        base_idx,
-                        leak_attempt_mask,
-                        attempt_den,
-                        leak_final_mask,
-                        final_den,
-                    )
-                )
+                self._cached_base_idx = base_idx
+                self._cached_keep_mask = keep_mask
 
         # Dual Gating & Attention Projections
-        # PERF: Single GEMM for q, k, v, gate_v, gate_o (reads x once)
-        qkvgg = self.qkvgg_proj(x)
-        H = self.hidden_size
-        q, k_attn, v, g_v_raw, g_o_raw = qkvgg.split([H, H, H, H, H], dim=-1)
-        q, k_attn, v, g_v_raw, g_o_raw = (
-            q.contiguous(),
-            k_attn.contiguous(),
-            v.contiguous(),
-            g_v_raw.contiguous(),
-            g_o_raw.contiguous(),
-        )
+        q = self.W_q(x)
+        k_attn = self.W_k(x)
+        v = self.W_v(x)
 
-        g_v = torch.sigmoid(g_v_raw)
+        g_v = torch.sigmoid(self.W_gv(x))
         v = v * g_v
 
         q = q.view(B, T, self.num_heads, self.head_dim)
         k_attn = k_attn.view(B, T, self.num_heads, self.head_dim)
         v = v.view(B, T, self.num_heads, self.head_dim)
         if token_keep is not None:
-            token_keep_f = token_keep.to(dtype=q.dtype).view(B, T, 1, 1)
-            q = q * token_keep_f
-            k_attn = k_attn * token_keep_f
-            v = v * token_keep_f
+            token_keep_v = token_keep.view(B, T, 1, 1).to(q.dtype)
+            q = q * token_keep_v
+            k_attn = k_attn * token_keep_v
+            v = v * token_keep_v
 
         # Rotary (computed on-the-fly to save 2.1GB VRAM)
-        cos, sin = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-        cos = cos.unsqueeze(0).unsqueeze(2)  # (1, T, 1, dim)
-        sin = sin.unsqueeze(0).unsqueeze(2)
-        q = self.rotary_emb._apply_rotary(q, cos, sin)
-        k_attn = self.rotary_emb._apply_rotary(k_attn, cos, sin)
+        # Uses cache key (T, device, dtype, head_dim) - Safe for centralized sharing
+        #   Consumes pre-broadcasted RoPE from centralized cache
+        cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
+        q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
+        k_attn = self.rotary_emb._apply_rotary(k_attn, _cos_b, _sin_b)
 
         # ── Sparse attention via triton_sparse_attention kernel ────────
         # O(T*k) complexity: kernel iterates only over k_limit selected
@@ -1251,7 +1233,7 @@ class GatedSparseAttention(nn.Module):
         #
         # At T=256k, B=1, k_limit=1024:
         #   indices: [1, 16, 256k, 1024] int64 = 32GB  (vs 128GB for [B,1,T,T])
-        #   BUT indices are shared across heads → [B, 1, T, k_limit] expanded
+        #   BUT indices are shared across heads -> [B, 1, T, k_limit] expanded
         #   as views, so actual memory = [B, T, k_limit] * 8 bytes = 2GB.
 
         # Kernel expects indices: [B, H, T, k_sel] int64, mask: [B, H, T, k_sel] float32
@@ -1261,7 +1243,9 @@ class GatedSparseAttention(nn.Module):
         # without copying. Memory: only [B, T, k_limit] actually allocated.
         sparse_idx = base_idx.unsqueeze(1).expand(B, self.num_heads, T, k_limit)
         sparse_mask = (
-            keep_mask.float().unsqueeze(1).expand(B, self.num_heads, T, k_limit)
+            keep_mask.to(dtype=q.dtype)  # type: ignore
+            .unsqueeze(1)
+            .expand(B, self.num_heads, T, k_limit)
         )
 
         scale_attn = 1.0 / math.sqrt(self.head_dim)
@@ -1290,8 +1274,8 @@ class GatedSparseAttention(nn.Module):
         # Output is [B, T, H, D] from kernel, reshape to [B, T, hidden_size]
         o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
 
-        # Output gate (g_o_raw already computed in fused qkvgg_proj above)
-        g_o = torch.sigmoid(g_o_raw)
+        # Output gate
+        g_o = torch.sigmoid(self.W_go(x))
 
         return self.o_proj(o_sparse * g_o)
 
@@ -1302,7 +1286,7 @@ class GatedSparseAttention(nn.Module):
 
 
 class DenseMLP(nn.Module):
-    """SwiGLU FFN (Liger MLP) for dense models — Test 14."""
+    """SwiGLU FFN (Liger MLP) for dense models -- Test 14."""
 
     def __init__(self, d_model: int, d_hidden: int):
         super().__init__()
@@ -1315,7 +1299,7 @@ class DenseMLP(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        for m in [self.mlp.gate_up_proj, self.mlp.down_proj]:
+        for m in [self.mlp.gate_proj, self.mlp.up_proj, self.mlp.down_proj]:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1331,11 +1315,16 @@ class LightningMLP(nn.Module):
             d_model=config.hidden_size,
             d_hidden=config.shared_expert_intermediate_size,
         )
+        self.aux_scalar_fastpath = os.getenv("T17_MLP_T2_AUX_SCALAR", "1") == "1"
 
     def forward(self, x):
         out = self.mlp(x)
         # Reversible stack expects (out, aux_loss); DenseMLP returns tensor only
-        aux = (out * 0.0).sum()  # zero aux with grad_fn for backprop
+        if self.aux_scalar_fastpath:
+            # Keep grad_fn with minimal work (avoid full-tensor reduction).
+            aux = out.reshape(-1)[0] * 0.0
+        else:
+            aux = (out * 0.0).sum()  # zero aux with grad_fn for backprop
         return out, aux
 
 
@@ -1358,12 +1347,7 @@ def sinkhorn_knopp(
     recomputation pass). Previously the backward path fell back to 20
     separate PyTorch kernel launches per sublayer instead of 1 Triton call.
     """
-    if (
-        not _TORCH_COMPILE_MODE
-        and HAS_TRITON
-        and triton_sinkhorn_knopp is not None
-        and logits.is_cuda
-    ):
+    if HAS_TRITON and triton_sinkhorn_knopp is not None and logits.is_cuda:
         # Stable exp: subtract max along last dim before passing to kernel
         logits_stable = logits - logits.amax(dim=-1, keepdim=True)
         try:
@@ -1371,7 +1355,7 @@ def sinkhorn_knopp(
                 return triton_sinkhorn_knopp(logits_stable, num_iters=iters, eps=eps)
         except Exception:
             pass  # fall through to PyTorch
-    # PyTorch fallback (CPU, Triton unavailable, or torch.compile mode)
+    # PyTorch fallback (CPU or Triton unavailable)
     with time_region("sinkhorn.pytorch"):
         return pytorch_sinkhorn_knopp(logits, num_iters=iters, eps=eps)  # type: ignore
 
@@ -1384,19 +1368,17 @@ class MHCCoeffs(nn.Module):
         self.d_model = d_model
         self.n = n_streams
         self.iters = iters
+        # Perf-only ablations (no architecture change):
+        # - T17_MHC_FUSE_COEFF_PROJ=1: one fused linear over concatenated phi weights
+        # - T17_MHC_RMS_FWD_ONLY=1: use forward-only Triton RMSNorm in no-grad execution
+        self.fuse_coeff_proj = os.getenv("T17_MHC_FUSE_COEFF_PROJ", "0") == "1"
+        self.rms_fwd_only = os.getenv("T17_MHC_RMS_FWD_ONLY", "0") == "1"
 
         d_in = self.n * d_model
 
-        # Fused projection: pre (n) + post (n) + res (n*n)
-        # Avoids inductor incorrectly fusing separate Linear layers on the same input
-        # (same pattern as qkvg_proj / bgk_proj / idx_proj / qkvgg_proj fusions)
-        self._pre_dim = self.n
-        self._post_dim = self.n
-        self._res_dim = self.n * self.n
-        self._phi_split = [self._pre_dim, self._post_dim, self._res_dim]
-        self.phi_fused = nn.Linear(
-            d_in, self._pre_dim + self._post_dim + self._res_dim, bias=False
-        )
+        self.phi_pre = nn.Linear(d_in, self.n, bias=False)
+        self.phi_post = nn.Linear(d_in, self.n, bias=False)
+        self.phi_res = nn.Linear(d_in, self.n * self.n, bias=False)
 
         self.b_pre = nn.Parameter(torch.zeros(self.n))
         self.b_post = nn.Parameter(torch.zeros(self.n))
@@ -1408,59 +1390,45 @@ class MHCCoeffs(nn.Module):
 
         self.rms = RMSNorm(d_in)
 
-        nn.init.normal_(self.phi_fused.weight, mean=0.0, std=0.02)
-
-    def _load_from_state_dict(
-        self,
-        state_dict,
-        prefix,
-        local_metadata,
-        strict,
-        missing_keys,
-        unexpected_keys,
-        error_msgs,
-    ):
-        """Handle old checkpoints with separate phi_pre/phi_post/phi_res weights."""
-        pre_key = prefix + "phi_pre.weight"
-        fused_key = prefix + "phi_fused.weight"
-        if pre_key in state_dict and fused_key not in state_dict:
-            w_pre = state_dict.pop(pre_key)
-            w_post = state_dict.pop(prefix + "phi_post.weight")
-            w_res = state_dict.pop(prefix + "phi_res.weight")
-            state_dict[fused_key] = torch.cat([w_pre, w_post, w_res], dim=0)
-        super()._load_from_state_dict(
-            state_dict,
-            prefix,
-            local_metadata,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
-        )
+        for m in [self.phi_pre, self.phi_post, self.phi_res]:
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
     def forward(self, x_stream: torch.Tensor):
         B, T, n, D = x_stream.shape
-        x_flat = x_stream.reshape(B, T, n * D).contiguous()
-        x_flat = self.rms(x_flat)
+        x_flat = x_stream.reshape(B, T, n * D)
+        use_rms_fast = (
+            self.rms_fwd_only
+            and triton_rmsnorm_fwd_only is not None
+            and x_flat.is_cuda
+            and (not torch.is_grad_enabled())
+        )
+        if use_rms_fast and triton_rmsnorm_fwd_only is not None:
+            # Forward-only fast path for inference/no-grad benchmarking.
+            x_flat = triton_rmsnorm_fwd_only(x_flat, self.rms.weight, self.rms.eps)
+        else:
+            x_flat = self.rms(x_flat)
 
         # Cast to weight dtype to prevent float32/bfloat16 mismatch during reversible backward
-        x_flat = x_flat.to(self.phi_fused.weight.dtype)
+        x_flat = x_flat.to(self.phi_pre.weight.dtype)
 
-        # Single fused projection, then split
-        logits_all = self.phi_fused(x_flat)
-        pre_raw, post_raw, res_raw = logits_all.split(self._phi_split, dim=-1)
-        # split() creates non-contiguous views — inductor generates wrong reinterpret_tensor
-        pre_raw, post_raw, res_raw = (
-            pre_raw.contiguous(),
-            post_raw.contiguous(),
-            res_raw.contiguous(),
-        )
-
-        pre_logits = self.alpha_pre * pre_raw + self.b_pre
-        post_logits = self.alpha_post * post_raw + self.b_post
-
-        res_logits = self.alpha_res * res_raw
-        res_logits = res_logits.view(B, T, n, n) + self.b_res
+        if self.fuse_coeff_proj:
+            # One projection launch (24 outputs) then split to pre/post/res branches.
+            phi_all_weight = torch.cat(
+                (self.phi_pre.weight, self.phi_post.weight, self.phi_res.weight),
+                dim=0,
+            )
+            logits_all = F.linear(x_flat, phi_all_weight)
+            pre_raw, post_raw, res_raw = torch.split(
+                logits_all, (self.n, self.n, self.n * self.n), dim=-1  # type: ignore
+            )
+            pre_logits = self.alpha_pre * pre_raw + self.b_pre
+            post_logits = self.alpha_post * post_raw + self.b_post
+            res_logits = (self.alpha_res * res_raw).view(B, T, n, n) + self.b_res
+        else:
+            pre_logits = self.alpha_pre * self.phi_pre(x_flat) + self.b_pre
+            post_logits = self.alpha_post * self.phi_post(x_flat) + self.b_post
+            res_logits = self.alpha_res * self.phi_res(x_flat)
+            res_logits = res_logits.view(B, T, n, n) + self.b_res
 
         H_pre = torch.sigmoid(pre_logits)
         H_post = 2.0 * torch.sigmoid(post_logits)
@@ -1486,18 +1454,36 @@ class MHCSublayer(nn.Module):
         self.sublayer = sublayer
         self.norm = norm
         self.coeffs = MHCCoeffs(d_model=d_model, n_streams=n_streams, iters=iters)
+        # Profiler labels — overridden by Model1B.__init__ after construction.
+        # time_region is zero-overhead when profiler is inactive (1 global read + branch).
+        self._prof_coeffs_label: str = ""
+        self._prof_sublayer_label: str = ""
 
     def forward(self, x_stream: torch.Tensor, attention_mask=None):
-        H_pre, H_post, H_res = self.coeffs(x_stream)
+        _pcl = self._prof_coeffs_label
+        _psl = self._prof_sublayer_label
+
+        if _pcl:
+            with time_region(_pcl):
+                H_pre, H_post, H_res = self.coeffs(x_stream)
+        else:
+            H_pre, H_post, H_res = self.coeffs(x_stream)
 
         x_in = (x_stream * H_pre.unsqueeze(-1)).sum(dim=2)
         x_in = self.norm(x_in)
 
         aux_loss = None
-        if attention_mask is None:
-            out = self.sublayer(x_in)
+        if _psl:
+            with time_region(_psl):
+                if attention_mask is None:
+                    out = self.sublayer(x_in)
+                else:
+                    out = self.sublayer(x_in, attention_mask)
         else:
-            out = self.sublayer(x_in, attention_mask)
+            if attention_mask is None:
+                out = self.sublayer(x_in)
+            else:
+                out = self.sublayer(x_in, attention_mask)
 
         if isinstance(out, tuple):
             y, aux_loss = out
@@ -1505,13 +1491,14 @@ class MHCSublayer(nn.Module):
             y = out
 
         y_stream = y.unsqueeze(2) * H_post.unsqueeze(-1)
-        x_res = torch.einsum("btij,btjd->btid", H_res, x_stream)
+        #   Use matmul instead of einsum (hits optimized GEMM)
+        x_res = torch.matmul(H_res, x_stream)
 
         return x_res + y_stream, aux_loss
 
 
 # ============================================================================
-# Decoder Layer (Hybrid DeltaNet + GSA — Test 14 DDDGDDDG)
+# Decoder Layer (Hybrid DeltaNet + GSA -- Test 14 DDDGDDDG)
 # ============================================================================
 
 
@@ -1716,7 +1703,7 @@ class MTPTransformerBlock(nn.Module):
 
 class Model1B(nn.Module):
     """
-    1B Dense Model — Test 14: Hybrid DeltaNet + GSA (DDDGDDDG), no fused CE.
+    1B Dense Model -- Test 14: Hybrid DeltaNet + GSA (DDDGDDDG), no fused CE.
 
     Configuration:
     - 1.513B total params, 1.513B active params (100% dense - no MoE)
@@ -1799,6 +1786,14 @@ class Model1B(nn.Module):
         self.layers = nn.ModuleList(layers)
         self.layer_types = layer_types
 
+        # Profiler labels for per-layer sub-component timing (zero-cost when inactive)
+        for i, layer in enumerate(layers):
+            kt = layer_types[i]  # "deltanet" or "gsa"
+            layer.attn_block._prof_coeffs_label = f"layer{i}.sinkhorn_attn.fwd"
+            layer.attn_block._prof_sublayer_label = f"layer{i}.{kt}.fwd"
+            layer.mlp_block._prof_coeffs_label = f"layer{i}.sinkhorn_mlp.fwd"
+            layer.mlp_block._prof_sublayer_label = f"layer{i}.mlp.fwd"
+
         # Reversible Midpoint Integration
         from .reversible_ops_midpoint import ReversibleMidpointStack
 
@@ -1815,11 +1810,15 @@ class Model1B(nn.Module):
         # MTP Block
         if config.enable_mtp:
             self.mtp_block = MTPTransformerBlock(config)
+            self.mtp_block.attn_block._prof_coeffs_label = "mtp_block.sinkhorn_attn.fwd"
+            self.mtp_block.attn_block._prof_sublayer_label = "mtp_block.gsa.fwd"
+            self.mtp_block.mlp_block._prof_coeffs_label = "mtp_block.sinkhorn_mlp.fwd"
+            self.mtp_block.mlp_block._prof_sublayer_label = "mtp_block.mlp.fwd"
         else:
             self.mtp_block = None
 
         # ============================================================================
-        # Memory Stream Recurrence — "different" style (same as different_recurrence_model_1b_wo_rev.py)
+        # Memory Stream Recurrence -- "different" style (same as different_recurrence_model_1b_wo_rev.py)
         # Injects into embedding space (before stream expansion); reads from collapsed h_main.
         # (lambda_r, memory_ln, content-dependent memory_gate_proj.)
         # ============================================================================
@@ -1843,7 +1842,7 @@ class Model1B(nn.Module):
             pf_to_model_std = 0.02 / math.sqrt(self._D_pf)
             self.pf_to_model.weight.data.normal_(mean=0.0, std=pf_to_model_std)
             print(
-                f"   🔧 pf_to_model (8192→{config.hidden_size}) initialized with std={pf_to_model_std:.6f}"
+                f"   🔧 pf_to_model (8192->{config.hidden_size}) initialized with std={pf_to_model_std:.6f}"
             )
 
         # Print configuration
@@ -1965,7 +1964,7 @@ class Model1B(nn.Module):
         B, T, D = x.shape
 
         # ============================================================================
-        # EMBEDDING-SPACE MEMORY INJECTION (before stream expansion) — "different" style
+        # EMBEDDING-SPACE MEMORY INJECTION (before stream expansion) -- "different" style
         # ============================================================================
         if prev_memory_stream is not None:
             prev_memory_stream = prev_memory_stream.detach()
@@ -1979,62 +1978,60 @@ class Model1B(nn.Module):
         x_stream = torch.zeros(B, T, self.n_streams, D, device=x.device, dtype=x.dtype)
         x_stream[:, :, 0, :] = x
 
-        # FIX #30: Precompute RoPE cos/sin once per forward (shared across all 8 layers)
-        # FIX #32: Correct path through MHCSublayer wrapper (was layer.attn, now layer.attn_block.sublayer)
-        # FIX #36: Include MTP block in RoPE cache optimization
-        # FIX #39: Include dtype in cache key for mixed-precision safety
-        # Set cache on all RotaryEmbedding instances - they'll check before computing
-        cache_key = (T, x.device, x.dtype)
+        #   Centralized RoPE caching (Bit-identical sharing across layers)
+        # Different layers (DeltaNet vs GSA) use different head_dims (128 vs 256).
+        # We pre-compute RoPE for all needed dims exactly once here.
+        distinct_dims = set()
         for layer in self.layers:
-            attn_mod = (
-                layer.attn_block.sublayer  # type: ignore
-            )  # Access through MHCSublayer wrapper # type: ignore
-            if not hasattr(attn_mod.rotary_emb, "_forward_cache"):  # type: ignore
-                attn_mod.rotary_emb._forward_cache = {}  # type: ignore
-            if cache_key not in attn_mod.rotary_emb._forward_cache:  # type: ignore
-                cos, sin = attn_mod.rotary_emb._compute_cos_sin(T, x.device, x.dtype)  # type: ignore
-                attn_mod.rotary_emb._forward_cache[cache_key] = (cos, sin)  # type: ignore
-
-        # Also cache for MTP block if enabled
+            distinct_dims.add(layer.attn_block.sublayer.rotary_emb.dim)  # type: ignore
         if self.mtp_block is not None:
-            mtp_attn = self.mtp_block.attn_block.sublayer
-            if not hasattr(mtp_attn.rotary_emb, "_forward_cache"):
-                mtp_attn.rotary_emb._forward_cache = {}  # type: ignore
-            if cache_key not in mtp_attn.rotary_emb._forward_cache:  # type: ignore
-                cos, sin = mtp_attn.rotary_emb._compute_cos_sin(T, x.device, x.dtype)  # type: ignore
-                mtp_attn.rotary_emb._forward_cache[cache_key] = (cos, sin)  # type: ignore
+            distinct_dims.add(self.mtp_block.attn_block.sublayer.rotary_emb.dim)
+
+        # Push the shared reference to all matching layers
+        for d in distinct_dims:
+            # Pick the specific instance to use as the "master" for this dimension
+            _rep_rotary = None
+            for layer in self.layers:
+                rm = layer.attn_block.sublayer.rotary_emb  # type: ignore
+                if rm.dim == d:
+                    _rep_rotary = rm
+                    break
+
+            # Fallback to MTP block if no stack layer matches this dimension
+            if _rep_rotary is None and self.mtp_block is not None:
+                rm = self.mtp_block.attn_block.sublayer.rotary_emb
+                if rm.dim == d:
+                    _rep_rotary = rm
+
+            if _rep_rotary is not None:
+                # Compute ONCE for this dimension
+                _c, _s, _cb, _sb = _rep_rotary._compute_cos_sin(T, x.device, x.dtype)  # type: ignore
+                _ck = (T, x.device, x.dtype, d)
+
+                # Push the shared 4-tuple references (includes broadcasted views)
+                for layer in self.layers:
+                    rm = layer.attn_block.sublayer.rotary_emb  # type: ignore
+                    if rm.dim == d:
+                        if not hasattr(rm, "_forward_cache"):
+                            rm._forward_cache = {}  # type: ignore
+                        rm._forward_cache[_ck] = (_c, _s, _cb, _sb)  # type: ignore
+
+                if self.mtp_block is not None:
+                    rm = self.mtp_block.attn_block.sublayer.rotary_emb
+                    if rm.dim == d:
+                        if not hasattr(rm, "_forward_cache"):
+                            rm._forward_cache = {}  # type: ignore
+                        rm._forward_cache[_ck] = (_c, _s, _cb, _sb)  # type: ignore
 
         # Pass through reversible stack
         x_stream, total_aux_loss = self.stack(x_stream, attention_mask=token_keep_mask)
-
-        # Surface GSA leak metrics at model level for train.py logging/guards.
-        leak_vals = []
-        leak_attempt_vals = []
-        for layer in self.layers:
-            attn_mod = layer.attn_block.sublayer  # type: ignore
-            leak_v = getattr(attn_mod, "last_gsa_leak_fraction", None)
-            leak_attempt_v = getattr(attn_mod, "last_gsa_leak_attempt_fraction", None)
-            if leak_v is not None:
-                leak_vals.append(leak_v.detach().float())
-            if leak_attempt_v is not None:
-                leak_attempt_vals.append(leak_attempt_v.detach().float())
-        self.last_gsa_leak_fraction = (
-            torch.stack(leak_vals).mean()
-            if leak_vals
-            else x_stream.new_tensor(0.0, dtype=torch.float32)
-        )
-        self.last_gsa_leak_attempt_fraction = (
-            torch.stack(leak_attempt_vals).mean()
-            if leak_attempt_vals
-            else x_stream.new_tensor(0.0, dtype=torch.float32)
-        )
 
         # Collapse streams
         h_main = x_stream.mean(dim=2)
         h_main = self.norm(h_main)
 
         # ============================================================================
-        # EXTRACT MEMORY from collapsed h_main (not stream-3) — "different" style
+        # EXTRACT MEMORY from collapsed h_main (not stream-3) -- "different" style
         # ============================================================================
         if return_memory:
             memory_stream_out = h_main[:, -1, :].detach()
@@ -2045,7 +2042,7 @@ class Model1B(nn.Module):
         # return_hidden=True: skip lm_head, return raw hidden states so train.py
         # can call FusedLinearCrossEntropyLoss without ever creating logit tensors.
         if return_hidden:
-            logits_ntp = h_main  # [B, T, H] — NOT logits
+            logits_ntp = h_main  # [B, T, H] -- NOT logits
         else:
             logits_ntp = self.lm_head(h_main)  # [B, T, V]
 
@@ -2071,12 +2068,12 @@ class Model1B(nn.Module):
             h_mtp = self.mtp_block(h_use, next_emb, attention_mask=mtp_attention_mask)
             h_mtp_normed = self.norm(h_mtp)
             if return_hidden:
-                logits_mtp = h_mtp_normed  # [B, T, H] — NOT logits
+                logits_mtp = h_mtp_normed  # [B, T, H] -- NOT logits
             else:
                 logits_mtp = self.lm_head(h_mtp_normed)  # [B, T, V]
 
         # FIX #41: Clear RoPE forward-pass cache to prevent accumulation (CRITICAL PATH FIX)
-        # Architecture: LightningDecoderLayer → MHCSublayer → GatedSparseAttention → RotaryEmbedding (all 8 layers GSA only)
+        # Architecture: LightningDecoderLayer -> MHCSublayer -> GatedSparseAttention -> RotaryEmbedding (all 8 layers GSA only)
         for layer in self.layers:
             if hasattr(layer.attn_block.sublayer, "rotary_emb"):  # type: ignore
                 if hasattr(layer.attn_block.sublayer.rotary_emb, "_forward_cache"):  # type: ignore
@@ -2099,160 +2096,6 @@ class Model1B(nn.Module):
             return logits_ntp, logits_mtp, memory_stream_out
         else:
             return logits_ntp, logits_mtp
-
-
-# ============================================================================
-# torch.compile Setup
-# ============================================================================
-
-
-def enable_torch_compile(model, compile_mode="default"):
-    """
-    Prepare Model1B for torch.compile by:
-    1. Switching Triton RMSNorm → PyTorch RMSNorm (compile fuses it with adjacent ops)
-    2. Switching Triton Sinkhorn → PyTorch Sinkhorn (compile fuses iteration loop)
-    3. Replacing profiler time_region with no-op (eliminates CUDA event graph breaks)
-    4. Compiling each layer's force() method (the reversible-midpoint hot path)
-    5. Compiling the MTP block forward
-
-    Graph breaks after setup:
-    - DeltaNet layers: 1 break (FLA chunk_gated_delta_rule — already optimized)
-    - GSA layers: 2 breaks (fused_indexer_topk + triton_sparse_attention)
-    - Everything else: fused by the compiler into large efficient kernels
-
-    Args:
-        model: Model1B instance (must be called BEFORE DeepSpeed wrapping)
-        compile_mode: "default" or "max-autotune" (default is safer, max-autotune is
-                      slower to compile but produces faster code)
-
-    Returns:
-        The same model (modified in-place), for chaining
-    """
-    global _TORCH_COMPILE_MODE, time_region
-
-    _TORCH_COMPILE_MODE = True
-
-    # 1. Replace time_region with no-op (profiler context managers cause graph breaks)
-    from contextlib import contextmanager
-
-    @contextmanager
-    def _noop_region(name):
-        yield
-
-    time_region = _noop_region
-
-    # 2. Keep Triton RMSNorm enabled — our kernel handles alignment correctly.
-    #    The inductor's generated replacement kernel has alignment bugs during
-    #    gradient checkpoint recomputation (misaligned address in fused reduction).
-    n_triton_rms = sum(
-        1 for m in model.modules() if isinstance(m, RMSNorm) and m._use_triton
-    )
-
-    print("\n  torch.compile setup:")
-    print(
-        f"    RMSNorm: keeping {n_triton_rms} Triton instances (our kernel is alignment-safe)"
-    )
-    print("    Sinkhorn: Triton bypassed in compile mode (compile will fuse)")
-    print("    Profiler time_region: replaced with no-op")
-
-    # 3. Switch bootstrap grad_checkpoint to use_reentrant=True
-    #    use_reentrant=False tracks intermediate tensor saves, which conflicts with
-    #    torch.compile's aot_autograd (90 vs 89 tensor count mismatch).
-    #    use_reentrant=True just saves inputs and replays — compatible with compile.
-    if hasattr(model, "stack") and hasattr(model.stack, "_compile_mode"):
-        model.stack._compile_mode = True
-        model.stack._sync_after_compile = True
-        # Enable sync on all ForceWrappers (midpoint layers)
-        for mid_layer in model.stack.mid_layers:
-            if hasattr(mid_layer, "wrapper"):
-                mid_layer.wrapper._sync_after_force = True
-        print("    Bootstrap checkpoint: switched to use_reentrant=True")
-        print("    Compiled function sync: enabled (sync after each force() call)")
-
-    # 4. Set optimal torch settings for compiled training
-    torch.set_float32_matmul_precision(
-        "high"
-    )  # TF32 for fp32 ops (RMSNorm variance, FLA internals)
-
-    # 5. Compile each layer's force() method
-    #    force() is the hot path: called ~4× per step per layer via reversible midpoint
-    #    (2× forward evaluations + 2× backward recomputation via functional_call)
-    n_compiled = 0
-    for i, layer in enumerate(model.layers):
-        layer.force = torch.compile(layer.force, mode=compile_mode, fullgraph=False)
-        print(f"    Compiled layer {i} force() [{layer.layer_type}]")
-        n_compiled += 1
-
-    # 6. Compile MTP block if present
-    if hasattr(model, "mtp_block") and model.mtp_block is not None:
-        model.mtp_block = torch.compile(
-            model.mtp_block, mode=compile_mode, fullgraph=False
-        )
-        print("    Compiled MTP block")
-
-    print(f"    Compile mode: {compile_mode}")
-
-    # 6. Immediate warmup — triggers JIT compilation NOW so inductor bugs
-    #    crash here instead of after 10+ minutes of data loading.
-    #    Requires model to be on CUDA already (call after model.to(device)).
-    device = next(model.parameters()).device
-    if device.type == "cuda":
-        print("    Running compile warmup (BS=2, seq=64)...")
-        _compile_warmup(model)
-        print("    Warmup PASSED — all compiled graphs validated.\n")
-    else:
-        print(
-            f"    Warmup SKIPPED — model on {device} (will compile on first training step).\n"
-        )
-
-    return model
-
-
-def _compile_warmup(model):
-    """Run a quick fwd+bwd with dummy data to trigger JIT compilation immediately.
-    Model must be on CUDA before calling this."""
-    device = next(model.parameters()).device
-    cfg = model.config
-    BS, SEQ = 2, 64
-    VOCAB = cfg.vocab_size
-
-    dummy_ids = torch.randint(0, VOCAB, (BS, SEQ), device=device)
-    dummy_mask = torch.ones(BS, SEQ, dtype=torch.long, device=device)
-    x_in = dummy_ids[:, :-2].contiguous()
-    y_ntp = dummy_ids[:, 1:-1].contiguous()
-    mask = dummy_mask[:, :-2].contiguous()
-
-    was_training = model.training
-    model.train()
-
-    # Forward
-    h_ntp, h_mtp, aux = model(
-        x_in,
-        next_token_ids=y_ntp,
-        attention_mask=mask,
-        return_loss=True,
-        return_memory=False,
-        prev_memory_stream=None,
-        return_hidden=True,
-    )
-
-    # Backward (exercises MidpointFunction.backward + compiled force recomputation)
-    loss = h_ntp.sum()
-    if h_mtp is not None:
-        loss = loss + h_mtp.sum()
-    if aux is not None and aux.numel() > 0:
-        loss = loss + aux.mean()
-    loss.backward()
-
-    torch.cuda.synchronize()
-
-    # Cleanup
-    model.zero_grad(set_to_none=True)
-    del h_ntp, h_mtp, aux, loss, dummy_ids, dummy_mask, x_in, y_ntp, mask
-    torch.cuda.empty_cache()
-
-    if not was_training:
-        model.eval()
 
 
 # ============================================================================
@@ -2279,67 +2122,3 @@ def create_model_1b(embedding_type="kronecker", bpe_vocab=None, pf_codec=None):
     return Model1B(
         config, embedding_type=embedding_type, bpe_vocab=bpe_vocab, pf_codec=pf_codec
     )
-
-
-if __name__ == "__main__":
-    # Calculate actual metrics from weight_calculator.py
-    from weight_calculator import LightningCalculator, LightningConfig  # type: ignore
-
-    config_calc = LightningConfig(
-        vocab_size=131072,
-        hidden_size=4096,
-        target_params=1e9,
-        attention_type="gsa",
-        deltanet_layer_ratio=0.75,  # Test 14: DDDGDDDG (6 DeltaNet, 2 GSA)
-        num_routed_experts_active=0,
-        num_shared_experts=0,
-        expert_intermediate_size=1024,
-        shared_expert_intermediate_size=2048,
-        enable_mtp=True,
-        mtp_num_predictions=2,
-        num_experts_override=0,  # Dense only (no MoE)
-        num_layers_override=8,
-    )
-
-    calc = LightningCalculator(config_calc)
-
-    # Use expert override if provided, otherwise solve for optimal expert count
-    if config_calc.num_experts_override is not None:
-        num_experts = config_calc.num_experts_override
-        print(f"⚙️  Using manual expert override: {num_experts} total experts\n")
-    else:
-        num_experts = calc.solve_for_experts()
-        print(f"✓ Solved for {num_experts} optimal experts\n")
-
-    report_df, _ = calc.generate_report(num_experts)
-
-    # Extract actual values
-    active_row = report_df[report_df["Component"] == "TOTAL ACTIVE PARAMETERS"]
-    total_row = report_df[report_df["Component"] == "TOTAL MODEL PARAMETERS"]
-    active_params = float(
-        str(active_row["Total Contribution"].iloc[0]).replace(" B", "")
-    )
-    total_params = float(str(total_row["Total Contribution"].iloc[0]).replace(" B", ""))
-    sparsity = total_params / active_params
-
-    config = ModelConfig()
-
-    print("=" * 80)
-    print("1B DENSE MODEL ARCHITECTURE")
-    print("=" * 80)
-    print("\nConfiguration:")
-    print(f"  Total Params: {total_params:.3f}B")
-    print(f"  Active Params: {active_params:.3f}B")
-    print(f"  Sparsity: {sparsity:.1f}x")
-    print("\nAttention (Test 14: DDDGDDDG — DeltaNet + GSA):")
-    print(
-        f"  DeltaNet: {config.num_deltanet_layers} layers ({100*config.num_deltanet_layers//config.num_layers}%) - O(N) linear attention"
-    )
-    print(
-        f"  GSA: {config.num_gsa_layers} layers ({100*config.num_gsa_layers//config.num_layers}%) - Adaptive sparse attention"
-    )
-    print("\nModel Type: DENSE (No MoE) — Test 14")
-    print(f"  Dense FFN intermediate: {config.shared_expert_intermediate_size}")
-    print("\nEmbedding: Kronecker (intended for Test 14)")
-    print(f"Context: {config.max_seq_len:,} tokens")
-    print("=" * 80)
