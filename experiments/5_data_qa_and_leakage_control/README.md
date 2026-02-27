@@ -149,8 +149,9 @@ python scripts/download_benchmarks.py
   - Layer 1: N-gram (13-word exact matching)
   - Layer 2: MinHash with word bigrams + LSH false-positive filtering (real Jaccard scores, threshold 0.8)
   - Layer 3: Semantic similarity via MiniLM + FAISS (cosine similarity, threshold 0.9)
-- **Benchmark Registry:** 14 benchmarks indexed (~70k+ questions)
-  - MMLU, MMLU-Pro, TriviaQA, TruthfulQA, ARC, BoolQ, HellaSwag, Winogrande, GSM8K, MATH, HumanEval, PIQA, IFEval, BBH
+- **Benchmark Registry:** 26 benchmarks indexed (~850k+ questions)
+  - English: MMLU, MMLU-Pro, TriviaQA, TruthfulQA, GPQA Diamond, ARC-Challenge, BoolQ, HellaSwag, Winogrande, GSM8K, MATH, HumanEval, APPS, AIME 2025/2026-I, IFEval, SimpleQA Verified, BBH, SWE-bench Verified, ToolBench, L-Eval
+  - Indic: MMLU-Indic, IndicGLUE, IndicQA, IndicGenBench, IndicMTEval
 - **Confidence scores:** Real computed values (Jaccard / cosine), not hardcoded labels
 - **Production Pipeline:** Single-command scanning with detailed per-layer reports
 - **Download script:** Handles multi-config benchmarks (BBH 27 tasks, MATH 7 subjects), clear failure summary
@@ -180,20 +181,36 @@ collected/
 │   └── scanner.py              # Main scanning orchestrator
 │
 ├── benchmarks/                 # Protected test sets (DO NOT MODIFY)
-│   ├── mmlu_test.jsonl         # 14,042 questions
-│   ├── mmlu_pro_test.jsonl
-│   ├── triviaqa_test.jsonl
-│   ├── truthfulqa_test.jsonl
-│   ├── arc_challenge_test.jsonl
-│   ├── boolq_test.jsonl
-│   ├── hellaswag_test.jsonl    # 10,042 questions
-│   ├── winogrande_test.jsonl
-│   ├── gsm8k_test.jsonl
-│   ├── math_test.jsonl         # 7 subjects combined
-│   ├── humaneval_test.jsonl    # 164 coding problems
-│   ├── piqa_test.jsonl
-│   ├── ifeval_test.jsonl
-│   └── bbh_test.jsonl          # 27 tasks combined
+│   │
+│   │  ── English ──
+│   ├── mmlu_test.jsonl              # 14,042 questions
+│   ├── mmlu_pro_test.jsonl          # 12,032 questions
+│   ├── triviaqa_test.jsonl          # 17,944 questions
+│   ├── truthfulqa_test.jsonl        # 817 questions
+│   ├── gpqa_diamond_test.jsonl      # 198 questions (gated, needs HF_TOKEN)
+│   ├── arc_challenge_test.jsonl     # 1,172 questions
+│   ├── boolq_test.jsonl             # 3,270 questions
+│   ├── hellaswag_test.jsonl         # 10,042 questions
+│   ├── winogrande_test.jsonl        # 1,267 questions
+│   ├── bbh_test.jsonl               # 6,511 questions (27 tasks)
+│   ├── gsm8k_test.jsonl             # 1,319 questions
+│   ├── math_test.jsonl              # 5,000 questions (7 subjects)
+│   ├── humaneval_test.jsonl         # 164 coding problems
+│   ├── apps_test.jsonl              # 5,000 programming problems
+│   ├── aime_2025_test.jsonl         # 30 problems
+│   ├── aime_2026_I_test.jsonl       # 15 problems
+│   ├── simpleqa_verified_test.jsonl # 1,000 questions
+│   ├── ifeval_test.jsonl            # 541 questions
+│   ├── swe_bench_verified_test.jsonl# 500 tasks
+│   ├── toolbench_test.jsonl         # ~5,000 tool-use instructions
+│   ├── leval_test.jsonl             # 2,043 long-context questions (18 subtasks)
+│   │
+│   │  ── Indic ──
+│   ├── mmlu_indic_test.jsonl        # ~293,000 questions (11 langs + romanised)
+│   ├── indicglue_test.jsonl         # ~300,000 samples (NLI/QA/NER, 11 langs)
+│   ├── indicqa_test.jsonl           # ~9,571 questions (11 languages)
+│   ├── indicgenbench_test.jsonl     # ~142,000 translation pairs (29 languages)
+│   └── indicmteval_test.jsonl       # ~14,000 MT annotations (hi/ta/mr/ml/gu)
 │
 ├── scripts/                    # CLI tools
 │   ├── scan.py                 # 👈 MAIN ENTRY POINT
@@ -344,11 +361,13 @@ python scripts/scan.py your_data.jsonl "Team X" "Description"
 
 | Phase | Time |
 |---|---|
-| Build benchmark index (~70k vectors) | ~2 min |
+| Build benchmark index (~850k vectors across 26 benchmarks) | ~8-12 min |
 | Embed + scan 400k samples | ~15-20 min |
-| Total | ~20 min |
+| Total | ~25-30 min |
 
-Memory usage peaks at ~300MB (batch processing, not all-at-once).
+Memory usage peaks at ~2-3GB for the full benchmark index (FAISS flat index, batch processing).
+
+> For English-only scanning (no Indic benchmarks), index build is ~2 min (~70k vectors).
 
 ### For Larger Datasets
 
@@ -364,24 +383,52 @@ done
 
 ## 🛡️ Protected Benchmarks
 
-Currently scanning against **14 benchmarks**:
+Currently scanning against **26 benchmarks** (~850k+ questions):
 
-| Benchmark | Domain | Priority for general knowledge |
-|---|---|---|
-| MMLU | General knowledge (57 subjects) | ⭐⭐⭐ High |
-| MMLU-Pro | General knowledge (harder) | ⭐⭐⭐ High |
-| TriviaQA | Factual / trivia | ⭐⭐⭐ High |
-| TruthfulQA | Factual accuracy | ⭐⭐⭐ High |
-| ARC-Challenge | Science / school knowledge | ⭐⭐⭐ High |
-| BoolQ | Yes/no factual | ⭐⭐ Medium |
-| HellaSwag | Commonsense completion | ⭐⭐ Medium |
-| Winogrande | Commonsense reasoning | ⭐⭐ Medium |
-| BBH | Mixed reasoning (27 tasks) | ⭐⭐ Medium |
-| GSM8K | Math word problems | ⭐ Lower |
-| MATH | Advanced mathematics | ⭐ Lower |
-| HumanEval | Code generation | ⭐ Lower |
-| PIQA | Physical reasoning | ⭐ Lower |
-| IFEval | Instruction following | ⭐ Lower |
+### English Benchmarks
+
+| Benchmark | Domain | Samples | Notes |
+|---|---|---|---|
+| MMLU | General knowledge (57 subjects) | 14,042 | |
+| MMLU-Pro | General knowledge (harder, 10-choice) | 12,032 | |
+| TriviaQA | Factual / trivia | 17,944 | |
+| TruthfulQA | Factual accuracy | 817 | |
+| GPQA Diamond | Expert-level science (PhD) | 198 | Requires HF_TOKEN (gated) |
+| ARC-Challenge | Science / school knowledge | 1,172 | |
+| BoolQ | Yes/no factual | 3,270 | |
+| HellaSwag | Commonsense completion | 10,042 | |
+| Winogrande | Commonsense reasoning | 1,267 | |
+| BBH | Mixed reasoning (27 tasks) | 6,511 | |
+| GSM8K | Math word problems | 1,319 | |
+| MATH | Advanced mathematics (7 subjects) | 5,000 | |
+| HumanEval | Code generation | 164 | |
+| APPS | Competitive programming | 5,000 | |
+| AIME 2025 | Competition math | 30 | |
+| AIME 2026-I | Competition math | 15 | |
+| SimpleQA Verified | Factual short-answer | 1,000 | |
+| IFEval | Instruction following | 541 | |
+| SWE-bench Verified | Software engineering tasks | 500 | |
+| ToolBench | Multi-step tool use | ~5,000 | 6 configs |
+| L-Eval | Long-context (18 subtasks) | 2,043 | |
+
+### Indic Benchmarks
+
+| Benchmark | Domain | Samples | Languages |
+|---|---|---|---|
+| MMLU-Indic | General knowledge (translated) | ~293,000 | 11 languages + romanised |
+| IndicGLUE | NLI, QA, NER, classification | ~300,000 | 11 languages |
+| IndicQA | Reading comprehension | ~9,571 | 11 languages |
+| IndicGenBench | Translation (flores + crosssum) | ~142,000 | 29 languages |
+| IndicMTEval | MT quality / MQM annotations | ~14,000 | hi, ta, mr, ml, gu |
+
+### Not Available
+
+| Benchmark | Reason |
+|---|---|
+| PIQA | HF deprecated dataset loading scripts (piqa.py) |
+| ARC-C-IN | Not found on HF Hub or GitHub |
+| RULER | Synthetic generator — must run locally (github.com/NVIDIA/RULER) |
+| AIME 2026-II | Not yet published on HF Hub (monitor huggingface.co/MathArena) |
 
 ---
 
@@ -430,7 +477,7 @@ done
 - [x] MinHash near-duplicate detection with word bigrams
 - [x] LSH false-positive filtering with real Jaccard scores
 - [x] Semantic layer (MiniLM + FAISS, batch processing)
-- [x] 14 benchmarks indexed
+- [x] 26 benchmarks indexed (~850k+ questions, English + Indic)
 - [x] Confidence scores are real computed values
 - [x] Full type hints and docstrings across all modules
 - [x] Configurable reports path and sample limit

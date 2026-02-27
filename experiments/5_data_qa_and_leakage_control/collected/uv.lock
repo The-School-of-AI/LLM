@@ -740,14 +740,10 @@ dependencies = [
     { name = "boto3" },
     { name = "datasets" },
     { name = "datasketch" },
-    { name = "rich" },
-    { name = "tqdm" },
-]
-
-[package.optional-dependencies]
-semantic = [
     { name = "faiss-cpu" },
+    { name = "rich" },
     { name = "sentence-transformers" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -755,12 +751,11 @@ requires-dist = [
     { name = "boto3" },
     { name = "datasets" },
     { name = "datasketch" },
-    { name = "faiss-cpu", marker = "extra == 'semantic'" },
+    { name = "faiss-cpu" },
     { name = "rich" },
-    { name = "sentence-transformers", marker = "extra == 'semantic'" },
+    { name = "sentence-transformers" },
     { name = "tqdm" },
 ]
-provides-extras = ["semantic"]
 
 [[package]]
 name = "markdown-it-py"

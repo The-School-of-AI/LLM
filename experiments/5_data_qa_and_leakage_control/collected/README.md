@@ -32,7 +32,13 @@ uv sync
 uv run python scripts/download_benchmarks.py
 ```
 
-Benchmarks are saved to `benchmarks/`. This step is skipped automatically on subsequent runs if the files already exist.
+Benchmarks are saved to `benchmarks/`. Downloads **26 benchmarks** (~850k+ questions, English + Indic).
+
+**Special requirements:**
+- **GPQA Diamond** (gated): accept terms at huggingface.co/datasets/Idavidrein/gpqa, then `export HF_TOKEN=<token>`
+- **RULER**: not downloadable — synthetic generator, see [github.com/NVIDIA/RULER](https://github.com/NVIDIA/RULER)
+- **ARC-C-IN / AIME 2026-II**: not yet available on HF Hub
+- **Disk**: ~500 MB output + ~10 GB HF cache. To redirect cache: `export HF_HOME=/path/to/bigger/disk`
 
 ---
 
