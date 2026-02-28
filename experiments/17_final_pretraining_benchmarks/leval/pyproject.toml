@@ -1,0 +1,36 @@
+[project]
+name = "olmes-leval-benchmark"
+version = "0.1.0"
+description = "OLMES L-Eval benchmarking for language models"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "accelerate>=0.24.0",
+    "datasets>=2.14.0",
+    "sentencepiece>=0.1.99",
+    "protobuf>=3.20.0",
+    "tqdm>=4.65.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "sacrebleu>=2.3.1",
+    "rouge-score>=0.1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.7.0",
+    "ruff>=0.0.287",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "ipython>=8.12.0",
+    "jupyter>=1.0.0",
+]
