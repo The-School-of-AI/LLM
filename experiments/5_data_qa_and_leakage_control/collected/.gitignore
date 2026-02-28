@@ -1,0 +1,15 @@
+# AWS credentials — never commit real secrets
+aws.json
+
+# Virtual environment
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Downloaded benchmark datasets (large, reproducible via download_benchmarks.py)
+benchmarks/
+
+# Scan output reports
+reports/
