@@ -1,0 +1,3422 @@
+{
+  "test1_special_token_integrity": {
+    "required": {
+      "<|begin_of_text|>": {
+        "id": 130716,
+        "ok": true
+      },
+      "<|end_of_text|>": {
+        "id": 130717,
+        "ok": true
+      },
+      "<|pad|>": {
+        "id": 130718,
+        "ok": true
+      }
+    },
+    "chat_tokens": {
+      "<|system|>": {
+        "id": 130726,
+        "ok": true
+      },
+      "<|user|>": {
+        "id": 130727,
+        "ok": true
+      },
+      "<|assistant|>": {
+        "id": 130728,
+        "ok": true
+      },
+      "<|tool|>": {
+        "id": 130729,
+        "ok": true
+      },
+      "<|im_start|>": {
+        "id": 130811,
+        "ok": true
+      },
+      "<|im_end|>": {
+        "id": 130812,
+        "ok": true
+      },
+      "<|end_turn|>": {
+        "id": 130735,
+        "ok": true
+      }
+    },
+    "problematic_absent": {
+      "<|startoftext|>": {
+        "id": 130719,
+        "absent": true
+      },
+      "<|return|>": {
+        "id": 130719,
+        "absent": true
+      },
+      "<AGENT>": {
+        "id": 130719,
+        "absent": true
+      },
+      "|AGENT|": {
+        "id": 130719,
+        "absent": true
+      }
+    },
+    "duplicate_ids": []
+  },
+  "test2_roundtrip": {
+    "total": 23,
+    "pass": 23,
+    "fail": 0,
+    "failures": []
+  },
+  "test3_special_single_token": {
+    "pass": 356,
+    "fail": 0,
+    "failures": []
+  },
+  "test4_ghost_tags_per_dataset": {
+    "golden_samples": {
+      "ghost_hits": {
+        "[USER]": 128,
+        "[ASSISTANT]": 128
+      },
+      "clean": false
+    },
+    "raw_shard": {
+      "ghost_hits": {
+        "<|endoftext|>": 3,
+        "[SYSTEM]": 2,
+        "[USER]": 6
+      },
+      "clean": false
+    },
+    "raw_manifest": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "manifest": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "sft_group1_assamese": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "sft_group1_hindi": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "sft_group1_marathi": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "sft_group1_punjabi": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "sft_group1_telugu": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "sft_group2": {
+      "ghost_hits": {},
+      "clean": true
+    },
+    "sft_group3": {
+      "ghost_hits": {},
+      "clean": true
+    }
+  },
+  "test5_vocab_utilisation": {
+    "overall": {
+      "total_tokens": 939538470,
+      "unique_tokens_seen": 127956,
+      "unused_tokens": 3116,
+      "unused_pct": 2.38,
+      "rare_tokens_lt5": 4687,
+      "unk_tokens": 0,
+      "top_50_frequent": [
+        {
+          "token_id": 11,
+          "token": ",",
+          "count": 29415812
+        },
+        {
+          "token_id": 290,
+          "token": "Ġthe",
+          "count": 26922106
+        },
+        {
+          "token_id": 13,
+          "token": ".",
+          "count": 20592006
+        },
+        {
+          "token_id": 220,
+          "token": "Ġ",
+          "count": 15577154
+        },
+        {
+          "token_id": 324,
+          "token": "Ġof",
+          "count": 14058911
+        },
+        {
+          "token_id": 315,
+          "token": "Ġto",
+          "count": 13723290
+        },
+        {
+          "token_id": 323,
+          "token": "Ġand",
+          "count": 13515137
+        },
+        {
+          "token_id": 261,
+          "token": "Ġa",
+          "count": 11411398
+        },
+        {
+          "token_id": 305,
+          "token": "Ġin",
+          "count": 9317322
+        },
+        {
+          "token_id": 372,
+          "token": "Ġis",
+          "count": 7100964
+        },
+        {
+          "token_id": 528,
+          "token": ".Ċ",
+          "count": 6628021
+        },
+        {
+          "token_id": 384,
+          "token": "Ġfor",
+          "count": 5314411
+        },
+        {
+          "token_id": 198,
+          "token": "Ċ",
+          "count": 5160831
+        },
+        {
+          "token_id": 464,
+          "token": "Ġthat",
+          "count": 5093832
+        },
+        {
+          "token_id": 25,
+          "token": ":",
+          "count": 4393847
+        },
+        {
+          "token_id": 16,
+          "token": "1",
+          "count": 4290447
+        },
+        {
+          "token_id": 342,
+          "token": "Ġ(",
+          "count": 4012764
+        },
+        {
+          "token_id": 463,
+          "token": "Ġwith",
+          "count": 3929034
+        },
+        {
+          "token_id": 381,
+          "token": "Ġ\"",
+          "count": 3855077
+        },
+        {
+          "token_id": 391,
+          "token": "Ġon",
+          "count": 3784573
+        },
+        {
+          "token_id": 15,
+          "token": "0",
+          "count": 3575380
+        },
+        {
+          "token_id": 17,
+          "token": "2",
+          "count": 3494170
+        },
+        {
+          "token_id": 271,
+          "token": "ĠĠĠ",
+          "count": 3491737
+        },
+        {
+          "token_id": 313,
+          "token": "Ġ=",
+          "count": 3420355
+        },
+        {
+          "token_id": 349,
+          "token": "ĠI",
+          "count": 3313233
+        },
+        {
+          "token_id": 460,
+          "token": "Ġit",
+          "count": 3231437
+        },
+        {
+          "token_id": 461,
+          "token": "Ġyou",
+          "count": 3127098
+        },
+        {
+          "token_id": 452,
+          "token": "Ġas",
+          "count": 3081811
+        },
+        {
+          "token_id": 59,
+          "token": "\\",
+          "count": 3072744
+        },
+        {
+          "token_id": 8,
+          "token": ")",
+          "count": 2979563
+        },
+        {
+          "token_id": 402,
+          "token": "Ġbe",
+          "count": 2869432
+        },
+        {
+          "token_id": 523,
+          "token": "Ġare",
+          "count": 2868875
+        },
+        {
+          "token_id": 90,
+          "token": "{",
+          "count": 2780642
+        },
+        {
+          "token_id": 627,
+          "token": "Ġwas",
+          "count": 2643747
+        },
+        {
+          "token_id": 12,
+          "token": "-",
+          "count": 2628040
+        },
+        {
+          "token_id": 308,
+          "token": "ĠĠĠĠĠĠĠ",
+          "count": 2600513
+        },
+        {
+          "token_id": 1,
+          "token": "\"",
+          "count": 2553378
+        },
+        {
+          "token_id": 474,
+          "token": "Ġthis",
+          "count": 2454281
+        },
+        {
+          "token_id": 588,
+          "token": "ĠThe",
+          "count": 2309015
+        },
+        {
+          "token_id": 615,
+          "token": "Ġby",
+          "count": 2305970
+        },
+        {
+          "token_id": 513,
+          "token": "Ġat",
+          "count": 2295491
+        },
+        {
+          "token_id": 632,
+          "token": "Ġhave",
+          "count": 2286049
+        },
+        {
+          "token_id": 559,
+          "token": "Ġfrom",
+          "count": 2284849
+        },
+        {
+          "token_id": 518,
+          "token": "Ġ$",
+          "count": 2157956
+        },
+        {
+          "token_id": 2027,
+          "token": "Ġ\\",
+          "count": 2112123
+        },
+        {
+          "token_id": 480,
+          "token": "Ġor",
+          "count": 1984950
+        },
+        {
+          "token_id": 430,
+          "token": "Ġan",
+          "count": 1936328
+        },
+        {
+          "token_id": 590,
+          "token": "Ġnot",
+          "count": 1896280
+        },
+        {
+          "token_id": 18,
+          "token": "3",
+          "count": 1886256
+        },
+        {
+          "token_id": 727,
+          "token": "âĢĻs",
+          "count": 1785975
+        }
+      ],
+      "bottom_50_nonzero": [
+        {
+          "token_id": 123336,
+          "token": "à°¸à±įà°¤à±ģà°¤",
+          "count": 1
+        },
+        {
+          "token_id": 126235,
+          "token": "à°¿à°Ĥà°ļà°¾à°¡à±ģ",
+          "count": 1
+        },
+        {
+          "token_id": 129740,
+          "token": "Ġà°ħà°¦à±ĩ",
+          "count": 1
+        },
+        {
+          "token_id": 123379,
+          "token": "à±ģà°¤à±Ĥ",
+          "count": 1
+        },
+        {
+          "token_id": 120312,
+          "token": "à°°à°¿à°Ĺ",
+          "count": 1
+        },
+        {
+          "token_id": 121271,
+          "token": "âĢĮà°ķà±ģ",
+          "count": 1
+        },
+        {
+          "token_id": 128347,
+          "token": "Ġà°¤à°Ĺà±įà°Ĺ",
+          "count": 1
+        },
+        {
+          "token_id": 126053,
+          "token": "à±ģà°Ĥà°¦à°¨à°¿",
+          "count": 1
+        },
+        {
+          "token_id": 92409,
+          "token": "Ġblandt",
+          "count": 1
+        },
+        {
+          "token_id": 85768,
+          "token": "urerie",
+          "count": 1
+        },
+        {
+          "token_id": 105210,
+          "token": "ĠdÃ©an",
+          "count": 1
+        },
+        {
+          "token_id": 104130,
+          "token": "irithe",
+          "count": 1
+        },
+        {
+          "token_id": 100221,
+          "token": "Ġngopfu",
+          "count": 1
+        },
+        {
+          "token_id": 79890,
+          "token": "Ġhikuva",
+          "count": 1
+        },
+        {
+          "token_id": 92937,
+          "token": "Ġmisava",
+          "count": 1
+        },
+        {
+          "token_id": 77777,
+          "token": "Ġantre",
+          "count": 1
+        },
+        {
+          "token_id": 103826,
+          "token": "Ġvrijblij",
+          "count": 1
+        },
+        {
+          "token_id": 108507,
+          "token": "Ġdaju",
+          "count": 1
+        },
+        {
+          "token_id": 127665,
+          "token": "à¶°à·Ĭ",
+          "count": 1
+        },
+        {
+          "token_id": 130473,
+          "token": "Ġà¶´à·ı",
+          "count": 1
+        },
+        {
+          "token_id": 129386,
+          "token": "Ġà¶¸à·Ĵ",
+          "count": 1
+        },
+        {
+          "token_id": 127048,
+          "token": "Ġà·ĥà¶Ĥ",
+          "count": 1
+        },
+        {
+          "token_id": 130393,
+          "token": "Ġà¶ļà¶½",
+          "count": 1
+        },
+        {
+          "token_id": 124634,
+          "token": "Ġà¶ļà·Ĵà¶»",
+          "count": 1
+        },
+        {
+          "token_id": 123849,
+          "token": "à¶Ĥà¶ļ",
+          "count": 1
+        },
+        {
+          "token_id": 129348,
+          "token": "Ġà·Ģà·ļ",
+          "count": 1
+        },
+        {
+          "token_id": 129049,
+          "token": "Ġà¶ļà·Ĵà¶»à·ĵà¶¸",
+          "count": 1
+        },
+        {
+          "token_id": 125672,
+          "token": "à¶ĳ",
+          "count": 1
+        },
+        {
+          "token_id": 127244,
+          "token": "à¶ļà·ı",
+          "count": 1
+        },
+        {
+          "token_id": 90325,
+          "token": "Ġcomh",
+          "count": 1
+        },
+        {
+          "token_id": 100839,
+          "token": "Ġgehaald",
+          "count": 1
+        },
+        {
+          "token_id": 75189,
+          "token": "Ġpuud",
+          "count": 1
+        },
+        {
+          "token_id": 96564,
+          "token": "Ġfogu",
+          "count": 1
+        },
+        {
+          "token_id": 93539,
+          "token": "Ġraam",
+          "count": 1
+        },
+        {
+          "token_id": 109768,
+          "token": "Ġalkaa",
+          "count": 1
+        },
+        {
+          "token_id": 96747,
+          "token": "Ġvseh",
+          "count": 1
+        },
+        {
+          "token_id": 73205,
+          "token": "ydym",
+          "count": 1
+        },
+        {
+          "token_id": 99638,
+          "token": "Ġjalma",
+          "count": 1
+        },
+        {
+          "token_id": 77984,
+          "token": "ovati",
+          "count": 1
+        },
+        {
+          "token_id": 38322,
+          "token": "ovendien",
+          "count": 1
+        },
+        {
+          "token_id": 116863,
+          "token": "ĠDaarmee",
+          "count": 1
+        },
+        {
+          "token_id": 95878,
+          "token": "Ġluisteren",
+          "count": 1
+        },
+        {
+          "token_id": 87965,
+          "token": "ĠSinds",
+          "count": 1
+        },
+        {
+          "token_id": 27632,
+          "token": "Ġeenvoud",
+          "count": 1
+        },
+        {
+          "token_id": 103246,
+          "token": "ĠZelfs",
+          "count": 1
+        },
+        {
+          "token_id": 80455,
+          "token": "Ġinwoners",
+          "count": 1
+        },
+        {
+          "token_id": 116894,
+          "token": "Ġdoelgroep",
+          "count": 1
+        },
+        {
+          "token_id": 80601,
+          "token": "Ġbevol",
+          "count": 1
+        },
+        {
+          "token_id": 116040,
+          "token": "Ġverkeers",
+          "count": 1
+        },
+        {
+          "token_id": 78790,
+          "token": "Ġbereid",
+          "count": 1
+        }
+      ]
+    },
+    "per_dataset": {
+      "golden_samples": {
+        "total_tokens": 78799,
+        "unique_tokens_seen": 10435,
+        "unused_tokens": 120637,
+        "unused_pct": 92.04,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "raw_shard": {
+        "total_tokens": 906188653,
+        "unique_tokens_seen": 127608,
+        "unused_tokens": 3464,
+        "unused_pct": 2.64,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "sft_group1_assamese": {
+        "total_tokens": 4805526,
+        "unique_tokens_seen": 1112,
+        "unused_tokens": 129960,
+        "unused_pct": 99.15,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "sft_group1_hindi": {
+        "total_tokens": 4103597,
+        "unique_tokens_seen": 1697,
+        "unused_tokens": 129375,
+        "unused_pct": 98.71,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "sft_group1_marathi": {
+        "total_tokens": 4613863,
+        "unique_tokens_seen": 2769,
+        "unused_tokens": 128303,
+        "unused_pct": 97.89,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "sft_group1_punjabi": {
+        "total_tokens": 7043691,
+        "unique_tokens_seen": 404,
+        "unused_tokens": 130668,
+        "unused_pct": 99.69,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "sft_group1_telugu": {
+        "total_tokens": 5294420,
+        "unique_tokens_seen": 2056,
+        "unused_tokens": 129016,
+        "unused_pct": 98.43,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "sft_group2": {
+        "total_tokens": 6026727,
+        "unique_tokens_seen": 1289,
+        "unused_tokens": 129783,
+        "unused_pct": 99.02,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      },
+      "sft_group3": {
+        "total_tokens": 1383194,
+        "unique_tokens_seen": 1655,
+        "unused_tokens": 129417,
+        "unused_pct": 98.74,
+        "unk_tokens": 0,
+        "unk_pct": 0.0
+      }
+    }
+  },
+  "test6_length_distribution": {
+    "per_dataset": {
+      "golden_samples": {
+        "count": 128,
+        "total": 78799,
+        "mean": 615.6,
+        "median": 486.5,
+        "std": 1150.8,
+        "min": 25,
+        "p25": 173,
+        "p75": 749,
+        "p90": 1042,
+        "p95": 1367,
+        "p99": 2548,
+        "max": 12617
+      },
+      "raw_shard": {
+        "count": 630140,
+        "total": 906188653,
+        "mean": 1438.1,
+        "median": 971.0,
+        "std": 2019.7,
+        "min": 4,
+        "p25": 678,
+        "p75": 1492,
+        "p90": 2583,
+        "p95": 3814,
+        "p99": 8241,
+        "max": 233006
+      },
+      "sft_group1_assamese": {
+        "count": 12294,
+        "total": 4805526,
+        "mean": 390.9,
+        "median": 391.0,
+        "std": 17.0,
+        "min": 330,
+        "p25": 379,
+        "p75": 402,
+        "p90": 413,
+        "p95": 419,
+        "p99": 432,
+        "max": 454
+      },
+      "sft_group1_hindi": {
+        "count": 14323,
+        "total": 4103597,
+        "mean": 286.5,
+        "median": 286.0,
+        "std": 13.8,
+        "min": 241,
+        "p25": 277,
+        "p75": 295,
+        "p90": 305,
+        "p95": 310,
+        "p99": 321,
+        "max": 345
+      },
+      "sft_group1_marathi": {
+        "count": 16101,
+        "total": 4613863,
+        "mean": 286.6,
+        "median": 286.0,
+        "std": 16.1,
+        "min": 239,
+        "p25": 275,
+        "p75": 297,
+        "p90": 308,
+        "p95": 314,
+        "p99": 328,
+        "max": 371
+      },
+      "sft_group1_punjabi": {
+        "count": 16852,
+        "total": 7043691,
+        "mean": 418.0,
+        "median": 418.0,
+        "std": 15.5,
+        "min": 358,
+        "p25": 407,
+        "p75": 428,
+        "p90": 438,
+        "p95": 443,
+        "p99": 453,
+        "max": 778
+      },
+      "sft_group1_telugu": {
+        "count": 17716,
+        "total": 5294420,
+        "mean": 298.8,
+        "median": 298.0,
+        "std": 14.5,
+        "min": 259,
+        "p25": 289,
+        "p75": 308,
+        "p90": 318,
+        "p95": 325,
+        "p99": 339,
+        "max": 380
+      },
+      "sft_group2": {
+        "count": 9710,
+        "total": 6026727,
+        "mean": 620.7,
+        "median": 622.0,
+        "std": 78.0,
+        "min": 405,
+        "p25": 548,
+        "p75": 651,
+        "p90": 719,
+        "p95": 750,
+        "p99": 875,
+        "max": 1033
+      },
+      "sft_group3": {
+        "count": 2512,
+        "total": 1383194,
+        "mean": 550.6,
+        "median": 542.0,
+        "std": 37.1,
+        "min": 183,
+        "p25": 527,
+        "p75": 571,
+        "p90": 608,
+        "p95": 619,
+        "p99": 632,
+        "max": 714
+      }
+    },
+    "overall": {
+      "count": 719776,
+      "total": 939538470,
+      "mean": 1305.3,
+      "median": 873.0,
+      "std": 1922.7,
+      "min": 4,
+      "p25": 598,
+      "p75": 1393,
+      "p90": 2370,
+      "p95": 3569,
+      "p99": 7605,
+      "max": 233006
+    }
+  },
+  "test7_sft_masking": {
+    "results": [
+      {
+        "format": "structured",
+        "n_tokens": 20,
+        "unmasked_tokens": 2,
+        "pad_masked_ok": true,
+        "assistant_detected": true
+      },
+      {
+        "format": "multi_turn",
+        "n_tokens": 25,
+        "unmasked_tokens": 12,
+        "pad_masked_ok": true,
+        "assistant_detected": true
+      },
+      {
+        "format": "code",
+        "n_tokens": 22,
+        "unmasked_tokens": 7,
+        "pad_masked_ok": true,
+        "assistant_detected": true
+      },
+      {
+        "format": "tool_use",
+        "n_tokens": 35,
+        "unmasked_tokens": 21,
+        "pad_masked_ok": true,
+        "assistant_detected": true
+      },
+      {
+        "format": "fim",
+        "n_tokens": 19,
+        "unmasked_tokens": 0,
+        "pad_masked_ok": true,
+        "assistant_detected": false
+      },
+      {
+        "format": "golden_math_reasoning",
+        "n_tokens": 449,
+        "unmasked_tokens": 0,
+        "pad_masked_ok": true,
+        "assistant_detected": false
+      },
+      {
+        "format": "golden_math_reasoning",
+        "n_tokens": 367,
+        "unmasked_tokens": 0,
+        "pad_masked_ok": true,
+        "assistant_detected": false
+      },
+      {
+        "format": "golden_math_reasoning",
+        "n_tokens": 408,
+        "unmasked_tokens": 0,
+        "pad_masked_ok": true,
+        "assistant_detected": false
+      }
+    ],
+    "failures": [
+      {
+        "format": "fim",
+        "preview": "<|fim_prefix|>def add(a, b):<|fim_suffix|>    return result<|fim_middle|>    result = a + b\n"
+      },
+      {
+        "format": "golden_math_reasoning",
+        "preview": "[USER] Janet hires six employees. Four of them are warehouse workers who make $15/hour, and the other two are managers w"
+      },
+      {
+        "format": "golden_math_reasoning",
+        "preview": "[USER] In April, Tank gathered 10 more Easter eggs than Emma in their first round of egg hunt. However, Emma gathered tw"
+      },
+      {
+        "format": "golden_math_reasoning",
+        "preview": "[USER] Sam works at the Widget Factory, assembling Widgets. He can assemble 1 widget every 10 minutes. Jack from the loa"
+      }
+    ]
+  },
+  "test8_sequence_lengths": {
+    "checkpoints": [
+      {
+        "target_length": 1024,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 2048,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 4096,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 8192,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 16384,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 32768,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 65536,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 131072,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      },
+      {
+        "target_length": 262144,
+        "encode_ok": true,
+        "decode_ok": true,
+        "re_encode_stable": true,
+        "status": "PASS"
+      }
+    ]
+  },
+  "test9_multilingual": {
+    "languages": {
+      "Hindi": {
+        "n_tokens": 14,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Telugu": {
+        "n_tokens": 14,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Marathi": {
+        "n_tokens": 16,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Punjabi": {
+        "n_tokens": 18,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Assamese": {
+        "n_tokens": 17,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Bengali": {
+        "n_tokens": 13,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Tamil": {
+        "n_tokens": 14,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Kannada": {
+        "n_tokens": 13,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Gujarati": {
+        "n_tokens": 15,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Odia": {
+        "n_tokens": 46,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Malayalam": {
+        "n_tokens": 14,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Arabic": {
+        "n_tokens": 65,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Chinese": {
+        "n_tokens": 28,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Japanese": {
+        "n_tokens": 36,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Russian": {
+        "n_tokens": 97,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "French": {
+        "n_tokens": 12,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Spanish": {
+        "n_tokens": 11,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "German": {
+        "n_tokens": 12,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Code (Py)": {
+        "n_tokens": 19,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Math": {
+        "n_tokens": 20,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      },
+      "Mixed": {
+        "n_tokens": 20,
+        "round_trip_ok": true,
+        "unk_count": 0,
+        "unk_pct": 0.0
+      }
+    }
+  },
+  "test10_semantic_duplicates": {
+    "duplicates_found": [],
+    "byte_fragment_dupe_groups": 10,
+    "total_checked": 131072
+  },
+  "test11_edge_cases": {
+    "cases": [
+      {
+        "label": "empty",
+        "n_tokens": 0,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "space",
+        "n_tokens": 1,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "newline",
+        "n_tokens": 1,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "tab",
+        "n_tokens": 1,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "null byte",
+        "n_tokens": 1,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "BOM",
+        "n_tokens": 3,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "10K 'a'",
+        "n_tokens": 1250,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "100 emoji",
+        "n_tokens": 100,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "50 ZWSP",
+        "n_tokens": 13,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "multi-script",
+        "n_tokens": 16,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "leading spaces",
+        "n_tokens": 3,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "trailing spaces",
+        "n_tokens": 4,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      },
+      {
+        "label": "CRLF",
+        "n_tokens": 8,
+        "unk_count": 0,
+        "ok": true,
+        "error": null
+      }
+    ]
+  },
+  "test12_config_integrity": {
+    "model_max_length": 1000000000000000019884624838656,
+    "padding_side": "right",
+    "truncation_side": "right",
+    "clean_up_tokenization_spaces": false,
+    "tokenizer_class": "PreTrainedTokenizerFast",
+    "bos_token_id": 130716,
+    "eos_token_id": 130717,
+    "pad_token_id": 130718
+  },
+  "test13_byte_fallback": {
+    "per_language": {
+      "English": {
+        "lang_code": "en",
+        "source": "corpus",
+        "n_chars": 3812789796,
+        "n_tokens": 900852419,
+        "tokens_per_char": 0.2363,
+        "chars_per_token": 4.23,
+        "byte_fallback_count": 7951010,
+        "byte_fallback_pct": 0.88
+      },
+      "Odia": {
+        "lang_code": "or",
+        "source": "corpus",
+        "n_chars": 999586,
+        "n_tokens": 970898,
+        "tokens_per_char": 0.9713,
+        "chars_per_token": 1.03,
+        "byte_fallback_count": 278306,
+        "byte_fallback_pct": 28.66
+      },
+      "Assamese": {
+        "lang_code": "as",
+        "source": "corpus",
+        "n_chars": 1773865,
+        "n_tokens": 739279,
+        "tokens_per_char": 0.4168,
+        "chars_per_token": 2.4,
+        "byte_fallback_count": 10497,
+        "byte_fallback_pct": 1.42
+      },
+      "Punjabi": {
+        "lang_code": "pa",
+        "source": "corpus",
+        "n_chars": 1407076,
+        "n_tokens": 732434,
+        "tokens_per_char": 0.5205,
+        "chars_per_token": 1.92,
+        "byte_fallback_count": 33977,
+        "byte_fallback_pct": 4.64
+      },
+      "Bengali": {
+        "lang_code": "bn",
+        "source": "corpus",
+        "n_chars": 1394541,
+        "n_tokens": 515562,
+        "tokens_per_char": 0.3697,
+        "chars_per_token": 2.7,
+        "byte_fallback_count": 8073,
+        "byte_fallback_pct": 1.57
+      },
+      "Tamil": {
+        "lang_code": "ta",
+        "source": "corpus",
+        "n_chars": 1365158,
+        "n_tokens": 479759,
+        "tokens_per_char": 0.3514,
+        "chars_per_token": 2.85,
+        "byte_fallback_count": 7950,
+        "byte_fallback_pct": 1.66
+      },
+      "Kannada": {
+        "lang_code": "kn",
+        "source": "corpus",
+        "n_chars": 1211631,
+        "n_tokens": 461325,
+        "tokens_per_char": 0.3807,
+        "chars_per_token": 2.63,
+        "byte_fallback_count": 8406,
+        "byte_fallback_pct": 1.82
+      },
+      "Gujarati": {
+        "lang_code": "gu",
+        "source": "corpus",
+        "n_chars": 1135805,
+        "n_tokens": 439048,
+        "tokens_per_char": 0.3866,
+        "chars_per_token": 2.59,
+        "byte_fallback_count": 9602,
+        "byte_fallback_pct": 2.19
+      },
+      "Marathi": {
+        "lang_code": "mr",
+        "source": "corpus",
+        "n_chars": 1089079,
+        "n_tokens": 400013,
+        "tokens_per_char": 0.3673,
+        "chars_per_token": 2.72,
+        "byte_fallback_count": 2137,
+        "byte_fallback_pct": 0.53
+      },
+      "Malayalam": {
+        "lang_code": "ml",
+        "source": "corpus",
+        "n_chars": 900487,
+        "n_tokens": 310686,
+        "tokens_per_char": 0.345,
+        "chars_per_token": 2.9,
+        "byte_fallback_count": 7550,
+        "byte_fallback_pct": 2.43
+      },
+      "Hindi": {
+        "lang_code": "hi",
+        "source": "corpus",
+        "n_chars": 908191,
+        "n_tokens": 287230,
+        "tokens_per_char": 0.3163,
+        "chars_per_token": 3.16,
+        "byte_fallback_count": 1438,
+        "byte_fallback_pct": 0.5
+      }
+    },
+    "overall_byte_fallback_pct": 0.96,
+    "byte_fallback_tokens_in_vocab": 1324,
+    "tokens_per_char_per_language": {},
+    "corpus_total_tokens": 939538470,
+    "corpus_byte_tokens": 9046539
+  },
+  "test14_numeric_tokenization": {
+    "cases": [
+      {
+        "label": "single_digit",
+        "input": "7",
+        "n_tokens": 1,
+        "pieces": [
+          "7"
+        ]
+      },
+      {
+        "label": "two_digit",
+        "input": "42",
+        "n_tokens": 1,
+        "pieces": [
+          "42"
+        ]
+      },
+      {
+        "label": "three_digit",
+        "input": "123",
+        "n_tokens": 1,
+        "pieces": [
+          "123"
+        ]
+      },
+      {
+        "label": "four_digit",
+        "input": "1234",
+        "n_tokens": 2,
+        "pieces": [
+          "123",
+          "4"
+        ]
+      },
+      {
+        "label": "five_digit",
+        "input": "12345",
+        "n_tokens": 2,
+        "pieces": [
+          "123",
+          "45"
+        ]
+      },
+      {
+        "label": "six_digit",
+        "input": "123456",
+        "n_tokens": 2,
+        "pieces": [
+          "123",
+          "456"
+        ]
+      },
+      {
+        "label": "large_int",
+        "input": "9876543210",
+        "n_tokens": 4,
+        "pieces": [
+          "987",
+          "654",
+          "321",
+          "0"
+        ]
+      },
+      {
+        "label": "15_digit",
+        "input": "123456789012345",
+        "n_tokens": 5,
+        "pieces": [
+          "123",
+          "456",
+          "789",
+          "012",
+          "345"
+        ]
+      },
+      {
+        "label": "decimal_2dp",
+        "input": "3.14",
+        "n_tokens": 3,
+        "pieces": [
+          "3",
+          ".",
+          "14"
+        ]
+      },
+      {
+        "label": "decimal_6dp",
+        "input": "3.141593",
+        "n_tokens": 4,
+        "pieces": [
+          "3",
+          ".",
+          "141",
+          "593"
+        ]
+      },
+      {
+        "label": "scientific_pos",
+        "input": "1.23e+10",
+        "n_tokens": 6,
+        "pieces": [
+          "1",
+          ".",
+          "23",
+          "e",
+          "+",
+          "10"
+        ]
+      },
+      {
+        "label": "scientific_neg",
+        "input": "9.81e-3",
+        "n_tokens": 6,
+        "pieces": [
+          "9",
+          ".",
+          "81",
+          "e",
+          "-",
+          "3"
+        ]
+      },
+      {
+        "label": "price_usd",
+        "input": "$1,234.56",
+        "n_tokens": 6,
+        "pieces": [
+          "$",
+          "1",
+          ",",
+          "234",
+          ".",
+          "56"
+        ]
+      },
+      {
+        "label": "price_inr",
+        "input": "₹99,999.00",
+        "n_tokens": 6,
+        "pieces": [
+          "âĤ¹",
+          "99",
+          ",",
+          "999",
+          ".",
+          "00"
+        ]
+      },
+      {
+        "label": "percentage",
+        "input": "95.7%",
+        "n_tokens": 4,
+        "pieces": [
+          "95",
+          ".",
+          "7",
+          "%"
+        ]
+      },
+      {
+        "label": "negative",
+        "input": "-273.15",
+        "n_tokens": 4,
+        "pieces": [
+          "-",
+          "273",
+          ".",
+          "15"
+        ]
+      },
+      {
+        "label": "date_iso",
+        "input": "2024-01-15",
+        "n_tokens": 6,
+        "pieces": [
+          "202",
+          "4",
+          "-",
+          "01",
+          "-",
+          "15"
+        ]
+      },
+      {
+        "label": "date_us",
+        "input": "01/15/2024",
+        "n_tokens": 6,
+        "pieces": [
+          "01",
+          "/",
+          "15",
+          "/",
+          "202",
+          "4"
+        ]
+      },
+      {
+        "label": "version",
+        "input": "v1.2.3",
+        "n_tokens": 6,
+        "pieces": [
+          "v",
+          "1",
+          ".",
+          "2",
+          ".",
+          "3"
+        ]
+      },
+      {
+        "label": "semver",
+        "input": "2.0.0-alpha.1",
+        "n_tokens": 8,
+        "pieces": [
+          "2",
+          ".",
+          "0",
+          ".",
+          "0",
+          "-alpha",
+          ".",
+          "1"
+        ]
+      },
+      {
+        "label": "phone_us",
+        "input": "+1-800-555-0199",
+        "n_tokens": 9,
+        "pieces": [
+          "+",
+          "1",
+          "-",
+          "800",
+          "-",
+          "555",
+          "-",
+          "019",
+          "9"
+        ]
+      },
+      {
+        "label": "phone_in",
+        "input": "+91-9876543210",
+        "n_tokens": 7,
+        "pieces": [
+          "+",
+          "91",
+          "-",
+          "987",
+          "654",
+          "321",
+          "0"
+        ]
+      },
+      {
+        "label": "aadhaar_style",
+        "input": "1234 5678 9012",
+        "n_tokens": 8,
+        "pieces": [
+          "123",
+          "4",
+          "Ġ",
+          "567",
+          "8",
+          "Ġ",
+          "901",
+          "2"
+        ]
+      },
+      {
+        "label": "fraction",
+        "input": "3/4",
+        "n_tokens": 3,
+        "pieces": [
+          "3",
+          "/",
+          "4"
+        ]
+      },
+      {
+        "label": "equation",
+        "input": "x = (-b ± √(b²-4ac)) / 2a",
+        "n_tokens": 17,
+        "pieces": [
+          "x",
+          "Ġ=",
+          "Ġ(-",
+          "b",
+          "ĠÂ±",
+          "ĠâĪļ",
+          "(",
+          "b",
+          "Â²",
+          "-",
+          "4",
+          "ac",
+          "))",
+          "Ġ/",
+          "Ġ",
+          "2",
+          "a"
+        ]
+      },
+      {
+        "label": "large_scientific",
+        "input": "6.022e23",
+        "n_tokens": 5,
+        "pieces": [
+          "6",
+          ".",
+          "022",
+          "e",
+          "23"
+        ]
+      },
+      {
+        "label": "hex",
+        "input": "0xFF",
+        "n_tokens": 3,
+        "pieces": [
+          "0",
+          "x",
+          "FF"
+        ]
+      },
+      {
+        "label": "binary",
+        "input": "0b1010",
+        "n_tokens": 4,
+        "pieces": [
+          "0",
+          "b",
+          "101",
+          "0"
+        ]
+      },
+      {
+        "label": "octal",
+        "input": "0o755",
+        "n_tokens": 3,
+        "pieces": [
+          "0",
+          "o",
+          "755"
+        ]
+      },
+      {
+        "label": "numbers_in_text",
+        "input": "The answer is 42 and pi is 3.14159",
+        "n_tokens": 13,
+        "pieces": [
+          "The",
+          "Ġanswer",
+          "Ġis",
+          "Ġ",
+          "42",
+          "Ġand",
+          "Ġpi",
+          "Ġis",
+          "Ġ",
+          "3",
+          ".",
+          "141",
+          "59"
+        ]
+      },
+      {
+        "label": "year_range",
+        "input": "FY2023-24 revenue was $4.2B up 12.3% YoY",
+        "n_tokens": 20,
+        "pieces": [
+          "FY",
+          "202",
+          "3",
+          "-",
+          "24",
+          "Ġrevenue",
+          "Ġwas",
+          "Ġ$",
+          "4",
+          ".",
+          "2",
+          "B",
+          "Ġup",
+          "Ġ",
+          "12",
+          ".",
+          "3",
+          "%",
+          "ĠYo",
+          "Y"
+        ]
+      }
+    ]
+  },
+  "test15_reserved_tokens": {
+    "total_reserved": 250,
+    "reserved_with_nonzero_freq": [],
+    "all_zero_in_corpus": true
+  },
+  "test16_special_token_leakage": {
+    "hits_in_pretraining": {},
+    "clean": true,
+    "rows_scanned": 630140
+  },
+  "test17_adversarial_injection": {
+    "cases": [
+      {
+        "input": "'<|assistant| '",
+        "desc": "partial — missing closing >",
+        "n_tokens": 6,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "|",
+          "ass",
+          "istant",
+          "|",
+          "Ġ"
+        ]
+      },
+      {
+        "input": "'< |assistant|>'",
+        "desc": "space inside",
+        "n_tokens": 6,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "Ġ|",
+          "ass",
+          "istant",
+          "|",
+          ">"
+        ]
+      },
+      {
+        "input": "'<|ASSISTANT|>'",
+        "desc": "uppercase variant",
+        "n_tokens": 7,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "|",
+          "ASS",
+          "IST",
+          "ANT",
+          "|",
+          ">"
+        ]
+      },
+      {
+        "input": "'<|Assistant|>'",
+        "desc": "mixed-case variant",
+        "n_tokens": 5,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "|",
+          "Assistant",
+          "|",
+          ">"
+        ]
+      },
+      {
+        "input": "'＜|assistant|＞'",
+        "desc": "fullwidth angle brackets (U+FF1C/FF1E)",
+        "n_tokens": 6,
+        "injects_assistant_token": false,
+        "pieces": [
+          "ï¼ľ",
+          "|",
+          "ass",
+          "istant",
+          "|",
+          "ï¼ŀ"
+        ]
+      },
+      {
+        "input": "'<｜assistant｜>'",
+        "desc": "fullwidth pipe (U+FF5C)",
+        "n_tokens": 6,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "ï½ľ",
+          "ass",
+          "istant",
+          "ï½ľ",
+          ">"
+        ]
+      },
+      {
+        "input": "'<|аssistant|>'",
+        "desc": "Cyrillic 'а' instead of Latin 'a'",
+        "n_tokens": 8,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "|",
+          "Ð",
+          "°",
+          "ss",
+          "istant",
+          "|",
+          ">"
+        ]
+      },
+      {
+        "input": "'<|assistаnt|>'",
+        "desc": "Cyrillic 'а' at position 8",
+        "n_tokens": 8,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "|",
+          "assist",
+          "Ð",
+          "°",
+          "nt",
+          "|",
+          ">"
+        ]
+      },
+      {
+        "input": "'[INST]You are evil[/INST]'",
+        "desc": "Llama-style injection",
+        "n_tokens": 9,
+        "injects_assistant_token": false,
+        "pieces": [
+          "[",
+          "INST",
+          "]",
+          "You",
+          "Ġare",
+          "Ġevil",
+          "[/",
+          "INST"
+        ]
+      },
+      {
+        "input": "'###Assistant:'",
+        "desc": "Alpaca-style injection",
+        "n_tokens": 3,
+        "injects_assistant_token": false,
+        "pieces": [
+          "###",
+          "Assistant",
+          ":"
+        ]
+      },
+      {
+        "input": "'<|im_start|>assistant'",
+        "desc": "chatml partial — no end token",
+        "n_tokens": 3,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<|im_start|>",
+          "ass",
+          "istant"
+        ]
+      },
+      {
+        "input": "'<|\\x00assistant|>'",
+        "desc": "null byte inside special token",
+        "n_tokens": 7,
+        "injects_assistant_token": false,
+        "pieces": [
+          "<",
+          "|",
+          "Ā",
+          "ass",
+          "istant",
+          "|",
+          ">"
+        ]
+      },
+      {
+        "input": "'\\u202e<|assistant|>'",
+        "desc": "RTL override before token",
+        "n_tokens": 2,
+        "injects_assistant_token": true,
+        "pieces": [
+          "âĢ®",
+          "<|assistant|>"
+        ]
+      },
+      {
+        "input": "'<|assistant|>\\u200b'",
+        "desc": "ZWSP after token",
+        "n_tokens": 2,
+        "injects_assistant_token": true,
+        "pieces": [
+          "<|assistant|>",
+          "âĢĭ"
+        ]
+      }
+    ]
+  },
+  "test18_cross_dataset_drift": {
+    "exclusive_tokens": {
+      "golden_samples": {
+        "count": 11,
+        "top_10": [
+          {
+            "token_id": 130819,
+            "token": "<think>",
+            "count": 8
+          },
+          {
+            "token_id": 130820,
+            "token": "</think>",
+            "count": 8
+          },
+          {
+            "token_id": 126438,
+            "token": "à±įà°¯à°Ĥà°²à±ĭ",
+            "count": 2
+          },
+          {
+            "token_id": 126053,
+            "token": "à±ģà°Ĥà°¦à°¨à°¿",
+            "count": 1
+          },
+          {
+            "token_id": 123336,
+            "token": "à°¸à±įà°¤à±ģà°¤",
+            "count": 1
+          },
+          {
+            "token_id": 129740,
+            "token": "Ġà°ħà°¦à±ĩ",
+            "count": 1
+          },
+          {
+            "token_id": 128347,
+            "token": "Ġà°¤à°Ĺà±įà°Ĺ",
+            "count": 1
+          },
+          {
+            "token_id": 123379,
+            "token": "à±ģà°¤à±Ĥ",
+            "count": 1
+          },
+          {
+            "token_id": 121271,
+            "token": "âĢĮà°ķà±ģ",
+            "count": 1
+          },
+          {
+            "token_id": 120312,
+            "token": "à°°à°¿à°Ĺ",
+            "count": 1
+          }
+        ]
+      },
+      "raw_shard": {
+        "count": 111911,
+        "top_10": [
+          {
+            "token_id": 271,
+            "token": "ĠĠĠ",
+            "count": 3491737
+          },
+          {
+            "token_id": 308,
+            "token": "ĠĠĠĠĠĠĠ",
+            "count": 2600513
+          },
+          {
+            "token_id": 344,
+            "token": "ĠĠĠĠĠĠĠĠĠĠĠ",
+            "count": 1321891
+          },
+          {
+            "token_id": 197,
+            "token": "ĉ",
+            "count": 1048703
+          },
+          {
+            "token_id": 140,
+            "token": "Ð",
+            "count": 851625
+          },
+          {
+            "token_id": 720,
+            "token": "ĠĊ",
+            "count": 668369
+          },
+          {
+            "token_id": 483,
+            "token": "ĠĠĠĠĠĠĠĠĠĠĠĠĠĠĠ",
+            "count": 619982
+          },
+          {
+            "token_id": 1351,
+            "token": "âĢĻt",
+            "count": 613765
+          },
+          {
+            "token_id": 504,
+            "token": "ĠĠĠĠĠ",
+            "count": 590468
+          },
+          {
+            "token_id": 141,
+            "token": "Ñ",
+            "count": 428587
+          }
+        ]
+      },
+      "sft_group1_assamese": {
+        "count": 8,
+        "top_10": [
+          {
+            "token_id": 129606,
+            "token": "Ġà¦¦à§įà¦¬à¦¿à¦¤à§Ģà§Ł",
+            "count": 15267
+          },
+          {
+            "token_id": 118288,
+            "token": "à§Ģà§Ł",
+            "count": 550
+          },
+          {
+            "token_id": 127453,
+            "token": "à§Ŀ",
+            "count": 477
+          },
+          {
+            "token_id": 121537,
+            "token": "à§Ģà§Łà¦¾",
+            "count": 257
+          },
+          {
+            "token_id": 125400,
+            "token": "à¦¾à§Łà§Ģ",
+            "count": 156
+          },
+          {
+            "token_id": 121902,
+            "token": "Ġà¦¦à¦¿à§Ł",
+            "count": 23
+          },
+          {
+            "token_id": 118553,
+            "token": "à§ĩà§Ł",
+            "count": 11
+          },
+          {
+            "token_id": 122758,
+            "token": "Ġà¦ķà§Ł",
+            "count": 10
+          }
+        ]
+      },
+      "sft_group1_hindi": {
+        "count": 4,
+        "top_10": [
+          {
+            "token_id": 130017,
+            "token": "à¥įà¤ķà¥ģà¤²",
+            "count": 186
+          },
+          {
+            "token_id": 129735,
+            "token": "à¤µà¤Ĥà¤¬à¤°",
+            "count": 177
+          },
+          {
+            "token_id": 125914,
+            "token": "à¤¶à¥įà¤ķà¤¿à¤²",
+            "count": 165
+          },
+          {
+            "token_id": 128798,
+            "token": "Ġà¤¬à¥ĩà¤²à¤¾",
+            "count": 21
+          }
+        ]
+      },
+      "sft_group1_marathi": {
+        "count": 3,
+        "top_10": [
+          {
+            "token_id": 129744,
+            "token": "âĢįà¤¯à¤¾",
+            "count": 268
+          },
+          {
+            "token_id": 121672,
+            "token": "âĢįà¤¯",
+            "count": 200
+          },
+          {
+            "token_id": 128925,
+            "token": "Ġà¤¸à¥į",
+            "count": 20
+          }
+        ]
+      },
+      "sft_group1_punjabi": {
+        "count": 0,
+        "top_10": []
+      },
+      "sft_group1_telugu": {
+        "count": 299,
+        "top_10": [
+          {
+            "token_id": 126941,
+            "token": "Ġà°¯à±Ĭà°ķà±įà°ķ",
+            "count": 25128
+          },
+          {
+            "token_id": 126850,
+            "token": "Ġà°¸à±įà°¥à°¾à°¨",
+            "count": 19230
+          },
+          {
+            "token_id": 128631,
+            "token": "à±ģà°µà±ģ",
+            "count": 14209
+          },
+          {
+            "token_id": 127486,
+            "token": "Ġà°īà°¨à±įà°¨à°¾à°¯à°¿",
+            "count": 13622
+          },
+          {
+            "token_id": 120013,
+            "token": "à°ħ",
+            "count": 11212
+          },
+          {
+            "token_id": 126559,
+            "token": "Ġà°°à±Ĩà°Ĥà°¡",
+            "count": 8114
+          },
+          {
+            "token_id": 118507,
+            "token": "à°Ń",
+            "count": 7468
+          },
+          {
+            "token_id": 125371,
+            "token": "Ġà°²à±ĩà°¦à±ģ",
+            "count": 6922
+          },
+          {
+            "token_id": 118032,
+            "token": "¡à±ģ",
+            "count": 6130
+          },
+          {
+            "token_id": 129390,
+            "token": "Ġà°¨à°¾à°²",
+            "count": 5933
+          }
+        ]
+      },
+      "sft_group2": {
+        "count": 0,
+        "top_10": []
+      },
+      "sft_group3": {
+        "count": 0,
+        "top_10": []
+      }
+    },
+    "overlap_matrix": {
+      "golden_samples": {
+        "golden_samples": 100.0,
+        "raw_shard": 99.7,
+        "sft_group1_assamese": 0.9,
+        "sft_group1_hindi": 2.4,
+        "sft_group1_marathi": 4.9,
+        "sft_group1_punjabi": 0.9,
+        "sft_group1_telugu": 5.1,
+        "sft_group2": 4.8,
+        "sft_group3": 7.7
+      },
+      "raw_shard": {
+        "golden_samples": 8.2,
+        "raw_shard": 100.0,
+        "sft_group1_assamese": 0.9,
+        "sft_group1_hindi": 1.3,
+        "sft_group1_marathi": 2.2,
+        "sft_group1_punjabi": 0.3,
+        "sft_group1_telugu": 1.4,
+        "sft_group2": 1.0,
+        "sft_group3": 1.3
+      },
+      "sft_group1_assamese": {
+        "golden_samples": 8.1,
+        "raw_shard": 99.3,
+        "sft_group1_assamese": 100.0,
+        "sft_group1_hindi": 1.8,
+        "sft_group1_marathi": 2.7,
+        "sft_group1_punjabi": 3.1,
+        "sft_group1_telugu": 2.7,
+        "sft_group2": 0.8,
+        "sft_group3": 0.7
+      },
+      "sft_group1_hindi": {
+        "golden_samples": 14.5,
+        "raw_shard": 99.5,
+        "sft_group1_assamese": 1.2,
+        "sft_group1_hindi": 100.0,
+        "sft_group1_marathi": 75.4,
+        "sft_group1_punjabi": 7.3,
+        "sft_group1_telugu": 7.0,
+        "sft_group2": 6.3,
+        "sft_group3": 6.2
+      },
+      "sft_group1_marathi": {
+        "golden_samples": 18.4,
+        "raw_shard": 99.7,
+        "sft_group1_assamese": 1.1,
+        "sft_group1_hindi": 46.2,
+        "sft_group1_marathi": 100.0,
+        "sft_group1_punjabi": 4.7,
+        "sft_group1_telugu": 37.4,
+        "sft_group2": 36.4,
+        "sft_group3": 4.5
+      },
+      "sft_group1_punjabi": {
+        "golden_samples": 24.0,
+        "raw_shard": 100.0,
+        "sft_group1_assamese": 8.7,
+        "sft_group1_hindi": 30.7,
+        "sft_group1_marathi": 32.4,
+        "sft_group1_punjabi": 100.0,
+        "sft_group1_telugu": 32.7,
+        "sft_group2": 26.7,
+        "sft_group3": 26.7
+      },
+      "sft_group1_telugu": {
+        "golden_samples": 25.8,
+        "raw_shard": 84.5,
+        "sft_group1_assamese": 1.5,
+        "sft_group1_hindi": 5.7,
+        "sft_group1_marathi": 50.4,
+        "sft_group1_punjabi": 6.4,
+        "sft_group1_telugu": 100.0,
+        "sft_group2": 49.0,
+        "sft_group3": 5.9
+      },
+      "sft_group2": {
+        "golden_samples": 38.7,
+        "raw_shard": 100.0,
+        "sft_group1_assamese": 0.7,
+        "sft_group1_hindi": 8.3,
+        "sft_group1_marathi": 78.3,
+        "sft_group1_punjabi": 8.4,
+        "sft_group1_telugu": 78.2,
+        "sft_group2": 100.0,
+        "sft_group3": 21.3
+      },
+      "sft_group3": {
+        "golden_samples": 48.7,
+        "raw_shard": 100.0,
+        "sft_group1_assamese": 0.5,
+        "sft_group1_hindi": 6.4,
+        "sft_group1_marathi": 7.6,
+        "sft_group1_punjabi": 6.5,
+        "sft_group1_telugu": 7.3,
+        "sft_group2": 16.6,
+        "sft_group3": 100.0
+      }
+    }
+  },
+  "test19_long_tail": {
+    "total_vocab": 131072,
+    "total_seen": 127956,
+    "total_zero": 3116,
+    "total_occurrences": 939538470,
+    "buckets": [
+      {
+        "label": "zero",
+        "n_tokens": 3116,
+        "pct_vocab": 2.38,
+        "n_occurrences": 0,
+        "pct_occurrences": 0.0
+      },
+      {
+        "label": "once",
+        "n_tokens": 1336,
+        "pct_vocab": 1.02,
+        "n_occurrences": 1336,
+        "pct_occurrences": 0.0001
+      },
+      {
+        "label": "2–4",
+        "n_tokens": 3351,
+        "pct_vocab": 2.56,
+        "n_occurrences": 9922,
+        "pct_occurrences": 0.0011
+      },
+      {
+        "label": "5–9",
+        "n_tokens": 4468,
+        "pct_vocab": 3.41,
+        "n_occurrences": 30898,
+        "pct_occurrences": 0.0033
+      },
+      {
+        "label": "10–99",
+        "n_tokens": 26586,
+        "pct_vocab": 20.28,
+        "n_occurrences": 1096990,
+        "pct_occurrences": 0.1168
+      },
+      {
+        "label": "100–999",
+        "n_tokens": 41933,
+        "pct_vocab": 31.99,
+        "n_occurrences": 18330022,
+        "pct_occurrences": 1.951
+      },
+      {
+        "label": "1K–9K",
+        "n_tokens": 40762,
+        "pct_vocab": 31.1,
+        "n_occurrences": 125926661,
+        "pct_occurrences": 13.403
+      },
+      {
+        "label": "10K+",
+        "n_tokens": 9520,
+        "pct_vocab": 7.26,
+        "n_occurrences": 794142641,
+        "pct_occurrences": 84.5248
+      }
+    ],
+    "zipf_ratio": 16163410.0
+  },
+  "test20_chat_robustness": {
+    "cases": [
+      {
+        "label": "single_turn",
+        "n_tokens": 8,
+        "unmasked": 4,
+        "spans_detected": 1,
+        "spans_ok": true
+      },
+      {
+        "label": "two_turn",
+        "n_tokens": 16,
+        "unmasked": 6,
+        "spans_detected": 2,
+        "spans_ok": true
+      },
+      {
+        "label": "three_turn",
+        "n_tokens": 24,
+        "unmasked": 9,
+        "spans_detected": 3,
+        "spans_ok": true
+      },
+      {
+        "label": "empty_assistant",
+        "n_tokens": 5,
+        "unmasked": 1,
+        "spans_detected": 1,
+        "spans_ok": true
+      },
+      {
+        "label": "system_user_asst",
+        "n_tokens": 12,
+        "unmasked": 3,
+        "spans_detected": 1,
+        "spans_ok": true
+      },
+      {
+        "label": "consecutive_asst",
+        "n_tokens": 6,
+        "unmasked": 4,
+        "spans_detected": 2,
+        "spans_ok": true
+      },
+      {
+        "label": "no_end_turn",
+        "n_tokens": 6,
+        "unmasked": 2,
+        "spans_detected": 1,
+        "spans_ok": true
+      }
+    ]
+  },
+  "test21_mixed_language": {
+    "cases": [
+      {
+        "label": "hi+en",
+        "n_chars": 75,
+        "n_tokens": 21,
+        "chars_per_token": 3.57,
+        "round_trip_ok": true,
+        "unk_count": 0
+      },
+      {
+        "label": "te+en",
+        "n_chars": 74,
+        "n_tokens": 21,
+        "chars_per_token": 3.52,
+        "round_trip_ok": true,
+        "unk_count": 0
+      },
+      {
+        "label": "ta+en+code",
+        "n_chars": 83,
+        "n_tokens": 26,
+        "chars_per_token": 3.19,
+        "round_trip_ok": true,
+        "unk_count": 0
+      },
+      {
+        "label": "hi+ta+en",
+        "n_chars": 76,
+        "n_tokens": 26,
+        "chars_per_token": 2.92,
+        "round_trip_ok": true,
+        "unk_count": 0
+      },
+      {
+        "label": "pa+hi+en",
+        "n_chars": 81,
+        "n_tokens": 23,
+        "chars_per_token": 3.52,
+        "round_trip_ok": true,
+        "unk_count": 0
+      },
+      {
+        "label": "math+hi",
+        "n_chars": 74,
+        "n_tokens": 34,
+        "chars_per_token": 2.18,
+        "round_trip_ok": true,
+        "unk_count": 0
+      },
+      {
+        "label": "code+te+hi",
+        "n_chars": 75,
+        "n_tokens": 26,
+        "chars_per_token": 2.88,
+        "round_trip_ok": true,
+        "unk_count": 0
+      },
+      {
+        "label": "5_scripts",
+        "n_chars": 43,
+        "n_tokens": 20,
+        "chars_per_token": 2.15,
+        "round_trip_ok": true,
+        "unk_count": 0
+      }
+    ]
+  },
+  "test22_eos_behaviour": {
+    "cases": [
+      {
+        "label": "eos_alone",
+        "input": "'<|end_of_text|>'",
+        "n_tokens": 1,
+        "pieces": [
+          "<|end_of_text|>"
+        ],
+        "round_trip": true
+      },
+      {
+        "label": "bos_alone",
+        "input": "'<|begin_of_text|>'",
+        "n_tokens": 1,
+        "pieces": [
+          "<|begin_of_text|>"
+        ],
+        "round_trip": true
+      },
+      {
+        "label": "bos_then_text",
+        "input": "'<|begin_of_text|>Hello world'",
+        "n_tokens": 3,
+        "pieces": [
+          "<|begin_of_text|>",
+          "Hello",
+          "Ġworld"
+        ],
+        "round_trip": true
+      },
+      {
+        "label": "text_then_eos",
+        "input": "'Hello world<|end_of_text|>'",
+        "n_tokens": 3,
+        "pieces": [
+          "Hello",
+          "Ġworld",
+          "<|end_of_text|>"
+        ],
+        "round_trip": true
+      },
+      {
+        "label": "bos_text_eos",
+        "input": "'<|begin_of_text|>Hello<|end_of_text|>'",
+        "n_tokens": 3,
+        "pieces": [
+          "<|begin_of_text|>",
+          "Hello",
+          "<|end_of_text|>"
+        ],
+        "round_trip": true
+      },
+      {
+        "label": "double_eos",
+        "input": "'<|end_of_text|><|end_of_text|>'",
+        "n_tokens": 2,
+        "pieces": [
+          "<|end_of_text|>",
+          "<|end_of_text|>"
+        ],
+        "round_trip": true
+      },
+      {
+        "label": "eos_mid_text",
+        "input": "'Before<|end_of_text|>After'",
+        "n_tokens": 3,
+        "pieces": [
+          "Before",
+          "<|end_of_text|>",
+          "After"
+        ],
+        "round_trip": true
+      },
+      {
+        "label": "pad_in_sequence",
+        "input": "'<|pad|>text<|pad|>'",
+        "n_tokens": 3,
+        "pieces": [
+          "<|pad|>",
+          "text",
+          "<|pad|>"
+        ],
+        "round_trip": true
+      }
+    ]
+  },
+  "test23_garbage_audit": {
+    "total_vocab_scanned": 131072,
+    "categories": {
+      "mojibake": {
+        "count": 0,
+        "examples": []
+      },
+      "private_use": {
+        "count": 5,
+        "examples": [
+          {
+            "token_id": 49529,
+            "token_decoded": "",
+            "token_raw": "ïĤ·"
+          },
+          {
+            "token_id": 76039,
+            "token_decoded": " ",
+            "token_raw": "ĠïĤ·"
+          },
+          {
+            "token_id": 77811,
+            "token_decoded": "",
+            "token_raw": "ïĤ§"
+          },
+          {
+            "token_id": 99490,
+            "token_decoded": "",
+            "token_raw": "ïĥĺ"
+          },
+          {
+            "token_id": 111144,
+            "token_decoded": "",
+            "token_raw": "î¤´"
+          }
+        ]
+      },
+      "surrogate": {
+        "count": 0,
+        "examples": []
+      },
+      "zero_width_noise": {
+        "count": 20,
+        "examples": [
+          {
+            "token_id": 2787,
+            "token_decoded": "​",
+            "token_raw": "âĢĭ"
+          },
+          {
+            "token_id": 5820,
+            "token_decoded": "​�",
+            "token_raw": "âĢĭáŀ"
+          },
+          {
+            "token_id": 10363,
+            "token_decoded": "‬",
+            "token_raw": "âĢ¬"
+          },
+          {
+            "token_id": 10417,
+            "token_decoded": " ​",
+            "token_raw": "ĠâĢĭ"
+          },
+          {
+            "token_id": 14642,
+            "token_decoded": " ​​",
+            "token_raw": "ĠâĢĭâĢĭ"
+          },
+          {
+            "token_id": 18982,
+            "token_decoded": "‪",
+            "token_raw": "âĢª"
+          },
+          {
+            "token_id": 19568,
+            "token_decoded": "‫",
+            "token_raw": "âĢ«"
+          },
+          {
+            "token_id": 19836,
+            "token_decoded": "​\n\n",
+            "token_raw": "âĢĭĊĊ"
+          },
+          {
+            "token_id": 22545,
+            "token_decoded": "​​",
+            "token_raw": "âĢĭâĢĭ"
+          },
+          {
+            "token_id": 49176,
+            "token_decoded": "‬\n",
+            "token_raw": "âĢ¬Ċ"
+          }
+        ]
+      },
+      "zero_width_review": {
+        "count": 85,
+        "examples": [
+          {
+            "token_id": 2094,
+            "token_decoded": "‌",
+            "token_raw": "âĢĮ"
+          },
+          {
+            "token_id": 2144,
+            "token_decoded": "‍",
+            "token_raw": "âĢį"
+          },
+          {
+            "token_id": 39986,
+            "token_decoded": "‍,",
+            "token_raw": "âĢį,"
+          },
+          {
+            "token_id": 44475,
+            "token_decoded": "‍.",
+            "token_raw": "âĢį."
+          },
+          {
+            "token_id": 53276,
+            "token_decoded": " ‌",
+            "token_raw": "ĠâĢĮ"
+          },
+          {
+            "token_id": 55868,
+            "token_decoded": "‌,",
+            "token_raw": "âĢĮ,"
+          },
+          {
+            "token_id": 61060,
+            "token_decoded": "‌.",
+            "token_raw": "âĢĮ."
+          },
+          {
+            "token_id": 74046,
+            "token_decoded": "‌‌",
+            "token_raw": "âĢĮâĢĮ"
+          },
+          {
+            "token_id": 79463,
+            "token_decoded": "‍\n\n",
+            "token_raw": "âĢįĊĊ"
+          },
+          {
+            "token_id": 99500,
+            "token_decoded": " ‍",
+            "token_raw": "ĠâĢį"
+          }
+        ]
+      },
+      "html_artifact": {
+        "count": 4,
+        "examples": [
+          {
+            "token_id": 18635,
+            "token_decoded": "&#",
+            "token_raw": "&#"
+          },
+          {
+            "token_id": 42631,
+            "token_decoded": " &#",
+            "token_raw": "Ġ&#"
+          },
+          {
+            "token_id": 45060,
+            "token_decoded": ";&#",
+            "token_raw": ";&#"
+          },
+          {
+            "token_id": 101607,
+            "token_decoded": " '&#",
+            "token_raw": "Ġ'&#"
+          }
+        ]
+      },
+      "broken_utf8": {
+        "count": 20,
+        "examples": [
+          {
+            "token_id": 2740,
+            "token_decoded": "�",
+            "token_raw": "ï¿½"
+          },
+          {
+            "token_id": 8100,
+            "token_decoded": "��",
+            "token_raw": "ï¿½ï¿½"
+          },
+          {
+            "token_id": 21607,
+            "token_decoded": "����",
+            "token_raw": "ï¿½ï¿½ï¿½ï¿½"
+          },
+          {
+            "token_id": 21812,
+            "token_decoded": " �",
+            "token_raw": "Ġï¿½"
+          },
+          {
+            "token_id": 47472,
+            "token_decoded": "�s",
+            "token_raw": "ï¿½s"
+          },
+          {
+            "token_id": 51441,
+            "token_decoded": "�\n\n",
+            "token_raw": "ï¿½ĊĊ"
+          },
+          {
+            "token_id": 54350,
+            "token_decoded": "���",
+            "token_raw": "ï¿½ï¿½ï¿½"
+          },
+          {
+            "token_id": 55055,
+            "token_decoded": "�n",
+            "token_raw": "ï¿½n"
+          },
+          {
+            "token_id": 61113,
+            "token_decoded": " ����",
+            "token_raw": "Ġï¿½ï¿½ï¿½ï¿½"
+          },
+          {
+            "token_id": 63696,
+            "token_decoded": "�t",
+            "token_raw": "ï¿½t"
+          }
+        ]
+      },
+      "overlong": {
+        "count": 0,
+        "examples": []
+      }
+    },
+    "total_garbage_tokens": 49,
+    "garbage_token_ids": [
+      2740,
+      2787,
+      5820,
+      8100,
+      10363,
+      10417,
+      14642,
+      18635,
+      18982,
+      19568,
+      19836,
+      21607,
+      21812,
+      22545,
+      42631,
+      45060,
+      47472,
+      49176,
+      49529,
+      51441,
+      54350,
+      55055,
+      55932,
+      61113,
+      63696,
+      68156,
+      76039,
+      77811,
+      79325,
+      80203,
+      80851,
+      86647,
+      88806,
+      89190,
+      90817,
+      96843,
+      98892,
+      99490,
+      101501,
+      101607,
+      102216,
+      104890,
+      106278,
+      107765,
+      110669,
+      111144,
+      113213,
+      113903,
+      114227
+    ],
+    "total_review_tokens": 85,
+    "review_token_ids": [
+      2094,
+      2144,
+      39986,
+      44475,
+      53276,
+      55868,
+      61060,
+      74046,
+      79463,
+      99500,
+      113998,
+      118816,
+      118843,
+      119229,
+      119338,
+      119558,
+      119810,
+      120037,
+      120593,
+      120789,
+      120987,
+      121092,
+      121154,
+      121220,
+      121222,
+      121271,
+      121340,
+      121401,
+      121672,
+      121916,
+      122038,
+      122579,
+      122670,
+      122700,
+      122707,
+      123093,
+      123164,
+      123478,
+      123564,
+      123600,
+      123606,
+      123644,
+      123833,
+      123835,
+      123933,
+      124197,
+      124293,
+      124439,
+      124518,
+      124627,
+      124628,
+      124636,
+      124716,
+      124770,
+      124864,
+      124962,
+      125154,
+      125324,
+      125494,
+      125587,
+      125646,
+      125998,
+      126128,
+      126132,
+      126232,
+      126694,
+      127181,
+      127705,
+      127934,
+      128111,
+      128156,
+      128462,
+      128624,
+      128660,
+      128797,
+      128938,
+      129121,
+      129127,
+      129183,
+      129259,
+      129568,
+      129744,
+      129972,
+      130420,
+      130699
+    ]
+  },
+  "datasets_summary": {
+    "golden_samples": {
+      "name": "golden_samples",
+      "source_type": "jsonl",
+      "total_docs": 128,
+      "tokenized_docs": 128,
+      "stats": {
+        "count": 128,
+        "total": 78799,
+        "mean": 615.6,
+        "median": 486.5,
+        "std": 1150.8,
+        "min": 25,
+        "p25": 173,
+        "p75": 749,
+        "p90": 1042,
+        "p95": 1367,
+        "p99": 2548,
+        "max": 12617
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {
+        "[USER]": 128,
+        "[ASSISTANT]": 128
+      },
+      "tag_distribution": {
+        "instruction_following": 14,
+        "truthfulness": 14,
+        "function_calling": 8,
+        "code_generation": 7,
+        "software_engineering": 7,
+        "tool_use": 6,
+        "math_reasoning": 5,
+        "math_competition": 5,
+        "general_knowledge": 5,
+        "reasoning": 5,
+        "long_context_qa": 5,
+        "math_hard": 4,
+        "science": 4,
+        "long_context_retrieval": 4,
+        "long_context_multihop": 4,
+        "indic_instruction": 3,
+        "benchmark_qa": 2,
+        "science_math": 2,
+        "general_qa": 2,
+        "general_preference": 2,
+        "general_conversation": 2,
+        "human_preferred": 2,
+        "indic_cultural_knowledge": 2,
+        "post_training": 1,
+        "high_reasoning": 1,
+        "indic_hindi": 1,
+        "indic_tamil": 1,
+        "indic_telugu": 1,
+        "indic_bengali": 1,
+        "indic_kannada": 1,
+        "indic_hindi_qa": 1,
+        "indic_tamil_qa": 1,
+        "indic_telugu_qa": 1,
+        "indic_hindi_nlu": 1,
+        "indic_tamil_nlu": 1,
+        "indic_fairness": 1,
+        "long_context_narrative": 1
+      }
+    },
+    "raw_shard": {
+      "name": "raw_shard",
+      "source_type": "parquet",
+      "total_docs": 630140,
+      "tokenized_docs": 630140,
+      "stats": {
+        "count": 630140,
+        "total": 906188653,
+        "mean": 1438.1,
+        "median": 971.0,
+        "std": 2019.7,
+        "min": 4,
+        "p25": 678,
+        "p75": 1492,
+        "p90": 2583,
+        "p95": 3814,
+        "p99": 8241,
+        "max": 233006
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {
+        "<|endoftext|>": 3,
+        "[SYSTEM]": 2,
+        "[USER]": 6
+      },
+      "language_dist": {
+        "en": 625140,
+        "as": 500,
+        "bn": 500,
+        "gu": 500,
+        "hi": 500,
+        "kn": 500,
+        "ml": 500,
+        "mr": 500,
+        "or": 500,
+        "pa": 500,
+        "ta": 500
+      },
+      "source_dist": {
+        "cc_news": 87380,
+        "refinedweb": 66745,
+        "stackexchange": 64047,
+        "cc_head": 63628,
+        "cc_middle": 60027,
+        "flan": 52425,
+        "cc_tail": 49178,
+        "C4": 42297,
+        "Starcoder": 35289,
+        "megawika": 30458,
+        "proof_pile_2-algebraic_stack": 26599,
+        "proof_pile_2-open_web_math": 20992,
+        "reddit": 12663,
+        "pes2o": 11054,
+        "redpajama-arxiv": 1858,
+        "ncert": 500,
+        "sangraha_as": 500,
+        "sangraha_bn": 500,
+        "sangraha_gu": 500,
+        "sangraha_hi": 500,
+        "sangraha_kn": 500,
+        "sangraha_ml": 500,
+        "sangraha_mr": 500,
+        "sangraha_or": 500,
+        "sangraha_pa": 500,
+        "sangraha_ta": 500
+      }
+    },
+    "raw_manifest": {
+      "name": "raw_manifest",
+      "source_type": "parquet_meta",
+      "total_docs": 629570,
+      "tokenized_docs": 0,
+      "stats": {},
+      "unk_tokens": 0,
+      "ghost_tag_hits": {},
+      "language_dist": {
+        "en": 624570,
+        "ta": 500,
+        "as": 500,
+        "bn": 500,
+        "hi": 500,
+        "kn": 500,
+        "or": 500,
+        "pa": 500,
+        "mr": 500,
+        "ml": 500,
+        "gu": 500
+      },
+      "domain_dist": {
+        "web": 286875,
+        "news": 87380,
+        "qa": 64047,
+        "instruction": 52424,
+        "math": 47588,
+        "code": 34726,
+        "encyclopedia": 30455,
+        "science": 12912,
+        "social": 12663,
+        "education": 500
+      },
+      "source_dist": {
+        "cc_news": 87380,
+        "refinedweb": 66745,
+        "stackexchange": 64047,
+        "cc_head": 63628,
+        "cc_middle": 60027,
+        "flan": 52424,
+        "cc_tail": 49178,
+        "C4": 42297,
+        "Starcoder": 34726,
+        "megawika": 30455,
+        "proof_pile_2-algebraic_stack": 26596,
+        "proof_pile_2-open_web_math": 20992,
+        "reddit": 12663,
+        "pes2o": 11054,
+        "redpajama-arxiv": 1858,
+        "sangraha_or": 500,
+        "sangraha_ml": 500,
+        "sangraha_mr": 500,
+        "sangraha_pa": 500,
+        "sangraha_as": 500
+      },
+      "band_dist": {
+        "B1": 221033,
+        "B0": 217048,
+        "B2": 153597,
+        "B3": 37156,
+        "B4": 736
+      },
+      "avg_word_count": 921.9,
+      "avg_token_est": 1199.4,
+      "total_token_est": 755133076
+    },
+    "manifest": {
+      "name": "manifest",
+      "source_type": "parquet_meta",
+      "total_docs": 3346792,
+      "tokenized_docs": 0,
+      "stats": {},
+      "unk_tokens": 0,
+      "ghost_tag_hits": {},
+      "language_dist": {
+        "en": 2708189,
+        "ml": 199072,
+        "mr": 110671,
+        "bn": 109496,
+        "kn": 80719,
+        "hi": 62322,
+        "gu": 55140,
+        "or": 16786,
+        "ta": 2149,
+        "pa": 1485,
+        "as": 763
+      },
+      "domain_dist": {
+        "web": 1464725,
+        "social": 491507,
+        "instruction": 438069,
+        "qa": 286749,
+        "code": 203235,
+        "news": 181856,
+        "math": 99869,
+        "science": 99183,
+        "encyclopedia": 75504,
+        "education": 6095
+      },
+      "source_dist": {
+        "reddit": 491507,
+        "flan": 438069,
+        "stackexchange": 286749,
+        "Starcoder": 203235,
+        "sangraha_ml": 199072,
+        "cc_news": 181856,
+        "refinedweb": 181544,
+        "cc_tail": 176443,
+        "C4": 168986,
+        "cc_middle": 149916,
+        "cc_head": 149233,
+        "sangraha_mr": 110671,
+        "sangraha_bn": 109496,
+        "pes2o": 86658,
+        "sangraha_kn": 80719,
+        "megawika": 75504,
+        "sangraha_hi": 62322,
+        "proof_pile_2-algebraic_stack": 60979,
+        "sangraha_gu": 55140,
+        "proof_pile_2-open_web_math": 38890
+      },
+      "band_dist": {
+        "B0": 1418360,
+        "B1": 1345981,
+        "B2": 408138,
+        "B3": 172842,
+        "B4": 1470,
+        "B5": 1
+      },
+      "avg_word_count": 406.1,
+      "avg_token_est": 556.6,
+      "total_token_est": 1862703095
+    },
+    "sft_group1_assamese": {
+      "name": "group1_assamese.txt",
+      "source_type": "txt",
+      "total_docs": 12294,
+      "tokenized_docs": 12294,
+      "stats": {
+        "count": 12294,
+        "total": 4805526,
+        "mean": 390.9,
+        "median": 391.0,
+        "std": 17.0,
+        "min": 330,
+        "p25": 379,
+        "p75": 402,
+        "p90": 413,
+        "p95": 419,
+        "p99": 432,
+        "max": 454
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {}
+    },
+    "sft_group1_hindi": {
+      "name": "group1_hindi.txt",
+      "source_type": "txt",
+      "total_docs": 14323,
+      "tokenized_docs": 14323,
+      "stats": {
+        "count": 14323,
+        "total": 4103597,
+        "mean": 286.5,
+        "median": 286.0,
+        "std": 13.8,
+        "min": 241,
+        "p25": 277,
+        "p75": 295,
+        "p90": 305,
+        "p95": 310,
+        "p99": 321,
+        "max": 345
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {}
+    },
+    "sft_group1_marathi": {
+      "name": "group1_marathi.txt",
+      "source_type": "txt",
+      "total_docs": 16101,
+      "tokenized_docs": 16101,
+      "stats": {
+        "count": 16101,
+        "total": 4613863,
+        "mean": 286.6,
+        "median": 286.0,
+        "std": 16.1,
+        "min": 239,
+        "p25": 275,
+        "p75": 297,
+        "p90": 308,
+        "p95": 314,
+        "p99": 328,
+        "max": 371
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {}
+    },
+    "sft_group1_punjabi": {
+      "name": "group1_punjabi.txt",
+      "source_type": "txt",
+      "total_docs": 16852,
+      "tokenized_docs": 16852,
+      "stats": {
+        "count": 16852,
+        "total": 7043691,
+        "mean": 418.0,
+        "median": 418.0,
+        "std": 15.5,
+        "min": 358,
+        "p25": 407,
+        "p75": 428,
+        "p90": 438,
+        "p95": 443,
+        "p99": 453,
+        "max": 778
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {}
+    },
+    "sft_group1_telugu": {
+      "name": "group1_telugu.txt",
+      "source_type": "txt",
+      "total_docs": 17716,
+      "tokenized_docs": 17716,
+      "stats": {
+        "count": 17716,
+        "total": 5294420,
+        "mean": 298.8,
+        "median": 298.0,
+        "std": 14.5,
+        "min": 259,
+        "p25": 289,
+        "p75": 308,
+        "p90": 318,
+        "p95": 325,
+        "p99": 339,
+        "max": 380
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {}
+    },
+    "sft_group2": {
+      "name": "group2.txt",
+      "source_type": "txt",
+      "total_docs": 9710,
+      "tokenized_docs": 9710,
+      "stats": {
+        "count": 9710,
+        "total": 6026727,
+        "mean": 620.7,
+        "median": 622.0,
+        "std": 78.0,
+        "min": 405,
+        "p25": 548,
+        "p75": 651,
+        "p90": 719,
+        "p95": 750,
+        "p99": 875,
+        "max": 1033
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {}
+    },
+    "sft_group3": {
+      "name": "group3.txt",
+      "source_type": "txt",
+      "total_docs": 2512,
+      "tokenized_docs": 2512,
+      "stats": {
+        "count": 2512,
+        "total": 1383194,
+        "mean": 550.6,
+        "median": 542.0,
+        "std": 37.1,
+        "min": 183,
+        "p25": 527,
+        "p75": 571,
+        "p90": 608,
+        "p95": 619,
+        "p99": 632,
+        "max": 714
+      },
+      "unk_tokens": 0,
+      "ghost_tag_hits": {}
+    }
+  },
+  "overall_stats": {
+    "count": 719776,
+    "total": 939538470,
+    "mean": 1305.3,
+    "median": 873.0,
+    "std": 1922.7,
+    "min": 4,
+    "p25": 598,
+    "p75": 1393,
+    "p90": 2370,
+    "p95": 3569,
+    "p99": 7605,
+    "max": 233006
+  }
+}
