@@ -1,0 +1,4 @@
+vllm>=0.4.0
+datasets>=2.19.0
+google-genai>=1.0.0
+

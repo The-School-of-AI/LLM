@@ -1,0 +1,34 @@
+name: Scanner CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for running (optional)"
+        required: false
+        default: "manual smoke test"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: experiments/5_data_qa_and_leakage_control/collected
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        # Core deps only — semantic layer gracefully disabled in smoke test.
+        run: uv pip install tqdm datasketch rich --system
+
+      - name: Run smoke test
+        run: python tests/smoke_test.py

@@ -1,0 +1,12 @@
+{
+  "s3_uri": "sS3 location",
+  "team_name": "Team 4",
+  "batch_name": "group4_batch_01",
+  "aws_region": "us-east-1",
+  "aws_profile": "",
+  "benchmarks_dir": "benchmarks",
+  "reports_dir": "reports",
+  "auto_download_benchmarks": true,
+  "enable_semantic": false
+}
+
