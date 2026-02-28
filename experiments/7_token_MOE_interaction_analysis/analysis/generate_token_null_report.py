@@ -114,7 +114,7 @@ def generate_report(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--affinity_npz", required=True)
-    parser.add_argument("--tokenizer", default="gpt2")
+    parser.add_argument("--tokenizer", default="../tsai_131k_tokenizer/")
     parser.add_argument("--output", default="reports/token_null_map.md")
 
     parser.add_argument("--min_prob", type=float, default=1e-5)
