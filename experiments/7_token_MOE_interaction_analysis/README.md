@@ -259,3 +259,14 @@ This is the output of **Team 7** of the ERA4 capstone project.
 
 **Advises / Gates:**
 - **Team 8** — Advisory gate: Team 7 can flag routing collapse, null-expert cannibalization of high-signal groups, or unsafe sparsity before architecture decisions are finalized.
+
+## Unaddressed Rquirements
+
+### Expert - Token Affinity
+
+The original plan included tracking which experts specialize in which modalities by comparing token distributions per modality (precomputed from the dataset) against the token distributions seen by each expert during training — since expert routing distributions shift over time, this comparison would reveal emergent expert–modality affinity.
+The precomputation side was implemented: token distributions per modality are calculated from the dataset ahead of training. However, the runtime comparison against expert distributions was not integrated. Additionally, the precomputation itself has a performance problem that must be resolved before it is viable at scale — on a 16 GB subset of Dolma v1.6, calculating token distributions per modality takes approximately 30 minutes, making it impractical for the full dataset.
+
+### Junk Token Labeling
+
+Several null router metrics depend on knowing which tokens are classified as "junk" (e.g., padding, special tokens, or other tokens the router should learn to ignore). The metrics logic itself was implemented and verified, but no authoritative source or specification was identified that defines which tokens qualify as junk. Testing was carried out using a placeholder classification, so the metrics cannot be considered production-ready until a proper junk token definition is established and integrated.
