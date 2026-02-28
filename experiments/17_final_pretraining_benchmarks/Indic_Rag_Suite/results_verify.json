@@ -19,15 +19,25 @@
         "mrr_at_10": 0.5002777777777778,
         "n": 10,
         "recall_at_1": 0.3,
+        "precision_at_1": 0.3,
         "recall_at_5": 0.7,
+        "precision_at_5": 0.13999999999999999,
+        "hit_at_5": 0.7,
         "recall_at_10": 1.0,
+        "precision_at_10": 0.09999999999999999,
+        "hit_at_10": 1.0,
+        "recall_at_20": 1.0,
+        "precision_at_20": 0.049999999999999996,
+        "hit_at_20": 1.0,
+        "ndcg_at_5": 0.5261859507142915,
         "ndcg_at_10": 0.6167419205910514
       }
     },
     "generation": {
       "hi": {
         "exact_match": 0.8,
-        "n": 10.0
+        "n": 10.0,
+        "token_f1": 0.0
       }
     }
   }

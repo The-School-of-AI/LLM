@@ -4,103 +4,18 @@ Unified evaluation harness for **Indic-Rag-Suite** and **IndicMSMARCO**: retriev
 
 ---
 
-## Introduction
+## 1. What harness to use
 
-This repository provides **`benchmark_indic_rag_suite`**, a unified, self-contained evaluation harness for benchmarking Retrieval-Augmented Generation (RAG) systems in Indic languages. It is the official framework for evaluating RAG pipelines on two major multilingual datasets.
+**Use this repository (`benchmark_indic_rag_suite`) as the harness.** The self-contained evaluation pipeline for:
 
-### What is this repository?
+- **[Indic-Rag-Suite](https://huggingface.co/datasets/ai4bharat/Indic-Rag-Suite)** (18 languages): RAG benchmark with question–paragraph–answer.
+- **[IndicMSMARCO](https://huggingface.co/datasets/ai4bharat/IndicMSMARCO)** (13 languages): retrieval benchmark; **official metric is MRR@10** (only ranks 1–10 count).
 
-**`benchmark_indic_rag_suite`** is a complete evaluation framework for RAG systems focusing on Indic languages (18 Indian language variants). It provides:
-
-- **Retrieval evaluation** using metrics like MRR@10, Hit@k, Recall@k, Precision@k, and NDCG@k
-- **Generation evaluation** using Exact Match (EM), Token F1, and optional metrics like BLEU and ROUGE-L
-- **Optional advanced evaluation** via RAGAS (Retrieval-Augmented Generation Assessment) for deeper insight into answer faithfulness and relevance
-- **Multiple workflows** (verify, dev, test) to support quick prototyping, iterative development, and final evaluation
-
-The framework is designed for researchers and practitioners working on multilingual RAG systems, providing a standardized way to compare retrieval and generation components independently or together.
-
-### Harness: What to use
-
-**Use this repository as your evaluation harness. No external harness or tool is needed.** This is the official unified pipeline for evaluating:
-
-- **[Indic-Rag-Suite](https://huggingface.co/datasets/ai4bharat/Indic-Rag-Suite)** (18 languages): RAG benchmark containing question–paragraph–answer triplets for evaluation of complete RAG systems.
-- **[IndicMSMARCO](https://huggingface.co/datasets/ai4bharat/IndicMSMARCO)** (13 languages): Retrieval-focused benchmark derived from MS MARCO. **The official metric is MRR@10** (only ranks 1–10 count; anything ranked below position 10 contributes zero to the score).
-
-This harness loads the chosen dataset, runs retrieval and/or generation with your selected backends (small/local models or large models like BGE-M3, Gemma), and outputs all metrics in a single JSON file for easy analysis.
-
-### What the scripts do
-
-The repository provides convenience shell scripts for common workflows in `scripts/`. Each script sets sensible defaults and produces JSON results:
-
-| Script | Purpose | When to use | Typical runtime |
-|--------|---------|-------------|-----------------|
-| **`run_verify.sh`** | Quick sanity check | First time setup, verifying pipeline correctness, debugging | ~2–5 min (10 samples, Hindi, small models)|
-| **`run_verify_gemma.sh`** | Verify with real LLM | Testing generation quality with a real model (Gemma-2-1B, GPU required) | ~10–15 min (10 samples, Hindi) |
-| **`run_dev.sh`** | Development iteration | Iterating on code, model configs, metrics during development. Default: 20 samples per language | ~5–10 min per language (small models) |
-| **`run_test.sh`** | Full evaluation | Final evaluation for paper/reporting. Tests all languages in the dataset with no sample cap | Varies by model and language (often 1–2 hours+ for all languages) |
-
-All scripts output to the repo root (e.g., `results_verify.json`, `results_dev.json`). You can customize them using environment variables:
-- **`DATASET`** – Dataset name (default: `ai4bharat/Indic-Rag-Suite`; set to `ai4bharat/IndicMSMARCO` for retrieval-focused evaluation)
-- **`LANG`** – Language code or `all` (default: `hi`); supported: `hi`, `ta`, `te`, `bn`, `gu`, `mr`, `ml`, `kn`, `or`, `pa`, `ne`, `as`, `ur`, `en`, etc.
-- **`MAX_SAMPLES`** – Number of samples per language (default: 20 for dev, unlimited for test)
-- **`SPLIT`** – Dataset split (default: `dev`; use `test` for full evaluation)
-- **`OUT`** – Output JSON filename (default: `results_dev.json`, `results_test.json`, etc.)
-
-**Example:** `DATASET=ai4bharat/IndicMSMARCO LANG=all MAX_SAMPLES=50 ./scripts/run_dev.sh`
-
-Alternatively, call the CLI directly with `python -m benchmark_indic_rag_suite ...` and pass any parameters; the scripts are convenience wrappers that set environment variables.
-
-### RAGAS: Is it needed?
-
-**RAGAS is completely optional and not required for the official Indic-Rag-Suite or IndicMSMARCO benchmarks.** Here's when you need it:
-
-| Scenario | RAGAS needed? | Details |
-|----------|---------------|---------|
-| **Running official Indic-Rag-Suite or IndicMSMARCO evaluation** | ❌ No | The official protocol uses only **Exact Match, Token F1, and standard retrieval metrics (MRR@10, Hit@k, Recall@k)**. These work with small/local models and need no API keys. |
-| **Want extra quality signals** | ✅ Optional | RAGAS adds metrics like **faithfulness** ("Is the answer grounded in the passage?") and **answer relevancy** ("Does the answer address the query?"). Useful for deeper analysis but not required for benchmarking. |
-| **Using only local models (no APIs)** | ✅ Possible | RAGAS can run with local HuggingFace models (e.g., Flan-T5) without any API keys. Requires `pip install ragas` and optionally set `RAGAS_LOCAL_LLM` and `RAGAS_LOCAL_EMBEDDING` env vars. |
-| **Using OpenAI or Azure OpenAI** | ✅ Possible | RAGAS can be powered by OpenAI (via `OPENAI_API_KEY`) or Azure OpenAI (via `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT`). Results are saved in the `generation_ragas` section of output JSON. Requires `pip install ragas` and valid API credentials. |
-
-**Bottom line:** 
-- For official benchmarks (Indic-Rag-Suite, IndicMSMARCO), **skip RAGAS** and run with standard metrics (Exact Match, F1, and retrieval metrics).
-- For additional insights into answer quality, **optionally add RAGAS** with local models (no cost, slower) or API keys (faster, incurs API calls).
-- See [§7 RAGAS](#7-ragas-optional-generation-evaluator) for complete installation and configuration instructions.
-
-### Quick start
-
-**1. Verify the setup** (2–5 minutes):
-```bash
-./scripts/run_verify.sh
-# Output: results_verify.json
-```
-
-**2. Run development tests** (per language):
-```bash
-LANG=hi ./scripts/run_dev.sh          # Hindi only
-LANG=all MAX_SAMPLES=20 ./scripts/run_dev.sh  # All languages, 20 samples each
-# Output: results_dev.json
-```
-
-**3. Run full evaluation** (all languages, no sample limit):
-```bash
-./scripts/run_test.sh
-# Output: results_test.json
-```
-
-**4. (Optional) Add RAGAS evaluation:**
-```bash
-pip install ragas
-python -m benchmark_indic_rag_suite --split dev --lang hi --generation-evaluator ragas -o results_ragas.json
-# Output: results_ragas.json with extra metrics under generation_ragas
-```
-
-For more details on configuration, backends, and metrics, see the sections below.
+This harness loads the chosen dataset, runs retrieval and/or generation with your chosen backends, and outputs all metrics in a single JSON.
 
 ---
 
----
-
-## 1. Detailed usage
+## 2. How to use the harness
 
 ### Install (optional)
 
@@ -239,7 +154,7 @@ results = run_benchmark(overrides=overrides)
 
 ---
 
-## 2. Project structure
+## 3. Project structure
 
 | Path | Description |
 |------|-------------|
@@ -257,7 +172,7 @@ results = run_benchmark(overrides=overrides)
 
 ---
 
-## 3. Metrics
+## 4. Metrics
 
 ### Retrieval
 
@@ -280,11 +195,11 @@ For **IndicMSMARCO** use **MRR@10** for paper-comparable numbers. The **Indic-Ra
 | **Token F1** | Token-level F1 (reported by default; disable with `--no-use-f1`) |
 | **BLEU** | Sentence BLEU (optional, `--use-bleu`; requires `nltk`) |
 | **ROUGE-L** | ROUGE-L F1 (optional, `--use-rouge`; requires `rouge-score`) |
-| **RAGAS** | Optional extra evaluator; see [§7. RAGAS](#7-ragas-optional-generation-evaluator). Scores in `generation_ragas` in the output JSON |
+| **RAGAS** | Optional extra evaluator; see [§8. RAGAS](#8-ragas-optional-generation-evaluator). Scores in `generation_ragas` in the output JSON |
 
 ---
 
-## 4. Datasets
+## 5. Datasets
 
 | Dataset | CLI | Languages | Use |
 |---------|-----|-----------|-----|
@@ -309,7 +224,7 @@ No `--paper-retrieval`; the default is monolingual. The **small** model (MiniLM)
 
 ---
 
-## 5. Dev, test, and verify
+## 6. Dev, test, and verify
 
 | Flow | When to use | How |
 |------|-------------|-----|
@@ -320,7 +235,7 @@ No `--paper-retrieval`; the default is monolingual. The **small** model (MiniLM)
 
 ---
 
-## 6. Merging sharded results
+## 7. Merging sharded results
 
 If you run with `--shard-index i --shard-total N` and get N result files:
 
@@ -330,7 +245,7 @@ python merge_results.py results_shard_0.json results_shard_1.json ... -o results
 
 ---
 
-## 7. RAGAS (optional generation evaluator)
+## 8. RAGAS (optional generation evaluator)
 
 **Required evaluation for Indic-RAG-Suite:** The benchmark’s **required** evaluation is **retrieval** (e.g. MRR@10, Hit@k, Recall@k) and **generation** (Exact Match and Token F1). These work with **small/local models only** (no OpenAI or other API keys). You can run the full benchmark with `--retrieval-backend small --generation-backend small` and no API keys.
 
@@ -392,15 +307,15 @@ python merge_results.py results_shard_0.json results_shard_1.json ... -o results
 
 ---
 
-## 8. Optional features and dependencies
+## 9. Optional features and dependencies
 
 - **Token F1** – Always computed by default; use `--no-use-f1` to disable.
 - **SQuAD-style normalization** – `--use-squad-normalize` for EM/F1 (removes articles/punctuation).
 - **BLEU** – `--use-bleu` (requires `nltk`: `pip install nltk`).
 - **ROUGE-L** – `--use-rouge` (requires `rouge-score`: `pip install rouge-score`).
-- **RAGAS** – See [§7. RAGAS](#7-ragas-optional-generation-evaluator) for install and usage.
+- **RAGAS** – See [§8. RAGAS](#8-ragas-optional-generation-evaluator) for install and usage.
 - **Save predictions** – `--save-predictions` writes per-sample (query, passage, prediction, answer) to `predictions.json` (or next to `-o` file as `<stem>_predictions.json`).
 
-## 9. Dependencies
+## 10. Dependencies
 
 See `pyproject.toml`. Key dependencies: `datasets`, `sentence-transformers`, `transformers`, `scikit-learn`, `tqdm`, `pyyaml`, `numpy`. Optional: `nltk`, `rouge-score`, `ragas` for extra metrics.
