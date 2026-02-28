@@ -60,7 +60,7 @@ def parse_args():
         help="Local rank for distributed training (set by DeepSpeed launcher)",
     )
     p.set_defaults(deepspeed_config="../deepspeed/smoke_train.json")
-    p.add_argument("--steps", type=int, default=3)
+    p.add_argument("--steps", type=int, default=6000)
     p.add_argument("--seq_len", type=int, default=64)
     p.add_argument("--vocab_size", type=int, default=4096)
     p.add_argument("--hidden_size", type=int, default=128)
