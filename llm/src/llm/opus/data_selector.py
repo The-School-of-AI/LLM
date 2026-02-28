@@ -41,11 +41,12 @@ class OpusDataSelector:
             if isinstance(proxy_loader, RandomInDistributionProxyProvider)
             else None
         )
-        self.proxy_loader = (
-            proxy_loader
-            if not isinstance(proxy_loader, RandomInDistributionProxyProvider)
-            else None
-        )
+        if not isinstance(proxy_loader, RandomInDistributionProxyProvider):
+            self._proxy_loader_source = proxy_loader
+            self.proxy_loader = iter(proxy_loader)
+        else:
+            self._proxy_loader_source = None
+            self.proxy_loader = None
         self.selector = OpusSelector(config)
         self.preconditioner = AdamWPreconditionerView(
             optimizer, strict_shard_only=config.strict_shard_preconditioner
@@ -82,12 +83,17 @@ class OpusDataSelector:
             try:
                 proxy_batch = next(self.proxy_loader)
             except StopIteration:
-                logger.warning("Proxy loader exhausted, falling back to random")
-                indices = torch.randperm(N)[:k_select]
-                return (
-                    {k: v[indices] for k, v in candidate_batch.items()},
-                    {"opus_mode": "fallback_random", "opus_selected_n": k_select},
-                )
+                logger.info("Proxy loader exhausted — resetting iterator for next epoch")
+                try:
+                    self.proxy_loader = iter(self._proxy_loader_source)
+                    proxy_batch = next(self.proxy_loader)
+                except StopIteration:
+                    logger.warning("Proxy loader is empty after reset, falling back to random")
+                    indices = torch.randperm(N)[:k_select]
+                    return (
+                        {k: v[indices] for k, v in candidate_batch.items()},
+                        {"opus_mode": "fallback_random", "opus_selected_n": k_select},
+                    )
             proxy_ids = proxy_batch["input_ids"][:, : cfg.score_seq_len].to(device)
         else:
             raise RuntimeError("No proxy data source configured")
@@ -177,7 +183,8 @@ class OpusDataSelector:
         except Exception as e:
             if cfg.fallback_random_on_error:
                 logger.warning(
-                    f"OPUS scoring failed ({e}), falling back to random"
+                    f"OPUS scoring failed ({type(e).__name__}: {e}), falling back to random",
+                    exc_info=True,
                 )
                 selected_idx = torch.randperm(N)[:k_select]
                 self.model.zero_grad(set_to_none=True)
