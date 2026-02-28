@@ -1,0 +1,13 @@
+# Test: full evaluation (or use --max-samples to cap)
+data:
+  dataset_name: ai4bharat/Indic-Rag-Suite
+  split: test
+  languages: [all]
+  max_samples_per_lang: null
+model:
+  retrieval_backend: small
+  generation_backend: small
+  device: cpu
+run:
+  tasks: [retrieval, generation]
+  retrieval_mrr_at_k: 10

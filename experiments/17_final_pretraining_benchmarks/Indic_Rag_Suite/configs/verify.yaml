@@ -1,0 +1,13 @@
+# Quick verification: minimal samples, one language, small models
+data:
+  dataset_name: ai4bharat/Indic-Rag-Suite
+  split: dev
+  languages: [hi]
+  max_samples_per_lang: 10
+model:
+  retrieval_backend: small
+  generation_backend: small
+  device: cpu
+run:
+  tasks: [retrieval, generation]
+  retrieval_mrr_at_k: 10
