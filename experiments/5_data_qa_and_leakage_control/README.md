@@ -537,7 +537,7 @@ done
 
 
 ## Results with group4.synth data
-
+## check results in reports folder.
 
 ![alt text](image.png)
 
