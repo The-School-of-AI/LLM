@@ -51,6 +51,22 @@ def _build_overrides(args: argparse.Namespace) -> dict:
         overrides.setdefault("run", {})["retrieval_add_cross_lang_negatives"] = True
     if getattr(args, "mrr_at_k", None) is not None:
         overrides.setdefault("run", {})["retrieval_mrr_at_k"] = args.mrr_at_k
+    if getattr(args, "recall_at_k", None) is not None:
+        overrides.setdefault("run", {})["recall_at_k_list"] = args.recall_at_k
+    if getattr(args, "ndcg_at_k", None) is not None:
+        overrides.setdefault("run", {})["ndcg_at_k_list"] = args.ndcg_at_k
+    if getattr(args, "use_f1", None) is not None:
+        overrides.setdefault("run", {})["use_f1"] = args.use_f1
+    if getattr(args, "use_squad_normalize", False):
+        overrides.setdefault("run", {})["use_squad_normalize"] = True
+    if getattr(args, "use_bleu", False):
+        overrides.setdefault("run", {})["use_bleu"] = True
+    if getattr(args, "use_rouge", False):
+        overrides.setdefault("run", {})["use_rouge"] = True
+    if getattr(args, "save_predictions", False):
+        overrides.setdefault("run", {})["save_predictions"] = True
+    if getattr(args, "generation_evaluator", None) is not None:
+        overrides.setdefault("run", {})["generation_evaluator"] = args.generation_evaluator
     return overrides
 
 
@@ -92,10 +108,24 @@ def run() -> int:
         help="Tasks to run",
     )
     parser.add_argument("--mrr-at-k", type=int, default=10, help="MRR cutoff (10 = paper standard for IndicMSMARCO)")
+    parser.add_argument("--recall-at-k", type=int, nargs="+", default=None, help="Recall@k and Precision@k values (e.g. 1 5 10 20)")
+    parser.add_argument("--ndcg-at-k", type=int, nargs="+", default=None, help="NDCG@k values (e.g. 5 10)")
     parser.add_argument("--output", "-o", default=None, help="Output JSON file")
     parser.add_argument("--output-dir", default=None, help="Output directory (writes results.json)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    parser.add_argument("--use-f1", action="store_true", default=None, help="Report token F1 for generation (default: True)")
+    parser.add_argument("--no-use-f1", action="store_false", dest="use_f1", help="Do not report token F1")
+    parser.add_argument("--use-squad-normalize", action="store_true", help="Use SQuAD-style normalization for EM/F1")
+    parser.add_argument("--use-bleu", action="store_true", help="Report BLEU for generation (requires nltk)")
+    parser.add_argument("--use-rouge", action="store_true", help="Report ROUGE-L for generation (requires rouge-score)")
+    parser.add_argument("--save-predictions", action="store_true", help="Save per-sample predictions to JSON")
+    parser.add_argument(
+        "--generation-evaluator",
+        choices=["default", "ragas"],
+        default=None,
+        help="Extra generation evaluator: default (EM/F1 only) or ragas (optional)",
+    )
     parser.add_argument(
         "--paper-retrieval",
         action="store_true",

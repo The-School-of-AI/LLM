@@ -62,6 +62,20 @@ class RunConfig:
     retrieval_add_cross_lang_negatives: bool = False
     # MRR@K cutoff (10 = paper standard for MS MARCO / IndicMSMARCO)
     retrieval_mrr_at_k: int = 10
+    # Retrieval: k values for Recall@k and NDCG@k (e.g. [1, 5, 10, 20])
+    recall_at_k_list: list[int] = field(default_factory=lambda: [1, 5, 10, 20])
+    ndcg_at_k_list: list[int] = field(default_factory=lambda: [5, 10])
+    # Generation: report token F1 alongside EM
+    use_f1: bool = True
+    # SQuAD-style normalization for EM/F1 (articles, punctuation removed)
+    use_squad_normalize: bool = False
+    # Optional: BLEU / ROUGE-L for generation (requires nltk / rouge-score)
+    use_bleu: bool = False
+    use_rouge: bool = False
+    # Save per-sample predictions to a JSON file for debugging
+    save_predictions: bool = False
+    # Generation evaluator: "default" (EM/F1 only), "ragas" (optional extra metrics)
+    generation_evaluator: str = "default"
 
 
 @dataclass
@@ -134,6 +148,14 @@ def load_config(
             "log_level": "INFO",
             "retrieval_add_cross_lang_negatives": False,
             "retrieval_mrr_at_k": 10,
+            "recall_at_k_list": [1, 5, 10, 20],
+            "ndcg_at_k_list": [5, 10],
+            "use_f1": True,
+            "use_squad_normalize": False,
+            "use_bleu": False,
+            "use_rouge": False,
+            "save_predictions": False,
+            "generation_evaluator": "default",
         },
     }
 

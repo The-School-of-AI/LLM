@@ -14,6 +14,7 @@ from typing import Any
 from benchmark_indic_rag_suite.config import BenchmarkConfig, load_config
 from benchmark_indic_rag_suite.data.loader import load_benchmark_data
 from benchmark_indic_rag_suite.evaluation.generation import run_generation_eval
+from benchmark_indic_rag_suite.evaluation.generation_evaluators import run_ragas
 from benchmark_indic_rag_suite.evaluation.retrieval import run_retrieval_eval
 from benchmark_indic_rag_suite.models.registry import get_generation_model, get_retrieval_model
 
@@ -113,14 +114,16 @@ def run_benchmark(
                 shard_index=config.data.shard_index,
                 shard_total=config.data.shard_total,
             )
+        recall_at_k = getattr(config.run, "recall_at_k_list", [1, 5, 10, 20])
+        ndcg_at_k_list = getattr(config.run, "ndcg_at_k_list", [5, 10])
         retrieval_results = run_retrieval_eval(
             retrieval_data,
             retrieval_model,
             batch_size=config.model.retrieval_batch_size,
             add_cross_lang_negatives=config.run.retrieval_add_cross_lang_negatives,
             mrr_at_k=config.run.retrieval_mrr_at_k,
-            recall_at_k_list=(1, 5, 10),
-            ndcg_at_k=10,
+            recall_at_k_list=recall_at_k,
+            ndcg_at_k_list=ndcg_at_k_list,
         )
         if config.run.retrieval_add_cross_lang_negatives and len(requested_langs) == 1:
             results["tasks"]["retrieval"] = {k: retrieval_results[k] for k in requested_langs if k in retrieval_results}
@@ -136,11 +139,45 @@ def run_benchmark(
             device=config.model.device,
             model_name_or_path=getattr(config.model, "generation_model_name_or_path", None),
         )
-        results["tasks"]["generation"] = run_generation_eval(
+        use_f1 = getattr(config.run, "use_f1", True)
+        use_squad = getattr(config.run, "use_squad_normalize", False)
+        use_bleu = getattr(config.run, "use_bleu", False)
+        use_rouge = getattr(config.run, "use_rouge", False)
+        gen_results, all_samples = run_generation_eval(
             data_by_lang,
             generation_model,
             max_new_tokens=config.model.generation_max_new_tokens,
+            use_f1=use_f1,
+            use_squad_normalize=use_squad,
+            use_bleu=use_bleu,
+            use_rouge=use_rouge,
         )
+        results["tasks"]["generation"] = gen_results
+        generation_evaluator = getattr(config.run, "generation_evaluator", "default")
+        if generation_evaluator == "ragas" and all_samples:
+            ragas_result = run_ragas(all_samples)
+            if ragas_result is not None:
+                results["tasks"]["generation_ragas"] = ragas_result
+            else:
+                logger.warning(
+                    "RAGAS was requested (--generation-evaluator ragas) but returned no results. "
+                    "Check that 'ragas' is installed and that evaluation did not fail (e.g. API keys). "
+                    "Output will not contain generation_ragas."
+                )
+        save_predictions = getattr(config.run, "save_predictions", False)
+        if save_predictions and all_samples:
+            out_dir = config.run.output_dir
+            out_file = config.run.output_file
+            if out_file:
+                pred_path = Path(out_file).parent / (Path(out_file).stem + "_predictions.json")
+            elif out_dir:
+                pred_path = Path(out_dir) / "predictions.json"
+            else:
+                pred_path = Path("predictions.json")
+            pred_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(pred_path, "w", encoding="utf-8") as f:
+                json.dump(all_samples, f, indent=2, ensure_ascii=False)
+            logger.info("Predictions written to %s", pred_path)
 
     out_dir = config.run.output_dir
     out_file = config.run.output_file
