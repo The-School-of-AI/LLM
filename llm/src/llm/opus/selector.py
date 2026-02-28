@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import time
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ from .distributed import (
 from .countsketch import CountSketchProjector
 from .ghost import LayerCapture, MoERoutedCapture
 from .preconditioner import AdamWPreconditionerView
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -550,8 +553,21 @@ class OpusSelector:
                 redundancy = torch.einsum("nlm,lm->n", cand, history)
                 local_scores = (learning_rate * alignment) - (learning_rate * learning_rate * redundancy)
                 local_scores = local_scores.to(torch.float32)
+                _n_nonfinite = int((~torch.isfinite(local_scores)).sum().item())
                 if self._track_nonfinite:
-                    nonfinite_local_scores += float((~torch.isfinite(local_scores)).sum().item())
+                    nonfinite_local_scores += float(_n_nonfinite)
+                if _n_nonfinite == local_scores.numel() and local_scores.numel() > 0:
+                    logger.warning(
+                        "OPUS selector: all %d candidate scores are non-finite "
+                        "— selection is effectively random this step",
+                        local_scores.numel(),
+                    )
+                elif _n_nonfinite > 0:
+                    logger.warning(
+                        "OPUS selector: %d/%d scores are non-finite",
+                        _n_nonfinite,
+                        local_scores.numel(),
+                    )
                 local_scores = torch.nan_to_num(
                     local_scores,
                     nan=torch.finfo(torch.float32).min,
