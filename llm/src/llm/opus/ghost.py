@@ -125,7 +125,7 @@ class GhostCollector:
                 x = args[0]
                 if not torch.is_tensor(x):
                     return
-                self._activations[name] = x.detach()
+                self._activations[name] = x.detach().clone()
 
             return _fwd
 
@@ -136,7 +136,7 @@ class GhostCollector:
                 gout = grad_output[0]
                 if not torch.is_tensor(gout):
                     return
-                self._grad_outputs[name] = gout.detach()
+                self._grad_outputs[name] = gout.detach().clone()
 
             return _bwd
 
@@ -155,11 +155,11 @@ class GhostCollector:
                 is_null = routing.get("is_null")
                 if not (torch.is_tensor(topk_idx) and torch.is_tensor(topk_weight) and torch.is_tensor(is_null)):
                     return
-                self._moe_activations[name] = x.detach()
+                self._moe_activations[name] = x.detach().clone()
                 self._moe_routing[name] = {
-                    "topk_idx": topk_idx.detach(),
-                    "topk_weight": topk_weight.detach(),
-                    "is_null": is_null.detach(),
+                    "topk_idx": topk_idx.detach().clone(),
+                    "topk_weight": topk_weight.detach().clone(),
+                    "is_null": is_null.detach().clone(),
                 }
 
             return _fwd
@@ -171,7 +171,7 @@ class GhostCollector:
                 gout = grad_output[0]
                 if not torch.is_tensor(gout):
                     return
-                self._moe_grad_outputs[name] = gout.detach()
+                self._moe_grad_outputs[name] = gout.detach().clone()
 
             return _bwd
 
