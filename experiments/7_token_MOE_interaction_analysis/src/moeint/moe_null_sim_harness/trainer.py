@@ -10,6 +10,7 @@ from transformers import AutoTokenizer
 from transformers.tokenization_utils_sentencepiece import SentencePieceBackend
 from transformers.tokenization_utils_tokenizers import TokenizersBackend
 from collections import defaultdict
+import string
 
 class Trainer:
     def __init__(self, data_file: str, tokenizer_dir: str, batch_size: int = 8, seq_len: int = 512, lr: float = 1e-4):
@@ -81,9 +82,13 @@ class Trainer:
             topk=self.topk,
             device=self.device,
         )
+        self.global_stats_ema = None
+        self.ema_decay = 0.95  # higher = smoother
+        self.global_expert_token_counts = defaultdict(lambda: defaultdict(int))
+        self.print_every = 50
 
 
-    def print_expert_tokens(self, expert_token_counts):
+    def print_expert_tokens(self, expert_token_counts, step):
         """
         Prints:
           - Top 20 tokens per real expert
@@ -98,7 +103,7 @@ class Trainer:
         num_null = int(num_real * (1 - self.data_sparsity) / self.data_sparsity)
 
         print("\n==============================")
-        print("TOP 20 TOKENS PER EXPERT (REAL + NULL)")
+        print(f"STEP {step}: TOP 20 TOKENS PER EXPERT (REAL + NULL)")
         print("==============================")
 
         # ---- Helper to print one expert ----
@@ -179,7 +184,8 @@ class Trainer:
             # ===============================================
             # Aggregate routing across ALL MoE layers
             # ===============================================
-            expert_token_counts = defaultdict(lambda: defaultdict(int))
+            # update global counts
+            expert_token_counts = self.global_expert_token_counts
 
             for routing_logits in moe_router_logits:
                 routing_probs = torch.softmax(routing_logits, dim=-1)
@@ -188,19 +194,25 @@ class Trainer:
                 flat_ids = input_ids.flatten()
                 flat_experts = topk_indices[..., 0].flatten()  # top-1 per layer
 
-                for token_id, expert_id in zip(flat_ids.tolist(), flat_experts.tolist()):
-                    expert_token_counts[expert_id][token_id] += 1
-
-            self.print_expert_tokens(expert_token_counts)
+                for token_id, expert_id in zip(flat_ids.view(-1), flat_experts.view(-1)):
+                    expert_token_counts[int(expert_id)][int(token_id)] += 1
 
             stats = self.router_health_analyzer.analyze_logits(
                 input_ids, moe_router_logits
             )
 
-            json_str = json.dumps([stat._asdict() for stat in stats], indent=2)
-            print(f"step: {step}")
-            print(json_str)
-            print("-" * 100)
+            # update EMA stats
+            self._set_global_stats(stats)
+
+            if step % self.print_every == 0:
+                self.print_expert_tokens(expert_token_counts, step)
+                json_str = json.dumps(self.global_stats_ema, indent=2)
+                print(f"step: {step}")
+                print(json_str)
+                print("-" * 100)
+
+            if step > 0 and step % 1000 == 0:
+                self.global_expert_token_counts = defaultdict(lambda: defaultdict(int))
 
             loss.backward()
             self.optimizer.step()
@@ -208,6 +220,30 @@ class Trainer:
 
             if step > max_steps:
                 break
+
+    def _set_global_stats(self, stats):
+        stats_dicts = [stat._asdict() for stat in stats]
+
+        if self.global_stats_ema is None:
+            self.global_stats_ema = [dict(layer) for layer in stats_dicts]
+        else:
+            for layer_idx in range(len(stats_dicts)):
+                for key in stats_dicts[layer_idx]:
+                    current = stats_dicts[layer_idx][key]
+                    prev = self.global_stats_ema[layer_idx][key]
+
+                    # only smooth numeric values
+                    if isinstance(current, (float, int)):
+                        self.global_stats_ema[layer_idx][key] = (
+                                self.ema_decay * prev
+                                + (1 - self.ema_decay) * current
+                        )
+                    else:
+                        # lists like entropy_per_group
+                        self.global_stats_ema[layer_idx][key] = [
+                            self.ema_decay * p + (1 - self.ema_decay) * c
+                            for p, c in zip(prev, current)
+                        ]
 
     def _collect_moe_router_logits(self) -> list[Tensor]:
         logits = []
@@ -221,18 +257,38 @@ class Trainer:
         self, tokenizer: TokenizersBackend | SentencePieceBackend
     ) -> dict[int, int]:
         mapping = {}
+        punctuation_set = set(string.punctuation)
 
-        # dummy token grouping logic, just to test things out:
         for token_str, token_id in tokenizer.get_vocab().items():
-            # 1. Convert the byte-level representation back to a normal string
-            # GPT-2 uses a specific byte-map; decoding is the safest way to check
-            decoded_token = tokenizer.convert_tokens_to_string([token_str])
 
-            # 2. Check if it's "Pure Junk"
-            # This catches standalone spaces, newlines, tabs, and strings of them
-            if decoded_token.isspace():
+            decoded = tokenizer.convert_tokens_to_string([token_str]).strip()
+
+            # 1️⃣ Empty after stripping → junk
+            if decoded == "":
                 mapping[token_id] = TokenGroups.junk
-            else:
-                mapping[token_id] = TokenGroups.content
+                continue
+
+            # 2️⃣ Pure whitespace
+            if decoded.isspace():
+                mapping[token_id] = TokenGroups.junk
+                continue
+
+            # 3️⃣ Pure punctuation (e.g. ".", ",", "()", "{}", "--")
+            if all(ch in punctuation_set for ch in decoded):
+                mapping[token_id] = TokenGroups.junk
+                continue
+
+            # 4️⃣ Repeated structural symbol (====, ----, ^^^^, etc.)
+            if len(set(decoded)) == 1 and not decoded.isalnum():
+                mapping[token_id] = TokenGroups.junk
+                continue
+
+            # 5️⃣ Pure number token (optional but recommended for code-heavy data)
+            if decoded.isdigit():
+                mapping[token_id] = TokenGroups.junk
+                continue
+
+            # Otherwise → content
+            mapping[token_id] = TokenGroups.content
 
         return mapping
