@@ -1,5 +1,6 @@
 """Output writers for metadata and rejection layers."""
 
+import hashlib
 import uuid as uuid_lib
 from dataclasses import dataclass
 from datetime import datetime
@@ -321,6 +322,24 @@ class RejectionWriter(OutputWriter):
         return written_files[0] if len(written_files) == 1 else None
 
 
-def generate_uuid() -> str:
-    """Generate a UUID for records."""
-    return str(uuid_lib.uuid4())
+def generate_uuid(record_id: str = "unknown", source_file: str = "unknown") -> str:
+    """Generate a deterministic UUID for records.
+    
+    Uses UUID5 with a hash of record_id and source_file to ensure
+    reproducibility across multiple runs.
+    
+    Args:
+        record_id: Original record identifier from JSONL
+        source_file: Source file path for tracking
+        
+    Returns:
+        Deterministic UUID string based on record_id and source_file
+    """
+    # Create a stable namespace UUID for curriculum extraction
+    namespace = uuid_lib.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # NAMESPACE_DNS
+    
+    # Create a deterministic seed from record_id and source_file
+    seed_str = f"{record_id}#{source_file}"
+    
+    # Use UUID5 for deterministic generation
+    return str(uuid_lib.uuid5(namespace, seed_str))

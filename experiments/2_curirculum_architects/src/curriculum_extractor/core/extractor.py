@@ -225,7 +225,7 @@ class CurriculumExtractor:
             - If rejected: (None, RejectionRecord)
         """
         record_id = record.get("id", "unknown")
-        record_uuid = generate_uuid()
+        record_uuid = generate_uuid(record_id, source_file)
 
         # Wrap record as read-only to prevent modifications
         readonly_record = ReadOnlyRecord(record)
@@ -324,10 +324,11 @@ class CurriculumExtractor:
                     if rejection:
                         rejection_records.append(rejection)
                     else:
+                        record_id = record.get("id", "unknown")
                         metadata_records.append(
                             MetadataRecord(
-                                uuid=generate_uuid(),
-                                id=record.get("id", "unknown"),
+                                uuid=generate_uuid(record_id, source_file),
+                                id=record_id,
                                 file_path=source_file,
                                 metrics=metadata,
                             )
@@ -425,10 +426,11 @@ class CurriculumExtractor:
                     if rejection:
                         rejection_records.append(rejection)
                     else:
+                        record_id = record.get("id", "unknown")
                         metadata_records.append(
                             MetadataRecord(
-                                uuid=generate_uuid(),
-                                id=record.get("id", "unknown"),
+                                uuid=generate_uuid(record_id, source_file),
+                                id=record_id,
                                 file_path=source_file,
                                 metrics=metadata,
                             )
@@ -503,10 +505,11 @@ class CurriculumExtractor:
                     }
                 )
             else:
+                record_id = record.get("id", "unknown")
                 processed.append(
                     {
-                        "uuid": generate_uuid(),
-                        "id": record.get("id", "unknown"),
+                        "uuid": generate_uuid(record_id, source_file),
+                        "id": record_id,
                         "file_path": source_file,
                         **metadata,
                     }

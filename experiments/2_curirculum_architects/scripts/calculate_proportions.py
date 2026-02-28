@@ -6,7 +6,7 @@ import math
 import random
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import pyarrow.parquet as pq
 import yaml
@@ -123,6 +123,7 @@ def sample_metadata(
     sample_rate: float,
     recompute: bool = False,
     curriculum_path: str = "curriculum.yaml",
+    seed: Optional[int] = None,
 ) -> Dict[str, float]:
     """Sample metadata and calculate base distribution of bands."""
     print(f"Reading metadata from: {metadata_path}")
@@ -144,6 +145,10 @@ def sample_metadata(
     table = pq.read_table(metadata_path)
     total_rows = table.num_rows
     print(f"Total rows found across files: {total_rows}")
+
+    # Set random seed for reproducibility if provided
+    if seed is not None:
+        random.seed(seed)
 
     # Simple random sampling indices
     sample_size = int(total_rows * sample_rate)
@@ -215,6 +220,12 @@ def main():
         action="store_true",
         help="Re-run band assignment logic on signals instead of using stored tags",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducible sampling (default: None)",
+    )
 
     args = parser.parse_args()
 
@@ -245,7 +256,7 @@ def main():
     # 1. Sample Distribution
     try:
         base_dist = sample_metadata(
-            args.metadata_path, args.sampling_rate, args.recompute, args.curriculum_path
+            args.metadata_path, args.sampling_rate, args.recompute, args.curriculum_path, args.seed
         )
         print("\nBase Distribution (from Data):")
         for b, p in sorted(base_dist.items()):
