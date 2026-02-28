@@ -22,6 +22,8 @@ class Trainer:
         self.topk = 2
         self.num_experts = 4
         self.data_sparsity = 0.5
+        self.num_null_experts = int(self.num_experts * (1 - self.data_sparsity) / self.data_sparsity)
+        self.num_total_experts = self.num_experts + self.num_null_experts
 
         if tokenizer_dir:
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -82,12 +84,25 @@ class Trainer:
             topk=self.topk,
             device=self.device,
         )
+        self.group_map_cpu = self.router_health_analyzer.group_map.cpu()
         self.global_stats_ema = None
         self.ema_decay = 0.95  # higher = smoother
-        self.global_expert_token_counts = defaultdict(
-            lambda: defaultdict(lambda: defaultdict(int))
-        )
+        self.global_expert_token_counts = {}
         self.print_every = 50
+
+        vocab = self.tokenizer.get_vocab()
+        self.id_to_token = {v: k for k, v in vocab.items()}
+        self.junk_mask = (self.group_map_cpu == TokenGroups.junk)
+
+
+    def _init_layer_counter(self, layer_idx: int):
+        if layer_idx not in self.global_expert_token_counts:
+            self.global_expert_token_counts[layer_idx] = torch.zeros(
+                self.num_total_experts,
+                self.tokenizer.vocab_size,
+                dtype=torch.int32,
+                device="cpu"  # keep on CPU to avoid GPU memory blowup
+            )
 
 
     def print_expert_tokens(self, expert_token_counts, step, layer_idx):
@@ -98,11 +113,8 @@ class Trainer:
           - % junk vs content per expert
         """
 
-        vocab = self.tokenizer.get_vocab()
-        id_to_token = {v: k for k, v in vocab.items()}
-
+        num_null = self.num_null_experts
         num_real = self.num_experts
-        num_null = int(num_real * (1 - self.data_sparsity) / self.data_sparsity)
 
         print("\n==============================")
         print(f"STEP {step} - Layer {layer_idx}: TOP 20 TOKENS PER EXPERT (REAL + NULL)")
@@ -110,29 +122,17 @@ class Trainer:
 
         # ---- Helper to print one expert ----
         def print_single_expert(label, token_counts):
-            if not token_counts:
+            total = token_counts.sum().item()
+
+            if total == 0:
                 print(f"\n--- {label} ---")
                 print("No tokens routed.")
                 return
 
-            sorted_tokens = sorted(
-                token_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:20]
-
-            total = sum(token_counts.values())
-
-            # Compute junk vs content %
-            junk_count = 0
-            content_count = 0
-            for token_id, count in token_counts.items():
-                group = self.router_health_analyzer.group_map[token_id].item()
-                if group == TokenGroups.junk:
-                    junk_count += count
-                else:
-                    content_count += count
-
+            # Vectorized junk vs content % computation
+            # junk_mask = (self.group_map_cpu == TokenGroups.junk)
+            junk_count = token_counts[self.junk_mask].sum().item()
+            content_count = total - junk_count
             junk_pct = 100 * junk_count / total if total > 0 else 0
             content_pct = 100 * content_count / total if total > 0 else 0
 
@@ -141,30 +141,32 @@ class Trainer:
             print(f"Junk: {junk_pct:.2f}% | Content: {content_pct:.2f}%")
             print("-" * 50)
 
-            for token_id, count in sorted_tokens:
-                token_str = id_to_token.get(token_id, f"<UNK:{token_id}>")
-                try:
-                    decoded = self.tokenizer.convert_tokens_to_string([token_str])
-                except:
-                    decoded = token_str
+            # top_vals, top_ids = torch.topk(token_counts, 20)
+            nonzero_ids = torch.nonzero(token_counts).squeeze(-1)
+            nonzero_vals = token_counts[nonzero_ids]
+            if len(nonzero_vals) > 20:
+                top_vals, idx = torch.topk(nonzero_vals, 20)
+                top_ids = nonzero_ids[idx]
+            else:
+                top_vals = nonzero_vals
+                top_ids = nonzero_ids
 
+            for token_id, count in zip(top_ids.tolist(), top_vals.tolist()):
+                token_str = self.id_to_token.get(token_id, f"<UNK:{token_id}>")
+                decoded = self.tokenizer.convert_tokens_to_string([token_str])
                 pct = 100 * count / total
                 print(f"{decoded!r:20s} | count={count:5d} | {pct:5.2f}%")
 
         # ---- Print Real Experts ----
         for expert_id in range(num_real):
-            token_counts = expert_token_counts.get(expert_id, {})
+            layer_counts = expert_token_counts  # tensor
+            token_counts = layer_counts[expert_id]
             print_single_expert(f"Real Expert {expert_id}", token_counts)
 
-        # ---- Collapse NULL Experts ----
-        null_token_counts = {}
-
-        for expert_id in range(num_real, num_real + num_null):
-            token_counts = expert_token_counts.get(expert_id, {})
-            for token_id, count in token_counts.items():
-                null_token_counts[token_id] = null_token_counts.get(token_id, 0) + count
-
-        print_single_expert("NULL (collapsed)", null_token_counts)
+        # ---- Collapse NULL Experts - Tensor safe version ----
+        if num_null > 0:
+            null_tensor = expert_token_counts[num_real: num_real + num_null].sum(dim=0)
+            print_single_expert("NULL (collapsed)", null_tensor)
 
     def train(self, max_steps: int = 100):
         self.model.train()
@@ -188,14 +190,30 @@ class Trainer:
             # ===============================================
             # update global counts
             for layer_idx, routing_logits in enumerate(moe_router_logits):
-                routing_probs = torch.softmax(routing_logits, dim=-1)
-                _, topk_indices = torch.topk(routing_probs, self.topk, dim=-1)
+                self._init_layer_counter(layer_idx)
 
-                flat_ids = input_ids.flatten()
-                flat_experts = topk_indices[..., 0].flatten()  # top-1 per layer
+                with torch.no_grad():
+                    # routing_probs = torch.softmax(routing_logits, dim=-1)
+                    # top1_experts = torch.topk(routing_probs, 1, dim=-1).indices.squeeze(-1)
+                    top1_experts = torch.topk(routing_logits, 1, dim=-1).indices.squeeze(-1)
 
-                for token_id, expert_id in zip(flat_ids.view(-1), flat_experts.view(-1)):
-                    self.global_expert_token_counts[layer_idx][int(expert_id)][int(token_id)] += 1
+                    flat_tokens = input_ids.view(-1)
+                    flat_experts = top1_experts.view(-1)
+
+                    # move to CPU for counting
+                    # flat_tokens = flat_tokens.cpu()
+                    # flat_experts = flat_experts.cpu()
+
+                    vocab_size = self.tokenizer.vocab_size
+                    # combined = flat_experts * vocab_size + flat_tokens
+                    combined = (flat_experts * vocab_size + flat_tokens).cpu()
+                    bincount = torch.bincount(
+                        combined,
+                        minlength=self.num_total_experts * vocab_size
+                    )
+
+                    layer_counts = bincount.view(self.num_total_experts, vocab_size)
+                    self.global_expert_token_counts[layer_idx] += layer_counts
 
             stats = self.router_health_analyzer.analyze_logits(
                 input_ids, moe_router_logits
@@ -215,8 +233,8 @@ class Trainer:
                 print(json_str)
                 print("-" * 100)
 
-            if step > 0 and step % 1000 == 0:
-                self.global_expert_token_counts = defaultdict(lambda: defaultdict(int))
+            if step > 0 and step % self.print_every == 0:
+                self.global_expert_token_counts = {}
 
             loss.backward()
             self.optimizer.step()
