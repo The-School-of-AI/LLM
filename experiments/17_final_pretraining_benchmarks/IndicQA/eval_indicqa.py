@@ -94,6 +94,25 @@ def token_density(text, tokenizer):
     tokens = tokenizer(text)["input_ids"]
     return len(tokens) / max(len(text), 1)
 
+
+def get_position_bucket(answer_starts, context):
+    if not answer_starts:
+        return "unknown"
+
+    start = answer_starts[0]  # take first gold span
+
+    if start is None:
+        return "unknown"
+
+    norm_pos = start / max(len(context), 1)
+
+    if norm_pos < 0.33:
+        return "early"
+    elif norm_pos < 0.66:
+        return "middle"
+    else:
+        return "late"
+
 # =========================
 # 3. PROMPT FORMAT
 # =========================
@@ -161,12 +180,27 @@ def load_indicqa_all_languages(force_download=False):
 
                 for qa in paragraph["qas"]:
                     question = qa["question"].strip()
-                    answers = [a["text"].strip() for a in qa["answers"]]
+                    answers = []
+                    answer_starts = []
+
+                    for a in qa["answers"]:
+                        text = a.get("text", "").strip()
+                        start = a.get("answer_start", None)
+
+                        # Only keep answers with valid integer start
+                        if text and isinstance(start, int):
+                            answers.append(text)
+                            answer_starts.append(start)
+
+                    # Skip example if no valid answers
+                    if not answers:
+                        continue
 
                     all_examples.append({
                         "context": context,
                         "question": question,
                         "answers": {"text": answers},
+                        "answer_starts": answer_starts,
                         "language": lang
                     })
 
@@ -215,6 +249,8 @@ def evaluate(model, tokenizer, split, max_samples=None):
 
     dataset = load_indicqa_all_languages(force_download=False)
     print(dataset[0])
+    for i in range(5):
+        print(dataset[i]["answer_starts"])
 
     results = defaultdict(lambda: {
         "em": [],
@@ -227,6 +263,11 @@ def evaluate(model, tokenizer, split, max_samples=None):
         "token_density": []
     })
 
+    position_stats = defaultdict(lambda: {
+        "early": [],
+        "middle": [],
+        "late": []
+    })
     hallucinations = defaultdict(int)
     total_per_lang = defaultdict(int)
 
@@ -244,12 +285,18 @@ def evaluate(model, tokenizer, split, max_samples=None):
         pred = generate_answer(model, tokenizer, prompt)
         # pred = pred.split(".")[0]
 
-        print(f"#{i}:  Context={context}, question={question}, gold={gold_answers}, language={language}, pred={pred}")
+        # print(f"#{i}:  Context={context}, question={question}, gold={gold_answers}, language={language}, pred={pred}")
 
         em = compute_em(pred, gold_answers)
         f1 = compute_f1(pred, gold_answers)
         results[language]["em"].append(em)
         results[language]["f1"].append(f1)
+
+        bucket = get_position_bucket(example["answer_starts"], context)
+        if bucket in ["early", "middle", "late"]:
+            position_stats[language][bucket].append(f1)
+        else:
+            print("Found None answer_start:", example)
 
         # Additional diagnostics
         results[language]["copy_ratio"].append(copy_ratio(pred, context))
@@ -271,6 +318,7 @@ def evaluate(model, tokenizer, split, max_samples=None):
 
     # Aggregate
     summary = {}
+    pos_summary = {}
 
     for lang in results:
         total = len(results[lang]["em"])
@@ -287,6 +335,22 @@ def evaluate(model, tokenizer, split, max_samples=None):
             "AvgTokensPerChar": round(sum(results[lang]["token_density"]) / total, 4),
             "Samples": total
         }
+
+    for lang in position_stats:
+        pos_summary[lang] = {}
+        for bucket in ["early", "middle", "late"]:
+            values = position_stats[lang][bucket]
+            if len(values) > 0:
+                pos_summary[lang][bucket] = round(sum(values) / len(values) * 100, 2)
+            else:
+                pos_summary[lang][bucket] = None
+
+    for lang in summary:
+        summary[lang]["PositionF1"] = pos_summary.get(lang, {
+            "early": None,
+            "middle": None,
+            "late": None
+        })
 
 
     return summary
