@@ -16,108 +16,110 @@ from transformers import AutoTokenizer
 # CONFIG
 # -----------------------------
 
-# DOMAINS = [
-#     "general_web_clean",
-#     "encyclopedic",
-#     "news_nonpolitical",
-#     "technical_docs",
-#     "math_science",
-#     "code_repos",
-#     "dialogue_chat",
-#     "planning_reasoning_curated",
-# ]
-
-# Note: These are actually modalities from curriculum metadata, not domains
 DOMAINS = [
     "general_text",
-    "agentic_traces",
-    "research_papers",
-    "technical_text",
+    "indic_text",
+    "structured_knowledge",
+    # "research_papers",
+    # "technical_text",
     "code",
     "math",
-    "reasoning",
+    "cot_reasoning",
+    "agentic_traces",
 ]
 
+SOURCE_DEFAULT_MODALITY = {
+    # Web
+    "C4": "general_text",
+    "refinedweb": "general_text",
+    "cc_head": "general_text",
+    "cc_middle": "general_text",
+    "cc_tail": "general_text",
+    "cc_news": "structured_knowledge",
+    "reddit": "general_text",
+    "books": "structured_knowledge",
+    "megawika": "structured_knowledge",
+
+    # Code
+    "Starcoder": "code",
+    "stackexchange": "structured_knowledge",
+
+    # Math / formal
+    "proof_pile_2-algebraic_stack": "math",
+    "proof_pile_2-open_web_math": "math",
+    "redpajama-arxiv": "structured_knowledge",
+    "ncert": "structured_knowledge",
+    "pes2o": "structured_knowledge",
+
+    # Instruction
+    "flan": "cot_reasoning",
+
+    # Indic
+    "sangraha_as": "general_text",
+    "sangraha_bn": "general_text",
+    "sangraha_gu": "general_text",
+    "sangraha_hi": "general_text",
+    "sangraha_kn": "general_text",
+    "sangraha_ml": "general_text",
+    "sangraha_mr": "general_text",
+    "sangraha_or": "general_text",
+    "sangraha_pa": "general_text",
+    "sangraha_ta": "general_text",
+    "sangraha_te": "general_text",
+}
+
+INDIC_SOURCES = {
+    "sangraha_as",
+    "sangraha_bn",
+    "sangraha_gu",
+    "sangraha_hi",
+    "sangraha_kn",
+    "sangraha_ml",
+    "sangraha_mr",
+    "sangraha_or",
+    "sangraha_pa",
+    "sangraha_ta",
+    "sangraha_te",
+}
+
 DEFAULT_EPS = 1e-8
-JOIN_KEY = "id"  # change if needed
 
 # -----------------------------
-# Helpers
-# -----------------------------
-
-
-def drop_null_type_columns(table: pa.Table) -> pa.Table:
-    keep = []
-    for field in table.schema:
-        if not pa.types.is_null(field.type):
-            keep.append(field.name)
-    return table.select(keep)
-
-
-def drop_unsupported_columns(table: pa.Table) -> pa.Table:
-    keep = []
-    for field in table.schema:
-        if pa.types.is_struct(field.type):
-            continue
-        if pa.types.is_list(field.type):
-            continue
-        if pa.types.is_map(field.type):
-            continue
-        keep.append(field.name)
-    return table.select(keep)
-
-
-# -----------------------------
-# Domain mapping logic
+# Modality mapping logic
 # -----------------------------
 
 
-def map_to_domain(record: dict) -> str:
-    if record.get("has_code", False):
-        return "code_repos"
+def map_to_modality(row):
+    src = row.get("source")
 
-    if record.get("has_math", False):
-        return "math_science"
+    # ---- LANGUAGE SPLIT FIRST ----
+    if src in INDIC_SOURCES:
+        return "indic_text"
 
-    if record.get("has_reason", False) or record.get("has_agentic", False):
-        return "planning_reasoning_curated"
+    # Baseline from source
+    base = SOURCE_DEFAULT_MODALITY.get(src, "general_text")
 
-    dataset_domain = (record.get("dataset_domain", "") or "").lower()
+    # ---- THEN DOMAIN / CODE / MATH / REASONING ----
+    # Strong overrides only
+    agentic = row.get("agentic_score", 0) or 0
+    cot = row.get("cot_score", 0) or 0
+    code = row.get("code_score", 0) or 0
+    math = row.get("math_score", 0) or 0
 
-    if "wiki" in dataset_domain:
-        return "encyclopedic"
+    # Override only if signal is strong enough
+    if agentic >= 12:
+        return "agentic_traces"
 
-    if "news" in dataset_domain:
-        return "news_nonpolitical"
+    if cot >= 15:
+        return "cot_reasoning"
 
-    if "dialogue" in dataset_domain or "chat" in dataset_domain:
-        return "dialogue_chat"
+    if code >= 30:
+        return "code"
 
-    if "technical" in dataset_domain or "docs" in dataset_domain:
-        return "technical_docs"
+    if math >= 20:
+        return "math"
 
-    return "general_web_clean"
-
-
-# def map_to_domain(record):
-#     if record.get("has_code"):
-#         return "code_repos"
-#
-#     if record.get("has_math"):
-#         return "math_science"
-#
-#     if record.get("dataset_domain"):
-#         d = record["dataset_domain"].lower()
-#         if "science" in d or "physics" in d or "math" in d:
-#             return "math_science"
-#         if "technical" in d:
-#             return "technical_docs"
-#
-#     # Heuristic fallback using entropy + sentence length
-#     if record.get("avg_sentence_length", 0) > 20:
-#         return "technical_docs"
-#
-#     return "general_web_clean"
+    return base
 
 # -----------------------------
 # Main
@@ -126,27 +128,23 @@ def map_to_domain(record: dict) -> str:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--text_dir", type=str, required=True, help="dataset/parquet/")
-    parser.add_argument("--meta_dir", type=str, required=True, help="dataset/meta/")
-    parser.add_argument("--tokenizer", type=str, default="gpt-oss")
+    parser.add_argument("--input_file", type=str, required=True, help="Path to combined raw_shard.parquet")
+    parser.add_argument("--tokenizer", type=str, default="../tsai_131k_tokenizer/")
     parser.add_argument("--text_field", type=str, default="text")
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--max_tokens_per_doc", type=int, default=8192)
     parser.add_argument("--eps", type=float, default=DEFAULT_EPS)
-    parser.add_argument("--output", type=str, default="domain_token_distributions.npz")
+    parser.add_argument("--output", type=str, default="artifacts/domain_token_distributions.npz")
     args = parser.parse_args()
 
-    text_files = sorted(glob.glob(os.path.join(args.text_dir, "*.parquet")))
-    if not text_files:
-        raise RuntimeError("No text parquet files found")
-
-    print(f"Found {len(text_files)} text shards")
+    if not os.path.exists(args.input_file):
+        raise FileNotFoundError(f"Input file not found: {args.input_file}")
 
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=True)
-    vocab_size = tokenizer.vocab_size
+    vocab_size = len(tokenizer)
     print("Vocab size:", vocab_size)
 
-    # Allocate counters. Use numpy, not python dicts
+    # Allocate counters.
     counts = {d: np.zeros(vocab_size, dtype=np.int64) for d in DOMAINS}
     totals = {d: 0 for d in DOMAINS}
 
@@ -164,7 +162,6 @@ def main():
                 continue
 
             ids = ids[: args.max_tokens_per_doc]
-
             if not ids:
                 continue
 
@@ -175,57 +172,32 @@ def main():
         batch_texts.clear()
         batch_domains.clear()
 
-    # Iterate shards
-    for tf in tqdm(text_files, desc="Shards"):
-        base = os.path.basename(tf).replace(".parquet", "")
-        meta_file = os.path.join(args.meta_dir, f"{base}_metadata.parquet")
-
-        if not os.path.exists(meta_file):
-            print("WARNING: metadata missing for", base)
-            continue
-
-        # text_table = drop_null_type_columns(pq.read_table(tf))
-        # meta_table = drop_null_type_columns(pq.read_table(meta_file))
-        text_table = pq.read_table(tf)
-        meta_table = pq.read_table(meta_file)
-        text_table = drop_unsupported_columns(drop_null_type_columns(text_table))
-        meta_table = drop_unsupported_columns(drop_null_type_columns(meta_table))
-
-        # Logging some schema info
-        print(text_table.schema.field(JOIN_KEY))
-        print(meta_table.schema.field(JOIN_KEY))
-        for f in meta_table.schema:
-            if pa.types.is_null(f.type):
-                print("Dropping null column:", f.name)
-
-        # Normalize join key types (string vs large_string)
-        text_table = text_table.set_column(
-            text_table.schema.get_field_index(JOIN_KEY),
-            JOIN_KEY,
-            text_table[JOIN_KEY].cast(pa.string()),
-        )
-        meta_table = meta_table.set_column(
-            meta_table.schema.get_field_index(JOIN_KEY),
-            JOIN_KEY,
-            meta_table[JOIN_KEY].cast(pa.string()),
-        )
-
-        # Inner join on JOIN_KEY
-        joined = text_table.join(meta_table, keys=JOIN_KEY, join_type="inner")
-
-        for row in joined.to_pylist():
-            text = row.get(args.text_field, None)
-            if not text:
+    # Process the large parquet file in batches to save memory
+    pf = pq.ParquetFile(args.input_file)
+    print(f"Processing {args.input_file} in batches...")
+    
+    # We need text + metadata flags
+    columns = ["text", "domain", "source", "has_code", "has_cot", "has_reasoning", "has_agentic", 
+                "math_score", "cot_score", "code_score", "reasoning_score", "agentic_score",
+                ]
+    
+    # Filter columns based on availability in the file to avoid error if some are missing
+    available_cols = [c for c in columns if c in pf.schema.names]
+    row_counts = {d: 0 for d in DOMAINS}
+    
+    for batch in tqdm(pf.iter_batches(batch_size=args.batch_size, columns=available_cols), total=pf.num_row_groups):
+        df_batch = batch.to_pandas()
+        
+        for _, row in df_batch.iterrows():
+            text = row.get(args.text_field)
+            if not text or not isinstance(text, str):
                 continue
 
-            # dom = map_to_domain(row)
-            dom = row.get("modality_primary_modality", "general_text")
-
+            dom = map_to_modality(row)
+            row_counts[dom] += 1
+            
             batch_texts.append(text)
             batch_domains.append(dom)
-
-            if len(batch_texts) >= args.batch_size:
-                flush_batch()
 
         flush_batch()
 
@@ -233,6 +205,7 @@ def main():
     P = {}
     for d in DOMAINS:
         if totals[d] == 0:
+            print(f"WARNING: No data for modality '{d}' - using uniform prior")
             P[d] = np.ones(vocab_size) / vocab_size
             continue
 
@@ -246,12 +219,18 @@ def main():
         save_dict[d] = P[d]
         save_dict[d + "__total"] = np.array([totals[d]], dtype=np.int64)
 
+    # Ensure output directory exists
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     np.savez(args.output, **save_dict)
     print("Saved:", args.output)
 
     # Sanity
-    print("\nTop tokens per domain:")
+    print("\nTop tokens per modality:")
     for d in DOMAINS:
+        if totals[d] == 0: continue
         top = np.argsort(-P[d])[:20]
         print("\n", d)
         print(tokenizer.convert_ids_to_tokens(top.tolist()))

@@ -70,8 +70,8 @@ def draw_plots(Pg, max_affinity, null_routing_score):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--npz", type=str, default="domain_token_distributions.npz")
-    parser.add_argument("--tokenizer", type=str, default="gpt2")
+    parser.add_argument("--npz", type=str, default="artifacts/domain_token_distributions.npz")
+    parser.add_argument("--tokenizer", type=str, default="../tsai_131k_tokenizer/")
     parser.add_argument("--min_tokens", type=int, default=5000)
     parser.add_argument("--no_plots", action="store_true")
     args = parser.parse_args()
@@ -115,6 +115,43 @@ def main():
 
     Pg = np.average(Ps, axis=0, weights=weights)
     Pg /= Pg.sum()
+
+    # -------------------------
+    # Entropy diagnostics
+    # -------------------------
+
+    print("\n==============================")
+    print("ENTROPY PER MODALITY")
+    #Lower entropy ⇒ more concentrated distribution ⇒ stronger specialization
+    for i, m in enumerate(modalities):
+        Pm = Ps[i]
+        entropy = -np.sum(Pm * np.log(Pm + cfg.eps))
+        print(f"{m:25s} entropy = {entropy:.4f}")
+
+    # Global entropy
+    entropy_global = -np.sum(Pg * np.log(Pg + cfg.eps))
+    print(f"\nGlobal Pg entropy = {entropy_global:.4f}")
+
+    # Higher perplexity → more spread tokens. Lower perplexity → sharper modality
+    perplexity = np.exp(entropy)
+    print(f"{m:25s} entropy={entropy:.4f} | perplexity={perplexity:.2f}")
+
+    print("\n==============================")
+    print("KL Divergence Matrix")
+
+    for i, mi in enumerate(modalities):
+        for j, mj in enumerate(modalities):
+            if i == j:
+                continue
+            KL = np.sum(Ps[i] * (np.log(Ps[i] + cfg.eps) - np.log(Ps[j] + cfg.eps)))
+            print(f"KL({mi:20s} || {mj:20s}) = {KL:.4f}")
+
+    """Notes: 
+    KL < 0.3 → almost same distribution
+    KL ~ 0.5–1 → moderately different
+    KL > 2 → strongly different
+    KL > 5 → essentially different language space
+    """
 
     # -------------------------
     # Core analysis
@@ -213,6 +250,7 @@ def main():
         argmax_affinity=aff["argmax_affinity"],
         domain_agnostic_score=aff["domain_agnostic_score"],
         modalities=np.array(modalities),
+        log_odds=aff["log_odds"],
     )
 
     print("\nSaved token_affinity_stats.npz")
