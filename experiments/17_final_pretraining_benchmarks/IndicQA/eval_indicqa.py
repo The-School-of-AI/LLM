@@ -274,11 +274,13 @@ def evaluate(model, tokenizer, split, max_samples=None, force_download=False, la
     })
     hallucinations = defaultdict(int)
     total_per_lang = defaultdict(int)
+    samples_per_lang = defaultdict(int)
 
     for i, example in enumerate(tqdm(dataset)):
 
-        if max_samples and i >= max_samples:
-            break
+        language = example["language"]
+        if max_samples and samples_per_lang[language] >= max_samples:
+            continue
 
         context = example["context"]
         question = example["question"]
@@ -319,6 +321,8 @@ def evaluate(model, tokenizer, split, max_samples=None, force_download=False, la
         # if pred not in context:
         if copy_ratio(pred, context) < 0.5:
             hallucinations[language] += 1
+
+        samples_per_lang[language] += 1
 
     # Aggregate
     summary = {}
