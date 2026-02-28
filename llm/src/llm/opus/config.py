@@ -20,7 +20,7 @@ class OpusConfig:
     include_embeddings: bool = False
     include_lm_head: bool = False
     track_nonfinite_stats: bool = True
-    zero2_exact_global_scoring: bool = True
+    zero2_exact_global_scoring: bool = False
     strict_shard_preconditioner: bool = False
     log_selection_metrics: bool = True
 

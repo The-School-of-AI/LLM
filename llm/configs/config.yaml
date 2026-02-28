@@ -83,6 +83,6 @@ opus:
   include_embeddings: false
   include_lm_head: false
   track_nonfinite_stats: true
-  zero2_exact_global_scoring: true
+  zero2_exact_global_scoring: false
   strict_shard_preconditioner: false
   log_selection_metrics: true
