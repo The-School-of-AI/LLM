@@ -1,0 +1,251 @@
+Modalities were separated out based on source data for a quick split.
+
+Modalities:
+  general_text: 171145361
+  indic_text: 4736134
+  structured_knowledge: 183793416
+  code: 62726913
+  math: 145709302
+  cot_reasoning: 92828261
+  agentic_traces: 200981849
+Keeping modalities: ['general_text', 'indic_text', 'structured_knowledge', 'code', 'math', 'cot_reasoning', 'agentic_traces']
+
+==============================
+TOP TOKENS BY EXPERT AFFINITY
+            à¬° | max_aff=5.203 | Pg=5.75e-05 | expert=indic_text
+            àŃį | max_aff=5.203 | Pg=6.33e-05 | expert=indic_text
+            àŃĩ | max_aff=5.203 | Pg=3.78e-05 | expert=indic_text
+            Ġà¬ | max_aff=5.203 | Pg=8.21e-05 | expert=indic_text
+            à¬¿ | max_aff=5.203 | Pg=5.84e-05 | expert=indic_text
+            à§° | max_aff=5.203 | Pg=1.90e-05 | expert=indic_text
+            à¬¾ | max_aff=5.203 | Pg=6.68e-05 | expert=indic_text
+            à¬¬ | max_aff=5.203 | Pg=1.97e-05 | expert=indic_text
+            à¬ķ | max_aff=5.203 | Pg=2.50e-05 | expert=indic_text
+            à¬¨ | max_aff=5.203 | Pg=2.49e-05 | expert=indic_text
+            à¬¤ | max_aff=5.203 | Pg=2.24e-05 | expert=indic_text
+            àŃģ | max_aff=5.203 | Pg=2.47e-05 | expert=indic_text
+           Ġà¬ķ | max_aff=5.203 | Pg=1.48e-05 | expert=indic_text
+           Ġà¬ª | max_aff=5.203 | Pg=1.29e-05 | expert=indic_text
+             à¬ | max_aff=5.203 | Pg=2.72e-05 | expert=indic_text
+            à¬¹ | max_aff=5.203 | Pg=1.26e-05 | expert=indic_text
+            à¬² | max_aff=5.203 | Pg=1.34e-05 | expert=indic_text
+             àŃ | max_aff=5.203 | Pg=1.43e-05 | expert=indic_text
+            àŃŁ | max_aff=5.203 | Pg=1.20e-05 | expert=indic_text
+           Ġà¬¸ | max_aff=5.203 | Pg=1.38e-05 | expert=indic_text
+
+==============================
+TOP TOKENS PER EXPERT
+
+--- general_text ---
+            à¶§ | log_odds=1.563 | Pg=1.75e-07
+            à·Ĵ | log_odds=1.544 | Pg=1.14e-07
+            à·Ļ | log_odds=1.542 | Pg=1.12e-07
+            à·ı | log_odds=1.540 | Pg=1.56e-07
+            à¶¸ | log_odds=1.537 | Pg=1.65e-07
+         à¶Ńà·Ĭ | log_odds=1.536 | Pg=1.19e-07
+            à·Ģ | log_odds=1.529 | Pg=1.10e-07
+           Ġà¶´ | log_odds=1.523 | Pg=1.41e-07
+         à¶±à·Ĭ | log_odds=1.522 | Pg=1.02e-07
+           ĠnÅį | log_odds=1.521 | Pg=1.26e-07
+            à·Ħ | log_odds=1.515 | Pg=8.30e-08
+            à·Ŀ | log_odds=1.512 | Pg=8.07e-08
+            à¶ľ | log_odds=1.511 | Pg=1.03e-07
+            à·ļ | log_odds=1.510 | Pg=1.13e-07
+           Ġà¶ļ | log_odds=1.508 | Pg=1.00e-07
+            à·ĵ | log_odds=1.505 | Pg=9.80e-08
+            à·ľ | log_odds=1.505 | Pg=7.60e-08
+            à¶ļ | log_odds=1.505 | Pg=1.08e-07
+         à¶½à·ı | log_odds=1.502 | Pg=7.37e-08
+            à·Ĥ | log_odds=1.501 | Pg=8.41e-08
+
+--- indic_text ---
+            à¬° | log_odds=5.203 | Pg=5.75e-05
+            àŃį | log_odds=5.203 | Pg=6.33e-05
+            àŃĩ | log_odds=5.203 | Pg=3.78e-05
+            Ġà¬ | log_odds=5.203 | Pg=8.21e-05
+            à¬¿ | log_odds=5.203 | Pg=5.84e-05
+            à§° | log_odds=5.203 | Pg=1.90e-05
+            à¬¾ | log_odds=5.203 | Pg=6.68e-05
+            à¬¬ | log_odds=5.203 | Pg=1.97e-05
+            à¬ķ | log_odds=5.203 | Pg=2.50e-05
+            à¬¨ | log_odds=5.203 | Pg=2.49e-05
+            à¬¤ | log_odds=5.203 | Pg=2.24e-05
+            àŃģ | log_odds=5.203 | Pg=2.47e-05
+           Ġà¬ķ | log_odds=5.203 | Pg=1.48e-05
+           Ġà¬ª | log_odds=5.203 | Pg=1.29e-05
+             à¬ | log_odds=5.203 | Pg=2.72e-05
+            à¬¹ | log_odds=5.203 | Pg=1.26e-05
+            à¬² | log_odds=5.203 | Pg=1.34e-05
+             àŃ | log_odds=5.203 | Pg=1.43e-05
+            àŃŁ | log_odds=5.203 | Pg=1.20e-05
+           Ġà¬¸ | log_odds=5.203 | Pg=1.38e-05
+
+--- structured_knowledge ---
+        ĠAktien | log_odds=1.522 | Pg=2.44e-06
+   gesellschaft | log_odds=1.512 | Pg=2.50e-06
+         NASDAQ | log_odds=1.498 | Pg=1.95e-05
+      ĠAdvisors | log_odds=1.497 | Pg=1.79e-05
+      Ġholdings | log_odds=1.496 | Pg=3.44e-05
+           NYSE | log_odds=1.495 | Pg=2.64e-05
+        Ġshares | log_odds=1.484 | Pg=3.00e-04
+      Ġdividend | log_odds=1.483 | Pg=5.11e-05
+           Beat | log_odds=1.480 | Pg=1.55e-05
+        ĠNorges | log_odds=1.475 | Pg=6.48e-07
+          ĠBanc | log_odds=1.473 | Pg=8.07e-06
+         Shares | log_odds=1.473 | Pg=9.98e-06
+           ĠEPS | log_odds=1.470 | Pg=2.59e-05
+      Ġinsiders | log_odds=1.469 | Pg=1.15e-05
+        ĠRating | log_odds=1.468 | Pg=2.73e-05
+          idend | log_odds=1.463 | Pg=1.03e-05
+      Ġequities | log_odds=1.460 | Pg=1.22e-05
+     Ġquarterly | log_odds=1.454 | Pg=2.90e-05
+      Ġanalysts | log_odds=1.452 | Pg=5.60e-05
+             ÄĦ | log_odds=1.451 | Pg=3.19e-07
+
+--- code ---
+           TRGL | log_odds=2.606 | Pg=6.35e-07
+          $lang | log_odds=2.572 | Pg=7.89e-07
+      omitempty | log_odds=2.572 | Pg=1.97e-07
+          ĉwant | log_odds=2.572 | Pg=2.93e-07
+          ĉPORT | log_odds=2.561 | Pg=2.59e-07
+         (CType | log_odds=2.558 | Pg=1.73e-07
+      .ISupport | log_odds=2.554 | Pg=3.24e-07
+         >--}}Ċ | log_odds=2.553 | Pg=3.04e-07
+        .Anchor | log_odds=2.553 | Pg=9.37e-07
+          Ġjspb | log_odds=2.551 | Pg=1.37e-07
+          .Xtra | log_odds=2.548 | Pg=2.15e-07
+              Ĉ | log_odds=2.547 | Pg=1.64e-06
+         alamat | log_odds=2.545 | Pg=2.71e-07
+         aporan | log_odds=2.544 | Pg=2.52e-07
+      GUILayout | log_odds=2.544 | Pg=3.76e-07
+          ĉfont | log_odds=2.541 | Pg=1.51e-06
+           VRTX | log_odds=2.540 | Pg=5.71e-07
+        &aacute | log_odds=2.540 | Pg=1.79e-07
+        ')}}">Ċ | log_odds=2.538 | Pg=1.91e-07
+        ĉmargin | log_odds=2.537 | Pg=1.45e-06
+
+--- math ---
+            \<^ | log_odds=1.768 | Pg=4.02e-06
+            >\< | log_odds=1.763 | Pg=5.06e-06
+            Ġ\< | log_odds=1.762 | Pg=3.89e-05
+           Ġqed | log_odds=1.740 | Pg=4.42e-07
+          Ġsimp | log_odds=1.737 | Pg=6.69e-06
+           Ġ:=Ċ | log_odds=1.736 | Pg=8.58e-06
+             \< | log_odds=1.735 | Pg=1.03e-05
+            paa | log_odds=1.733 | Pg=5.68e-07
+          ]:ĊĊĊ | log_odds=1.729 | Pg=2.13e-06
+         ĠBOOST | log_odds=1.729 | Pg=1.25e-05
+        isempty | log_odds=1.723 | Pg=8.96e-07
+          (ierr | log_odds=1.716 | Pg=2.54e-07
+         _coeff | log_odds=1.713 | Pg=2.58e-06
+       Ġisempty | log_odds=1.713 | Pg=1.06e-06
+            $ĊĊ | log_odds=1.710 | Pg=2.02e-05
+âĶģâĶģâĶģâĶģâĶģâĶģâĶģâĶģ | log_odds=1.709 | Pg=3.88e-07
+     Ġeventdata | log_odds=1.709 | Pg=2.12e-07
+   displaystyle | log_odds=1.707 | Pg=2.03e-05
+            Ġ$$ | log_odds=1.706 | Pg=8.88e-05
+          lemma | log_odds=1.705 | Pg=1.23e-05
+
+--- cot_reasoning ---
+       ++++++++ | log_odds=2.214 | Pg=1.96e-05
+++++++++++++++++++++++++++++++++ | log_odds=2.189 | Pg=7.64e-06
+      Ġfullname | log_odds=2.188 | Pg=7.36e-06
+          ****Ċ | log_odds=2.179 | Pg=1.40e-05
+        OPTIONS | log_odds=2.178 | Pg=1.20e-05
+           cÃŃa | log_odds=2.161 | Pg=1.71e-07
+          Ġhapo | log_odds=2.158 | Pg=2.34e-07
+  ĠcoopÃ©ration | log_odds=2.150 | Pg=1.95e-07
+Ġrenseignements | log_odds=2.149 | Pg=2.23e-07
+      Ġnovember | log_odds=2.148 | Pg=6.70e-06
+             rb | log_odds=2.144 | Pg=6.96e-05
+          Ġjuly | log_odds=2.143 | Pg=7.22e-06
+          ĠĊĠĠĊ | log_odds=2.141 | Pg=8.59e-06
+      Ġdecember | log_odds=2.141 | Pg=6.91e-06
+     Ġseptember | log_odds=2.141 | Pg=7.13e-06
+         ĠettÃ¤ | log_odds=2.139 | Pg=2.66e-07
+         Answer | log_odds=2.138 | Pg=5.38e-05
+            âĢ¨ | log_odds=2.135 | Pg=3.65e-06
+     AssemblÃ©e | log_odds=2.131 | Pg=2.09e-07
+        Ġaugust | log_odds=2.130 | Pg=7.70e-06
+
+--- agentic_traces ---
+           ICAg | log_odds=1.425 | Pg=4.71e-06
+        Invoker | log_odds=1.405 | Pg=1.11e-06
+       .liferay | log_odds=1.394 | Pg=5.93e-07
+       /******/ | log_odds=1.374 | Pg=2.14e-07
+      ĠBetriebs | log_odds=1.354 | Pg=1.75e-07
+         âłĢâłĢ | log_odds=1.352 | Pg=1.36e-07
+       <IAction | log_odds=1.352 | Pg=1.71e-07
+             ÃĢ | log_odds=1.344 | Pg=2.65e-06
+        .Invoke | log_odds=1.336 | Pg=1.05e-06
+      .awtextra | log_odds=1.334 | Pg=6.68e-08
+        Magento | log_odds=1.325 | Pg=1.12e-06
+        ******/ | log_odds=1.324 | Pg=5.60e-07
+       Ġgrenzen | log_odds=1.324 | Pg=6.21e-08
+        .invoke | log_odds=1.320 | Pg=5.92e-06
+       ĠUIAlert | log_odds=1.315 | Pg=3.05e-07
+ .myapplication | log_odds=1.313 | Pg=2.49e-07
+    Funcionario | log_odds=1.294 | Pg=1.13e-07
+             ÅĿ | log_odds=1.293 | Pg=1.75e-07
+        ĠCialis | log_odds=1.290 | Pg=2.36e-06
+        spender | log_odds=1.288 | Pg=6.44e-08
+
+==============================
+TOP TOKENS BY NULL ROUTING SCORE (frequency-gated)
+              , | Pg=3.14e-02 | max_aff=1.38e-01 | null_score=6.01e+00
+              Ġ | Pg=1.59e-02 | max_aff=2.33e-01 | null_score=1.13e+00
+              . | Pg=2.19e-02 | max_aff=1.98e-01 | null_score=7.69e-01
+           Ġthe | Pg=3.01e-02 | max_aff=2.17e-01 | null_score=3.85e-01
+             Ġ( | Pg=4.42e-03 | max_aff=3.12e-01 | null_score=2.37e-01
+            Ġof | Pg=1.57e-02 | max_aff=2.04e-01 | null_score=1.84e-01
+             or | Pg=2.21e-04 | max_aff=5.45e-02 | null_score=1.32e-01
+            Ġin | Pg=1.05e-02 | max_aff=2.43e-01 | null_score=1.30e-01
+              - | Pg=2.79e-03 | max_aff=5.10e-01 | null_score=1.23e-01
+             Ġa | Pg=1.29e-02 | max_aff=2.98e-01 | null_score=1.14e-01
+            Ġto | Pg=1.56e-02 | max_aff=3.49e-01 | null_score=1.09e-01
+            Ġis | Pg=7.78e-03 | max_aff=3.28e-01 | null_score=8.95e-02
+           Ġand | Pg=1.52e-02 | max_aff=3.60e-01 | null_score=7.85e-02
+           Ġfor | Pg=5.98e-03 | max_aff=2.98e-01 | null_score=7.32e-02
+            201 | Pg=9.17e-04 | max_aff=1.70e-01 | null_score=7.26e-02
+              7 | Pg=8.24e-04 | max_aff=2.43e-01 | null_score=6.25e-02
+          Ġthis | Pg=2.77e-03 | max_aff=2.21e-01 | null_score=5.70e-02
+              6 | Pg=9.35e-04 | max_aff=2.60e-01 | null_score=5.45e-02
+              8 | Pg=8.96e-04 | max_aff=2.43e-01 | null_score=5.11e-02
+             os | Pg=1.21e-04 | max_aff=7.80e-02 | null_score=5.07e-02
+
+==============================
+NULL-LIKE TOKENS (frequent + low affinity)
+
+==============================
+JUNK TOKEN CANDIDATES (rare + low affinity)
+              À | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              Á | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              õ | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ö | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ÷ | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ø | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ù | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ú | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              û | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ü | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ý | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              þ | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+              ÿ | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+             à± | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+          âĢĭáŀ | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+        Ġawá»įn | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+         Ġgebru | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+         Ġpesso | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+          Æ°á»£ | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+          Æ°á»Ŀ | Pg=9.99e-09 | max_aff=2.22e-16 | null_score=9.98e+15
+
+
+
+Note:
+Tokens like 
+à¶§
+à·Ĵ
+
+are likely UTF-8 byte fragments, not full characters.
+They appear in multiple scripts.
+This is a tokenizer artifact, not a modality issue.

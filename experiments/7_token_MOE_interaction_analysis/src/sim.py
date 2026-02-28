@@ -22,5 +22,5 @@ if __name__ == "__main__":
     main(args.data_file, args.tokenizer_dir, args.batch_size, args.seq_len, args.lr, args.max_steps)
 
     """To run
-    python sim.py --data-file /work/courses/capstone_era4/Data-benchmark/small_shard.parquet --tokenizer-dir /work/courses/capstone_era4/6_Tokenizer/tsai_131k_tokenizer --max-steps 300 --seq-length 1024
+    python sim.py --data-file /work/courses/capstone_era4/Data-benchmark/small_shard.parquet --tokenizer-dir /work/courses/capstone_era4/6_Tokenizer/tsai_131k_tokenizer --max-steps 300 --seq-len 256 --batch-size 4
     """

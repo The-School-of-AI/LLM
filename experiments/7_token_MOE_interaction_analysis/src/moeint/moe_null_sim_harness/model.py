@@ -130,8 +130,7 @@ class MoERouter(nn.Module):
         self.router_bias = nn.Parameter(torch.zeros(num_experts))
 
         # single expert logit (will be duplicated self.num_null_expert times)
-        # self.null_expert_logit = nn.Parameter(torch.tensor(0.0))
-        self.null_expert_logit = nn.Parameter(torch.tensor(-1.0)) # Starting with negative bias
+        self.null_router = nn.Linear(hidden_size, 1, bias=False)
 
         self.last_router_logits: Tensor | None = None
 
@@ -144,9 +143,9 @@ class MoERouter(nn.Module):
         )  # shape: (batch_size, seq_len, num_experts)
 
         # duplicate null expert logic num_null_expert times
-        null_logits = self.null_expert_logit.view(1, 1, 1).expand(
-            batch_size, seq_len, self.num_null_experts
-        )  # shape: (batch_size, seq_len, num_null_experts)
+        null_logits = self.null_router(x)
+        null_logits = null_logits.expand(batch_size, seq_len, self.num_null_experts)
+        # shape: (batch_size, seq_len, num_null_experts)
 
         # creating router logits by concantenating real and null expert router logits
         router_logits = torch.cat(
@@ -184,8 +183,37 @@ class MoERouter(nn.Module):
         # log^2(sum(exp(logits))) -> (log_sum_exp(logits))^2
         L_z = (torch.logsumexp(router_logits, dim=-1) ** 2).mean()
 
+        # KL-Regularized Sink Loss
+        # Separate real + null probabilities
+        real_probs = router_probs[..., :self.num_experts]
+        null_prob = router_probs[..., self.num_experts:].sum(dim=-1)
+
+        # Normalize real probs
+        real_probs_norm = real_probs / (real_probs.sum(dim=-1, keepdim=True) + 1e-10)
+
+        # Uniform distribution
+        uniform = torch.full_like(real_probs_norm, 1.0 / self.num_experts)
+
+        # KL(p_real || Uniform)
+        kl = torch.sum(
+            real_probs_norm * torch.log((real_probs_norm + 1e-10) / uniform),
+            dim=-1
+        )
+
+        # Target null probability
+        alpha = 5.0  # controls sharpness
+        target_null = torch.exp(-alpha * kl).detach()
+
+        # Sink loss
+        L_sink = F.binary_cross_entropy(null_prob, target_null)
+
         # final aux loss
-        aux_loss = 2e-2 * L_bal + 1e-3 * L_z
+        # aux_loss = 2e-2 * L_bal + 1e-3 * L_z
+        aux_loss = (
+                2e-2 * L_bal
+                + 1e-3 * L_z
+                + 5e-2 * L_sink
+        )
 
         return topk_indices, topk_weight, is_null, aux_loss
 
