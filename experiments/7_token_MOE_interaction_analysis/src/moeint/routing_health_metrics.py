@@ -129,9 +129,12 @@ class RouterHealthAnalyzer:
         self.num_null_experts = int(
             self.num_real_experts * (1 - data_sparsity) / data_sparsity
         )
+        self.num_total_experts = self.num_real_experts + self.num_null_experts
         self.topk = topk
         self.starvation_threshold = starvation_threshold
         self.polarization_threshold = polarization_threshold
+
+        # Precompute token group lookup
         self.group_map = torch.full(
             (vocab_size,), TokenGroups.content, dtype=torch.long, device=device
         )
@@ -139,6 +142,170 @@ class RouterHealthAnalyzer:
             self.group_map[tid] = gid
 
     def analyze_logits(
+            self,
+            input_ids: Tensor,
+            routing_logits: list[Tensor],
+    ) -> list[RouterStats]:
+
+        stats = []
+
+        for logits in routing_logits:
+
+            # Flatten tokens
+            B, S, E = logits.shape
+            logits = logits.view(B * S, E)
+
+            num_tokens = logits.shape[0]
+
+            # ------------------------------------------------------
+            # Router logit scale
+            # ------------------------------------------------------
+            router_logit_scale = logits.std()
+
+            # ------------------------------------------------------
+            # Softmax once
+            # ------------------------------------------------------
+            probs = F.softmax(logits, dim=-1)
+
+            # ------------------------------------------------------
+            # Collapse null experts
+            # ------------------------------------------------------
+            real_probs = probs[:, : self.num_real_experts]
+            null_prob = probs[:, self.num_real_experts:].sum(dim=-1, keepdim=True)
+            collapsed_probs = torch.cat([real_probs, null_prob], dim=-1)
+
+            # ------------------------------------------------------
+            # Entropy
+            # ------------------------------------------------------
+            log_probs = torch.log(collapsed_probs + 1e-10)
+            entropy = -torch.sum(collapsed_probs * log_probs, dim=-1)
+
+            entropy_mean = entropy.mean()
+            entropy_std = entropy.std()
+            n_eff = torch.exp(entropy_mean)
+
+            # ------------------------------------------------------
+            # Entropy per group (no one-hot)
+            # ------------------------------------------------------
+            group_ids = self.group_map[input_ids.view(-1)]
+            entropy_per_group = []
+
+            for g in range(len(TokenGroups)):
+                mask = (group_ids == g)
+                if mask.any():
+                    entropy_per_group.append(entropy[mask].mean())
+                else:
+                    entropy_per_group.append(torch.tensor(float("nan"), device=entropy.device))
+
+            entropy_per_group = torch.stack(entropy_per_group)
+
+            # ------------------------------------------------------
+            # Top-k routing (from logits, not probs)
+            # ------------------------------------------------------
+            _, topk_indices = torch.topk(logits, self.topk, dim=-1)
+
+            # Collapse null for token-level metrics
+            is_null = topk_indices >= self.num_real_experts
+
+            tokens_to_real = torch.any(~is_null, dim=-1).float()
+            tokens_to_null = torch.any(is_null, dim=-1).float()
+
+            tokens_to_real_rate = tokens_to_real.mean()
+            tokens_to_null_rate = tokens_to_null.mean()
+
+            # ------------------------------------------------------
+            # Null/Junk interaction
+            # ------------------------------------------------------
+            is_junk = (group_ids == TokenGroups.junk)
+
+            null_and_junk = tokens_to_null.bool() & is_junk
+            null_junk_rate = (
+                    null_and_junk.sum().float() /
+                    tokens_to_null.sum().clamp(min=1)
+            )
+
+            junk_to_null_rate = (
+                    null_and_junk.sum().float() /
+                    is_junk.sum().clamp(min=1)
+            )
+
+            # ------------------------------------------------------
+            # Tokens per expert (collapsed null)
+            # ------------------------------------------------------
+            flat_top1 = topk_indices[:, 0]
+
+            # Collapse null copies
+            flat_top1 = torch.where(
+                flat_top1 >= self.num_real_experts,
+                torch.tensor(self.num_real_experts, device=flat_top1.device),
+                flat_top1,
+            )
+
+            tokens_per_expert = torch.bincount(
+                flat_top1,
+                minlength=self.num_real_experts + 1,
+            ).float()
+
+            real_counts = tokens_per_expert[:-1]
+
+            # ------------------------------------------------------
+            # Load balance metrics
+            # ------------------------------------------------------
+            imbalance_ratio = (
+                    real_counts.max() /
+                    real_counts.min().clamp(min=1)
+            )
+
+            # Gini
+            sorted_counts, _ = torch.sort(real_counts)
+            n = len(sorted_counts)
+            index = torch.arange(1, n + 1, device=sorted_counts.device)
+            gini = (
+                           (2 * (index * sorted_counts).sum()) /
+                           (n * sorted_counts.sum().clamp(min=1))
+                   ) - (n + 1) / n
+
+            # CV
+            cv = real_counts.std() / real_counts.mean().clamp(min=1)
+
+            # Starvation
+            starving = real_counts < (
+                    self.starvation_threshold *
+                    real_counts.mean()
+            )
+            starvation_count = starving.sum()
+
+            # ------------------------------------------------------
+            # Polarization
+            # ------------------------------------------------------
+            compute_intensity = real_probs.sum(dim=-1)
+            near_zero = (compute_intensity < self.polarization_threshold[0]).float()
+            near_one = (compute_intensity > self.polarization_threshold[1]).float()
+            polarization = (near_zero.mean() + near_one.mean()) / 2
+
+            # ------------------------------------------------------
+            stats.append(
+                RouterStats(
+                    entropy_mean=entropy_mean.item(),
+                    entropy_std=entropy_std.item(),
+                    entropy_per_group=entropy_per_group.cpu().tolist(),
+                    n_eff=n_eff.item(),
+                    polarization=polarization.item(),
+                    tokens_to_real_rate=tokens_to_real_rate.item(),
+                    tokens_to_null_rate=tokens_to_null_rate.item(),
+                    null_junk_rate=null_junk_rate.item(),
+                    junk_to_null_rate=junk_to_null_rate.item(),
+                    imbalance_ratio=imbalance_ratio.item(),
+                    gini=gini.item(),
+                    cv=cv.item(),
+                    starvation_count=starvation_count.item(),
+                    router_logit_scale=router_logit_scale.item(),
+                )
+            )
+
+        return stats
+
+    def analyze_logits_old(
         self, input_ids: Tensor, routing_logits: list[Tensor]
     ) -> list[RouterStats]:
         """
