@@ -256,7 +256,11 @@ def main():
     # 1. Sample Distribution
     try:
         base_dist = sample_metadata(
-            args.metadata_path, args.sampling_rate, args.recompute, args.curriculum_path, args.seed
+            args.metadata_path,
+            args.sampling_rate,
+            args.recompute,
+            args.curriculum_path,
+            args.seed,
         )
         print("\nBase Distribution (from Data):")
         for b, p in sorted(base_dist.items()):
