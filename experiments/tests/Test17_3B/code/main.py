@@ -131,7 +131,7 @@ class Config:
             "enable_system_metrics", False
         )
         self.init_model_path = config_dict["training"].get("init_model_path")
-        self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 32.0)
+        self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 8.0)
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
 
         # Profiler configuration

@@ -30,7 +30,7 @@ training:
   require_gsa_triton: true
   require_fused_kernels: false
   use_fused_ce: true
-  max_chunk_gb: 16
+  max_chunk_gb: 8
   metrics_jsonl_path: "../results/run/metrics.jsonl"
   profile_steps: [1, 2, 3]
 
