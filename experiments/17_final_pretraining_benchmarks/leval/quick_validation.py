@@ -59,7 +59,11 @@ def validate_environment() -> dict:
     try:
         import torch
 
-        mps_ok = torch.backends.mps.is_available() if hasattr(torch.backends, "mps") else False
+        mps_ok = (
+            torch.backends.mps.is_available()
+            if hasattr(torch.backends, "mps")
+            else False
+        )
         cuda_ok = torch.cuda.is_available()
         results["checks"]["devices"] = {
             "mps_available": mps_ok,
@@ -68,7 +72,7 @@ def validate_environment() -> dict:
         }
         print(f"    MPS  (Apple Silicon): {'PASS' if mps_ok else 'N/A'}")
         print(f"    CUDA (NVIDIA GPU)   : {'PASS' if cuda_ok else 'N/A'}")
-        print(f"    CPU                 : PASS (always available)")
+        print("    CPU                 : PASS (always available)")
     except Exception:
         results["checks"]["devices"] = {"passed": False}
         print("    Cannot check devices (torch not available)")

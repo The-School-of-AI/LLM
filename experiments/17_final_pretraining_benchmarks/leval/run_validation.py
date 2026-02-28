@@ -7,27 +7,27 @@ Optimized for Apple Silicon M3 with 18GB RAM.
 """
 
 import json
-import os
-import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
+from typing import Dict, List
 
 # ---------------------------------------------------------------------------
 # Lazy imports so validation can report *which* dependency is missing
 # before crashing.
 # ---------------------------------------------------------------------------
 
+
 def _import_torch():
     import torch
+
     return torch
 
 
 def _import_transformers():
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
     return AutoModelForCausalLM, AutoTokenizer
 
 
@@ -147,6 +147,7 @@ LEVAL_SAMPLE_TASKS: List[Dict] = [
 # Metrics
 # ===========================================================================
 
+
 def compute_f1(prediction: str, reference: str) -> float:
     """Token-level F1 score (standard SQuAD-style)."""
     pred_tokens = prediction.lower().split()
@@ -183,6 +184,7 @@ def compute_rouge(predictions: List[str], references: List[str]) -> Dict[str, fl
 # ===========================================================================
 # Main benchmark class
 # ===========================================================================
+
 
 class OLMESLEvalBenchmark:
     """OLMES L-Eval Benchmark Runner -- validates CLI, runs L-Eval tasks,
@@ -373,11 +375,24 @@ class OLMESLEvalBenchmark:
                     )
                 text = self.tokenizer.decode(out[0], skip_special_tokens=True)
                 # Strip the echoed prompt for chat/instruct models
-                response = text[len(prompt):].strip() if text.startswith(prompt) else text.strip()
-                results.append({"prompt": prompt, "response": response, "success": True})
+                response = (
+                    text[len(prompt) :].strip()
+                    if text.startswith(prompt)
+                    else text.strip()
+                )
+                results.append(
+                    {"prompt": prompt, "response": response, "success": True}
+                )
                 print(f"           -> {response[:80]}...")
             except Exception as e:
-                results.append({"prompt": prompt, "response": None, "success": False, "error": str(e)})
+                results.append(
+                    {
+                        "prompt": prompt,
+                        "response": None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
                 print(f"           FAIL: {e}")
 
         rate = sum(1 for r in results if r["success"]) / max(len(results), 1)
@@ -406,11 +421,7 @@ class OLMESLEvalBenchmark:
             ref = task["reference"]
 
             # Build a simple prompt that mirrors how L-Eval frames tasks.
-            prompt = (
-                f"Context:\n{ctx}\n\n"
-                f"Question: {q}\n"
-                f"Answer:"
-            )
+            prompt = f"Context:\n{ctx}\n\n" f"Question: {q}\n" f"Answer:"
             print(f"  [{idx}/{len(tasks)}] {ttype}: {q[:60]}...")
 
             try:
@@ -431,32 +442,40 @@ class OLMESLEvalBenchmark:
                     )
 
                 # Decode only the NEW tokens (skip input tokens)
-                generated_ids = out[0][inputs["input_ids"].shape[1]:]
-                answer = self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+                generated_ids = out[0][inputs["input_ids"].shape[1] :]
+                answer = self.tokenizer.decode(
+                    generated_ids, skip_special_tokens=True
+                ).strip()
 
                 predictions.append(answer)
                 references.append(ref)
-                task_results.append({
-                    "task_type": ttype,
-                    "question": q,
-                    "prediction": answer,
-                    "reference": ref,
-                    "success": True,
-                })
+                task_results.append(
+                    {
+                        "task_type": ttype,
+                        "question": q,
+                        "prediction": answer,
+                        "reference": ref,
+                        "success": True,
+                    }
+                )
                 print(f"           -> {answer[:80]}")
             except Exception as e:
-                task_results.append({
-                    "task_type": ttype,
-                    "question": q,
-                    "prediction": None,
-                    "reference": ref,
-                    "success": False,
-                    "error": str(e),
-                })
+                task_results.append(
+                    {
+                        "task_type": ttype,
+                        "question": q,
+                        "prediction": None,
+                        "reference": ref,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
                 print(f"           FAIL: {e}")
 
         rate = sum(1 for t in task_results if t["success"]) / max(len(task_results), 1)
-        print(f"  Completed {len(task_results)} L-Eval tasks -- {rate*100:.0f}% success")
+        print(
+            f"  Completed {len(task_results)} L-Eval tasks -- {rate*100:.0f}% success"
+        )
         return {
             "num_tasks": len(task_results),
             "success_rate": rate,
@@ -586,9 +605,11 @@ class OLMESLEvalBenchmark:
         print(f"  L-Eval Tasks      : {leval_rate*100:.0f}%")
         print(f"  Metrics Valid     : {'PASS' if metrics_ok else 'FAIL'}")
 
-        overall = cli_ok and model_ok and smoke_rate > 0 and leval_rate > 0 and metrics_ok
+        overall = (
+            cli_ok and model_ok and smoke_rate > 0 and leval_rate > 0 and metrics_ok
+        )
         label = "ALL PASS" if overall else "ISSUES DETECTED"
-        print(f"  -------------------------")
+        print("  -------------------------")
         print(f"  Overall           : {label}")
         print(f"  Results saved to  : {out_file}")
         print("=" * 60)
@@ -597,6 +618,7 @@ class OLMESLEvalBenchmark:
 # ===========================================================================
 # CLI entry point
 # ===========================================================================
+
 
 def main() -> int:
     import argparse
@@ -646,9 +668,8 @@ def main() -> int:
     results = benchmark.run_full_validation()
 
     # Exit 0 if everything passed
-    overall = (
-        results.get("model_loaded", False)
-        and results.get("metrics", {}).get("validation_success", False)
+    overall = results.get("model_loaded", False) and results.get("metrics", {}).get(
+        "validation_success", False
     )
     return 0 if overall else 1
 
