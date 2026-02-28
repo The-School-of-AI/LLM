@@ -74,13 +74,22 @@ set -e # Exit immediately if a command exits with a non-zero status
 DRY_RUN=false
 FOREGROUND=false
 SKIP_REPO_SETUP=false
+SKIP_EBS_VALIDATION="${SKIP_EBS_VALIDATION:-false}"
+SKIP_VALIDATION="${SKIP_VALIDATION:-false}"
+
 for arg in "$@"; do
     case "$arg" in
         --dry-run) DRY_RUN=true ;;
         --foreground) FOREGROUND=true ;;
         --skip-repo-setup) SKIP_REPO_SETUP=true ;;
+        --skip-ebs) SKIP_EBS_VALIDATION=true ;;
+        --skip-validation) SKIP_VALIDATION=true ;;
     esac
 done
+
+# Sanitize skip flags (remove potential smart/standard quotes from environment exports)
+SKIP_EBS_VALIDATION=$(echo "${SKIP_EBS_VALIDATION}" | sed "s/[”\"'“]//g")
+SKIP_VALIDATION=$(echo "${SKIP_VALIDATION}" | sed "s/[”\"'“]//g")
 
 if [ "${DRY_RUN}" = "true" ]; then
     echo "============================================"
@@ -93,6 +102,7 @@ fi
 BRANCH_NAME="${BRANCH_NAME:-p3/feat/stage-wise-coreset-selection_v2}"
 S3_BUCKET="${S3_BUCKET:?ERROR: S3_BUCKET is not set. Export it before running: export S3_BUCKET=your-bucket-name}"
 S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/}"
+S3_PREFIX="${S3_PREFIX:-processed_dataset/curriculum_pyspark_output/source=C4/}"
 NUM_SHARDS="${NUM_SHARDS:-8}"
 STAGES="${STAGES:-1B}"
 TOTAL_TOKENS="${TOTAL_TOKENS:-4523096944}"
@@ -156,7 +166,11 @@ else
     if ! command -v uv &> /dev/null; then
         echo "Installing uv..."
         curl -LsSf https://astral.sh/uv/install.sh | sh
-        source $HOME/.cargo/env
+        if [ -f "$HOME/.local/bin/env" ]; then
+            source "$HOME/.local/bin/env"
+        elif [ -f "$HOME/.cargo/env" ]; then
+            source "$HOME/.cargo/env"
+        fi
     fi
 fi
 
@@ -242,30 +256,30 @@ fi
 # ==============================================================================
 # 4. Dependency Sync (via UV)
 # ==============================================================================
-echo "### [4/8] Dependency Sync (via UV) ###"
+# echo "### [4/8] Dependency Sync (via UV) ###"
 EXPERIMENT_DIR="${REPO_ROOT}/experiments/3_coreset_engineering"
 ENGINE_DIR="${EXPERIMENT_DIR}/coreset_engine_v5"
 
-if [ -d "${EXPERIMENT_DIR}" ]; then
-    cd "${EXPERIMENT_DIR}"
-    if [ "${DRY_RUN}" = "true" ]; then
-        echo "[DRY RUN] Would create .venv and run: uv sync"
-        if [ -f "pyproject.toml" ]; then
-            echo "[OK] pyproject.toml found at ${EXPERIMENT_DIR}/pyproject.toml"
-        else
-            echo "[ERROR] pyproject.toml NOT found at ${EXPERIMENT_DIR}/"
-        fi
-    else
-        if [ ! -d ".venv" ]; then
-            uv venv .venv
-        fi
-        export UV_PROJECT_ENVIRONMENT=$(pwd)/.venv
-        uv sync
-    fi
-else
-    echo "[ERROR] Experiment directory not found: ${EXPERIMENT_DIR}"
-    exit 1
-fi
+# if [ -d "${EXPERIMENT_DIR}" ]; then
+#     cd "${EXPERIMENT_DIR}"
+#     if [ "${DRY_RUN}" = "true" ]; then
+#         echo "[DRY RUN] Would create .venv and run: uv sync"
+#         if [ -f "pyproject.toml" ]; then
+#             echo "[OK] pyproject.toml found at ${EXPERIMENT_DIR}/pyproject.toml"
+#         else
+#             echo "[ERROR] pyproject.toml NOT found at ${EXPERIMENT_DIR}/"
+#         fi
+#     else
+#         if [ ! -d ".venv" ]; then
+#             uv venv .venv
+#         fi
+#         export UV_PROJECT_ENVIRONMENT=$(pwd)/.venv
+#         uv sync
+#     fi
+# else
+#     echo "[ERROR] Experiment directory not found: ${EXPERIMENT_DIR}"
+#     exit 1
+# fi
 
 # ==============================================================================
 # 5. Infrastructure Validation
@@ -275,16 +289,18 @@ VALIDATE_INFRA="${ENGINE_DIR}/scripts/validate_infra.sh"
 
 # Export infra thresholds so sudo -E passes them to validate_infra.sh
 export EXPECTED_INSTANCE_TYPE MIN_VCPU MIN_RAM_GB MIN_EBS_ROOT_GB MIN_EBS_FREE_GB
-export MIN_NVME_FREE_GB
+export MIN_NVME_FREE_GB SKIP_EBS_VALIDATION S3_BUCKET S3_PREFIX
 [ -n "${ENABLE_NVME}" ] && export ENABLE_NVME
 
-if [ "${DRY_RUN}" = "true" ]; then
+if [ "${SKIP_VALIDATION}" = "true" ]; then
+    echo "[SKIP] Infrastructure validation skipped (--skip-validation)."
+elif [ "${DRY_RUN}" = "true" ]; then
     echo "[DRY RUN] Would run: sudo -E bash ${VALIDATE_INFRA}"
-    echo "          Thresholds: instance=${EXPECTED_INSTANCE_TYPE} vcpu>=${MIN_VCPU} ram>=${MIN_RAM_GB}GB nvme=${ENABLE_NVME:-auto} ebs>=${MIN_EBS_FREE_GB}GB"
+    echo "          Thresholds: instance=${EXPECTED_INSTANCE_TYPE} vcpu>=${MIN_VCPU} ram>=${MIN_RAM_GB}GB nvme=${ENABLE_NVME:-auto} ebs>=${MIN_EBS_FREE_GB}GB skip_ebs=${SKIP_EBS_VALIDATION} skip_valid=${SKIP_VALIDATION}"
 else
     if [ -f "${VALIDATE_INFRA}" ]; then
         echo "Running infrastructure validation..."
-        echo "  Thresholds: instance=${EXPECTED_INSTANCE_TYPE} vcpu>=${MIN_VCPU} ram>=${MIN_RAM_GB}GB nvme=${ENABLE_NVME:-auto} ebs>=${MIN_EBS_FREE_GB}GB"
+        echo "  Thresholds: instance=${EXPECTED_INSTANCE_TYPE} vcpu>=${MIN_VCPU} ram>=${MIN_RAM_GB}GB nvme=${ENABLE_NVME:-auto} ebs>=${MIN_EBS_FREE_GB}GB skip_ebs=${SKIP_EBS_VALIDATION} skip_valid=${SKIP_VALIDATION}"
         if sudo -E bash "${VALIDATE_INFRA}"; then
             echo "[OK] Infrastructure validation passed."
         else
@@ -302,6 +318,7 @@ fi
 echo "### [6/8] Start Monitoring ###"
 MONITOR_SCRIPT="${ENGINE_DIR}/scripts/monitor.sh"
 MONITOR_PID=""
+LOG_DIR="${LOG_DIR:-/mnt/nvme/logs}"
 
 if [ "${DRY_RUN}" = "true" ]; then
     echo "[DRY RUN] Would run: nohup bash ${MONITOR_SCRIPT} &"
@@ -468,7 +485,7 @@ else
         echo ""
         echo "  After pipeline finishes, run post-run validation manually:"
         echo "    # Stop monitoring"
-        echo "    kill \$(cat /mnt/nvme/logs/monitor.pid)"
+        echo "    kill \$(cat ${LOG_DIR}/monitor.pid)"
         echo "    # Generate monitoring report"
         echo "    python3 ${ENGINE_DIR}/scripts/monitor_report.py"
         echo "    # Validate coreset outputs"
