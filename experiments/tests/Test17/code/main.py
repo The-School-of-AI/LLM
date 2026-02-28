@@ -121,11 +121,19 @@ class Config:
         self.metrics_jsonl_path = config_dict["training"].get(
             "metrics_jsonl_path", "./logs/metrics.jsonl"
         )
+        self.metrics_jsonl_interval = config_dict["training"].get(
+            "metrics_jsonl_interval", 10
+        )
         self.enable_system_metrics = config_dict["training"].get(
             "enable_system_metrics", False
         )
         self.init_model_path = config_dict["training"].get("init_model_path")
         self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 32.0)
+        self.enable_flops_profiler = config_dict["training"].get(
+            "enable_flops_profiler", False
+        )
+        _fps = config_dict["training"].get("flops_profile_steps", [1, 2, 3])
+        self.flops_profile_steps: set = set(_fps) if _fps else set()
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
 
         # Profiler configuration
@@ -604,7 +612,7 @@ def main():
 
         # Train
         with pipe.stage(f"epoch_{epoch}_train"):
-            avg_loss, global_step = train_epoch(
+            last_train_loss, global_step = train_epoch(
                 model_engine,
                 train_loader,
                 epoch,
@@ -617,9 +625,12 @@ def main():
                 start_step=epoch_start_step,
                 global_step=global_step,
                 metrics_jsonl_path=args.metrics_jsonl_path,
+                metrics_jsonl_interval=args.metrics_jsonl_interval,
                 max_chunk_gb=args.max_chunk_gb,
                 profile_steps=args.profile_steps if args.profile_steps else None,
                 profile_output_dir=os.path.dirname(args.metrics_jsonl_path) if args.metrics_jsonl_path else None,
+                enable_flops_profiler=args.enable_flops_profiler,
+                flops_profile_steps=args.flops_profile_steps if args.flops_profile_steps else None,
             )
 
         eval_loss = None
@@ -646,7 +657,7 @@ def main():
                 "epoch": epoch + 1,  # Next epoch to start from
                 "step": 0,
                 "global_step": global_step,
-                "avg_loss": avg_loss,
+                "last_train_loss": last_train_loss,
                 "eval_loss": eval_loss,
                 "eval_perplexity": eval_perplexity,
             }

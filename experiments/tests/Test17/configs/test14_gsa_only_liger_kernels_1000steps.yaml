@@ -8,7 +8,7 @@ data:
   dataset_config: "wikitext-103-raw-v1"
   tokenize_num_proc: 8
   max_length: 4096
-  num_workers: 16
+  num_workers: 12
   tokenized_dataset_path: null
   dataset_cache_dir: null
   local_nvme_cache_dir: null
@@ -32,6 +32,9 @@ training:
   use_fused_ce: true
   max_chunk_gb: 16
   metrics_jsonl_path: "../results/run/metrics.jsonl"
+  metrics_jsonl_interval: 10
+  enable_flops_profiler: false
+  flops_profile_steps: [1,2,3]
   # Kernel profiler: list global step numbers to profile (e.g. [10, 11, 12]).
   # Outputs profile_report.txt + profile.jsonl next to metrics_jsonl_path.
   # Set to [] or omit to disable (zero overhead when disabled).

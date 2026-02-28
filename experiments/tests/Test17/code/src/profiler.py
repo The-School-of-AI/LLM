@@ -418,6 +418,10 @@ class StepProfiler:
             h.remove()
         self._hook_handles.clear()
 
+    def detach_hooks(self):
+        """Detach forward hooks while keeping profiler state/reporting active."""
+        self._remove_hooks()
+
     # ── step boundary methods ─────────────────────────────────────────────────
 
     def start_step(self, global_step: int, tokens: int = 0):
