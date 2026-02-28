@@ -1,0 +1,141 @@
+# Metrics Configuration
+# Define which metrics to apply and in what order
+# Each metric class should exist in src/curriculum_tags/metrics/
+
+version: "0.1"
+
+# Metrics are applied in order - later metrics can use results from earlier ones
+metrics:
+  - name: rejection_policy
+    class: RejectionPolicyMetric
+    module: rejection_policy
+    enabled: true
+    level: 0
+
+  - name: difficulty
+    class: DifficultyMetric
+    enabled: true
+    output: |
+      "difficulty": {
+        "level": str, # L0-L5
+        "score": float, # 0.0-1.0
+        "features": {
+          "token_count": int,
+          "avg_word_length": float,
+          "rare_ratio": float,
+          "entropy": float
+        }
+      }
+    
+  - name: modality
+    class: ModalityMetric
+    enabled: true
+    output: |
+      "modality": {
+        "has_code": bool,
+        "has_math": bool,
+        "has_reasoning": bool,
+        "has_agentic": bool,
+        "has_research_paper": bool,
+        "primary_modality": str 
+        # one of ["text", "code", "math", "reasoning", "agentic", "research_paper"]
+      }
+    
+  - name: domain
+    class: DomainMetric
+    module: domain
+    enabled: true
+    output: |
+      "domain": {
+        "primary_domain": str,
+        "confidence": float,
+        "reason": str
+      }
+    
+  - name: readability
+    class: ReadabilityMetric
+    enabled: true
+    output: |
+      "readability": {
+        "flesch_kincaid_grade": float,
+        "avg_sentence_length": float,
+        "avg_word_length": float
+      }
+
+  - name: tokenizer_difficulty
+    class: TokenizerDifficultyMetric
+    module: tokenizer_difficulty
+    enabled: false
+    output: |
+      "tokenizer_difficulty": {
+        "level": str,
+        "score": float,
+        "level_description": str,
+        "level_reason": str,
+        "features": {
+          "avg_token_id": float,
+          "max_token_id": int,
+          "min_token_id": int,
+          "p50_token_id": float,
+          "p95_token_id": float,
+          "p99_token_id": float,
+          "token_count": int
+        }
+      }
+
+  - name: structural_density
+    class: StructuralDensityMetric
+    module: structural_density
+    enabled: true
+    output: |
+      "structural_density": {
+        "structural_density": float,
+        "symbolic_density": float,
+        "char_count": int
+      }
+
+  - name: cot_scanner
+    class: COTScannerMetric
+    module: cot_scanner
+    enabled: false
+    output: |
+      "cot_scanner": {
+        "has_cot": bool,
+        "has_agentic": bool,
+        "cot_density": float,
+        "agentic_density": float
+      }
+  - name: entropy
+    class: EntropyMetric
+    enabled: true
+    output: |
+      "entropy": {
+        "score": float
+      }
+
+  - name: diversity
+    class: DiversityMetric
+    enabled: false
+    output: |
+      "diversity": {
+        "rare_ratio": float,
+        "token_count": int
+      }
+
+  - name: band_assignment
+    class: BandAssignmentMetric
+    module: band_assignment
+    enabled: true
+    output: |
+      "band_assignment": {
+        "band": str,
+        "reason": str
+      }
+
+# To add a new metric:
+# 1. Create YourMetric class in src/curriculum_tags/metrics/your_metric.py
+# 2. Add entry here:
+#    - name: your_metric
+#      class: YourMetric
+#      enabled: true
+# 3. The system will auto-discover and use it.
