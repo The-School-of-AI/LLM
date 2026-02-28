@@ -1,8 +1,8 @@
 """Detection layers: N-gram (exact), MinHash (fuzzy), and Semantic (paraphrase)."""
 
+import pickle
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-import pickle
 from pathlib import Path
 from typing import Any
 
@@ -240,7 +240,9 @@ class MinHashDetector:
             mh.update(shingle.encode("utf-8"))
         return mh
 
-    def _hash_chunk(self, chunk: list[tuple[int, str]]) -> list[tuple[int, str, MinHash]]:
+    def _hash_chunk(
+        self, chunk: list[tuple[int, str]]
+    ) -> list[tuple[int, str, MinHash]]:
         """Hash one chunk of benchmark texts."""
         out: list[tuple[int, str, MinHash]] = []
         for idx, text in chunk:

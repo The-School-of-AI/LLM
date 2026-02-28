@@ -87,7 +87,10 @@ def load_records_from_s3_txt(
 
 
 def write_validation_report(
-    reports_dir: str, s3_uri: str, batch_name: str, unmatched_lines: list[dict[str, str | int]]
+    reports_dir: str,
+    s3_uri: str,
+    batch_name: str,
+    unmatched_lines: list[dict[str, str | int]],
 ) -> Path | None:
     """Write a local JSONL validation report for lines with zero extracted pairs."""
     if not unmatched_lines:
@@ -110,7 +113,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run contamination scan directly from an S3 .txt dataset."
     )
-    parser.add_argument("s3_uri", help="S3 path to input .txt file (s3://bucket/key.txt)")
+    parser.add_argument(
+        "s3_uri", help="S3 path to input .txt file (s3://bucket/key.txt)"
+    )
     parser.add_argument("team_name", help="Team name recorded in reports")
     parser.add_argument("batch_name", help="Batch name used in report filenames")
     parser.add_argument(
@@ -152,9 +157,7 @@ def main() -> None:
 
     non_empty_lines = stats["non_empty_lines"]
     parsed_lines = non_empty_lines - stats["zero_pair_lines"]
-    extraction_rate = (
-        (parsed_lines / non_empty_lines) * 100 if non_empty_lines else 0.0
-    )
+    extraction_rate = (parsed_lines / non_empty_lines) * 100 if non_empty_lines else 0.0
 
     print("Validation summary")
     print(f"  S3 input:            {args.s3_uri}")

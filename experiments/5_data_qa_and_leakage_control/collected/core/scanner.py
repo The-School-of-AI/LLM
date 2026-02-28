@@ -613,9 +613,7 @@ class ContaminationScanner:
                 "minhash_threshold": self.config.get("minhash_threshold", 0.8),
                 "minhash_permutations": self.config.get("minhash_permutations", 128),
                 "semantic_threshold": self.config.get("semantic_threshold", 0.9),
-                "semantic_model": self.config.get(
-                    "semantic_model", "all-MiniLM-L6-v2"
-                ),
+                "semantic_model": self.config.get("semantic_model", "all-MiniLM-L6-v2"),
                 "semantic_batch_size": self.config.get("semantic_batch_size", 512),
                 "enable_semantic": self._enable_semantic,
             },
@@ -682,9 +680,7 @@ class ContaminationScanner:
             return False
         try:
             self.semantic.load_index(index_path, meta_path)
-            console.print(
-                f"[green]✓ Loaded semantic index cache: {index_path}[/green]"
-            )
+            console.print(f"[green]✓ Loaded semantic index cache: {index_path}[/green]")
             return True
         except Exception as exc:
             console.print(f"[yellow]⚠ Semantic cache ignored: {exc}[/yellow]")

@@ -13,7 +13,6 @@ import sys
 import time
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -75,7 +74,9 @@ def build_scan_command(config: dict) -> list[str]:
     required = ["s3_uri", "team_name", "batch_name"]
     missing = [key for key in required if not config.get(key)]
     if missing:
-        raise ValueError(f"Missing required fields in config.json: {', '.join(missing)}")
+        raise ValueError(
+            f"Missing required fields in config.json: {', '.join(missing)}"
+        )
 
     cmd = [
         sys.executable,
@@ -83,8 +84,10 @@ def build_scan_command(config: dict) -> list[str]:
         str(config["s3_uri"]),
         str(config["team_name"]),
         str(config["batch_name"]),
-        "--benchmarks-dir", str(config.get("benchmarks_dir", "benchmarks")),
-        "--reports-dir", str(config.get("reports_dir", "reports")),
+        "--benchmarks-dir",
+        str(config.get("benchmarks_dir", "benchmarks")),
+        "--reports-dir",
+        str(config.get("reports_dir", "reports")),
     ]
     if config.get("build_workers") is not None:
         cmd.extend(["--build-workers", str(config["build_workers"])])
