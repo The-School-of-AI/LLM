@@ -1,0 +1,34 @@
+{
+  "config": {
+    "split": "dev",
+    "max_samples_per_lang": 10,
+    "languages": [
+      "hi"
+    ],
+    "shard_index": 0,
+    "shard_total": 1,
+    "retrieval_backend": "small",
+    "generation_backend": "small",
+    "retrieval_mrr_at_k": 10
+  },
+  "tasks": {
+    "retrieval": {
+      "hi": {
+        "hit_at_1": 0.3,
+        "mrr": 0.5002777777777778,
+        "mrr_at_10": 0.5002777777777778,
+        "n": 10,
+        "recall_at_1": 0.3,
+        "recall_at_5": 0.7,
+        "recall_at_10": 1.0,
+        "ndcg_at_10": 0.6167419205910514
+      }
+    },
+    "generation": {
+      "hi": {
+        "exact_match": 0.8,
+        "n": 10.0
+      }
+    }
+  }
+}

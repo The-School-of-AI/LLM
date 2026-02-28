@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "benchmark-indic-rag-suite"
+version = "1.0.0"
+description = "Unified benchmark harness for Indic-Rag-Suite and IndicMSMARCO (retrieval + generation, dev/test/verify)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "datasets>=2.14.0",
+    "huggingface_hub>=0.17.0",
+    "torch>=1.13.0",
+    "sentence-transformers>=2.2.0",
+    "transformers>=4.30.0",
+    "accelerate>=0.20.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.65.0",
+    "scikit-learn>=1.2.0",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+benchmark-indic-rag-suite = "benchmark_indic_rag_suite.cli:run"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["benchmark_indic_rag_suite*"]
