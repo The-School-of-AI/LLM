@@ -84,11 +84,13 @@ class Trainer:
         )
         self.global_stats_ema = None
         self.ema_decay = 0.95  # higher = smoother
-        self.global_expert_token_counts = defaultdict(lambda: defaultdict(int))
+        self.global_expert_token_counts = defaultdict(
+            lambda: defaultdict(lambda: defaultdict(int))
+        )
         self.print_every = 50
 
 
-    def print_expert_tokens(self, expert_token_counts, step):
+    def print_expert_tokens(self, expert_token_counts, step, layer_idx):
         """
         Prints:
           - Top 20 tokens per real expert
@@ -103,7 +105,7 @@ class Trainer:
         num_null = int(num_real * (1 - self.data_sparsity) / self.data_sparsity)
 
         print("\n==============================")
-        print(f"STEP {step}: TOP 20 TOKENS PER EXPERT (REAL + NULL)")
+        print(f"STEP {step} - Layer {layer_idx}: TOP 20 TOKENS PER EXPERT (REAL + NULL)")
         print("==============================")
 
         # ---- Helper to print one expert ----
@@ -185,9 +187,7 @@ class Trainer:
             # Aggregate routing across ALL MoE layers
             # ===============================================
             # update global counts
-            expert_token_counts = self.global_expert_token_counts
-
-            for routing_logits in moe_router_logits:
+            for layer_idx, routing_logits in enumerate(moe_router_logits):
                 routing_probs = torch.softmax(routing_logits, dim=-1)
                 _, topk_indices = torch.topk(routing_probs, self.topk, dim=-1)
 
@@ -195,7 +195,7 @@ class Trainer:
                 flat_experts = topk_indices[..., 0].flatten()  # top-1 per layer
 
                 for token_id, expert_id in zip(flat_ids.view(-1), flat_experts.view(-1)):
-                    expert_token_counts[int(expert_id)][int(token_id)] += 1
+                    self.global_expert_token_counts[layer_idx][int(expert_id)][int(token_id)] += 1
 
             stats = self.router_health_analyzer.analyze_logits(
                 input_ids, moe_router_logits
@@ -205,7 +205,11 @@ class Trainer:
             self._set_global_stats(stats)
 
             if step % self.print_every == 0:
-                self.print_expert_tokens(expert_token_counts, step)
+                for layer_idx in self.global_expert_token_counts:
+                    print(f"\n==== STEP {step}: Layer {layer_idx} ====")
+                    self.print_expert_tokens(
+                        self.global_expert_token_counts[layer_idx], step, layer_idx
+                    )
                 json_str = json.dumps(self.global_stats_ema, indent=2)
                 print(f"step: {step}")
                 print(json_str)
