@@ -1,6 +1,6 @@
 data:
   loader_type: "bin_idx"
-  shard_dir: ../data/wikitext_shards/
+  shard_dir: /mnt/local-nvme/LLM/experiments/tests/Test17_3B/data/wikitext_shards
   eval_shard_dir: null
   tokenizer_dir: src/tokenizer
   validate_tokenizer: true
