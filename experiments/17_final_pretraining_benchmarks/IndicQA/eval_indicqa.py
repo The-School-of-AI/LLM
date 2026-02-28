@@ -152,13 +152,14 @@ def load_model_and_tokenizer(model_path, tokenizer_path):
     return model, tokenizer
 
 
-def load_indicqa_all_languages(force_download=False):
+def load_indicqa_all_languages(force_download=False, selected_langs=None):
 
     os.makedirs(CACHE_DIR, exist_ok=True)
+    langs_to_load = selected_langs if selected_langs else _LANG
 
     all_examples = []
 
-    for lang in _LANG:
+    for lang in langs_to_load:
         filename = f"indicqa.{lang}.json"
         cache_path = os.path.join(CACHE_DIR, filename)
         url = BASE_URL + filename
@@ -245,9 +246,12 @@ def generate_answer(model, tokenizer, prompt, max_new_tokens=8):
 # 6. MAIN EVAL LOOP
 # =========================
 
-def evaluate(model, tokenizer, split, max_samples=None):
+def evaluate(model, tokenizer, split, max_samples=None, force_download=False, languages=None):
 
-    dataset = load_indicqa_all_languages(force_download=False)
+    dataset = load_indicqa_all_languages(
+        force_download=force_download,
+        selected_langs=languages
+    )
     print(dataset[0])
     for i in range(5):
         print(dataset[i]["answer_starts"])
@@ -368,7 +372,13 @@ def main():
     parser.add_argument("--split", type=str, default="validation")
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--output", type=str, default="indicqa_results.json")
-    # parser.add_argument("--force_download", action="store_true")
+    parser.add_argument("--force_download", action="store_true")
+    parser.add_argument(
+        "--languages",
+        nargs="+",
+        default=None,
+        help="List of languages to evaluate (e.g., hi ta ml)"
+    )
 
     args = parser.parse_args()
 
@@ -378,7 +388,9 @@ def main():
         model,
         tokenizer,
         split=args.split,
-        max_samples=args.max_samples
+        max_samples=args.max_samples,
+        force_download=args.force_download,
+        languages=args.languages
     )
 
     print("\n===== IndicQA Results =====")
