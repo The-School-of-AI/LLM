@@ -23,7 +23,9 @@ class Trainer:
         self.num_experts = 4
         self.data_sparsity = 0.5
         self.num_null_experts = int(self.num_experts * (1 - self.data_sparsity) / self.data_sparsity)
-        self.num_total_experts = self.num_experts + self.num_null_experts
+
+        # Collapse all null experts into ONE bucket for stats
+        self.num_total_experts = self.num_experts + 1
 
         if tokenizer_dir:
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -93,6 +95,10 @@ class Trainer:
         vocab = self.tokenizer.get_vocab()
         self.id_to_token = {v: k for k, v in vocab.items()}
         self.junk_mask = (self.group_map_cpu == TokenGroups.junk)
+        self._count_buffer = torch.zeros(
+            self.num_total_experts * self.tokenizer.vocab_size,
+            dtype=torch.int32
+        )
 
 
     def _init_layer_counter(self, layer_idx: int):
@@ -163,9 +169,9 @@ class Trainer:
             token_counts = layer_counts[expert_id]
             print_single_expert(f"Real Expert {expert_id}", token_counts)
 
-        # ---- Collapse NULL Experts - Tensor safe version ----
+        # ---- Collapse NULL Experts - Last row is collapsed NULL
         if num_null > 0:
-            null_tensor = expert_token_counts[num_real: num_real + num_null].sum(dim=0)
+            null_tensor = expert_token_counts[self.num_experts]
             print_single_expert("NULL (collapsed)", null_tensor)
 
     def train(self, max_steps: int = 100):
@@ -200,19 +206,20 @@ class Trainer:
                     flat_tokens = input_ids.view(-1)
                     flat_experts = top1_experts.view(-1)
 
-                    # move to CPU for counting
-                    # flat_tokens = flat_tokens.cpu()
-                    # flat_experts = flat_experts.cpu()
+                    # ---- COLLAPSE NULL EXPERTS ----
+                    is_null = flat_experts >= self.num_experts
+                    flat_experts[is_null] = self.num_experts
 
                     vocab_size = self.tokenizer.vocab_size
-                    # combined = flat_experts * vocab_size + flat_tokens
-                    combined = (flat_experts * vocab_size + flat_tokens).cpu()
+                    # move to CPU for counting
+                    combined = (flat_experts * vocab_size + flat_tokens).to("cpu", non_blocking=True)
+                    self._count_buffer.zero_()
                     bincount = torch.bincount(
                         combined,
-                        minlength=self.num_total_experts * vocab_size
+                        minlength=self._count_buffer.numel()
                     )
-
-                    layer_counts = bincount.view(self.num_total_experts, vocab_size)
+                    self._count_buffer[:bincount.numel()] += bincount
+                    layer_counts = self._count_buffer.view(self.num_total_experts, vocab_size)
                     self.global_expert_token_counts[layer_idx] += layer_counts
 
             stats = self.router_health_analyzer.analyze_logits(
