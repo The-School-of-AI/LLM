@@ -24,8 +24,8 @@ def run_retrieval_eval(
     batch_size: int = 16,
     add_cross_lang_negatives: bool = False,
     mrr_at_k: int = 10,
-    recall_at_k_list: tuple[int, ...] = (1, 5, 10),
-    ndcg_at_k: int = 10,
+    recall_at_k_list: tuple[int, ...] | list[int] = (1, 5, 10, 20),
+    ndcg_at_k_list: tuple[int, ...] | list[int] = (5, 10),
     **encode_kwargs: Any,
 ) -> dict[str, dict[str, float]]:
     """
@@ -47,12 +47,17 @@ def run_retrieval_eval(
         passages = [r["passage"] for r in rows]
         all_p_embs[lang] = model.encode_passages(passages, batch_size=batch_size, **encode_kwargs)
 
+    recall_at_k_list = tuple(recall_at_k_list)
+    ndcg_at_k_list = tuple(ndcg_at_k_list)
     for lang, rows in data_by_lang.items():
         if not rows:
             results[lang] = {"hit_at_1": 0.0, "mrr": 0.0, f"mrr_at_{mrr_at_k}": 0.0, "n": 0}
             for k in recall_at_k_list:
                 results[lang][f"recall_at_{k}"] = 0.0
-            results[lang][f"ndcg_at_{ndcg_at_k}"] = 0.0
+                results[lang][f"precision_at_{k}"] = 0.0
+                results[lang][f"hit_at_{k}"] = 0.0
+            for k in ndcg_at_k_list:
+                results[lang][f"ndcg_at_{k}"] = 0.0
             continue
         queries = [r["query"] for r in rows]
         n = len(rows)
@@ -75,19 +80,20 @@ def run_retrieval_eval(
             gold_indices=gold_indices,
             mrr_at_k=mrr_at_k,
             recall_at_k_list=recall_at_k_list,
-            ndcg_at_k=ndcg_at_k,
+            ndcg_at_k_list=ndcg_at_k_list,
         )
         results[lang] = metrics
+        recall_10 = metrics.get("recall_at_10", 0.0)
+        ndcg_10 = metrics.get("ndcg_at_10", 0.0)
         logger.info(
-            "%s: Hit@1=%.4f MRR=%.4f MRR@%d=%.4f Recall@10=%.4f NDCG@%d=%.4f n=%d pool=%d",
+            "%s: Hit@1=%.4f MRR=%.4f MRR@%d=%.4f Recall@10=%.4f NDCG@10=%.4f n=%d pool=%d",
             lang,
             metrics["hit_at_1"],
             metrics["mrr"],
             mrr_at_k,
             metrics[f"mrr_at_{mrr_at_k}"],
-            metrics.get(f"recall_at_{10}", 0.0),
-            ndcg_at_k,
-            metrics[f"ndcg_at_{ndcg_at_k}"],
+            recall_10,
+            ndcg_10,
             metrics["n"],
             p_embs.shape[0],
         )
