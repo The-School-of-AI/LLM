@@ -249,11 +249,11 @@ class ReversibleMidpointStack(nn.Module):
         # Midpoint / leapfrog recurrence
         if self.use_full_stack_checkpoint:
             # Single checkpoint over whole stack: backward is standard PyTorch, so ZeRO-3
-            # param release can run. Workaround for allgathered params being retained when
-            # backward is invoked from inside MidpointFunction.backward().
+            # param release can run. Use reentrant=True because MoE routing can produce
+            # different tensor counts on recompute (non-reentrant would raise CheckpointError).
             self._checkpoint_attn_mask = attention_mask
             p_cur, mid_aux = grad_checkpoint(
-                self._midpoint_only_impl, p_prev, p_cur, use_reentrant=False
+                self._midpoint_only_impl, p_prev, p_cur, use_reentrant=True
             )
             self._checkpoint_attn_mask = None
             total_aux = total_aux + mid_aux
