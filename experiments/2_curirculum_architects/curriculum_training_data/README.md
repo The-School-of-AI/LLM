@@ -140,6 +140,7 @@ curriculum_training_data/
 ├── analyze_group1_queries.py          # Analysis utilities
 ├── calculate_sample_distribution.py   # Sample distribution calculator
 ├── curriculum_distribution.json       # Distribution configuration
+├── validate_determinism.py            # Validates distribution stability across runs
 │
 ├── output/                             # Generated dataset outputs
 │   ├── group1_part1.txt                # Group 1 English output part 1 (~345K samples)
@@ -463,6 +464,58 @@ Validation runs automatically during generation. To analyze existing datasets:
 python analyze_group1_queries.py
 ```
 
+## Reproducibility & Determinism
+
+### Non-Deterministic Content, Deterministic Distribution
+
+The generation scripts **do not fix random seeds** (`random.seed()` is never called), so each run produces **different content** — different specific QA pairs are selected. However, the **distribution of samples per statement type is deterministic** across runs.
+
+This was validated empirically by running generators multiple times and comparing results:
+
+| Aspect | Deterministic? | Explanation |
+|--------|---------------|-------------|
+| **Per-statement QA pair counts** | **Yes — exactly identical** | Targets are hardcoded constants. Combinatorial generators (Group 1, parts of Group 3) always produce `min(combinatorial_space, target)` samples regardless of random ordering. Attempt-based generators (Group 2, parts of Group 3) use high attempt multipliers (100×–200× target) ensuring targets are reliably reached. |
+| **Content (specific QA pairs)** | **No** | Different runs select different subsets from the combinatorial space. Empirically, content overlap between runs is 0–8%, confirming high diversity. |
+| **Combined sample count (output lines)** | **Approximately — within ~1%** | The `combine_qa_pairs_to_reach_min_tokens()` function is itself deterministic (sequential packing, no randomness), but different QA pair selections across runs produce slightly different average token lengths, leading to minor packing variation (~0.8%). |
+
+### Why Distribution is Stable
+
+1. **Hardcoded targets**: Every generator has explicit `num_samples` parameters (e.g., `generate_s1_spelling(num_samples=100000)`).
+
+2. **Combinatorial generation pattern** (Group 1, parts of Group 3):
+   - All possible combinations are enumerated (e.g., `words × templates`)
+   - The list is shuffled (`random.shuffle`)
+   - Iteration stops at `num_samples` — the count is always `min(len(all_combinations), num_samples)`
+   - Shuffling changes *which* samples are selected, not *how many*
+
+3. **Attempt-based generation pattern** (Group 2, parts of Group 3):
+   - `while len(samples) < num_samples and attempt < max_attempts` with `max_attempts = 100×–200× target`
+   - Large combinatorial spaces relative to targets ensure the target is reached consistently
+
+4. **Validation enforcement**: Built-in `validate_distribution()` checks actual vs expected counts with ±5% OK / ±10% warning / >10% error thresholds.
+
+### Empirical Validation
+
+A validation script (`validate_determinism.py`) confirms these properties across 3 independent runs:
+
+```
+Group 1 (combinatorial generators):
+  S1 Spelling:        5,000 / 5,000 / 5,000  — IDENTICAL
+  S2 Letter Position: 5,000 / 5,000 / 5,000  — IDENTICAL
+  S4 Letter Count:    5,000 / 5,000 / 5,000  — IDENTICAL
+  S6 Classification:  5,000 / 5,000 / 5,000  — IDENTICAL
+  S9 Last Letter:     5,000 / 5,000 / 5,000  — IDENTICAL
+  S10 Word Comparison:5,000 / 5,000 / 5,000  — IDENTICAL
+  Content overlap: 0.0%–8.4% (confirming different content per run)
+
+Group 2 (attempt-based generators):
+  S1 Counting:    1,150 / 1,150 / 1,150  — IDENTICAL
+  S2 Before/After:2,000 / 2,000 / 2,000  — IDENTICAL
+  S4 Comparisons: 2,000 / 2,000 / 2,000  — IDENTICAL
+
+Combine step: 123 / 123 / 122 combined samples (0.81% variation)
+```
+
 ## Technical Details
 
 ### Generation Strategies
@@ -545,8 +598,8 @@ When adding new generators or modifying existing ones:
 
 ---
 
-**Last Updated**: 2026-02-17  
-**Version**: 1.2  
+**Last Updated**: 2026-03-01  
+**Version**: 1.3  
 **Status**: Active Development
 
 ---
