@@ -1,0 +1,65 @@
+{
+  "config": {
+    "languages": [
+      "hi"
+    ],
+    "split": "test",
+    "max_samples": 10,
+    "metrics": [
+      "bleu",
+      "chrf",
+      "ter",
+      "rouge_l"
+    ],
+    "levels": [
+      "segment"
+    ],
+    "elapsed_seconds": 1.21
+  },
+  "results": {
+    "segment_level": {
+      "hi": {
+        "bleu": {
+          "pearson": 0.49191371237581494,
+          "kendall_tau": 0.395777167602761,
+          "n": 10
+        },
+        "chrf": {
+          "pearson": 0.3512602869706676,
+          "kendall_tau": 0.34921514788478913,
+          "n": 10
+        },
+        "ter": {
+          "pearson": -0.39117534969460643,
+          "kendall_tau": -0.42869295740658686,
+          "n": 10
+        },
+        "rouge_l": {
+          "pearson": 0.6029203504935496,
+          "kendall_tau": 0.5738190417570045,
+          "n": 10
+        }
+      }
+    }
+  },
+  "summary": {
+    "segment_level_avg": {
+      "bleu": {
+        "pearson": 0.49191371237581494,
+        "kendall_tau": 0.395777167602761
+      },
+      "chrf": {
+        "pearson": 0.3512602869706676,
+        "kendall_tau": 0.34921514788478913
+      },
+      "ter": {
+        "pearson": -0.39117534969460643,
+        "kendall_tau": -0.42869295740658686
+      },
+      "rouge_l": {
+        "pearson": 0.6029203504935496,
+        "kendall_tau": 0.5738190417570045
+      }
+    }
+  }
+}
