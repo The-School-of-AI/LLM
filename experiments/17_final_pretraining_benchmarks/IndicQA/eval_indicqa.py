@@ -5,6 +5,8 @@ import re
 import requests
 import unicodedata
 from collections import defaultdict
+import numpy as np
+import random
 
 import torch
 from datasets import load_dataset, Dataset
@@ -14,7 +16,7 @@ _LANG = ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"]
 
 BASE_URL = "https://huggingface.co/datasets/ai4bharat/IndicQA/resolve/main/data/"
 CACHE_DIR = "./cache/indicqa"
-
+random.seed(42)
 
 def download_file(url, save_path):
     response = requests.get(url)
@@ -113,6 +115,30 @@ def get_position_bucket(answer_starts, context):
     else:
         return "late"
 
+
+def analyze_answer_lengths(dataset):
+
+    lengths = []
+    per_lang = defaultdict(list)
+
+    for ex in dataset:
+        golds = ex["answers"]["text"]
+        avg_len = sum(len(g.split()) for g in golds) / len(golds)
+        lengths.append(avg_len)
+        per_lang[ex["language"]].append(avg_len)
+
+    print("Overall Avg Gold Length:", round(np.mean(lengths), 2))
+    print("Overall Max Gold Length:", max(lengths))
+    print("Overall 95th percentile:", np.percentile(lengths, 95))
+
+    print("\nPer Language:")
+    for lang in per_lang:
+        print(
+            lang,
+            "avg:", round(np.mean(per_lang[lang]), 2),
+            "max:", max(per_lang[lang])
+        )
+
 # =========================
 # 3. PROMPT FORMAT
 # =========================
@@ -152,7 +178,7 @@ def load_model_and_tokenizer(model_path, tokenizer_path):
     return model, tokenizer
 
 
-def load_indicqa_all_languages(force_download=False, selected_langs=None):
+def load_indicqa_all_languages(force_download=False, selected_langs=None, max_samples_per_lang=None):
 
     os.makedirs(CACHE_DIR, exist_ok=True)
     langs_to_load = selected_langs if selected_langs else _LANG
@@ -175,11 +201,16 @@ def load_indicqa_all_languages(force_download=False, selected_langs=None):
         with open(cache_path, encoding="utf-8") as f:
             data = json.load(f)
 
+        count = 0
         for article in data["data"]:
             for paragraph in article["paragraphs"]:
                 context = paragraph["context"].strip()
 
                 for qa in paragraph["qas"]:
+
+                    if max_samples_per_lang and count >= max_samples_per_lang:
+                        break
+
                     question = qa["question"].strip()
                     answers = []
                     answer_starts = []
@@ -205,56 +236,75 @@ def load_indicqa_all_languages(force_download=False, selected_langs=None):
                         "language": lang
                     })
 
+                    count += 1
+
+                if max_samples_per_lang and count >= max_samples_per_lang:
+                    break
+
+            if max_samples_per_lang and count >= max_samples_per_lang:
+                break
+
+    random.shuffle(all_examples)
     return Dataset.from_list(all_examples)
 
 # =========================
 # 5. GENERATION
 # =========================
 
-@torch.no_grad()
-def generate_answer(model, tokenizer, prompt, max_new_tokens=8):
+def generate_batch(model, tokenizer, prompts, max_new_tokens=8):
 
     inputs = tokenizer(
-        prompt,
+        prompts,
         return_tensors="pt",
+        padding=True,
         truncation=True,
-        max_length=2048
-    )
+        max_length=1024
+    ).to(model.device)
 
-    input_ids = inputs["input_ids"].to(model.device)
-    attention_mask = inputs["attention_mask"].to(model.device)
+    with torch.inference_mode():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            temperature=0.0,
+            do_sample=False,
+            use_cache=True
+        )
 
-    outputs = model.generate(
-        input_ids=input_ids,
-        attention_mask=attention_mask,
-        max_new_tokens=max_new_tokens,
-        temperature=0.0,
-        do_sample=False,
-        top_p=1.0,
-        eos_token_id=tokenizer.eos_token_id,
-    )
+    preds = []
 
-    generated = outputs[0][input_ids.shape[-1]:]
-    text = tokenizer.decode(generated, skip_special_tokens=True)
+    input_lengths = inputs["input_ids"].shape[1]
 
-    # stop at first newline
-    text = text.strip().split("\n")[0]
-    return text.strip()
+    for i in range(len(prompts)):
+        gen_tokens = outputs[i][input_lengths:]
+        text = tokenizer.decode(gen_tokens, skip_special_tokens=True)
+        preds.append(text.strip().split("\n")[0])
 
+    return preds
 
 # =========================
 # 6. MAIN EVAL LOOP
 # =========================
 
-def evaluate(model, tokenizer, split, max_samples=None, force_download=False, languages=None):
+def evaluate(
+    model,
+    tokenizer,
+    split,
+    max_samples=None,
+    force_download=False,
+    languages=None,
+    batch_size=4,
+    max_new_tokens=8
+):
 
     dataset = load_indicqa_all_languages(
         force_download=force_download,
-        selected_langs=languages
+        selected_langs=languages,
+        max_samples_per_lang=max_samples
     )
     print(dataset[0])
     for i in range(5):
         print(dataset[i]["answer_starts"])
+    analyze_answer_lengths(dataset)
 
     results = defaultdict(lambda: {
         "em": [],
@@ -274,57 +324,113 @@ def evaluate(model, tokenizer, split, max_samples=None, force_download=False, la
     })
     hallucinations = defaultdict(int)
     total_per_lang = defaultdict(int)
-    samples_per_lang = defaultdict(int)
 
-    for i, example in enumerate(tqdm(dataset)):
+    # -------------------------------
+    # Collect valid examples first
+    # -------------------------------
 
-        language = example["language"]
-        if max_samples and samples_per_lang[language] >= max_samples:
-            continue
+    filtered_examples = []
+    dataset = sorted(dataset, key=lambda x: len(tokenizer(x["context"])["input_ids"]))
+    for example in dataset:
+        # lang = example["language"]
+        filtered_examples.append(example)
 
-        context = example["context"]
-        question = example["question"]
-        gold_answers = example["answers"]["text"]
-        language = example["language"]
+    # -------------------------------
+    # Batched Evaluation
+    # -------------------------------
+    # lengths = [len(tokenizer(p)["input_ids"]) for p in prompts]
+    # print("Max length in batch:", max(lengths))
 
-        prompt = build_prompt(context, question)
-        pred = generate_answer(model, tokenizer, prompt)
-        # pred = pred.split(".")[0]
+    # for start_idx in tqdm(range(0, len(filtered_examples), batch_size)):
+    pbar = tqdm(
+        range(0, len(filtered_examples), batch_size),
+        desc="Evaluating",
+        dynamic_ncols=True
+    )
 
-        # print(f"#{i}:  Context={context}, question={question}, gold={gold_answers}, language={language}, pred={pred}")
+    for start_idx in pbar:
+        batch = filtered_examples[start_idx:start_idx + batch_size]
 
-        em = compute_em(pred, gold_answers)
-        f1 = compute_f1(pred, gold_answers)
-        results[language]["em"].append(em)
-        results[language]["f1"].append(f1)
+        prompts = []
+        contexts = []
+        golds = []
+        langs = []
+        answer_starts_batch = []
 
-        bucket = get_position_bucket(example["answer_starts"], context)
-        if bucket in ["early", "middle", "late"]:
-            position_stats[language][bucket].append(f1)
-        else:
-            print("Found None answer_start:", example)
+        for example in batch:
+            context = example["context"]
+            question = example["question"]
 
-        # Additional diagnostics
-        results[language]["copy_ratio"].append(copy_ratio(pred, context))
-        results[language]["first_token_acc"].append(first_token_accuracy(pred, gold_answers))
-        results[language]["pred_len"].append(len(pred.split()))
+            prompts.append(build_prompt(context, question))
+            contexts.append(context)
+            golds.append(example["answers"]["text"])
+            langs.append(example["language"])
+            answer_starts_batch.append(example["answer_starts"])
 
-        avg_gold_len = sum(len(g.split()) for g in gold_answers) / max(len(gold_answers), 1)
-        results[language]["gold_len"].append(avg_gold_len)
+        preds = generate_batch(
+            model,
+            tokenizer,
+            prompts,
+            max_new_tokens=max_new_tokens
+        )
 
-        results[language]["empty"].append(int(len(pred.strip()) == 0))
-        results[language]["token_density"].append(token_density(context, tokenizer))
+        # --------------------------------
+        # Process metrics per example
+        # --------------------------------
 
-        total_per_lang[language] += 1
+        for i in range(len(preds)):
 
-        # Hallucination tracking
-        # if pred not in context:
-        if copy_ratio(pred, context) < 0.5:
-            hallucinations[language] += 1
+            pred = preds[i]
+            context = contexts[i]
+            gold_answers = golds[i]
+            language = langs[i]
+            answer_starts = answer_starts_batch[i]
 
-        samples_per_lang[language] += 1
+            em = compute_em(pred, gold_answers)
+            f1 = compute_f1(pred, gold_answers)
 
-    # Aggregate
+            results[language]["em"].append(em)
+            results[language]["f1"].append(f1)
+
+            bucket = get_position_bucket(answer_starts, context)
+            if bucket in ["early", "middle", "late"]:
+                position_stats[language][bucket].append(f1)
+
+            cr = copy_ratio(pred, context)
+            results[language]["copy_ratio"].append(cr)
+
+            if cr < 0.5:
+                hallucinations[language] += 1
+
+            results[language]["first_token_acc"].append(
+                first_token_accuracy(pred, gold_answers)
+            )
+
+            results[language]["pred_len"].append(len(pred.split()))
+
+            avg_gold_len = sum(len(g.split()) for g in gold_answers) / max(len(gold_answers), 1)
+            results[language]["gold_len"].append(avg_gold_len)
+
+            results[language]["empty"].append(int(len(pred.strip()) == 0))
+
+            results[language]["token_density"].append(
+                token_density(context, tokenizer)
+            )
+
+            total_per_lang[language] += 1
+
+        # Update live language stats
+        total_done = sum(total_per_lang.values())
+        lang_counts_str = ", ".join(
+            f"{lang}:{total_per_lang[lang]}"
+            for lang in sorted(total_per_lang.keys())
+        )
+        pbar.set_postfix_str(lang_counts_str)
+
+    # -------------------------------
+    # Aggregation
+    # -------------------------------
+
     summary = {}
     pos_summary = {}
 
@@ -348,21 +454,18 @@ def evaluate(model, tokenizer, split, max_samples=None, force_download=False, la
         pos_summary[lang] = {}
         for bucket in ["early", "middle", "late"]:
             values = position_stats[lang][bucket]
-            if len(values) > 0:
-                pos_summary[lang][bucket] = round(sum(values) / len(values) * 100, 2)
-            else:
-                pos_summary[lang][bucket] = None
+            pos_summary[lang][bucket] = (
+                round(sum(values) / len(values) * 100, 2)
+                if values else None
+            )
 
     for lang in summary:
-        summary[lang]["PositionF1"] = pos_summary.get(lang, {
-            "early": None,
-            "middle": None,
-            "late": None
-        })
-
+        summary[lang]["PositionF1"] = pos_summary.get(
+            lang,
+            {"early": None, "middle": None, "late": None}
+        )
 
     return summary
-
 
 # =========================
 # 7. ENTRY POINT
