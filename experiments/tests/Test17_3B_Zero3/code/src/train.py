@@ -5,6 +5,7 @@ This module contains training, evaluation, and inference functions
 for training language models with DeepSpeed optimization.
 """
 
+import gc
 import inspect
 import json
 import os
@@ -281,7 +282,26 @@ def train_epoch(
 
             # 3. FusedLinearCE: fuses lm_head matmul + CE in one chunked kernel.
             # Never materialises [B*T, vocab] logits. Zero fallback.
-            lm_weight = model_engine.module.lm_head.weight  # [V, H]
+            #
+            # ZeRO-3 FIX: lm_head.weight is partitioned across GPUs with ZeRO-3.
+            # The fused CE accesses it as a raw tensor (not through an nn.Module
+            # forward call), so ZeRO-3's parameter-gathering hooks don't fire.
+            # We gather the full weight explicitly, clone it so it survives the
+            # context exit, and use it for both NTP and MTP CE.
+            _lm_param = model_engine.module.lm_head.weight
+            _is_zero3 = hasattr(_lm_param, 'ds_id')
+            if _is_zero3:
+                try:
+                    from deepspeed.zero import GatheredParameters
+                except ImportError:
+                    from deepspeed.runtime.zero.partition_parameters import GatheredParameters
+                _gather_ctx = GatheredParameters([_lm_param], modifier_rank=None)
+            else:
+                _gather_ctx = _null_ctx()
+
+            with _gather_ctx:
+                lm_weight = _lm_param.data.clone()  # [V, H] — full weight
+
             B_seq, T_seq, H_dim = h_ntp.shape
             vocab_size = lm_weight.shape[0]
 
@@ -304,6 +324,7 @@ def train_epoch(
                         lm_weight,                   # [V, H]
                         y_mtp.view(-1),              # [B*T]
                     )
+            del lm_weight  # Free the cloned full weight after both CE passes
             
             # 4. NaN Watchdog — HARD CRASH (FIX: was silently continuing, corrupting weights)
             if torch.isnan(loss_ntp) or (loss_mtp is not None and torch.isnan(loss_mtp)) or \
@@ -559,6 +580,11 @@ def train_epoch(
                 elif output_dir:
                     # Use basic checkpoint saving
                     save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
+
+        # Free circular-ref GPU memory at end of each step
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:

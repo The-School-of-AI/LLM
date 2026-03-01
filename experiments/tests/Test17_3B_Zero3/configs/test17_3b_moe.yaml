@@ -1,6 +1,6 @@
 data:
   loader_type: "bin_idx"
-  shard_dir: /mnt/local-nvme/LLM/experiments/tests/Test17_3B/data/wikitext_shards
+  shard_dir: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
   eval_shard_dir: null
   tokenizer_dir: src/tokenizer
   validate_tokenizer: true
@@ -32,10 +32,10 @@ training:
   use_fused_ce: true
   max_chunk_gb: 8
   metrics_jsonl_path: "../results/run/metrics.jsonl"
-  profile_steps: [1, 2, 3]
+  profile_steps: [ ]
 
 deepspeed:
-  config_path: "../deepspeed/zero-2-dense-bf16-test14-1000steps.json"
+  config_path: "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json"
   local_rank: -1
 
 model:
