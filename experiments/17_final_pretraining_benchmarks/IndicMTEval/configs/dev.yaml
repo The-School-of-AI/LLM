@@ -1,0 +1,12 @@
+# dev.yaml — Development iteration (~5 min)
+data:
+  languages: [hi, ta]
+  split: test
+  max_samples: 50
+
+metrics:
+  metrics: [bleu, chrf, ter, rouge_l]
+
+run:
+  output: results_dev.json
+  levels: [segment, system]

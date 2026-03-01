@@ -1,0 +1,11 @@
+# test.yaml — Full evaluation (all languages, all samples)
+data:
+  languages: [hi, ta, mr, ml, gu]
+  split: test
+
+metrics:
+  metrics: [bleu, chrf, ter, rouge_l]
+
+run:
+  output: results_test.json
+  levels: [segment, system]

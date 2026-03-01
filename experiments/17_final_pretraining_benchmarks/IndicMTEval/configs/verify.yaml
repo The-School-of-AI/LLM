@@ -1,0 +1,13 @@
+# verify.yaml — Quick sanity check (~1 min, CPU only)
+data:
+  languages: [hi]
+  split: test
+  max_samples: 10
+
+metrics:
+  metrics: [bleu, chrf, ter, rouge_l]
+
+run:
+  output: results_verify.json
+  levels: [segment]
+  verbose: true
