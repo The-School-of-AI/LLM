@@ -146,6 +146,9 @@ class Config:
             "memory_probe_steps", 0
         )
         self.enable_mtp = config_dict["training"].get("enable_mtp", True)
+        self.clear_grad_after_step = config_dict["training"].get(
+            "clear_grad_after_step", False
+        )
 
         # Profiler configuration
         # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
@@ -650,6 +653,7 @@ def main():
                 flops_profile_step=args.flops_profile_step,
                 flops_profile_print=args.flops_profile_print,
                 memory_probe_steps=args.memory_probe_steps,
+                clear_grad_after_step=args.clear_grad_after_step,
             )
 
         eval_loss = None

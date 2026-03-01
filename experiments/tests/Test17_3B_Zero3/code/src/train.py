@@ -140,6 +140,7 @@ def train_epoch(
     flops_profile_step: int = 10,
     flops_profile_print: bool = True,
     memory_probe_steps: int = 0,
+    clear_grad_after_step: bool = False,
 ):
     """
     Train the model for one epoch.
@@ -405,6 +406,13 @@ def train_epoch(
         # Update weights (includes allreduce in ZeRO-1)
         with profiler.phase("optim_step") if profiler is not None else _null_ctx():
             model_engine.step()
+        # Diagnostic: clear param.grad refs after step to test if grad retention causes
+        # the per-step memory growth (observed in both ZeRO-2 and ZeRO-3).
+        if clear_grad_after_step:
+            with torch.no_grad():
+                for p in model_engine.module.parameters():
+                    if p.grad is not None:
+                        p.grad = None
         _log_mem_probe(i, "after_optim_step")
         
         if i == 0:
@@ -643,7 +651,11 @@ def train_epoch(
                 f"alloc_retries={_num_alloc_retries}"
             )
 
-        # Deep tensor census: run at step 1 and step 2 to diff
+        # Deep tensor census: run at step 1 and step 2 to diff.
+        # Observed: param-shaped (20,4096,1024), (8188,4096), (20,1024,4096) and
+        # activation-shaped (1,4094,4,4096), (4094,16384) grow by one set per step
+        # (~22 MoE expert tensors, ~16 attn blocks), consistent with each reversible
+        # layer leaving allgathered params / activations behind (ZeRO-3 + custom backward).
         if memory_probe_steps > 0 and i in (0, 1, 2) and torch.cuda.is_available():
             _tcnt = 0; _tbytes = 0; _by_shape = {}
             for _obj in gc.get_objects():
