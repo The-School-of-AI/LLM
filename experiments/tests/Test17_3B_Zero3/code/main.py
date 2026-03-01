@@ -149,6 +149,9 @@ class Config:
         self.clear_grad_after_step = config_dict["training"].get(
             "clear_grad_after_step", False
         )
+        self.use_full_stack_checkpoint = config_dict["training"].get(
+            "use_full_stack_checkpoint", False
+        )
 
         # Profiler configuration
         # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
@@ -465,9 +468,11 @@ def main():
     vocab_size = len(tokenizer)
     config.vocab_size = vocab_size
     config.enable_mtp = args.enable_mtp
+    config.use_full_stack_checkpoint = getattr(args, "use_full_stack_checkpoint", False)
     print_rank_0(f"  Updated model vocab_size to match tokenizer: {vocab_size:,}")
     print_rank_0(f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})")
     print_rank_0(f"  MTP: {'enabled' if config.enable_mtp else 'DISABLED (diagnostic)'}")
+    print_rank_0(f"  Full-stack checkpoint (ZeRO-3 workaround): {'ON' if config.use_full_stack_checkpoint else 'OFF'}")
     
     # Prepare vocabulary for Kronecker embeddings if needed
     bpe_vocab = None

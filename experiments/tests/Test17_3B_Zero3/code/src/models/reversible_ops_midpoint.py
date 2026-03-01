@@ -149,6 +149,10 @@ class ReversibleMidpointStack(nn.Module):
     - a: stabilizing blend coefficient (a=1 pure leapfrog; 0.85–0.98 often helps)
     - bootstrap: "no_kick" or "euler"
     - noise_eps: optional noise to delta during training
+    - use_full_stack_checkpoint: if True, run the whole midpoint recurrence inside
+      a single gradient checkpoint so backward is standard PyTorch (no custom
+      autograd Function). Workaround for ZeRO-3 retaining allgathered params
+      when backward is invoked from inside MidpointFunction.backward().
     """
     def __init__(
         self,
@@ -157,6 +161,7 @@ class ReversibleMidpointStack(nn.Module):
         a: float = 0.95,
         noise_eps: float = 0.0,
         bootstrap: str = "no_kick",
+        use_full_stack_checkpoint: bool = False,
     ):
         super().__init__()
         assert 0.0 <= a <= 1.0, "a must be in [0,1]"
@@ -165,13 +170,35 @@ class ReversibleMidpointStack(nn.Module):
         self.blocks = blocks
         self.h = float(step_size)
         self.a = float(a)
+        self.two_h = float(2.0 * step_size)
         self.noise_eps = float(noise_eps)
         self.bootstrap = bootstrap
+        self.use_full_stack_checkpoint = bool(use_full_stack_checkpoint)
 
         self.bootstrap_layer = blocks[0]
         self.mid_layers = nn.ModuleList([MidpointBlock(b, step_size=self.h, a=self.a) for b in blocks[1:]])
 
         self.step_count = 0
+        # Used by _midpoint_only_impl when use_full_stack_checkpoint=True
+        self._checkpoint_attn_mask = None
+
+    def _midpoint_only_impl(self, p_prev: torch.Tensor, p_cur: torch.Tensor):
+        """Runs the midpoint recurrence over mid_layers. Used as the body of a single
+        gradient checkpoint so backward is standard PyTorch (avoids ZeRO-3 leak when
+        backward is invoked from inside MidpointFunction.backward). Same math as
+        the per-layer MidpointFunction path.
+        """
+        total_aux = torch.tensor(0.0, device=p_cur.device, dtype=torch.float32)
+        two_h = self.two_h
+        a = self.a
+        attn = self._checkpoint_attn_mask
+        for layer in self.mid_layers:
+            delta, aux = layer.wrapper(p_cur, attention_mask=attn)
+            p_next = (a * p_prev) + ((1.0 - a) * p_cur) + (two_h * delta)
+            if aux is not None:
+                total_aux = total_aux + aux
+            p_prev, p_cur = p_cur, p_next
+        return p_cur, total_aux
 
     def forward(self, x, attention_mask=None):
         # Bootstrap creates two states (p_prev, p_cur)
@@ -207,11 +234,22 @@ class ReversibleMidpointStack(nn.Module):
         total_aux = aux0 if aux0 is not None else torch.tensor(0.0, device=x.device, dtype=torch.float32)
 
         # Midpoint / leapfrog recurrence
-        for layer in self.mid_layers:
-            p_next, aux = layer(p_prev, p_cur, attention_mask=attention_mask)
-            if aux is not None:
-                total_aux = total_aux + aux
-            p_prev, p_cur = p_cur, p_next
+        if self.use_full_stack_checkpoint:
+            # Single checkpoint over whole stack: backward is standard PyTorch, so ZeRO-3
+            # param release can run. Workaround for allgathered params being retained when
+            # backward is invoked from inside MidpointFunction.backward().
+            self._checkpoint_attn_mask = attention_mask
+            p_cur, mid_aux = grad_checkpoint(
+                self._midpoint_only_impl, p_prev, p_cur, use_reentrant=False
+            )
+            self._checkpoint_attn_mask = None
+            total_aux = total_aux + mid_aux
+        else:
+            for layer in self.mid_layers:
+                p_next, aux = layer(p_prev, p_cur, attention_mask=attention_mask)
+                if aux is not None:
+                    total_aux = total_aux + aux
+                p_prev, p_cur = p_cur, p_next
 
         if self.training:
             self.step_count += 1

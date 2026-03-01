@@ -496,6 +496,11 @@ class ModelConfig:
     require_fused_deltanet_kernel = True
     require_fused_gsa_kernel = True
 
+    # ZeRO-3 workaround: run midpoint stack inside one gradient checkpoint so backward
+    # is standard PyTorch (avoids allgathered params being retained when backward runs
+    # inside MidpointFunction.backward). Set True if per-step memory grows and OOM.
+    use_full_stack_checkpoint = False
+
 
 # ============================================================================
 # Embedding Layer (Kronecker Product)
@@ -1924,12 +1929,14 @@ class Model3B(nn.Module):
 
         # Reversible Midpoint Integration
         from .reversible_ops_midpoint import ReversibleMidpointStack
+        use_full_stack_checkpoint = getattr(config, "use_full_stack_checkpoint", False)
         self.stack = ReversibleMidpointStack(
             self.layers,
             step_size=0.25,
             a=0.5,
             noise_eps=0.0,
             bootstrap="euler",
+            use_full_stack_checkpoint=use_full_stack_checkpoint,
         )
 
         self.norm = RMSNorm(config.hidden_size)

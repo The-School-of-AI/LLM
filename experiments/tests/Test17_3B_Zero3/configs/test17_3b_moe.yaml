@@ -40,6 +40,8 @@ training:
   enable_mtp: true
   # Diagnostic: set true to clear param.grad after each step (tests grad retention as leak cause; OOM seen in both ZeRO-2 and ZeRO-3)
   clear_grad_after_step: false
+  # ZeRO-3 workaround: run reversible midpoint stack inside one gradient checkpoint so backward is standard PyTorch (no custom Function). Set true if per-step memory grows and OOM.
+  use_full_stack_checkpoint: true
 
 deepspeed:
   config_path: "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json"
