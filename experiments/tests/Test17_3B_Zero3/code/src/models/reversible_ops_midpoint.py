@@ -187,18 +187,31 @@ class ReversibleMidpointStack(nn.Module):
         gradient checkpoint so backward is standard PyTorch (avoids ZeRO-3 leak when
         backward is invoked from inside MidpointFunction.backward). Same math as
         the per-layer MidpointFunction path.
+
+        Non-reentrant checkpoint requires identical graph on forward and recomputation.
+        We run mid_layers in eval mode so dropout and other train-only behavior do not
+        change the number of saved tensors between passes.
         """
         total_aux = torch.tensor(0.0, device=p_cur.device, dtype=torch.float32)
         two_h = self.two_h
         a = self.a
         attn = self._checkpoint_attn_mask
-        for layer in self.mid_layers:
-            delta, aux = layer.wrapper(p_cur, attention_mask=attn)
-            p_next = (a * p_prev) + ((1.0 - a) * p_cur) + (two_h * delta)
-            if aux is not None:
-                total_aux = total_aux + aux
-            p_prev, p_cur = p_cur, p_next
-        return p_cur, total_aux
+        # Force eval so forward and recomputation produce the same graph (avoids CheckpointError).
+        was_training = [m.training for m in self.mid_layers]
+        for m in self.mid_layers:
+            m.eval()
+        try:
+            for layer in self.mid_layers:
+                delta, aux = layer.wrapper(p_cur, attention_mask=attn)
+                p_next = (a * p_prev) + ((1.0 - a) * p_cur) + (two_h * delta)
+                if aux is not None:
+                    total_aux = total_aux + aux
+                p_prev, p_cur = p_cur, p_next
+            return p_cur, total_aux
+        finally:
+            for m, train in zip(self.mid_layers, was_training):
+                if train:
+                    m.train()
 
     def forward(self, x, attention_mask=None):
         # Bootstrap creates two states (p_prev, p_cur)
