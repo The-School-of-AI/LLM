@@ -7,16 +7,15 @@ data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-103-raw-v1"
   tokenize_num_proc: 8
-  # Workaround for per-step memory growth: reduce to 2048 (or 1024) to run more steps before OOM. See notes/MEMORY_OOM_AND_WORKAROUNDS.md
-  max_length: 4096
+  # Required workaround: per-step memory growth causes OOM at 4096 even with per-layer checkpoint. Use 2048 until leak is fixed (see notes/MEMORY_OOM_AND_WORKAROUNDS.md). Set back to 4096 when training on 80GB GPUs or after upstream fix.
+  max_length: 2048
   num_workers: 16
   tokenized_dataset_path: null
   dataset_cache_dir: null
   local_nvme_cache_dir: null
   require_local_nvme: false
   pack_into_blocks: true
-  # Match block_sizes to max_length if you reduce max_length for memory workaround
-  block_sizes: [4096]
+  block_sizes: [2048]
   block_size_counts: null
   domain_column: null
   concat_across_domains: false
@@ -46,6 +45,8 @@ training:
   use_full_stack_checkpoint: false
   # Checkpoint each reversible layer separately (no custom backward). Reduces peak memory; try true to fix OOM at 4096.
   use_per_layer_checkpoint: true
+  # Root-cause diagnostic: 1=print what holds a (20,4096,1024) tensor after step 1; 2=one more referrer level. See notes/MEMORY_OOM_AND_WORKAROUNDS.md
+  trace_leak_referrers: 0
 
 deepspeed:
   config_path: "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json"

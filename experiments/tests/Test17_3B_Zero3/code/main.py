@@ -155,6 +155,9 @@ class Config:
         self.use_per_layer_checkpoint = config_dict["training"].get(
             "use_per_layer_checkpoint", True
         )
+        self.trace_leak_referrers = config_dict["training"].get(
+            "trace_leak_referrers", 0
+        )
 
         # Profiler configuration
         # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
@@ -663,6 +666,7 @@ def main():
                 flops_profile_print=args.flops_profile_print,
                 memory_probe_steps=args.memory_probe_steps,
                 clear_grad_after_step=args.clear_grad_after_step,
+                trace_leak_referrers=getattr(args, "trace_leak_referrers", 0),
             )
 
         eval_loss = None

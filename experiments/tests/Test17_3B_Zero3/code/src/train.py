@@ -141,6 +141,7 @@ def train_epoch(
     flops_profile_print: bool = True,
     memory_probe_steps: int = 0,
     clear_grad_after_step: bool = False,
+    trace_leak_referrers: int = 0,
 ):
     """
     Train the model for one epoch.
@@ -680,6 +681,36 @@ def train_epoch(
                     f"[tensor_census]   {_k[0]:>40s} {_k[1]:>20s}  count={_c:>4d}  "
                     f"bytes={_s/1e9:.3f}GB"
                 )
+
+            # Optional: trace what holds a leaked-shaped tensor (root-cause diagnostic).
+            # trace_leak_referrers=1: print referrers of one (20,4096,1024) tensor; =2: one more level.
+            if trace_leak_referrers > 0 and i == 1:
+                _target_shape = (20, 4096, 1024)
+                _found = None
+                for _obj in gc.get_objects():
+                    try:
+                        if torch.is_tensor(_obj) and _obj.is_cuda and getattr(_obj, "shape", None) == _target_shape:
+                            _found = _obj
+                            break
+                    except Exception:
+                        pass
+                if _found is not None:
+                    def _safe_repr(o, max_len=200):
+                        try:
+                            r = repr(o)
+                            return r[:max_len] + ("..." if len(r) > max_len else "")
+                        except Exception:
+                            return f"<repr failed: {type(o).__name__}>"
+                    refs = gc.get_referrers(_found)
+                    print_rank_0(f"[leak_trace] tensor shape={_target_shape} id={id(_found)} has {len(refs)} referrers:")
+                    for _r in refs[:20]:
+                        print_rank_0(f"  ref: {type(_r).__name__} {_safe_repr(_r)}")
+                        if trace_leak_referrers >= 2 and type(_r).__name__ not in ("frame", "dict"):
+                            refs2 = gc.get_referrers(_r)
+                            for _r2 in refs2[:5]:
+                                print_rank_0(f"    -> {type(_r2).__name__} {_safe_repr(_r2)}")
+                else:
+                    print_rank_0("[leak_trace] no tensor with shape (20, 4096, 1024) found in gc.get_objects()")
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
