@@ -64,7 +64,8 @@ from .utils import print_rank_0
 
 logger = logging.getLogger(__name__)
 
-# Shards are 4096-token fixed blocks.
+# Shards are 4096-token fixed blocks on disk.
+# seq_len can be <= SHARD_BLOCK_SIZE (truncate one block) or a multiple of it (join blocks).
 SHARD_BLOCK_SIZE = 4096
 
 
@@ -188,6 +189,10 @@ def _iter_sequences_from_shard(
     """
     Yield [seq_len] long tensors from a single .bin/.idx shard.
 
+    seq_len <= SHARD_BLOCK_SIZE (e.g. 2048, 1024):
+        One block is read; the first seq_len tokens are emitted and the rest
+        of the block is discarded. Use for memory workarounds (shorter seq).
+
     seq_len == SHARD_BLOCK_SIZE (4096):
         Each .idx region is exactly one sequence. One read per region.
 
@@ -199,13 +204,16 @@ def _iter_sequences_from_shard(
 
     Corrupted / empty regions are logged and skipped; the shard continues.
     """
-    if seq_len % SHARD_BLOCK_SIZE != 0:
+    if seq_len <= 0:
+        raise ValueError(f"seq_len must be positive, got {seq_len}")
+    if seq_len > SHARD_BLOCK_SIZE and seq_len % SHARD_BLOCK_SIZE != 0:
         raise ValueError(
             f"seq_len={seq_len} is not a multiple of SHARD_BLOCK_SIZE={SHARD_BLOCK_SIZE}. "
-            f"Supported: seq_len == {SHARD_BLOCK_SIZE} (one block) or seq_len = N * {SHARD_BLOCK_SIZE} (join N blocks)."
+            f"Use seq_len <= {SHARD_BLOCK_SIZE} (truncate one block) or seq_len = N * {SHARD_BLOCK_SIZE} (join N blocks)."
         )
 
-    blocks_per_seq = seq_len // SHARD_BLOCK_SIZE
+    truncate_from_block = seq_len <= SHARD_BLOCK_SIZE
+    blocks_per_seq = 1 if truncate_from_block else seq_len // SHARD_BLOCK_SIZE
     offsets = _read_idx_offsets(idx_path)
     itemsize = dtype.itemsize
     num_regions = len(offsets) - 1
@@ -248,8 +256,12 @@ def _iter_sequences_from_shard(
                 skipped += 1
                 continue
 
-            if blocks_per_seq == 1:
-                # Fast path: one block == one sequence
+            if truncate_from_block:
+                # seq_len <= SHARD_BLOCK_SIZE: use first seq_len tokens of this block
+                out = block[:seq_len].copy()
+                yield torch.from_numpy(out).to(torch.long)
+            elif blocks_per_seq == 1:
+                # seq_len == SHARD_BLOCK_SIZE: one block == one sequence
                 yield torch.from_numpy(block.copy()).to(torch.long)
             else:
                 # Accumulate blocks into buffer, emit when full
@@ -353,10 +365,10 @@ class BinIdxDataset(IterableDataset):
             "labels":         LongTensor [seq_len]  (copy of input_ids)
         }
 
-    seq_len must be a multiple of SHARD_BLOCK_SIZE (4096):
+    seq_len behavior:
+        seq_len <= 4096  → one block read, first seq_len tokens used (e.g. 2048 for memory workaround)
         seq_len == 4096  → one block per sequence (standard)
-        seq_len == 8192  → two consecutive blocks joined per sequence
-        seq_len == 16384 → four consecutive blocks joined, etc.
+        seq_len > 4096   → must be multiple of 4096; consecutive blocks joined (8192, 16384, ...)
 
     DDP:
         rank / world_size are resolved automatically from torch.distributed.
@@ -383,11 +395,12 @@ class BinIdxDataset(IterableDataset):
     ) -> None:
         super().__init__()
 
-        if seq_len % SHARD_BLOCK_SIZE != 0:
+        if seq_len <= 0:
+            raise ValueError(f"seq_len must be positive, got {seq_len}")
+        if seq_len > SHARD_BLOCK_SIZE and seq_len % SHARD_BLOCK_SIZE != 0:
             raise ValueError(
-                f"seq_len={seq_len} must be a multiple of "
-                f"SHARD_BLOCK_SIZE={SHARD_BLOCK_SIZE}. "
-                f"Use {SHARD_BLOCK_SIZE}, {SHARD_BLOCK_SIZE*2}, {SHARD_BLOCK_SIZE*4}, ..."
+                f"seq_len={seq_len} must be <= {SHARD_BLOCK_SIZE} or a multiple of it. "
+                f"Use e.g. 2048, {SHARD_BLOCK_SIZE}, {SHARD_BLOCK_SIZE*2}, ..."
             )
 
         self.shard_dir = shard_dir
@@ -492,9 +505,8 @@ def build_bin_idx_dataloader(
         tokenizer:          Live tokenizer instance. Used for EOS/PAD ID validation.
         tokenizer_dir:      Path to tokenizer directory for hash computation.
                             Defaults to code/src/tokenizer/ relative to this file.
-        seq_len:            Sequence length. Must be a multiple of 4096.
-                            Default 4096 (one block per sequence).
-                            Use 8192/16384 to join consecutive blocks.
+        seq_len:            Sequence length. Can be <= 4096 (truncate one block, e.g. 2048)
+                            or a multiple of 4096 (join blocks: 4096, 8192, 16384, ...).
         dtype:              Token dtype used when writing .bin files (default uint32).
         num_workers:        DataLoader worker processes. 0 = main process (debug only).
         prefetch_factor:    Prefetch batches per worker (only active when num_workers > 0).
@@ -535,10 +547,12 @@ def build_bin_idx_dataloader(
             "skipped. Ensure shards were produced with the canonical tokenizer."
         )
 
-    blocks_per_seq = seq_len // SHARD_BLOCK_SIZE
-    if blocks_per_seq == 1:
-        print_rank_0(f"Block config: seq_len={seq_len} (1 block per sequence)")
+    if seq_len <= SHARD_BLOCK_SIZE:
+        print_rank_0(
+            f"Block config: seq_len={seq_len} (first {seq_len} tokens of each {SHARD_BLOCK_SIZE}-token block)"
+        )
     else:
+        blocks_per_seq = seq_len // SHARD_BLOCK_SIZE
         print_rank_0(
             f"Block config: seq_len={seq_len} ({blocks_per_seq} blocks joined per sequence)"
         )
