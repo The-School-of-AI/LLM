@@ -36,5 +36,5 @@ def compute_comet(
         )
     model = _get_comet_model(kwargs.get("comet_model", "Unbabel/wmt22-comet-da"))
     data = [{"src": source, "mt": hypothesis, "ref": reference}]
-    output = model.predict(data, batch_size=1, gpus=0)
+    output = model.predict(data, batch_size=1, gpus=0, num_workers=1)
     return float(output.scores[0])
