@@ -665,7 +665,7 @@ def train_epoch(
             )
             for _k, (_c, _s) in _sorted[:15]:
                 print_rank_0(
-                    f"  {_k[0]:>40s} {_k[1]:>20s}  count={_c:>4d}  "
+                    f"[tensor_census]   {_k[0]:>40s} {_k[1]:>20s}  count={_c:>4d}  "
                     f"bytes={_s/1e9:.3f}GB"
                 )
 
