@@ -33,6 +33,10 @@ training:
   max_chunk_gb: 8
   metrics_jsonl_path: "../results/run/metrics.jsonl"
   profile_steps: [ ]
+  enable_flops_profiler: true
+  flops_profile_step: 2
+  flops_profile_print: true
+  memory_probe_steps: 8
 
 deepspeed:
   config_path: "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json"

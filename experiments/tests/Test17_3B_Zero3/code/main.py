@@ -133,6 +133,18 @@ class Config:
         self.init_model_path = config_dict["training"].get("init_model_path")
         self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 8.0)
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
+        self.enable_flops_profiler = config_dict["training"].get(
+            "enable_flops_profiler", False
+        )
+        self.flops_profile_step = config_dict["training"].get(
+            "flops_profile_step", 10
+        )
+        self.flops_profile_print = config_dict["training"].get(
+            "flops_profile_print", True
+        )
+        self.memory_probe_steps = config_dict["training"].get(
+            "memory_probe_steps", 0
+        )
 
         # Profiler configuration
         # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
@@ -301,6 +313,11 @@ def main():
     print_rank_0(f"  Max Length: {args.max_length}")
     print_rank_0(f"  DataLoader Workers: {args.num_workers} per GPU")
     print_rank_0(f"  Epochs: {args.num_epochs}")
+    print_rank_0(
+        f"  FLOPs Profiler: {'ON' if args.enable_flops_profiler else 'OFF'}"
+        + (f" (step={args.flops_profile_step})" if args.enable_flops_profiler else "")
+    )
+    print_rank_0(f"  Memory Probe Steps: {args.memory_probe_steps}")
     print_rank_0(f"  Checkpoint Interval: Every {args.checkpoint_interval} steps")
     print_rank_0(f"  Output Directory: {args.output_dir}")
     print_rank_0(f"  Random Seed: {args.seed}")
@@ -626,6 +643,10 @@ def main():
                 max_chunk_gb=args.max_chunk_gb,
                 profile_steps=args.profile_steps if args.profile_steps else None,
                 profile_output_dir=os.path.dirname(args.metrics_jsonl_path) if args.metrics_jsonl_path else None,
+                enable_flops_profiler=args.enable_flops_profiler,
+                flops_profile_step=args.flops_profile_step,
+                flops_profile_print=args.flops_profile_print,
+                memory_probe_steps=args.memory_probe_steps,
             )
 
         eval_loss = None

@@ -136,6 +136,10 @@ def train_epoch(
     profiler: "StepProfiler | None" = None,
     profile_steps: "set | None" = None,
     profile_output_dir: "str | None" = None,
+    enable_flops_profiler: bool = False,
+    flops_profile_step: int = 10,
+    flops_profile_print: bool = True,
+    memory_probe_steps: int = 0,
 ):
     """
     Train the model for one epoch.
@@ -183,15 +187,38 @@ def train_epoch(
         train_loader, desc=f"Epoch {epoch}", disable=not is_main_process()
     )
 
-    profile_step = 10
-    print_profile= True
-    prof = FlopsProfiler(model_engine)
+    # FLOPs profiler is opt-in and lazily initialized only on the target step.
+    # Keeping it always alive can retain model hooks/references unexpectedly.
+    prof = None
+    if enable_flops_profiler:
+        print_rank_0(
+            f"[flops_profiler] enabled=True step={flops_profile_step} "
+            f"print_profile={flops_profile_print}"
+        )
+    if memory_probe_steps > 0 and torch.cuda.is_available():
+        print_rank_0(
+            f"[mem_probe] enabled for first {memory_probe_steps} steps "
+            "(logging alloc/reserved/peak after forward/backward/step)"
+        )
+
+    def _log_mem_probe(step_i: int, phase: str) -> None:
+        if memory_probe_steps <= 0 or step_i >= memory_probe_steps or not torch.cuda.is_available():
+            return
+        alloc_gb = torch.cuda.memory_allocated(model_engine.device) / 1e9
+        reserved_gb = torch.cuda.memory_reserved(model_engine.device) / 1e9
+        peak_gb = torch.cuda.max_memory_allocated(model_engine.device) / 1e9
+        print_rank_0(
+            f"[mem_probe] step={global_step + 1} iter={step_i} phase={phase} "
+            f"alloc={alloc_gb:.2f}GB reserved={reserved_gb:.2f}GB peak={peak_gb:.2f}GB"
+        )
+
     for i, batch in enumerate(progress_bar):
         # Skip steps if resuming
         if i < start_step:
             continue
-        if i == profile_step:
-            print ("Profile started")
+        if enable_flops_profiler and prof is None and i == flops_profile_step:
+            prof = FlopsProfiler(model_engine)
+            print("FLOPs profile started")
             prof.start_profile()
 
         # ── Profiler: start step ─────────────────────────────────────────────
@@ -368,14 +395,17 @@ def train_epoch(
             loss_ntp_value = float(loss.detach().float().item())
             loss_mtp_value = None
             loss_aux_value = None
+        _log_mem_probe(i, "after_forward")
 
         # Backward pass
         with profiler.phase("backward") if profiler is not None else _null_ctx():
             model_engine.backward(loss)
+        _log_mem_probe(i, "after_backward")
 
         # Update weights (includes allreduce in ZeRO-1)
         with profiler.phase("optim_step") if profiler is not None else _null_ctx():
             model_engine.step()
+        _log_mem_probe(i, "after_optim_step")
         
         if i == 0:
             mem_after_step = torch.cuda.memory_allocated(model_engine.device) / 1e9
@@ -454,15 +484,20 @@ def train_epoch(
                         # Fail silently if NVML query fails
                         pass
 
-        if i == profile_step:
-            print("Profile stoped\n")
+        if enable_flops_profiler and i == flops_profile_step and prof is not None:
+            print("FLOPs profile stopped\n")
             prof.stop_profile()
             flops = prof.get_total_flops()
             macs = prof.get_total_macs()
             params = prof.get_total_params()
-            if print_profile:
-                prof.print_model_profile(profile_step=profile_step)
+            print_rank_0(
+                f"[flops_profiler] total_flops={flops} total_macs={macs} total_params={params}"
+            )
+            if flops_profile_print:
+                prof.print_model_profile(profile_step=flops_profile_step)
             prof.end_profile()
+            del prof
+            prof = None
         # Track metrics
         total_loss += loss.item()
         steps += 1
@@ -585,6 +620,7 @@ def train_epoch(
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+        _log_mem_probe(i, "after_gc_empty_cache")
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
