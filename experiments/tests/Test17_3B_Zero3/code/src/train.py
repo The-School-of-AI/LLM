@@ -616,11 +616,58 @@ def train_epoch(
                     # Use basic checkpoint saving
                     save_checkpoint(model_engine, output_dir, tag=checkpoint_tag)
 
+        # Explicitly release all step-local GPU tensors before gc.
+        # If this stops the leak, the cause is Python variable retention.
+        # If it still grows, the leak is inside the model/ZeRO internals.
+        loss = None; h_ntp = None; h_mtp = None; aux_loss = None
+        loss_ntp = None; loss_mtp = None; aux_term = None
+        lm_weight = None; input_ids = None; attention_mask = None
+        labels = None; x_input = None; y_ntp = None; y_mtp = None
+        batch = None; leak_frac_t = None; leak_attempt_t = None
+
         # Free circular-ref GPU memory at end of each step
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         _log_mem_probe(i, "after_gc_empty_cache")
+
+        # GPU allocation census (lightweight: uses cuda memory_stats)
+        if memory_probe_steps > 0 and i < memory_probe_steps and torch.cuda.is_available():
+            _ms = torch.cuda.memory_stats(model_engine.device)
+            _active_allocs = _ms.get('active.all.current', -1)
+            _active_bytes = _ms.get('active_bytes.all.current', 0) / 1e9
+            _num_alloc_retries = _ms.get('num_alloc_retries', 0)
+            print_rank_0(
+                f"[mem_census] iter={i} active_allocs={_active_allocs} "
+                f"active_bytes={_active_bytes:.2f}GB "
+                f"alloc_retries={_num_alloc_retries}"
+            )
+
+        # Deep tensor census: run at step 1 and step 2 to diff
+        if memory_probe_steps > 0 and i in (0, 1, 2) and torch.cuda.is_available():
+            _tcnt = 0; _tbytes = 0; _by_shape = {}
+            for _obj in gc.get_objects():
+                try:
+                    if torch.is_tensor(_obj) and _obj.is_cuda:
+                        _sz = _obj.element_size() * _obj.nelement()
+                        _tcnt += 1; _tbytes += _sz
+                        _key = (str(tuple(_obj.shape)), str(_obj.dtype))
+                        if _key not in _by_shape:
+                            _by_shape[_key] = [0, 0]
+                        _by_shape[_key][0] += 1
+                        _by_shape[_key][1] += _sz
+                except Exception:
+                    pass
+            _sorted = sorted(_by_shape.items(), key=lambda x: -x[1][1])
+            print_rank_0(
+                f"[tensor_census] iter={i} total_cuda_tensors={_tcnt} "
+                f"total_bytes={_tbytes/1e9:.2f}GB"
+            )
+            for _k, (_c, _s) in _sorted[:15]:
+                print_rank_0(
+                    f"  {_k[0]:>40s} {_k[1]:>20s}  count={_c:>4d}  "
+                    f"bytes={_s/1e9:.3f}GB"
+                )
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
