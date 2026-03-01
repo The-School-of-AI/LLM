@@ -10,9 +10,8 @@ This script runs representative generators multiple times and compares:
 2. Content overlap (should differ between runs)
 """
 
-import sys
 import os
-import random
+import sys
 
 sys.path.append(os.path.dirname(__file__))
 sys.path.append(os.path.join(os.path.dirname(__file__), "group1"))
@@ -81,7 +80,10 @@ def test_group1_distribution_stability():
         if len(sets) >= 2:
             overlap_12 = len(sets[0] & sets[1]) / max(len(sets[0]), 1) * 100
             overlap_13 = len(sets[0] & sets[2]) / max(len(sets[0]), 1) * 100
-            print(f"  {name}: Run1∩Run2 = {overlap_12:.1f}%, Run1∩Run3 = {overlap_13:.1f}%")
+            print(
+                f"  {name}: Run1∩Run2 = {overlap_12:.1f}%,"
+                f" Run1∩Run3 = {overlap_13:.1f}%"
+            )
 
     return all_same
 
@@ -155,7 +157,10 @@ def test_combine_stability():
         all_pairs = list(s1.items()) + list(s4.items())
         combined = combine_qa_pairs_to_reach_min_tokens(all_pairs, min_tokens=512)
         combined_counts.append(len(combined))
-        print(f"  Run {run + 1}: {len(all_pairs):,} QA pairs -> {len(combined):,} combined samples")
+        print(
+            f"  Run {run + 1}: {len(all_pairs):,} QA pairs"
+            f" -> {len(combined):,} combined samples"
+        )
 
     same = len(set(combined_counts)) == 1
     max_diff = max(combined_counts) - min(combined_counts)
@@ -169,7 +174,10 @@ def test_combine_stability():
 
 if __name__ == "__main__":
     print("Validating determinism assertion:")
-    print('"Codes are not deterministic (no fixed seeds), but distribution is the same"')
+    print(
+        '"Codes are not deterministic (no fixed seeds),'
+        ' but distribution is the same"'
+    )
     print()
 
     g1_same = test_group1_distribution_stability()
@@ -179,13 +187,25 @@ if __name__ == "__main__":
     print("\n" + "=" * 80)
     print("FINAL SUMMARY")
     print("=" * 80)
-    print(f"  Group 1 per-statement counts identical across runs: {'PASS' if g1_same else 'FAIL'}")
-    print(f"  Group 2 per-statement counts identical across runs: {'PASS' if g2_same else 'FAIL'}")
-    print(f"  Combine output count stable:                       {'PASS' if combine_same else f'WITHIN {combine_pct:.2f}%'}")
+    print(
+        "  Group 1 per-statement counts identical across runs:"
+        f" {'PASS' if g1_same else 'FAIL'}"
+    )
+    print(
+        "  Group 2 per-statement counts identical across runs:"
+        f" {'PASS' if g2_same else 'FAIL'}"
+    )
+    print(
+        "  Combine output count stable:                      "
+        f" {'PASS' if combine_same else f'WITHIN {combine_pct:.2f}%'}"
+    )
     print()
 
     if g1_same:
-        print("CONCLUSION: Distribution is DETERMINISTIC for combinatorial generators (Group 1).")
+        print(
+            "CONCLUSION: Distribution is DETERMINISTIC"
+            " for combinatorial generators (Group 1)."
+        )
         print("  - Per-statement QA pair counts are exactly the same across runs")
         print("  - Only the CONTENT (which specific QA pairs) differs between runs")
     else:
@@ -196,7 +216,10 @@ if __name__ == "__main__":
         print("  - This is expected for random-attempt generators with deduplication")
 
     if not combine_same:
-        print(f"  - Combined sample count varies by up to {combine_pct:.2f}% due to different QA pair sizes")
+        print(
+            f"  - Combined sample count varies by up to {combine_pct:.2f}%"
+            " due to different QA pair sizes"
+        )
     else:
         print("  - Combined sample count is also stable")
 
