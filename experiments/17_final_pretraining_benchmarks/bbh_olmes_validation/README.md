@@ -15,10 +15,11 @@ Validate that the [OLMES](https://github.com/allenai/olmes) CLI tool can correct
 ## 2. Setup
 
 ### Environment
-- **Platform:** Lightning.ai Studio (free tier)
-- **GPU:** NVIDIA L40S (48GB VRAM)
+- **Platform:** Lightning.ai Studio
+- **GPU:** NVIDIA H100 (80GB VRAM)
 - **Model:** `Qwen/Qwen2.5-1.5B-Instruct` (public, no HuggingFace auth needed)
 - **Task:** `bbh:cot-v1::tulu` (Chain-of-Thought, 3-shot, Tulu chat format)
+- **Total Runtime:** ~1.5 hours
 
 ### Installation Commands
 
@@ -44,7 +45,7 @@ cd ~/olmes && olmes \
   --model Qwen/Qwen2.5-1.5B-Instruct \
   --task bbh:cot-v1::tulu \
   --output-dir ~/bbh_results \
-  --batch-size 4
+  --batch-size 8
 ```
 
 ### Key Parameters
@@ -52,7 +53,7 @@ cd ~/olmes && olmes \
 |-----------|-------|-----|
 | `--model` | `Qwen/Qwen2.5-1.5B-Instruct` | Public model with known BBH score |
 | `--task` | `bbh:cot-v1::tulu` | Standard BBH eval with chain-of-thought prompting |
-| `--batch-size 4` | 4 | Balances speed and memory (batch-size 16 causes OOM) |
+| `--batch-size` | 8 | Balances speed and memory (16 causes OOM on L40S, 8 works well on H100) |
 | `--output-dir` | `~/bbh_results` | Where result JSONs are saved |
 
 ---
@@ -156,11 +157,12 @@ Additionally, OLMES generates:
 | Slow on Colab T4 (4+ hours) | Use Lightning.ai L40S or add `--batch-size` flag |
 
 ### Run Time Estimates
-| GPU | Batch Size | Estimated Time |
+| GPU | Batch Size | Measured Time |
 |-----|-----------|---------------|
 | T4 (Colab) | 1 | ~4-5 hours |
-| L40S (Lightning.ai) | 4 | ~1.5-2 hours |
-| A100 | 4 | ~30-60 min |
+| L40S (Lightning.ai) | 4 | ~2-3 hours |
+| **H100** | **8** | **~1.5 hours** ✅ |
+| A100 | 8 | ~1-1.5 hours (estimated) |
 
 ---
 
