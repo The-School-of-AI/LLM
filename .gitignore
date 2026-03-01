@@ -146,6 +146,7 @@ stats/
 # Model Checkpoints / Weights
 *.pt
 *.pth
+.DS_Store
 
 # macOS specific files
 *.DS_Store

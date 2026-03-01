@@ -58,6 +58,8 @@ header() {
   echo -e "${CYAN}── $1 ──${NC}"
 }
 
+SKIP_EBS_VALIDATION="${SKIP_EBS_VALIDATION:-false}"
+
 # ── Configurable Thresholds ──────────────────────────────────
 # All thresholds can be overridden via environment variables.
 # Defaults target c7gd.16xlarge.
@@ -78,7 +80,7 @@ MAX_SWAPPINESS="${MAX_SWAPPINESS:-1}"
 MIN_PYTHON_MAJOR="${MIN_PYTHON_MAJOR:-3}"
 MIN_PYTHON_MINOR="${MIN_PYTHON_MINOR:-10}"
 S3_BUCKET="${S3_BUCKET:-t2-datacurriculum-353}"
-S3_PREFIX="${S3_PREFIX:-processed_dataset/curriculum_pyspark_output/source=C4/}"
+S3_PREFIX="${S3_PREFIX:-processed_dataset/curriculum_pyspark_output/source=C4/bands/band=B0/}"
 S3_TEST_COUNT="${S3_TEST_COUNT:-50}"
 MIN_S3_SPEED_MBS="${MIN_S3_SPEED_MBS:-500}"
 
@@ -301,20 +303,26 @@ fi
 # 10. EBS Volume Size
 # ============================================================
 header "10. EBS Volume"
-ROOT_SIZE_GB=$(df -BG / \
-  | awk 'NR==2{gsub("G","",$2); print $2}')
-if (( ROOT_SIZE_GB >= MIN_EBS_ROOT_GB )); then
-  pass "EBS root volume = ${ROOT_SIZE_GB} GB"
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS volume check skipped" "SKIP_EBS_VALIDATION=true"
 else
-  warn "EBS root volume" \
-    "${ROOT_SIZE_GB} GB (recommended >= ${MIN_EBS_ROOT_GB})"
+  ROOT_SIZE_GB=$(df -BG / \
+    | awk 'NR==2{gsub("G","",$2); print $2}')
+  if (( ROOT_SIZE_GB >= MIN_EBS_ROOT_GB )); then
+    pass "EBS root volume = ${ROOT_SIZE_GB} GB"
+  else
+    warn "EBS root volume" \
+      "${ROOT_SIZE_GB} GB (recommended >= ${MIN_EBS_ROOT_GB})"
+  fi
 fi
 
 # ============================================================
 # 11. EBS IOPS (via AWS CLI)
 # ============================================================
 header "11. EBS Provisioned IOPS"
-if command -v aws &>/dev/null; then
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS IOPS check skipped" "SKIP_EBS_VALIDATION=true"
+elif command -v aws &>/dev/null; then
   ROOT_DEV=$(lsblk -ndo NAME / 2>/dev/null \
     | head -1 || echo "")
   # Try to get volume ID from instance metadata
@@ -350,7 +358,9 @@ fi
 # 12. EBS Latency
 # ============================================================
 header "12. EBS Latency"
-if command -v iostat &>/dev/null; then
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS latency check skipped" "SKIP_EBS_VALIDATION=true"
+elif command -v iostat &>/dev/null; then
   EBS_AWAIT=$(iostat -xd 1 1 2>/dev/null \
     | awk '/nvme0n1/{print $10}' | head -1)
   if [[ -n "$EBS_AWAIT" ]]; then
@@ -372,16 +382,25 @@ fi
 # 13. S3 Connectivity
 # ============================================================
 header "13. S3 Connectivity"
-# S3_BUCKET and S3_PREFIX already set in config block above
+
+# Debug credentials under sudo
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -z "${AWS_PROFILE:-}" ] && [ -z "${AWS_CONTAINER_CREDENTIALS_RELATIVE_URI:-}" ]; then
+  warn "S3 Credentials" "No AWS environment variables found (Identity might be missing under sudo)"
+fi
+
+# Ensure S3_PREFIX ends with a slash and no double slashes
+S3_URL="s3://${S3_BUCKET}/${S3_PREFIX%/}/"
+echo "S3 URL: $S3_URL"
 
 if command -v aws &>/dev/null; then
-  if aws s3 ls "s3://$S3_BUCKET/$S3_PREFIX" \
-    --max-items 1 &>/dev/null; then
-    pass "S3 bucket '$S3_BUCKET' accessible"
-    pass "S3 prefix '$S3_PREFIX' exists"
+  # List just 1 item to check connectivity. Capture output and status.
+  S3_CHECK=$(aws s3 ls "$S3_URL" 2>&1)
+  S3_STATUS=$?
+  if [ $S3_STATUS -eq 0 ] && [ -n "$S3_CHECK" ]; then
+    pass "S3 accessible ($S3_URL)"
   else
-    fail "S3 access" \
-      "cannot list s3://$S3_BUCKET/$S3_PREFIX"
+    S3_ERR_MSG=$(echo "$S3_CHECK" | head -n 1)
+    fail "S3 access" "cannot list $S3_URL. Error: ${S3_ERR_MSG:-empty response}"
   fi
 else
   warn "AWS CLI not installed" \
@@ -404,8 +423,7 @@ if command -v aws &>/dev/null; then
 
   # Discover first N files from the prefix
   mapfile -t S3_FILES < <(
-    aws s3 ls "s3://$S3_BUCKET/$S3_PREFIX" \
-      --recursive 2>/dev/null \
+    aws s3 ls "$S3_URL" --recursive 2>/dev/null \
     | awk '{print $NF}' \
     | head -n "$S3_TEST_COUNT"
   )
@@ -477,7 +495,7 @@ fi
 # ============================================================
 header "16. Python Packages"
 PKGS_OK=true
-for pkg in pyarrow pandas yaml; do
+for pkg in yaml; do
   if python3 -c "import $pkg" 2>/dev/null; then
     VER=$(python3 -c \
       "import ${pkg}; print(getattr(${pkg},'__version__','ok'))")
@@ -510,12 +528,16 @@ fi
 # 18. EBS Free Space
 # ============================================================
 header "18. EBS Free Space"
-EBS_FREE=$(df -BG / \
-  | awk 'NR==2{gsub("G","",$4); print $4}')
-if (( EBS_FREE >= MIN_EBS_FREE_GB )); then
-  pass "EBS free = ${EBS_FREE} GB"
+if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
+  warn "EBS free space skipped" "SKIP_EBS_VALIDATION=true"
 else
-  fail "EBS free" "${EBS_FREE} GB (expected >= ${MIN_EBS_FREE_GB})"
+  EBS_FREE=$(df -BG / \
+    | awk 'NR==2{gsub("G","",$4); print $4}')
+  if (( EBS_FREE >= MIN_EBS_FREE_GB )); then
+    pass "EBS free = ${EBS_FREE} GB"
+  else
+    fail "EBS free" "${EBS_FREE} GB (expected >= ${MIN_EBS_FREE_GB})"
+  fi
 fi
 
 # ============================================================

@@ -1,0 +1,4414 @@
+{
+  "run_id": "dea1801a-59a0-4f2b-97ca-2d7cbbc0abdd",
+  "dataset": "group4_batch_01",
+  "team": "Team 4",
+  "timestamp": "2026-02-27T22:28:11.032384",
+  "scanner_commit": "b85a2aefa07ba2f1232be7dca38cbdd490971c58",
+  "repo_dirty": true,
+  "total_samples": 493920,
+  "contaminated_count": 301,
+  "contamination_rate": "0.06%",
+  "findings": [
+    {
+      "layer": "MINHASH",
+      "severity": "HIGH",
+      "count": 3,
+      "benchmarks": [
+        "triviaqa_test",
+        "mmlu_indic_test",
+        "mmlu_test"
+      ],
+      "contaminated_samples": [
+        {
+          "sample_id": "qa_9990",
+          "sample_index": 9989,
+          "text_preview": "what is the capital of poland? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?"
+        },
+        {
+          "sample_id": "qa_9990",
+          "sample_index": 9989,
+          "text_preview": "what is the capital of poland? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?"
+        },
+        {
+          "sample_id": "qa_22121",
+          "sample_index": 22120,
+          "text_preview": "what is the capital of new zealand? wellington.",
+          "benchmark": "mmlu_indic_test",
+          "similar_to": "what is the capital of new zealand?"
+        },
+        {
+          "sample_id": "qa_209485",
+          "sample_index": 209484,
+          "text_preview": "what is the capital of north dakota? bismarck.",
+          "benchmark": "mmlu_indic_test",
+          "similar_to": "what is the capital of north dakota?"
+        },
+        {
+          "sample_id": "qa_22121",
+          "sample_index": 22120,
+          "text_preview": "what is the capital of new zealand? wellington.",
+          "benchmark": "mmlu_test",
+          "similar_to": "what is the capital of new zealand?"
+        },
+        {
+          "sample_id": "qa_209485",
+          "sample_index": 209484,
+          "text_preview": "what is the capital of north dakota? bismarck.",
+          "benchmark": "mmlu_test",
+          "similar_to": "what is the capital of north dakota?"
+        }
+      ]
+    },
+    {
+      "layer": "SEMANTIC",
+      "severity": "MEDIUM",
+      "count": 298,
+      "benchmarks": [
+        "triviaqa_test",
+        "mmlu_indic_test",
+        "boolq_test",
+        "simpleqa_verified_test"
+      ],
+      "contaminated_samples": [
+        {
+          "sample_id": "qa_37",
+          "sample_index": 36,
+          "text_preview": "i'm curious about what is the official language of nigeria? english.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is nigeria's official language?",
+          "cosine": 0.932
+        },
+        {
+          "sample_id": "qa_45",
+          "sample_index": 44,
+          "text_preview": "do you know the sides count of a octagon is? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.921
+        },
+        {
+          "sample_id": "qa_47",
+          "sample_index": 46,
+          "text_preview": "what is chile's capital? santiago.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital city of chile?",
+          "cosine": 0.903
+        },
+        {
+          "sample_id": "qa_69",
+          "sample_index": 68,
+          "text_preview": "can you tell me what is sweden's capital? stockholm.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of sweden?",
+          "cosine": 0.9
+        },
+        {
+          "sample_id": "qa_304",
+          "sample_index": 303,
+          "text_preview": "i need to know the location of the pituitary gland is where? brain.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "where is the pituitary gland?",
+          "cosine": 0.906
+        },
+        {
+          "sample_id": "qa_471",
+          "sample_index": 470,
+          "text_preview": "tell me which language is official in brazil? portuguese.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the official language of brazil?",
+          "cosine": 0.926
+        },
+        {
+          "sample_id": "qa_2280",
+          "sample_index": 2279,
+          "text_preview": "where is the capital of malaysia? kuala lumpur.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "kuala lumpur is the capital of which country?",
+          "cosine": 0.904
+        },
+        {
+          "sample_id": "qa_2384",
+          "sample_index": 2383,
+          "text_preview": "tell me where is the capital of pakistan? islamabad.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of pakistan?",
+          "cosine": 0.913
+        },
+        {
+          "sample_id": "qa_2486",
+          "sample_index": 2485,
+          "text_preview": "please tell me what is sweden's capital? stockholm.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of sweden?",
+          "cosine": 0.922
+        },
+        {
+          "sample_id": "qa_2550",
+          "sample_index": 2549,
+          "text_preview": "i'm curious about which language is official in brazil? portuguese.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the official language of brazil?",
+          "cosine": 0.917
+        },
+        {
+          "sample_id": "qa_2616",
+          "sample_index": 2615,
+          "text_preview": "tell me the sides count of a octagon is? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.929
+        },
+        {
+          "sample_id": "qa_2977",
+          "sample_index": 2976,
+          "text_preview": "i'm curious about what is the capital of poland? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?",
+          "cosine": 0.904
+        },
+        {
+          "sample_id": "qa_3636",
+          "sample_index": 3635,
+          "text_preview": "can you tell me the capital city of chile is? santiago.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital city of chile?",
+          "cosine": 0.909
+        },
+        {
+          "sample_id": "qa_4291",
+          "sample_index": 4290,
+          "text_preview": "where is the pituitary gland location in a body? brain.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "where is the pituitary gland?",
+          "cosine": 0.909
+        },
+        {
+          "sample_id": "qa_4389",
+          "sample_index": 4388,
+          "text_preview": "tell me what is the official language of nigeria? english.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is nigeria's official language?",
+          "cosine": 0.933
+        },
+        {
+          "sample_id": "qa_4758",
+          "sample_index": 4757,
+          "text_preview": "where is the pineal gland location in a body? brain.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "the pineal gland is situated in which part of the body?",
+          "cosine": 0.901
+        },
+        {
+          "sample_id": "qa_4766",
+          "sample_index": 4765,
+          "text_preview": "tell me which language is official in nigeria? english.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is nigeria's official language?",
+          "cosine": 0.932
+        },
+        {
+          "sample_id": "qa_5492",
+          "sample_index": 5491,
+          "text_preview": "i would like to know the location of the pituitary gland is where? brain.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "where is the pituitary gland?",
+          "cosine": 0.908
+        },
+        {
+          "sample_id": "qa_6007",
+          "sample_index": 6006,
+          "text_preview": "please tell me where is the capital of poland? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?",
+          "cosine": 0.904
+        },
+        {
+          "sample_id": "qa_6176",
+          "sample_index": 6175,
+          "text_preview": "please tell me what is the number of sides on a octagon? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.925
+        },
+        {
+          "sample_id": "qa_6516",
+          "sample_index": 6515,
+          "text_preview": "i need to know what is pakistan's capital? islamabad.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of pakistan?",
+          "cosine": 0.909
+        },
+        {
+          "sample_id": "qa_6590",
+          "sample_index": 6589,
+          "text_preview": "how many sides does a octagon have? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.956
+        },
+        {
+          "sample_id": "qa_7513",
+          "sample_index": 7512,
+          "text_preview": "i would like to know the currency of egypt is? pound.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the currency of egypt?",
+          "cosine": 0.907
+        },
+        {
+          "sample_id": "qa_7845",
+          "sample_index": 7844,
+          "text_preview": "can you tell me a octagon has how many sides? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.962
+        },
+        {
+          "sample_id": "qa_8093",
+          "sample_index": 8092,
+          "text_preview": "i would like to know what is the number of sides on a octagon? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.911
+        },
+        {
+          "sample_id": "qa_8452",
+          "sample_index": 8451,
+          "text_preview": "tell me what is pakistan's capital? islamabad.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of pakistan?",
+          "cosine": 0.925
+        },
+        {
+          "sample_id": "qa_8684",
+          "sample_index": 8683,
+          "text_preview": "tell me what is the capital of poland? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?",
+          "cosine": 0.907
+        },
+        {
+          "sample_id": "qa_8831",
+          "sample_index": 8830,
+          "text_preview": "tell me what is chile's capital? santiago.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital city of chile?",
+          "cosine": 0.905
+        },
+        {
+          "sample_id": "qa_9220",
+          "sample_index": 9219,
+          "text_preview": "i would like to know the sides count of a octagon is? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.913
+        },
+        {
+          "sample_id": "qa_9609",
+          "sample_index": 9608,
+          "text_preview": "i need to know how many sides does a octagon have? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.938
+        },
+        {
+          "sample_id": "qa_10453",
+          "sample_index": 10452,
+          "text_preview": "i would like to know what is the official language of brazil? portuguese.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the official language of brazil?",
+          "cosine": 0.927
+        },
+        {
+          "sample_id": "qa_10863",
+          "sample_index": 10862,
+          "text_preview": "please tell me what is pakistan's capital? islamabad.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of pakistan?",
+          "cosine": 0.92
+        },
+        {
+          "sample_id": "qa_11805",
+          "sample_index": 11804,
+          "text_preview": "the sides count of a octagon is? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.916
+        },
+        {
+          "sample_id": "qa_11849",
+          "sample_index": 11848,
+          "text_preview": "i would like to know what is the capital of sweden? stockholm.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of sweden?",
+          "cosine": 0.903
+        },
+        {
+          "sample_id": "qa_12453",
+          "sample_index": 12452,
+          "text_preview": "do you know a octagon has how many sides? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.951
+        },
+        {
+          "sample_id": "qa_12904",
+          "sample_index": 12903,
+          "text_preview": "tell me what is the capital of sweden? stockholm.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of sweden?",
+          "cosine": 0.917
+        },
+        {
+          "sample_id": "qa_13963",
+          "sample_index": 13962,
+          "text_preview": "i'm curious about the sides count of a octagon is? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.913
+        },
+        {
+          "sample_id": "qa_14937",
+          "sample_index": 14936,
+          "text_preview": "could you tell me what is sweden's capital? stockholm.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of sweden?",
+          "cosine": 0.908
+        },
+        {
+          "sample_id": "qa_16028",
+          "sample_index": 16027,
+          "text_preview": "please tell me what is the capital of pakistan? islamabad.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of pakistan?",
+          "cosine": 0.909
+        },
+        {
+          "sample_id": "qa_16261",
+          "sample_index": 16260,
+          "text_preview": "i need to know a octagon has how many sides? 8.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "how many sides has an octagon?",
+          "cosine": 0.953
+        },
+        {
+          "sample_id": "qa_16771",
+          "sample_index": 16770,
+          "text_preview": "do you know which language is official in nigeria? english.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is nigeria's official language?",
+          "cosine": 0.917
+        },
+        {
+          "sample_id": "qa_16850",
+          "sample_index": 16849,
+          "text_preview": "the capital city of chile is? santiago.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital city of chile?",
+          "cosine": 0.914
+        },
+        {
+          "sample_id": "qa_16959",
+          "sample_index": 16958,
+          "text_preview": "tell me where is the capital of poland? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?",
+          "cosine": 0.915
+        },
+        {
+          "sample_id": "qa_17384",
+          "sample_index": 17383,
+          "text_preview": "what is malaysia's capital? kuala lumpur.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "kuala lumpur is the capital of which country?",
+          "cosine": 0.903
+        },
+        {
+          "sample_id": "qa_17655",
+          "sample_index": 17654,
+          "text_preview": "tell me what is the official language of brazil? portuguese.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the official language of brazil?",
+          "cosine": 0.943
+        },
+        {
+          "sample_id": "qa_17749",
+          "sample_index": 17748,
+          "text_preview": "tell me what is sweden's capital? stockholm.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of sweden?",
+          "cosine": 0.921
+        },
+        {
+          "sample_id": "qa_17756",
+          "sample_index": 17755,
+          "text_preview": "i'm curious about what is sweden's capital? stockholm.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of sweden?",
+          "cosine": 0.919
+        },
+        {
+          "sample_id": "qa_18143",
+          "sample_index": 18142,
+          "text_preview": "i need to know the capital city of chile is? santiago.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital city of chile?",
+          "cosine": 0.915
+        },
+        {
+          "sample_id": "qa_18799",
+          "sample_index": 18798,
+          "text_preview": "tell me what is poland's capital? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?",
+          "cosine": 0.901
+        },
+        {
+          "sample_id": "qa_18867",
+          "sample_index": 18866,
+          "text_preview": "what is poland's capital? warsaw.",
+          "benchmark": "triviaqa_test",
+          "similar_to": "what is the capital of poland?",
+          "cosine": 0.922
+        }
+      ]
+    }
+  ],
+  "all_contaminated_samples": [
+    {
+      "id": "qa_9990",
+      "text": "what is the capital of poland? warsaw.",
+      "detection_method": "MINHASH",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "fuzzy",
+          "confidence": "85.2%",
+          "similar_to": "what is the capital of poland?"
+        },
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "fuzzy",
+          "confidence": "85.2%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_22121",
+      "text": "what is the capital of new zealand? wellington.",
+      "detection_method": "MINHASH",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "fuzzy",
+          "confidence": "85.2%",
+          "similar_to": "what is the capital of new zealand?"
+        },
+        {
+          "benchmark": "mmlu_test",
+          "match_type": "fuzzy",
+          "confidence": "85.2%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_209485",
+      "text": "what is the capital of north dakota? bismarck.",
+      "detection_method": "MINHASH",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "fuzzy",
+          "confidence": "85.9%",
+          "similar_to": "what is the capital of north dakota?"
+        },
+        {
+          "benchmark": "mmlu_test",
+          "match_type": "fuzzy",
+          "confidence": "85.9%",
+          "similar_to": "what is the capital of north dakota?"
+        }
+      ]
+    },
+    {
+      "id": "qa_37",
+      "text": "i'm curious about what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.2%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_45",
+      "text": "do you know the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.1%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_47",
+      "text": "what is chile's capital? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_69",
+      "text": "can you tell me what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.0%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_304",
+      "text": "i need to know the location of the pituitary gland is where? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_471",
+      "text": "tell me which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.6%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2280",
+      "text": "where is the capital of malaysia? kuala lumpur.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "kuala lumpur is the capital of which country?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2384",
+      "text": "tell me where is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2486",
+      "text": "please tell me what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.2%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2550",
+      "text": "i'm curious about which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2616",
+      "text": "tell me the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.9%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2977",
+      "text": "i'm curious about what is the capital of poland? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_3636",
+      "text": "can you tell me the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_4291",
+      "text": "where is the pituitary gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_4389",
+      "text": "tell me what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.3%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_4758",
+      "text": "where is the pineal gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "the pineal gland is situated in which part of the body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_4766",
+      "text": "tell me which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.2%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_5492",
+      "text": "i would like to know the location of the pituitary gland is where? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6007",
+      "text": "please tell me where is the capital of poland? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6176",
+      "text": "please tell me what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.5%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6516",
+      "text": "i need to know what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6590",
+      "text": "how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.6%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_7513",
+      "text": "i would like to know the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_7845",
+      "text": "can you tell me a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "96.2%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_8093",
+      "text": "i would like to know what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.1%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_8452",
+      "text": "tell me what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.5%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_8684",
+      "text": "tell me what is the capital of poland? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_8831",
+      "text": "tell me what is chile's capital? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_9220",
+      "text": "i would like to know the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_9609",
+      "text": "i need to know how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.8%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_10453",
+      "text": "i would like to know what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.7%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_10863",
+      "text": "please tell me what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.0%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_11805",
+      "text": "the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.6%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_11849",
+      "text": "i would like to know what is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_12453",
+      "text": "do you know a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.1%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_12904",
+      "text": "tell me what is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_13963",
+      "text": "i'm curious about the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_14937",
+      "text": "could you tell me what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_16028",
+      "text": "please tell me what is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_16261",
+      "text": "i need to know a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.3%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_16771",
+      "text": "do you know which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_16850",
+      "text": "the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.4%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_16959",
+      "text": "tell me where is the capital of poland? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.5%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_17384",
+      "text": "what is malaysia's capital? kuala lumpur.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "kuala lumpur is the capital of which country?"
+        }
+      ]
+    },
+    {
+      "id": "qa_17655",
+      "text": "tell me what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "94.3%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_17749",
+      "text": "tell me what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.1%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_17756",
+      "text": "i'm curious about what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.9%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_18143",
+      "text": "i need to know the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.5%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_18799",
+      "text": "tell me what is poland's capital? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_18867",
+      "text": "what is poland's capital? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.2%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_18934",
+      "text": "i need to know where is the pineal gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.0%",
+          "similar_to": "the pineal gland is situated in which part of the body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_18993",
+      "text": "do you know what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_20142",
+      "text": "tell me the capital city of australia is? canberra.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "what is the capital city of australia?"
+        }
+      ]
+    },
+    {
+      "id": "qa_20571",
+      "text": "could you tell me the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_21227",
+      "text": "please tell me where is the pineal gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "the pineal gland is situated in which part of the body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_21630",
+      "text": "please tell me what is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.2%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_21818",
+      "text": "could you tell me which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.2%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_22305",
+      "text": "can you tell me what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_22727",
+      "text": "could you tell me the location of the pituitary gland is where? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_23203",
+      "text": "what is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.9%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_23482",
+      "text": "where is the capital of poland? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.9%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_24337",
+      "text": "can you tell me the location of the pituitary gland is where? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_24625",
+      "text": "tell me how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.7%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_24838",
+      "text": "i would like to know where is the pineal gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "the pineal gland is situated in which part of the body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_25312",
+      "text": "could you tell me where is the pituitary gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_25643",
+      "text": "i would like to know where is the pituitary gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_25959",
+      "text": "i need to know what is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_26163",
+      "text": "please tell me what is the capital of poland? warsaw.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital of poland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_26501",
+      "text": "could you tell me a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "96.0%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_26916",
+      "text": "can you tell me what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.5%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_28612",
+      "text": "i'm curious about what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.4%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_28762",
+      "text": "i need to know which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_28872",
+      "text": "please tell me the capital city of australia is? canberra.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital city of australia?"
+        }
+      ]
+    },
+    {
+      "id": "qa_29001",
+      "text": "could you tell me what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.5%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_29640",
+      "text": "can you tell me where is the pineal gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "the pineal gland is situated in which part of the body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_29678",
+      "text": "i'm curious about what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.4%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30014",
+      "text": "please tell me a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "96.0%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30103",
+      "text": "i would like to know which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30106",
+      "text": "do you know what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30282",
+      "text": "could you tell me what is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30382",
+      "text": "i would like to know what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30431",
+      "text": "please tell me where is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30873",
+      "text": "please tell me the location of the pituitary gland is where? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.6%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_32349",
+      "text": "tell me what is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_32653",
+      "text": "where is the capital of chile? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.0%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_32699",
+      "text": "what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.4%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_33457",
+      "text": "please tell me what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.4%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_34909",
+      "text": "can you tell me which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.7%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_35001",
+      "text": "i'm curious about which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.0%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_35123",
+      "text": "do you know what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.1%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_36303",
+      "text": "do you know how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.0%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_36379",
+      "text": "could you tell me where is the pineal gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "the pineal gland is situated in which part of the body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_37485",
+      "text": "tell me the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.2%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38111",
+      "text": "which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.0%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38118",
+      "text": "where is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38225",
+      "text": "i need to know what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38297",
+      "text": "tell me what language is spoken officially in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.0%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38518",
+      "text": "can you tell me what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.4%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38689",
+      "text": "i need to know what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.9%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38779",
+      "text": "i'm curious about where is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39030",
+      "text": "what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.1%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39298",
+      "text": "can you tell me which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.1%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39386",
+      "text": "can you tell me the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39465",
+      "text": "what is the capital of chile? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39721",
+      "text": "could you tell me the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39821",
+      "text": "tell me what is the capital of chile? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39839",
+      "text": "tell me what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.2%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39955",
+      "text": "please tell me the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.6%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_41376",
+      "text": "i need to know which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_42038",
+      "text": "can you tell me where is the pituitary gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_42057",
+      "text": "i'm curious about the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_42710",
+      "text": "i'm curious about what is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.2%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_42860",
+      "text": "i'm curious about the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_44601",
+      "text": "i'm curious about what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.1%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_45043",
+      "text": "a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.8%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_45254",
+      "text": "please tell me which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.4%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_45991",
+      "text": "can you tell me what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.6%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_46178",
+      "text": "could you tell me what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_47284",
+      "text": "please tell me the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.6%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_47709",
+      "text": "i would like to know the capital city of chile is? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.2%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_47765",
+      "text": "could you tell me the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.4%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_47834",
+      "text": "i would like to know what is the capital of pakistan? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_48459",
+      "text": "what is the capital of malaysia? kuala lumpur.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "kuala lumpur is the capital of which country?"
+        }
+      ]
+    },
+    {
+      "id": "qa_48599",
+      "text": "which language is official in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "94.1%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_48759",
+      "text": "could you tell me what is the official language of brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.8%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_49036",
+      "text": "could you tell me which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.3%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_49177",
+      "text": "i need to know the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_49268",
+      "text": "i'm curious about a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.1%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_49709",
+      "text": "i would like to know a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.5%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_49886",
+      "text": "i need to know what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_50261",
+      "text": "i'm curious about what is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_50943",
+      "text": "what is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.2%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_50998",
+      "text": "what language is spoken officially in nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_51244",
+      "text": "i need to know what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_51280",
+      "text": "please tell me how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.0%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_51309",
+      "text": "could you tell me what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.3%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_51375",
+      "text": "i would like to know how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "94.0%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_51514",
+      "text": "tell me where is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.2%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_52213",
+      "text": "what is the number of sides on a octagon? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.4%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_52240",
+      "text": "tell me a octagon has how many sides? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "96.3%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_54290",
+      "text": "tell me where is the pituitary gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_54318",
+      "text": "the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_54634",
+      "text": "do you know which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_54938",
+      "text": "i need to know where is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_55106",
+      "text": "do you know what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_55220",
+      "text": "i would like to know what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.8%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_55844",
+      "text": "tell me the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.4%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_56492",
+      "text": "i'm curious about how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.7%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_56625",
+      "text": "i'm curious about what is the official language of china? mandarin.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.0%",
+          "similar_to": "what is china's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_57606",
+      "text": "please tell me what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.4%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_57621",
+      "text": "what is the official language of china? mandarin.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "what is china's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_57771",
+      "text": "could you tell me how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.3%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_58229",
+      "text": "can you tell me how many sides does a octagon have? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "95.3%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59122",
+      "text": "what is the official language of nigeria? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "94.7%",
+          "similar_to": "what is nigeria's official language?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59490",
+      "text": "i need to know the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59626",
+      "text": "what is sweden's capital? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "93.4%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59783",
+      "text": "please tell me the currency of egypt is? pound.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "what is the currency of egypt?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59801",
+      "text": "tell me the location of the pituitary gland is where? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.4%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_60302",
+      "text": "i would like to know which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.2%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_60450",
+      "text": "where is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.5%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_60488",
+      "text": "i need to know what is the capital of sweden? stockholm.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "what is the capital of sweden?"
+        }
+      ]
+    },
+    {
+      "id": "qa_60878",
+      "text": "i would like to know what is pakistan's capital? islamabad.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "what is the capital of pakistan?"
+        }
+      ]
+    },
+    {
+      "id": "qa_61869",
+      "text": "i'm curious about where is the pineal gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "the pineal gland is situated in which part of the body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_62536",
+      "text": "can you tell me the sides count of a octagon is? 8.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.4%",
+          "similar_to": "how many sides has an octagon?"
+        }
+      ]
+    },
+    {
+      "id": "qa_62573",
+      "text": "tell me where is the capital of chile? santiago.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.2%",
+          "similar_to": "what is the capital city of chile?"
+        }
+      ]
+    },
+    {
+      "id": "qa_63103",
+      "text": "please tell me which language is official in brazil? portuguese.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.5%",
+          "similar_to": "what is the official language of brazil?"
+        }
+      ]
+    },
+    {
+      "id": "qa_64189",
+      "text": "please tell me where is the pituitary gland location in a body? brain.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "where is the pituitary gland?"
+        }
+      ]
+    },
+    {
+      "id": "qa_74386",
+      "text": "i would like to know how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_74575",
+      "text": "i'm curious about who is the inventor of telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_78467",
+      "text": "i need to know how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_82660",
+      "text": "could you tell me who is the inventor associated with telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_83553",
+      "text": "please tell me how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_84130",
+      "text": "can you tell me how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_86814",
+      "text": "tell me how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.9%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_89612",
+      "text": "do you know how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_89831",
+      "text": "i'm curious about who is the inventor associated with telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_104258",
+      "text": "how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_108250",
+      "text": "who is the inventor of telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_110067",
+      "text": "please tell me who is the inventor associated with telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_110820",
+      "text": "could you tell me how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_110906",
+      "text": "i would like to know who is the inventor of telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_112476",
+      "text": "i need to know who is the inventor associated with telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_112973",
+      "text": "tell me who is the inventor associated with telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_113449",
+      "text": "i would like to know who is the inventor associated with telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_118062",
+      "text": "i'm curious about how many moons does neptune planet have? 16.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.1%",
+          "similar_to": "how many moons does neptune have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_119178",
+      "text": "who is the inventor associated with telephone invention? alexander graham bell.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.5%",
+          "similar_to": "in what year did alexander graham bell invent the telephone?"
+        }
+      ]
+    },
+    {
+      "id": "qa_184763",
+      "text": "please tell me which sport does toronto maple leafs belong to? hockey.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "the toronto maple leafs are a team in which sport?"
+        }
+      ]
+    },
+    {
+      "id": "qa_185887",
+      "text": "which country is kuala lumpur in? malaysia.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "kuala lumpur is the capital of which country?"
+        }
+      ]
+    },
+    {
+      "id": "qa_190506",
+      "text": "tell me which sport does toronto maple leafs belong to? hockey.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "the toronto maple leafs are a team in which sport?"
+        }
+      ]
+    },
+    {
+      "id": "qa_195073",
+      "text": "i would like to know which sport does toronto maple leafs belong to? hockey.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "the toronto maple leafs are a team in which sport?"
+        }
+      ]
+    },
+    {
+      "id": "qa_202022",
+      "text": "i'm curious about which sport does toronto maple leafs belong to? hockey.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "the toronto maple leafs are a team in which sport?"
+        }
+      ]
+    },
+    {
+      "id": "qa_219808",
+      "text": "which field does enrico fermi belong to? physics.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "with which field is enrico fermi associated?"
+        }
+      ]
+    },
+    {
+      "id": "qa_227665",
+      "text": "which sport does toronto maple leafs belong to? hockey.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "92.3%",
+          "similar_to": "the toronto maple leafs are a team in which sport?"
+        }
+      ]
+    },
+    {
+      "id": "qa_266751",
+      "text": "what is the country of harvard university? usa.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "the us university of harvard is in which state?"
+        }
+      ]
+    },
+    {
+      "id": "qa_285389",
+      "text": "roald dahl author is known for which work? charlie and the chocolate factory.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "charlie and the chocolate factory is a 1964 children's book by british author roald dahl; what is ch"
+        }
+      ]
+    },
+    {
+      "id": "qa_297461",
+      "text": "what is the country of yale university? usa.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "91.1%",
+          "similar_to": "in which us state is yale university?"
+        }
+      ]
+    },
+    {
+      "id": "qa_325974",
+      "text": "tell me what shape is rigatoni pasta? ridged tube.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "what shape is the pasta called rigatoni?"
+        }
+      ]
+    },
+    {
+      "id": "qa_327598",
+      "text": "tell me what shape is fettuccine pasta? ribbon.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "what shape is the pasta fettuccini?"
+        }
+      ]
+    },
+    {
+      "id": "qa_335749",
+      "text": "do you know what shape is rigatoni pasta? ridged tube.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "what shape is the pasta called rigatoni?"
+        }
+      ]
+    },
+    {
+      "id": "qa_347983",
+      "text": "please tell me what shape is fettuccine pasta? ribbon.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "what shape is the pasta fettuccini?"
+        }
+      ]
+    },
+    {
+      "id": "qa_357081",
+      "text": "what shape is rigatoni pasta? ridged tube.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "triviaqa_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "what shape is the pasta called rigatoni?"
+        }
+      ]
+    },
+    {
+      "id": "qa_172",
+      "text": "i'm curious about what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.4%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_321",
+      "text": "tell me what is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2682",
+      "text": "which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.4%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_2849",
+      "text": "tell me how many number of ribs are in the human body? 24.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "how many ribs are there in the human body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_3123",
+      "text": "tell me what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "92.3%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_3983",
+      "text": "please tell me what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.2%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_5346",
+      "text": "can you tell me the sides count of a rhombus is? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.2%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6085",
+      "text": "can you tell me what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.2%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6199",
+      "text": "tell me what is new zealand's capital? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6519",
+      "text": "i would like to know what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.4%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6526",
+      "text": "i need to know how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.2%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_7479",
+      "text": "could you tell me where is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_8394",
+      "text": "where is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.1%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_10446",
+      "text": "tell me which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.2%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_11008",
+      "text": "i'm curious about how many number of ribs are in the human body? 24.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "how many ribs are there in the human body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_12355",
+      "text": "i'm curious about which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "93.9%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_13561",
+      "text": "i need to know the sides count of a rhombus is? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_14678",
+      "text": "i need to know what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_15622",
+      "text": "do you know which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "92.9%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_15671",
+      "text": "please tell me a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "96.3%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_15870",
+      "text": "tell me what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "96.0%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_16240",
+      "text": "what is new zealand's capital? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_16685",
+      "text": "tell me where is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_18616",
+      "text": "do you know a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.5%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_19028",
+      "text": "i would like to know the sides count of a rhombus is? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.4%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_19301",
+      "text": "could you tell me what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.5%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_19591",
+      "text": "i would like to know a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.8%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_22820",
+      "text": "i'm curious about what is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_23561",
+      "text": "please tell me the sides count of a rhombus is? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_23611",
+      "text": "tell me a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "96.1%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_24187",
+      "text": "i need to know a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.9%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_24718",
+      "text": "i need to know what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "93.9%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_25568",
+      "text": "what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "93.1%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_25631",
+      "text": "can you tell me how many number of ribs are in the human body? 24.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "how many ribs are there in the human body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_26068",
+      "text": "could you tell me what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.5%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_28571",
+      "text": "can you tell me where is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_29663",
+      "text": "i'm curious about what is new zealand's capital? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_30983",
+      "text": "i'm curious about how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.5%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_31303",
+      "text": "i would like to know how many number of ribs are in the human body? 24.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.1%",
+          "similar_to": "how many ribs are there in the human body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_32052",
+      "text": "do you know what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.5%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_33961",
+      "text": "i would like to know what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_35090",
+      "text": "can you tell me what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.9%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_37405",
+      "text": "i would like to know which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "93.6%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_37767",
+      "text": "please tell me what is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38013",
+      "text": "please tell me what is new zealand's capital? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38608",
+      "text": "i need to know which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "93.2%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38905",
+      "text": "could you tell me what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_38971",
+      "text": "please tell me what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.8%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39154",
+      "text": "please tell me how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.8%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_39566",
+      "text": "tell me the sides count of a rhombus is? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_40295",
+      "text": "could you tell me a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.9%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_40688",
+      "text": "do you know what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "92.2%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_40764",
+      "text": "what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.9%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_41859",
+      "text": "could you tell me what is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_43024",
+      "text": "i would like to know how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.5%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_43744",
+      "text": "i'm curious about a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.7%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_45334",
+      "text": "how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.7%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_47921",
+      "text": "can you tell me how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "96.0%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_49738",
+      "text": "i would like to know what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_51710",
+      "text": "a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.2%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_52399",
+      "text": "i'm curious about the sides count of a rhombus is? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_52761",
+      "text": "please tell me where is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_53191",
+      "text": "could you tell me the sides count of a rhombus is? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.9%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_54766",
+      "text": "could you tell me how many number of ribs are in the human body? 24.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "how many ribs are there in the human body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_55773",
+      "text": "please tell me what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.4%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_55863",
+      "text": "i'm curious about what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.7%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_56184",
+      "text": "please tell me which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.3%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_58019",
+      "text": "can you tell me a rhombus has how many sides? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "96.2%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_58243",
+      "text": "i would like to know what is the capital of new zealand? wellington.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "what is the capital of new zealand?"
+        }
+      ]
+    },
+    {
+      "id": "qa_58554",
+      "text": "do you know how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.4%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_58906",
+      "text": "could you tell me which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.8%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59345",
+      "text": "i'm curious about what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59615",
+      "text": "what is the official language of netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "96.6%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_59820",
+      "text": "i need to know what is the number of sides on a rhombus? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_60603",
+      "text": "tell me what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.7%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_61417",
+      "text": "could you tell me how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.8%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_62443",
+      "text": "can you tell me which language is official in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "94.7%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_62498",
+      "text": "tell me how many sides does a rhombus have? 4.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "95.9%",
+          "similar_to": "how many sides does a rhombus have?"
+        }
+      ]
+    },
+    {
+      "id": "qa_62849",
+      "text": "please tell me how many number of ribs are in the human body? 24.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.8%",
+          "similar_to": "how many ribs are there in the human body?"
+        }
+      ]
+    },
+    {
+      "id": "qa_63045",
+      "text": "can you tell me what language is spoken officially in netherlands? dutch.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "91.3%",
+          "similar_to": "what is the official language of the netherlands?"
+        }
+      ]
+    },
+    {
+      "id": "qa_242489",
+      "text": "the work of charles dickens author is ? a tale of two cities.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "\u2014a tale of two cities, by charles dickens"
+        }
+      ]
+    },
+    {
+      "id": "qa_244140",
+      "text": "i'm curious about the work of charles dickens author is? a tale of two cities.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "\u2014a tale of two cities, by charles dickens"
+        }
+      ]
+    },
+    {
+      "id": "qa_248532",
+      "text": "charles dickens author is known for which work? a tale of two cities.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.6%",
+          "similar_to": "\u2014a tale of two cities, by charles dickens"
+        }
+      ]
+    },
+    {
+      "id": "qa_303893",
+      "text": "which work is associated with charles dickens author? a tale of two cities.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "\u2014a tale of two cities, by charles dickens"
+        }
+      ]
+    },
+    {
+      "id": "qa_388364",
+      "text": "how many players can play backgammon game? 2.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.8%",
+          "similar_to": "backgammon is a how many player game?"
+        }
+      ]
+    },
+    {
+      "id": "qa_406491",
+      "text": "could you tell me how many players can play backgammon game? 2.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.5%",
+          "similar_to": "backgammon is a how many player game?"
+        }
+      ]
+    },
+    {
+      "id": "qa_416213",
+      "text": "please tell me how many players can play backgammon game? 2.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.2%",
+          "similar_to": "backgammon is a how many player game?"
+        }
+      ]
+    },
+    {
+      "id": "qa_420094",
+      "text": "tell me how many players can play backgammon game? 2.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.7%",
+          "similar_to": "backgammon is a how many player game?"
+        }
+      ]
+    },
+    {
+      "id": "qa_430112",
+      "text": "can you tell me how many players can play backgammon game? 2.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "mmlu_indic_test",
+          "match_type": "semantic",
+          "confidence": "90.4%",
+          "similar_to": "backgammon is a how many player game?"
+        }
+      ]
+    },
+    {
+      "id": "qa_6190",
+      "text": "what is the official language of new zealand? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "boolq_test",
+          "match_type": "semantic",
+          "confidence": "92.7%",
+          "similar_to": "is english an official language of new zealand"
+        }
+      ]
+    },
+    {
+      "id": "qa_14978",
+      "text": "the trachea is part of which bodily system? respiratory.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "boolq_test",
+          "match_type": "semantic",
+          "confidence": "90.3%",
+          "similar_to": "is the trachea part of the upper respiratory system"
+        }
+      ]
+    },
+    {
+      "id": "qa_27984",
+      "text": "which language is official in new zealand? english.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "boolq_test",
+          "match_type": "semantic",
+          "confidence": "93.0%",
+          "similar_to": "is english an official language of new zealand"
+        }
+      ]
+    },
+    {
+      "id": "qa_29283",
+      "text": "what system is the trachea part of? respiratory.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "boolq_test",
+          "match_type": "semantic",
+          "confidence": "91.1%",
+          "similar_to": "is the trachea part of the upper respiratory system"
+        }
+      ]
+    },
+    {
+      "id": "qa_31072",
+      "text": "what system is the eyes part of? nervous.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "boolq_test",
+          "match_type": "semantic",
+          "confidence": "91.6%",
+          "similar_to": "is the eyes part of the nervous system"
+        }
+      ]
+    },
+    {
+      "id": "qa_188614",
+      "text": "tell me the depth of the mediterranean sea is? 1500 m.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "simpleqa_verified_test",
+          "match_type": "semantic",
+          "confidence": "90.1%",
+          "similar_to": "what is the maximum depth of the mediterranean sea in meters?"
+        }
+      ]
+    },
+    {
+      "id": "qa_189371",
+      "text": "how depth is the mediterranean sea? 1500 m.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "simpleqa_verified_test",
+          "match_type": "semantic",
+          "confidence": "91.6%",
+          "similar_to": "what is the maximum depth of the mediterranean sea in meters?"
+        }
+      ]
+    },
+    {
+      "id": "qa_209565",
+      "text": "what is the depth of the mediterranean sea? 1500 m.",
+      "detection_method": "SEMANTIC",
+      "matched_benchmarks": [
+        {
+          "benchmark": "simpleqa_verified_test",
+          "match_type": "semantic",
+          "confidence": "91.0%",
+          "similar_to": "what is the maximum depth of the mediterranean sea in meters?"
+        }
+      ]
+    }
+  ],
+  "status": "REJECTED"
+}
