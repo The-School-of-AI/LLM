@@ -37,6 +37,7 @@ training:
   flops_profile_step: 2
   flops_profile_print: true
   memory_probe_steps: 8
+  enable_mtp: false
 
 deepspeed:
   config_path: "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json"

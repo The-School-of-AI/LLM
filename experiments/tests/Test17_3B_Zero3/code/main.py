@@ -145,6 +145,7 @@ class Config:
         self.memory_probe_steps = config_dict["training"].get(
             "memory_probe_steps", 0
         )
+        self.enable_mtp = config_dict["training"].get("enable_mtp", True)
 
         # Profiler configuration
         # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
@@ -460,8 +461,10 @@ def main():
     # Use len(tokenizer) to include special tokens (pad, eos, etc.)
     vocab_size = len(tokenizer)
     config.vocab_size = vocab_size
+    config.enable_mtp = args.enable_mtp
     print_rank_0(f"  Updated model vocab_size to match tokenizer: {vocab_size:,}")
     print_rank_0(f"    (tokenizer.vocab_size={tokenizer.vocab_size}, len(tokenizer)={len(tokenizer)})")
+    print_rank_0(f"  MTP: {'enabled' if config.enable_mtp else 'DISABLED (diagnostic)'}")
     
     # Prepare vocabulary for Kronecker embeddings if needed
     bpe_vocab = None
