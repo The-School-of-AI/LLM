@@ -7,6 +7,7 @@ data:
   dataset_name: "wikitext"
   dataset_config: "wikitext-103-raw-v1"
   tokenize_num_proc: 8
+  # Workaround for per-step memory growth: reduce to 2048 (or 1024) to run more steps before OOM. See notes/MEMORY_OOM_AND_WORKAROUNDS.md
   max_length: 4096
   num_workers: 16
   tokenized_dataset_path: null
@@ -14,6 +15,7 @@ data:
   local_nvme_cache_dir: null
   require_local_nvme: false
   pack_into_blocks: true
+  # Match block_sizes to max_length if you reduce max_length for memory workaround
   block_sizes: [4096]
   block_size_counts: null
   domain_column: null
