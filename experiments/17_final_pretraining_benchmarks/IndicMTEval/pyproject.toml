@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "benchmark-indic-mt-eval"
+version = "0.1.0"
+description = "IndicMT-Eval: Meta-evaluate MT metrics against human MQM judgments for Indian languages"
+requires-python = ">=3.10"
+dependencies = [
+    "sacrebleu>=2.0",
+    "rouge-score",
+    "scipy",
+    "pandas",
+    "requests",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+neural = [
+    "bert-score",
+    "unbabel-comet>=2.0",
+    "torch",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
+all = [
+    "benchmark-indic-mt-eval[neural,dev]",
+]
+
+[project.scripts]
+indic-mt-eval = "benchmark_indic_mt_eval.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
