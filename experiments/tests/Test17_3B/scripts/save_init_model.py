@@ -37,8 +37,8 @@ def main() -> None:
     sys.path.insert(0, str(code_dir))
 
     from src.data import get_tokenizer
-    from src.models.recurrence_model_1b import KroneckerConfig, KroneckerEmbeddings
-    from src.models.recurrence_model_1b import Model1B, ModelConfig
+    from src.models.recurrence_model_3b_moe import KroneckerConfig, KroneckerEmbeddings
+    from src.models.recurrence_model_3b_moe import Model3B, ModelConfig
     from src.utils import set_seed
     from src.kernels import HAS_TRITON, fused_indexer_topk, triton_sparse_attention
 
@@ -69,7 +69,7 @@ def main() -> None:
         pf_cfg = KroneckerConfig(CHAR_DIM=256, POS_DIM=32, D=8192, length_normalize=True, truncate_long_words=True)
         pf_codec = KroneckerEmbeddings(pf_cfg)
 
-    model = Model1B(
+    model = Model3B(
         config=model_cfg,
         embedding_type=embedding_type,
         bpe_vocab=bpe_vocab,

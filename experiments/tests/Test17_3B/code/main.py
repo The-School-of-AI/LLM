@@ -54,12 +54,12 @@ from src.checkpoint import S3CheckpointManager
 from src.bin_idx_dataloader import build_bin_idx_dataloader
 from src.data import get_dataloaders, get_tokenizer
 from src.kernels import HAS_TRITON
-from src.models.recurrence_model_1b import (
-    Model1B as Model1B_Rev,
-    ModelConfig as ModelConfig_Rev,
-    KroneckerConfig,
-    KroneckerEmbeddings,
-)
+# from src.models.recurrence_model_1b import (
+#     Model1B as Model1B_Rev,
+#     ModelConfig as ModelConfig_Rev,
+#     KroneckerConfig,
+#     KroneckerEmbeddings,
+# )
 from src.models.recurrence_model_3b_moe import (
     Model3B as Model3B_Rev,
     ModelConfig as ModelConfig_Rev,
@@ -131,7 +131,7 @@ class Config:
             "enable_system_metrics", False
         )
         self.init_model_path = config_dict["training"].get("init_model_path")
-        self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 32.0)
+        self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 8.0)
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
 
         # Profiler configuration
@@ -434,7 +434,7 @@ def main():
             f"This test is pinned to model_variant=reversible, got: {variant}"
         )
     ModelConfig = ModelConfig_Rev
-    Model1B = Model1B_Rev
+    Model3B = Model3B_Rev
     print_rank_0("  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...")
 
     # Create model configuration
@@ -479,7 +479,7 @@ def main():
 
     with pipe.stage("model_build"):
         # Create the 1B model
-        model = Model1B(
+        model = Model3B(
             config=config,
             embedding_type=args.embedding_type,
             bpe_vocab=bpe_vocab,

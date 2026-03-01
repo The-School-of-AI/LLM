@@ -4,6 +4,7 @@ triton_cross_entropy.py — Optimized Fused Linear + CE Kernel
 import torch
 import triton
 import triton.language as tl
+import os
 
 _MAX_FUSED_SIZE = 32768
 
@@ -139,7 +140,7 @@ _MAX_FUSED_SIZE = 8192
 # ... (kernel kept as is) ...
 
 class FusedLinearCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, ignore_index=-100, reduction="mean", max_chunk_gb=32.0):
+    def __init__(self, ignore_index=-100, reduction="mean", max_chunk_gb=8.0):
         super().__init__()
         self.ignore_index = ignore_index
         self.reduction = reduction

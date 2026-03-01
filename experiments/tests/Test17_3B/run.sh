@@ -4,7 +4,7 @@ set -euo pipefail
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$TEST_ROOT/code"
 export PYTHONPATH="${TEST_ROOT}:${PYTHONPATH:-}"
-CFG="$TEST_ROOT/configs/test17_1b_dense.yaml"
+CFG="/mnt/local-nvme/LLM/experiments/tests/Test17_3B/configs/test17_3b_moe.yaml"
 RESULTS_DIR="$TEST_ROOT/results"
 INIT_CKPT="$RESULTS_DIR/init/model_init.pt"
 INIT_META="$RESULTS_DIR/init/model_init_meta.json"
