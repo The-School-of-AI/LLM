@@ -1,0 +1,25 @@
+[project]
+name = "indicifeval-evalharness"
+version = "0.1.0"
+description = "Evaluation-only harness to run IndicIFEval via EleutherAI lm-eval."
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+  "lm-eval==0.4.2",
+  "nltk>=3.9",
+  "indic-nlp-library>=0.92",
+  "langdetect>=1.0.9",
+  "immutabledict>=4.2.0",
+  "datasets>=2.18.0",
+  "huggingface-hub>=0.22.0",
+  "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+# HF model execution stack (choose/install an appropriate torch wheel for your system).
+hf = [
+  "torch",
+  "transformers",
+  "accelerate",
+]

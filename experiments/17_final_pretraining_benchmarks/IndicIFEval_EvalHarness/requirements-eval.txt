@@ -1,0 +1,15 @@
+# Pinned for Windows compatibility (avoid extremely long-path task YAMLs)
+lm-eval==0.4.2
+
+# IndicIFEval verification utils
+nltk>=3.9
+indic-nlp-library>=0.92
+langdetect>=1.0.9
+immutabledict>=4.2.0
+
+# HF datasets (often pulled transitively but keep explicit)
+datasets>=2.18.0
+huggingface-hub>=0.22.0
+
+# Safer YAML handling for task configs
+pyyaml>=6.0.1
