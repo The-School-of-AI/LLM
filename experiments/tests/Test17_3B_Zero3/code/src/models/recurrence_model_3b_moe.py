@@ -500,6 +500,8 @@ class ModelConfig:
     # is standard PyTorch (avoids allgathered params being retained when backward runs
     # inside MidpointFunction.backward). Set True if per-step memory grows and OOM.
     use_full_stack_checkpoint = False
+    # Checkpoint each reversible layer separately (no MidpointFunction). Can reduce OOM at 4096.
+    use_per_layer_checkpoint = True
 
 
 # ============================================================================
@@ -1930,6 +1932,7 @@ class Model3B(nn.Module):
         # Reversible Midpoint Integration
         from .reversible_ops_midpoint import ReversibleMidpointStack
         use_full_stack_checkpoint = getattr(config, "use_full_stack_checkpoint", False)
+        use_per_layer_checkpoint = getattr(config, "use_per_layer_checkpoint", True)
         self.stack = ReversibleMidpointStack(
             self.layers,
             step_size=0.25,
@@ -1937,6 +1940,7 @@ class Model3B(nn.Module):
             noise_eps=0.0,
             bootstrap="euler",
             use_full_stack_checkpoint=use_full_stack_checkpoint,
+            use_per_layer_checkpoint=use_per_layer_checkpoint,
         )
 
         self.norm = RMSNorm(config.hidden_size)

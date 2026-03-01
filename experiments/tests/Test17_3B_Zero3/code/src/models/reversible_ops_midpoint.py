@@ -153,6 +153,9 @@ class ReversibleMidpointStack(nn.Module):
       a single gradient checkpoint so backward is standard PyTorch (no custom
       autograd Function). Workaround for ZeRO-3 retaining allgathered params
       when backward is invoked from inside MidpointFunction.backward().
+    - use_per_layer_checkpoint: if True, checkpoint each midpoint layer separately
+      (no MidpointFunction). Backward runs one layer at a time; can help ZeRO-3
+      release params between layers and reduce OOM at 4096.
     """
     def __init__(
         self,
@@ -162,6 +165,7 @@ class ReversibleMidpointStack(nn.Module):
         noise_eps: float = 0.0,
         bootstrap: str = "no_kick",
         use_full_stack_checkpoint: bool = False,
+        use_per_layer_checkpoint: bool = False,
     ):
         super().__init__()
         assert 0.0 <= a <= 1.0, "a must be in [0,1]"
@@ -174,6 +178,7 @@ class ReversibleMidpointStack(nn.Module):
         self.noise_eps = float(noise_eps)
         self.bootstrap = bootstrap
         self.use_full_stack_checkpoint = bool(use_full_stack_checkpoint)
+        self.use_per_layer_checkpoint = bool(use_per_layer_checkpoint)
 
         self.bootstrap_layer = blocks[0]
         self.mid_layers = nn.ModuleList([MidpointBlock(b, step_size=self.h, a=self.a) for b in blocks[1:]])
@@ -213,6 +218,13 @@ class ReversibleMidpointStack(nn.Module):
                 if train:
                     m.train()
 
+    def _one_layer_step(self, layer: MidpointBlock, p_prev: torch.Tensor, p_cur: torch.Tensor):
+        """One midpoint step for a single layer. Used with per-layer checkpoint."""
+        delta, aux = layer.wrapper(p_cur, attention_mask=self._checkpoint_attn_mask)
+        p_next = (layer.a * p_prev) + ((1.0 - layer.a) * p_cur) + (layer.two_h * delta)
+        out_aux = aux if aux is not None else torch.tensor(0.0, device=p_cur.device, dtype=torch.float32)
+        return p_next, out_aux
+
     def forward(self, x, attention_mask=None):
         # Bootstrap creates two states (p_prev, p_cur)
         p_prev = x
@@ -247,7 +259,20 @@ class ReversibleMidpointStack(nn.Module):
         total_aux = aux0 if aux0 is not None else torch.tensor(0.0, device=x.device, dtype=torch.float32)
 
         # Midpoint / leapfrog recurrence
-        if self.use_full_stack_checkpoint:
+        if self.use_per_layer_checkpoint:
+            # Checkpoint each layer separately so backward runs one layer at a time.
+            # No MidpointFunction (no custom backward); may help ZeRO-3 release params between layers.
+            self._checkpoint_attn_mask = attention_mask
+            for layer in self.mid_layers:
+                p_next, aux = grad_checkpoint(
+                    lambda _p_prev, _p_cur, _layer=layer: self._one_layer_step(_layer, _p_prev, _p_cur),
+                    p_prev, p_cur,
+                    use_reentrant=True,
+                )
+                total_aux = total_aux + aux
+                p_prev, p_cur = p_cur, p_next
+            self._checkpoint_attn_mask = None
+        elif self.use_full_stack_checkpoint:
             # Single checkpoint over whole stack: backward is standard PyTorch, so ZeRO-3
             # param release can run. Use reentrant=True because MoE routing can produce
             # different tensor counts on recompute (non-reentrant would raise CheckpointError).

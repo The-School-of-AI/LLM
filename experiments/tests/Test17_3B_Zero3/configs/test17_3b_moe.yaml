@@ -44,6 +44,8 @@ training:
   clear_grad_after_step: false
   # ZeRO-3 workaround: run reversible midpoint stack inside one gradient checkpoint. Can trigger CheckpointError (different tensor count) with MoE. Midpoint layers run in eval during checkpoint to reduce non-determinism.
   use_full_stack_checkpoint: false
+  # Checkpoint each reversible layer separately (no custom backward). Reduces peak memory; try true to fix OOM at 4096.
+  use_per_layer_checkpoint: true
 
 deepspeed:
   config_path: "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json"
