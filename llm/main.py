@@ -182,6 +182,12 @@ class Config:
         self.test_generation = config_dict["generation"]["test_generation"]
         self.generation_prompt = config_dict["generation"]["generation_prompt"]
 
+        # OPUS configuration
+        from llm.opus.config import OpusConfig
+
+        opus_dict = config_dict.get("opus", {})
+        self.opus_config = OpusConfig.from_dict(opus_dict) if opus_dict else OpusConfig()
+
 
 def load_config(config_path: str = "config.yaml") -> Config:
     """
@@ -393,9 +399,19 @@ def main():
                 )
 
             print_rank_0(f"  [bin_idx] Loading train shards from: {args.shard_dir}")
+
+            # OPUS: candidate batch is multiplied
+            loader_batch_size = micro_batch_size
+            if args.opus_config.enabled:
+                loader_batch_size = micro_batch_size * args.opus_config.candidate_multiplier
+                print_rank_0(
+                    f"  [OPUS] Candidate batch size: {loader_batch_size} "
+                    f"(select {int(loader_batch_size * args.opus_config.selection_ratio)})"
+                )
+
             train_loader = build_bin_idx_dataloader(
                 shard_dir=args.shard_dir,
-                batch_size=micro_batch_size,
+                batch_size=loader_batch_size,
                 tokenizer=tokenizer,
                 tokenizer_dir=args.tokenizer_dir,
                 seq_len=args.max_length,
@@ -403,6 +419,20 @@ def main():
                 validate_tokenizer=args.validate_tokenizer,
             )
             print_rank_0(f"  [bin_idx] Train loader ready (seq_len={args.max_length})")
+
+            # OPUS: separate proxy loader from same shards
+            proxy_loader = None
+            if args.opus_config.enabled:
+                proxy_loader = build_bin_idx_dataloader(
+                    shard_dir=args.shard_dir,
+                    batch_size=args.opus_config.proxy_batch_size,
+                    tokenizer=tokenizer,
+                    tokenizer_dir=args.tokenizer_dir,
+                    seq_len=args.max_length,
+                    num_workers=min(2, args.num_workers),
+                    validate_tokenizer=False,
+                )
+                print_rank_0(f"  [OPUS] Proxy loader ready (batch={args.opus_config.proxy_batch_size})")
 
             if args.eval_shard_dir:
                 print_rank_0(
@@ -426,6 +456,8 @@ def main():
                     "  [bin_idx] No eval_shard_dir set — validation/test will be skipped."
                 )
     else:
+        if args.opus_config.enabled:
+            raise ValueError("OPUS data selection requires loader_type='bin_idx'.")
         with pipe.stage("data_load"):
             train_loader, eval_loader, test_loader, dataset_info = get_dataloaders(
                 dataset_name=args.dataset_name,
@@ -562,6 +594,31 @@ def main():
     print_rank_0(f"ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
     # ========================================
+    # Step 3.1: Initialize OPUS Data Selector (if enabled)
+    # ========================================
+    opus_selector = None
+    if args.opus_config.enabled:
+        print_rank_0("\n[3.1/5] Initializing OPUS Data Selector...")
+        from llm.opus import OpusDataSelector, RandomInDistributionProxyProvider
+
+        ds_optimizer = model_engine.optimizer
+        base_optimizer = getattr(ds_optimizer, "optimizer", ds_optimizer)
+
+        # Wrap proxy loader with auto-resetting provider (handles epoch boundaries)
+        proxy_provider = RandomInDistributionProxyProvider(proxy_loader)
+
+        opus_selector = OpusDataSelector(
+            config=args.opus_config,
+            model=model_engine.module,
+            optimizer=base_optimizer,
+            proxy_loader=proxy_provider,
+        )
+        print_rank_0(f"  OPUS mode: {args.opus_config.selection_mode}")
+        print_rank_0(f"  Selection ratio: {args.opus_config.selection_ratio}")
+        print_rank_0(f"  Sketch dim: {args.opus_config.sketch_dim}")
+        print_rank_0("  ✓ OPUS Data Selector initialized")
+
+    # ========================================
     # Step 3.5: Initialize Checkpoint Manager
     # ========================================
     checkpoint_manager = None
@@ -660,6 +717,7 @@ def main():
                     if args.metrics_jsonl_path
                     else None
                 ),
+                opus_selector=opus_selector,
             )
 
         eval_loss = None
