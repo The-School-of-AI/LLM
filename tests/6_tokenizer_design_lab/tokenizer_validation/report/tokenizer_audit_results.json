@@ -77,11 +77,8 @@
   },
   "test4_ghost_tags_per_dataset": {
     "golden_samples": {
-      "ghost_hits": {
-        "[USER]": 128,
-        "[ASSISTANT]": 128
-      },
-      "clean": false
+      "ghost_hits": {},
+      "clean": true
     },
     "raw_shard": {
       "ghost_hits": {
@@ -130,122 +127,147 @@
   },
   "test5_vocab_utilisation": {
     "overall": {
-      "total_tokens": 939538470,
-      "unique_tokens_seen": 127956,
-      "unused_tokens": 3116,
-      "unused_pct": 2.38,
-      "rare_tokens_lt5": 4687,
+      "total_tokens": 1033175543,
+      "unique_tokens_seen": 121046,
+      "unused_tokens": 10026,
+      "unused_pct": 7.65,
+      "rare_tokens_lt5": 5441,
       "unk_tokens": 0,
       "top_50_frequent": [
         {
+          "token_id": 156,
+          "token": "à",
+          "count": 35194438
+        },
+        {
           "token_id": 11,
           "token": ",",
-          "count": 29415812
+          "count": 29419874
         },
         {
-          "token_id": 290,
+          "token_id": 289,
           "token": "Ġthe",
-          "count": 26922106
-        },
-        {
-          "token_id": 13,
-          "token": ".",
-          "count": 20592006
+          "count": 26919944
         },
         {
           "token_id": 220,
           "token": "Ġ",
-          "count": 15577154
+          "count": 21179176
         },
         {
-          "token_id": 324,
+          "token_id": 13,
+          "token": ".",
+          "count": 20599061
+        },
+        {
+          "token_id": 320,
           "token": "Ġof",
-          "count": 14058911
+          "count": 14058049
         },
         {
-          "token_id": 315,
+          "token_id": 312,
           "token": "Ġto",
-          "count": 13723290
+          "count": 13722433
         },
         {
-          "token_id": 323,
+          "token_id": 319,
           "token": "Ġand",
-          "count": 13515137
+          "count": 13514188
         },
         {
           "token_id": 261,
           "token": "Ġa",
-          "count": 11411398
+          "count": 11410725
         },
         {
-          "token_id": 305,
+          "token_id": 302,
           "token": "Ġin",
-          "count": 9317322
+          "count": 9316682
         },
         {
-          "token_id": 372,
+          "token_id": 97,
+          "token": "¤",
+          "count": 8789658
+        },
+        {
+          "token_id": 108,
+          "token": "°",
+          "count": 8407413
+        },
+        {
+          "token_id": 101,
+          "token": "¨",
+          "count": 7611169
+        },
+        {
+          "token_id": 363,
           "token": "Ġis",
-          "count": 7100964
+          "count": 7100441
         },
         {
-          "token_id": 528,
+          "token_id": 508,
           "token": ".Ċ",
-          "count": 6628021
+          "count": 6628295
         },
         {
-          "token_id": 384,
+          "token_id": 99,
+          "token": "¦",
+          "count": 6126368
+        },
+        {
+          "token_id": 373,
           "token": "Ġfor",
-          "count": 5314411
+          "count": 5314116
         },
         {
           "token_id": 198,
           "token": "Ċ",
-          "count": 5160831
+          "count": 5167699
         },
         {
-          "token_id": 464,
+          "token_id": 447,
           "token": "Ġthat",
-          "count": 5093832
+          "count": 5093617
         },
         {
           "token_id": 25,
           "token": ":",
-          "count": 4393847
+          "count": 4391843
         },
         {
           "token_id": 16,
           "token": "1",
-          "count": 4290447
+          "count": 4289873
         },
         {
-          "token_id": 342,
+          "token_id": 337,
           "token": "Ġ(",
-          "count": 4012764
+          "count": 4012713
         },
         {
-          "token_id": 463,
+          "token_id": 446,
           "token": "Ġwith",
-          "count": 3929034
+          "count": 3928762
         },
         {
-          "token_id": 381,
+          "token_id": 370,
           "token": "Ġ\"",
-          "count": 3855077
+          "count": 3854616
         },
         {
-          "token_id": 391,
+          "token_id": 379,
           "token": "Ġon",
-          "count": 3784573
+          "count": 3784370
         },
         {
           "token_id": 15,
           "token": "0",
-          "count": 3575380
+          "count": 3574903
         },
         {
           "token_id": 17,
           "token": "2",
-          "count": 3494170
+          "count": 3493529
         },
         {
           "token_id": 271,
@@ -253,463 +275,438 @@
           "count": 3491737
         },
         {
-          "token_id": 313,
+          "token_id": 310,
           "token": "Ġ=",
-          "count": 3420355
+          "count": 3419501
         },
         {
-          "token_id": 349,
+          "token_id": 122,
+          "token": "¾",
+          "count": 3339100
+        },
+        {
+          "token_id": 344,
           "token": "ĠI",
-          "count": 3313233
+          "count": 3312806
         },
         {
-          "token_id": 460,
+          "token_id": 443,
           "token": "Ġit",
-          "count": 3231437
+          "count": 3231320
         },
         {
-          "token_id": 461,
+          "token_id": 444,
           "token": "Ġyou",
-          "count": 3127098
+          "count": 3126997
         },
         {
-          "token_id": 452,
+          "token_id": 437,
           "token": "Ġas",
-          "count": 3081811
+          "count": 3080338
         },
         {
           "token_id": 59,
           "token": "\\",
-          "count": 3072744
+          "count": 3071739
         },
         {
           "token_id": 8,
           "token": ")",
-          "count": 2979563
+          "count": 2978742
         },
         {
-          "token_id": 402,
+          "token_id": 390,
           "token": "Ġbe",
-          "count": 2869432
+          "count": 2869254
         },
         {
-          "token_id": 523,
+          "token_id": 503,
           "token": "Ġare",
-          "count": 2868875
+          "count": 2868739
         },
         {
           "token_id": 90,
           "token": "{",
-          "count": 2780642
+          "count": 2780016
         },
         {
-          "token_id": 627,
+          "token_id": 595,
           "token": "Ġwas",
-          "count": 2643747
+          "count": 2643663
         },
         {
           "token_id": 12,
           "token": "-",
-          "count": 2628040
+          "count": 2626338
         },
         {
-          "token_id": 308,
+          "token_id": 305,
           "token": "ĠĠĠĠĠĠĠ",
           "count": 2600513
         },
         {
           "token_id": 1,
           "token": "\"",
-          "count": 2553378
+          "count": 2551529
         },
         {
-          "token_id": 474,
+          "token_id": 235,
+          "token": "į",
+          "count": 2521573
+        },
+        {
+          "token_id": 457,
           "token": "Ġthis",
-          "count": 2454281
+          "count": 2454205
         },
         {
-          "token_id": 588,
+          "token_id": 562,
           "token": "ĠThe",
-          "count": 2309015
+          "count": 2308822
         },
         {
-          "token_id": 615,
+          "token_id": 585,
           "token": "Ġby",
-          "count": 2305970
+          "count": 2305833
         },
         {
-          "token_id": 513,
+          "token_id": 494,
           "token": "Ġat",
-          "count": 2295491
+          "count": 2295375
         },
         {
-          "token_id": 632,
+          "token_id": 100,
+          "token": "§",
+          "count": 2287188
+        },
+        {
+          "token_id": 600,
           "token": "Ġhave",
-          "count": 2286049
-        },
-        {
-          "token_id": 559,
-          "token": "Ġfrom",
-          "count": 2284849
-        },
-        {
-          "token_id": 518,
-          "token": "Ġ$",
-          "count": 2157956
-        },
-        {
-          "token_id": 2027,
-          "token": "Ġ\\",
-          "count": 2112123
-        },
-        {
-          "token_id": 480,
-          "token": "Ġor",
-          "count": 1984950
-        },
-        {
-          "token_id": 430,
-          "token": "Ġan",
-          "count": 1936328
-        },
-        {
-          "token_id": 590,
-          "token": "Ġnot",
-          "count": 1896280
-        },
-        {
-          "token_id": 18,
-          "token": "3",
-          "count": 1886256
-        },
-        {
-          "token_id": 727,
-          "token": "âĢĻs",
-          "count": 1785975
+          "count": 2285980
         }
       ],
       "bottom_50_nonzero": [
         {
-          "token_id": 123336,
-          "token": "à°¸à±įà°¤à±ģà°¤",
+          "token_id": 36848,
+          "token": "âĢĻent",
           "count": 1
         },
         {
-          "token_id": 126235,
-          "token": "à°¿à°Ĥà°ļà°¾à°¡à±ģ",
-          "count": 1
-        },
-        {
-          "token_id": 129740,
-          "token": "Ġà°ħà°¦à±ĩ",
-          "count": 1
-        },
-        {
-          "token_id": 123379,
-          "token": "à±ģà°¤à±Ĥ",
-          "count": 1
-        },
-        {
-          "token_id": 120312,
-          "token": "à°°à°¿à°Ĺ",
-          "count": 1
-        },
-        {
-          "token_id": 121271,
-          "token": "âĢĮà°ķà±ģ",
-          "count": 1
-        },
-        {
-          "token_id": 128347,
-          "token": "Ġà°¤à°Ĺà±įà°Ĺ",
-          "count": 1
-        },
-        {
-          "token_id": 126053,
-          "token": "à±ģà°Ĥà°¦à°¨à°¿",
-          "count": 1
-        },
-        {
-          "token_id": 92409,
+          "token_id": 91418,
           "token": "Ġblandt",
           "count": 1
         },
         {
-          "token_id": 85768,
+          "token_id": 84793,
           "token": "urerie",
           "count": 1
         },
         {
-          "token_id": 105210,
+          "token_id": 104193,
           "token": "ĠdÃ©an",
           "count": 1
         },
         {
-          "token_id": 104130,
+          "token_id": 103114,
           "token": "irithe",
           "count": 1
         },
         {
-          "token_id": 100221,
+          "token_id": 99215,
           "token": "Ġngopfu",
           "count": 1
         },
         {
-          "token_id": 79890,
+          "token_id": 78945,
           "token": "Ġhikuva",
           "count": 1
         },
         {
-          "token_id": 92937,
+          "token_id": 91946,
           "token": "Ġmisava",
           "count": 1
         },
         {
-          "token_id": 77777,
+          "token_id": 76838,
           "token": "Ġantre",
           "count": 1
         },
         {
-          "token_id": 103826,
+          "token_id": 102810,
           "token": "Ġvrijblij",
           "count": 1
         },
         {
-          "token_id": 108507,
+          "token_id": 107480,
           "token": "Ġdaju",
           "count": 1
         },
         {
-          "token_id": 127665,
-          "token": "à¶°à·Ĭ",
+          "token_id": 125892,
+          "token": "Ġà¶ħà¶¯",
           "count": 1
         },
         {
-          "token_id": 130473,
-          "token": "Ġà¶´à·ı",
+          "token_id": 125315,
+          "token": "Ġà·Ħà·ı",
           "count": 1
         },
         {
-          "token_id": 129386,
-          "token": "Ġà¶¸à·Ĵ",
+          "token_id": 128947,
+          "token": "âĢįà¶ºà·ı",
           "count": 1
         },
         {
-          "token_id": 127048,
-          "token": "Ġà·ĥà¶Ĥ",
+          "token_id": 128353,
+          "token": "Ġà·Ģà·Ĵà·ĥ",
           "count": 1
         },
         {
-          "token_id": 130393,
-          "token": "Ġà¶ļà¶½",
+          "token_id": 118896,
+          "token": "âĢįà¶»",
           "count": 1
         },
         {
-          "token_id": 124634,
-          "token": "Ġà¶ļà·Ĵà¶»",
+          "token_id": 126829,
+          "token": "à·Ħà·Ķ",
           "count": 1
         },
         {
-          "token_id": 123849,
-          "token": "à¶Ĥà¶ļ",
+          "token_id": 127915,
+          "token": "Ġà¶ļà·Ĵ",
           "count": 1
         },
         {
-          "token_id": 129348,
+          "token_id": 126769,
+          "token": "Ġà¶¶à¶½",
+          "count": 1
+        },
+        {
+          "token_id": 129354,
           "token": "Ġà·Ģà·ļ",
           "count": 1
         },
         {
-          "token_id": 129049,
-          "token": "Ġà¶ļà·Ĵà¶»à·ĵà¶¸",
+          "token_id": 125539,
+          "token": "Ġà¶¸à·ı",
           "count": 1
         },
         {
-          "token_id": 125672,
-          "token": "à¶ĳ",
-          "count": 1
-        },
-        {
-          "token_id": 127244,
-          "token": "à¶ļà·ı",
-          "count": 1
-        },
-        {
-          "token_id": 90325,
+          "token_id": 89338,
           "token": "Ġcomh",
           "count": 1
         },
         {
-          "token_id": 100839,
+          "token_id": 99832,
           "token": "Ġgehaald",
           "count": 1
         },
         {
-          "token_id": 75189,
+          "token_id": 74262,
           "token": "Ġpuud",
           "count": 1
         },
         {
-          "token_id": 96564,
+          "token_id": 95567,
           "token": "Ġfogu",
           "count": 1
         },
         {
-          "token_id": 93539,
+          "token_id": 92546,
           "token": "Ġraam",
           "count": 1
         },
         {
-          "token_id": 109768,
+          "token_id": 108737,
           "token": "Ġalkaa",
           "count": 1
         },
         {
-          "token_id": 96747,
+          "token_id": 95750,
           "token": "Ġvseh",
           "count": 1
         },
         {
-          "token_id": 73205,
+          "token_id": 72285,
           "token": "ydym",
           "count": 1
         },
         {
-          "token_id": 99638,
+          "token_id": 98632,
           "token": "Ġjalma",
           "count": 1
         },
         {
-          "token_id": 77984,
+          "token_id": 77044,
           "token": "ovati",
           "count": 1
         },
         {
-          "token_id": 38322,
+          "token_id": 37607,
           "token": "ovendien",
           "count": 1
         },
         {
-          "token_id": 116863,
+          "token_id": 115812,
           "token": "ĠDaarmee",
           "count": 1
         },
         {
-          "token_id": 95878,
+          "token_id": 94881,
           "token": "Ġluisteren",
           "count": 1
         },
         {
-          "token_id": 87965,
+          "token_id": 86983,
           "token": "ĠSinds",
           "count": 1
         },
         {
-          "token_id": 27632,
+          "token_id": 26990,
           "token": "Ġeenvoud",
           "count": 1
         },
         {
-          "token_id": 103246,
+          "token_id": 102231,
           "token": "ĠZelfs",
           "count": 1
         },
         {
-          "token_id": 80455,
+          "token_id": 79507,
           "token": "Ġinwoners",
           "count": 1
         },
         {
-          "token_id": 116894,
+          "token_id": 115843,
           "token": "Ġdoelgroep",
           "count": 1
         },
         {
-          "token_id": 80601,
+          "token_id": 79653,
           "token": "Ġbevol",
           "count": 1
         },
         {
-          "token_id": 116040,
+          "token_id": 114990,
           "token": "Ġverkeers",
           "count": 1
         },
         {
-          "token_id": 78790,
+          "token_id": 116533,
+          "token": "Ġvuil",
+          "count": 1
+        },
+        {
+          "token_id": 77849,
           "token": "Ġbereid",
+          "count": 1
+        },
+        {
+          "token_id": 71568,
+          "token": "Ġinwon",
+          "count": 1
+        },
+        {
+          "token_id": 115050,
+          "token": "Ġbanden",
+          "count": 1
+        },
+        {
+          "token_id": 92121,
+          "token": "Ġinspiratie",
+          "count": 1
+        },
+        {
+          "token_id": 98000,
+          "token": "Ġverslag",
+          "count": 1
+        },
+        {
+          "token_id": 77668,
+          "token": "Ġwoningen",
+          "count": 1
+        },
+        {
+          "token_id": 110144,
+          "token": "Ġbeteg",
+          "count": 1
+        },
+        {
+          "token_id": 93006,
+          "token": "Ġgeloven",
           "count": 1
         }
       ]
     },
     "per_dataset": {
       "golden_samples": {
-        "total_tokens": 78799,
-        "unique_tokens_seen": 10435,
-        "unused_tokens": 120637,
-        "unused_pct": 92.04,
+        "total_tokens": 0,
+        "unique_tokens_seen": 0,
+        "unused_tokens": 131072,
+        "unused_pct": 100.0,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "raw_shard": {
-        "total_tokens": 906188653,
-        "unique_tokens_seen": 127608,
-        "unused_tokens": 3464,
-        "unused_pct": 2.64,
+        "total_tokens": 929851093,
+        "unique_tokens_seen": 120283,
+        "unused_tokens": 10789,
+        "unused_pct": 8.23,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "sft_group1_assamese": {
-        "total_tokens": 4805526,
-        "unique_tokens_seen": 1112,
-        "unused_tokens": 129960,
-        "unused_pct": 99.15,
+        "total_tokens": 17840446,
+        "unique_tokens_seen": 491,
+        "unused_tokens": 130581,
+        "unused_pct": 99.63,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "sft_group1_hindi": {
-        "total_tokens": 4103597,
-        "unique_tokens_seen": 1697,
-        "unused_tokens": 129375,
-        "unused_pct": 98.71,
+        "total_tokens": 12006671,
+        "unique_tokens_seen": 982,
+        "unused_tokens": 130090,
+        "unused_pct": 99.25,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "sft_group1_marathi": {
-        "total_tokens": 4613863,
-        "unique_tokens_seen": 2769,
-        "unused_tokens": 128303,
-        "unused_pct": 97.89,
+        "total_tokens": 18289840,
+        "unique_tokens_seen": 2073,
+        "unused_tokens": 128999,
+        "unused_pct": 98.42,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "sft_group1_punjabi": {
-        "total_tokens": 7043691,
-        "unique_tokens_seen": 404,
-        "unused_tokens": 130668,
-        "unused_pct": 99.69,
+        "total_tokens": 23710441,
+        "unique_tokens_seen": 306,
+        "unused_tokens": 130766,
+        "unused_pct": 99.77,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "sft_group1_telugu": {
-        "total_tokens": 5294420,
-        "unique_tokens_seen": 2056,
-        "unused_tokens": 129016,
-        "unused_pct": 98.43,
+        "total_tokens": 24067382,
+        "unique_tokens_seen": 1388,
+        "unused_tokens": 129684,
+        "unused_pct": 98.94,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "sft_group2": {
         "total_tokens": 6026727,
-        "unique_tokens_seen": 1289,
-        "unused_tokens": 129783,
+        "unique_tokens_seen": 1288,
+        "unused_tokens": 129784,
         "unused_pct": 99.02,
         "unk_tokens": 0,
         "unk_pct": 0.0
       },
       "sft_group3": {
-        "total_tokens": 1383194,
-        "unique_tokens_seen": 1655,
-        "unused_tokens": 129417,
+        "total_tokens": 1382943,
+        "unique_tokens_seen": 1653,
+        "unused_tokens": 129419,
         "unused_pct": 98.74,
         "unk_tokens": 0,
         "unk_pct": 0.0
@@ -718,103 +715,89 @@
   },
   "test6_length_distribution": {
     "per_dataset": {
-      "golden_samples": {
-        "count": 128,
-        "total": 78799,
-        "mean": 615.6,
-        "median": 486.5,
-        "std": 1150.8,
-        "min": 25,
-        "p25": 173,
-        "p75": 749,
-        "p90": 1042,
-        "p95": 1367,
-        "p99": 2548,
-        "max": 12617
-      },
       "raw_shard": {
         "count": 630140,
-        "total": 906188653,
-        "mean": 1438.1,
-        "median": 971.0,
-        "std": 2019.7,
+        "total": 929851093,
+        "mean": 1475.6,
+        "median": 981.0,
+        "std": 2337.3,
         "min": 4,
-        "p25": 678,
-        "p75": 1492,
-        "p90": 2583,
-        "p95": 3814,
-        "p99": 8241,
-        "max": 233006
+        "p25": 684,
+        "p75": 1512,
+        "p90": 2657,
+        "p95": 3926,
+        "p99": 8711,
+        "max": 412802
       },
       "sft_group1_assamese": {
         "count": 12294,
-        "total": 4805526,
-        "mean": 390.9,
-        "median": 391.0,
-        "std": 17.0,
-        "min": 330,
-        "p25": 379,
-        "p75": 402,
-        "p90": 413,
-        "p95": 419,
-        "p99": 432,
-        "max": 454
+        "total": 17840446,
+        "mean": 1451.2,
+        "median": 1452.0,
+        "std": 61.5,
+        "min": 1170,
+        "p25": 1409,
+        "p75": 1492,
+        "p90": 1531,
+        "p95": 1553,
+        "p99": 1595,
+        "max": 1720
       },
       "sft_group1_hindi": {
         "count": 14323,
-        "total": 4103597,
-        "mean": 286.5,
-        "median": 286.0,
-        "std": 13.8,
-        "min": 241,
-        "p25": 277,
-        "p75": 295,
-        "p90": 305,
-        "p95": 310,
-        "p99": 321,
-        "max": 345
+        "total": 12006671,
+        "mean": 838.3,
+        "median": 838.0,
+        "std": 49.9,
+        "min": 638,
+        "p25": 805,
+        "p75": 872,
+        "p90": 902,
+        "p95": 921,
+        "p99": 955,
+        "max": 1045
       },
       "sft_group1_marathi": {
         "count": 16101,
-        "total": 4613863,
-        "mean": 286.6,
-        "median": 286.0,
-        "std": 16.1,
-        "min": 239,
-        "p25": 275,
-        "p75": 297,
-        "p90": 308,
-        "p95": 314,
-        "p99": 328,
-        "max": 371
+        "total": 18289840,
+        "mean": 1135.9,
+        "median": 1135.0,
+        "std": 59.1,
+        "min": 923,
+        "p25": 1095,
+        "p75": 1175,
+        "p90": 1213,
+        "p95": 1236,
+        "p99": 1277,
+        "max": 1376
       },
       "sft_group1_punjabi": {
         "count": 16852,
-        "total": 7043691,
-        "mean": 418.0,
-        "median": 418.0,
-        "std": 15.5,
-        "min": 358,
-        "p25": 407,
-        "p75": 428,
-        "p90": 438,
-        "p95": 443,
-        "p99": 453,
-        "max": 778
+        "total": 23710441,
+        "mean": 1407.0,
+        "median": 1406.0,
+        "std": 48.1,
+        "min": 1257,
+        "p25": 1374,
+        "p75": 1439,
+        "p90": 1469,
+        "p95": 1486,
+        "p99": 1518,
+        "max": 2573
       },
       "sft_group1_telugu": {
         "count": 17716,
-        "total": 5294420,
-        "mean": 298.8,
-        "median": 298.0,
-        "std": 14.5,
-        "min": 259,
-        "p25": 289,
-        "p75": 308,
-        "p90": 318,
-        "p95": 325,
-        "p99": 339,
-        "max": 380
+        "total": 24067382,
+        "mean": 1358.5,
+        "median": 1356.0,
+        "std": 56.0,
+        "min": 1175,
+        "p25": 1320,
+        "p75": 1395,
+        "p90": 1433,
+        "p95": 1455,
+        "p99": 1495,
+        "max": 1726
       },
       "sft_group2": {
         "count": 9710,
@@ -832,10 +815,10 @@
       },
       "sft_group3": {
         "count": 2512,
-        "total": 1383194,
-        "mean": 550.6,
+        "total": 1382943,
+        "mean": 550.5,
         "median": 542.0,
-        "std": 37.1,
+        "std": 37.2,
         "min": 183,
         "p25": 527,
         "p75": 571,
@@ -846,18 +829,18 @@
       }
     },
     "overall": {
-      "count": 719776,
-      "total": 939538470,
-      "mean": 1305.3,
-      "median": 873.0,
-      "std": 1922.7,
+      "count": 719648,
+      "total": 1033175543,
+      "mean": 1435.7,
+      "median": 1025.0,
+      "std": 2192.3,
       "min": 4,
-      "p25": 598,
-      "p75": 1393,
-      "p90": 2370,
-      "p95": 3569,
-      "p99": 7605,
-      "max": 233006
+      "p25": 701,
+      "p75": 1453,
+      "p90": 2438,
+      "p95": 3678,
+      "p99": 8019,
+      "max": 412802
     }
   },
   "test7_sft_masking": {
@@ -896,45 +879,12 @@
         "unmasked_tokens": 0,
         "pad_masked_ok": true,
         "assistant_detected": false
-      },
-      {
-        "format": "golden_math_reasoning",
-        "n_tokens": 449,
-        "unmasked_tokens": 0,
-        "pad_masked_ok": true,
-        "assistant_detected": false
-      },
-      {
-        "format": "golden_math_reasoning",
-        "n_tokens": 367,
-        "unmasked_tokens": 0,
-        "pad_masked_ok": true,
-        "assistant_detected": false
-      },
-      {
-        "format": "golden_math_reasoning",
-        "n_tokens": 408,
-        "unmasked_tokens": 0,
-        "pad_masked_ok": true,
-        "assistant_detected": false
       }
     ],
     "failures": [
       {
         "format": "fim",
         "preview": "<|fim_prefix|>def add(a, b):<|fim_suffix|>    return result<|fim_middle|>    result = a + b\n"
-      },
-      {
-        "format": "golden_math_reasoning",
-        "preview": "[USER] Janet hires six employees. Four of them are warehouse workers who make $15/hour, and the other two are managers w"
-      },
-      {
-        "format": "golden_math_reasoning",
-        "preview": "[USER] In April, Tank gathered 10 more Easter eggs than Emma in their first round of egg hunt. However, Emma gathered tw"
-      },
-      {
-        "format": "golden_math_reasoning",
-        "preview": "[USER] Sam works at the Widget Factory, assembling Widgets. He can assemble 1 widget every 10 minutes. Jack from the loa"
       }
     ]
   },
@@ -1008,91 +958,91 @@
   "test9_multilingual": {
     "languages": {
       "Hindi": {
-        "n_tokens": 14,
+        "n_tokens": 27,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Telugu": {
-        "n_tokens": 14,
+        "n_tokens": 77,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Marathi": {
-        "n_tokens": 16,
+        "n_tokens": 80,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Punjabi": {
-        "n_tokens": 18,
+        "n_tokens": 75,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Assamese": {
-        "n_tokens": 17,
+        "n_tokens": 115,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Bengali": {
-        "n_tokens": 13,
+        "n_tokens": 84,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Tamil": {
-        "n_tokens": 14,
+        "n_tokens": 108,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Kannada": {
-        "n_tokens": 13,
+        "n_tokens": 93,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Gujarati": {
-        "n_tokens": 15,
+        "n_tokens": 92,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Odia": {
-        "n_tokens": 46,
+        "n_tokens": 115,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Malayalam": {
-        "n_tokens": 14,
+        "n_tokens": 111,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Arabic": {
-        "n_tokens": 65,
+        "n_tokens": 70,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Chinese": {
-        "n_tokens": 28,
+        "n_tokens": 42,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Japanese": {
-        "n_tokens": 36,
+        "n_tokens": 54,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Russian": {
-        "n_tokens": 97,
+        "n_tokens": 100,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
@@ -1122,13 +1072,13 @@
         "unk_pct": 0.0
       },
       "Math": {
-        "n_tokens": 20,
+        "n_tokens": 23,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
       },
       "Mixed": {
-        "n_tokens": 20,
+        "n_tokens": 43,
         "round_trip_ok": true,
         "unk_count": 0,
         "unk_pct": 0.0
@@ -1137,7 +1087,7 @@
   },
   "test10_semantic_duplicates": {
     "duplicates_found": [],
-    "byte_fragment_dupe_groups": 10,
+    "byte_fragment_dupe_groups": 1,
     "total_checked": 131072
   },
   "test11_edge_cases": {
@@ -1193,21 +1143,21 @@
       },
       {
         "label": "100 emoji",
-        "n_tokens": 100,
+        "n_tokens": 400,
         "unk_count": 0,
         "ok": true,
         "error": null
       },
       {
         "label": "50 ZWSP",
-        "n_tokens": 13,
+        "n_tokens": 150,
         "unk_count": 0,
         "ok": true,
         "error": null
       },
       {
         "label": "multi-script",
-        "n_tokens": 16,
+        "n_tokens": 34,
         "unk_count": 0,
         "ok": true,
         "error": null
@@ -1251,118 +1201,118 @@
         "lang_code": "en",
         "source": "corpus",
         "n_chars": 3812789796,
-        "n_tokens": 900852419,
-        "tokens_per_char": 0.2363,
-        "chars_per_token": 4.23,
-        "byte_fallback_count": 7951010,
-        "byte_fallback_pct": 0.88
-      },
-      "Odia": {
-        "lang_code": "or",
-        "source": "corpus",
-        "n_chars": 999586,
-        "n_tokens": 970898,
-        "tokens_per_char": 0.9713,
-        "chars_per_token": 1.03,
-        "byte_fallback_count": 278306,
-        "byte_fallback_pct": 28.66
+        "n_tokens": 904343851,
+        "tokens_per_char": 0.2372,
+        "chars_per_token": 4.22,
+        "byte_fallback_count": 11877919,
+        "byte_fallback_pct": 1.31
       },
       "Assamese": {
         "lang_code": "as",
         "source": "corpus",
         "n_chars": 1773865,
-        "n_tokens": 739279,
-        "tokens_per_char": 0.4168,
-        "chars_per_token": 2.4,
-        "byte_fallback_count": 10497,
-        "byte_fallback_pct": 1.42
-      },
-      "Punjabi": {
-        "lang_code": "pa",
-        "source": "corpus",
-        "n_chars": 1407076,
-        "n_tokens": 732434,
-        "tokens_per_char": 0.5205,
-        "chars_per_token": 1.92,
-        "byte_fallback_count": 33977,
-        "byte_fallback_pct": 4.64
-      },
-      "Bengali": {
-        "lang_code": "bn",
-        "source": "corpus",
-        "n_chars": 1394541,
-        "n_tokens": 515562,
-        "tokens_per_char": 0.3697,
-        "chars_per_token": 2.7,
-        "byte_fallback_count": 8073,
-        "byte_fallback_pct": 1.57
+        "n_tokens": 3629325,
+        "tokens_per_char": 2.046,
+        "chars_per_token": 0.49,
+        "byte_fallback_count": 3288854,
+        "byte_fallback_pct": 90.62
       },
       "Tamil": {
         "lang_code": "ta",
         "source": "corpus",
         "n_chars": 1365158,
-        "n_tokens": 479759,
-        "tokens_per_char": 0.3514,
-        "chars_per_token": 2.85,
-        "byte_fallback_count": 7950,
-        "byte_fallback_pct": 1.66
+        "n_tokens": 3305972,
+        "tokens_per_char": 2.4217,
+        "chars_per_token": 0.41,
+        "byte_fallback_count": 3120870,
+        "byte_fallback_pct": 94.4
+      },
+      "Punjabi": {
+        "lang_code": "pa",
+        "source": "corpus",
+        "n_chars": 1407076,
+        "n_tokens": 2793964,
+        "tokens_per_char": 1.9857,
+        "chars_per_token": 0.5,
+        "byte_fallback_count": 2477441,
+        "byte_fallback_pct": 88.67
       },
       "Kannada": {
         "lang_code": "kn",
         "source": "corpus",
         "n_chars": 1211631,
-        "n_tokens": 461325,
-        "tokens_per_char": 0.3807,
-        "chars_per_token": 2.63,
-        "byte_fallback_count": 8406,
-        "byte_fallback_pct": 1.82
+        "n_tokens": 2784359,
+        "tokens_per_char": 2.298,
+        "chars_per_token": 0.44,
+        "byte_fallback_count": 2597474,
+        "byte_fallback_pct": 93.29
       },
-      "Gujarati": {
-        "lang_code": "gu",
+      "Bengali": {
+        "lang_code": "bn",
         "source": "corpus",
-        "n_chars": 1135805,
-        "n_tokens": 439048,
-        "tokens_per_char": 0.3866,
-        "chars_per_token": 2.59,
-        "byte_fallback_count": 9602,
-        "byte_fallback_pct": 2.19
+        "n_chars": 1394541,
+        "n_tokens": 2733284,
+        "tokens_per_char": 1.96,
+        "chars_per_token": 0.51,
+        "byte_fallback_count": 2485535,
+        "byte_fallback_pct": 90.94
+      },
+      "Odia": {
+        "lang_code": "or",
+        "source": "corpus",
+        "n_chars": 999586,
+        "n_tokens": 2566897,
+        "tokens_per_char": 2.568,
+        "chars_per_token": 0.39,
+        "byte_fallback_count": 2393088,
+        "byte_fallback_pct": 93.23
       },
       "Marathi": {
         "lang_code": "mr",
         "source": "corpus",
         "n_chars": 1089079,
-        "n_tokens": 400013,
-        "tokens_per_char": 0.3673,
-        "chars_per_token": 2.72,
-        "byte_fallback_count": 2137,
-        "byte_fallback_pct": 0.53
+        "n_tokens": 2294821,
+        "tokens_per_char": 2.1071,
+        "chars_per_token": 0.47,
+        "byte_fallback_count": 2108529,
+        "byte_fallback_pct": 91.88
       },
       "Malayalam": {
         "lang_code": "ml",
         "source": "corpus",
         "n_chars": 900487,
-        "n_tokens": 310686,
-        "tokens_per_char": 0.345,
-        "chars_per_token": 2.9,
-        "byte_fallback_count": 7550,
-        "byte_fallback_pct": 2.43
+        "n_tokens": 2237954,
+        "tokens_per_char": 2.4853,
+        "chars_per_token": 0.4,
+        "byte_fallback_count": 2128175,
+        "byte_fallback_pct": 95.09
+      },
+      "Gujarati": {
+        "lang_code": "gu",
+        "source": "corpus",
+        "n_chars": 1135805,
+        "n_tokens": 2069918,
+        "tokens_per_char": 1.8224,
+        "chars_per_token": 0.55,
+        "byte_fallback_count": 1846772,
+        "byte_fallback_pct": 89.22
       },
       "Hindi": {
         "lang_code": "hi",
         "source": "corpus",
         "n_chars": 908191,
-        "n_tokens": 287230,
-        "tokens_per_char": 0.3163,
-        "chars_per_token": 3.16,
-        "byte_fallback_count": 1438,
-        "byte_fallback_pct": 0.5
+        "n_tokens": 1090748,
+        "tokens_per_char": 1.201,
+        "chars_per_token": 0.83,
+        "byte_fallback_count": 892895,
+        "byte_fallback_pct": 81.86
       }
     },
-    "overall_byte_fallback_pct": 0.96,
-    "byte_fallback_tokens_in_vocab": 1324,
+    "overall_byte_fallback_pct": 11.34,
+    "byte_fallback_tokens_in_vocab": 128,
     "tokens_per_char_per_language": {},
-    "corpus_total_tokens": 939538470,
-    "corpus_byte_tokens": 9046539
+    "corpus_total_tokens": 1033175543,
+    "corpus_byte_tokens": 117210969
   },
   "test14_numeric_tokenization": {
     "cases": [
@@ -1647,14 +1597,17 @@
       {
         "label": "equation",
         "input": "x = (-b ± √(b²-4ac)) / 2a",
-        "n_tokens": 17,
+        "n_tokens": 20,
         "pieces": [
           "x",
           "Ġ=",
           "Ġ(-",
           "b",
           "ĠÂ±",
-          "ĠâĪļ",
+          "Ġ",
+          "â",
+          "Ī",
+          "ļ",
           "(",
           "b",
           "Â²",
@@ -1831,29 +1784,33 @@
       {
         "input": "'＜|assistant|＞'",
         "desc": "fullwidth angle brackets (U+FF1C/FF1E)",
-        "n_tokens": 6,
+        "n_tokens": 10,
         "injects_assistant_token": false,
         "pieces": [
-          "ï¼ľ",
+          "ï",
+          "¼",
+          "ľ",
           "|",
           "ass",
           "istant",
           "|",
-          "ï¼ŀ"
+          "ï"
         ]
       },
       {
         "input": "'<｜assistant｜>'",
         "desc": "fullwidth pipe (U+FF5C)",
-        "n_tokens": 6,
+        "n_tokens": 10,
         "injects_assistant_token": false,
         "pieces": [
           "<",
-          "ï½ľ",
+          "ï",
+          "½",
+          "ľ",
           "ass",
           "istant",
-          "ï½ľ",
-          ">"
+          "ï",
+          "½"
         ]
       },
       {
@@ -1966,261 +1923,336 @@
   "test18_cross_dataset_drift": {
     "exclusive_tokens": {
       "golden_samples": {
-        "count": 11,
-        "top_10": [
-          {
-            "token_id": 130819,
-            "token": "<think>",
-            "count": 8
-          },
-          {
-            "token_id": 130820,
-            "token": "</think>",
-            "count": 8
-          },
-          {
-            "token_id": 126438,
-            "token": "à±įà°¯à°Ĥà°²à±ĭ",
-            "count": 2
-          },
-          {
-            "token_id": 126053,
-            "token": "à±ģà°Ĥà°¦à°¨à°¿",
-            "count": 1
-          },
-          {
-            "token_id": 123336,
-            "token": "à°¸à±įà°¤à±ģà°¤",
-            "count": 1
-          },
-          {
-            "token_id": 129740,
-            "token": "Ġà°ħà°¦à±ĩ",
-            "count": 1
-          },
-          {
-            "token_id": 128347,
-            "token": "Ġà°¤à°Ĺà±įà°Ĺ",
-            "count": 1
-          },
-          {
-            "token_id": 123379,
-            "token": "à±ģà°¤à±Ĥ",
-            "count": 1
-          },
-          {
-            "token_id": 121271,
-            "token": "âĢĮà°ķà±ģ",
-            "count": 1
-          },
-          {
-            "token_id": 120312,
-            "token": "à°°à°¿à°Ĺ",
-            "count": 1
-          }
-        ]
+        "count": 0,
+        "top_10": []
       },
       "raw_shard": {
-        "count": 111911,
+        "count": 116146,
         "top_10": [
+          {
+            "token_id": 508,
+            "token": ".Ċ",
+            "count": 6628295
+          },
+          {
+            "token_id": 198,
+            "token": "Ċ",
+            "count": 5167699
+          },
           {
             "token_id": 271,
             "token": "ĠĠĠ",
             "count": 3491737
           },
           {
-            "token_id": 308,
+            "token_id": 59,
+            "token": "\\",
+            "count": 3071739
+          },
+          {
+            "token_id": 90,
+            "token": "{",
+            "count": 2780016
+          },
+          {
+            "token_id": 595,
+            "token": "Ġwas",
+            "count": 2643663
+          },
+          {
+            "token_id": 305,
             "token": "ĠĠĠĠĠĠĠ",
             "count": 2600513
           },
           {
-            "token_id": 344,
-            "token": "ĠĠĠĠĠĠĠĠĠĠĠ",
-            "count": 1321891
+            "token_id": 498,
+            "token": "Ġ$",
+            "count": 2157832
           },
           {
-            "token_id": 197,
-            "token": "ĉ",
-            "count": 1048703
+            "token_id": 1923,
+            "token": "Ġ\\",
+            "count": 2111766
           },
           {
-            "token_id": 140,
-            "token": "Ð",
-            "count": 851625
-          },
-          {
-            "token_id": 720,
-            "token": "ĠĊ",
-            "count": 668369
-          },
-          {
-            "token_id": 483,
-            "token": "ĠĠĠĠĠĠĠĠĠĠĠĠĠĠĠ",
-            "count": 619982
-          },
-          {
-            "token_id": 1351,
-            "token": "âĢĻt",
-            "count": 613765
-          },
-          {
-            "token_id": 504,
-            "token": "ĠĠĠĠĠ",
-            "count": 590468
-          },
-          {
-            "token_id": 141,
-            "token": "Ñ",
-            "count": 428587
+            "token_id": 563,
+            "token": "Ġnot",
+            "count": 1894774
           }
         ]
       },
       "sft_group1_assamese": {
-        "count": 8,
+        "count": 100,
         "top_10": [
           {
-            "token_id": 129606,
+            "token_id": 129610,
             "token": "Ġà¦¦à§įà¦¬à¦¿à¦¤à§Ģà§Ł",
             "count": 15267
           },
           {
-            "token_id": 118288,
-            "token": "à§Ģà§Ł",
-            "count": 550
+            "token_id": 117881,
+            "token": "à§±",
+            "count": 7797
           },
           {
-            "token_id": 127453,
-            "token": "à§Ŀ",
-            "count": 477
+            "token_id": 118258,
+            "token": "à¦·",
+            "count": 7540
           },
           {
-            "token_id": 121537,
-            "token": "à§Ģà§Łà¦¾",
-            "count": 257
+            "token_id": 125917,
+            "token": "Ġà§ĩ",
+            "count": 5457
           },
           {
-            "token_id": 125400,
-            "token": "à¦¾à§Łà§Ģ",
-            "count": 156
+            "token_id": 123514,
+            "token": "à§°à¦¾",
+            "count": 368
           },
           {
-            "token_id": 121902,
-            "token": "Ġà¦¦à¦¿à§Ł",
-            "count": 23
+            "token_id": 118368,
+            "token": "à¦¤à¦¿",
+            "count": 272
           },
           {
-            "token_id": 118553,
-            "token": "à§ĩà§Ł",
-            "count": 11
+            "token_id": 117816,
+            "token": "à¦ļ",
+            "count": 264
           },
           {
-            "token_id": 122758,
-            "token": "Ġà¦ķà§Ł",
-            "count": 10
+            "token_id": 120650,
+            "token": "Ġà¦¢",
+            "count": 211
+          },
+          {
+            "token_id": 122080,
+            "token": "à¦ªà¦¾à¦¤",
+            "count": 189
+          },
+          {
+            "token_id": 119036,
+            "token": "à¦¨à¦¿",
+            "count": 188
           }
         ]
       },
       "sft_group1_hindi": {
-        "count": 4,
+        "count": 56,
         "top_10": [
           {
-            "token_id": 130017,
-            "token": "à¥įà¤ķà¥ģà¤²",
-            "count": 186
+            "token_id": 125142,
+            "token": "à¤¸à¥įà¤¥à¤¾à¤¨",
+            "count": 243
           },
           {
-            "token_id": 129735,
-            "token": "à¤µà¤Ĥà¤¬à¤°",
-            "count": 177
+            "token_id": 125058,
+            "token": "à¤¹à¤°à¤¾",
+            "count": 217
           },
           {
-            "token_id": 125914,
-            "token": "à¤¶à¥įà¤ķà¤¿à¤²",
-            "count": 165
+            "token_id": 121784,
+            "token": "à¤Łà¤¨",
+            "count": 207
           },
           {
-            "token_id": 128798,
-            "token": "Ġà¤¬à¥ĩà¤²à¤¾",
-            "count": 21
+            "token_id": 117932,
+            "token": "à¤ķà¤¾à¤°",
+            "count": 180
+          },
+          {
+            "token_id": 129519,
+            "token": "à¤®à¥Ģà¤Łà¤°",
+            "count": 152
+          },
+          {
+            "token_id": 120313,
+            "token": "à¤ļà¤¨à¤¾",
+            "count": 152
+          },
+          {
+            "token_id": 126216,
+            "token": "à¤Ĭà¤¨",
+            "count": 151
+          },
+          {
+            "token_id": 119829,
+            "token": "à¤¹à¤°à¥Ģ",
+            "count": 149
+          },
+          {
+            "token_id": 119255,
+            "token": "à¤¡à¤¼à¤¾",
+            "count": 120
+          },
+          {
+            "token_id": 125976,
+            "token": "à¤®à¤°",
+            "count": 87
           }
         ]
       },
       "sft_group1_marathi": {
-        "count": 3,
+        "count": 157,
         "top_10": [
           {
-            "token_id": 129744,
+            "token_id": 123108,
+            "token": "à¤¹à¥ģ",
+            "count": 324
+          },
+          {
+            "token_id": 129747,
             "token": "âĢįà¤¯à¤¾",
             "count": 268
           },
           {
-            "token_id": 121672,
-            "token": "âĢįà¤¯",
-            "count": 200
+            "token_id": 130142,
+            "token": "Ġà¤¹à¤¾à¤¦",
+            "count": 247
           },
           {
-            "token_id": 128925,
-            "token": "Ġà¤¸à¥į",
-            "count": 20
+            "token_id": 129081,
+            "token": "à¤ªà¥ĭ",
+            "count": 187
+          },
+          {
+            "token_id": 119009,
+            "token": "Ġà¤¹à¥ģ",
+            "count": 160
+          },
+          {
+            "token_id": 123129,
+            "token": "à¤£à¥ĩ",
+            "count": 144
+          },
+          {
+            "token_id": 125091,
+            "token": "à¤ªà¥ģà¤°à¥Ģ",
+            "count": 134
+          },
+          {
+            "token_id": 121736,
+            "token": "à¤µà¥įà¤¯",
+            "count": 128
+          },
+          {
+            "token_id": 123509,
+            "token": "à¤¯à¤¾à¤¨",
+            "count": 118
+          },
+          {
+            "token_id": 119776,
+            "token": "à¤¸à¥įà¤¯",
+            "count": 114
           }
         ]
       },
       "sft_group1_punjabi": {
-        "count": 0,
-        "top_10": []
-      },
-      "sft_group1_telugu": {
-        "count": 299,
+        "count": 32,
         "top_10": [
           {
-            "token_id": 126941,
+            "token_id": 123120,
+            "token": "Ġà¨Ł",
+            "count": 518
+          },
+          {
+            "token_id": 117863,
+            "token": "à¨¤",
+            "count": 492
+          },
+          {
+            "token_id": 117988,
+            "token": "à¨¹",
+            "count": 379
+          },
+          {
+            "token_id": 127909,
+            "token": "Ġà¨Ľ",
+            "count": 350
+          },
+          {
+            "token_id": 120184,
+            "token": "Ġà¨Ń",
+            "count": 346
+          },
+          {
+            "token_id": 120832,
+            "token": "à¨ĩ",
+            "count": 345
+          },
+          {
+            "token_id": 121259,
+            "token": "à¨¤à¨¾",
+            "count": 327
+          },
+          {
+            "token_id": 122044,
+            "token": "à¨ī",
+            "count": 319
+          },
+          {
+            "token_id": 118470,
+            "token": "à¨ª",
+            "count": 319
+          },
+          {
+            "token_id": 117946,
+            "token": "à¨ķ",
+            "count": 317
+          }
+        ]
+      },
+      "sft_group1_telugu": {
+        "count": 271,
+        "top_10": [
+          {
+            "token_id": 126957,
             "token": "Ġà°¯à±Ĭà°ķà±įà°ķ",
             "count": 25128
           },
           {
-            "token_id": 126850,
-            "token": "Ġà°¸à±įà°¥à°¾à°¨",
-            "count": 19230
-          },
-          {
-            "token_id": 128631,
-            "token": "à±ģà°µà±ģ",
-            "count": 14209
-          },
-          {
-            "token_id": 127486,
+            "token_id": 127500,
             "token": "Ġà°īà°¨à±įà°¨à°¾à°¯à°¿",
             "count": 13622
           },
           {
-            "token_id": 120013,
-            "token": "à°ħ",
-            "count": 11212
-          },
-          {
-            "token_id": 126559,
-            "token": "Ġà°°à±Ĩà°Ĥà°¡",
-            "count": 8114
-          },
-          {
-            "token_id": 118507,
-            "token": "à°Ń",
-            "count": 7468
-          },
-          {
-            "token_id": 125371,
+            "token_id": 125391,
             "token": "Ġà°²à±ĩà°¦à±ģ",
             "count": 6922
           },
           {
-            "token_id": 118032,
-            "token": "¡à±ģ",
-            "count": 6130
+            "token_id": 118253,
+            "token": "Ġà°²",
+            "count": 6425
           },
           {
-            "token_id": 129390,
-            "token": "Ġà°¨à°¾à°²",
-            "count": 5933
+            "token_id": 117942,
+            "token": "Ġà°¦",
+            "count": 5449
+          },
+          {
+            "token_id": 117745,
+            "token": "Ġà°°",
+            "count": 3941
+          },
+          {
+            "token_id": 117610,
+            "token": "Ġà°¨",
+            "count": 3550
+          },
+          {
+            "token_id": 128471,
+            "token": "Ġà°ļà±ĭà°Ł",
+            "count": 3216
+          },
+          {
+            "token_id": 117472,
+            "token": "Ġà°ķ",
+            "count": 3182
+          },
+          {
+            "token_id": 117537,
+            "token": "Ġà°ħ",
+            "count": 3022
           }
         ]
       },
@@ -2236,94 +2268,94 @@
     "overlap_matrix": {
       "golden_samples": {
         "golden_samples": 100.0,
-        "raw_shard": 99.7,
-        "sft_group1_assamese": 0.9,
-        "sft_group1_hindi": 2.4,
-        "sft_group1_marathi": 4.9,
-        "sft_group1_punjabi": 0.9,
-        "sft_group1_telugu": 5.1,
-        "sft_group2": 4.8,
-        "sft_group3": 7.7
+        "raw_shard": 0.0,
+        "sft_group1_assamese": 0.0,
+        "sft_group1_hindi": 0.0,
+        "sft_group1_marathi": 0.0,
+        "sft_group1_punjabi": 0.0,
+        "sft_group1_telugu": 0.0,
+        "sft_group2": 0.0,
+        "sft_group3": 0.0
       },
       "raw_shard": {
-        "golden_samples": 8.2,
+        "golden_samples": 0.0,
         "raw_shard": 100.0,
-        "sft_group1_assamese": 0.9,
-        "sft_group1_hindi": 1.3,
-        "sft_group1_marathi": 2.2,
-        "sft_group1_punjabi": 0.3,
-        "sft_group1_telugu": 1.4,
-        "sft_group2": 1.0,
-        "sft_group3": 1.3
+        "sft_group1_assamese": 0.3,
+        "sft_group1_hindi": 0.6,
+        "sft_group1_marathi": 1.5,
+        "sft_group1_punjabi": 0.2,
+        "sft_group1_telugu": 0.9,
+        "sft_group2": 1.1,
+        "sft_group3": 1.4
       },
       "sft_group1_assamese": {
-        "golden_samples": 8.1,
-        "raw_shard": 99.3,
+        "golden_samples": 0.0,
+        "raw_shard": 79.6,
         "sft_group1_assamese": 100.0,
-        "sft_group1_hindi": 1.8,
-        "sft_group1_marathi": 2.7,
-        "sft_group1_punjabi": 3.1,
-        "sft_group1_telugu": 2.7,
-        "sft_group2": 0.8,
-        "sft_group3": 0.7
+        "sft_group1_hindi": 11.8,
+        "sft_group1_marathi": 12.2,
+        "sft_group1_punjabi": 12.0,
+        "sft_group1_telugu": 12.4,
+        "sft_group2": 1.8,
+        "sft_group3": 1.6
       },
       "sft_group1_hindi": {
-        "golden_samples": 14.5,
-        "raw_shard": 99.5,
-        "sft_group1_assamese": 1.2,
+        "golden_samples": 0.0,
+        "raw_shard": 79.3,
+        "sft_group1_assamese": 5.9,
         "sft_group1_hindi": 100.0,
-        "sft_group1_marathi": 75.4,
-        "sft_group1_punjabi": 7.3,
-        "sft_group1_telugu": 7.0,
-        "sft_group2": 6.3,
-        "sft_group3": 6.2
+        "sft_group1_marathi": 71.4,
+        "sft_group1_punjabi": 16.1,
+        "sft_group1_telugu": 16.1,
+        "sft_group2": 10.8,
+        "sft_group3": 10.8
       },
       "sft_group1_marathi": {
-        "golden_samples": 18.4,
-        "raw_shard": 99.7,
-        "sft_group1_assamese": 1.1,
-        "sft_group1_hindi": 46.2,
+        "golden_samples": 0.0,
+        "raw_shard": 85.3,
+        "sft_group1_assamese": 2.9,
+        "sft_group1_hindi": 33.8,
         "sft_group1_marathi": 100.0,
-        "sft_group1_punjabi": 4.7,
-        "sft_group1_telugu": 37.4,
-        "sft_group2": 36.4,
-        "sft_group3": 4.5
+        "sft_group1_punjabi": 7.6,
+        "sft_group1_telugu": 51.3,
+        "sft_group2": 48.6,
+        "sft_group3": 6.0
       },
       "sft_group1_punjabi": {
-        "golden_samples": 24.0,
-        "raw_shard": 100.0,
-        "sft_group1_assamese": 8.7,
-        "sft_group1_hindi": 30.7,
-        "sft_group1_marathi": 32.4,
+        "golden_samples": 0.0,
+        "raw_shard": 89.5,
+        "sft_group1_assamese": 19.3,
+        "sft_group1_hindi": 51.6,
+        "sft_group1_marathi": 51.3,
         "sft_group1_punjabi": 100.0,
-        "sft_group1_telugu": 32.7,
-        "sft_group2": 26.7,
-        "sft_group3": 26.7
+        "sft_group1_telugu": 51.3,
+        "sft_group2": 35.3,
+        "sft_group3": 35.3
       },
       "sft_group1_telugu": {
-        "golden_samples": 25.8,
-        "raw_shard": 84.5,
-        "sft_group1_assamese": 1.5,
-        "sft_group1_hindi": 5.7,
-        "sft_group1_marathi": 50.4,
-        "sft_group1_punjabi": 6.4,
+        "golden_samples": 0.0,
+        "raw_shard": 80.5,
+        "sft_group1_assamese": 4.4,
+        "sft_group1_hindi": 11.4,
+        "sft_group1_marathi": 76.7,
+        "sft_group1_punjabi": 11.3,
         "sft_group1_telugu": 100.0,
-        "sft_group2": 49.0,
-        "sft_group3": 5.9
+        "sft_group2": 72.6,
+        "sft_group3": 8.7
       },
       "sft_group2": {
-        "golden_samples": 38.7,
+        "golden_samples": 0.0,
         "raw_shard": 100.0,
         "sft_group1_assamese": 0.7,
-        "sft_group1_hindi": 8.3,
+        "sft_group1_hindi": 8.2,
         "sft_group1_marathi": 78.3,
         "sft_group1_punjabi": 8.4,
         "sft_group1_telugu": 78.2,
         "sft_group2": 100.0,
-        "sft_group3": 21.3
+        "sft_group3": 21.4
       },
       "sft_group3": {
-        "golden_samples": 48.7,
+        "golden_samples": 0.0,
         "raw_shard": 100.0,
         "sft_group1_assamese": 0.5,
         "sft_group1_hindi": 6.4,
@@ -2337,68 +2369,68 @@
   },
   "test19_long_tail": {
     "total_vocab": 131072,
-    "total_seen": 127956,
-    "total_zero": 3116,
-    "total_occurrences": 939538470,
+    "total_seen": 121046,
+    "total_zero": 10026,
+    "total_occurrences": 1033175543,
     "buckets": [
       {
         "label": "zero",
-        "n_tokens": 3116,
-        "pct_vocab": 2.38,
+        "n_tokens": 10026,
+        "pct_vocab": 7.65,
         "n_occurrences": 0,
         "pct_occurrences": 0.0
       },
       {
         "label": "once",
-        "n_tokens": 1336,
-        "pct_vocab": 1.02,
-        "n_occurrences": 1336,
-        "pct_occurrences": 0.0001
+        "n_tokens": 1729,
+        "pct_vocab": 1.32,
+        "n_occurrences": 1729,
+        "pct_occurrences": 0.0002
       },
       {
         "label": "2–4",
-        "n_tokens": 3351,
-        "pct_vocab": 2.56,
-        "n_occurrences": 9922,
+        "n_tokens": 3712,
+        "pct_vocab": 2.83,
+        "n_occurrences": 10946,
         "pct_occurrences": 0.0011
       },
       {
         "label": "5–9",
-        "n_tokens": 4468,
-        "pct_vocab": 3.41,
-        "n_occurrences": 30898,
-        "pct_occurrences": 0.0033
+        "n_tokens": 4706,
+        "pct_vocab": 3.59,
+        "n_occurrences": 32513,
+        "pct_occurrences": 0.0031
       },
       {
         "label": "10–99",
-        "n_tokens": 26586,
-        "pct_vocab": 20.28,
-        "n_occurrences": 1096990,
-        "pct_occurrences": 0.1168
+        "n_tokens": 24948,
+        "pct_vocab": 19.03,
+        "n_occurrences": 982254,
+        "pct_occurrences": 0.0951
       },
       {
         "label": "100–999",
-        "n_tokens": 41933,
-        "pct_vocab": 31.99,
-        "n_occurrences": 18330022,
-        "pct_occurrences": 1.951
+        "n_tokens": 37655,
+        "pct_vocab": 28.73,
+        "n_occurrences": 16945881,
+        "pct_occurrences": 1.6402
       },
       {
         "label": "1K–9K",
-        "n_tokens": 40762,
-        "pct_vocab": 31.1,
-        "n_occurrences": 125926661,
-        "pct_occurrences": 13.403
+        "n_tokens": 39215,
+        "pct_vocab": 29.92,
+        "n_occurrences": 120979329,
+        "pct_occurrences": 11.7095
       },
       {
         "label": "10K+",
-        "n_tokens": 9520,
-        "pct_vocab": 7.26,
-        "n_occurrences": 794142641,
-        "pct_occurrences": 84.5248
+        "n_tokens": 9081,
+        "pct_vocab": 6.93,
+        "n_occurrences": 894222891,
+        "pct_occurrences": 86.5509
       }
     ],
-    "zipf_ratio": 16163410.0
+    "zipf_ratio": 19533457.0
   },
   "test20_chat_robustness": {
     "cases": [
@@ -2458,64 +2490,64 @@
       {
         "label": "hi+en",
         "n_chars": 75,
-        "n_tokens": 21,
-        "chars_per_token": 3.57,
+        "n_tokens": 35,
+        "chars_per_token": 2.14,
         "round_trip_ok": true,
         "unk_count": 0
       },
       {
         "label": "te+en",
         "n_chars": 74,
-        "n_tokens": 21,
-        "chars_per_token": 3.52,
+        "n_tokens": 54,
+        "chars_per_token": 1.37,
         "round_trip_ok": true,
         "unk_count": 0
       },
       {
         "label": "ta+en+code",
         "n_chars": 83,
-        "n_tokens": 26,
-        "chars_per_token": 3.19,
+        "n_tokens": 62,
+        "chars_per_token": 1.34,
         "round_trip_ok": true,
         "unk_count": 0
       },
       {
         "label": "hi+ta+en",
         "n_chars": 76,
-        "n_tokens": 26,
-        "chars_per_token": 2.92,
+        "n_tokens": 93,
+        "chars_per_token": 0.82,
         "round_trip_ok": true,
         "unk_count": 0
       },
       {
         "label": "pa+hi+en",
         "n_chars": 81,
-        "n_tokens": 23,
-        "chars_per_token": 3.52,
+        "n_tokens": 43,
+        "chars_per_token": 1.88,
         "round_trip_ok": true,
         "unk_count": 0
       },
       {
         "label": "math+hi",
         "n_chars": 74,
-        "n_tokens": 34,
-        "chars_per_token": 2.18,
+        "n_tokens": 58,
+        "chars_per_token": 1.28,
         "round_trip_ok": true,
         "unk_count": 0
       },
       {
         "label": "code+te+hi",
         "n_chars": 75,
-        "n_tokens": 26,
-        "chars_per_token": 2.88,
+        "n_tokens": 81,
+        "chars_per_token": 0.93,
         "round_trip_ok": true,
         "unk_count": 0
       },
       {
         "label": "5_scripts",
         "n_chars": 43,
-        "n_tokens": 20,
-        "chars_per_token": 2.15,
+        "n_tokens": 103,
+        "chars_per_token": 0.42,
         "round_trip_ok": true,
         "unk_count": 0
       }
@@ -2616,34 +2648,8 @@
         "examples": []
       },
       "private_use": {
-        "count": 5,
-        "examples": [
-          {
-            "token_id": 49529,
-            "token_decoded": "",
-            "token_raw": "ïĤ·"
-          },
-          {
-            "token_id": 76039,
-            "token_decoded": " ",
-            "token_raw": "ĠïĤ·"
-          },
-          {
-            "token_id": 77811,
-            "token_decoded": "",
-            "token_raw": "ïĤ§"
-          },
-          {
-            "token_id": 99490,
-            "token_decoded": "",
-            "token_raw": "ïĥĺ"
-          },
-          {
-            "token_id": 111144,
-            "token_decoded": "",
-            "token_raw": "î¤´"
-          }
-        ]
+        "count": 0,
+        "examples": []
       },
       "surrogate": {
         "count": 0,
@@ -2653,54 +2659,54 @@
         "count": 20,
         "examples": [
           {
-            "token_id": 2787,
+            "token_id": 2646,
             "token_decoded": "​",
             "token_raw": "âĢĭ"
           },
           {
-            "token_id": 5820,
-            "token_decoded": "​�",
-            "token_raw": "âĢĭáŀ"
-          },
-          {
-            "token_id": 10363,
+            "token_id": 9964,
             "token_decoded": "‬",
             "token_raw": "âĢ¬"
           },
           {
-            "token_id": 10417,
+            "token_id": 10016,
             "token_decoded": " ​",
             "token_raw": "ĠâĢĭ"
           },
           {
-            "token_id": 14642,
+            "token_id": 14161,
             "token_decoded": " ​​",
             "token_raw": "ĠâĢĭâĢĭ"
           },
           {
-            "token_id": 18982,
+            "token_id": 18436,
             "token_decoded": "‪",
             "token_raw": "âĢª"
           },
           {
-            "token_id": 19568,
+            "token_id": 19013,
             "token_decoded": "‫",
             "token_raw": "âĢ«"
           },
           {
-            "token_id": 19836,
+            "token_id": 19277,
             "token_decoded": "​\n\n",
             "token_raw": "âĢĭĊĊ"
           },
           {
-            "token_id": 22545,
+            "token_id": 21951,
             "token_decoded": "​​",
             "token_raw": "âĢĭâĢĭ"
           },
           {
-            "token_id": 49176,
+            "token_id": 48386,
             "token_decoded": "‬\n",
             "token_raw": "âĢ¬Ċ"
+          },
+          {
+            "token_id": 55109,
+            "token_decoded": "​\n",
+            "token_raw": "âĢĭĊ"
           }
         ]
       },
@@ -2708,52 +2714,52 @@
         "count": 85,
         "examples": [
           {
-            "token_id": 2094,
+            "token_id": 1986,
             "token_decoded": "‌",
             "token_raw": "âĢĮ"
           },
           {
-            "token_id": 2144,
+            "token_id": 2032,
             "token_decoded": "‍",
             "token_raw": "âĢį"
           },
           {
-            "token_id": 39986,
+            "token_id": 39258,
             "token_decoded": "‍,",
             "token_raw": "âĢį,"
           },
           {
-            "token_id": 44475,
+            "token_id": 43721,
             "token_decoded": "‍.",
             "token_raw": "âĢį."
           },
           {
-            "token_id": 53276,
+            "token_id": 52462,
             "token_decoded": " ‌",
             "token_raw": "ĠâĢĮ"
           },
           {
-            "token_id": 55868,
+            "token_id": 55047,
             "token_decoded": "‌,",
             "token_raw": "âĢĮ,"
           },
           {
-            "token_id": 61060,
+            "token_id": 60209,
             "token_decoded": "‌.",
             "token_raw": "âĢĮ."
           },
           {
-            "token_id": 74046,
+            "token_id": 73123,
             "token_decoded": "‌‌",
             "token_raw": "âĢĮâĢĮ"
           },
           {
-            "token_id": 79463,
+            "token_id": 78521,
             "token_decoded": "‍\n\n",
             "token_raw": "âĢįĊĊ"
           },
           {
-            "token_id": 99500,
+            "token_id": 98494,
             "token_decoded": " ‍",
             "token_raw": "ĠâĢį"
           }
@@ -2763,224 +2769,148 @@
         "count": 4,
         "examples": [
           {
-            "token_id": 18635,
+            "token_id": 18093,
             "token_decoded": "&#",
             "token_raw": "&#"
           },
           {
-            "token_id": 42631,
+            "token_id": 41891,
             "token_decoded": " &#",
             "token_raw": "Ġ&#"
           },
           {
-            "token_id": 45060,
+            "token_id": 44304,
             "token_decoded": ";&#",
             "token_raw": ";&#"
           },
           {
-            "token_id": 101607,
+            "token_id": 100598,
             "token_decoded": " '&#",
             "token_raw": "Ġ'&#"
           }
         ]
       },
       "broken_utf8": {
-        "count": 20,
-        "examples": [
-          {
-            "token_id": 2740,
-            "token_decoded": "�",
-            "token_raw": "ï¿½"
-          },
-          {
-            "token_id": 8100,
-            "token_decoded": "��",
-            "token_raw": "ï¿½ï¿½"
-          },
-          {
-            "token_id": 21607,
-            "token_decoded": "����",
-            "token_raw": "ï¿½ï¿½ï¿½ï¿½"
-          },
-          {
-            "token_id": 21812,
-            "token_decoded": " �",
-            "token_raw": "Ġï¿½"
-          },
-          {
-            "token_id": 47472,
-            "token_decoded": "�s",
-            "token_raw": "ï¿½s"
-          },
-          {
-            "token_id": 51441,
-            "token_decoded": "�\n\n",
-            "token_raw": "ï¿½ĊĊ"
-          },
-          {
-            "token_id": 54350,
-            "token_decoded": "���",
-            "token_raw": "ï¿½ï¿½ï¿½"
-          },
-          {
-            "token_id": 55055,
-            "token_decoded": "�n",
-            "token_raw": "ï¿½n"
-          },
-          {
-            "token_id": 61113,
-            "token_decoded": " ����",
-            "token_raw": "Ġï¿½ï¿½ï¿½ï¿½"
-          },
-          {
-            "token_id": 63696,
-            "token_decoded": "�t",
-            "token_raw": "ï¿½t"
-          }
-        ]
+        "count": 0,
+        "examples": []
       },
       "overlong": {
         "count": 0,
         "examples": []
       }
     },
-    "total_garbage_tokens": 49,
+    "total_garbage_tokens": 24,
     "garbage_token_ids": [
-      2740,
-      2787,
-      5820,
-      8100,
-      10363,
-      10417,
-      14642,
-      18635,
-      18982,
-      19568,
-      19836,
-      21607,
-      21812,
-      22545,
-      42631,
-      45060,
-      47472,
-      49176,
-      49529,
-      51441,
-      54350,
-      55055,
-      55932,
-      61113,
-      63696,
-      68156,
-      76039,
-      77811,
-      79325,
-      80203,
-      80851,
-      86647,
-      88806,
-      89190,
-      90817,
-      96843,
-      98892,
-      99490,
-      101501,
-      101607,
-      102216,
-      104890,
-      106278,
-      107765,
-      110669,
-      111144,
-      113213,
-      113903,
-      114227
+      2646,
+      9964,
+      10016,
+      14161,
+      18093,
+      18436,
+      19013,
+      19277,
+      21951,
+      41891,
+      44304,
+      48386,
+      55109,
+      79258,
+      85669,
+      88205,
+      89830,
+      95846,
+      100598,
+      101203,
+      103873,
+      106740,
+      109637,
+      116157
     ],
     "total_review_tokens": 85,
     "review_token_ids": [
-      2094,
-      2144,
-      39986,
-      44475,
-      53276,
-      55868,
-      61060,
-      74046,
-      79463,
-      99500,
-      113998,
-      118816,
-      118843,
-      119229,
-      119338,
-      119558,
-      119810,
-      120037,
-      120593,
-      120789,
-      120987,
-      121092,
-      121154,
-      121220,
-      121222,
-      121271,
-      121340,
-      121401,
-      121672,
-      121916,
-      122038,
-      122579,
-      122670,
-      122700,
-      122707,
-      123093,
-      123164,
-      123478,
-      123564,
-      123600,
-      123606,
-      123644,
-      123833,
-      123835,
-      123933,
-      124197,
-      124293,
-      124439,
-      124518,
-      124627,
-      124628,
-      124636,
-      124716,
-      124770,
-      124864,
-      124962,
-      125154,
-      125324,
-      125494,
-      125587,
-      125646,
-      125998,
-      126128,
-      126132,
-      126232,
-      126694,
-      127181,
-      127705,
-      127934,
-      128111,
-      128156,
-      128462,
-      128624,
-      128660,
-      128797,
-      128938,
-      129121,
-      129127,
-      129183,
-      129259,
-      129568,
-      129744,
-      129972,
+      1986,
+      2032,
+      39258,
+      43721,
+      52462,
+      55047,
+      60209,
+      73123,
+      78521,
+      98494,
+      112956,
+      118896,
+      118923,
+      119303,
+      119409,
+      119627,
+      119873,
+      120095,
+      120646,
+      120839,
+      121036,
+      121141,
+      121203,
+      121268,
+      121270,
+      121318,
+      121386,
+      121447,
+      121716,
+      121955,
+      122076,
+      122611,
+      122701,
+      122731,
+      122738,
+      123122,
+      123193,
+      123506,
+      123592,
+      123628,
+      123634,
+      123672,
+      123860,
+      123862,
+      123960,
+      124222,
+      124318,
+      124464,
+      124543,
+      124652,
+      124653,
+      124661,
+      124739,
+      124793,
+      124887,
+      124985,
+      125176,
+      125345,
+      125514,
+      125607,
+      125666,
+      126018,
+      126147,
+      126151,
+      126251,
+      126712,
+      127197,
+      127718,
+      127946,
+      128123,
+      128167,
+      128472,
+      128634,
+      128670,
+      128807,
+      128947,
+      129128,
+      129134,
+      129190,
+      129266,
+      129572,
+      129747,
+      129974,
       130420,
       130699
     ]
@@ -2989,66 +2919,11 @@
     "golden_samples": {
       "name": "golden_samples",
       "source_type": "jsonl",
-      "total_docs": 128,
-      "tokenized_docs": 128,
-      "stats": {
-        "count": 128,
-        "total": 78799,
-        "mean": 615.6,
-        "median": 486.5,
-        "std": 1150.8,
-        "min": 25,
-        "p25": 173,
-        "p75": 749,
-        "p90": 1042,
-        "p95": 1367,
-        "p99": 2548,
-        "max": 12617
-      },
+      "total_docs": 0,
+      "tokenized_docs": 0,
+      "stats": {},
       "unk_tokens": 0,
-      "ghost_tag_hits": {
-        "[USER]": 128,
-        "[ASSISTANT]": 128
-      },
-      "tag_distribution": {
-        "instruction_following": 14,
-        "truthfulness": 14,
-        "function_calling": 8,
-        "code_generation": 7,
-        "software_engineering": 7,
-        "tool_use": 6,
-        "math_reasoning": 5,
-        "math_competition": 5,
-        "general_knowledge": 5,
-        "reasoning": 5,
-        "long_context_qa": 5,
-        "math_hard": 4,
-        "science": 4,
-        "long_context_retrieval": 4,
-        "long_context_multihop": 4,
-        "indic_instruction": 3,
-        "benchmark_qa": 2,
-        "science_math": 2,
-        "general_qa": 2,
-        "general_preference": 2,
-        "general_conversation": 2,
-        "human_preferred": 2,
-        "indic_cultural_knowledge": 2,
-        "post_training": 1,
-        "high_reasoning": 1,
-        "indic_hindi": 1,
-        "indic_tamil": 1,
-        "indic_telugu": 1,
-        "indic_bengali": 1,
-        "indic_kannada": 1,
-        "indic_hindi_qa": 1,
-        "indic_tamil_qa": 1,
-        "indic_telugu_qa": 1,
-        "indic_hindi_nlu": 1,
-        "indic_tamil_nlu": 1,
-        "indic_fairness": 1,
-        "long_context_narrative": 1
-      }
+      "ghost_tag_hits": {}
     },
     "raw_shard": {
       "name": "raw_shard",
@@ -3057,17 +2932,17 @@
       "tokenized_docs": 630140,
       "stats": {
         "count": 630140,
-        "total": 906188653,
-        "mean": 1438.1,
-        "median": 971.0,
-        "std": 2019.7,
+        "total": 929851093,
+        "mean": 1475.6,
+        "median": 981.0,
+        "std": 2337.3,
         "min": 4,
-        "p25": 678,
-        "p75": 1492,
-        "p90": 2583,
-        "p95": 3814,
-        "p99": 8241,
-        "max": 233006
+        "p25": 684,
+        "p75": 1512,
+        "p90": 2657,
+        "p95": 3926,
+        "p99": 8711,
+        "max": 412802
       },
       "unk_tokens": 0,
       "ghost_tag_hits": {
@@ -3257,17 +3132,17 @@
       "tokenized_docs": 12294,
       "stats": {
         "count": 12294,
-        "total": 4805526,
-        "mean": 390.9,
-        "median": 391.0,
-        "std": 17.0,
-        "min": 330,
-        "p25": 379,
-        "p75": 402,
-        "p90": 413,
-        "p95": 419,
-        "p99": 432,
-        "max": 454
+        "total": 17840446,
+        "mean": 1451.2,
+        "median": 1452.0,
+        "std": 61.5,
+        "min": 1170,
+        "p25": 1409,
+        "p75": 1492,
+        "p90": 1531,
+        "p95": 1553,
+        "p99": 1595,
+        "max": 1720
       },
       "unk_tokens": 0,
       "ghost_tag_hits": {}
@@ -3279,17 +3154,17 @@
       "tokenized_docs": 14323,
       "stats": {
         "count": 14323,
-        "total": 4103597,
-        "mean": 286.5,
-        "median": 286.0,
-        "std": 13.8,
-        "min": 241,
-        "p25": 277,
-        "p75": 295,
-        "p90": 305,
-        "p95": 310,
-        "p99": 321,
-        "max": 345
+        "total": 12006671,
+        "mean": 838.3,
+        "median": 838.0,
+        "std": 49.9,
+        "min": 638,
+        "p25": 805,
+        "p75": 872,
+        "p90": 902,
+        "p95": 921,
+        "p99": 955,
+        "max": 1045
       },
       "unk_tokens": 0,
       "ghost_tag_hits": {}
@@ -3301,17 +3176,17 @@
       "tokenized_docs": 16101,
       "stats": {
         "count": 16101,
-        "total": 4613863,
-        "mean": 286.6,
-        "median": 286.0,
-        "std": 16.1,
-        "min": 239,
-        "p25": 275,
-        "p75": 297,
-        "p90": 308,
-        "p95": 314,
-        "p99": 328,
-        "max": 371
+        "total": 18289840,
+        "mean": 1135.9,
+        "median": 1135.0,
+        "std": 59.1,
+        "min": 923,
+        "p25": 1095,
+        "p75": 1175,
+        "p90": 1213,
+        "p95": 1236,
+        "p99": 1277,
+        "max": 1376
       },
       "unk_tokens": 0,
       "ghost_tag_hits": {}
@@ -3323,17 +3198,17 @@
       "tokenized_docs": 16852,
       "stats": {
         "count": 16852,
-        "total": 7043691,
-        "mean": 418.0,
-        "median": 418.0,
-        "std": 15.5,
-        "min": 358,
-        "p25": 407,
-        "p75": 428,
-        "p90": 438,
-        "p95": 443,
-        "p99": 453,
-        "max": 778
+        "total": 23710441,
+        "mean": 1407.0,
+        "median": 1406.0,
+        "std": 48.1,
+        "min": 1257,
+        "p25": 1374,
+        "p75": 1439,
+        "p90": 1469,
+        "p95": 1486,
+        "p99": 1518,
+        "max": 2573
       },
       "unk_tokens": 0,
       "ghost_tag_hits": {}
@@ -3345,17 +3220,17 @@
       "tokenized_docs": 17716,
       "stats": {
         "count": 17716,
-        "total": 5294420,
-        "mean": 298.8,
-        "median": 298.0,
-        "std": 14.5,
-        "min": 259,
-        "p25": 289,
-        "p75": 308,
-        "p90": 318,
-        "p95": 325,
-        "p99": 339,
-        "max": 380
+        "total": 24067382,
+        "mean": 1358.5,
+        "median": 1356.0,
+        "std": 56.0,
+        "min": 1175,
+        "p25": 1320,
+        "p75": 1395,
+        "p90": 1433,
+        "p95": 1455,
+        "p99": 1495,
+        "max": 1726
       },
       "unk_tokens": 0,
       "ghost_tag_hits": {}
@@ -3389,10 +3264,10 @@
       "tokenized_docs": 2512,
       "stats": {
         "count": 2512,
-        "total": 1383194,
-        "mean": 550.6,
+        "total": 1382943,
+        "mean": 550.5,
         "median": 542.0,
-        "std": 37.1,
+        "std": 37.2,
         "min": 183,
         "p25": 527,
         "p75": 571,
@@ -3406,17 +3281,17 @@
     }
   },
   "overall_stats": {
-    "count": 719776,
-    "total": 939538470,
-    "mean": 1305.3,
-    "median": 873.0,
-    "std": 1922.7,
+    "count": 719648,
+    "total": 1033175543,
+    "mean": 1435.7,
+    "median": 1025.0,
+    "std": 2192.3,
     "min": 4,
-    "p25": 598,
-    "p75": 1393,
-    "p90": 2370,
-    "p95": 3569,
-    "p99": 7605,
-    "max": 233006
+    "p25": 701,
+    "p75": 1453,
+    "p90": 2438,
+    "p95": 3678,
+    "p99": 8019,
+    "max": 412802
   }
 }
