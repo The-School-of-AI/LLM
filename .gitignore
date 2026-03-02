@@ -148,6 +148,9 @@ stats/
 *.pth
 .DS_Store
 
+# macOS specific files
+*.DS_Store
+.idea
 # Large Data & Partitioned Files
 part-*
 notebooks/data/

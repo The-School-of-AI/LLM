@@ -1,0 +1,18 @@
+# Curriculum Training Data - Python Dependencies
+#
+# Python Version: 3.12
+#
+# Required for grapheme cluster handling (Unicode UAX#29 \X pattern)
+# in Hindi, Punjabi, Marathi, Kannada, Telugu, Assamese generators
+# and prompt_utils token counting.
+regex>=2023.0.0
+
+# Standard library modules also used:
+# - json, os, random, re, sys
+# - typing (Dict, List, Tuple, Set, Iterable)
+# - collections (defaultdict)
+# - operator (Group 2 mathematical operations)
+# - itertools (combinations)
+
+# Optional: For running tests (group1_telugu/tests/)
+# pytest>=7.0.0
