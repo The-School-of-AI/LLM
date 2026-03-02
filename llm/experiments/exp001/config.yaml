@@ -1,0 +1,16 @@
+seed: 42
+deepspeed_config: ./deepspeed_config.yaml
+tokenizer_dir: ../../_data/tokenizer
+profiler_output_dir: ../../_data/profiler
+data:
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  max_length: 2
+  num_workers: 1
+proxy:
+  local_path: _data/synth_local_en
+  seq_len: 512
+  batch_size: 16
+  num_workers: 1
+opus:
+  strict_shard_preconditioner: true
