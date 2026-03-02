@@ -1,0 +1,1 @@
+> **Note: this package has been taken from [19f3034](https://github.com/The-School-of-AI/LLM/tree/19f30344462678ccff31d92b00542a01739e05bd/experiments/2_curirculum_architects/curriculum_tags). Once the code is merged, this package should be removed from here and the imports have to be updated.**

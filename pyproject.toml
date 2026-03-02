@@ -6,5 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
-[tool.uv]
-workspace = { members = ["experiments/3_coreset_engineering"] }
+[tool.uv.workspace]
+members = [
+    "experiments/3_coreset_engineering",
+    "experiments/7_token_MOE_interaction_analysis",
+]

@@ -1,0 +1,113 @@
+==========================
+KL MATRIX Results and Explanation
+==========================
+
+KL Divergence Matrix:
+KL(general_text         || indic_text          ) = 5.1219
+KL(general_text         || structured_knowledge) = 0.1918
+KL(general_text         || code                ) = 1.7508
+KL(general_text         || math                ) = 1.0330
+KL(general_text         || cot_reasoning       ) = 0.1328
+KL(general_text         || agentic_traces      ) = 0.1583
+KL(indic_text           || general_text        ) = 8.8391
+KL(indic_text           || structured_knowledge) = 8.9395
+KL(indic_text           || code                ) = 9.0776
+KL(indic_text           || math                ) = 9.1535
+KL(indic_text           || cot_reasoning       ) = 8.4077
+KL(indic_text           || agentic_traces      ) = 9.0526
+KL(structured_knowledge || general_text        ) = 0.3282
+KL(structured_knowledge || indic_text          ) = 4.9090
+KL(structured_knowledge || code                ) = 1.3445
+KL(structured_knowledge || math                ) = 0.7647
+KL(structured_knowledge || cot_reasoning       ) = 0.1875
+KL(structured_knowledge || agentic_traces      ) = 0.1393
+KL(code                 || general_text        ) = 3.1006
+KL(code                 || indic_text          ) = 6.0392
+KL(code                 || structured_knowledge) = 1.3038
+KL(code                 || math                ) = 0.7165
+KL(code                 || cot_reasoning       ) = 1.7259
+KL(code                 || agentic_traces      ) = 0.9024
+KL(math                 || general_text        ) = 2.0710
+KL(math                 || indic_text          ) = 5.4841
+KL(math                 || structured_knowledge) = 0.8121
+KL(math                 || code                ) = 0.6848
+KL(math                 || cot_reasoning       ) = 1.0407
+KL(math                 || agentic_traces      ) = 0.5915
+KL(cot_reasoning        || general_text        ) = 0.2290
+KL(cot_reasoning        || indic_text          ) = 4.9494
+KL(cot_reasoning        || structured_knowledge) = 0.1969
+KL(cot_reasoning        || code                ) = 1.5669
+KL(cot_reasoning        || math                ) = 0.9062
+KL(cot_reasoning        || agentic_traces      ) = 0.1989
+KL(agentic_traces       || general_text        ) = 0.4022
+KL(agentic_traces       || indic_text          ) = 5.0203
+KL(agentic_traces       || structured_knowledge) = 0.1328
+KL(agentic_traces       || code                ) = 1.0770
+KL(agentic_traces       || math                ) = 0.5606
+KL(agentic_traces       || cot_reasoning       ) = 0.1985
+
+For context:
+KL < 0.3 → almost same distribution
+KL ~ 0.5–1 → moderately different
+KL > 2 → strongly different
+KL > 5 → essentially different language space
+
+Which means these four are extremely close:
+general_text
+structured_knowledge
+cot_reasoning
+agentic_traces
+
+-  Code vs math: moderate difference   
+KL(code || math) = 0.716
+KL(math || code) = 0.684
+
+- Code vs general text: 3.10
+Very strong difference
+
+-------------------
+KL graph can be visualized like this:
+
+
+               [indic_text]
+                     |
+                     |   (very far)
+                     |
+
+      -------------------------------------
+      |                                   |
+ [general] — [structured] — [cot] — [agentic]
+           \            /
+            \          /
+             \        /
+              [math] — [code]
+
+
+
+True Clusters From KL
+
+1. Cluster A (Very tight):
+general_text
+structured_knowledge
+cot_reasoning
+agentic_traces
+
+2. Cluster B (Moderate separation):
+math
+code (close to math, but far from general)
+
+3. Cluster C:
+indic_text
+
+
+-----------------
+Final recommended expert split:
+
+Use 5 experts:
+E0: English General (general + structured + cot + agentic)
+E1: Math
+E2: Code
+E3: Indic
+E4: Null / Free capacity
+
+If needed: Duplicate General into 2 experts (load balancing)
