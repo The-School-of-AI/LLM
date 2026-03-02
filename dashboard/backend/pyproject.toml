@@ -12,6 +12,20 @@ dependencies = [
     "pydantic-settings>=2.0.0",
 ]
 
+[dependency-groups]
+dev = [
+    "basedpyright>=1.38.2",
+]
+
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
 build-backend = "uv_build"
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+reportAny = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnannotatedClassAttribute = false
+reportImplicitOverride = false

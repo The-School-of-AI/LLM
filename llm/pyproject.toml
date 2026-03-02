@@ -19,6 +19,10 @@ dependencies = [
     "triton>=3.6.0; sys_platform == 'linux'",
 ]
 
+[dependency-groups]
+dev = [
+    "basedpyright>=1.38.2",
+]
 
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
@@ -28,3 +32,12 @@ build-backend = "uv_build"
 "main.py" = [
     "E402", # Module level import not at top of file
 ]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+reportAny = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnannotatedClassAttribute = false
+reportImplicitOverride = false

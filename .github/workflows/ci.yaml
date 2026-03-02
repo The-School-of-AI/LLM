@@ -17,6 +17,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv sync --group dev
+        working-directory: llm
+
+      - name: Install dependencies
+        run: |
+          uv sync --group dev
+        working-directory: dashboard/backend
+
       - name: Install pre-commit
         run: pip install pre-commit
 
@@ -29,3 +41,11 @@ jobs:
 
       - name: Run hooks
         run: pre-commit run --all-files --show-diff-on-failure
+
+      - name: Run basedpyright (llm)
+        run: uv run basedpyright
+        working-directory: llm
+
+      - name: Run basedpyright (dashboard/backend)
+        run: uv run basedpyright
+        working-directory: dashboard/backend
