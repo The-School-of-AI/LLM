@@ -1,0 +1,25 @@
+# RULER Benchmark — Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# PyTorch (CUDA 12.1 — for NVIDIA L4)
+# Install separately first:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Inference engine
+vllm>=0.4.0
+
+# HuggingFace
+transformers>=4.40.0
+accelerate>=0.30.0
+huggingface_hub>=0.23.0
+tokenizers>=0.19.0
+
+# RULER evaluation
+nltk>=3.8.1
+rouge_score>=0.1.2
+
+# General utilities
+tqdm>=4.66.0
+pyyaml>=6.0.1
+requests>=2.31.0
+numpy>=1.26.0
