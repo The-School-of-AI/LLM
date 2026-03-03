@@ -877,6 +877,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                     "band",
                     "source_doc_id",
                     "source_url",
+                    "t1_file_path",
                     "token_ids",
                     # Optional continuous score columns used by --band-score-source.
                     "band_score",
@@ -1307,6 +1308,8 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             or meta_dict.get("source_doc_id", ""),
                             source_url=row.get("source_url", None)
                             or meta_dict.get("source_url", None),
+                            t1_file_path=row.get("t1_file_path", None)
+                            or meta_dict.get("t1_file_path", None),
                         )
 
                         # Preserve raw input source when available (some datasets distinguish dataset_id vs source).
@@ -1420,6 +1423,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                                 ),
                                 "source_doc_id": getattr(meta, "source_doc_id", ""),
                                 "source_url": getattr(meta, "source_url", None),
+                                "t1_file_path": getattr(meta, "t1_file_path", None),
                                 # Preserve original `source` when present; fallback to dataset_id.
                                 "source": getattr(meta, "source", None)
                                 or meta.dataset_id,
