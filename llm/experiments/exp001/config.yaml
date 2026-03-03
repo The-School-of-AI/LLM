@@ -1,16 +1,83 @@
 seed: 42
 deepspeed_config: ./deepspeed_config.yaml
-tokenizer_dir: ../../_data/tokenizer
-profiler_output_dir: ../../_data/profiler
+tokenizer_dir: ./_data/tokenizer
+profiler_output_dir: ./_data/profiler
+
 data:
   dataset_name: wikitext
   dataset_config: wikitext-2-raw-v1
   max_length: 2
   num_workers: 1
+  pack_into_blocks: true
+  block_sizes: [128]
+
 proxy:
-  local_path: _data/synth_local_en
-  seq_len: 512
+  local_path: ./_data/synth_local_en
+  seq_len: 128 # should be greater than or equal to the smallest block_size, if pack_into_blocks is True
   batch_size: 16
   num_workers: 1
+
+train:
+  max_steps: 10
+  log_interval: 1
+  profile_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
 opus:
+  candidate_multiplier: 2 # if set to 1, opus is disabled.
+  n_proxy: 16
+  sketch_dim: 512
+  temperature: 0.9
+  sketch_seed: 42
   strict_shard_preconditioner: true
+  max_selector_time_s: 30.0
+  fallback_random_on_error: true
+
+model:
+  vocab_size: 131072
+  hidden_size: 512 # Down from 4096 — biggest VRAM saving
+  num_layers: 2
+
+  # Attention Mix (1 of each)
+  num_deltanet_layers: 1
+  num_gsa_layers: 1
+
+  # DeltaNet — heads must satisfy: num_heads * head_dim == hidden_size
+  delta_v_heads: 4 # 512 / 128 = 4
+  delta_head_dim: 128
+  delta_gate_dim: 64 # ~12% of hidden_size
+
+  # GSA — head_dim = hidden_size / num_heads
+  gsa_num_heads: 4 # 512 / 128 = 4
+  gsa_head_dim: 128 # Down from 256
+  gsa_k_base: 32
+  gsa_k_min: 4
+  gsa_k_max: 64
+  gsa_indexer_heads: 2
+
+  # MoE (dense, no change needed)
+  num_real_experts: 0
+  num_null_experts: 0
+  total_expert_slots: 0
+  top_k: 0
+  expert_intermediate_size: 512
+  shared_expert_intermediate_size: 512 # Down from 2048
+  data_sparsity: 0.0
+
+  # MTP
+  enable_mtp: false
+  mtp_num_predictions: 1
+
+  # mHC — n_streams=2 instead of 4 cuts stream memory in half
+  n_streams: 2
+  sinkhorn_iters: 5 # 20 is overkill for a forward pass check
+
+  # Context — keep short for the test
+  max_seq_len: 4096
+  rope_base: 10000
+  rope_original_max_position: 4096
+  rope_scaling_factor: 1.0
+
+  # Training
+  dropout: 0.0
+  require_fused_deltanet_kernel: true
+  require_fused_gsa_kernel: true

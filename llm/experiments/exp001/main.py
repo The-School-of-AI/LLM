@@ -22,6 +22,7 @@ def resolve_paths(c: Config, config_file_path: Path | str) -> Config:
 def main(local_rank: int, config: Config):
     trainer = Trainer(local_rank, config)
     trainer.train()
+    trainer.write_reports()
 
 
 if __name__ == "__main__":

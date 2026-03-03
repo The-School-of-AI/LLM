@@ -85,6 +85,18 @@ class SYNTHStream(IterableDataset):
             return None
         return "\n".join(parts)
 
+    def _tokenize(self, text: str) -> List[int]:
+        """Tokenize text and return input_ids as a plain list."""
+        encoded = self.tokenizer(
+            text,
+            add_special_tokens=False,
+            return_tensors=None,
+            max_length=self.seq_len * 2,
+            truncation=True,
+            padding=False,
+        )
+        return encoded["input_ids"]
+
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         """Iterate over dataset with deterministic resume support"""
         # Load and shuffle full dataset (global shuffle = deterministic)
@@ -120,15 +132,7 @@ class SYNTHStream(IterableDataset):
                     if not text:
                         continue
 
-                    encoded = self.tokenizer.encode_plus(
-                        text,
-                        add_special_tokens=False,
-                        return_tensors=None,
-                        max_length=self.seq_len * 2,
-                        truncation=True,
-                        padding=False,
-                    )
-                    ids = encoded["input_ids"]
+                    ids = self._tokenize(text)
                     if not ids:
                         continue
 
@@ -164,15 +168,7 @@ class SYNTHStream(IterableDataset):
                 if not text:
                     continue
 
-                encoded = self.tokenizer.encode_plus(
-                    text,
-                    add_special_tokens=False,
-                    return_tensors=None,
-                    max_length=self.seq_len * 2,
-                    truncation=True,
-                    padding=False,
-                )
-                ids = encoded["input_ids"]
+                ids = self._tokenize(text)
                 if not ids:
                     continue
 
