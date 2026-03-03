@@ -6,14 +6,13 @@ profiler_output_dir: ./_data/profiler
 data:
   dataset_name: wikitext
   dataset_config: wikitext-2-raw-v1
-  max_length: 2
   num_workers: 1
   pack_into_blocks: true
   block_sizes: [128]
 
 proxy:
   local_path: ./_data/synth_local_en
-  seq_len: 128 # should be greater than or equal to the smallest block_size, if pack_into_blocks is True
+  seq_len: 64 # should be greater than or equal to the smallest block_size, if pack_into_blocks is True
   batch_size: 16
   num_workers: 1
 

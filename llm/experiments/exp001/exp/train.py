@@ -32,7 +32,7 @@ from llm.utils import print_rank_0
 
 @dataclass
 class DataConfig:
-    max_length: int
+    max_length: int = 128
     dataset_name: str | None = None
     dataset_config: str | None = None
     tokenized_dataset_path: str | None = None

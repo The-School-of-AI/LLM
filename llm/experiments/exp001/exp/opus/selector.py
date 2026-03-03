@@ -105,8 +105,10 @@ class OpusSelector:
         is correct — we want each GPU to independently nominate its local best
         before competing globally in _global_pick_from_rank_bests.
         """
-        u = torch.rand(logits.shape, generator=self._rng, dtype=torch.float32).clamp_(
-            min=1e-6, max=1.0 - 1e-6
+        u = (
+            torch.rand(logits.shape, generator=self._rng, dtype=torch.float32)
+            .clamp_(min=1e-6, max=1.0 - 1e-6)
+            .to(logits.device)
         )
         gumbel_noise = -torch.log(-torch.log(u))
         noisy = logits.float() + gumbel_noise
@@ -263,115 +265,111 @@ class OpusSelector:
         used_fallback = False
         fallback_no_finite = False
 
-        try:
-            for _ in range(k_global):
-                # ── Timeout guard ─────────────────────────────────────────────
-                if (time.perf_counter() - t_start) > self.max_selector_time_s:
+        for _ in range(k_global):
+            # ── Timeout guard ─────────────────────────────────────────────
+            if (time.perf_counter() - t_start) > self.max_selector_time_s:
+                if not self.fallback_random_on_error:
                     raise TimeoutError(
                         f"OPUS selector exceeded time budget of {self.max_selector_time_s}s"
                     )
-
-                # ── Compute local utility scores ───────────────────────────────
-                # Alignment term: η * Σ_r <φ^(r)(z), ψ^(r)_proxy>
-                # alignment_scores already holds the layer-summed dot product
-                # from the ghost collector, so no further summation needed here.
-                alignment_term = lr * alignment_scores.float()
-
-                # Redundancy term: η² * Σ_r <φ^(r)(z), Φ^(r)>
-                # history accumulates the sketches of already-selected candidates.
-                redundancy_term = (lr**2) * torch.einsum("nlm,lm->n", cand, history)
-
-                local_scores = alignment_term - redundancy_term
-
-                # Clamp non-finite scores to a large negative value rather than
-                # -inf so they don't propagate NaN into Gumbel noise arithmetic.
-                nonfinite_mask = ~torch.isfinite(local_scores)
-                nonfinite_scores += int(nonfinite_mask.sum().item())
-                local_scores = torch.nan_to_num(
-                    local_scores,
-                    nan=torch.finfo(torch.float32).min,
-                    posinf=torch.finfo(torch.float32).min,
-                    neginf=torch.finfo(torch.float32).min,
+                local_indices = self._fallback_local_random(
+                    n_local, k_local_fallback, device
+                )
+                global_indices = local_indices + (rank * n_local)
+                return SelectionResult(
+                    selected_local_indices=local_indices,
+                    selected_global_indices=global_indices,
+                    used_fallback=True,
+                    metrics={
+                        "alignment": 0.0,
+                        "redundancy": 0.0,
+                        "entropy": 0.0,
+                        "nonfinite_scores": float(nonfinite_scores),
+                        "fallback_no_finite": 0.0,
+                        "used_fallback": 1.0,
+                        "selector_time_s": float(time.perf_counter() - t_start),
+                    },
                 )
 
-                # Mask already-selected candidates with -inf so they can never
-                # be picked again (Gumbel noise can't rescue a -inf logit)
-                local_scores[selected_local] = -torch.inf
+            # ── Compute local utility scores ───────────────────────────────
+            # Alignment term: η * Σ_r <φ^(r)(z), ψ^(r)_proxy>
+            # alignment_scores already holds the layer-summed dot product
+            # from the ghost collector, so no further summation needed here.
+            alignment_term = lr * alignment_scores.float()
 
-                # ── Sample one winner ──────────────────────────────────────────
+            # Redundancy term: η² * Σ_r <φ^(r)(z), Φ^(r)>
+            # history accumulates the sketches of already-selected candidates.
+            redundancy_term = (lr**2) * torch.einsum("nlm,lm->n", cand, history)
 
-                # Each GPU picks its local Gumbel best, then they compete globally.
-                logits = local_scores / self.temperature
-                local_best_val, local_best_idx = self._local_gumbel_argmax(logits)
-                local_best_score = local_scores[local_best_idx]
+            local_scores = alignment_term - redundancy_term
 
-                chosen, chosen_score = self._global_pick_from_rank_bests(
-                    local_best_value=local_best_val,
-                    local_best_index=local_best_idx,
-                    local_best_score=local_best_score,
-                    n_local=n_local,
-                    device=device,
-                )
-
-                # ── Handle no valid winner ─────────────────────────────────────
-                if chosen < 0:
-                    fallback_no_finite = True
-                    break
-
-                selected_global_indices.append(chosen)
-
-                # ── Update local selection mask ────────────────────────────────
-                # Decode owner GPU and local index from the global index:
-                #   global_idx = owner_rank * n_local + local_idx
-                owner = chosen // n_local
-                local_idx = chosen % n_local
-                if rank == owner:
-                    selected_local[local_idx] = True
-                    selected_feat = cand[local_idx].clone()  # (n_layers, sketch_dim)
-                else:
-                    # This GPU doesn't own the winner — contribute zeros to
-                    # the all-reduce so history stays correct everywhere
-                    selected_feat = torch.zeros_like(history)
-
-                # ── Update history Φ on all GPUs ───────────────────────────────
-                # All-reduce propagates the winner's sketch to every GPU so they
-                # all update Φ identically, keeping the redundancy term in sync.
-                work = all_reduce_sum_async(selected_feat)
-                if work is not None:
-                    work.wait()
-                history = history + selected_feat
-
-                # ── Metrics ────────────────────────────────────────────────────
-                alignment_acc += chosen_score
-                redundancy_acc += float(torch.norm(selected_feat).item())
-
-                # Approximate entropy contribution: -p * log(p)
-                if math.isfinite(chosen_score):
-                    p = math.exp(min(chosen_score / self.temperature, 80.0))
-                    if p > 0.0:
-                        entropy_acc += -p * math.log(p + 1e-12)
-
-        except Exception:
-            if not self.fallback_random_on_error:
-                raise
-            local_indices = self._fallback_local_random(
-                n_local, k_local_fallback, device
+            # Clamp non-finite scores to a large negative value rather than
+            # -inf so they don't propagate NaN into Gumbel noise arithmetic.
+            nonfinite_mask = ~torch.isfinite(local_scores)
+            nonfinite_scores += int(nonfinite_mask.sum().item())
+            local_scores = torch.nan_to_num(
+                local_scores,
+                nan=torch.finfo(torch.float32).min,
+                posinf=torch.finfo(torch.float32).min,
+                neginf=torch.finfo(torch.float32).min,
             )
-            global_indices = local_indices + (rank * n_local)
-            return SelectionResult(
-                selected_local_indices=local_indices,
-                selected_global_indices=global_indices,
-                used_fallback=True,
-                metrics={
-                    "alignment": 0.0,
-                    "redundancy": 0.0,
-                    "entropy": 0.0,
-                    "nonfinite_scores": float(nonfinite_scores),
-                    "fallback_no_finite": 0.0,
-                    "used_fallback": 1.0,
-                    "selector_time_s": float(time.perf_counter() - t_start),
-                },
+
+            # Mask already-selected candidates with -inf so they can never
+            # be picked again (Gumbel noise can't rescue a -inf logit)
+            local_scores[selected_local] = -torch.inf
+
+            # ── Sample one winner ──────────────────────────────────────────
+
+            # Each GPU picks its local Gumbel best, then they compete globally.
+            logits = local_scores / self.temperature
+            local_best_val, local_best_idx = self._local_gumbel_argmax(logits)
+            local_best_score = local_scores[local_best_idx]
+
+            chosen, chosen_score = self._global_pick_from_rank_bests(
+                local_best_value=local_best_val,
+                local_best_index=local_best_idx,
+                local_best_score=local_best_score,
+                n_local=n_local,
+                device=device,
             )
+
+            # ── Handle no valid winner ─────────────────────────────────────
+            if chosen < 0:
+                fallback_no_finite = True
+                break
+
+            selected_global_indices.append(chosen)
+
+            # ── Update local selection mask ────────────────────────────────
+            # Decode owner GPU and local index from the global index:
+            #   global_idx = owner_rank * n_local + local_idx
+            owner = chosen // n_local
+            local_idx = chosen % n_local
+            if rank == owner:
+                selected_local[local_idx] = True
+                selected_feat = cand[local_idx].clone()  # (n_layers, sketch_dim)
+            else:
+                # This GPU doesn't own the winner — contribute zeros to
+                # the all-reduce so history stays correct everywhere
+                selected_feat = torch.zeros_like(history)
+
+            # ── Update history Φ on all GPUs ───────────────────────────────
+            # All-reduce propagates the winner's sketch to every GPU so they
+            # all update Φ identically, keeping the redundancy term in sync.
+            work = all_reduce_sum_async(selected_feat)
+            if work is not None:
+                work.wait()
+            history = history + selected_feat
+
+            # ── Metrics ────────────────────────────────────────────────────
+            alignment_acc += chosen_score
+            redundancy_acc += float(torch.norm(selected_feat).item())
+
+            # Approximate entropy contribution: -p * log(p)
+            if math.isfinite(chosen_score):
+                p = math.exp(min(chosen_score / self.temperature, 80.0))
+                if p > 0.0:
+                    entropy_acc += -p * math.log(p + 1e-12)
 
         # ── Post-loop: resolve final local indices ─────────────────────────────
         local_indices = torch.nonzero(selected_local, as_tuple=False).flatten()
