@@ -23,4 +23,4 @@ if [ "$NUM_GPUS" -eq 0 ]; then
     NUM_GPUS=1
 fi
 
-uv run deepspeed --num_gpus=$NUM_GPUS main.py --config config.yaml 2>&1 | tee _data/train.log
+exec uv run deepspeed --num_gpus=$NUM_GPUS main.py --config config.yaml "$@" 2>&1 | tee _data/train.log

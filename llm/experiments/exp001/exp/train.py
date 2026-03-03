@@ -5,7 +5,7 @@ from typing import Any, ContextManager
 import deepspeed
 import torch
 import yaml
-from exp.distributed import get_rank, set_seed
+from exp.distributed import all_reduce_sum, get_rank, set_seed
 from exp.opus import (
     AdamWPreconditionerView,
     CountSketchProjector,
@@ -255,16 +255,9 @@ class Trainer:
 
         print_rank_0("starting training")
 
-        for batch in self.train_loader:
+        for step, batch in enumerate(self.train_loader):
             if self.step_prof is not None:
-                self.step_prof.start_step(
-                    global_step=1,
-                    tokens=int(
-                        batch["attention_mask"].sum().item()
-                        if "attention_mask" in batch
-                        else 0
-                    ),
-                )
+                self.step_prof.start_step(global_step=step)
 
             # ── Move candidate pool to device ─────────────────────────────
             # The train loader yields candidate_pool_size sequences per GPU.
@@ -326,13 +319,11 @@ class Trainer:
             loss_val = train_loss.detach().float().item()
 
             if self.step_prof is not None:
-                self.step_prof.end_step(
-                    tokens=int(
-                        batch["attention_mask"].sum().item()
-                        if "attention_mask" in batch
-                        else 0
-                    ),
+                _ptoks = torch.tensor(
+                    selected_ids.numel(), dtype=torch.long, device=self.device
                 )
+                _ptoks = all_reduce_sum(_ptoks)
+                self.step_prof.end_step(tokens=int(_ptoks.item()))
 
             if global_step % c.train.log_interval == 0:
                 n_selected_local = local_indices.numel()
@@ -441,11 +432,11 @@ class Trainer:
             with self._step_phase("opus/scoring_backward"):
                 self.engine.backward(scoring_loss)
 
-        # Discard scoring gradients so they don't pollute the training pass.
-        with self._step_phase("opus/zero_grad"):
-            self.engine.zero_grad()
+            # Discard scoring gradients so they don't pollute the training pass.
+            with self._step_phase("opus/zero_grad"):
+                self.engine.zero_grad()
 
-        alignment_scores, candidate_sketches = ghost_collector.results()
+            alignment_scores, candidate_sketches = ghost_collector.results()
 
         # ── Boltzmann selection ───────────────────────────────────────────────
         # OpusSelector runs the distributed Boltzmann loop:

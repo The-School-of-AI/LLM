@@ -18,13 +18,13 @@ proxy:
   num_workers: 1
 
 train:
-  max_steps: 10
+  max_steps: 20
   log_interval: 1
-  profile_steps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  profile_steps: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 
 opus:
   candidate_multiplier: 2 # if set to 1, opus is disabled.
-  n_proxy: 16
+  n_proxy: 2
   sketch_dim: 512
   temperature: 0.9
   sketch_seed: 42

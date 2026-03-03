@@ -463,6 +463,9 @@ class StepProfiler:
         self._recording = False
         if tokens:
             self._current.tokens = tokens
+        self._current.add(
+            "step_total", (_time.time() - self._current.start_timestamp) * 1000.0
+        )
 
         # Force CUDA sync so all event elapsed_time() calls are ready
         if torch.cuda.is_available():
@@ -611,7 +614,7 @@ class StepProfiler:
             "\n── Step Phases ──────────────────────────────────────────────────"
         )
         lines.append(f"  {'Region':<30}  {'ms':>8}  {'%step':>7}")
-        lines.append(f"  {'-'*30}  {'-'*8}  {'-'*7}")
+        lines.append(f"  {'-' * 30}  {'-' * 8}  {'-' * 7}")
         step_total = avgs.get(
             "step_total", sum(avgs.get(k, 0) for k in phase_keys) or 1
         )
@@ -625,7 +628,7 @@ class StepProfiler:
             "\n── Per-Layer Forward (ms) ───────────────────────────────────────"
         )
         lines.append(f"  {'Layer':<38}  {'fwd ms':>8}")
-        lines.append(f"  {'-'*38}  {'-'*8}")
+        lines.append(f"  {'-' * 38}  {'-' * 8}")
         layer_keys = sorted(
             k for k in avgs if k.startswith("layer") and k.endswith(".fwd")
         )
@@ -667,7 +670,7 @@ class StepProfiler:
                 "\n── Kernel-Type Totals (all layers summed) ───────────────────────"
             )
             lines.append(f"  {'Kernel':<30}  {'total ms':>10}")
-            lines.append(f"  {'-'*30}  {'-'*10}")
+            lines.append(f"  {'-' * 30}  {'-' * 10}")
             for ktype, total_ms in sorted(kernel_totals.items(), key=lambda x: -x[1]):
                 lines.append(f"  {ktype:<30}  {total_ms:>10.2f}")
 
@@ -676,7 +679,7 @@ class StepProfiler:
             "\n── Granular Kernel Operations (avg per call) ────────────────────"
         )
         lines.append(f"  {'Operation':<52}  {'per-call ms':>10}  {'calls':>8}")
-        lines.append(f"  {'-'*52}  {'-'*10}  {'-'*8}")
+        lines.append(f"  {'-' * 52}  {'-' * 10}  {'-' * 8}")
 
         # Filter for detailed kernel operations (those with dots indicating nesting)
         detailed_ops = sorted(
@@ -699,7 +702,7 @@ class StepProfiler:
             "\n── All Regions (sorted by avg ms) ───────────────────────────────"
         )
         lines.append(f"  {'Region':<44}  {'avg ms':>8}  {'calls':>6}  {'per-call':>8}")
-        lines.append(f"  {'-'*44}  {'-'*8}  {'-'*6}  {'-'*8}")
+        lines.append(f"  {'-' * 44}  {'-' * 8}  {'-' * 6}  {'-' * 8}")
         for k, v in sorted(avgs.items(), key=lambda x: -x[1])[:60]:
             calls = region_counts[k]
             per_call_ms = v / (calls / n) if calls > 0 else 0
@@ -825,7 +828,7 @@ class PipelineProfiler:
         lines.append(
             f"  {'Stage':<35}  {'Time':>10}  {'%total':>7}  {'Cumulative':>11}"
         )
-        lines.append(f"  {'-'*35}  {'-'*10}  {'-'*7}  {'-'*11}")
+        lines.append(f"  {'-' * 35}  {'-' * 10}  {'-' * 7}  {'-' * 11}")
 
         cumulative = 0.0
         for name, t0, t1, meta in self._records:
@@ -855,7 +858,7 @@ class PipelineProfiler:
                 f"  {'(unaccounted / gaps)':<35}  {_fmt_duration(unaccounted):>10}  {pct:>6.1f}%"
             )
 
-        lines.append(f"  {'-'*35}  {'-'*10}  {'-'*7}  {'-'*11}")
+        lines.append(f"  {'-' * 35}  {'-' * 10}  {'-' * 7}  {'-' * 11}")
         lines.append(
             f"  {'TOTAL':<35}  {_fmt_duration(total_elapsed):>10}  {'100.0%':>7}"
         )
