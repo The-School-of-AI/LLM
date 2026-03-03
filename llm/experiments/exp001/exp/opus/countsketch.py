@@ -6,6 +6,8 @@ from typing import Dict, Tuple
 
 import torch
 
+from .triton_countsketch import fused_sketch_scatter
+
 
 @dataclass
 class _ShapeCache:
@@ -361,10 +363,6 @@ class CountSketchProjector:
             # Equivalent to: for each sample b, grad[b] = g[b].T @ a[b]
             grad_chunk = torch.bmm(g_chunk.transpose(1, 2), a_f)
 
-            # Apply diagonal preconditioner (broadcast over batch dim)
-            if p is not None:
-                grad_chunk = grad_chunk * p[row_start:row_end].unsqueeze(0)
-
             # CountSketch: compute hash bins and signs for this row-chunk
             pair_hash = (
                 cache.row_hash[row_start:row_end].unsqueeze(1)
@@ -374,11 +372,10 @@ class CountSketchProjector:
                 1
             ) * cache.col_sign.unsqueeze(0)  # [chunk, in_dim]
 
-            # Apply signs and flatten spatial dims for scatter
-            signed = (grad_chunk * pair_sign.unsqueeze(0)).reshape(bsz, -1)  # [B, chunk*in_dim]
-            idx = pair_hash.reshape(1, -1).expand(bsz, -1)  # [B, chunk*in_dim]
-
-            sketches.scatter_add_(1, idx, signed)
+            # Fused: preconditioner multiply + sign multiply + scatter_add
+            # in one kernel launch (Triton when available, PyTorch fallback)
+            p_slice = p[row_start:row_end] if p is not None else None
+            fused_sketch_scatter(grad_chunk, p_slice, pair_sign, pair_hash, sketches)
 
         sketches = torch.nan_to_num(sketches, nan=0.0, posinf=0.0, neginf=0.0)
         return sketches.to(out_dtype)
