@@ -1,8 +1,6 @@
 # EC2 Coreset Pipeline Commands
 
-This document covers how to run the coreset pipeline
-on an EC2 instance, using either the **automated script**
-(`commands.sh`) or **manual steps**.
+This document covers how to run the coreset pipeline on an EC2 instance, using either the **automated script** (`commands.sh`) or **manual steps**.
 
 ---
 
@@ -21,9 +19,7 @@ The `commands.sh` script automates the full pipeline in 8 steps:
 
 ### Prerequisites
 
-- **EMR Job (Step 0):** An AWS Admin must first run the EMR Serverless job:
-  [`emr/T3_final_emr_serverless_stats.py`](../emr/T3_final_emr_serverless_stats.py)
-  Once the EMR job completes, it generates chunked data files and source-wise stats in CSV format. These stats must be aggregated to get `TOTAL_TOKENS` and passed to `shard.sh` as a parameter.
+- **EMR Job (Step 0):** An AWS Admin must first run the EMR Serverless job: [`emr/T3_final_emr_serverless_stats.py`](../emr/T3_final_emr_serverless_stats.py). Once the EMR job completes, it generates chunked data files and source-wise stats in CSV format. These stats must be aggregated to get `TOTAL_TOKENS` and passed to `shard.sh` as a parameter.
   - To aggregate, run: [`tools/estimate_total_tokens.py`](../tools/estimate_total_tokens.py)
   - For distribution analysis, use: [`notebooks/distribution_plots_notebook_extended.ipynb`](../notebooks/distribution_plots_notebook_extended.ipynb) (this also creates an aggregate CSV providing `TOTAL_TOKENS`)
 - **S3_BUCKET** must be set (required)
@@ -61,9 +57,7 @@ export S3_BUCKET="your-bucket-name"
 
 ## Estimating TOTAL_TOKENS
 
-Before running the pipeline, estimate `TOTAL_TOKENS`
-from the post-dedup `stats/` folder on EC2. This folder
-contains one CSV file per source with token counts.
+Before running the pipeline, estimate `TOTAL_TOKENS` from the post-dedup `stats/` folder on EC2. This folder contains one CSV file per source with token counts.
 
 ```bash
 # Option 1: Python tool (aggregates across all CSVs)
@@ -85,17 +79,13 @@ export TOTAL_TOKENS=<replace with output of estimate_total_tokens.py(total_token
 ```
 
 > [!TIP]
-> Run this after the EMR dedup process generates
-> `stats/` CSV files. The aggregate `total_tokens`
-> across all sources becomes the `TOTAL_TOKENS`
-> input for the coreset pipeline.
+> Run this after the EMR dedup process generates `stats/` CSV files. The aggregate `total_tokens` across all sources becomes the `TOTAL_TOKENS` input for the coreset pipeline.
 
 ---
 
 ## Overriding Pipeline Parameters
 
-All pipeline variables have defaults and can be
-overridden via environment variables:
+All pipeline variables have defaults and can be overridden via environment variables:
 
 ```bash
 export S3_BUCKET="your-bucket-name"
@@ -108,7 +98,7 @@ export RESUME=true
 ```
 
 | Variable | Default | Description |
-| -------- | ------- | ----------- |
+| --- | --- | --- |
 | `S3_BUCKET` | *(required)* | S3 bucket name |
 | `S3_INPUT_PATH` | `s3://${S3_BUCKET}/...` | Input data path |
 | `NUM_SHARDS` | `8` | Parallel shards |
@@ -123,38 +113,32 @@ export RESUME=true
 
 ## Overriding Infrastructure Validation Thresholds
 
-The infrastructure validation step (`validate_infra.sh`)
-has defaults tuned for **c7gd.16xlarge** but all
-thresholds are configurable.
+The infrastructure validation step (`validate_infra.sh`) has defaults tuned for **c7gd.16xlarge** but all thresholds are configurable.
 
-### Example: Running on c6i.8xlarge (no NVMe)
+### Deployment Profiles
+
+#### Option 1: EBS Gp3 Only (`c6i`, `m7i-flex`)
 
 ```bash
 export S3_BUCKET="your-bucket-name"
-export EXPECTED_INSTANCE_TYPE="c6i.8xlarge"
-export MIN_VCPU=32
-export MIN_RAM_GB=60
 export ENABLE_NVME=false
-export MIN_EBS_FREE_GB=200
-export MIN_EBS_ROOT_GB=500
+export SKIP_EBS_VALIDATION=true
 ./commands.sh --foreground
 ```
 
-### Example: Running on m5d.4xlarge (with NVMe)
+#### Option 2: NVMe + EBS Gp3 (`c7gd.16xlarge`)
 
 ```bash
+# Setup NVMe first (refer to INFRA_OPERATIONS.md)
 export S3_BUCKET="your-bucket-name"
-export EXPECTED_INSTANCE_TYPE="m5d.4xlarge"
-export MIN_VCPU=16
-export MIN_RAM_GB=60
-export MIN_NVME_FREE_GB=100
+export ENABLE_NVME=true
 ./commands.sh --foreground
 ```
 
 ### Full threshold reference
 
 | Variable | Default | Description |
-| -------- | ------- | ----------- |
+| --- | --- | --- |
 | `EXPECTED_INSTANCE_TYPE` | `c7gd.16xlarge` | EC2 instance type |
 | `MIN_VCPU` | `64` | Min vCPU count |
 | `MIN_RAM_GB` | `120` | Min RAM (GiB) |
@@ -217,7 +201,6 @@ python3 tools/merge_sharded_ablation_reports.py --overwrite
 # Merge Sharded selected indices manifests
 python3 tools/merge_selected_indices.py --coreset-root output/coresets\
   --stages 1B 3B 8B 70B
-
 ```
 
 ---
@@ -290,6 +273,7 @@ nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
 tail -f shard_run.log
 ps aux | grep shard.sh
 ```
+
 ### 7. Post-run steps (default)
 
 After the pipeline finishes, run post-run steps manually:
@@ -316,6 +300,7 @@ python3 tools/merge_sharded_ablation_reports.py --overwrite
 # Merge Sharded selected indices manifests
 python3 tools/merge_selected_indices.py --coreset-root output/coresets\
   --stages 1B 3B 8B 70B
+```
 
 ---
 
