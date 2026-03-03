@@ -320,14 +320,20 @@ class CountSketchProjector:
         sketch_key: str = "",
     ) -> torch.Tensor:
         """
-        Project batch of linear gradients to sketch vectors.
+        Project batch of linear gradients to sketch vectors (batched).
+
+        Uses torch.bmm to compute all per-sample outer-product gradients in
+        a single batched matmul, then applies preconditioner and CountSketch
+        projection via a single scatter_add_ per row-chunk.  This eliminates
+        the per-sample Python for-loop that previously caused thousands of
+        tiny GPU kernel launches per backward pass.
 
         Args:
             activations: [B, T, in_dim] or [B, in_dim]
             grad_outputs: [B, T, out_dim] or [B, out_dim]
             preconditioner: [out_dim, in_dim] or None
         Returns:
-            [B, m]
+            [B, sketch_dim]
         """
         a = self._ensure_btd(activations)
         g = self._ensure_btd(grad_outputs)
@@ -337,17 +343,42 @@ class CountSketchProjector:
             )
 
         bsz = a.shape[0]
-        out = []
-        for i in range(bsz):
-            out.append(
-                self.project_linear_sample(
-                    activations=a[i],
-                    grad_outputs=g[i],
-                    preconditioner=preconditioner,
-                    out_dim=out_dim,
-                    in_dim=in_dim,
-                    out_dtype=out_dtype,
-                    sketch_key=sketch_key,
-                )
-            )
-        return torch.stack(out, dim=0)
+        device = a.device
+        cache = self._get_cache(out_dim, in_dim, device, sketch_key=sketch_key)
+
+        a_f = a.float()
+        g_f = g.float()
+        p = self._sanitize_f32(preconditioner) if preconditioner is not None else None
+
+        sketches = torch.zeros(bsz, self.sketch_dim, device=device, dtype=torch.float32)
+
+        chunk = max(1, self.row_chunk_size)
+        for row_start in range(0, out_dim, chunk):
+            row_end = min(out_dim, row_start + chunk)
+            g_chunk = g_f[:, :, row_start:row_end]  # [B, T, chunk]
+
+            # Batched outer-product sum: [B, chunk, in_dim]
+            # Equivalent to: for each sample b, grad[b] = g[b].T @ a[b]
+            grad_chunk = torch.bmm(g_chunk.transpose(1, 2), a_f)
+
+            # Apply diagonal preconditioner (broadcast over batch dim)
+            if p is not None:
+                grad_chunk = grad_chunk * p[row_start:row_end].unsqueeze(0)
+
+            # CountSketch: compute hash bins and signs for this row-chunk
+            pair_hash = (
+                cache.row_hash[row_start:row_end].unsqueeze(1)
+                + cache.col_hash.unsqueeze(0)
+            ) % self.sketch_dim  # [chunk, in_dim]
+            pair_sign = cache.row_sign[row_start:row_end].unsqueeze(
+                1
+            ) * cache.col_sign.unsqueeze(0)  # [chunk, in_dim]
+
+            # Apply signs and flatten spatial dims for scatter
+            signed = (grad_chunk * pair_sign.unsqueeze(0)).reshape(bsz, -1)  # [B, chunk*in_dim]
+            idx = pair_hash.reshape(1, -1).expand(bsz, -1)  # [B, chunk*in_dim]
+
+            sketches.scatter_add_(1, idx, signed)
+
+        sketches = torch.nan_to_num(sketches, nan=0.0, posinf=0.0, neginf=0.0)
+        return sketches.to(out_dtype)
