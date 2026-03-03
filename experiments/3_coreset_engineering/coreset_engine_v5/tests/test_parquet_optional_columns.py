@@ -19,6 +19,7 @@ def test_parquet_batch_iterator_ignores_missing_columns(tmp_path):
                 "band": "B0",
                 "source_doc_id": "doc",
                 "source_url": None,
+                "t1_file_path":"doc_2.parquet"
             }
         ]
     )

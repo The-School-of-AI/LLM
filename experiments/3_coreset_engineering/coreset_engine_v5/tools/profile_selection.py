@@ -61,7 +61,8 @@ def profile_selection_at_scale(k: int):
             language=data.get("language", "en"),
             band=DifficultyBand(data.get("band", "B0")),
             source_doc_id=data.get("source_doc_id", ""),
-            source_url=data.get("source_url", None),
+            source_url=data.get("source_url", ""),
+            t1_file_path=data.get("t1_file_path", ""),
         )
         if "token_ids" in data:
             setattr(meta, "token_ids", list(data["token_ids"]))

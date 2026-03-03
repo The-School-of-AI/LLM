@@ -95,7 +95,7 @@ print(df.head())
 **Sample Columns (typical):**
 
 - `chunk_id`, `dataset_id`, `token_count`, `domain`, `language`, `band`
-- `byte_length`, `source_doc_id`, `source_url`
+- `byte_length`, `source_doc_id`, `source_url`, `t1_file_path`
 - `source` (when available)
 
 
@@ -120,7 +120,7 @@ with open("output/coresets/1B/selected_indices.jsonl") as f:
 **Sample Output (schema-aligned):**
 
 ```json
-{"chunk_id":"ch_001","dataset_id":"books","source":"books","token_count":2048,"byte_length":6463,"domain":"literature","language":"en","band":"B0","source_doc_id":"part-00000-...parquet","source_url":"s3://..."}
+{"chunk_id":"ch_001","dataset_id":"books","source":"books","token_count":2048,"byte_length":6463,"domain":"literature","language":"en","band":"B0","source_doc_id":"part-00000-...parquet","source_url":"s3://...","t1_file_path":"s3://t1-raw/.../file.parquet"}
 ```
 
 ### CSV Format
@@ -140,8 +140,8 @@ df = pd.read_csv("output/coresets/1B/selected_indices.csv")
 **Sample Output (schema-aligned):**
 
 ```csv
-chunk_id,dataset_id,source,token_count,byte_length,domain,language,band,source_doc_id,source_url
-ch_001,books,books,2048,2048,6463,literature,en,B0,part-00000-...parquet,s3://...
+chunk_id,dataset_id,source,token_count,byte_length,domain,language,band,source_doc_id,source_url,t1_file_path
+ch_001,books,books,2048,2048,6463,literature,en,B0,part-00000-...parquet,s3://...,s3://t1-raw/.../file.parquet
 ```
 
 ## Configuration Examples
@@ -204,8 +204,9 @@ Each row/object contains:
 - **source**: Original dataset source label when provided (often same as dataset_id)
 - **source_doc_id**: Document source file name
 - **source_url**: URL if available
+- **t1_file_path**: Path/URI to the original raw source file (recorded by the T1 dataset team) that contains the raw data for this chunk
 
-* source_url+source_doc_id -->  Leads to the source dataset file and then use chunk_id to pull the exact record data (Raw dataset)
+* `t1_file_path` and/or `source_url`+`source_doc_id` can be used for traceability to the source dataset; use `chunk_id` to locate the exact record within that source.
 
 ## Performance Comparison
 

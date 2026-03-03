@@ -7,7 +7,7 @@ This pipeline consolidates, transforms, and deduplicates curriculum data from mu
 - **Resume from Checkpoint**: Uses S3-based `.done` files to skip already processed sources, allowing for robust retries.
 - **Optimized Deduplication**: Performs "Exact Deduplication" on a minimized schema (hash-only) to significantly reduce Network I/O and Disk spill.
 - **Advanced Statistics**: Reports detailed metrics including input/unique counts for documents, words, and tokens, along with reduction percentages.
-- **Metadata Capture**: Automatically tracks the origin of each record (`source_doc_id` and `source_url`).
+- **Metadata Capture**: Automatically tracks the origin of each record (`source_doc_id`, `source_url`, and (when provided upstream) `t1_file_path`).
 
 ## Data Schema Mapping
 
@@ -21,6 +21,7 @@ This pipeline consolidates, transforms, and deduplicates curriculum data from mu
 | (New) | `band_score` | Probability score specifically for the assigned band. |
 | (New) | `source_doc_id` | Filename of the source Parquet file. |
 | (New) | `source_url` | Full S3 folder path of the source data. |
+| (New) | `t1_file_path` | Path/URI to the original raw source file containing the record (recorded by the T1 dataset team; preserved when present upstream). |
 
 ## System Architecture & Flow
 
@@ -44,8 +45,9 @@ This pipeline consolidates, transforms, and deduplicates curriculum data from mu
 3.  **Metadata Capture**: 
     - `source_doc_id`: Captures the specific `.parquet` filename for every record using `input_file_name()`.
     - `source_url`: Captures the full s3 folder url path (e.g., `s3://.../band=B2/`).
+  - `t1_file_path`: Preserved from an upstream column when present; points to the original raw file containing the record as recorded by the T1 dataset team.
 4.  **Schema Preparation**: Renames the `id` column to `chunk_id` as the primary identifier.
-5.  **Data Thinning (Performance Block)**: To prevent Out-of-Memory errors during shuffle, the script immediately drops heavy `text` and `metadata` columns. It only keeps `hash`, `chunk_id`, `assigned_band`, `source_doc_id`, `source_url` and the `band_p_*` scores.
+5.  **Data Thinning (Performance Block)**: To prevent Out-of-Memory errors during shuffle, the script immediately drops heavy `text` and `metadata` columns. It only keeps `hash`, `chunk_id`, `assigned_band`, `source_doc_id`, `source_url`, `t1_file_path` and the `band_p_*` scores.
 6.  **Global Deduplication**: Executes `dropDuplicates(["hash"])`. Since the data is now "thin", Spark performs the shuffle and deduplication significantly faster and with less disk spill.
 7.  **Post-Dedup Feature Engineering**:
     - **Band Alignment**: Derives the final `band` column from `assigned_band`.
@@ -63,6 +65,7 @@ While the final output is in **Parquet** format, each record contains the follow
   "chunk_id": "c9cc4f99-2006-479e-95b6-b84a5094ca93",
   "source_doc_id": "part-00019-e5d823ab-2176-4666-90e1-47d89b6983e8.c000.zstd.parquet",
   "source_url": "s3://t2-datacurriculum-353/processed_dataset/curriculum_data/source=ncert/bands/band=B2/",
+  "t1_file_path": "s3://t1-raw/.../ncert/file.parquet",
   "source": "ncert",
   "band": "B2",
   "band_score": 0.7746882097457848,
