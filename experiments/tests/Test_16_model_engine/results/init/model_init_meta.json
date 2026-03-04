@@ -1,0 +1,15 @@
+{
+  "seed": 42,
+  "model_variant": "reversible",
+  "embedding_type": "kronecker",
+  "tokenizer_name": null,
+  "vocab_size": 131075,
+  "parameter_count": 1647216820,
+  "init_checkpoint_path": "/mnt/local-nvme/LLM/experiments/tests/Test_14_gsa_only_liger_kernels_1000steps/results/init/model_init.pt",
+  "init_checkpoint_sha256": "0a20a622d553820f664fba69c85a548b3fcbe03c6a253b1231a6917ac8392894",
+  "config_path": "/mnt/local-nvme/LLM/experiments/tests/Test_14_gsa_only_liger_kernels_1000steps/configs/test14_gsa_only_liger_kernels_1000steps.yaml",
+  "reversibility_assertion_passed": true,
+  "require_gsa_triton": true,
+  "gsa_triton_assertion_passed": true,
+  "kronecker_assertions_passed": true
+}

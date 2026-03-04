@@ -61,6 +61,22 @@ gemma_block = '''
             TOKENIZER_PATH="${MODEL_DIR}/google/gemma-1b-it"
             TOKENIZER_TYPE="hf"
             ;;
+
+        gemma-3b)
+            MODEL_PATH="${MODEL_DIR}/google/gemma-3b"
+            MODEL_TEMPLATE_TYPE="base"
+            MODEL_FRAMEWORK="vllm"
+            TOKENIZER_PATH="${MODEL_DIR}/google/gemma-3b"
+            TOKENIZER_TYPE="hf"
+            ;;
+
+        gemma-3b-it)
+            MODEL_PATH="${MODEL_DIR}/google/gemma-3b-it"
+            MODEL_TEMPLATE_TYPE="gemma"
+            MODEL_FRAMEWORK="vllm"
+            TOKENIZER_PATH="${MODEL_DIR}/google/gemma-3b-it"
+            TOKENIZER_TYPE="hf"
+            ;;
 '''
 
 # Insert before 'esac'

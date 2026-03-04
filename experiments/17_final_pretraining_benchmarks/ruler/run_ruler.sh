@@ -3,50 +3,50 @@
 # run_ruler.sh — Pre-configured RULER benchmark runner for NVIDIA L4
 # Usage: bash run_ruler.sh [MODEL_NAME] [BENCHMARK]
 #
-# Defaults to: bash run_ruler.sh gemma-2b synthetic
+# Defaults to: bash run_ruler.sh gemma-3-1b-pt synthetic
 # =============================================================================
 
 set -euo pipefail
 
-# ─── USER CONFIGURATION ──────────────────────────────────────────────────────
+# ─── USER CONFIGURATION (edit these) ─────────────────────────────────────────
 
-# Model key (must match a case in RULER/scripts/config_models.sh)
-MODEL_NAME="${1:-gemma-2b}"
+# Model key — must match a case in RULER/scripts/config_models.sh
+MODEL_NAME="${1:-gemma-3b-it}"
 
-# Benchmark name (synthetic is the standard RULER suite of 13 tasks)
+# Benchmark name (synthetic = standard 13-task RULER suite)
 BENCHMARK="${2:-synthetic}"
 
-# Path where models are stored. The model should be at:
-#   ${MODEL_DIR}/google/gemma-2b   (for gemma-2b)
-#   ${MODEL_DIR}/google/gemma-1b   (for gemma-1b)
+# Directory where models live: model must be at ${MODEL_DIR}/<org>/<name>
 MODEL_DIR="$(pwd)/models"
 
-# Path where generated data and predictions will be written
+# Where generated data and predictions will be written
 ROOT_DIR="$(pwd)/results"
 
-# Number of GPU(s) — L4 is single-GPU, keep at 1
+# Number of GPUs — L4 is single-GPU
 GPUS=1
 
-# Inference batch size — L4 can handle 32 for 1-2B models
+# Inference batch size — L4 handles 32 comfortably for 1-3B models
 BATCH_SIZE=32
 
-# Sequence lengths to evaluate (space-separated)
-# Remove 16384/32768 if you did NOT patch config.json for extended context
+# Sequence lengths to evaluate (space-separated inside the parens)
+# Remove 16384/32768 if you did NOT extend max_position_embeddings in config.json
 SEQ_LENGTHS=(4096 8192)
-# SEQ_LENGTHS=(4096 8192 16384 32768)   # uncomment after extending context
+# SEQ_LENGTHS=(4096 8192 16384 32768)
 
-# Samples per task.  Use 10 for a smoke test, 500 for the full benchmark.
+# Samples per task. Use 10 for a quick smoke test, 500 for the full benchmark.
 NUM_SAMPLES=500
-# NUM_SAMPLES=10   # smoke test
+# NUM_SAMPLES=10
 
-# ─── SANITY CHECKS ───────────────────────────────────────────────────────────
+# ─── PATHS ───────────────────────────────────────────────────────────────────
 
 RULER_DIR="$(pwd)/RULER"
 SCRIPTS_DIR="${RULER_DIR}/scripts"
 
+# ─── CHECKS ──────────────────────────────────────────────────────────────────
+
 if [ ! -d "${RULER_DIR}" ]; then
-    echo "[ERROR] RULER directory not found at ${RULER_DIR}"
-    echo "  Run: git clone https://github.com/NVIDIA/RULER.git RULER"
+    echo "[ERROR] RULER not found at ${RULER_DIR}"
+    echo "  Fix: git clone https://github.com/NVIDIA/RULER.git RULER"
     exit 1
 fi
 
@@ -55,23 +55,25 @@ if ! python -c "import vllm" 2>/dev/null; then
     exit 1
 fi
 
-# ─── PATCH CONFIGS IF NEEDED ─────────────────────────────────────────────────
-
-# Automatically apply patches if not yet applied
-if ! grep -q "gemma-2b)" "${SCRIPTS_DIR}/config_models.sh" 2>/dev/null; then
-    echo "[INFO] Applying config patches..."
-    bash "$(pwd)/patch_configs.sh"
+# Apply model patches if gemma entries are not yet in config_models.sh
+if ! grep -q "${MODEL_NAME})" "${SCRIPTS_DIR}/config_models.sh" 2>/dev/null; then
+    echo "[INFO] Model '${MODEL_NAME}' not found in config_models.sh."
+    echo "  Either run:  bash patch_configs.sh"
+    echo "  Or add it manually to RULER/scripts/config_models.sh"
+    echo "  See SETUP.md Step 7 for the snippet."
+    exit 1
 fi
 
-# ─── INJECT RUNTIME VARIABLES ────────────────────────────────────────────────
+# ─── BUILD SEQ_LENGTHS BASH ARRAY STRING ─────────────────────────────────────
 
-# Temporarily override variables in run.sh via environment
-export RULER_ROOT_DIR="${ROOT_DIR}"
-export RULER_MODEL_DIR="${MODEL_DIR}"
-export RULER_BATCH_SIZE="${BATCH_SIZE}"
-export RULER_GPUS="${GPUS}"
+# Convert bash array to a multi-line string for insertion into config_models.sh
+SEQ_LENGTHS_STR=""
+for s in "${SEQ_LENGTHS[@]}"; do
+    SEQ_LENGTHS_STR="${SEQ_LENGTHS_STR}    ${s}"$'\n'
+done
 
-# Patch run.sh values inline (sed into a temp copy)
+# ─── PATCH RULER/scripts/run.sh → temp copy ──────────────────────────────────
+
 TEMP_RUN="${SCRIPTS_DIR}/.run_patched.sh"
 sed \
     -e "s|^ROOT_DIR=.*|ROOT_DIR=\"${ROOT_DIR}\"|" \
@@ -79,76 +81,63 @@ sed \
     -e "s|^BATCH_SIZE=.*|BATCH_SIZE=${BATCH_SIZE}|" \
     -e "s|^GPUS=.*|GPUS=\"${GPUS}\"|" \
     "${SCRIPTS_DIR}/run.sh" > "${TEMP_RUN}"
+chmod +x "${TEMP_RUN}"
 
-# Patch config_tasks.sh values
-TEMP_TASKS="${SCRIPTS_DIR}/.config_tasks_patched.sh"
-cp "${SCRIPTS_DIR}/config_tasks.sh" "${TEMP_TASKS}"
+# ─── PATCH config_tasks.sh NUM_SAMPLES (in place, restore after) ─────────────
 
-# Build SEQ_LENGTHS array string for bash
-SEQ_ARR="($(printf '%s ' "${SEQ_LENGTHS[@]}"))"
-python3 - <<PYEOF
-import re, os
+cp "${SCRIPTS_DIR}/config_tasks.sh" "${SCRIPTS_DIR}/config_tasks.sh.bak"
+sed -i "s|^NUM_SAMPLES=.*|NUM_SAMPLES=${NUM_SAMPLES}|" "${SCRIPTS_DIR}/config_tasks.sh"
 
-tasks_file = os.path.join("${SCRIPTS_DIR}", ".config_tasks_patched.sh")
-with open(tasks_file) as f:
-    content = f.read()
+# ─── PATCH SEQ_LENGTHS in config_models.sh (in place, restore after) ─────────
 
-# Replace NUM_SAMPLES
-content = re.sub(r'^NUM_SAMPLES=\d+', 'NUM_SAMPLES=${NUM_SAMPLES}', content, flags=re.MULTILINE)
+cp "${SCRIPTS_DIR}/config_models.sh" "${SCRIPTS_DIR}/config_models.sh.bak"
 
-# Replace SEQ_LENGTHS block
-seq_str = " ".join([str(s) for s in ${SEQ_LENGTHS[@]/#/} if s])
-PYEOF
+# Build the replacement block (pure bash, no Python needed)
+LENGTHS_BLOCK="SEQ_LENGTHS=($'\n'${SEQ_LENGTHS_STR})"
 
-# Use simpler sed approach for config_tasks.sh
-sed -i.bak \
-    -e "s|^NUM_SAMPLES=.*|NUM_SAMPLES=${NUM_SAMPLES}|" \
-    "${SCRIPTS_DIR}/config_tasks.sh"
-
-# Inject SEQ_LENGTHS into config_models.sh (it's defined there for the defaults)
-# SEQ_LENGTHS in the actual run is controlled by config_tasks.sh via run.sh sourcing
-
-# Patch SEQ_LENGTHS in config_models.sh
-python3 - <<PYEOF
-import re
-
-path = "${SCRIPTS_DIR}/config_models.sh"
-with open(path) as f:
-    content = f.read()
-
-seq_vals = "\n".join(["    " + str(s) for s in [${SEQ_LENGTHS[@]}]])
-content = re.sub(
-    r'SEQ_LENGTHS=\(\s*[^)]*\)',
-    'SEQ_LENGTHS=(\n' + seq_vals + '\n)',
-    content,
-    flags=re.DOTALL
-)
-
-with open(path, "w") as f:
-    f.write(content)
-
-print("[INFO] SEQ_LENGTHS patched to: ${SEQ_LENGTHS[*]}")
-PYEOF
+# Use awk to replace the multi-line SEQ_LENGTHS block
+awk -v lengths="${SEQ_LENGTHS_STR}" '
+    /^SEQ_LENGTHS=\(/ {
+        print "SEQ_LENGTHS=("
+        n = split(lengths, arr, "\n")
+        for (i = 1; i <= n; i++) {
+            if (arr[i] != "") print arr[i]
+        }
+        # skip until closing paren
+        while ($0 !~ /\)/) { getline }
+        print ")"
+        next
+    }
+    { print }
+' "${SCRIPTS_DIR}/config_models.sh.bak" > "${SCRIPTS_DIR}/config_models.sh"
 
 # ─── RUN ─────────────────────────────────────────────────────────────────────
 
 echo ""
 echo "============================================================"
 echo "  RULER Benchmark"
-echo "  Model    : ${MODEL_NAME}"
-echo "  Benchmark: ${BENCHMARK}"
-echo "  Seq Lens : ${SEQ_LENGTHS[*]}"
-echo "  Samples  : ${NUM_SAMPLES}"
-echo "  Model Dir: ${MODEL_DIR}"
-echo "  Output   : ${ROOT_DIR}"
+echo "  Model     : ${MODEL_NAME}"
+echo "  Benchmark : ${BENCHMARK}"
+echo "  Seq Lens  : ${SEQ_LENGTHS[*]}"
+echo "  Samples   : ${NUM_SAMPLES}"
+echo "  Model Dir : ${MODEL_DIR}"
+echo "  Output    : ${ROOT_DIR}/${MODEL_NAME}/${BENCHMARK}/"
 echo "============================================================"
 echo ""
 
 cd "${SCRIPTS_DIR}"
 bash "${TEMP_RUN}" "${MODEL_NAME}" "${BENCHMARK}"
+EXIT_CODE=$?
 
-# Restore config_tasks.sh
-cp "${SCRIPTS_DIR}/config_tasks.sh.bak" "${SCRIPTS_DIR}/config_tasks.sh" 2>/dev/null || true
+# ─── RESTORE original configs ─────────────────────────────────────────────────
+
+cp "${SCRIPTS_DIR}/config_tasks.sh.bak"  "${SCRIPTS_DIR}/config_tasks.sh"
+cp "${SCRIPTS_DIR}/config_models.sh.bak" "${SCRIPTS_DIR}/config_models.sh"
 
 echo ""
-echo "[DONE] Results written to: ${ROOT_DIR}/${MODEL_NAME}/${BENCHMARK}/"
+if [ ${EXIT_CODE} -eq 0 ]; then
+    echo "[DONE] Results written to: ${ROOT_DIR}/${MODEL_NAME}/${BENCHMARK}/"
+else
+    echo "[ERROR] Benchmark exited with code ${EXIT_CODE}"
+fi
+exit ${EXIT_CODE}

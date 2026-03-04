@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <title>Training Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b1020;
+            --panel: #0f1a33;
+            --panel2: #0b142b;
+            --text: #e7ecff;
+            --muted: #6b7a99;
+            --accent: #ffd400;
+            --border: rgba(255, 255, 255, .10);
+            --ok: #33d17a;
+            --bad: #ff4d6d;
+        }
+
+        html,
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            height: 100%;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 16px;
+            height: 100vh;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Utility */
+        .flex-col {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            flex: 1; /* Make cards fill available space equally */
+        }
+
+        .card-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--muted);
+            transition: background 0.3s;
+        }
+
+        .status-dot.active {
+            background: var(--ok);
+            box-shadow: 0 0 8px var(--ok);
+        }
+
+        /* Plots */
+        .plot-container {
+            flex: 1;
+            position: relative;
+            min-height: 0; /* Allow container to shrink */
+        }
+
+        #lossPlot,
+        #throughputPlot {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Controls / Legend Overlay */
+        .legend-controls {
+            padding: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel2);
+        }
+
+        .pill {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pill:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .pill.active {
+            background: rgba(255, 212, 0, 0.15);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        
+        /* EMA Buttons */
+        .ema-controls {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .ema-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ema-btn:hover { 
+            background: rgba(255,255,255,0.1); 
+        }
+
+        .ema-btn.active { 
+            background: var(--accent); 
+            color: #000; 
+            border-color: var(--accent); 
+        }
+
+        @media (max-width: 900px) {
+            .app-container {
+                height: auto;
+            }
+            .card {
+                min-height: 400px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        
+        <!-- Global Controls & Legend -->
+        <div class="card" style="flex: 0 0 auto;">
+             <div class="card-header" style="justify-content: center;">
+                 <div class="ema-controls">
+                    <span style="font-size:12px; color:var(--muted); margin-right: 8px;">EMA Smoothing:</span>
+                    <button class="ema-btn" onclick="setEma(1)">Raw (1)</button>
+                    <button class="ema-btn active" onclick="setEma(10)">10</button>
+                    <button class="ema-btn" onclick="setEma(20)">20</button>
+                    <button class="ema-btn" onclick="setEma(50)">50</button>
+                    <button class="ema-btn" onclick="setEma(100)">100</button>
+                </div>
+            </div>
+            <div class="legend-controls" id="legendContainer">
+                <!-- Pills injected by JS -->
+            </div>
+        </div>
+
+        <!-- Top Half: Loss Plot -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Training Loss</h2>
+                <div id="lossStatus" class="status-dot"></div>
+            </div>
+            <div class="plot-container">
+                <div id="lossPlot"></div>
+            </div>
+        </div>
+
+        <!-- Bottom Half: Throughput Plot -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Throughput (Tokens / sec)</h2>
+                <div id="throughputStatus" class="status-dot"></div>
+            </div>
+            <div class="plot-container">
+                <div id="throughputPlot"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // CONFIGURATION
+        const LOG_FILES = [
+            { name: "T1 New Recurrance", url: "CleanedLogs/T1 New Recurrance.log", color: "#e6194b" },
+            { name: "T1 Old Recurrance", url: "CleanedLogs/T1 Old Recurrance.log", color: "#3cb44b" },
+            { name: "T3 Standard Emb", url: "CleanedLogs/T3 Standard Emb.log", color: "#4363d8" },
+            { name: "T4 Kronecker", url: "CleanedLogs/T4 Kronecker.log", color: "#f58231" },
+            { name: "T5 With Reversibility", url: "CleanedLogs/T5 With Reversibility.log", color: "#911eb4" },
+            { name: "T6 With Fused GSA FB", url: "CleanedLogs/T6 With Fused GSA FB.log", color: "#46f0f0" },
+            { name: "T7 With Fused GSA DeltaNet", url: "CleanedLogs/T7 With Fuded GSA DeltaNet.log", color: "#f032e6" },
+            { name: "T8 With Fused MLP CE", url: "CleanedLogs/T8 With Fused MLP CE.log", color: "#ffffff" }
+        ];
+
+        // STATE
+        let seriesData = {};
+        let visibleTraces = new Set(LOG_FILES.map(f => f.url)); // All visible by default
+        let emaWindow = 10;
+
+        // PARSING REGEX
+        // Matches e.g., "step 10 | loss: 6.543 | ... tok/s: 1234.5"
+        // Also handling variations like "step: 10", "oss=", "tok/sec="
+        const RE_METRICS = /step\s*:?\s*(\d+).*?(?:loss|oss)\s*[=:]\s*([\d\.]+).*?tok.*?[:=]\s*([\d\.]+)/;
+
+        // INIT
+        async function init() {
+            initPlots();
+            renderLegend();
+            await fetchAll();
+            // setInterval(fetchAll, 5000); // Uncomment for auto-refresh
+        }
+
+        function setEma(val) {
+            emaWindow = val;
+            document.querySelectorAll('.ema-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.innerText.replace(/[^0-9]/g, '')) === val || (val===1 && b.innerText.includes('Raw')));
+            });
+            
+            // Re-calc EMA and update
+            Object.values(seriesData).forEach(d => {
+                d.yLossSmoothed = calculateEMA(d.rawLoss, emaWindow);
+                d.yTokSmoothed = calculateEMA(d.rawTok, emaWindow);
+            });
+            updatePlots();
+        }
+
+        function initPlots() {
+            const commonConfig = { responsive: true, displayModeBar: true, scrollZoom: true };
+            const layoutBase = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                margin: { t: 20, r: 20, l: 60, b: 40 },
+                xaxis: { title: 'Steps', color: '#6b7a99', gridcolor: 'rgba(255,255,255,0.05)', zerolinecolor: 'rgba(255,255,255,0.1)' },
+                yaxis: { color: '#6b7a99', gridcolor: 'rgba(255,255,255,0.05)', zerolinecolor: 'rgba(255,255,255,0.1)' },
+                showlegend: false,
+                dragmode: 'pan',
+                font: { family: '-apple-system, sans-serif' }
+            };
+
+            // 1. Loss Plot
+            Plotly.newPlot('lossPlot', [], {
+                ...layoutBase,
+                yaxis: { ...layoutBase.yaxis, title: 'Loss' }
+            }, commonConfig);
+
+            // 2. Throughput Plot
+            Plotly.newPlot('throughputPlot', [], {
+                ...layoutBase,
+                yaxis: { ...layoutBase.yaxis, title: 'Tokens / sec' }
+            }, commonConfig);
+        }
+
+        async function fetchAll() {
+            const dots = document.querySelectorAll('.status-dot');
+            dots.forEach(d => d.classList.add('active'));
+
+            for (const file of LOG_FILES) {
+                try {
+                    const res = await fetch(file.url + '?t=' + Date.now());
+                    if (!res.ok) {
+                        console.warn(`Could not fetch ${file.url}`);
+                        continue;
+                    }
+                    const text = await res.text();
+                    parseLog(text, file);
+                } catch (e) { 
+                    console.error("Fetch error for " + file.url, e); 
+                }
+            }
+
+            updatePlots();
+            setTimeout(() => dots.forEach(d => d.classList.remove('active')), 500);
+        }
+
+        function parseLog(text, fileInfo) {
+            const lines = text.split('\n');
+            const x = [], rawLoss = [], rawTok = [];
+            
+            for (const line of lines) {
+                const match = RE_METRICS.exec(line);
+                if (match) {
+                    x.push(parseInt(match[1]));
+                    rawLoss.push(parseFloat(match[2]));
+                    rawTok.push(parseFloat(match[3]));
+                }
+            }
+            
+            seriesData[fileInfo.url] = { 
+                x, 
+                rawLoss, 
+                rawTok,
+                yLossSmoothed: calculateEMA(rawLoss, emaWindow),
+                yTokSmoothed: calculateEMA(rawTok, emaWindow)
+            };
+        }
+
+        function calculateEMA(data, window) {
+            if (data.length === 0) return [];
+            if (window === 1) return [...data]; // No smoothing
+            
+            const alpha = 2 / (window + 1);
+            let ema = [data[0]];
+            for (let i = 1; i < data.length; i++) {
+                ema.push(alpha * data[i] + (1 - alpha) * ema[i - 1]);
+            }
+            return ema;
+        }
+
+        // UI UPDATES
+        function updatePlots() {
+            const lossTraces = [];
+            const tokTraces = [];
+
+            LOG_FILES.forEach(f => {
+                if (!visibleTraces.has(f.url)) return;
+                const d = seriesData[f.url];
+                if (!d || d.x.length === 0) return;
+
+                lossTraces.push({
+                    x: d.x, 
+                    y: d.yLossSmoothed, 
+                    name: f.name, 
+                    type: 'scatter', 
+                    mode: 'lines',
+                    line: { color: f.color, width: 1.5 },
+                    opacity: 0.9,
+                });
+
+                tokTraces.push({
+                    x: d.x, 
+                    y: d.yTokSmoothed, 
+                    name: f.name, 
+                    type: 'scatter', 
+                    mode: 'lines',
+                    line: { color: f.color, width: 1.5 },
+                    opacity: 0.9,
+                });
+            });
+
+            Plotly.react('lossPlot', lossTraces, document.getElementById('lossPlot').layout);
+            Plotly.react('throughputPlot', tokTraces, document.getElementById('throughputPlot').layout);
+        }
+
+        function renderLegend() {
+            const c = document.getElementById('legendContainer');
+            c.innerHTML = '';
+            LOG_FILES.forEach(f => {
+                const el = document.createElement('div');
+                el.className = `pill ${visibleTraces.has(f.url) ? 'active' : ''}`;
+                // Highlight border with the series color if active
+                if(visibleTraces.has(f.url)) {
+                    el.style.borderColor = f.color;
+                    el.style.color = f.color;
+                }
+                
+                el.innerHTML = `<span style="background:${f.color}; width:10px; height:10px; border-radius:50%; display:inline-block;"></span> ${f.name}`;
+                el.onclick = () => {
+                    if (visibleTraces.has(f.url)) {
+                        visibleTraces.delete(f.url);
+                    } else {
+                        visibleTraces.add(f.url);
+                    }
+                    renderLegend(); 
+                    updatePlots();
+                };
+                c.appendChild(el);
+            });
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
