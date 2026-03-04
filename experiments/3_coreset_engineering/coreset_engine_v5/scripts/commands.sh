@@ -121,6 +121,18 @@ BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO="${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RAT
 BATCH_PREFETCH_AUTO_MIN_WAIT_MS="${BATCH_PREFETCH_AUTO_MIN_WAIT_MS:-2.0}"
 BATCH_PREFETCH_AUTO_WARMUP_BATCHES="${BATCH_PREFETCH_AUTO_WARMUP_BATCHES:-5}"
 RESUME="${RESUME:-false}" 
+
+# Hybrid Storage Configuration (Safe high-volume output)
+# If ENABLE_NVME is true, we redirect batch 'part' files to NVMe to avoid EBS I/O storm.
+# Final checkpoints and manifests remain on EBS for durability.
+NVME_MOUNT="${NVME_MOUNT:-/mnt/nvme}"
+CORESET_OUTPUT_DIR="${ENGINE_DIR}/output/coresets"
+
+if [ "${ENABLE_NVME}" = "true" ] && [ -d "${NVME_MOUNT}" ]; then
+    echo "[INFO] Hybrid Storage Enabled: Redirecting high-volume outputs to ${NVME_MOUNT}/coresets"
+    CORESET_OUTPUT_DIR="${NVME_MOUNT}/coresets"
+    mkdir -p "${CORESET_OUTPUT_DIR}"
+fi
 # ------------------------------------------------------------------------------
 
 # --- Infrastructure Validation Overrides (for validate_infra.sh) ---------------
@@ -437,7 +449,7 @@ if [ "${FOREGROUND}" = "true" ]; then
             echo "Validating coreset outputs against curriculum..."
             python3 "${VALIDATE_OUTPUTS}" \
                 --curriculum "${ENGINE_DIR}/config/curriculum.yaml" \
-                --output-dir "${ENGINE_DIR}/output/coresets" \
+                --output-dir "${CORESET_OUTPUT_DIR}" \
                 --stages ${STAGES} \
                 --format both \
                 --report-dir "${ENGINE_DIR}/output/validation_reports" \
@@ -446,14 +458,26 @@ if [ "${FOREGROUND}" = "true" ]; then
             echo "[WARN] validate_coreset_outputs.py not found. Skipping output validation."
         fi
 
+        # ==========================================================================
+        # 9. S3 Flush (High-Volume Sync)
+        # ==========================================================================
+        if [ "${ENABLE_NVME}" = "true" ] && [ -d "${CORESET_OUTPUT_DIR}" ]; then
+            echo "### [9/9] S3 Flush (NVMe -> S3) ###"
+            echo "Syncing 90k+ part files to S3 (this may take a few minutes)..."
+            aws s3 sync "${CORESET_OUTPUT_DIR}" "s3://${S3_BUCKET}/final_outputs/coresets/" \
+                --quiet --no-progress
+            echo "[OK] All outputs synced to S3."
+        fi
+
         echo ""
         echo "=======================================================================" 
         echo "  PRODUCTION RUN COMPLETE"
         echo "  Pipeline exit code:  ${PIPELINE_EXIT}"
-        echo "  Manifests:           output/coresets/*/manifest_shard*.json"
+        echo "  Manifests:           ${CORESET_OUTPUT_DIR}/*/manifest_shard*.json"
         echo "  Ablation Reports:    output/manifests/ablation_validation_report*.md"
         echo "  Validation Reports:  ${ENGINE_DIR}/output/validation_reports/"
         echo "  Monitoring Report:   ${LOG_DIR:-/mnt/nvme/logs}/report_*.html"
+        echo "  S3 Final Location:   s3://${S3_BUCKET}/final_outputs/coresets/"
         echo "======================================================================="
         exit ${PIPELINE_EXIT}
 else
@@ -491,6 +515,12 @@ else
         echo "    # Validate coreset outputs"
         echo "    python3 ${ENGINE_DIR}/tools/validate_coreset_outputs.py \\"
         echo "        --curriculum ${ENGINE_DIR}/config/curriculum.yaml \\"
+        echo "        --output-dir ${CORESET_OUTPUT_DIR} \\"
         echo "        --stages ${STAGES} --format both"
+        echo ""
+        if [ "${ENABLE_NVME}" = "true" ]; then
+            echo "    # Sync high-volume outputs to S3"
+            echo "    aws s3 sync ${CORESET_OUTPUT_DIR} s3://${S3_BUCKET}/final_outputs/coresets/ --quiet --no-progress"
+        fi
         echo "-----------------------------------------------------------------------"
 fi

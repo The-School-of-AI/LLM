@@ -36,26 +36,42 @@ export SKIP_EBS_VALIDATION="true"              # Enable if using small volumes
 Use for `c7gd`, `m5d`, or any instance with high-speed local ephemeral storage (`/dev/nvmeXn1`).
 
 ```bash
-# 1. One-Time NVMe Setup (Manual)
+# 1. NVMe Setup (Choose One)
+
+**Option A: Automated (Recommended)**
+Safely detects, formats (if needed), and mounts to `/mnt/nvme`.
+```bash
+sudo ./scripts/setup_nvme.sh
+```
+
+**Option B: Manual (Hardware Reference)**
+Use if the drive is not at `/dev/nvme1n1` or for custom mounting.
+
+```bash
 sudo mkfs.ext4 /dev/nvme1n1
 sudo mkdir -p /mnt/nvme
 sudo mount /dev/nvme1n1 /mnt/nvme
 sudo chown ubuntu:ubuntu /mnt/nvme
+```
 
 # 2. Export Parameters
+
 export S3_BUCKET="era4-lightening-lm-lake"
-export S3_INPUT_PATH="s3://era4-lightening-lm-lake/processed_dataset/curriculum_data/"
 export S3_PREFIX="processed_dataset/curriculum_data/source=C4/bands/band=B0/"
 
 # 3. Infra Overrides
+
 export EXPECTED_INSTANCE_TYPE="c7gd.16xlarge"
 export ENABLE_NVME="true"
-export NVME_MOUNT="/mnt/nvme"
 
 # 4. Launch
+
 ./commands.sh
 ```
 
+> [!NOTE]
+> `setup_nvme.sh` is a safe, one-click script that won't format your drive if it already contains a filesystem.
+>
 > [!IMPORTANT]
 > Always use **standard straight quotes** (`"`) for exports. Bash does not recognize "smart" curly quotes (`”`) from document editors.
 

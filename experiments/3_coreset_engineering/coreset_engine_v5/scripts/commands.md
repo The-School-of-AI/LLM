@@ -129,7 +129,10 @@ export SKIP_EBS_VALIDATION=true
 #### Option 2: NVMe + EBS Gp3 (`c7gd.16xlarge`)
 
 ```bash
-# Setup NVMe first (refer to INFRA_OPERATIONS.md)
+# Setup NVMe safely
+sudo ./scripts/setup_nvme.sh
+
+# Launch pipeline
 export S3_BUCKET="your-bucket-name"
 export ENABLE_NVME=true
 ./commands.sh --foreground

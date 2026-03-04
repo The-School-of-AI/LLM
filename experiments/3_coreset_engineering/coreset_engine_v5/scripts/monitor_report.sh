@@ -123,24 +123,29 @@ echo ""
 
 # ── Disk I/O Summary ────────────────────────────────────────
 echo -e "${CYAN}── Disk I/O Summary ──${NC}"
-if [[ -f "$LOG_DIR/disk.log" ]]; then
-  # NVMe (ephemeral) — typically nvme1n1
-  NVME_AWAIT=$(awk '/nvme1n1/{sum+=$10; n++} END{
-    if(n>0) printf "%.2f", sum/n; else print "N/A"
-  }' "$LOG_DIR/disk.log")
+  # Auto-detect devices for I/O summary
+  # NVMe (ephemeral) — try to find the one with the most activity or named nvme[1-9]n1
+  NVME_DEV=$(awk '/nvme[1-9]n1/{print $3}' "$LOG_DIR/disk.log" | sort | uniq | head -1)
+  [ -z "$NVME_DEV" ] && NVME_DEV="nvme1n1"
 
   # EBS (root) — typically nvme0n1
-  EBS_AWAIT=$(awk '/nvme0n1/{sum+=$10; n++} END{
+  EBS_DEV="nvme0n1"
+
+  NVME_AWAIT=$(awk -v dev="$NVME_DEV" '$0 ~ dev {sum+=$10; n++} END{
     if(n>0) printf "%.2f", sum/n; else print "N/A"
   }' "$LOG_DIR/disk.log")
 
-  EBS_UTIL=$(awk '/nvme0n1/{sum+=$NF; n++} END{
+  EBS_AWAIT=$(awk -v dev="$EBS_DEV" '$0 ~ dev {sum+=$10; n++} END{
+    if(n>0) printf "%.2f", sum/n; else print "N/A"
+  }' "$LOG_DIR/disk.log")
+
+  EBS_UTIL=$(awk -v dev="$EBS_DEV" '$0 ~ dev {sum+=$NF; n++} END{
     if(n>0) printf "%.1f", sum/n; else print "N/A"
   }' "$LOG_DIR/disk.log")
 
-  echo "  NVMe avg await : ${NVME_AWAIT} ms"
-  echo "  EBS avg await  : ${EBS_AWAIT} ms"
-  echo "  EBS avg %util  : ${EBS_UTIL}%"
+  echo "  NVMe ($NVME_DEV) avg await : ${NVME_AWAIT} ms"
+  echo "  EBS ($EBS_DEV) avg await  : ${EBS_AWAIT} ms"
+  echo "  EBS ($EBS_DEV) avg %util  : ${EBS_UTIL}%"
 
   if [[ "$NVME_AWAIT" != "N/A" ]]; then
     NVME_INT=${NVME_AWAIT%%.*}
