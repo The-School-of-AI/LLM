@@ -206,9 +206,10 @@ def format_sft_dataset(
     dataset: Dataset, config: QLoRAConfig, tokenizer: Any
 ) -> Dataset:
     """Format dataset for SFT training."""
+    _empty_text_warned = False
 
     def format_example(example):
-        # Get text from the appropriate column
+        nonlocal _empty_text_warned
         text = example.get(config.data.text_column, "")
         if not text and "text" in example:
             text = example["text"]
@@ -217,7 +218,14 @@ def format_sft_dataset(
         elif not text and "prompt" in example:
             text = example["prompt"]
 
-        # Apply prompt template if provided
+        if not text and not _empty_text_warned:
+            _empty_text_warned = True
+            logger.warning(
+                f"Empty text found in dataset. Available columns: "
+                f"{list(example.keys())}. "
+                f"Set data.text_column to the correct column name."
+            )
+
         if config.data.prompt_template and "{text}" in config.data.prompt_template:
             formatted = config.data.prompt_template.format(text=text)
         else:

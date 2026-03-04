@@ -28,7 +28,12 @@ quantization:
   exclude_modules:
     - "lm_head"
     - "embed_tokens"
-    - ".*norm.*"
+    - "embed_out"
+    - "wte"
+    - "wpe"
+    - "word_embeddings"
+    - "embed_in"
+    - "output_layer"
 
 lora:
   r: 64
@@ -36,15 +41,8 @@ lora:
   dropout: 0.05
   bias: "none"
   task_type: "CAUSAL_LM"
-  # For MoE: target all expert FFNs + attention (NOT just attention)
-  target_modules:
-    - "q_proj"
-    - "k_proj"
-    - "v_proj"
-    - "o_proj"
-    - "gate_proj"
-    - "up_proj"
-    - "down_proj"
+  # "all-linear" targets every nn.Linear layer, including all MoE expert FFNs.
+  target_modules: "all-linear"
 
 training:
   output_dir: "./outputs/idft_smoke_test"

@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import gc
 import json
 import logging
 import sys
@@ -25,6 +26,8 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import torch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -102,7 +105,9 @@ def phase1_ddt_validation(setup: Dict[str, Any]) -> Dict[str, Any]:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     logger.info(f"Loading model for phi diagnostic: {config.model.name}")
-    tokenizer = AutoTokenizer.from_pretrained(config.model.name, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        config.model.name, trust_remote_code=True, padding_side="left"
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -194,9 +199,14 @@ def phase2_training_runs(setup: Dict[str, Any]) -> Dict[str, Any]:
                     "status": "success",
                 }
             )
+            del trainer
         except Exception as e:
             logger.error(f"SFT run failed at LR={lr}: {e}")
             results["sft_runs"].append({"lr": lr, "status": "failed", "error": str(e)})
+        finally:
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     # --- IDFT Runs ---
     for lr in learning_rates:
@@ -219,9 +229,14 @@ def phase2_training_runs(setup: Dict[str, Any]) -> Dict[str, Any]:
                     "status": "success",
                 }
             )
+            del trainer
         except Exception as e:
             logger.error(f"IDFT run failed at LR={lr}: {e}")
             results["idft_runs"].append({"lr": lr, "status": "failed", "error": str(e)})
+        finally:
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     # Select best checkpoint per condition
     results["sft_best"] = _select_best_run(results["sft_runs"])

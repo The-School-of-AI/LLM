@@ -31,7 +31,6 @@ class IDFTTrainer(SFTTrainer):
         super().__init__(**kwargs)
         self.clip_B = clip_B
         self.log_diagnostics_every = log_diagnostics_every
-        self._idft_step_count = 0
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         """Override to use IDFT loss instead of standard CE."""
@@ -58,9 +57,10 @@ class IDFTTrainer(SFTTrainer):
             clip_B=self.clip_B,
         )
 
-        # Log diagnostics periodically
-        self._idft_step_count += 1
-        if self._idft_step_count % self.log_diagnostics_every == 0:
+        # Log diagnostics periodically (use global_step to match training steps,
+        # not compute_loss calls which fire multiple times per step with grad accum)
+        step = self.state.global_step
+        if step > 0 and step % self.log_diagnostics_every == 0:
             self.log({f"idft/{k}": v for k, v in diagnostics.items()})
 
         if return_outputs:

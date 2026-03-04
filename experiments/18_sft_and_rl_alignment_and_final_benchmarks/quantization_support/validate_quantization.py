@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 import torch
 
 # Local imports
-from qlora_config import QLoRAConfig, create_argument_parser, load_config
+from qlora_config import QLoRAConfig
 
 # =============================================================================
 # Validation Result Classes
@@ -198,6 +198,15 @@ def check_model_loading(config: QLoRAConfig) -> ValidationResult:
         # Check model is loaded
         param_count = model.num_parameters()
 
+        # Verify embedding/norm layers are NOT quantized
+        precision_issues = []
+        if config.quantization.enabled:
+            sensitive_keywords = ["embed", "norm", "lm_head"]
+            for name, param in model.named_parameters():
+                if any(k in name.lower() for k in sensitive_keywords):
+                    if hasattr(param, "quant_state"):
+                        precision_issues.append(name)
+
         # Clean up
         del model
         clear_memory()
@@ -211,6 +220,18 @@ def check_model_loading(config: QLoRAConfig) -> ValidationResult:
         if config.quantization.enabled:
             details["quantization_bits"] = config.quantization.bits
             details["quantization_type"] = config.quantization.quant_type
+
+        if precision_issues:
+            details["quantized_sensitive_layers"] = precision_issues
+            return ValidationResult(
+                name="Model Loading",
+                passed=False,
+                message=(
+                    f"Model loaded but {len(precision_issues)} embedding/norm layer(s) "
+                    "are quantized when they should be in full precision"
+                ),
+                details=details,
+            )
 
         return ValidationResult(
             name="Model Loading",
@@ -1006,18 +1027,24 @@ def main():
 
     args = parser.parse_args()
 
-    # Load configuration
-    config_parser = create_argument_parser()
-    config_args = config_parser.parse_args([])  # Empty args to get defaults
-
+    # Load configuration directly
     if args.config:
-        config_args.config = args.config
-    if args.model_name:
-        config_args.model_name = args.model_name
-    if args.no_quantization:
-        config_args.no_quantization = True
+        config = QLoRAConfig.from_yaml(args.config)
+    else:
+        default_path = os.path.join(os.path.dirname(__file__), "default_config.yaml")
+        if os.path.exists(default_path):
+            config = QLoRAConfig.from_yaml(default_path)
+        else:
+            config = QLoRAConfig()
 
-    config = load_config(config_args)
+    if args.model_name:
+        config.model.name = args.model_name
+    if args.no_quantization:
+        config.quantization.enabled = False
+
+    config.auto_configure_hardware()
+    for w in config.validate():
+        print(f"Warning: {w}")
 
     # Print configuration
     print("\n" + "=" * 70)

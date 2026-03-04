@@ -65,13 +65,18 @@ quantization:
   # Quantizes the quantization constants (~0.4 bits/param savings)
   double_quant: true
   
-  # Modules to exclude from quantization (regex patterns supported)
+  # Modules to exclude from quantization (exact name matching)
   # These layers remain in full precision
+  # Covers common architectures: Llama, Mistral, Qwen, phi, GPT-2, Falcon, BLOOM
   exclude_modules:
     - "lm_head"
     - "embed_tokens"
-    - ".*layernorm.*"
-    - ".*norm.*"
+    - "embed_out"
+    - "wte"
+    - "wpe"
+    - "word_embeddings"
+    - "embed_in"
+    - "output_layer"
   
   # Modules to save in full precision during training
   # Useful if you want to fine-tune embeddings
@@ -108,20 +113,13 @@ lora:
   task_type: "CAUSAL_LM"
   
   # Target modules to apply LoRA
-  # These are the linear layers that get LoRA adapters
-  # Model-specific - these work for Llama, Mistral, phi-2, etc.
-  target_modules:
-    - "q_proj"      # Query projection
-    - "k_proj"      # Key projection
-    - "v_proj"      # Value projection
-    - "o_proj"      # Output projection
-    - "gate_proj"   # MLP gate (Llama-style)
-    - "up_proj"     # MLP up projection
-    - "down_proj"   # MLP down projection
-    # For phi-2 specifically, you may also use:
-    # - "fc1"       # MLP first layer
-    # - "fc2"       # MLP second layer
-    # - "dense"     # Attention output
+  # "all-linear" auto-detects every nn.Linear layer, making this model-agnostic.
+  # Works for Llama, Mistral, Qwen, phi-2, GPT-2, Falcon, BLOOM, Gemma, etc.
+  # Override with an explicit list if you want to target specific layers only:
+  #   target_modules:
+  #     - "q_proj"
+  #     - "v_proj"
+  target_modules: "all-linear"
 
 # -----------------------------------------------------------------------------
 # Training Configuration

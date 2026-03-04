@@ -7,10 +7,9 @@ with support for YAML files and CLI argument overrides.
 """
 
 import argparse
-import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import torch
 import yaml
@@ -54,7 +53,11 @@ class QuantizationConfig:
     compute_dtype: str = "bfloat16"
     double_quant: bool = True
     exclude_modules: List[str] = field(
-        default_factory=lambda: ["lm_head", "embed_tokens", ".*layernorm.*", ".*norm.*"]
+        default_factory=lambda: [
+            "lm_head", "embed_tokens", "embed_out",
+            "wte", "wpe", "word_embeddings",
+            "embed_in", "output_layer",
+        ]
     )
     modules_to_save: List[str] = field(default_factory=list)
 
@@ -80,20 +83,19 @@ class QuantizationConfig:
                 bnb_4bit_quant_type=self.quant_type,
                 bnb_4bit_compute_dtype=self.get_compute_dtype(),
                 bnb_4bit_use_double_quant=self.double_quant,
+                llm_int8_skip_modules=self.exclude_modules,
             )
         elif self.bits == 8:
             return BitsAndBytesConfig(
                 load_in_8bit=True,
+                llm_int8_skip_modules=self.exclude_modules,
             )
         else:
             raise ValueError(f"Unsupported quantization bits: {self.bits}")
 
-    def should_quantize_module(self, module_name: str) -> bool:
-        """Check if a module should be quantized based on exclusion patterns."""
-        for pattern in self.exclude_modules:
-            if re.search(pattern, module_name, re.IGNORECASE):
-                return False
-        return True
+    def should_skip_module(self, module_name: str) -> bool:
+        """Check if a module should be skipped from quantization."""
+        return any(exc in module_name for exc in self.exclude_modules)
 
 
 @dataclass
@@ -105,17 +107,9 @@ class LoRAConfig:
     dropout: float = 0.05
     bias: str = "none"
     task_type: str = "CAUSAL_LM"
-    target_modules: List[str] = field(
-        default_factory=lambda: [
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ]
-    )
+    # "all-linear" auto-detects all nn.Linear layers, making LoRA model-agnostic.
+    # Can also be a list of explicit module names, e.g. ["q_proj", "v_proj"].
+    target_modules: Union[str, List[str]] = "all-linear"
 
     def to_peft_config(self):
         """Convert to PEFT LoraConfig."""
@@ -296,7 +290,8 @@ class QLoRAConfig:
         lora_config = LoRAConfig(**config_dict.get("lora", {}))
 
         # Training config with nested GRPO/DPO settings
-        training_dict = config_dict.get("training", {})
+        # Copy to avoid mutating the caller's dict
+        training_dict = dict(config_dict.get("training", {}))
         grpo_settings = GRPOSettings(**training_dict.pop("grpo", {}))
         dpo_settings = DPOSettings(**training_dict.pop("dpo", {}))
         idft_settings = IDFTSettings(**training_dict.pop("idft", {}))
@@ -305,7 +300,7 @@ class QLoRAConfig:
         )
 
         # Data config with nested filters
-        data_dict = config_dict.get("data", {})
+        data_dict = dict(config_dict.get("data", {}))
         filters = DataFilters(**data_dict.pop("filters", {}))
         data_config = DataConfig(**data_dict, filters=filters)
 
@@ -341,8 +336,9 @@ class QLoRAConfig:
         else:
             config = base_config
 
-        # Override with CLI arguments if provided
-        if hasattr(args, "model_name") and args.model_name:
+        # Override with CLI arguments if provided (use `is not None` to
+        # allow falsy values like 0 or 0.0 to pass through correctly)
+        if hasattr(args, "model_name") and args.model_name is not None:
             config.model.name = args.model_name
 
         if hasattr(args, "quantization_bits") and args.quantization_bits is not None:
@@ -354,41 +350,41 @@ class QLoRAConfig:
         if hasattr(args, "no_quantization") and args.no_quantization:
             config.quantization.enabled = False
 
-        if hasattr(args, "quant_type") and args.quant_type:
+        if hasattr(args, "quant_type") and args.quant_type is not None:
             config.quantization.quant_type = args.quant_type
 
-        if hasattr(args, "lora_r") and args.lora_r:
+        if hasattr(args, "lora_r") and args.lora_r is not None:
             config.lora.r = args.lora_r
 
-        if hasattr(args, "lora_alpha") and args.lora_alpha:
+        if hasattr(args, "lora_alpha") and args.lora_alpha is not None:
             config.lora.alpha = args.lora_alpha
 
-        if hasattr(args, "lora_target_modules") and args.lora_target_modules:
+        if hasattr(args, "lora_target_modules") and args.lora_target_modules is not None:
             config.lora.target_modules = args.lora_target_modules
 
-        if hasattr(args, "learning_rate") and args.learning_rate:
+        if hasattr(args, "learning_rate") and args.learning_rate is not None:
             config.training.learning_rate = args.learning_rate
 
-        if hasattr(args, "max_steps") and args.max_steps:
+        if hasattr(args, "max_steps") and args.max_steps is not None:
             config.training.max_steps = args.max_steps
 
-        if hasattr(args, "method") and args.method:
+        if hasattr(args, "method") and args.method is not None:
             config.training.method = args.method
 
-        if hasattr(args, "num_generations") and args.num_generations:
+        if hasattr(args, "num_generations") and args.num_generations is not None:
             config.training.grpo.num_generations = args.num_generations
 
-        if hasattr(args, "output_dir") and args.output_dir:
+        if hasattr(args, "output_dir") and args.output_dir is not None:
             config.training.output_dir = args.output_dir
 
-        if hasattr(args, "device") and args.device:
+        if hasattr(args, "device") and args.device is not None:
             config.hardware.force_device = args.device
             config.hardware.auto_detect = False
 
         if hasattr(args, "push_to_hub") and args.push_to_hub:
             config.hub.push_to_hub = True
 
-        if hasattr(args, "hub_model_id") and args.hub_model_id:
+        if hasattr(args, "hub_model_id") and args.hub_model_id is not None:
             config.hub.hub_model_id = args.hub_model_id
 
         if hasattr(args, "idft_clip_B") and args.idft_clip_B is not None:
@@ -399,10 +395,10 @@ class QLoRAConfig:
             config.training.idft.enabled = True
             config.training.method = "idft"
 
-        if hasattr(args, "dataset_name") and args.dataset_name:
+        if hasattr(args, "dataset_name") and args.dataset_name is not None:
             config.data.dataset_name = args.dataset_name
 
-        if hasattr(args, "max_samples") and args.max_samples:
+        if hasattr(args, "max_samples") and args.max_samples is not None:
             config.data.max_samples = args.max_samples
 
         return config

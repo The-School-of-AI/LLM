@@ -79,7 +79,9 @@ def idft_loss(
     phi_clipped = phi.clamp(-clip_B, clip_B)
 
     # Step 6: gamma_t = exp(-phi_t)
-    gamma = torch.exp(-phi_clipped)  # (B, L)
+    # Detach gamma so gradients don't flow through the reweighting factor.
+    # Per the paper, gamma acts as a fixed per-token coefficient each step.
+    gamma = torch.exp(-phi_clipped).detach()  # (B, L)
 
     # Step 7: IDFT loss in log-space for stability: p^gamma = exp(gamma * log p)
     weighted_factor = torch.exp(gamma * token_log_probs)  # p_t^gamma_t

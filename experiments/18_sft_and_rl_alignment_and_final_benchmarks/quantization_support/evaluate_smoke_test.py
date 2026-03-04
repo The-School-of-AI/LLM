@@ -190,6 +190,24 @@ def evaluate_checkpoint(
     return results
 
 
+METRIC_KEYS = ["acc", "acc_norm", "exact_match", "pass@1", "em", "score"]
+
+
+def _extract_score_from_raw(raw: Dict[str, Any]) -> Optional[float]:
+    """Extract a single score (as percentage) from lm-eval raw output."""
+    if "results" not in raw:
+        return None
+    task_results = raw["results"]
+    for _task_name, task_data in task_results.items():
+        for metric_key in METRIC_KEYS:
+            if metric_key in task_data:
+                score = task_data[metric_key]
+                if score is not None and score <= 1.0:
+                    score *= 100
+                return score
+    return None
+
+
 def compute_aggregate_scores(results: Dict[str, Any]) -> Dict[str, float]:
     """
     Compute Math-Avg and General-Avg from benchmark results.
@@ -202,15 +220,7 @@ def compute_aggregate_scores(results: Dict[str, Any]) -> Dict[str, float]:
 
     for name, bench_result in results.get("benchmarks", {}).items():
         raw = bench_result.get("raw_results", {})
-        # Try to extract accuracy from lm-eval output format
-        score = None
-        if "results" in raw:
-            task_results = raw["results"]
-            for task_name, task_data in task_results.items():
-                if "acc" in task_data:
-                    score = task_data["acc"] * 100
-                elif "acc_norm" in task_data:
-                    score = task_data["acc_norm"] * 100
+        score = _extract_score_from_raw(raw)
 
         if score is not None:
             if bench_result["category"] == "math":
@@ -310,17 +320,30 @@ def print_results_table(
 
     for name in sorted(all_benchmarks):
         category = ""
-        base_score = "-"
-        sft_score = "-"
-        idft_score = "-"
-        delta = "-"
+        base_val = None
+        sft_val = None
+        idft_val = None
 
         if name in sft_results.get("benchmarks", {}):
-            category = sft_results["benchmarks"][name].get("category", "")
+            bench = sft_results["benchmarks"][name]
+            category = bench.get("category", "")
+            sft_val = _extract_score_from_raw(bench.get("raw_results", {}))
         if name in idft_results.get("benchmarks", {}):
-            category = idft_results["benchmarks"][name].get("category", "")
+            bench = idft_results["benchmarks"][name]
+            category = bench.get("category", "")
+            idft_val = _extract_score_from_raw(bench.get("raw_results", {}))
+        if base_results and name in base_results.get("benchmarks", {}):
+            bench = base_results["benchmarks"][name]
+            base_val = _extract_score_from_raw(bench.get("raw_results", {}))
 
-        # Extract scores (placeholder - actual extraction depends on lm-eval output)
+        base_score = f"{base_val:.1f}" if base_val is not None else "-"
+        sft_score = f"{sft_val:.1f}" if sft_val is not None else "-"
+        idft_score = f"{idft_val:.1f}" if idft_val is not None else "-"
+        if sft_val is not None and idft_val is not None:
+            delta = f"{idft_val - sft_val:+.1f}"
+        else:
+            delta = "-"
+
         print(
             f"{name:<20} {category:<12} {base_score:>8} {sft_score:>8} {idft_score:>8} {delta:>8}"
         )

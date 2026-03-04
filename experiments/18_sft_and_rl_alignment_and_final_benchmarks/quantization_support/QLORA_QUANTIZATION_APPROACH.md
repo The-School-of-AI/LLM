@@ -237,6 +237,10 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_quant_type="nf4",
     bnb_4bit_compute_dtype=torch.bfloat16,
     bnb_4bit_use_double_quant=True,
+    # Keep embedding, norm, and output layers in full precision
+    llm_int8_skip_modules=["lm_head", "embed_tokens", "embed_out",
+                           "wte", "wpe", "word_embeddings",
+                           "embed_in", "output_layer"],
 )
 
 # Load model with quantization
@@ -278,11 +282,15 @@ model = prepare_model_for_kbit_training(
 from peft import LoraConfig, get_peft_model
 
 # Configure LoRA
+# "all-linear" auto-detects every nn.Linear layer, making this model-agnostic.
+# Works for Llama, Mistral, Qwen, phi-2, GPT-2, Falcon, BLOOM, Gemma, etc.
+# Override with an explicit list if you want to target specific layers only:
+#   target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+#                   "gate_proj", "up_proj", "down_proj"]
 peft_config = LoraConfig(
     r=64,
     lora_alpha=128,
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", 
-                    "gate_proj", "up_proj", "down_proj"],
+    target_modules="all-linear",
     lora_dropout=0.05,
     bias="none",
     task_type="CAUSAL_LM",
@@ -293,7 +301,7 @@ model = get_peft_model(model, peft_config)
 ```
 
 **What happens:**
-1. LoRA adapters (A and B matrices) are added to target modules
+1. PEFT scans the model for all `nn.Linear` layers and attaches LoRA adapters
 2. Adapters are initialized (A: random, B: zeros typically)
 3. Only adapter parameters are trainable
 4. Adapters remain in full precision (FP32/BF16)
@@ -610,7 +618,7 @@ def setup_qlora_model(
     quantization_bits: int = 4,
     lora_r: int = 64,
     lora_alpha: int = 128,
-    target_modules: list = None,
+    target_modules = "all-linear",
 ):
     """
     Set up a model for QLoRA training.
@@ -620,17 +628,19 @@ def setup_qlora_model(
         quantization_bits: 4 or 8 (0 for no quantization)
         lora_r: LoRA rank
         lora_alpha: LoRA alpha (scaling factor)
-        target_modules: List of modules to apply LoRA to
+        target_modules: Modules to apply LoRA to. "all-linear" (default) 
+            auto-detects all nn.Linear layers. Can also be a list of 
+            explicit module names, e.g. ["q_proj", "v_proj"].
     
     Returns:
         Tuple of (model, tokenizer)
     """
-    # Default target modules for common architectures
-    if target_modules is None:
-        target_modules = [
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj"
-        ]
+    # Modules to keep in full precision (covers common architectures)
+    skip_modules = [
+        "lm_head", "embed_tokens", "embed_out",
+        "wte", "wpe", "word_embeddings",
+        "embed_in", "output_layer",
+    ]
     
     # Configure quantization
     bnb_config = None
@@ -640,10 +650,12 @@ def setup_qlora_model(
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16,
             bnb_4bit_use_double_quant=True,
+            llm_int8_skip_modules=skip_modules,
         )
     elif quantization_bits == 8:
         bnb_config = BitsAndBytesConfig(
             load_in_8bit=True,
+            llm_int8_skip_modules=skip_modules,
         )
     
     # Load tokenizer
@@ -888,7 +900,7 @@ quantization: "4bit-nf4"
 | `CUDA out of memory` | Model too large | Enable double_quant, reduce batch size |
 | `Expected all tensors to be on the same device` | Mixed device placement | Use device_map="auto" |
 | `RuntimeError: mat1 and mat2 shapes cannot be multiplied` | Wrong target modules | Check model architecture |
-| `ValueError: Target modules not found` | Incorrect module names | Print model structure, verify names |
+| `ValueError: Target modules not found` | Incorrect module names | Use `target_modules="all-linear"` for model-agnostic LoRA, or print model structure to find correct names |
 | `bitsandbytes not found` | Missing dependency | `pip install bitsandbytes` |
 | `MPS backend doesn't support quantization` | Using bnb on Apple Silicon | Disable quantization for MPS |
 
