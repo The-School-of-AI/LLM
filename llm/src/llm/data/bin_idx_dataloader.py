@@ -52,6 +52,8 @@ import hashlib
 import json
 import logging
 import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
 
@@ -61,17 +63,23 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, IterableDataset
 
 from llm.utils import print_rank_0
+from .s3_utils import (
+    is_s3_path,
+    list_s3_shard_uris,
+    download_metadata_only,
+    S3ShardPrefetcher,
+)
 
 logger = logging.getLogger(__name__)
 
-# Shards are 4096-token fixed blocks.
+# Shards are 4096-token fixed blocks on disk.
+# seq_len can be <= SHARD_BLOCK_SIZE (truncate one block) or a multiple of it (join blocks).
 SHARD_BLOCK_SIZE = 4096
 
 
 # ---------------------------------------------------------------------------
 # Tokenizer hash
 # ---------------------------------------------------------------------------
-
 
 def compute_tokenizer_hash(tokenizer_dir: str) -> str:
     """
@@ -98,7 +106,6 @@ def compute_tokenizer_hash(tokenizer_dir: str) -> str:
 # ---------------------------------------------------------------------------
 # Metadata loading and validation
 # ---------------------------------------------------------------------------
-
 
 def _load_shard_meta(meta_path: str) -> Optional[dict]:
     """Load metadata.json sidecar if present. Returns None for legacy shards."""
@@ -190,6 +197,10 @@ def _iter_sequences_from_shard(
     """
     Yield [seq_len] long tensors from a single .bin/.idx shard.
 
+    seq_len <= SHARD_BLOCK_SIZE (e.g. 2048, 1024):
+        One block is read; the first seq_len tokens are emitted and the rest
+        of the block is discarded. Use for memory workarounds (shorter seq).
+
     seq_len == SHARD_BLOCK_SIZE (4096):
         Each .idx region is exactly one sequence. One read per region.
 
@@ -201,13 +212,16 @@ def _iter_sequences_from_shard(
 
     Corrupted / empty regions are logged and skipped; the shard continues.
     """
-    if seq_len % SHARD_BLOCK_SIZE != 0:
+    if seq_len <= 0:
+        raise ValueError(f"seq_len must be positive, got {seq_len}")
+    if seq_len > SHARD_BLOCK_SIZE and seq_len % SHARD_BLOCK_SIZE != 0:
         raise ValueError(
             f"seq_len={seq_len} is not a multiple of SHARD_BLOCK_SIZE={SHARD_BLOCK_SIZE}. "
-            f"Supported: seq_len == {SHARD_BLOCK_SIZE} (one block) or seq_len = N * {SHARD_BLOCK_SIZE} (join N blocks)."
+            f"Use seq_len <= {SHARD_BLOCK_SIZE} (truncate one block) or seq_len = N * {SHARD_BLOCK_SIZE} (join N blocks)."
         )
 
-    blocks_per_seq = seq_len // SHARD_BLOCK_SIZE
+    truncate_from_block = seq_len <= SHARD_BLOCK_SIZE
+    blocks_per_seq = 1 if truncate_from_block else seq_len // SHARD_BLOCK_SIZE
     offsets = _read_idx_offsets(idx_path)
     itemsize = dtype.itemsize
     num_regions = len(offsets) - 1
@@ -233,10 +247,7 @@ def _iter_sequences_from_shard(
             if num_tokens < expected:
                 logger.warning(
                     "Short region %d in %s: expected %d tokens, got %d. Skipping.",
-                    i,
-                    bin_path,
-                    expected,
-                    num_tokens,
+                    i, bin_path, expected, num_tokens,
                 )
                 skipped += 1
                 continue
@@ -248,16 +259,17 @@ def _iter_sequences_from_shard(
             if len(block) != expected:
                 logger.warning(
                     "Incomplete read in %s region %d: expected %d got %d. Skipping.",
-                    bin_path,
-                    i,
-                    expected,
-                    len(block),
+                    bin_path, i, expected, len(block),
                 )
                 skipped += 1
                 continue
 
-            if blocks_per_seq == 1:
-                # Fast path: one block == one sequence
+            if truncate_from_block:
+                # seq_len <= SHARD_BLOCK_SIZE: use first seq_len tokens of this block
+                out = block[:seq_len].copy()
+                yield torch.from_numpy(out).to(torch.long)
+            elif blocks_per_seq == 1:
+                # seq_len == SHARD_BLOCK_SIZE: one block == one sequence
                 yield torch.from_numpy(block.copy()).to(torch.long)
             else:
                 # Accumulate blocks into buffer, emit when full
@@ -270,9 +282,7 @@ def _iter_sequences_from_shard(
     if token_buffer:
         logger.info(
             "%s: %d tokens remaining in join-buffer (< seq_len=%d), discarded.",
-            bin_path,
-            len(token_buffer),
-            seq_len,
+            bin_path, len(token_buffer), seq_len,
         )
 
     if skipped > 0:
@@ -291,27 +301,53 @@ def _build_shard_list(
     shard_dir: str,
     rank: int,
     world_size: int,
-) -> Tuple[List[Tuple[str, str, str]], int]:
+) -> Tuple[List[Tuple[str, str, str]], int, bool]:
     """
-    Return (shard_pairs, total_shards) for this rank.
+    Return (shard_pairs, total_shards, is_s3) for this rank.
 
     shard_pairs is a sorted list of (bin_path, idx_path, shard_subdir) tuples
     assigned to this rank via round-robin across all subdirectories.
+
+    For S3 sources (``shard_dir`` starts with ``s3://``), each tuple contains
+    the S3 shard URI in all three positions — the actual bin/idx paths are
+    resolved at iteration time via ``S3ShardPrefetcher``.
 
     Expected on-disk layout (directory-per-shard):
         shards/
           shard_001/
             tokens.bin
             tokens.idx
-            metadata.json
+            metadata.json        (optional)
           shard_002/
             ...
+
+    Expected S3 layout (mirrors local):
+        s3://bucket/prefix/shard_001/tokens.bin
+        s3://bucket/prefix/shard_001/tokens.idx
+        s3://bucket/prefix/shard_001/metadata.json  (optional)
 
     If a rank receives no shards (fewer shards than GPUs), this is rank
     starvation. We do NOT hard-fail — training continues on ranks that have
     data. Instead we emit a structured, highly-visible error log so that
     the monitoring system can capture it and trigger a halt if needed.
     """
+    # ------------------------------------------------------------------ S3
+    if is_s3_path(shard_dir):
+        rank_uris, total_shards = list_s3_shard_uris(shard_dir, rank, world_size)
+        if not rank_uris:
+            print_rank_0(
+                f"  ERROR: {_STARVATION_PREFIX} | rank={rank} | world_size={world_size} | "
+                f"total_shards={total_shards} | "
+                "This rank has zero shards assigned. "
+                "The GPU will idle and produce no gradient updates. "
+                "Add more shards or reduce world_size to eliminate starvation."
+            )
+            return [], total_shards, True
+        # Use the shard URI in all three tuple positions; real paths resolved later.
+        pairs = [(uri, uri, uri) for uri in rank_uris]
+        return pairs, total_shards, True
+
+    # --------------------------------------------------------------- Local
     shard_dir_path = Path(shard_dir)
     all_subdirs = sorted(p for p in shard_dir_path.iterdir() if p.is_dir())
     total_shards = len(all_subdirs)
@@ -333,7 +369,7 @@ def _build_shard_list(
             "The GPU will idle and produce no gradient updates. "
             "Add more shards or reduce world_size to eliminate starvation."
         )
-        return [], total_shards
+        return [], total_shards, False
 
     pairs = []
     for sd in rank_subdirs:
@@ -345,13 +381,12 @@ def _build_shard_list(
             raise FileNotFoundError(f"Missing tokens.idx in shard directory {sd}.")
         pairs.append((str(bp), str(ip), str(sd)))
 
-    return pairs, total_shards
+    return pairs, total_shards, False
 
 
 # ---------------------------------------------------------------------------
 # IterableDataset
 # ---------------------------------------------------------------------------
-
 
 class BinIdxDataset(IterableDataset):
     """
@@ -364,10 +399,10 @@ class BinIdxDataset(IterableDataset):
             "labels":         LongTensor [seq_len]  (copy of input_ids)
         }
 
-    seq_len must be a multiple of SHARD_BLOCK_SIZE (4096):
+    seq_len behavior:
+        seq_len <= 4096  → one block read, first seq_len tokens used (e.g. 2048 for memory workaround)
         seq_len == 4096  → one block per sequence (standard)
-        seq_len == 8192  → two consecutive blocks joined per sequence
-        seq_len == 16384 → four consecutive blocks joined, etc.
+        seq_len > 4096   → must be multiple of 4096; consecutive blocks joined (8192, 16384, ...)
 
     DDP:
         rank / world_size are resolved automatically from torch.distributed.
@@ -391,14 +426,34 @@ class BinIdxDataset(IterableDataset):
         world_size: int = 1,
         dtype: str = "uint32",
         validate_tokenizer: bool = True,
+        # S3 prefetch options (no effect for local paths)
+        cache_dir: Optional[str] = None,
+        s3_prefetch_count: int = 2,
+        s3_delete_after_use: bool = True,
     ) -> None:
+        """
+        Parameters
+        ----------
+        cache_dir:
+            Local directory for S3 shard downloads.  A system temp dir is
+            used when unset.  Ignored for local shard_dir paths.
+        s3_prefetch_count:
+            Number of shards to prefetch ahead from S3.  2 is a good default:
+            it keeps one shard ready while the current one is being consumed,
+            without wasting significant disk space.
+        s3_delete_after_use:
+            Delete each downloaded shard directory after its sequences have
+            been fully consumed (default True).  Set False to build a
+            persistent local cache across epochs.
+        """
         super().__init__()
 
-        if seq_len % SHARD_BLOCK_SIZE != 0:
+        if seq_len <= 0:
+            raise ValueError(f"seq_len must be positive, got {seq_len}")
+        if seq_len > SHARD_BLOCK_SIZE and seq_len % SHARD_BLOCK_SIZE != 0:
             raise ValueError(
-                f"seq_len={seq_len} must be a multiple of "
-                f"SHARD_BLOCK_SIZE={SHARD_BLOCK_SIZE}. "
-                f"Use {SHARD_BLOCK_SIZE}, {SHARD_BLOCK_SIZE*2}, {SHARD_BLOCK_SIZE*4}, ..."
+                f"seq_len={seq_len} must be <= {SHARD_BLOCK_SIZE} or a multiple of it. "
+                f"Use e.g. 2048, {SHARD_BLOCK_SIZE}, {SHARD_BLOCK_SIZE*2}, ..."
             )
 
         self.shard_dir = shard_dir
@@ -406,12 +461,15 @@ class BinIdxDataset(IterableDataset):
         self.tokenizer = tokenizer
         self.dtype = np.dtype(dtype)
         self.validate_tokenizer = validate_tokenizer
+        self._cache_dir = cache_dir
+        self._s3_prefetch_count = s3_prefetch_count
+        self._s3_delete_after_use = s3_delete_after_use
 
         self._tokenizer_hash: Optional[str] = None
         if validate_tokenizer and tokenizer_dir and os.path.isdir(tokenizer_dir):
             self._tokenizer_hash = compute_tokenizer_hash(tokenizer_dir)
 
-        self._shard_pairs, self._total_shards = _build_shard_list(
+        self._shard_pairs, self._total_shards, self._is_s3 = _build_shard_list(
             shard_dir, rank, world_size
         )
         self._rank = rank
@@ -419,7 +477,11 @@ class BinIdxDataset(IterableDataset):
         self._validate_all_shards()
 
     def _validate_all_shards(self) -> None:
-        """Pre-flight: validate metadata.json for every shard on this rank."""
+        """Pre-flight: validate metadata.json for every shard on this rank.
+
+        For S3 shards, only metadata.json is downloaded (lightweight — a few
+        KB per shard) so validation does not incur full shard download cost.
+        """
         if not self.validate_tokenizer:
             print_rank_0(
                 "  WARNING: validate_tokenizer=False — skipping tokenizer identity checks. "
@@ -429,8 +491,19 @@ class BinIdxDataset(IterableDataset):
 
         errors_found = 0
         for bin_path, _, shard_subdir in self._shard_pairs:
-            meta_path = os.path.join(shard_subdir, "metadata.json")
-            meta = _load_shard_meta(meta_path)
+            if self._is_s3:
+                # Download only metadata.json for S3 shards to a throw-away temp dir.
+                tmp = tempfile.mkdtemp(prefix="shard_meta_", dir=self._cache_dir)
+                try:
+                    download_metadata_only(shard_subdir, tmp)
+                    meta_path = os.path.join(tmp, "metadata.json")
+                    meta = _load_shard_meta(meta_path)
+                finally:
+                    shutil.rmtree(tmp, ignore_errors=True)
+            else:
+                meta_path = os.path.join(shard_subdir, "metadata.json")
+                meta = _load_shard_meta(meta_path)
+
             if meta is None:
                 print_rank_0(
                     f"  WARNING: No metadata.json for {bin_path} — cannot validate "
@@ -453,6 +526,13 @@ class BinIdxDataset(IterableDataset):
             )
 
     def __iter__(self) -> Iterator[Dict[str, torch.Tensor]]:
+        if self._is_s3:
+            yield from self._iter_s3()
+        else:
+            yield from self._iter_local()
+
+    def _iter_local(self) -> Iterator[Dict[str, torch.Tensor]]:
+        """Iterate over local .bin/.idx shard pairs (zero overhead path)."""
         for bin_path, idx_path, _ in self._shard_pairs:
             for seq in _iter_sequences_from_shard(
                 bin_path, idx_path, self.dtype, self.seq_len
@@ -463,11 +543,39 @@ class BinIdxDataset(IterableDataset):
                     "labels": seq.clone(),
                 }
 
+    def _iter_s3(self) -> Iterator[Dict[str, torch.Tensor]]:
+        """
+        Iterate over S3 shards with background prefetching.
+
+        The ``S3ShardPrefetcher`` downloads the next shard(s) while the
+        training loop consumes the current one, so GPU compute is never
+        stalled waiting for a network transfer.
+        """
+        shard_uris = [sd for _, _, sd in self._shard_pairs]
+        with S3ShardPrefetcher(
+            shard_uris,
+            cache_dir=self._cache_dir,
+            prefetch_count=self._s3_prefetch_count,
+            delete_after_use=self._s3_delete_after_use,
+        ) as prefetcher:
+            for local_dir in prefetcher:
+                bin_path = os.path.join(local_dir, "tokens.bin")
+                idx_path = os.path.join(local_dir, "tokens.idx")
+                for seq in _iter_sequences_from_shard(
+                    bin_path, idx_path, self.dtype, self.seq_len
+                ):
+                    yield {
+                        "input_ids": seq,
+                        "attention_mask": torch.ones(self.seq_len, dtype=torch.long),
+                        "labels": seq.clone(),
+                    }
+                # Free shard disk space before the next shard is consumed.
+                prefetcher.release(local_dir)
+
 
 # ---------------------------------------------------------------------------
 # Distributed context helper
 # ---------------------------------------------------------------------------
-
 
 def _resolve_dist_context() -> Tuple[int, int]:
     """Return (rank, world_size) from torch.distributed, falling back to env vars."""
@@ -482,7 +590,6 @@ def _resolve_dist_context() -> Tuple[int, int]:
 # Public factory
 # ---------------------------------------------------------------------------
 
-
 def build_bin_idx_dataloader(
     shard_dir: str,
     batch_size: int,
@@ -495,26 +602,40 @@ def build_bin_idx_dataloader(
     validate_tokenizer: bool = True,
     rank: Optional[int] = None,
     world_size: Optional[int] = None,
+    # S3 prefetch options (ignored for local paths)
+    cache_dir: Optional[str] = None,
+    s3_prefetch_count: int = 2,
+    s3_delete_after_use: bool = True,
 ) -> DataLoader:
     """
     Build and return a DataLoader over .bin/.idx shards.
 
+    Accepts both local directories and S3 URIs (``s3://bucket/prefix``).
+    For S3 sources, shards are downloaded to a local cache by a background
+    thread ahead of consumption so training is never stalled on I/O.
+
     Args:
-        shard_dir:          Directory containing shard subdirectories.
-        batch_size:         Batch size per GPU (not global batch size).
-        tokenizer:          Live tokenizer instance. Used for EOS/PAD ID validation.
-        tokenizer_dir:      Path to tokenizer directory for hash computation.
-                            Defaults to code/src/tokenizer/ relative to this file.
-        seq_len:            Sequence length. Must be a multiple of 4096.
-                            Default 4096 (one block per sequence).
-                            Use 8192/16384 to join consecutive blocks.
-        dtype:              Token dtype used when writing .bin files (default uint32).
-        num_workers:        DataLoader worker processes. 0 = main process (debug only).
-        prefetch_factor:    Prefetch batches per worker (only active when num_workers > 0).
-        validate_tokenizer: Hard-fail on tokenizer mismatch. Set False only for
-                            legacy shards during migration.
-        rank:               Override rank (default: auto-detect from torch.distributed).
-        world_size:         Override world_size (default: auto-detect).
+        shard_dir:            Local directory **or** S3 URI containing shard
+                              subdirectories (e.g. ``s3://my-bucket/shards``).
+        batch_size:           Batch size per GPU (not global batch size).
+        tokenizer:            Live tokenizer instance. Used for EOS/PAD ID validation.
+        tokenizer_dir:        Path to tokenizer directory for hash computation.
+                              Defaults to code/src/tokenizer/ relative to this file.
+        seq_len:              Sequence length. Can be <= 4096 (truncate one block,
+                              e.g. 2048) or a multiple of 4096 (join blocks).
+        dtype:                Token dtype used when writing .bin files (uint32).
+        num_workers:          DataLoader worker processes. 0 = main process (debug).
+        prefetch_factor:      Prefetch batches per worker (only when num_workers > 0).
+        validate_tokenizer:   Hard-fail on tokenizer mismatch. Set False only for
+                              legacy shards during migration.
+        rank:                 Override rank (default: auto-detect from torch.distributed).
+        world_size:           Override world_size (default: auto-detect).
+        cache_dir:            Local directory for S3 downloads. Defaults to the
+                              system temp directory. Ignored for local shard_dir.
+        s3_prefetch_count:    Number of shards to hold pre-downloaded simultaneously.
+                              2 eliminates most download stalls with minimal disk use.
+        s3_delete_after_use:  Delete each S3 shard from local cache after it has been
+                              fully consumed. Set False to keep a persistent cache.
 
     Returns:
         DataLoader emitting {"input_ids", "attention_mask", "labels"} batches.
@@ -539,17 +660,21 @@ def build_bin_idx_dataloader(
 
     if tokenizer_dir:
         tok_hash = compute_tokenizer_hash(tokenizer_dir)
-        print_rank_0(f"Tokenizer hash (first 16 chars): {tok_hash[:16]}...")
+        print_rank_0(
+            f"Tokenizer hash (first 16 chars): {tok_hash[:16]}..."
+        )
     else:
         print_rank_0(
             "  WARNING: tokenizer_dir not found — tokenizer hash validation will be "
             "skipped. Ensure shards were produced with the canonical tokenizer."
         )
 
-    blocks_per_seq = seq_len // SHARD_BLOCK_SIZE
-    if blocks_per_seq == 1:
-        print_rank_0(f"Block config: seq_len={seq_len} (1 block per sequence)")
+    if seq_len <= SHARD_BLOCK_SIZE:
+        print_rank_0(
+            f"Block config: seq_len={seq_len} (first {seq_len} tokens of each {SHARD_BLOCK_SIZE}-token block)"
+        )
     else:
+        blocks_per_seq = seq_len // SHARD_BLOCK_SIZE
         print_rank_0(
             f"Block config: seq_len={seq_len} ({blocks_per_seq} blocks joined per sequence)"
         )
@@ -563,6 +688,9 @@ def build_bin_idx_dataloader(
         world_size=world_size,
         dtype=dtype,
         validate_tokenizer=validate_tokenizer,
+        cache_dir=cache_dir,
+        s3_prefetch_count=s3_prefetch_count,
+        s3_delete_after_use=s3_delete_after_use,
     )
 
     n_assigned = len(dataset._shard_pairs)
@@ -575,6 +703,13 @@ def build_bin_idx_dataloader(
 
     if validate_tokenizer and n_assigned > 0:
         print_rank_0(f"✓ All {n_assigned} shard(s) passed tokenizer validation")
+
+    if is_s3_path(shard_dir):
+        print_rank_0(
+            f"S3 prefetch config: prefetch_count={s3_prefetch_count}, "
+            f"cache_dir={'<system tmp>' if cache_dir is None else cache_dir}, "
+            f"delete_after_use={s3_delete_after_use}"
+        )
 
     loader_kwargs: dict = {
         "batch_size": batch_size,
