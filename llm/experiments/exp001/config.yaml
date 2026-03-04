@@ -12,7 +12,7 @@ data:
 
 proxy:
   local_path: ./_data/synth_local_en
-  seq_len: 64 # should be greater than or equal to the smallest block_size, if pack_into_blocks is True
+  seq_len: 512 # overridden at runtime to max(opus.scoring_seq_len, opus.train_seq_len) if needed
   batch_size: 16
   num_workers: 1
 
@@ -21,13 +21,33 @@ train:
   log_interval: 1
   profile_steps: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 
+# ── OPUS Configuration ──────────────────────────────────────────────────────
+# Single point of truth for all OPUS experiment knobs.
+#
+# Current values are for the small local experiment (micro_batch=1, 1 GPU).
+# Production values (8 GPUs, micro_batch=4):
+#   n_proxy_total: 16, candidate_multiplier: 4, scoring_seq_len: 512,
+#   train_seq_len: <match data.block_sizes>, strict_shard_preconditioner: false
 opus:
-  candidate_multiplier: 2 # if set to 1, opus is disabled.
-  n_proxy: 2
+  # ── Pool sizing ──
+  candidate_multiplier: 2 # candidate pool = micro_batch × this. Set to 1 to disable OPUS.
+  n_proxy_total: 1        # total proxy samples across all GPUs (auto-divided by world_size)
+                           # production: 16 (gives 2 per GPU with 8 GPUs)
+
+  # ── Sequence lengths ──
+  scoring_seq_len: 512    # token length for ghost scoring pass (clamped to available)
+  train_seq_len: 128      # training seq_len for proxy samples (should match data.block_sizes)
+
+  # ── Scoring internals ──
   sketch_dim: 512
   temperature: 0.9
   sketch_seed: 42
-  strict_shard_preconditioner: true
+
+  # ── Proxy-inclusive training ──
+  include_proxy_in_training: true # train on proxy samples alongside OPUS-selected candidates
+
+  # ── Safety ──
+  strict_shard_preconditioner: false # false for ZeRO-2 (scalar C_t fallback for partitioned state)
   max_selector_time_s: 30.0
   fallback_random_on_error: true
 

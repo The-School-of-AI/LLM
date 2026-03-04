@@ -1,11 +1,11 @@
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, ContextManager
 
 import deepspeed
 import torch
 import yaml
-from exp.distributed import all_reduce_sum, get_rank, set_seed
+from exp.distributed import all_reduce_sum, get_rank, get_world_size, set_seed
 from exp.opus import (
     AdamWPreconditionerView,
     CountSketchProjector,
@@ -58,14 +58,29 @@ class TrainConfig:
 
 @dataclass
 class OpusConfig:
+    # ── Pool sizing ──
+
     # How many times larger the candidate pool is vs. the training batch size.
     # e.g. candidate_multiplier=4 with train_micro_batch_size_per_gpu=8 means
     # each GPU draws 32 candidates and selects the best ~16 of them.
     candidate_multiplier: int
 
-    # Number of proxy samples to draw from the proxy pool each step to estimate
-    # the target gradient direction g_proxy.
-    n_proxy: int
+    # Total number of proxy samples across all GPUs. Auto-divided by world_size
+    # at runtime to get per-GPU count. Must be divisible by world_size.
+    n_proxy_total: int
+
+    # ── Sequence lengths ──
+
+    # Token length for the ghost scoring pass. Both proxy and candidate sequences
+    # are truncated to min(scoring_seq_len, available_len) before scoring.
+    scoring_seq_len: int
+
+    # Training sequence length for proxy samples. Should match data.block_sizes.
+    # Proxy samples are truncated to min(train_seq_len, candidate_seq_len) before
+    # being added to the training batch.
+    train_seq_len: int
+
+    # ── Scoring internals ──
 
     # Dimensionality of the CountSketch projection space. Higher = more accurate
     # inner-product estimates but more memory. 8192 is a good default.
@@ -79,10 +94,19 @@ class OpusConfig:
     # so every GPU builds the same projection matrices.
     sketch_seed: int
 
+    # ── Proxy-inclusive training (architect's modification) ──
+
+    # If True, proxy samples are added to the training batch alongside
+    # OPUS-selected candidates. The paper discards proxy after scoring;
+    # this flag keeps them because they are high-quality data.
+    include_proxy_in_training: bool = True
+
+    # ── Safety ──
+
     # If True, treat parameters whose optimizer state is not local to this GPU
-    # shard (ZeRO-3) as having zero preconditioner rather than falling back to
-    # a scalar approximation.
-    strict_shard_preconditioner: bool = True
+    # shard (ZeRO-2/3) as having zero preconditioner rather than falling back to
+    # a scalar approximation. Set to False for ZeRO-2 to use scalar C_t fallback.
+    strict_shard_preconditioner: bool = False
 
     # Maximum wall-clock time in seconds allowed for one full selection loop.
     # If exceeded, the selector raises TimeoutError and (if fallback_random_on_error
@@ -140,27 +164,80 @@ class Trainer:
             print_rank_0("loading dataloaders")
 
             # DeepSpeed's train_micro_batch_size_per_gpu is the number of
-            # sequences the optimizer step actually trains on per GPU. OPUS
-            # draws candidate_multiplier times that many sequences and selects
-            # the best train_micro_batch_size_per_gpu of them.
-            #
-            # selection_ratio = 1 / candidate_multiplier, which means we always
-            # select back exactly train_micro_batch_size_per_gpu samples on
-            # average — keeping DeepSpeed's gradient accounting consistent.
+            # sequences the optimizer step actually trains on per GPU.
             selected_batch_size = ds_config["train_micro_batch_size_per_gpu"]
             candidate_pool_size = selected_batch_size * c.opus.candidate_multiplier
-            selection_ratio = 1.0 / c.opus.candidate_multiplier
             initial_lr = float(ds_config["optimizer"]["params"]["lr"])
 
+            # ── Auto-configure proxy count from world_size ────────────────
+            world_size = get_world_size()
+            n_proxy_per_gpu = c.opus.n_proxy_total // world_size
+
+            assert c.opus.n_proxy_total % world_size == 0, (
+                f"n_proxy_total ({c.opus.n_proxy_total}) must be divisible "
+                f"by world_size ({world_size})"
+            )
+
+            # ── Compute selection ratio ───────────────────────────────────
+            # When include_proxy_in_training=True, proxy samples fill part of
+            # the training batch, so OPUS selects fewer candidates.
+            if c.opus.include_proxy_in_training:
+                assert n_proxy_per_gpu <= selected_batch_size, (
+                    f"n_proxy_per_gpu ({n_proxy_per_gpu}) > micro_batch "
+                    f"({selected_batch_size}). Reduce n_proxy_total or "
+                    f"increase train_micro_batch_size_per_gpu."
+                )
+                n_to_select = selected_batch_size - n_proxy_per_gpu
+                if n_to_select == 0:
+                    print_rank_0(
+                        "WARNING: n_to_select=0, all training slots "
+                        "filled by proxy samples — no OPUS selection"
+                    )
+            else:
+                # Original paper behavior: proxy used for scoring only
+                n_to_select = selected_batch_size
+
+            selection_ratio = (
+                n_to_select / candidate_pool_size
+                if candidate_pool_size > 0
+                else 0.0
+            )
+
+            print_rank_0(
+                f"OPUS config: world_size={world_size}, "
+                f"n_proxy_per_gpu={n_proxy_per_gpu}, "
+                f"n_to_select={n_to_select}, "
+                f"candidate_pool={candidate_pool_size}, "
+                f"selection_ratio={selection_ratio:.4f}, "
+                f"include_proxy_in_training={c.opus.include_proxy_in_training}"
+            )
+
+            # ── Train data loader (candidate pool) ────────────────────────
             self.train_loader, _, _, _ = get_dataloaders(
                 tokenizer=tokenizer,
                 batch_size=candidate_pool_size,
                 **asdict(c.data),
             )
 
+            # ── Proxy loader ──────────────────────────────────────────────
+            # Proxy needs enough tokens for both scoring and training.
+            # Override proxy.seq_len to the larger of the two.
+            proxy_config = c.proxy
+            effective_proxy_seq_len = max(
+                c.opus.scoring_seq_len, c.opus.train_seq_len
+            )
+            if proxy_config.seq_len != effective_proxy_seq_len:
+                proxy_config = replace(
+                    proxy_config, seq_len=effective_proxy_seq_len
+                )
+                print_rank_0(
+                    f"Overriding proxy.seq_len to {effective_proxy_seq_len} "
+                    f"(max of scoring_seq_len={c.opus.scoring_seq_len}, "
+                    f"train_seq_len={c.opus.train_seq_len})"
+                )
             proxy_loader = get_proxy_dataloader(
                 tokenizer=tokenizer,
-                config=c.proxy,
+                config=proxy_config,
                 seed=c.seed,
             )
             self.proxy_provider = RandomInDistributionProxyProvider(proxy_loader)
@@ -247,6 +324,8 @@ class Trainer:
         self.candidate_pool_size = candidate_pool_size
         self.selection_ratio = selection_ratio
         self.initial_lr = initial_lr
+        self.n_proxy_per_gpu = n_proxy_per_gpu
+        self.n_to_select = n_to_select
 
     def train(self):
         c = self.config
@@ -285,26 +364,39 @@ class Trainer:
                     metrics={},
                 )
                 current_lr = self.initial_lr
+                # No proxy injection in bypass mode
+                proxy_ids_train = torch.empty(
+                    0, candidate_ids.size(1),
+                    dtype=candidate_ids.dtype, device=device,
+                )
             else:
                 # Runs proxy sampling, scoring pass (forward+backward with ghost
                 # hooks), Boltzmann selection, and index extraction.
                 # See _select_candidates() for the full breakdown.
                 with self._step_phase("step/opus_selection"):
-                    local_indices, result, current_lr = self._select_candidates(
-                        candidate_ids
+                    local_indices, proxy_ids_train, result, current_lr = (
+                        self._select_candidates(candidate_ids)
                     )
 
             # ── Training pass (Pass 2) ────────────────────────────────────
-            # Uses the full-length candidate sequences (not the proxy-length
-            # truncated ones used for scoring) so training sees the complete
-            # context window.
-            # Shape: (k_local, full_seq_len)
+            # Assemble the training batch from OPUS-selected candidates and
+            # (optionally) proxy samples.
             selected_ids = candidate_ids[local_indices]
+
+            if c.opus.include_proxy_in_training and proxy_ids_train.size(0) > 0:
+                # Ensure seq_len dimensions match (proxy may be truncated
+                # to train_seq_len which could differ from candidate seq_len).
+                target_len = proxy_ids_train.size(1)
+                training_ids = torch.cat(
+                    [proxy_ids_train, selected_ids[:, :target_len]], dim=0
+                )
+            else:
+                training_ids = selected_ids
 
             # Forward — identical loss formulation to the scoring pass so the
             # gradient signal is consistent throughout.
             with self._step_phase("step/train_forward"):
-                train_loss = self._forward_and_loss(selected_ids)
+                train_loss = self._forward_and_loss(training_ids)
 
             # Backward — the only backward that counts toward a weight update.
             with self._step_phase("step/train_backward"):
@@ -320,19 +412,22 @@ class Trainer:
 
             if self.step_prof is not None:
                 _ptoks = torch.tensor(
-                    selected_ids.numel(), dtype=torch.long, device=self.device
+                    training_ids.numel(), dtype=torch.long, device=self.device
                 )
                 _ptoks = all_reduce_sum(_ptoks)
                 self.step_prof.end_step(tokens=int(_ptoks.item()))
 
             if global_step % c.train.log_interval == 0:
+                n_proxy_in_batch = proxy_ids_train.size(0)
                 n_selected_local = local_indices.numel()
                 m = result.metrics
                 print_rank_0(
                     f"step {global_step}/{c.train.max_steps} | "
                     f"loss {loss_val:.4f} | "
                     f"lr {current_lr:.2e} | "
-                    f"selected {n_selected_local}/{n_candidates} local samples | "
+                    f"proxy {n_proxy_in_batch} + "
+                    f"selected {n_selected_local} / "
+                    f"{n_candidates} candidates | "
                     f"alignment {m.get('alignment', 0.0):.3f} | "
                     f"redundancy {m.get('redundancy', 0.0):.3f} | "
                     f"entropy {m.get('entropy', 0.0):.3f} | "
@@ -357,7 +452,7 @@ class Trainer:
     def _select_candidates(
         self,
         candidate_ids: torch.Tensor,
-    ) -> tuple[torch.Tensor, SelectionResult, float]:
+    ) -> tuple[torch.Tensor, torch.Tensor, SelectionResult, float]:
         """
         Run the full OPUS selection pipeline for one training step.
 
@@ -374,13 +469,16 @@ class Trainer:
                            this GPU's local candidate pool.
 
         Returns:
-            local_indices:  (k_local,)        indices into candidate_ids for training
-            result:         SelectionResult    metrics + global index info
-            current_lr:     float              LR at this step, for logging + scoring
+            local_indices:          (k_local,) indices into candidate_ids
+            proxy_ids_for_training: (n_proxy_per_gpu, train_seq_len) proxy samples
+                                    truncated to training length
+            result:                 SelectionResult with metrics + global index info
+            current_lr:             float LR at this step, for logging + scoring
         """
         c = self.config
         device = self.device
         n_candidates = candidate_ids.size(0)
+        candidate_seq_len = candidate_ids.size(1)
 
         # ── snapshot the AdamW preconditioner state ───────────────────
         # Done before any gradients are computed so P_t reflects the
@@ -389,26 +487,31 @@ class Trainer:
             self.preconditioner_view.refresh()
 
         # ── Sample proxy sequences ────────────────────────────────────────────
-        # Draw n_proxy sequences from the in-distribution proxy pool. These
-        # estimate the target gradient direction g_proxy for this step.
-        # seq_len is fixed at proxy_seq_len (e.g. 512) — candidates will be
-        # truncated to match before the scoring pass.
+        # Draw n_proxy_per_gpu sequences from the in-distribution proxy pool.
+        # These estimate the target gradient direction g_proxy for this step.
+        # Loaded at max(scoring_seq_len, train_seq_len) so we have enough
+        # tokens for both scoring and training.
+        proxy_loader_seq_len = max(c.opus.scoring_seq_len, c.opus.train_seq_len)
         with self._step_phase("opus/proxy_sample"):
             proxy_ids: torch.Tensor = self.proxy_provider.sample(
                 device=device,  # type: ignore[arg-type]  # asserted non-None in __init__
-                k=c.opus.n_proxy,
-                seq_len=c.proxy.seq_len,
+                k=self.n_proxy_per_gpu,
+                seq_len=proxy_loader_seq_len,
             )
         n_proxy = proxy_ids.size(0)
-        proxy_seq_len = proxy_ids.size(1)
 
         # ── Build combined scoring batch ──────────────────────────────────────
-        # Truncate candidates to proxy_seq_len so proxy and candidate sketches
-        # live in comparable feature spaces. Full-length candidates are kept
-        # separately and used untouched in the training pass.
-        scoring_candidate_ids = candidate_ids[:, :proxy_seq_len]
-        # Shape: (n_proxy + n_candidates, proxy_seq_len)
-        combined_ids = torch.cat([proxy_ids, scoring_candidate_ids], dim=0)
+        # Effective scoring length: clamped to what's actually available.
+        effective_scoring_len = min(
+            c.opus.scoring_seq_len, proxy_ids.size(1), candidate_seq_len
+        )
+        # Truncate both proxy and candidates to the same scoring length.
+        proxy_ids_for_scoring = proxy_ids[:, :effective_scoring_len]
+        scoring_candidate_ids = candidate_ids[:, :effective_scoring_len]
+        # Shape: (n_proxy + n_candidates, effective_scoring_len)
+        combined_ids = torch.cat(
+            [proxy_ids_for_scoring, scoring_candidate_ids], dim=0
+        )
 
         # ── Scoring pass: forward ─────────────────────────────────────────────
         # A single forward pass over [proxy | candidates] fires the ghost hooks
@@ -456,7 +559,18 @@ class Trainer:
                 learning_rate=current_lr,
             )
 
-        return result.selected_local_indices, result, current_lr
+        # ── Prepare proxy samples for training ────────────────────────────────
+        # Truncate proxy to training length (must match candidate_ids seq_len
+        # so torch.cat works in the training loop).
+        train_len = min(c.opus.train_seq_len, candidate_seq_len)
+        proxy_ids_for_training = proxy_ids[:, :train_len]
+
+        return (
+            result.selected_local_indices,
+            proxy_ids_for_training,
+            result,
+            current_lr,
+        )
 
     # -------------------------------------------------------------------------
 
