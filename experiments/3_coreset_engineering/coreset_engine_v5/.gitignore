@@ -1,0 +1,20 @@
+output
+outputv2
+output1
+output2
+output3
+output*
+output_wo_bandinference
+output_w_bandinferbeforeauto(bandscore)
+output_w_bandinferauto(banbd_pmax)
+data
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+*.sqlite
+*.log
+*.pem
+gogi
+coreset_engine_v5 - Copy

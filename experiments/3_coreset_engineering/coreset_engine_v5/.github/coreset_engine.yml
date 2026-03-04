@@ -1,0 +1,198 @@
+name: Coreset Engine Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_mode:
+        description: 'Deployment mode'
+        required: true
+        type: choice
+        options:
+          - self-hosted
+          - ssh
+        default: 'self-hosted'
+      num_shards:
+        description: 'Number of parallel shards'
+        required: true
+        default: '8'
+      stages:
+        description: 'Space-separated stage list'
+        required: true
+        default: '1B'
+      input_path:
+        description: 'S3 input path (optional, overrides default in commands.sh)'
+        required: false
+        default: ''
+      total_tokens:
+        description: 'Total tokens estimate'
+        required: false
+        default: '4523096944'
+      resume:
+        description: 'Resume from last checkpoints'
+        type: boolean
+        default: false
+
+# ==============================================================================
+# DEPLOYMENT MODES:
+#
+#   1. self-hosted:  The EC2 instance is registered as a GitHub Actions
+#                    self-hosted runner. The pipeline runs DIRECTLY on EC2.
+#                    Requires: EC2 runner with label 'coreset-runner'.
+#                    AWS auth: via IAM Role attached to the EC2 instance.
+#
+#   2. ssh:          A GitHub-hosted (public) runner SSHes into an EC2
+#                    instance and runs the pipeline remotely.
+#                    Requires: EC2_SSH_KEY, EC2_HOST, EC2_USER secrets.
+#                    AWS auth: via IAM Role attached to the EC2 instance.
+#
+# SECURITY NOTES (applies to both modes):
+#   - All sensitive values stored as GitHub Secrets (auto-masked in logs)
+#   - S3_BUCKET stored as a secret, never hardcoded
+#   - EC2 instances MUST have IAM Roles for S3 access
+#   - SSH mode: key written to temp file, cleaned up in 'always()' step
+#   - SSH mode: set +x enforced, ssh -q used to prevent leakage
+#
+# REQUIRED SECRETS:
+#   Both modes:   S3_BUCKET
+#   SSH mode:     EC2_SSH_KEY (Base64), EC2_HOST, EC2_USER
+# ==============================================================================
+
+jobs:
+  # ============================================================================
+  # Job 1: Run Unit Tests (always runs)
+  # ============================================================================
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-path: "uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: |
+          cd experiments/3_coreset_engineering/
+          uv sync --dev
+
+      - name: Run tests
+        run: |
+          cd experiments/3_coreset_engineering/
+          uv run pytest coreset_engine_v5/tests/
+
+  # ============================================================================
+  # Job 2a: Self-Hosted Runner Mode
+  # The EC2 instance IS the runner. Code is checked out directly on it.
+  # No SSH, no key management. Simplest and most secure option.
+  # ============================================================================
+  deploy-self-hosted:
+    name: Run on Self-Hosted EC2 Runner
+    if: github.event.inputs.deploy_mode == 'self-hosted'
+    runs-on: [self-hosted, coreset-runner]
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          if ! command -v uv &> /dev/null; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Run Pipeline
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          NUM_SHARDS: ${{ github.event.inputs.num_shards }}
+          STAGES: ${{ github.event.inputs.stages }}
+          TOTAL_TOKENS: ${{ github.event.inputs.total_tokens }}
+          RESUME: ${{ github.event.inputs.resume }}
+          S3_INPUT_PATH: ${{ github.event.inputs.input_path }}
+        run: |
+          chmod +x experiments/3_coreset_engineering/coreset_engine_v5/commands.sh
+          bash experiments/3_coreset_engineering/coreset_engine_v5/commands.sh --foreground --skip-repo-setup
+
+  # ============================================================================
+  # Job 2b: SSH Mode
+  # A GitHub-hosted runner SSHes into an existing EC2 instance.
+  # Useful when self-hosted runner is not configured.
+  # ============================================================================
+  deploy-ssh:
+    name: Deploy via SSH to EC2
+    if: github.event.inputs.deploy_mode == 'ssh'
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Prepare SSH key securely ---
+      - name: Setup SSH Key
+        run: |
+          set +x
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > ~/.ssh/ec2_key.pem
+          chmod 400 ~/.ssh/ec2_key.pem
+
+          ssh-keyscan -H -T 10 "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+          echo "SSH key configured successfully."
+
+      # --- Copy script to EC2 ---
+      - name: Copy Script to EC2
+        run: |
+          set +x
+          scp -q -i ~/.ssh/ec2_key.pem \
+            experiments/3_coreset_engineering/coreset_engine_v5/commands.sh \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/commands.sh"
+          echo "Script copied to EC2."
+
+      # --- Execute pipeline on EC2 via SSH ---
+      - name: Run Pipeline on EC2
+        run: |
+          set +x
+          ssh -q -i ~/.ssh/ec2_key.pem \
+            -o ConnectTimeout=30 \
+            -o ServerAliveInterval=60 \
+            -o ServerAliveCountMax=10 \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" << REMOTE_SCRIPT
+
+            set -e
+            echo "Connected to EC2 instance."
+
+            export S3_BUCKET="${{ secrets.S3_BUCKET }}"
+            export NUM_SHARDS="${{ github.event.inputs.num_shards }}"
+            export STAGES="${{ github.event.inputs.stages }}"
+            export TOTAL_TOKENS="${{ github.event.inputs.total_tokens }}"
+            export RESUME="${{ github.event.inputs.resume }}"
+
+            INPUT_PATH_OVERRIDE="${{ github.event.inputs.input_path }}"
+            if [ -n "\${INPUT_PATH_OVERRIDE}" ]; then
+              export S3_INPUT_PATH="\${INPUT_PATH_OVERRIDE}"
+            fi
+
+            chmod +x /tmp/commands.sh
+            bash /tmp/commands.sh --foreground
+
+            rm -f /tmp/commands.sh
+          REMOTE_SCRIPT
+
+          echo "EC2 pipeline execution completed."
+
+      # --- Always clean up SSH keys ---
+      - name: Cleanup SSH Key
+        if: always()
+        run: |
+          rm -f ~/.ssh/ec2_key.pem
+          rm -f ~/.ssh/known_hosts
+          echo "SSH credentials cleaned up."

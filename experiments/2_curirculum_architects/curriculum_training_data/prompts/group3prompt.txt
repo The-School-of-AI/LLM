@@ -1,0 +1,944 @@
+# Group 3: Shapes, Colors & Patterns - Dataset Generation Prompt
+
+## Overview
+Generate 250,000 samples for visual perception and pattern recognition training. This group focuses on color perception, shape recognition, geometric concepts, and pattern completion.
+
+## Output Format
+Simple key-value JSON format in `curriculum_training_data/group3.json`:
+```json
+{
+  "What color is a banana?": "yellow",
+  "What is the shape of a ball?": "sphere",
+  "Which shape has 3 sides?": "triangle",
+  "What comes next: blue, red, blue, red, ...?": "blue",
+  ...
+}
+```
+
+---
+
+## Statement Breakdown (4 Statement Types)
+
+### Statement 1: Color Perception (70,000 samples)
+**Core Example**: {What color is a banana?: "yellow"}
+
+**Prompt**: Create data points for color identification and color knowledge. Use the REVERSE approach: take different colors, identify objects of those colors, and generate question-answer pairs. Try different combinations of:
+
+#### 1A. Object Color Identification (35,000 samples)
+**Example**: {What color is a banana?: "yellow"}
+
+**(i) Semantic variations**:
+- "What color is a [object]?"
+- "What is the color of a [object]?"
+- "Tell me the color of a [object]"
+- "What color does a [object] have?"
+- "Name the color of a [object]"
+- "A [object] is what color?"
+- "What's the typical color of a [object]?"
+- "Identify the color of a [object]"
+- "What color would you say a [object] is?"
+- "Describe the color of a [object]"
+
+**(ii) Color-Object Mappings** (build from colors to objects):
+- **Red**: apple, tomato, strawberry, cherry, fire truck, stop sign, rose, ladybug, cardinal, blood, brick, chili pepper, lobster, crab, pomegranate, raspberry, watermelon (inside), mars, ruby, poppy, heart, fire hydrant, barn, robin breast
+- **Orange**: orange (fruit), carrot, pumpkin, goldfish, tiger (stripes), basketball, traffic cone, autumn leaves, marigold, mango, papaya, sweet potato, tangerine, apricot, peach, cantaloupe, salmon, fox, monarch butterfly, cheese (cheddar)
+- **Yellow**: banana, sun, lemon, school bus, taxi, sunflower, corn, butter, cheese, daffodil, canary, rubber duck, bee, honey, mustard, egg yolk, pineapple, gold, lightning, tennis ball, highlighter, chick, giraffe spots
+- **Green**: grass, leaf, frog, broccoli, cucumber, lime, peas, lettuce, spinach, kale, avocado, kiwi, green apple, pickle, shamrock, alligator, crocodile, turtle shell, parsley, mint, basil, dollar bill, emerald, watermelon (outside), green pepper, celery, cabbage, asparagus, zucchini
+- **Blue**: sky, ocean, water, blueberry, blue jay, whale, dolphin, sapphire, jeans, denim, blue whale, peacock feathers, hydrangea, cornflower, bluebell, bluebonnet, police car lights, swimming pool, globe (oceans), ink, navy uniform
+- **Purple/Violet**: grape, eggplant, plum, lavender, violet flower, amethyst, lilac, iris, orchid, purple cabbage, beet, fig, blackberry, bruise, purple onion, purple potato, wisteria
+- **Pink**: flamingo, pig, cotton candy, rose (pink), cherry blossom, peony, carnation, bubblegum, piglet, salmon (raw), ham, shrimp (cooked), tongue, lips, grapefruit (inside), dragon fruit (inside)
+- **Brown**: chocolate, tree trunk, wood, dirt, soil, mud, coffee, bear, horse, deer, acorn, walnut, coconut shell, bread crust, cookie, potato skin, mushroom, cardboard, leather, football, pinecone, owl, sparrow, camel, peanut
+- **Black**: coal, crow, raven, panther, tire, night sky, licorice, blackberry, blackbird, gorilla, bat, spider, ant, orca (parts), tuxedo, piano keys, chalkboard, shadow, penguin (back)
+- **White**: snow, cloud, milk, cotton, polar bear, swan, dove, egg (shell), rice, salt, sugar, vanilla ice cream, paper, sheep/wool, rabbit (white), ghost, wedding dress, teeth, pearl, daisy petals, seagull, marshmallow, coconut flesh, garlic, cauliflower, onion (white)
+- **Gray/Grey**: elephant, dolphin (gray), shark, mouse, rat, rhinoceros, hippopotamus, wolf, storm cloud, concrete, stone, rock, silver, pencil lead, ash, smoke, seal, pigeon, donkey, brain, dust
+
+**(iii) Difficulty levels**:
+- **Easy (40%)**: Common objects with universally known colors (banana-yellow, grass-green, sky-blue)
+- **Medium (40%)**: Less common objects or objects that could vary (fox-orange, raven-black, jade-green)
+- **Hard (20%)**: Objects with specific shades or less obvious colors (eggplant-purple, salmon-pink/orange, champagne-gold)
+
+**(iv) Answer format**: Single color word (e.g., "yellow", "green", "blue")
+
+---
+
+#### 1B. Reverse Color Identification (15,000 samples)
+**Example**: {Name something that is yellow: "banana"} or {Give me an object that is red: "apple"}
+
+**(i) Semantic variations**:
+- "Name something that is [color]"
+- "Give me an object that is [color]"
+- "What is something that is [color]?"
+- "Tell me something [color]"
+- "Name a [color] object"
+- "What object is [color]?"
+- "Give an example of something [color]"
+- "What is [color] in color?"
+- "Can you name a [color] thing?"
+- "List something that is [color]"
+
+**(ii) Colors to use**: Red, orange, yellow, green, blue, purple, pink, brown, black, white, gray
+
+**(iii) Answer format**: Single object name (e.g., "banana", "sun", "lemon")
+- For curriculum training consistency: Each question should have ONE predetermined answer from the color-object mappings
+- Example: "Name something yellow" → "banana" (not multiple valid answers)
+
+**(iv) Difficulty levels**:
+- **Easy (40%)**: Primary colors (red, blue, yellow, green)
+- **Medium (40%)**: Secondary colors (orange, purple, pink)
+- **Hard (20%)**: Neutral colors (brown, gray, black, white)
+
+---
+
+#### 1C. Color Verification (Yes/No) (8,000 samples)
+**Example**: {Is a banana yellow?: "yes"}, {Is grass blue?: "no"}
+
+**(i) Semantic variations**:
+- "Is a [object] [color]?"
+- "Is the [object] [color]?"
+- "Are [objects] [color]?"
+- "Does a [object] have [color] color?"
+- "Is [color] the color of a [object]?"
+- "Would you say a [object] is [color]?"
+
+**(ii) Distribution**:
+- **70% True statements**: {Is a banana yellow?: "yes"}
+- **30% False statements**: {Is grass purple?: "no"}
+
+**(iii) Answer format**: "yes" or "no"
+
+---
+
+#### 1D. Color Multiple Choice (5,000 samples)
+**Example**: {Which is red, an apple or a banana?: "apple"}
+
+**(i) Semantic variations**:
+- "Which is [color], a [object1] or a [object2]?"
+- "Which one is [color]: [object1] or [object2]?"
+- "Pick the [color] object: [object1] or [object2]"
+- "Between [object1] and [object2], which is [color]?"
+- "Is [object1] or [object2] [color]?"
+
+**(ii) Answer format**: The correct object name
+
+---
+
+#### 1E. Color Mixing (4,000 samples)
+**Example**: {What color do you get when you mix red and blue?: "purple"}
+
+**(i) Semantic variations**:
+- "What color do you get when you mix [color1] and [color2]?"
+- "If you mix [color1] and [color2], what color do you get?"
+- "What is [color1] mixed with [color2]?"
+- "[color1] plus [color2] makes what color?"
+- "Combine [color1] and [color2]. What color results?"
+- "What happens when you mix [color1] with [color2]?"
+
+**(ii) Color mixing rules - Focus on Secondary Colors (primary + primary = secondary)**:
+
+**Primary Colors**: Red, Blue, Yellow
+**Secondary Colors**: Orange, Green, Purple
+
+**Core mixing rules**:
+- Red + Blue = Purple (secondary)
+- Red + Yellow = Orange (secondary)
+- Blue + Yellow = Green (secondary)
+
+**Tints and Shades**:
+- Red + White = Pink
+- Blue + White = Light Blue
+- Black + White = Gray
+- Any color + White = Lighter shade
+- Any color + Black = Darker shade
+
+**(iii) Difficulty levels**:
+- **Easy (60%)**: Primary → Secondary combinations (red+blue=purple, red+yellow=orange, blue+yellow=green)
+- **Medium (40%)**: Adding white/black for tints and shades
+
+**(iv) Answer format**: Single color word
+
+---
+
+#### 1F. Color Associations (3,000 samples)
+**Example**: {What color usually means stop or danger?: "red"}
+
+**(i) Semantic variations**:
+- "What color usually means [meaning]?"
+- "What color represents [concept]?"
+- "Which color is associated with [concept]?"
+- "What color symbolizes [concept]?"
+- "[Concept] is typically shown in what color?"
+
+**(ii) Color associations**:
+- **Red**: stop, danger, love, anger, heat, fire, emergency, warning
+- **Green**: go, nature, growth, envy, environment, safety, money
+- **Yellow**: caution, happiness, sunshine, warning, cowardice, energy
+- **Blue**: sadness, calm, trust, cold, water, sky, loyalty, peace
+- **White**: purity, peace, cleanliness, innocence, snow, surrender
+- **Black**: death, darkness, evil, elegance, mystery, night, formal
+- **Orange**: energy, enthusiasm, warmth, autumn, creativity
+- **Purple**: royalty, luxury, mystery, magic, spirituality
+- **Pink**: love, femininity, sweetness, romance, tenderness
+- **Brown**: earth, stability, reliability, nature, comfort
+- **Gray**: neutrality, balance, maturity, wisdom, sadness
+
+**(iii) Answer format**: Single color word
+
+---
+
+### Statement 2: Shape Perception (70,000 samples)
+**Core Example**: {What is the shape of a ball?: "sphere"}
+
+**Prompt**: Create data points for shape identification and recognition. Use the REVERSE approach: take different shapes, identify objects of those shapes, and generate question-answer pairs.
+
+#### 2A. Object Shape Identification (35,000 samples)
+**Example**: {What is the shape of a ball?: "sphere"}, {What shape is a pizza?: "circle"}
+
+**(i) Semantic variations**:
+- "What is the shape of a [object]?"
+- "What shape is a [object]?"
+- "Tell me the shape of a [object]"
+- "Identify the shape of a [object]"
+- "A [object] has what shape?"
+- "What shape does a [object] have?"
+- "Describe the shape of a [object]"
+- "Name the shape of a [object]"
+- "What geometric shape is a [object]?"
+- "What form does a [object] have?"
+
+**(ii) Shape-Object Mappings** (build from shapes to objects):
+
+**2D Shapes**:
+- **Circle**: pizza, wheel, clock face, coin, plate, frisbee, donut, moon (full), sun (as drawn), CD/DVD, pancake, cookie (round), orange slice, basketball (2D view), button, manhole cover, pie, ring, zero (0)
+- **Square**: window, chessboard square, tile, cracker, napkin, sticky note, picture frame, Rubik's cube face, waffle (section), sandwich (sliced), dice face, pixel, coaster, ice cube (face)
+- **Rectangle**: door, book, phone, TV screen, laptop screen, brick, dollar bill, envelope, business card, chocolate bar, ruler, notebook, flag, window pane, desk, table (top view), pool table, mattress
+- **Triangle**: pizza slice, sail, yield sign, pyramid face, mountain peak, tent, arrow tip, hanger, slice of cake, nachos chip, sandwich (cut diagonally), roof (side view), ice cream cone (2D)
+- **Oval/Ellipse**: egg, rugby ball (2D), face shape, mirror, track (running), racetrack, bathtub, leaf, grape, platter, spoon (bowl part), eye shape, zero (italic)
+- **Diamond/Rhombus**: kite, playing card diamond, baseball field, argyle pattern, gemstone cut, road sign (some)
+- **Pentagon**: home plate (baseball), some road signs, star fruit cross-section
+- **Hexagon**: honeycomb cell, nuts (hardware), stop sign (6 sides - actually 8, error: use benzene ring), snowflake base
+- **Octagon**: stop sign, some tiles, umbrella (from top)
+- **Star**: star shape, starfish, sheriff badge, Christmas star
+
+**3D Shapes**:
+- **Sphere**: ball, globe, marble, orange, grape, bubble, pearl, planet, moon, basketball, tennis ball, golf ball, ping pong ball, balloon (round), eyeball, cherry, blueberry, plum, ornament
+- **Cube**: dice, ice cube, Rubik's cube, sugar cube, box (equal sides), building block, gift box (square)
+- **Cylinder**: can, battery, candle, tube, pipe, log, pillar, column, barrel, drinking glass, roll of tape, crayon, marker, pencil (without tip), lipstick, test tube
+- **Cone**: ice cream cone, traffic cone, party hat, funnel, megaphone, pine tree (shape), tornado, volcano (shape), teepee, rocket nose
+- **Rectangular Prism/Cuboid**: book, brick, box, refrigerator, shoe box, cereal box, door, building, eraser, smartphone, tissue box, mattress, loaf of bread
+- **Pyramid**: Egyptian pyramid, tent, roof (peaked), mountain, tetrahedron (triangular pyramid)
+- **Oval/Ovoid (3D)**: egg, avocado, lemon, potato (some), football (American)
+
+**(iii) Answer Consistency for Curriculum Training**:
+Use SINGLE, CONSISTENT answers (avoid multiple valid answers):
+- **Use "round" for everyday/informal contexts**: "What shape is a ball?" → "round", "Is a wheel round?" → "yes"
+- **Use "sphere" for geometric/formal contexts**: "What is the geometric shape of a ball?" → "sphere", "Name a 3D shape" → "sphere"
+- **Use "circle" for 2D flat shapes**: "What shape is a pizza?" → "circle", "What shape is a wheel from the front?" → "circle"
+- **Use precise geometric terms for 3D**: cube, cylinder, cone, pyramid, rectangular prism
+
+This distinction helps curriculum progression: everyday language first, then geometric terminology.
+
+**(iv) Difficulty levels**:
+- **Easy (40%)**: Common objects with obvious shapes (ball-sphere, door-rectangle)
+- **Medium (40%)**: Objects that require shape abstraction (pizza-circle, can-cylinder)
+- **Hard (20%)**: 3D shapes with specific names (ice cream cone-cone, dice-cube)
+
+**(v) Answer format**: Shape name (e.g., "sphere", "circle", "rectangle", "cylinder")
+
+---
+
+#### 2B. Reverse Shape Identification (15,000 samples)
+**Example**: {Name something that is round: "ball"}, {Give me an object that is rectangular: "door"}
+
+**(i) Semantic variations**:
+- "Name something that is [shape]"
+- "Give me an object that is [shape]"
+- "What is something that is [shape]?"
+- "Tell me something [shape]"
+- "Name a [shape] object"
+- "What object is [shape]?"
+- "Give an example of something [shape]"
+- "What has the shape of a [shape]?"
+- "Can you name something [shape]?"
+- "List a [shape] object"
+
+**(ii) Shape descriptors to use**:
+- 2D: round/circular, square, rectangular, triangular, oval, diamond-shaped, star-shaped, hexagonal
+- 3D: spherical, cubic, cylindrical, conical, pyramidal
+
+**(iii) Answer format**: Single object name
+
+---
+
+#### 2C. Shape Verification (Yes/No) (8,000 samples)
+**Example**: {Is a ball round?: "yes"}, {Is a door circular?: "no"}
+
+**(i) Semantic variations**:
+- "Is a [object] [shape]?"
+- "Is the [object] [shape]?"
+- "Does a [object] have a [shape] shape?"
+- "Would you say a [object] is [shape]?"
+- "Is [shape] the shape of a [object]?"
+
+**(ii) Distribution**:
+- **70% True statements**: {Is a ball round?: "yes"}
+- **30% False statements**: {Is a book circular?: "no"}
+
+**(iii) Answer format**: "yes" or "no"
+
+---
+
+#### 2D. Shape Multiple Choice (5,000 samples)
+**Example**: {Which is round, a ball or a book?: "ball"}
+
+**(i) Semantic variations**:
+- "Which is [shape], a [object1] or a [object2]?"
+- "Which one is [shape]: [object1] or [object2]?"
+- "Pick the [shape] object: [object1] or [object2]"
+- "Between [object1] and [object2], which is [shape]?"
+- "Is [object1] or [object2] [shape]?"
+
+**(ii) Answer format**: The correct object name
+
+---
+
+#### 2E. 2D vs 3D Distinction (4,000 samples)
+**Example**: {Is a ball a 2D shape or 3D shape?: "3D"}, {Is a circle a 2D shape or 3D shape?: "2D"}
+
+**(i) Semantic variations**:
+- "Is a [object/shape] a 2D shape or 3D shape?"
+- "Is [shape] two-dimensional or three-dimensional?"
+- "Is a [object] flat or solid?"
+- "Would you classify [shape] as 2D or 3D?"
+- "Is [object] a flat shape or a solid shape?"
+
+**(ii) 2D vs 3D classifications**:
+- **2D**: circle, square, triangle, rectangle, oval, pentagon, hexagon, octagon, star, diamond, rhombus
+- **3D**: sphere, cube, cylinder, cone, pyramid, prism, cuboid, oval/ovoid, hemisphere
+
+**(iii) Answer format**: "2D" or "3D" or "two-dimensional" or "three-dimensional"
+
+---
+
+#### 2F. 2D-3D Relationship (3,000 samples)
+**Example**: {What is the 2D outline of a sphere?: "circle"}, {What 3D shape has circular faces?: "cylinder"}
+
+**(i) Semantic variations for 3D to 2D**:
+- "What is the 2D outline of a [3D shape]?"
+- "What 2D shape is the face of a [3D shape]?"
+- "If you trace around a [3D shape], what 2D shape do you get?"
+- "What is the cross-section of a [3D shape]?"
+
+**(ii) Semantic variations for 2D to 3D**:
+- "What 3D shape has [2D shape] faces?"
+- "If you spin a [2D shape], what 3D shape do you get?"
+- "What 3D shape is made of [2D shape]s?"
+
+**(iii) 2D-3D relationships**:
+- Sphere → Circle (outline/cross-section)
+- Cube → Square (face)
+- Cylinder → Circle (top/bottom face), Rectangle (side when unrolled)
+- Cone → Circle (base), Triangle (side view)
+- Pyramid → Triangle (face), Square (base for square pyramid)
+- Rectangular prism → Rectangle (faces)
+
+**(iv) Answer format**: Shape name
+
+---
+
+### Statement 3: Geometric Concepts (60,000 samples)
+**Core Example**: {Which shape has 3 sides?: "triangle"}
+
+**Prompt**: Create data points for geometric property identification. Cover easy, medium, and hard levels (skip expert level).
+
+#### 3A. Shape by Number of Sides (10,000 samples)
+**Example**: {Which shape has 3 sides?: "triangle"}, {What shape has 6 sides?: "hexagon"}
+
+**(i) Semantic variations**:
+- "Which shape has [N] sides?"
+- "What shape has [N] sides?"
+- "Name the shape with [N] sides"
+- "A shape with [N] sides is called?"
+- "What do you call a shape with [N] sides?"
+- "Which polygon has [N] sides?"
+- "Identify the shape with [N] sides"
+- "[N]-sided shape is called?"
+
+**(ii) Sides-to-Shape mappings**:
+- 3 sides → triangle
+- 4 sides → quadrilateral (or square, rectangle, rhombus, parallelogram, trapezoid)
+- 5 sides → pentagon
+- 6 sides → hexagon
+- 7 sides → heptagon
+- 8 sides → octagon
+- 9 sides → nonagon
+- 10 sides → decagon
+
+**(iii) Difficulty levels**:
+- **Easy (40%)**: 3, 4, 5, 6 sides
+- **Medium (40%)**: 7, 8 sides
+- **Hard (20%)**: 9, 10 sides
+
+**(iv) Answer format**: Shape name
+
+---
+
+#### 3B. Number of Sides for Shape (10,000 samples)
+**Example**: {How many sides does a triangle have?: "3"}, {How many sides does an octagon have?: "8"}
+
+**(i) Semantic variations**:
+- "How many sides does a [shape] have?"
+- "Count the sides of a [shape]"
+- "A [shape] has how many sides?"
+- "What is the number of sides in a [shape]?"
+- "Tell me the side count of a [shape]"
+- "How many edges does a [shape] have?" (for 2D)
+
+**(ii) Shapes to use**: triangle, square, rectangle, pentagon, hexagon, heptagon, octagon, nonagon, decagon, parallelogram, rhombus, trapezoid
+
+**(iii) Answer format**: Number (e.g., "3", "4", "8")
+
+---
+
+#### 3C. Corners/Vertices (8,000 samples)
+**Example**: {How many corners does a triangle have?: "3"}, {How many vertices does a hexagon have?: "6"}
+
+**(i) Semantic variations**:
+- "How many corners does a [shape] have?"
+- "How many vertices does a [shape] have?"
+- "Count the corners of a [shape]"
+- "A [shape] has how many corners?"
+- "What is the number of vertices in a [shape]?"
+- "Tell me the corner count of a [shape]"
+
+**(ii) 2D shapes**: triangle (3), square (4), rectangle (4), pentagon (5), hexagon (6), octagon (8)
+
+**(iii) 3D shapes**: cube (8 vertices), pyramid (5 vertices for square base), cone (1 vertex), cylinder (0 vertices), sphere (0 vertices), rectangular prism (8 vertices)
+
+**(iv) Answer format**: Number
+
+---
+
+#### 3D. Angles Count (5,000 samples)
+**Example**: {How many angles does a triangle have?: "3"}, {How many angles does a rectangle have?: "4"}
+
+**(i) Semantic variations**:
+- "How many angles does a [shape] have?"
+- "Count the angles in a [shape]"
+- "A [shape] has how many angles?"
+- "What is the number of angles in a [shape]?"
+
+**(ii) Shapes**: triangle (3), square (4), rectangle (4), pentagon (5), hexagon (6), octagon (8)
+
+**(iii) Answer format**: Number
+
+---
+
+#### 3E. Angle Types (8,000 samples)
+**Example**: {What is an angle less than 90 degrees called?: "acute"}, {What is an angle equal to 90 degrees called?: "right angle"}
+
+**(i) Semantic variations - Definition to Name**:
+- "What is an angle less than 90 degrees called?"
+- "An angle smaller than 90 degrees is called?"
+- "What do we call an angle under 90 degrees?"
+- "Name the type of angle that is less than 90 degrees"
+
+**(ii) Semantic variations - Name to Definition**:
+- "What is an acute angle?"
+- "How many degrees is a right angle?"
+- "What range of degrees is an obtuse angle?"
+
+**(iii) Angle types**:
+- **Acute angle**: less than 90 degrees
+- **Right angle**: exactly 90 degrees
+- **Obtuse angle**: greater than 90 degrees but less than 180 degrees
+- **Straight angle**: exactly 180 degrees
+
+**(iv) Difficulty levels**:
+- **Easy (50%)**: acute, right, obtuse
+- **Medium (50%)**: straight angle
+
+**(v) Answer format**: Angle type name or degree value
+
+---
+
+#### 3F. Shape Properties (8,000 samples)
+**Example**: {Which shape has 4 equal sides and 4 right angles?: "square"}, {Which shape has 2 pairs of parallel sides?: "parallelogram"}
+
+**(i) Semantic variations**:
+- "Which shape has [property]?"
+- "What shape has [property]?"
+- "Name the shape with [property]"
+- "A shape with [property] is called?"
+
+**(ii) Properties and shapes**:
+- 4 equal sides and 4 right angles → square
+- 4 right angles (not necessarily equal sides) → rectangle
+- 4 equal sides (not necessarily right angles) → rhombus
+- 2 pairs of parallel sides → parallelogram
+- Exactly 1 pair of parallel sides → trapezoid
+- All sides equal and all angles equal → regular polygon
+- 3 equal sides → equilateral triangle
+- 2 equal sides → isosceles triangle
+- No equal sides → scalene triangle
+- 3 angles less than 90° → acute triangle
+- One angle equals 90° → right triangle
+- One angle greater than 90° → obtuse triangle
+
+**(iii) Answer format**: Shape name
+
+---
+
+#### 3G. 3D Shape Faces, Edges, Vertices (6,000 samples)
+**Example**: {How many faces does a cube have?: "6"}, {How many edges does a cube have?: "12"}
+
+**(i) Semantic variations**:
+- "How many faces does a [shape] have?"
+- "How many edges does a [shape] have?"
+- "How many vertices does a [shape] have?"
+- "Count the faces of a [shape]"
+- "A [shape] has how many edges?"
+- "What is the number of vertices in a [shape]?"
+
+**(ii) 3D Shape properties**:
+| Shape | Faces | Edges | Vertices |
+|-------|-------|-------|----------|
+| Cube | 6 | 12 | 8 |
+| Rectangular Prism | 6 | 12 | 8 |
+| Triangular Prism | 5 | 9 | 6 |
+| Square Pyramid | 5 | 8 | 5 |
+| Triangular Pyramid (Tetrahedron) | 4 | 6 | 4 |
+| Cylinder | 3 (2 flat, 1 curved) | 2 | 0 |
+| Cone | 2 (1 flat, 1 curved) | 1 | 1 |
+| Sphere | 1 (curved) | 0 | 0 |
+
+**(iii) Difficulty levels**:
+- **Easy (40%)**: Cube, rectangular prism
+- **Medium (40%)**: Pyramids, prisms
+- **Hard (20%)**: Cylinder, cone, sphere (edge cases)
+
+**(iv) Answer format**: Number
+
+---
+
+#### 3H. Symmetry (3,000 samples)
+**Example**: {How many lines of symmetry does a square have?: "4"}, {How many lines of symmetry does a rectangle have?: "2"}
+
+**(i) Semantic variations**:
+- "How many lines of symmetry does a [shape] have?"
+- "Count the lines of symmetry in a [shape]"
+- "A [shape] has how many axes of symmetry?"
+- "What is the number of symmetry lines in a [shape]?"
+
+**(ii) Symmetry counts**:
+- Circle → infinite
+- Square → 4
+- Rectangle → 2
+- Equilateral triangle → 3
+- Isosceles triangle → 1
+- Regular pentagon → 5
+- Regular hexagon → 6
+- Rhombus → 2
+
+**(iii) Answer format**: Number (or "infinite" for circle)
+
+---
+
+#### 3I. Shape Comparisons (3,000 samples)
+**Example**: {Which has more sides, a pentagon or a hexagon?: "hexagon"}, {Which has fewer corners, a triangle or a square?: "triangle"}
+
+**(i) Semantic variations**:
+- "Which has more sides, a [shape1] or a [shape2]?"
+- "Which has fewer sides, a [shape1] or a [shape2]?"
+- "Between [shape1] and [shape2], which has more corners?"
+- "Compare [shape1] and [shape2]. Which has more angles?"
+
+**(ii) Answer format**: Shape name
+
+---
+
+#### 3J. Circle Properties (4,000 samples)
+**Example**: {What is the distance around a circle called?: "circumference"}, {What is half of the diameter called?: "radius"}
+
+**(i) Semantic variations**:
+- "What is the distance around a circle called?"
+- "What is the distance across a circle through the center called?"
+- "What is half of the diameter called?"
+- "What do we call the distance from center to edge of a circle?"
+- "What is the perimeter of a circle called?"
+- "What is a line from one side of a circle to the other through the center?"
+
+**(ii) Circle terms**:
+- Distance around = circumference
+- Distance across through center = diameter
+- Half of diameter = radius
+- Distance from center to edge = radius
+- Any straight line from edge to edge = chord
+- Diameter is the longest chord
+- Part of the circumference = arc
+
+**(iii) Difficulty levels**:
+- **Easy (50%)**: radius, diameter, circumference
+- **Medium (50%)**: chord, arc
+
+**(iv) Answer format**: Term name
+
+---
+
+#### 3K. Basic Perimeter (2,500 samples)
+**Example**: {If each side of a square is 3, what is the perimeter?: "12"}, {A rectangle has length 5 and width 3, what is its perimeter?: "16"}
+
+**(i) Semantic variations**:
+- "If each side of a square is [N], what is the perimeter?"
+- "A square has sides of length [N]. What is its perimeter?"
+- "Find the perimeter of a square with side [N]"
+- "A rectangle has length [L] and width [W], what is its perimeter?"
+- "Calculate the perimeter of a rectangle [L] by [W]"
+- "If a triangle has sides [a], [b], and [c], what is its perimeter?"
+
+**(ii) Perimeter formulas**:
+- Square: 4 × side
+- Rectangle: 2 × (length + width)
+- Triangle: side1 + side2 + side3
+- Regular polygon: number of sides × side length
+
+**(iii) Number ranges**: Use small whole numbers (1-15) for easy calculation
+
+**(iv) Answer format**: Number
+
+---
+
+#### 3L. Basic Area (2,500 samples)
+**Example**: {What is the area of a square with side 4?: "16"}, {A rectangle is 5 long and 3 wide, what is its area?: "15"}
+
+**(i) Semantic variations**:
+- "What is the area of a square with side [N]?"
+- "Find the area of a square with sides of [N]"
+- "A rectangle is [L] long and [W] wide, what is its area?"
+- "Calculate the area of a rectangle [L] by [W]"
+- "What is the area of a [L] × [W] rectangle?"
+
+**(ii) Area formulas**:
+- Square: side × side
+- Rectangle: length × width
+- Triangle: (base × height) / 2
+
+**(iii) Number ranges**: Use small whole numbers (1-12) for easy calculation, ensure clean results
+
+**(iv) Answer format**: Number (with optional "square units")
+
+---
+
+### Statement 4: Pattern Recognition (50,000 samples)
+**Core Example**: {What comes next: blue, red, blue, red, ...?: "blue"}
+
+**Prompt**: Create data points for pattern completion and sequence recognition.
+
+#### 4A. Simple Alternating Patterns - 2 Items (10,000 samples)
+**Example**: {What comes next: A, B, A, B, A, ...?: "B"}
+
+**(i) Semantic variations**:
+- "What comes next: [pattern]?"
+- "Complete the pattern: [pattern]"
+- "What is the next item in the sequence: [pattern]?"
+- "Continue the pattern: [pattern]"
+- "Find the next in the series: [pattern]"
+- "What follows in: [pattern]?"
+
+**(ii) Pattern types (2-item alternating)**:
+- **Colors**: blue, red, blue, red, ... → blue
+- **Letters**: A, B, A, B, A, ... → B
+- **Shapes**: circle, square, circle, square, ... → circle
+- **Numbers**: 1, 2, 1, 2, 1, ... → 2
+- **Words**: yes, no, yes, no, ... → yes
+- **Directions**: up, down, up, down, ... → up
+- **Sizes**: big, small, big, small, ... → big
+
+**(iii) Show 4-6 items before asking "what comes next"
+
+**(iv) Answer format**: Next item in pattern
+
+---
+
+#### 4B. Repeating Patterns - 3 Items (7,000 samples)
+**Example**: {What comes next: red, blue, green, red, blue, green, red, ...?: "blue"}
+
+**(i) Pattern types (3-item repeating)**:
+- **Colors**: red, blue, green, red, blue, green, red, ... → blue
+- **Letters**: A, B, C, A, B, C, A, ... → B
+- **Shapes**: circle, square, triangle, circle, square, triangle, ... → circle
+- **Numbers**: 1, 2, 3, 1, 2, 3, 1, ... → 2
+- **Sizes**: small, medium, large, small, medium, large, small, ... → medium
+
+**(ii) Show 5-7 items
+
+**(iii) Answer format**: Next item in pattern
+
+---
+
+#### 4C. Repeating Patterns - 4 Items (4,000 samples)
+**Example**: {What comes next: A, B, C, D, A, B, C, D, A, ...?: "B"}
+
+**(i) Pattern types (4-item repeating)**:
+- Colors: red, blue, green, yellow, red, blue, green, yellow, ...
+- Letters: A, B, C, D, A, B, C, D, ...
+- Shapes: circle, square, triangle, star, circle, square, triangle, ...
+- Days: Monday, Tuesday, Wednesday, Thursday, Monday, Tuesday, ...
+
+**(ii) Show 5-8 items
+
+**(iii) Answer format**: Next item in pattern
+
+---
+
+#### 4D. Simple Number Sequences (10,000 samples)
+**Example**: {What comes next: 1, 2, 3, 4, ...?: "5"}, {What comes next: 2, 4, 6, 8, ...?: "10"}
+
+**(i) Semantic variations**: Same as 4A
+
+**(ii) Sequence types**:
+- **Counting by 1**: 1, 2, 3, 4, ... → 5
+- **Counting by 2 (evens)**: 2, 4, 6, 8, ... → 10
+- **Counting by 2 (odds)**: 1, 3, 5, 7, ... → 9
+- **Counting by 5**: 5, 10, 15, 20, ... → 25
+- **Counting by 10**: 10, 20, 30, 40, ... → 50
+- **Counting by 3**: 3, 6, 9, 12, ... → 15
+- **Decreasing by 1**: 10, 9, 8, 7, ... → 6
+- **Decreasing by 2**: 20, 18, 16, 14, ... → 12
+
+**(iii) Difficulty levels**:
+- **Easy (50%)**: +1, +2, +5, +10
+- **Medium (30%)**: +3, +4, -1, -2
+- **Hard (20%)**: +7, +9, -5, starting from non-standard numbers
+
+**(iv) Show 4-5 numbers
+
+**(v) Answer format**: Next number
+
+---
+
+#### 4E. Growing/Shrinking Patterns (4,000 samples)
+**Example**: {What comes next: A, AA, AAA, ...?: "AAAA"}, {What comes next: 1, 11, 111, ...?: "1111"}
+
+**(i) Pattern types**:
+- A, AA, AAA, AAAA, ... → AAAAA
+- 1, 11, 111, 1111, ... → 11111
+- X, XX, XXX, ... → XXXX
+- *, **, ***, ... → ****
+
+**(ii) Answer format**: Next item in pattern
+
+---
+
+#### 4F. Doubling Patterns (5,000 samples)
+**Example**: {What comes next: 1, 2, 4, 8, ...?: "16"}
+
+**(i) Semantic variations**: Same as 4A
+
+**(ii) Sequence types**:
+- 1, 2, 4, 8, 16, ... → 32
+- 2, 4, 8, 16, ... → 32
+- 3, 6, 12, 24, ... → 48
+- 5, 10, 20, 40, ... → 80
+
+**(iii) Show 4-5 numbers
+
+**(iv) Answer format**: Next number
+
+---
+
+#### 4G. Day and Month Sequences (6,000 samples)
+**Example**: {What comes next: Monday, Tuesday, Wednesday, ...?: "Thursday"}
+
+**(i) Semantic variations**:
+- "What day comes after [day]?"
+- "What comes next: [day1], [day2], [day3], ...?"
+- "What month comes after [month]?"
+- "What comes next: January, February, March, ...?"
+
+**(ii) Sequences**:
+- Days: Monday → Tuesday → Wednesday → Thursday → Friday → Saturday → Sunday → Monday
+- Months: January → February → March → ... → December → January
+
+**(iii) Answer format**: Day or month name
+
+---
+
+#### 4H. Letter Sequences (4,000 samples)
+**Example**: {What comes next: A, B, C, D, ...?: "E"}
+
+**(i) Sequences**:
+- Alphabetical: A, B, C, D, E, ... → F
+- Reverse: Z, Y, X, W, ... → V
+- Skip one: A, C, E, G, ... → I
+- Skip two: A, D, G, J, ... → M
+
+**(ii) Show 4-5 letters
+
+**(iii) Difficulty levels**:
+- **Easy (60%)**: Sequential (A, B, C, D)
+- **Medium (40%)**: Skip one (A, C, E, G) or reverse
+
+**(iv) Answer format**: Next letter
+
+---
+
+## Total Samples to Generate: 250,000
+
+### Distribution Breakdown:
+
+| Statement | Type | Samples | Percentage | Rationale |
+|-----------|------|---------|------------|-----------|
+| **Statement 1** | Color Perception | 70,000 | 28% | High variety (colors × objects), foundational |
+| **Statement 2** | Shape Perception | 70,000 | 28% | High variety (shapes × objects), foundational |
+| **Statement 3** | Geometric Concepts | 60,000 | 24% | Covers 2D/3D, properties, formulas |
+| **Statement 4** | Pattern Recognition | 50,000 | 20% | Various pattern types, cognitive skill |
+| **TOTAL** | | **250,000** | **100%** | |
+
+---
+
+## Detailed Sub-Distribution
+
+### Statement 1: Color Perception (70,000)
+| Sub-type | Samples | % of S1 |
+|----------|---------|---------|
+| 1A. Object Color ID | 35,000 | 50% |
+| 1B. Reverse Color ID | 15,000 | 21.4% |
+| 1C. Color Verification | 8,000 | 11.4% |
+| 1D. Color Multiple Choice | 5,000 | 7.1% |
+| 1E. Color Mixing | 4,000 | 5.7% |
+| 1F. Color Associations | 3,000 | 4.3% |
+
+### Statement 2: Shape Perception (70,000)
+| Sub-type | Samples | % of S2 |
+|----------|---------|---------|
+| 2A. Object Shape ID | 35,000 | 50% |
+| 2B. Reverse Shape ID | 15,000 | 21.4% |
+| 2C. Shape Verification | 8,000 | 11.4% |
+| 2D. Shape Multiple Choice | 5,000 | 7.1% |
+| 2E. 2D vs 3D Distinction | 4,000 | 5.7% |
+| 2F. 2D-3D Relationship | 3,000 | 4.3% |
+
+### Statement 3: Geometric Concepts (60,000)
+| Sub-type | Samples | % of S3 |
+|----------|---------|---------|
+| 3A. Shape by Sides | 10,000 | 16.7% |
+| 3B. Sides of Shape | 10,000 | 16.7% |
+| 3C. Corners/Vertices | 8,000 | 13.3% |
+| 3D. Angles Count | 5,000 | 8.3% |
+| 3E. Angle Types | 8,000 | 13.3% |
+| 3F. Shape Properties | 8,000 | 13.3% |
+| 3G. 3D Faces/Edges/Vertices | 6,000 | 10% |
+| 3H. Symmetry | 3,000 | 5% |
+| 3I. Shape Comparisons | 3,000 | 5% |
+| 3J. Circle Properties | 4,000 | 6.7% |
+| 3K. Basic Perimeter | 2,500 | 4.2% |
+| 3L. Basic Area | 2,500 | 4.2% |
+
+### Statement 4: Pattern Recognition (50,000)
+| Sub-type | Samples | % of S4 |
+|----------|---------|---------|
+| 4A. 2-item Alternating | 10,000 | 20% |
+| 4B. 3-item Repeating | 7,000 | 14% |
+| 4C. 4-item Repeating | 4,000 | 8% |
+| 4D. Number Sequences | 10,000 | 20% |
+| 4E. Growing/Shrinking | 4,000 | 8% |
+| 4F. Doubling | 5,000 | 10% |
+| 4G. Day/Month Sequences | 6,000 | 12% |
+| 4H. Letter Sequences | 4,000 | 8% |
+
+---
+
+## Implementation Notes
+
+### Data Sources Needed:
+1. **Color-Object mappings**: 200+ common objects mapped to their typical colors
+2. **Shape-Object mappings**: 150+ common objects mapped to their shapes
+3. **Geometric shape data**: Properties (sides, angles, vertices) for 2D and 3D shapes
+4. **Pattern templates**: Various sequence types with generation rules
+5. **Semantic templates**: 8-12 templates per sub-type
+
+### Generation Strategies:
+- **1A, 2A**: Random selection from color/shape-object mappings × templates
+- **1B, 2B**: Random selection with consistent single answers per query
+- **1C, 2C**: Balanced 70/30 true/false distribution
+- **3A-3L**: Systematic enumeration with template variation
+- **4A-4H**: Rule-based generation with randomized starting points
+
+### Validation Checks:
+- All color-object associations are factually correct
+- All shape-object associations are reasonable
+- All geometric calculations are mathematically verified
+- Pattern sequences follow stated rules
+- No duplicate queries
+
+### Answer Format Rules:
+- Colors: lowercase single word (e.g., "yellow", "red")
+- Shapes: lowercase shape name (e.g., "circle", "sphere", "rectangle")
+- Numbers: numeric string (e.g., "3", "12", "25")
+- Yes/No: lowercase (e.g., "yes", "no")
+- Patterns: exact next item (e.g., "blue", "5", "Thursday")
+
+---
+
+## Sample Examples for Each Statement Type
+
+### Statement 1 - Color Perception:
+```json
+{"What color is a banana?": "yellow"}
+{"What is the color of grass?": "green"}
+{"Name something that is red": "apple"}
+{"Is a lemon yellow?": "yes"}
+{"Which is blue, the sky or a carrot?": "sky"}
+{"What color do you get when you mix red and blue?": "purple"}
+{"What color usually means stop?": "red"}
+```
+
+### Statement 2 - Shape Perception:
+```json
+{"What is the shape of a ball?": "sphere"}
+{"What shape is a door?": "rectangle"}
+{"Name something that is round": "wheel"}
+{"Is a book rectangular?": "yes"}
+{"Which is round, a ball or a box?": "ball"}
+{"Is a sphere a 2D or 3D shape?": "3D"}
+{"What is the 2D outline of a sphere?": "circle"}
+```
+
+### Statement 3 - Geometric Concepts:
+```json
+{"Which shape has 3 sides?": "triangle"}
+{"How many sides does a hexagon have?": "6"}
+{"How many corners does a square have?": "4"}
+{"What is an angle less than 90 degrees called?": "acute"}
+{"Which shape has 4 equal sides and 4 right angles?": "square"}
+{"How many faces does a cube have?": "6"}
+{"How many lines of symmetry does a square have?": "4"}
+{"What is the distance around a circle called?": "circumference"}
+{"If each side of a square is 5, what is the perimeter?": "20"}
+{"What is the area of a rectangle 4 by 3?": "12"}
+```
+
+### Statement 4 - Pattern Recognition:
+```json
+{"What comes next: blue, red, blue, red, blue, ...?": "red"}
+{"What comes next: A, B, C, A, B, C, A, ...?": "B"}
+{"What comes next: 2, 4, 6, 8, ...?": "10"}
+{"What comes next: 1, 2, 4, 8, ...?": "16"}
+{"What comes next: Monday, Tuesday, Wednesday, ...?": "Thursday"}
+{"What comes next: A, C, E, G, ...?": "I"}
+{"What comes next: 5, 10, 15, 20, ...?": "25"}
+{"What day comes after Friday?": "Saturday"}
+```
+
+---
+
+## Files to Create/Modify
+- `generate_group3_dataset.py` - Main generation script
+- `curriculum_training_data/group3.json` - Output file (250,000 key-value pairs)
+
+---
+
+## Questions for Clarification (if needed):
+1. For objects with variable colors (e.g., cars, flowers), should we use "can be many colors" or pick the most common?
+2. Should answers accept British and American spellings (grey/gray, colour/color)?
+3. Should perimeter/area questions use units in answers (e.g., "12 square units")?

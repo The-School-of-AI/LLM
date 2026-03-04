@@ -1,0 +1,140 @@
+(a) For first statemement (What’s is the spelling of “cat”?) -> Create data points similar to: {What’s is the spelling of “cat”? : "c, a, t"}. Try different combination of (i) Sematic like, 'Spell "cat"', 'What the letters in "cat"', 'Write the spelling of "cat"' etc (ii) The target object (which is "cat") in the example. Replace "cat" with other animals and objects up to 9 letters in lengh. Eg: "rat", "tiger", "elephant"
+(b) For second statement (Can you say the “first” letter in “Cat”?) -> Create data point similar to: {Can you say the “first” letter in “Cat”?: "C"}. Try different combination of (i) Sematic like, 'Tell me first letter of "Cat"', 'Give me second letter of "dog", 'Write first letter of "Cat" (ii) The letter position, like we can ask for first, second, third or any other letter equal to number of letters in the word. Eg: 'What is the fifth letter of "elephant"', 'Write the 3rd letter of "ant"'. The letter position can be in word(fifth) or numeric(5th) (iii) The object word. Eg: Ask letter position of not only cat, but other common words upto 9-10 letters in length like ant, bat, table, chair, train, aeroplane, orange etc
+(c) For third statement (Which word starts with the sound “B”, “Ball” or “Cat”?) -> Create data points similar to {Which word starts with the sound “B”, “Ball” or “Cat”? : "Ball"}. Try different combinations of (i) Sound. Eg: {Which word starts with sound "K", "Kale" or "Male", Which word starts with sound "R", "Rhinoceros" or "Dinosaurs"}(ii) Different option target words (like Ball & Cat in the statement: Which word starts with the sound “B”, “Ball” or “Cat”?). Try different words, common, scientific, complex.
+(d) For fourth statement (How many alphabets are there in “cat”?) -> Create data points similar to {How many alphabets are there in “cat”? : 3}. Try different combinations of (i) Semantic, like 'Count the number of alphabets in "cat"', 'Letter count of "cat"', 'Length of word "cat"' (ii) Object word, i.e. the word whose letters are being counted, like 'How many alphabets are there in “dog”?', 'How many alphabets are there in “elephant”?'
+
+
+
+
+############################################
+
+Statement 1: What's the spelling of "cat"?
+Prompt: Create data points similar to: {What's the spelling of "cat"?: "c, a, t"}. Try different combinations of (i) Semantic variations like 'Spell "cat"', 'What are the letters in "cat"', 'Write the spelling of "cat"', 'How do you spell "cat"' etc. (ii) The target object (which is "cat") - replace "cat" with other animals, objects, and common nouns up to 9 letters in length. Examples: "rat", "tiger", "elephant", "chair", "pencil", "computer", "orange", "butterfly". Include a mixture of difficulty levels from simple 3-letter words to complex 9-letter words.
+
+Statement 2: Can you say the "first" letter in "Cat"?
+Prompt: Create data points similar to: {Can you say the "first" letter in "Cat"?: "C"}. Try different combinations of (i) Semantic variations like 'Tell me the first letter of "Cat"', 'Give me the second letter of "dog"', 'Write the first letter of "Cat"', 'What is the third letter in "bat"' etc. (ii) The letter position - ask for first, second, third, or any other position up to the total number of letters in the word. Examples: 'What is the fifth letter of "elephant"?', 'Write the 3rd letter of "ant"'. The letter position can be in word form (fifth, second) or numeric (5th, 2nd). (iii) The object word - use common words up to 9-10 letters in length like "ant", "bat", "table", "chair", "train", "aeroplane", "orange", "butterfly", "crocodile". Include a mixture of difficulty levels with varying word lengths.
+
+Statement 3: Which word starts with the sound "B", "Ball" or "Cat"?
+Prompt: Create data points similar to: {Which word starts with the sound "B", "Ball" or "Cat"?: "Ball"}. Try different combinations of (i) Phonetic sounds - use various sounds like /k/, /b/, /r/, /s/, /t/, /m/, /f/, /d/, /g/, /h/, etc. Examples: 'Which word starts with the sound "K", "Kale" or "Male"?', 'Which word starts with the sound "R", "Rhinoceros" or "Dinosaurs"?'. (ii) Different option target words (like "Ball" & "Cat") - vary the word pairs with one matching and one non-matching word. Use common words, animals, objects, and some complex/scientific terms. Include a mixture of difficulty levels from simple words like "sun/run" to complex words like "pharmaceutical/architecture". Note: Focus on phonetic sound matching, not just letter matching (e.g., "Cat" starts with /k/ sound, "Cycle" also starts with /s/ sound).
+
+Statement 4: How many alphabets are there in "cat"?
+Prompt: Create data points similar to: {How many alphabets are there in "cat"?: "3"}. Try different combinations of (i) Semantic variations like 'Count the number of alphabets in "cat"', 'Letter count of "cat"', 'Length of word "cat"', 'How many letters are in "cat"?', 'Count letters in "cat"' etc. (ii) Object word - the word whose letters are being counted. Use various words from 3 to 9 letters in length. Examples: 'How many alphabets are there in "dog"?', 'How many alphabets are there in "elephant"?', 'Letter count of "train"', 'Count letters in "butterfly"'. Include a mixture of difficulty levels with varying word lengths.
+
+Statement 5: What word rhymes with "cat"?
+Prompt: Create data points similar to: {What word rhymes with "cat"?: "bat"} or {What word rhymes with "cat"?: "hat"}. Try different combinations of (i) Semantic variations like 'What rhymes with "cat"?', 'Tell me a word that rhymes with "cat"', 'Give me a rhyming word for "cat"', 'Which word rhymes with "cat"?', 'Find a rhyme for "cat"' etc. (ii) The target word - use common words with clear rhyming patterns. Examples: "dog/log", "sun/run", "cake/lake", "tree/bee", "night/light", "mouse/house", "rain/train", "book/cook". (iii) Provide valid rhyming answers - for each target word, provide at least one common rhyming word. Include a mixture of difficulty levels from simple one-syllable rhymes to multi-syllable rhymes like "vacation/station" or "together/weather".
+
+Statement 6: Is "cat" a person, animal, or thing?
+Prompt: Create data points similar to: {Is "cat" a person, animal, or thing?: "animal"}. Try different combinations of (i) Semantic variations like 'What is "cat" - a person, animal, or thing?', 'Classify "cat" as person, animal, or thing', 'Is "dog" a person, an animal, or a thing?', 'Tell me if "table" is a person, animal, or thing' etc. (ii) The target object - use a variety of words that clearly fall into each category. Examples for animals: "dog", "elephant", "bird", "fish", "tiger". Examples for things/objects: "table", "chair", "book", "pencil", "car", "computer", "spoon". Examples for persons: "teacher", "doctor", "mother", "child", "farmer", "artist". (iii) Expand categories to include subcategories occasionally like "living thing/non-living thing", "natural/man-made", "concrete/abstract" for variety. Include a mixture of difficulty levels with obvious cases and some that require more thought (e.g., "robot" - is it a thing or could be debated).
+
+Statement 7: At what location does letter "a" come in "cat"?
+Prompt: Create data points similar to: {At what location does letter "a" come in "cat"?: "2"} or {At what location does letter "a" come in "cat"?: "second"}. Try different combinations of (i) Semantic variations like 'Where is the letter "a" in "cat"?', 'What position is "a" in "cat"?', 'At what location does letter "t" come in "cat"?', 'Find the position of letter "e" in "elephant"', 'Which position is letter "o" in "dog"?' etc. (ii) The target letter - vary which letter you're looking for in the word. (iii) The object word - use words of varying lengths (3-9 letters). Examples: "dog", "elephant", "table", "orange", "butterfly", "computer". Note: Answers can be numeric (1, 2, 3) or word form (first, second, third). Include cases where a letter appears multiple times (e.g., "a" in "banana") - in such cases, provide all positions or specify "first occurrence". Include a mixture of difficulty levels.
+
+Statement 8: What is the spelling of 11?
+Prompt: Create data points similar to: {What is the spelling of 11?: "e, l, e, v, e, n"}. Try different combinations of (i) Semantic variations like 'Spell 11', 'What is the spelling of eleven?', 'How do you spell 15?', 'Write the spelling of twenty', 'Spell out the number 7' etc. (ii) The target number - use various numbers from 1-100, including single digits (1-9), teens (11-19), tens (10, 20, 30...90), and compound numbers (21, 35, 47, 68, 99). Examples: 'What is the spelling of 5?', 'Spell 13', 'What is the spelling of 42?', 'How do you spell 100?'. Note: Accept both the numeric form in the question (11, 42) and word form (eleven, forty-two). Include a mixture of difficulty levels from simple single digits to more complex numbers like ninety-nine.
+
+Statement 9: What letter does "cat" end with?
+Prompt: Create data points similar to: {What letter does "cat" end with?: "t"}. Try different combinations of (i) Semantic variations like 'What is the last letter of "cat"?', 'Which letter does "dog" end with?', 'Tell me the ending letter of "elephant"', 'What letter comes at the end of "table"?', 'Find the final letter in "orange"' etc. (ii) The object word - use common words of varying lengths (3-9 letters). Examples: "bat", "dog", "sun", "train", "pencil", "computer", "butterfly", "crocodile", "hospital". Include words ending with different letters to create variety. Include a mixture of difficulty levels with varying word lengths. Note: Answers should be the single letter in lowercase.
+
+Statement 10: Which word is longer, "cat" or "cream"?
+Prompt: Create data points similar to: {Which word is longer, "cat" or "cream"?: "cream"}. Try different combinations of (i) Semantic variations like 'Which word is longer, "cat" or "dog"?', 'Is "elephant" longer than "ant"?', 'Compare the length of "table" and "chair"', 'Which is the longer word: "sun" or "moon"?', 'Tell me which word has more letters, "train" or "car"' etc. (ii) Word pairs - create pairs with varying differences in length. Examples: obvious differences like "ant" vs "elephant" (3 vs 8 letters), close differences like "cat" vs "dog" (both 3 letters - these would be "equal"), moderate differences like "table" vs "chair" (5 vs 5 or "pencil" vs "pen" (6 vs 3). Include pairs where: (a) first word is longer, (b) second word is longer, (c) both words are equal length. Use common animals, objects, and nouns up to 9-10 letters. Include a mixture of difficulty levels. Note: "Longer" refers to the number of letters, not syllables or physical size of the object.
+
+
+
+Total Samples to Generate: 70,000
+Distribution Breakdown:
+Statement 1 (Spelling): 10,000 samples (14.3%)
+* Rationale: Most foundational literacy skill; forms the basis for other tasks
+* Difficulty mix: 30% easy (3-4 letters), 50% medium (5-6 letters), 20% hard (7-9 letters)
+Statement 2 (Letter at position): 9,000 samples (12.9%)
+* Rationale: Complex task with high variation potential (position × word length)
+* Difficulty mix: 30% easy (positions 1-2 in short words), 50% medium (middle positions), 20% hard (later positions in long words)
+Statement 3 (Sound matching): 7,000 samples (10%)
+* Rationale: Distinct phonological processing skill
+* Difficulty mix: 40% easy (common consonants), 40% medium (vowel sounds), 20% hard (complex sounds like 'ph', 'ch')
+Statement 4 (Letter count): 9,000 samples (12.9%)
+* Rationale: Fundamental quantitative literacy skill
+* Difficulty mix: 30% easy (3-4 letters), 50% medium (5-6 letters), 20% hard (7-9 letters)
+Statement 5 (Rhyming): 7,000 samples (10%)
+* Rationale: Important phonological awareness; distinct from sound matching
+* Difficulty mix: 40% easy (single syllable rhymes), 40% medium (two syllables), 20% hard (complex/multi-syllable)
+Statement 6 (Classification): 7,000 samples (10%)
+* Rationale: Completely different cognitive domain (semantic understanding)
+* Difficulty mix: 40% easy (obvious cases), 40% medium (common objects), 20% hard (abstract concepts, edge cases)
+Statement 7 (Position of letter): 6,000 samples (8.6%)
+* Rationale: Reverse operation of Statement 2; provides valuable variation
+* Difficulty mix: 30% easy (single occurrence), 50% medium (common letters), 20% hard (letters appearing multiple times)
+Statement 8 (Number spelling): 3,500 samples (5%)
+* Rationale: Specialized domain with limited vocabulary (numbers 1-100); prevents over-sampling
+* Coverage: Ensure all numbers 1-100 are covered, with emphasis on commonly used numbers (1-20, tens, round numbers)
+Statement 9 (Last letter): 6,000 samples (8.6%)
+* Rationale: Specific case of positional understanding; complements Statement 2
+* Difficulty mix: 30% easy (3-4 letter words), 50% medium (5-6 letters), 20% hard (7-9 letters)
+Statement 10 (Word comparison): 5,500 samples (7.9%)
+* Rationale: Comparative reasoning using knowledge from other tasks
+* Difficulty mix: 30% easy (obvious length differences), 50% medium (moderate differences), 20% hard (equal length or 1-letter difference)
+
+##################################################
+Let's first generate for group 1 Language and Literacy. We will generate different versions based on guidelines provided for each case as below:
+Statement 1: What's the spelling of "cat"?
+Prompt: Create data points similar to: {What's the spelling of "cat"?: "c, a, t"}. Try different combinations of (i) Semantic variations like 'Spell "cat"', 'What are the letters in "cat"', 'Write the spelling of "cat"', 'How do you spell "cat"' etc. (ii) The target object (which is "cat") - replace "cat" with other animals, objects, and common nouns up to 9 letters in length. Examples: "rat", "tiger", "elephant", "chair", "pencil", "computer", "orange", "butterfly". Include a mixture of difficulty levels from simple 3-letter words to complex 9-letter words.
+
+Statement 2: Can you say the "first" letter in "Cat"?
+Prompt: Create data points similar to: {Can you say the "first" letter in "Cat"?: "C"}. Try different combinations of (i) Semantic variations like 'Tell me the first letter of "Cat"', 'Give me the second letter of "dog"', 'Write the first letter of "Cat"', 'What is the third letter in "bat"' etc. (ii) The letter position - ask for first, second, third, or any other position up to the total number of letters in the word. Examples: 'What is the fifth letter of "elephant"?', 'Write the 3rd letter of "ant"'. The letter position can be in word form (fifth, second) or numeric (5th, 2nd). (iii) The object word - use common words up to 9-10 letters in length like "ant", "bat", "table", "chair", "train", "aeroplane", "orange", "butterfly", "crocodile". Include a mixture of difficulty levels with varying word lengths.
+
+Statement 3: Which word starts with the sound "B", "Ball" or "Cat"?
+Prompt: Create data points similar to: {Which word starts with the sound "B", "Ball" or "Cat"?: "Ball"}. Try different combinations of (i) Phonetic sounds - use various sounds like /k/, /b/, /r/, /s/, /t/, /m/, /f/, /d/, /g/, /h/, etc. Examples: 'Which word starts with the sound "K", "Kale" or "Male"?', 'Which word starts with the sound "R", "Rhinoceros" or "Dinosaurs"?'. (ii) Different option target words (like "Ball" & "Cat") - vary the word pairs with one matching and one non-matching word. Use common words, animals, objects, and some complex/scientific terms. Include a mixture of difficulty levels from simple words like "sun/run" to complex words like "pharmaceutical/architecture". Note: Focus on phonetic sound matching, not just letter matching (e.g., "Cat" starts with /k/ sound, "Cycle" also starts with /s/ sound).
+
+Statement 4: How many alphabets are there in "cat"?
+Prompt: Create data points similar to: {How many alphabets are there in "cat"?: "3"}. Try different combinations of (i) Semantic variations like 'Count the number of alphabets in "cat"', 'Letter count of "cat"', 'Length of word "cat"', 'How many letters are in "cat"?', 'Count letters in "cat"' etc. (ii) Object word - the word whose letters are being counted. Use various words from 3 to 9 letters in length. Examples: 'How many alphabets are there in "dog"?', 'How many alphabets are there in "elephant"?', 'Letter count of "train"', 'Count letters in "butterfly"'. Include a mixture of difficulty levels with varying word lengths.
+
+Statement 5: What word rhymes with "cat"?
+Prompt: Create data points similar to: {What word rhymes with "cat"?: "bat"} or {What word rhymes with "cat"?: "hat"}. Try different combinations of (i) Semantic variations like 'What rhymes with "cat"?', 'Tell me a word that rhymes with "cat"', 'Give me a rhyming word for "cat"', 'Which word rhymes with "cat"?', 'Find a rhyme for "cat"' etc. (ii) The target word - use common words with clear rhyming patterns. Examples: "dog/log", "sun/run", "cake/lake", "tree/bee", "night/light", "mouse/house", "rain/train", "book/cook". (iii) Provide valid rhyming answers - for each target word, provide at least one common rhyming word. Include a mixture of difficulty levels from simple one-syllable rhymes to multi-syllable rhymes like "vacation/station" or "together/weather".
+
+Statement 6: Is "cat" a person, animal, or thing?
+Prompt: Create data points similar to: {Is "cat" a person, animal, or thing?: "animal"}. Try different combinations of (i) Semantic variations like 'What is "cat" - a person, animal, or thing?', 'Classify "cat" as person, animal, or thing', 'Is "dog" a person, an animal, or a thing?', 'Tell me if "table" is a person, animal, or thing' etc. (ii) The target object - use a variety of words that clearly fall into each category. Examples for animals: "dog", "elephant", "bird", "fish", "tiger". Examples for things/objects: "table", "chair", "book", "pencil", "car", "computer", "spoon". Examples for persons: "teacher", "doctor", "mother", "child", "farmer", "artist". (iii) Expand categories to include subcategories occasionally like "living thing/non-living thing", "natural/man-made", "concrete/abstract" for variety. Include a mixture of difficulty levels with obvious cases and some that require more thought (e.g., "robot" - is it a thing or could be debated).
+
+Statement 7: At what location does letter "a" come in "cat"?
+Prompt: Create data points similar to: {At what location does letter "a" come in "cat"?: "2"} or {At what location does letter "a" come in "cat"?: "second"}. Try different combinations of (i) Semantic variations like 'Where is the letter "a" in "cat"?', 'What position is "a" in "cat"?', 'At what location does letter "t" come in "cat"?', 'Find the position of letter "e" in "elephant"', 'Which position is letter "o" in "dog"?' etc. (ii) The target letter - vary which letter you're looking for in the word. (iii) The object word - use words of varying lengths (3-9 letters). Examples: "dog", "elephant", "table", "orange", "butterfly", "computer". Note: Answers can be numeric (1, 2, 3) or word form (first, second, third). Include cases where a letter appears multiple times (e.g., "a" in "banana") - in such cases, provide all positions or specify "first occurrence". Include a mixture of difficulty levels.
+
+Statement 8: What is the spelling of 11?
+Prompt: Create data points similar to: {What is the spelling of 11?: "e, l, e, v, e, n"}. Try different combinations of (i) Semantic variations like 'Spell 11', 'What is the spelling of eleven?', 'How do you spell 15?', 'Write the spelling of twenty', 'Spell out the number 7' etc. (ii) The target number - use various numbers from 1-100, including single digits (1-9), teens (11-19), tens (10, 20, 30...90), and compound numbers (21, 35, 47, 68, 99). Examples: 'What is the spelling of 5?', 'Spell 13', 'What is the spelling of 42?', 'How do you spell 100?'. Note: Accept both the numeric form in the question (11, 42) and word form (eleven, forty-two). Include a mixture of difficulty levels from simple single digits to more complex numbers like ninety-nine.
+
+Statement 9: What letter does "cat" end with?
+Prompt: Create data points similar to: {What letter does "cat" end with?: "t"}. Try different combinations of (i) Semantic variations like 'What is the last letter of "cat"?', 'Which letter does "dog" end with?', 'Tell me the ending letter of "elephant"', 'What letter comes at the end of "table"?', 'Find the final letter in "orange"' etc. (ii) The object word - use common words of varying lengths (3-9 letters). Examples: "bat", "dog", "sun", "train", "pencil", "computer", "butterfly", "crocodile", "hospital". Include words ending with different letters to create variety. Include a mixture of difficulty levels with varying word lengths. Note: Answers should be the single letter in lowercase.
+
+Statement 10: Which word is longer, "cat" or "cream"?
+Prompt: Create data points similar to: {Which word is longer, "cat" or "cream"?: "cream"}. Try different combinations of (i) Semantic variations like 'Which word is longer, "cat" or "dog"?', 'Is "elephant" longer than "ant"?', 'Compare the length of "table" and "chair"', 'Which is the longer word: "sun" or "moon"?', 'Tell me which word has more letters, "train" or "car"' etc. (ii) Word pairs - create pairs with varying differences in length. Examples: obvious differences like "ant" vs "elephant" (3 vs 8 letters), close differences like "cat" vs "dog" (both 3 letters - these would be "equal"), moderate differences like "table" vs "chair" (5 vs 5 or "pencil" vs "pen" (6 vs 3). Include pairs where: (a) first word is longer, (b) second word is longer, (c) both words are equal length. Use common animals, objects, and nouns up to 9-10 letters. Include a mixture of difficulty levels. Note: "Longer" refers to the number of letters, not syllables or physical size of the object.
+4. Total Samples to Generate: 70,000
+Distribution Breakdown:
+(a) Statement 1 (Spelling): 10,000 samples (14.3%)
+Rationale: Most foundational literacy skill; forms the basis for other tasks
+Difficulty mix: 30% easy (3-4 letters), 50% medium (5-6 letters), 20% hard (7-9 letters)
+(b) Statement 2 (Letter at position): 9,000 samples (12.9%)
+Rationale: Complex task with high variation potential (position × word length)
+Difficulty mix: 30% easy (positions 1-2 in short words), 50% medium (middle positions), 20% hard (later positions in long words)
+(c) Statement 3 (Sound matching): 7,000 samples (10%)
+Rationale: Distinct phonological processing skill
+Difficulty mix: 40% easy (common consonants), 40% medium (vowel sounds), 20% hard (complex sounds like 'ph', 'ch')
+(d) Statement 4 (Letter count): 9,000 samples (12.9%)
+Rationale: Fundamental quantitative literacy skill
+Difficulty mix: 30% easy (3-4 letters), 50% medium (5-6 letters), 20% hard (7-9 letters)
+(e) Statement 5 (Rhyming): 7,000 samples (10%)
+Rationale: Important phonological awareness; distinct from sound matching
+Difficulty mix: 40% easy (single syllable rhymes), 40% medium (two syllables), 20% hard (complex/multi-syllable)
+(f) Statement 6 (Classification): 7,000 samples (10%)
+Rationale: Completely different cognitive domain (semantic understanding)
+Difficulty mix: 40% easy (obvious cases), 40% medium (common objects), 20% hard (abstract concepts, edge cases)
+(g) Statement 7 (Position of letter): 6,000 samples (8.6%)
+Rationale: Reverse operation of Statement 2; provides valuable variation
+Difficulty mix: 30% easy (single occurrence), 50% medium (common letters), 20% hard (letters appearing multiple times)
+(h) Statement 8 (Number spelling): 3,500 samples (5%)
+Rationale: Specialized domain with limited vocabulary (numbers 1-100); prevents over-sampling
+Coverage: Ensure all numbers 1-100 are covered, with emphasis on commonly used numbers (1-20, tens, round numbers)
+(i) Statement 9 (Last letter): 6,000 samples (8.6%)
+Rationale: Specific case of positional understanding; complements Statement 2
+Difficulty mix: 30% easy (3-4 letter words), 50% medium (5-6 letters), 20% hard (7-9 letters)
+(j) Statement 10 (Word comparison): 5,500 samples (7.9%)
+Rationale: Comparative reasoning using knowledge from other tasks
+Difficulty mix: 30% easy (obvious length differences), 50% medium (moderate differences), 20% hard (equal length or 1-letter difference)
+5. Create a json file to save the results in curriculum_training_data folder called group1.json. Name that as group1. The examples must be created in json format, with query and answer -> {query: answer}
+6. Ask any questions if required.

@@ -1,0 +1,160 @@
+# =============================================================================
+# LLM 1B Reference Configuration (Test_Code/model_1b.py aligned)
+# =============================================================================
+# Architecture targets:
+# - 8 backbone layers + 1 MTP layer = 9 computational layers
+# - 75% DeltaNet (6 layers) / 25% GSA (2 layers)
+# - mHC V2 (norm inside), alpha=0.1
+# - FFN=2048 dense shared expert (no routed experts)
+# - Full-transformer MTP block
+# - Reversible midpoint integration
+# - Supports standard or Kronecker embeddings
+# =============================================================================
+
+model_name: "LLM-1B-Reference"
+model_version: "1.0.0"
+
+# Core architecture
+vocab_size: 131072
+hidden_size: 4096
+num_hidden_layers: 8
+max_position_embeddings: 262144
+
+# Normalization / init
+rms_norm_eps: 1.0e-6
+use_pre_norm: true
+initializer_range: 0.02
+hidden_dropout: 0.0
+dtype: "bfloat16"
+
+# -----------------------------------------------------------------------------
+# Attention
+# -----------------------------------------------------------------------------
+attention:
+  attention_type: "gated_deltanet"
+
+  # GQA fallback
+  num_attention_heads: 16
+  num_key_value_heads: 2
+  head_dim: 256
+  attention_dropout: 0.0
+  attention_bias: false
+
+  # DeltaNet: 32V / 16QK x 128, gate=384
+  delta_v_heads: 32
+  delta_qk_heads: 16
+  delta_head_dim: 128
+  delta_gate_dim: 384
+
+  # Reference GSA: full MHA, d_idx=32
+  gsa_num_heads: 16
+  gsa_head_dim: 256
+  gsa_indexer_dim: 32
+  gsa_num_indexer_heads: 4
+  gsa_k_base: 512
+  gsa_k_min: 32
+  gsa_k_max: 256
+
+  # Layer split: 75% Delta / 25% GSA
+  mixer_delta_ratio: 0.75
+  mixer_gsa_ratio: 0.25
+
+  # Keep other fields explicit for serialization compatibility
+  gsa_use_adaptive_k: true
+  gsa_adaptive_k_method: "variance"
+  gsa_adaptive_k_temperature: 1.0
+  gsa_use_value_gate: true
+  gsa_use_output_gate: true
+  gsa_gate_activation: "sigmoid"
+  gsa_gate_bias_init: 0.5
+  gsa_indexer_activation: "sigmoid"
+  gsa_use_triton_kernels: true
+  gsa_sparse_backend: "auto"
+  gsa_triton_min_seq_len: 512
+  gsa_prefer_flash: true
+  gsa_sdpa_chunk_size: 16
+  ds_compressed_dim: 512
+  ds_rope_head_dim: 32
+  ds_num_shared_experts: 1
+  ds_q_lora_rank: 0
+
+# -----------------------------------------------------------------------------
+# Position Embedding (YaRN to 256K)
+# -----------------------------------------------------------------------------
+position:
+  position_type: "yarn"
+  rope_theta: 10000.0
+  rope_scaling_factor: 32.0
+  yarn_scale: 32.0
+  yarn_original_max_position: 8192
+  yarn_beta_fast: 32.0
+  yarn_beta_slow: 1.0
+  yarn_mscale: 1.0
+  yarn_mscale_all_dim: 0.0
+
+# -----------------------------------------------------------------------------
+# FFN (Dense shared expert)
+# -----------------------------------------------------------------------------
+ffn:
+  ffn_type: "swiglu"
+  intermediate_size: 2048
+  ffn_dropout: 0.0
+  ffn_bias: false
+  moe_num_experts: 0
+  moe_num_experts_per_tok: 0
+  moe_aux_loss_coef: 0.01
+  moe_data_sparsity: 0.0
+
+# -----------------------------------------------------------------------------
+# Connections
+# -----------------------------------------------------------------------------
+connection:
+  connection_type: "mhc_v2"
+  mhc_expansion_rate: 4
+  mhc_alpha_init: 0.1
+  mhc_sinkhorn_iters: 10
+
+# -----------------------------------------------------------------------------
+# Output Head
+# -----------------------------------------------------------------------------
+head:
+  use_multi_token_prediction: true
+  num_predict_tokens: 2
+  mtp_loss_weight: 0.3
+  mtp_block_type: "full_transformer"
+  tie_word_embeddings: false
+
+# -----------------------------------------------------------------------------
+# Embedding + Integration
+# -----------------------------------------------------------------------------
+embedding:
+  embedding_type: "standard"
+  kronecker_pf_dim: 8192
+
+integration:
+  use_reversible: true
+  step_size: 0.25
+  a: 0.5
+  noise_eps: 0.0
+  bootstrap: "euler"
+
+# -----------------------------------------------------------------------------
+# Training defaults for WikiText-2 test
+# -----------------------------------------------------------------------------
+training:
+  max_steps: 100
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  seq_length: 256
+  learning_rate: 3.0e-4
+  min_learning_rate: 1.0e-5
+  warmup_steps: 20
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  eps: 1.0e-8
+  gradient_clip: 1.0
+  use_amp: true
+  amp_dtype: "bfloat16"
+  device: "auto"
+  log_interval: 10
