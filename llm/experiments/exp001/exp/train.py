@@ -1,3 +1,4 @@
+import time as _time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from typing import Any, ContextManager
@@ -327,34 +328,54 @@ class Trainer:
         self.n_proxy_per_gpu = n_proxy_per_gpu
         self.n_to_select = n_to_select
 
+    @staticmethod
+    def _gpu_mem_stats(device: torch.device) -> dict[str, float]:
+        """Return GPU memory stats in MB. No-op dict if CUDA unavailable."""
+        if not torch.cuda.is_available():
+            return {}
+        return {
+            "gpu_mem_allocated_mb": torch.cuda.memory_allocated(device) / (1024 ** 2),
+            "gpu_mem_reserved_mb": torch.cuda.memory_reserved(device) / (1024 ** 2),
+            "gpu_mem_peak_mb": torch.cuda.max_memory_allocated(device) / (1024 ** 2),
+        }
+
     def train(self):
         c = self.config
         device = self.device
         global_step = 0
+        opus_enabled = c.opus.candidate_multiplier > 1
 
         print_rank_0("starting training")
+        print_rank_0(
+            f"OPUS {'ENABLED' if opus_enabled else 'DISABLED (multiplier=1)'} | "
+            f"log every step | "
+            f"include_proxy_in_training={c.opus.include_proxy_in_training}"
+        )
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(device)
 
         for step, batch in enumerate(self.train_loader):
+            step_t0 = _time.perf_counter()
+            timings: dict[str, float] = {}
+
             if self.step_prof is not None:
                 self.step_prof.start_step(global_step=step)
 
             # ── Move candidate pool to device ─────────────────────────────
-            # The train loader yields candidate_pool_size sequences per GPU.
-            # Shape: (candidate_pool_size, full_seq_len)
+            t0 = _time.perf_counter()
             candidate_ids: torch.Tensor = batch["input_ids"].to(
                 device, non_blocking=True
             )
             n_candidates = candidate_ids.size(0)
+            candidate_seq_len = candidate_ids.size(1)
+            timings["data_to_device_ms"] = (_time.perf_counter() - t0) * 1000
 
             # ── OPUS selection ───────────────────────────────────────────
-            # When candidate_multiplier == 1 there are no extra candidates to
-            # choose from, so skip the entire scoring pass and use all samples
-            # directly. This acts as a clean baseline (random / no selection).
-            if c.opus.candidate_multiplier == 1:
+            opus_timings: dict[str, float] = {}
+            if not opus_enabled:
+                # Bypass mode — no OPUS scoring, use all candidates directly
+                t0 = _time.perf_counter()
                 local_indices = torch.arange(n_candidates, device=device)
-                # Reconstruct global indices using the same encoding as the
-                # selector: global_idx = owner_rank * n_local + local_idx.
-                # Works correctly under ZeRO-0/2/3 and single-GPU alike.
                 rank_offset = get_rank() * n_candidates
                 global_indices = local_indices + rank_offset
                 result = SelectionResult(
@@ -364,51 +385,54 @@ class Trainer:
                     metrics={},
                 )
                 current_lr = self.initial_lr
-                # No proxy injection in bypass mode
                 proxy_ids_train = torch.empty(
                     0, candidate_ids.size(1),
                     dtype=candidate_ids.dtype, device=device,
                 )
+                timings["opus_bypass_ms"] = (_time.perf_counter() - t0) * 1000
             else:
-                # Runs proxy sampling, scoring pass (forward+backward with ghost
-                # hooks), Boltzmann selection, and index extraction.
-                # See _select_candidates() for the full breakdown.
+                t0 = _time.perf_counter()
                 with self._step_phase("step/opus_selection"):
-                    local_indices, proxy_ids_train, result, current_lr = (
+                    local_indices, proxy_ids_train, result, current_lr, opus_timings = (
                         self._select_candidates(candidate_ids)
                     )
+                timings["opus_total_ms"] = (_time.perf_counter() - t0) * 1000
 
-            # ── Training pass (Pass 2) ────────────────────────────────────
-            # Assemble the training batch from OPUS-selected candidates and
-            # (optionally) proxy samples.
+            # ── Assemble training batch ───────────────────────────────────
+            t0 = _time.perf_counter()
             selected_ids = candidate_ids[local_indices]
 
             if c.opus.include_proxy_in_training and proxy_ids_train.size(0) > 0:
-                # Ensure seq_len dimensions match (proxy may be truncated
-                # to train_seq_len which could differ from candidate seq_len).
                 target_len = proxy_ids_train.size(1)
                 training_ids = torch.cat(
                     [proxy_ids_train, selected_ids[:, :target_len]], dim=0
                 )
             else:
                 training_ids = selected_ids
+            timings["batch_assembly_ms"] = (_time.perf_counter() - t0) * 1000
 
-            # Forward — identical loss formulation to the scoring pass so the
-            # gradient signal is consistent throughout.
+            # ── Training forward ──────────────────────────────────────────
+            t0 = _time.perf_counter()
             with self._step_phase("step/train_forward"):
                 train_loss = self._forward_and_loss(training_ids)
+            timings["train_forward_ms"] = (_time.perf_counter() - t0) * 1000
 
-            # Backward — the only backward that counts toward a weight update.
+            # ── Training backward ─────────────────────────────────────────
+            t0 = _time.perf_counter()
             with self._step_phase("step/train_backward"):
                 self.engine.backward(train_loss)
+            timings["train_backward_ms"] = (_time.perf_counter() - t0) * 1000
 
-            # Optimizer step — updates weights using the accumulated gradients.
+            # ── Optimizer step ────────────────────────────────────────────
+            t0 = _time.perf_counter()
             with self._step_phase("step/train_optimizer_step"):
                 self.engine.step()
+            timings["optimizer_step_ms"] = (_time.perf_counter() - t0) * 1000
 
-            # ── Logging ───────────────────────────────────────────────────
+            # ── Collect metrics ───────────────────────────────────────────
             global_step += 1
             loss_val = train_loss.detach().float().item()
+            step_time_ms = (_time.perf_counter() - step_t0) * 1000
 
             if self.step_prof is not None:
                 _ptoks = torch.tensor(
@@ -417,25 +441,80 @@ class Trainer:
                 _ptoks = all_reduce_sum(_ptoks)
                 self.step_prof.end_step(tokens=int(_ptoks.item()))
 
-            if global_step % c.train.log_interval == 0:
-                n_proxy_in_batch = proxy_ids_train.size(0)
-                n_selected_local = local_indices.numel()
-                m = result.metrics
+            # ── GPU memory stats ──────────────────────────────────────────
+            gpu_stats = self._gpu_mem_stats(device)
+
+            # ── Per-step detailed logging ─────────────────────────────────
+            n_proxy_in_batch = proxy_ids_train.size(0)
+            n_selected_local = local_indices.numel()
+            n_training = training_ids.size(0)
+            training_seq_len = training_ids.size(1)
+            total_train_tokens = training_ids.numel()
+            m = result.metrics
+
+            # Line 1: Step summary — loss, lr, total step time
+            print_rank_0(
+                f"[step {global_step}/{c.train.max_steps}] "
+                f"loss={loss_val:.4f} | lr={current_lr:.2e} | "
+                f"step_time={step_time_ms:.1f}ms"
+            )
+
+            # Line 2: OPUS pipeline breakdown
+            if opus_enabled:
                 print_rank_0(
-                    f"step {global_step}/{c.train.max_steps} | "
-                    f"loss {loss_val:.4f} | "
-                    f"lr {current_lr:.2e} | "
-                    f"proxy {n_proxy_in_batch} + "
-                    f"selected {n_selected_local} / "
-                    f"{n_candidates} candidates | "
-                    f"alignment {m.get('alignment', 0.0):.3f} | "
-                    f"redundancy {m.get('redundancy', 0.0):.3f} | "
-                    f"entropy {m.get('entropy', 0.0):.3f} | "
-                    f"selector_time {m.get('selector_time_s', 0.0) * 1000:.1f}ms"
-                    + (" | [FALLBACK]" if result.used_fallback else "")
+                    f"  OPUS: "
+                    f"proxy_sample={opus_timings.get('proxy_sample_ms', 0):.1f}ms | "
+                    f"scoring_fwd={opus_timings.get('scoring_forward_ms', 0):.1f}ms | "
+                    f"scoring_bwd={opus_timings.get('scoring_backward_ms', 0):.1f}ms | "
+                    f"zero_grad={opus_timings.get('zero_grad_ms', 0):.1f}ms | "
+                    f"boltzmann={opus_timings.get('boltzmann_select_ms', 0):.1f}ms | "
+                    f"precond_refresh={opus_timings.get('preconditioner_refresh_ms', 0):.1f}ms | "
+                    f"total={timings.get('opus_total_ms', 0):.1f}ms"
+                    + (" [FALLBACK]" if result.used_fallback else "")
+                )
+                print_rank_0(
+                    f"  OPUS scores: "
+                    f"alignment={m.get('alignment', 0.0):.4f} | "
+                    f"redundancy={m.get('redundancy', 0.0):.4f} | "
+                    f"entropy={m.get('entropy', 0.0):.4f} | "
+                    f"selector_time={m.get('selector_time_s', 0.0) * 1000:.1f}ms"
+                )
+            else:
+                print_rank_0(
+                    f"  OPUS: DISABLED (bypass) | "
+                    f"bypass_time={timings.get('opus_bypass_ms', 0):.1f}ms"
                 )
 
-            # ── 9. Stop at max_steps ────────────────────────────────────────
+            # Line 3: Batch composition — what actually went to training
+            print_rank_0(
+                f"  Batch: "
+                f"candidates_in={n_candidates} (seq_len={candidate_seq_len}) | "
+                f"proxy_in_batch={n_proxy_in_batch} | "
+                f"selected={n_selected_local} | "
+                f"training_batch={n_training} (seq_len={training_seq_len}) | "
+                f"train_tokens={total_train_tokens}"
+            )
+
+            # Line 4: Training pass timing breakdown
+            print_rank_0(
+                f"  Timing: "
+                f"data_load={timings['data_to_device_ms']:.1f}ms | "
+                f"batch_asm={timings['batch_assembly_ms']:.1f}ms | "
+                f"train_fwd={timings['train_forward_ms']:.1f}ms | "
+                f"train_bwd={timings['train_backward_ms']:.1f}ms | "
+                f"optim={timings['optimizer_step_ms']:.1f}ms"
+            )
+
+            # Line 5: GPU memory
+            if gpu_stats:
+                print_rank_0(
+                    f"  GPU: "
+                    f"alloc={gpu_stats['gpu_mem_allocated_mb']:.0f}MB | "
+                    f"reserved={gpu_stats['gpu_mem_reserved_mb']:.0f}MB | "
+                    f"peak={gpu_stats['gpu_mem_peak_mb']:.0f}MB"
+                )
+
+            # ── Stop at max_steps ─────────────────────────────────────────
             if global_step >= c.train.max_steps:
                 print_rank_0(f"reached max_steps={c.train.max_steps}, stopping.")
                 break
@@ -452,7 +531,7 @@ class Trainer:
     def _select_candidates(
         self,
         candidate_ids: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, SelectionResult, float]:
+    ) -> tuple[torch.Tensor, torch.Tensor, SelectionResult, float, dict[str, float]]:
         """
         Run the full OPUS selection pipeline for one training step.
 
@@ -474,49 +553,43 @@ class Trainer:
                                     truncated to training length
             result:                 SelectionResult with metrics + global index info
             current_lr:             float LR at this step, for logging + scoring
+            opus_timings:           dict of per-phase wall-clock timings in ms
         """
         c = self.config
         device = self.device
         n_candidates = candidate_ids.size(0)
         candidate_seq_len = candidate_ids.size(1)
+        opus_timings: dict[str, float] = {}
 
         # ── snapshot the AdamW preconditioner state ───────────────────
-        # Done before any gradients are computed so P_t reflects the
-        # optimizer's state at the start of this step (v_{t-1}).
+        t0 = _time.perf_counter()
         with self._step_phase("opus/preconditioner_refresh"):
             self.preconditioner_view.refresh()
+        opus_timings["preconditioner_refresh_ms"] = (_time.perf_counter() - t0) * 1000
 
         # ── Sample proxy sequences ────────────────────────────────────────────
-        # Draw n_proxy_per_gpu sequences from the in-distribution proxy pool.
-        # These estimate the target gradient direction g_proxy for this step.
-        # Loaded at max(scoring_seq_len, train_seq_len) so we have enough
-        # tokens for both scoring and training.
         proxy_loader_seq_len = max(c.opus.scoring_seq_len, c.opus.train_seq_len)
+        t0 = _time.perf_counter()
         with self._step_phase("opus/proxy_sample"):
             proxy_ids: torch.Tensor = self.proxy_provider.sample(
                 device=device,  # type: ignore[arg-type]  # asserted non-None in __init__
                 k=self.n_proxy_per_gpu,
                 seq_len=proxy_loader_seq_len,
             )
+        opus_timings["proxy_sample_ms"] = (_time.perf_counter() - t0) * 1000
         n_proxy = proxy_ids.size(0)
 
         # ── Build combined scoring batch ──────────────────────────────────────
-        # Effective scoring length: clamped to what's actually available.
         effective_scoring_len = min(
             c.opus.scoring_seq_len, proxy_ids.size(1), candidate_seq_len
         )
-        # Truncate both proxy and candidates to the same scoring length.
         proxy_ids_for_scoring = proxy_ids[:, :effective_scoring_len]
         scoring_candidate_ids = candidate_ids[:, :effective_scoring_len]
-        # Shape: (n_proxy + n_candidates, effective_scoring_len)
         combined_ids = torch.cat(
             [proxy_ids_for_scoring, scoring_candidate_ids], dim=0
         )
 
-        # ── Scoring pass: forward ─────────────────────────────────────────────
-        # A single forward pass over [proxy | candidates] fires the ghost hooks
-        # in every linear layer. The hooks compute per-layer sketches on the fly
-        # without ever materialising the full [out_dim, in_dim] gradient matrix.
+        # ── Scoring pass ──────────────────────────────────────────────────────
         ghost_collector = OpusGhostCollector(
             model=self.engine.module,
             n_proxy=n_proxy,
@@ -527,49 +600,56 @@ class Trainer:
         )
 
         with ghost_collector:
+            t0 = _time.perf_counter()
             with self._step_phase("opus/scoring_forward"):
                 scoring_loss = self._forward_and_loss(combined_ids)
+            opus_timings["scoring_forward_ms"] = (_time.perf_counter() - t0) * 1000
 
-            # Backward fires the ghost hooks. We deliberately do NOT call
-            # engine.step() — this pass is for scoring only.
+            t0 = _time.perf_counter()
             with self._step_phase("opus/scoring_backward"):
                 self.engine.backward(scoring_loss)
+            opus_timings["scoring_backward_ms"] = (_time.perf_counter() - t0) * 1000
 
-            # Discard scoring gradients so they don't pollute the training pass.
+            t0 = _time.perf_counter()
             with self._step_phase("opus/zero_grad"):
                 self.engine.zero_grad()
+            opus_timings["zero_grad_ms"] = (_time.perf_counter() - t0) * 1000
 
             alignment_scores, candidate_sketches = ghost_collector.results()
 
+        opus_timings["scoring_loss_val"] = scoring_loss.detach().float().item()
+
         # ── Boltzmann selection ───────────────────────────────────────────────
-        # OpusSelector runs the distributed Boltzmann loop:
-        #   - Each GPU nominates its local Gumbel-argmax winner
-        #   - Winners compete globally via _global_pick_from_rank_bests
-        #   - History Φ is updated on all GPUs via all_reduce after each pick
-        # Returns selected_local_indices directly — no manual remapping needed.
         current_lr = (
             self.engine.get_lr()[0]
             if hasattr(self.engine, "get_lr")
             else self.initial_lr
         )
+        t0 = _time.perf_counter()
         with self._step_phase("opus/boltzmann_select"):
             result = self.selector.select(
                 alignment_scores=alignment_scores,
                 candidate_sketches=candidate_sketches,
                 learning_rate=current_lr,
             )
+        opus_timings["boltzmann_select_ms"] = (_time.perf_counter() - t0) * 1000
 
         # ── Prepare proxy samples for training ────────────────────────────────
-        # Truncate proxy to training length (must match candidate_ids seq_len
-        # so torch.cat works in the training loop).
         train_len = min(c.opus.train_seq_len, candidate_seq_len)
         proxy_ids_for_training = proxy_ids[:, :train_len]
+
+        # ── Log scoring batch details ─────────────────────────────────────────
+        opus_timings["scoring_seq_len"] = float(effective_scoring_len)
+        opus_timings["combined_scoring_batch"] = float(combined_ids.size(0))
+        opus_timings["n_proxy_sampled"] = float(n_proxy)
+        opus_timings["n_candidates_scored"] = float(n_candidates)
 
         return (
             result.selected_local_indices,
             proxy_ids_for_training,
             result,
             current_lr,
+            opus_timings,
         )
 
     # -------------------------------------------------------------------------
