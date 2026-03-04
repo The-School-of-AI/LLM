@@ -127,6 +127,18 @@ if __name__ == "__main__":
         _original_patch_rope_scaling_dict(rope_scaling)
     vllm.transformers_utils.config.patch_rope_scaling_dict = _new_patch_rope_scaling_dict
 
+    # VLLM 0.5.0 hack for missing tokenizer.all_special_tokens_extended in new transformers
+    import vllm.transformers_utils.tokenizer
+    if not hasattr(vllm.transformers_utils.tokenizer, '_patched_get_cached_tokenizer'):
+        _original_get_cached_tokenizer = vllm.transformers_utils.tokenizer.get_cached_tokenizer
+        def _new_get_cached_tokenizer(tokenizer):
+            if not hasattr(type(tokenizer), 'all_special_tokens_extended'):
+                type(tokenizer).all_special_tokens_extended = property(lambda self: [str(t) for t in self.all_special_tokens])
+            return _original_get_cached_tokenizer(tokenizer)
+        vllm.transformers_utils.tokenizer.get_cached_tokenizer = _new_get_cached_tokenizer
+        vllm.transformers_utils.tokenizer._patched_get_cached_tokenizer = True
+
+
     engine = AsyncLLMEngine.from_engine_args(engine_args)
 
     app.root_path = args.root_path
