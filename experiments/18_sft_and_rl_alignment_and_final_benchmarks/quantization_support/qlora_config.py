@@ -54,9 +54,14 @@ class QuantizationConfig:
     double_quant: bool = True
     exclude_modules: List[str] = field(
         default_factory=lambda: [
-            "lm_head", "embed_tokens", "embed_out",
-            "wte", "wpe", "word_embeddings",
-            "embed_in", "output_layer",
+            "lm_head",
+            "embed_tokens",
+            "embed_out",
+            "wte",
+            "wpe",
+            "word_embeddings",
+            "embed_in",
+            "output_layer",
         ]
     )
     modules_to_save: List[str] = field(default_factory=list)
@@ -359,7 +364,10 @@ class QLoRAConfig:
         if hasattr(args, "lora_alpha") and args.lora_alpha is not None:
             config.lora.alpha = args.lora_alpha
 
-        if hasattr(args, "lora_target_modules") and args.lora_target_modules is not None:
+        if (
+            hasattr(args, "lora_target_modules")
+            and args.lora_target_modules is not None
+        ):
             config.lora.target_modules = args.lora_target_modules
 
         if hasattr(args, "learning_rate") and args.learning_rate is not None:
