@@ -300,6 +300,7 @@ class TestBatchedSelectionEngine:
                     language="en",
                     band=DifficultyBand("B2"),
                     source_doc_id="doc_1",
+                    t1_file_path="doc_2.parquet"
                 )
                 yield (f"chunk_{i:05d}", metadata)
 

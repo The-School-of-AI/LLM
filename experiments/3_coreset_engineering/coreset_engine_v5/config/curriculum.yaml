@@ -108,7 +108,7 @@ difficulty_system:
       name: "Nursery"
       intent: "Surface language acquisition"
       allowed_modalities: ["general_text"]
-      allowed_domains: ["web", "social", "qa"]
+      allowed_domains: ["web", "social", "qa", "education", "language_literacy", "conversation", "translation","golden"]
       constraints:
         tokenizer:
           avg_max: 5000
@@ -123,7 +123,7 @@ difficulty_system:
       name: "Primary"
       intent: "Fluent everyday language"
       allowed_modalities: ["general_text", "clean_exposition"]
-      allowed_domains: ["web", "encyclopedia", "news", "social", "qa"]
+      allowed_domains: ["web","encyclopedia","news","social","qa","education","language_literacy","conversation","translation","golden"]
       constraints:
         tokenizer:
           avg_max: 10000
@@ -138,8 +138,7 @@ difficulty_system:
       name: "HighSchool"
       intent: "Structured knowledge without explicit reasoning"
       allowed_modalities: ["general_text", "structured_knowledge"]
-      allowed_domains:
-        ["encyclopedia", "news", "education", "literature", "web", "qa"]
+      allowed_domains: ["encyclopedia", "news","education", "literature","web","qa", "conversation","translation","golden"]
       constraints:
         tokenizer:
           avg_max: 20000
@@ -154,7 +153,7 @@ difficulty_system:
       name: "Undergraduate"
       intent: "Reasoning emergence"
       allowed_modalities: ["structured_knowledge", "technical_text", "code"]
-      allowed_domains: ["science", "math", "education", "code", "literature"]
+      allowed_domains:  ["science", "math", "education", "code", "literature", "conversation","translation","golden"]
       constraints:
         tokenizer:
           avg_max: 40000
@@ -171,7 +170,7 @@ difficulty_system:
       name: "Graduate"
       intent: "Explicit abstraction and algorithms"
       allowed_modalities: ["technical_text", "math", "code"]
-      allowed_domains: ["science", "math", "code", "instruction"]
+      allowed_domains: ["science", "math", "code", "instruction","golden"]
       constraints:
         tokenizer:
           avg_max: 70000
@@ -187,9 +186,8 @@ difficulty_system:
     B5:
       name: "PhD"
       intent: "Planning and system-level reasoning"
-      allowed_modalities:
-        ["hard_reasoning", "math", "advanced_code", "planning"]
-      allowed_domains: ["instruction", "science", "math", "code"]
+      allowed_modalities: ["hard_reasoning", "math", "advanced_code", "planning"]
+      allowed_domains: ["instruction", "science", "math", "code","golden"]
       constraints:
         tokenizer:
           avg_max: .inf
@@ -391,31 +389,17 @@ domains:
 
   band_domain_policy:
     B0:
-      ["web", "social", "qa", "education", "language_literacy", "conversation"]
+      ["web", "social", "qa", "education", "language_literacy", "conversation", "translation","golden"]
     B1:
-      [
-        "web",
-        "encyclopedia",
-        "news",
-        "social",
-        "qa",
-        "education",
-        "language_literacy",
-        "conversation",
-      ]
+      ["web","encyclopedia","news","social","qa","education","language_literacy","conversation","translation","golden"]
     B2:
-      [
-        "encyclopedia",
-        "news",
-        "education",
-        "literature",
-        "web",
-        "qa",
-        "conversation",
-      ]
-    B3: ["science", "math", "education", "code", "literature", "conversation"]
-    B4: ["science", "math", "code", "instruction"]
-    B5: ["instruction", "science", "math", "code"]
+      ["encyclopedia", "news","education", "literature","web","qa", "conversation","translation","golden"]
+    B3: 
+      ["science", "math", "education", "code", "literature", "conversation","translation","golden"]
+    B4: 
+      ["science", "math", "code", "instruction","golden"]
+    B5:
+      ["instruction", "science", "math", "code","golden"]
 
 # ============================================================
 # EVALUATION SIGNAL INTERFACE

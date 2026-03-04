@@ -37,6 +37,7 @@ DEFAULT_COLUMNS: List[str] = [
     "source_doc_id",
     "source_url",
     "source",
+    "t1_file_path",
 ]
 
 LEGACY_TOKEN_COLUMN = "token_count_estimate"

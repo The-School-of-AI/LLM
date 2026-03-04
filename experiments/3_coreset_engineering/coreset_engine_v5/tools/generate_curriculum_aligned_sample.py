@@ -166,6 +166,7 @@ def generate(
                 "quality_flags": [],
                 "sensitive_markers": [],
                 "start_offset": 0,
+                "t1_file_path":"doc_2.parquet",
             }
             f.write(json.dumps(row) + "\n")
 

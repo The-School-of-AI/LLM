@@ -46,6 +46,7 @@ def test_protected_slice_enforcement_respects_band_allowed_domains(
             band=DifficultyBand.B4,
             source_doc_id="doc",
             source_url=None,
+            t1_file_path="doc_2.parquet",
         ),
         "c002": ChunkMetadata(
             chunk_id="c002",
@@ -57,6 +58,7 @@ def test_protected_slice_enforcement_respects_band_allowed_domains(
             band=DifficultyBand.B4,
             source_doc_id="doc",
             source_url=None,
+            t1_file_path="doc_2.parquet",
         ),
     }
 
