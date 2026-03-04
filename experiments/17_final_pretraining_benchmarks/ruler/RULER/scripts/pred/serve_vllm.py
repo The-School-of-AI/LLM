@@ -119,13 +119,13 @@ if __name__ == "__main__":
 
     engine_args = AsyncEngineArgs.from_cli_args(args)
 
-import vllm.transformers_utils.config
-_original_patch_rope_scaling_dict = vllm.transformers_utils.config.patch_rope_scaling_dict
-def _new_patch_rope_scaling_dict(rope_scaling: dict):
-    if 'rope_type' not in rope_scaling:
-        rope_scaling['rope_type'] = 'linear'
-    _original_patch_rope_scaling_dict(rope_scaling)
-vllm.transformers_utils.config.patch_rope_scaling_dict = _new_patch_rope_scaling_dict
+    import vllm.transformers_utils.config
+    _original_patch_rope_scaling_dict = vllm.transformers_utils.config.patch_rope_scaling_dict
+    def _new_patch_rope_scaling_dict(rope_scaling: dict):
+        if 'rope_type' not in rope_scaling:
+            rope_scaling['rope_type'] = 'linear'
+        _original_patch_rope_scaling_dict(rope_scaling)
+    vllm.transformers_utils.config.patch_rope_scaling_dict = _new_patch_rope_scaling_dict
 
     engine = AsyncLLMEngine.from_engine_args(engine_args)
 
