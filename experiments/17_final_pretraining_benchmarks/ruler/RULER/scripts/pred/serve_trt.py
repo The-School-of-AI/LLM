@@ -30,6 +30,16 @@ from tensorrt_llm.runtime import ModelRunnerCpp
 from mpi4py import MPI
 from transformers import AutoTokenizer
 
+import json
+def read_manifest(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return [json.loads(line) for line in f if line.strip()]
+def write_manifest(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+
+
 
 class TritonServerGenerate(Resource):
     def __init__(self, model):

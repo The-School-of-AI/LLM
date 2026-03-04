@@ -42,7 +42,16 @@ import time
 from tqdm import tqdm
 from pathlib import Path
 import traceback
-from manifest_utils import read_manifest
+
+import json
+def read_manifest(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return [json.loads(line) for line in f if line.strip()]
+def write_manifest(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+
 
 SERVER_TYPES = (
     'trtllm',

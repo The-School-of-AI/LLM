@@ -27,6 +27,16 @@ from typing import List, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from tenacity import (
+
+import json
+def read_manifest(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return [json.loads(line) for line in f if line.strip()]
+def write_manifest(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+
     retry,
     stop_after_attempt,
     wait_random_exponential,

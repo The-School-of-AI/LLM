@@ -2,16 +2,6 @@
 import os
 os.environ['VLLM_ALLOW_LONG_MAX_MODEL_LEN'] = '1'
 
-# VLLM 0.5.0 hack for Gemma 3 rope_scaling config errors
-import vllm.config
-_original_init = vllm.config.ModelConfig.__init__
-def _new_init(self, *args, **kwargs):
-    _original_init(self, *args, **kwargs)
-    if hasattr(self, 'hf_config') and hasattr(self.hf_config, 'rope_scaling'):
-        rs = self.hf_config.rope_scaling
-        if isinstance(rs, dict) and 'rope_type' not in rs:
-            rs['rope_type'] = 'linear'
-vllm.config.ModelConfig.__init__ = _new_init
 
 # Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
@@ -42,6 +32,16 @@ from vllm.engine.async_llm_engine import AsyncLLMEngine
 from vllm.sampling_params import SamplingParams
 from vllm.utils import random_uuid
 from vllm.utils import FlexibleArgumentParser
+
+import json
+def read_manifest(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return [json.loads(line) for line in f if line.strip()]
+def write_manifest(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+
 
 TIMEOUT_KEEP_ALIVE = 5  # seconds.
 app = FastAPI()
@@ -118,6 +118,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     engine_args = AsyncEngineArgs.from_cli_args(args)
+
+import vllm.transformers_utils.config
+_original_patch_rope_scaling_dict = vllm.transformers_utils.config.patch_rope_scaling_dict
+def _new_patch_rope_scaling_dict(rope_scaling: dict):
+    if 'rope_type' not in rope_scaling:
+        rope_scaling['rope_type'] = 'linear'
+    _original_patch_rope_scaling_dict(rope_scaling)
+vllm.transformers_utils.config.patch_rope_scaling_dict = _new_patch_rope_scaling_dict
+
     engine = AsyncLLMEngine.from_engine_args(engine_args)
 
     app.root_path = args.root_path

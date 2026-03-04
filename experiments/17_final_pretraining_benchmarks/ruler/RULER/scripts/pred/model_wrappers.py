@@ -18,6 +18,16 @@ import requests
 import torch
 from typing import Dict, List, Optional
 
+import json
+def read_manifest(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return [json.loads(line) for line in f if line.strip()]
+def write_manifest(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+
+
 
 class HuggingFaceModel:
     def __init__(self, name_or_path: str, **generation_kwargs) -> None:

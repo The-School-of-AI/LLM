@@ -39,8 +39,17 @@ from pathlib import Path
 from tqdm import tqdm
 from collections import defaultdict
 import sys, os
+
+import json
+def read_manifest(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return [json.loads(line) for line in f if line.strip()]
+def write_manifest(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from manifest_utils import read_manifest, write_manifest
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, required=True, help='path to the prediction jsonl files')
