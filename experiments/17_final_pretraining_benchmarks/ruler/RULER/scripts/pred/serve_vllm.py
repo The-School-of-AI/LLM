@@ -1,3 +1,18 @@
+
+import os
+os.environ['VLLM_ALLOW_LONG_MAX_MODEL_LEN'] = '1'
+
+# VLLM 0.5.0 hack for Gemma 3 rope_scaling config errors
+import vllm.config
+_original_init = vllm.config.ModelConfig.__init__
+def _new_init(self, *args, **kwargs):
+    _original_init(self, *args, **kwargs)
+    if hasattr(self, 'hf_config') and hasattr(self.hf_config, 'rope_scaling'):
+        rs = self.hf_config.rope_scaling
+        if isinstance(rs, dict) and 'rope_type' not in rs:
+            rs['rope_type'] = 'linear'
+vllm.config.ModelConfig.__init__ = _new_init
+
 # Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
