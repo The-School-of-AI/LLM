@@ -38,6 +38,8 @@ import yaml
 from pathlib import Path
 from tqdm import tqdm
 from collections import defaultdict
+import sys, os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from manifest_utils import read_manifest, write_manifest
 
 parser = argparse.ArgumentParser()
