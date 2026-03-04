@@ -1,7 +1,8 @@
 # RULER Benchmark — NVIDIA L4 Setup Guide
 
 > Run the [NVIDIA RULER benchmark](https://github.com/NVIDIA/RULER) on any HuggingFace model on an NVIDIA L4 GPU (24 GB VRAM).  
-> **No Docker required** — direct pip install.
+> **No Docker required.** The `RULER/` scripts directory is already included in this repo.  
+> **Default model:** `google/gemma-3-1b-pt` (1B base pretrained, fits L4 at all seq lengths)
 
 ---
 
@@ -13,186 +14,148 @@
 | GPU | NVIDIA L4 (24 GB) |
 | CUDA | 12.1+ |
 | Python | 3.10+ |
-| Disk | ~20 GB free (datasets + model) |
+| Disk | ~25 GB free (deps + datasets + model) |
 
-Verify your GPU and CUDA before starting:
 ```bash
-nvidia-smi
-nvcc --version
+nvidia-smi       # verify GPU
+nvcc --version   # verify CUDA
 ```
 
 ---
 
-## Quick-Start (Recommended)
-
-Use the pre-configured wrapper script included in this folder:
+## Quick-Start
 
 ```bash
-# 1. Clone RULER into this folder
-git clone https://github.com/NVIDIA/RULER.git RULER
+# From this directory on the L4:
+cd ~/LLM/experiments/17_final_pretraining_benchmarks/ruler
 
-# 2. Apply all patches (configures model, tasks, paths)
-bash patch_configs.sh
+# 1. Create and activate virtual environment
+uv venv && source .venv/bin/activate
 
-# 3. Install Python dependencies
-pip install -r requirements.txt
+# 2. Install dependencies (uv reads pyproject.toml)
+uv sync
 
-# 4. Download datasets
+# 3. Download datasets (one-time)
 cd RULER/scripts/data/synthetic/json/
 python download_paulgraham_essay.py
 bash download_qa_dataset.sh
 cd ../../../../..
 
-# 5. Download the model (adjust MODEL and LOCAL_DIR as needed)
-huggingface-cli download google/gemma-2b --local-dir ./models/google/gemma-2b
+# 4. Download model
+huggingface-cli login
+huggingface-cli download google/gemma-3-1b-pt --local-dir ./models/google/gemma-3-1b-pt
+
+# 5. Patch RULER configs to register Gemma models
+bash patch_configs.sh
 
 # 6. Run the benchmark
-bash run_ruler.sh
+bash run_ruler.sh gemma-3-1b-pt synthetic
 ```
 
 ---
 
-## Step-by-Step Manual Setup
+## Supported Models (registered in `patch_configs.sh`)
 
-### Step 1 — Clone RULER
+| Key for `run_ruler.sh` | HF Model ID | Template |
+|---|---|---|
+| `gemma-1b` | google/gemma-1b | base |
+| `gemma-2b` | google/gemma-2b | base |
+| `gemma-3b` | google/gemma-3b | base |
+| `gemma-3-1b-pt` | google/gemma-3-1b-pt | base (pretrained) |
+| `gemma-1b-it` | google/gemma-1b-it | gemma (instruct) |
+| `gemma-2b-it` | google/gemma-2b-it | gemma (instruct) |
+| `gemma-3b-it` | google/gemma-3b-it | gemma (instruct) |
 
-```bash
-git clone https://github.com/NVIDIA/RULER.git RULER
-cd RULER
-```
-
-### Step 2 — Install Python Dependencies
-
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install vllm transformers accelerate
-pip install nltk rouge_score tqdm pyyaml requests
-```
-
-Or use the provided `requirements.txt`:
-```bash
-pip install -r requirements.txt
-```
-
-### Step 3 — Download Datasets
-
-From inside `RULER/`:
-```bash
-cd scripts/data/synthetic/json/
-python download_paulgraham_essay.py
-bash download_qa_dataset.sh
-cd ../../../..
-```
-
-> Downloads Paul Graham essays (NIAH haystack) and SQuAD + HotpotQA (QA tasks).
-
-### Step 4 — Download Your Model
-
-```bash
-# Example: Gemma 2B (fits L4 at all sequence lengths)
-huggingface-cli download google/gemma-2b --local-dir ./models/google/gemma-2b
-
-# Example: Gemma 1B
-huggingface-cli download google/gemma-1b --local-dir ./models/google/gemma-1b
-```
-
-> **Note:** Gemma requires accepting the license on HuggingFace first.  
-> Log in first: `huggingface-cli login`
-
-### Step 5 — (Optional) Extend Context Window
-
-Gemma 1B/2B natively supports 8K tokens. To test at 16K/32K, edit the model's `config.json`:
-
-```json
-{
-  "max_position_embeddings": 32768,
-  "rope_scaling": {
-    "type": "linear",
-    "factor": 4.0
-  }
-}
-```
-
-> Skip if only testing at 4K and 8K.
-
-### Step 6 — Configure Paths in `RULER/scripts/run.sh`
-
-Edit the top of `RULER/scripts/run.sh`:
-
-```bash
-GPUS="1"
-ROOT_DIR="$(pwd)/results"        # output directory
-MODEL_DIR="$(pwd)/models"        # parent dir of model folders
-ENGINE_DIR=""                     # leave empty (TensorRT-LLM only)
-BATCH_SIZE=32                     # L4 handles 32 comfortably for 1-2B models
-```
-
-### Step 7 — Register Your Model in `RULER/scripts/config_models.sh`
-
-Add a new case block inside the `MODEL_SELECT()` function:
-
-```bash
-gemma-2b)
-    MODEL_PATH="${MODEL_DIR}/google/gemma-2b"
-    MODEL_TEMPLATE_TYPE="base"
-    MODEL_FRAMEWORK="vllm"
-    TOKENIZER_PATH="${MODEL_DIR}/google/gemma-2b"
-    TOKENIZER_TYPE="hf"
-    ;;
-
-gemma-1b)
-    MODEL_PATH="${MODEL_DIR}/google/gemma-1b"
-    MODEL_TEMPLATE_TYPE="base"
-    MODEL_FRAMEWORK="vllm"
-    TOKENIZER_PATH="${MODEL_DIR}/google/gemma-1b"
-    TOKENIZER_TYPE="hf"
-    ;;
-```
-
-For Gemma Instruct variants, use `MODEL_TEMPLATE_TYPE="gemma"` and add to `RULER/scripts/data/template.py`:
-```python
-"gemma": (
-    "<start_of_turn>user\n{context}\n\n{query}<end_of_turn>\n"
-    "<start_of_turn>model\n"
-),
-```
-
-### Step 8 — Configure Sequence Lengths in `RULER/scripts/config_tasks.sh`
-
-Update `SEQ_LENGTHS` and `NUM_SAMPLES`:
-
-```bash
-SEQ_LENGTHS=(4096 8192)      # add 16384 32768 if context was extended in Step 5
-NUM_SAMPLES=500               # set to 10 for a quick smoke test
-```
-
-### Step 9 — Run the Benchmark
-
-```bash
-cd RULER/scripts
-bash run.sh gemma-2b synthetic
-```
-
-Or use the wrapper from this folder:
-```bash
-bash run_ruler.sh
-```
+To add any other HF model, add a case block to `RULER/scripts/config_models.sh` (see Step 7 below).
 
 ---
 
 ## Configuration Reference
 
-All settings in `run_ruler.sh` (wrapper):
+Edit the top of `run_ruler.sh` to change any setting:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_NAME` | `gemma-2b` | Name key used in config_models.sh |
-| `HF_MODEL_ID` | `google/gemma-2b` | HuggingFace model ID for download |
-| `MODEL_DIR` | `./models` | Where models are downloaded |
-| `ROOT_DIR` | `./results` | Where outputs are saved |
+| `MODEL_NAME` | `gemma-3-1b-pt` | Key in `config_models.sh` |
+| `MODEL_DIR` | `./models` | Parent dir of downloaded models |
+| `ROOT_DIR` | `./results` | Where outputs are written |
+| `GPUS` | `1` | Number of GPUs (L4 = 1) |
 | `BATCH_SIZE` | `32` | Inference batch size |
-| `SEQ_LENGTHS` | `4096 8192` | Space-separated sequence lengths |
-| `NUM_SAMPLES` | `500` | Samples per task (10 for smoke test) |
+| `SEQ_LENGTHS` | `(4096 8192)` | Sequence lengths to evaluate |
+| `NUM_SAMPLES` | `500` | Samples per task; use `10` for smoke test |
+
+---
+
+## Step-by-Step Manual Setup
+
+### Step 1 — Install Python Dependencies
+
+**Option A — uv (recommended, fast):**
+```bash
+uv venv && source .venv/bin/activate
+uv sync
+```
+
+**Option B — pip into conda base (if vllm already installed):**
+```bash
+pip install transformers accelerate huggingface-hub nltk rouge-score \
+            tqdm pyyaml requests pandas>=2.2.0 scipy>=1.13.0 scikit-learn>=1.4.0
+```
+
+> **Note:** If using the conda base env, ignore pip conflict warnings about GCP packages (`dataproc-jupyter-plugin`, `bigframes`, etc.) — these don't affect RULER.
+
+### Step 2 — Download Datasets (one-time)
+
+```bash
+cd RULER/scripts/data/synthetic/json/
+python download_paulgraham_essay.py   # Paul Graham essays (NIAH haystack)
+bash download_qa_dataset.sh           # SQuAD + HotpotQA (QA tasks)
+cd ../../../../..
+```
+
+### Step 3 — Download Model
+
+```bash
+huggingface-cli login   # required for gated models (Gemma)
+huggingface-cli download google/gemma-3b-it --local-dir ./models/google/gemma-3b-it
+```
+
+### Step 4 — (Optional) Extend Context Window
+
+Gemma 3B-IT natively supports 8K tokens. To test at 16K/32K, patch `config.json`:
+
+```json
+{
+  "max_position_embeddings": 32768,
+  "rope_scaling": { "type": "linear", "factor": 4.0 }
+}
+```
+
+Then add `16384 32768` to `SEQ_LENGTHS` in `run_ruler.sh`.
+
+### Step 5 — Register Gemma in RULER configs
+
+```bash
+bash patch_configs.sh
+```
+
+This adds gemma-1b/2b/3b and their `-it` variants to `RULER/scripts/config_models.sh`. Safe to re-run — skips already-registered models.
+
+### Step 6 — Add a Custom Model
+
+Add a case block inside `MODEL_SELECT()` in `RULER/scripts/config_models.sh`:
+
+```bash
+my-model)
+    MODEL_PATH="${MODEL_DIR}/org/my-model"
+    MODEL_TEMPLATE_TYPE="base"        # or "gemma", "meta-chat", etc.
+    MODEL_FRAMEWORK="vllm"
+    TOKENIZER_PATH="${MODEL_DIR}/org/my-model"
+    TOKENIZER_TYPE="hf"
+    ;;
+```
+
+Then run: `bash run_ruler.sh my-model synthetic`
 
 ---
 
@@ -200,29 +163,31 @@ All settings in `run_ruler.sh` (wrapper):
 
 **Port 5000 already in use:**
 ```bash
-lsof -i :5000
-kill -9 <PID>
+lsof -i :5000 && kill -9 <PID>
 ```
 
 **Out of GPU memory:**
 ```bash
-# In run_ruler.sh or run.sh, reduce:
+# In run_ruler.sh, reduce:
 BATCH_SIZE=8
-SEQ_LENGTHS=(4096)     # Start small
+SEQ_LENGTHS=(4096)
 ```
 
-**Gemma model gated / 401 error:**
+**Disk full during install:**
 ```bash
-huggingface-cli login   # paste your HF token
+pip cache purge
+rm -rf ~/.cache/uv/
+df -h /
 ```
 
-**Model not found:**
-- Verify `MODEL_DIR` matches where the model was downloaded
-- Check the path: `ls ${MODEL_DIR}/google/gemma-2b/config.json`
+**Gemma 401 / gated model error:**
+```bash
+huggingface-cli login
+```
 
-**NLTK data missing:**
-```python
-import nltk; nltk.download('punkt')
+**numpy/scipy binary incompatibility (`numpy.dtype size changed`):**
+```bash
+pip install --force-reinstall --no-cache-dir "pandas>=2.2.0" "scipy>=1.13.0" "scikit-learn>=1.4.0"
 ```
 
 ---
@@ -236,10 +201,10 @@ import nltk; nltk.download('punkt')
 | 16K | 13 | 500 | ~2 hr |
 | 32K | 13 | 500 | ~4 hr |
 
-> **Tip:** Run inside `tmux` to survive SSH disconnects:
+> Run inside `tmux` to survive SSH disconnects:
 > ```bash
 > tmux new -s ruler
-> bash run_ruler.sh
+> bash run_ruler.sh gemma-3b-it synthetic
 > # Ctrl+B then D to detach
 > ```
 
@@ -249,13 +214,14 @@ import nltk; nltk.download('punkt')
 
 ```
 results/
-└── <model_name>/
+└── gemma-3-1b-pt/
     └── synthetic/
-        └── <seq_len>/
+        ├── 4096/
+        │   ├── data/   # validation.jsonl (generated inputs)
+        │   └── pred/   # validation.jsonl (model predictions + scores)
+        └── 8192/
             ├── data/
-            │   └── validation.jsonl    # generated inputs
             └── pred/
-                └── validation.jsonl    # model predictions + scores
 ```
 
 ---
@@ -264,4 +230,4 @@ results/
 
 - [RULER GitHub](https://github.com/NVIDIA/RULER)
 - [RULER Paper (arXiv:2404.06654)](https://arxiv.org/abs/2404.06654)
-- [Gemma on HuggingFace](https://huggingface.co/google/gemma-2b)
+- [Gemma 3-1B-PT on HuggingFace](https://huggingface.co/google/gemma-3-1b-pt)

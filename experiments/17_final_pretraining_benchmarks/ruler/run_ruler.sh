@@ -11,7 +11,7 @@ set -euo pipefail
 # ─── USER CONFIGURATION (edit these) ─────────────────────────────────────────
 
 # Model key — must match a case in RULER/scripts/config_models.sh
-MODEL_NAME="${1:-gemma-3b-it}"
+MODEL_NAME="${1:-gemma-3-1b-pt}"
 
 # Benchmark name (synthetic = standard 13-task RULER suite)
 BENCHMARK="${2:-synthetic}"
