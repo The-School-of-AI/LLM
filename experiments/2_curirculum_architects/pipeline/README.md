@@ -8,7 +8,8 @@ Three independent PySpark jobs that assign a curriculum band (B0–B5) to every 
 
 | Job | Script | Input Data | Band Range |
 |-----|--------|-----------|------------|
-| Main | `jobs/main_job.py` | Large-scale web/book/code (RedPajama, FineWeb, Dolma, Sangraha, arXiv, etc.) | B0–B5 (full) |
+| Main | `jobs/main_job.py` | Large-scale web/book/code (FineWeb, Dolma, Sangraha, etc.) | B0–B5 (full) |
+| Science/ArXiv | `jobs/arxiv_science_job.py` | Research papers and science-domain data (arXiv, RedPajama ArXiv) | B3–B5 (clamped) |
 | Curated Datasets | `jobs/curated_datasets_job.py` | 17 HuggingFace SFT/math/code/preference datasets | Source-clamped per dataset |
 | Student Data | `jobs/student_data_job.py` | ERAv4 Q&A drills + Samvaad conversation | B0–B2 only |
 
