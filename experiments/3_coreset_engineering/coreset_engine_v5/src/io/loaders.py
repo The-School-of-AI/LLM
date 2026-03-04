@@ -157,7 +157,8 @@ class ChunkLoader:
 
                 metadata = ChunkMetadata(
                     chunk_id=row["chunk_id"],
-                    dataset_id=row["dataset_id"],
+                    dataset_id=row["source"],
+                    source=row["source"],
                     token_count=int(token_val or 0),
                     byte_length=int(row["byte_length"]),
                     domain=row["domain"],
