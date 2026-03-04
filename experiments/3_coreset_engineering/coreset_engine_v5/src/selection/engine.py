@@ -331,13 +331,19 @@ class SelectionEngine:
 
         # Enforce protected slices
         if protected_slices and self.config.selection.include_protected_slices:
+            before = set(selected)
             selected = self._enforce_protected_slices(
                 selected, all_chunks, protected_slices, stage_name
             )
 
-            # Re-enforce language policy after protected slices may have added chunks
-            # that violate language constraints
-            selected = self._enforce_language_policy(selected, all_chunks, stage_name)
+            # Re-enforce language policy only if protected-slice enforcement changed
+            # the selection. `_enforce_language_policy()` is not idempotent for
+            # monolingual pools (it uses current total tokens as the denominator),
+            # so calling it redundantly can compound trimming.
+            if selected != before:
+                selected = self._enforce_language_policy(
+                    selected, all_chunks, stage_name
+                )
 
         self.selected_chunks.update(selected)
 
