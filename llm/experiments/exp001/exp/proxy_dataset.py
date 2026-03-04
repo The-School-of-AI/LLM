@@ -13,12 +13,17 @@ class ProxyDatasetConfig:
     local_path: str
     seq_len: int
     batch_size: int
+    dataset_format: str = "auto"  # auto | token_ids | text | synth_qa
+    token_ids_column: str = "input_ids"
+    text_column: str = "text"
+    language_column: str = "language"
+    filter_language: str | None = "en"
     shuffle_buffer: int = 10000
     start_step: int = 0
     num_workers: int = 2
 
 
-class SYNTHStream(IterableDataset):
+class ProxyStream(IterableDataset):
     """
     STRICT Loader: Instant resume using Arrow slicing.
     Supports deterministic ordering for reproducible training.
@@ -27,10 +32,13 @@ class SYNTHStream(IterableDataset):
     def __init__(
         self,
         tokenizer,
-        dataset_name="PleIAs/SYNTH",
-        local_path="../synth_local_en",
+        local_path="./_data/proxy_local",
         seq_len=512,
         batch_size=16,
+        dataset_format="auto",
+        token_ids_column="input_ids",
+        text_column="text",
+        language_column="language",
         shuffle_buffer=10000,
         seed=42,
         include_query=True,
@@ -44,6 +52,10 @@ class SYNTHStream(IterableDataset):
         self.tokenizer = tokenizer
         self.seq_len = seq_len
         self.batch_size = batch_size
+        self.dataset_format = dataset_format
+        self.token_ids_column = token_ids_column
+        self.text_column = text_column
+        self.language_column = language_column
         self.seed = seed
         self.start_step = start_step
         self.combine_separator = combine_separator
@@ -53,11 +65,11 @@ class SYNTHStream(IterableDataset):
         self.filter_language = filter_language
         self.full_path = local_path
 
-    def _construct_text(self, ex: Dict[str, Any]) -> Optional[str]:
-        """Construct training text from dataset example"""
+    def _construct_synth_text(self, ex: Dict[str, Any]) -> Optional[str]:
+        """Construct text from SYNTH-style QA examples."""
         # Fast language filter
         if self.filter_language:
-            lang = ex.get("language")
+            lang = ex.get(self.language_column)
             if not lang or (
                 isinstance(lang, str) and lang.lower() != self.filter_language.lower()
             ):
@@ -85,6 +97,28 @@ class SYNTHStream(IterableDataset):
             return None
         return "\n".join(parts)
 
+    def _detect_mode(self, full_ds) -> str:
+        cols = set(full_ds.column_names)
+        mode = self.dataset_format
+        if mode != "auto":
+            return mode
+
+        if self.token_ids_column in cols:
+            return "token_ids"
+        if self.text_column in cols:
+            return "text"
+        if {
+            "query",
+            "synthetic_reasoning",
+            "synthetic_answer",
+        }.intersection(cols):
+            return "synth_qa"
+        raise ValueError(
+            "Could not auto-detect proxy dataset format. "
+            f"Columns={sorted(cols)}. "
+            "Set proxy.dataset_format to one of: token_ids, text, synth_qa."
+        )
+
     def _tokenize(self, text: str) -> List[int]:
         """Tokenize text and return input_ids as a plain list."""
         encoded = self.tokenizer(
@@ -97,13 +131,40 @@ class SYNTHStream(IterableDataset):
         )
         return encoded["input_ids"]
 
+    def _example_to_ids(self, ex: Dict[str, Any], mode: str) -> Optional[List[int]]:
+        if mode == "token_ids":
+            ids = ex.get(self.token_ids_column)
+            if ids is None:
+                return None
+            if torch.is_tensor(ids):
+                ids = ids.tolist()
+            if not isinstance(ids, list) or len(ids) == 0:
+                return None
+            return [int(x) for x in ids]
+
+        if mode == "text":
+            text = ex.get(self.text_column, "")
+            if not isinstance(text, str) or not text.strip():
+                return None
+            return self._tokenize(text)
+
+        if mode == "synth_qa":
+            text = self._construct_synth_text(ex)
+            if not text:
+                return None
+            return self._tokenize(text)
+
+        raise ValueError(f"Unsupported proxy dataset_format: {mode}")
+
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         """Iterate over dataset with deterministic resume support"""
         # Load and shuffle full dataset (global shuffle = deterministic)
         full_ds = load_from_disk(self.full_path)
         full_ds = full_ds.shuffle(seed=self.seed)
+        mode = self._detect_mode(full_ds)
 
         print(f"📊 Dataset loaded: {len(full_ds)} rows")
+        print(f"📊 Proxy dataset mode: {mode}")
         print(f"📊 Deterministic Resume: Fast-forwarding {self.start_step} steps...")
 
         it = iter(full_ds)
@@ -128,11 +189,7 @@ class SYNTHStream(IterableDataset):
                         it = iter(full_ds)  # Restart same permutation
                         ex = next(it)  # type: ignore
 
-                    text = self._construct_text(ex)
-                    if not text:
-                        continue
-
-                    ids = self._tokenize(text)
+                    ids = self._example_to_ids(ex, mode)
                     if not ids:
                         continue
 
@@ -164,11 +221,7 @@ class SYNTHStream(IterableDataset):
                     it = iter(full_ds)
                     ex = next(it)  # type: ignore
 
-                text = self._construct_text(ex)
-                if not text:
-                    continue
-
-                ids = self._tokenize(text)
+                ids = self._example_to_ids(ex, mode)
                 if not ids:
                     continue
 
@@ -187,12 +240,17 @@ class SYNTHStream(IterableDataset):
 def get_proxy_dataloader(
     tokenizer: TokenizersBackend, config: ProxyDatasetConfig, seed: int
 ) -> DataLoader:
-    ds = SYNTHStream(
+    ds = ProxyStream(
         tokenizer,
         seed=seed,
         local_path=config.local_path,
         seq_len=config.seq_len,
         batch_size=config.batch_size,
+        dataset_format=config.dataset_format,
+        token_ids_column=config.token_ids_column,
+        text_column=config.text_column,
+        language_column=config.language_column,
+        filter_language=config.filter_language,
         shuffle_buffer=config.shuffle_buffer,
         start_step=config.start_step,
     )
@@ -203,3 +261,7 @@ def get_proxy_dataloader(
         pin_memory=torch.cuda.is_available(),
         drop_last=True,
     )
+
+
+# Backward-compatible alias for older references.
+SYNTHStream = ProxyStream

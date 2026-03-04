@@ -11,9 +11,14 @@ data:
   block_sizes: [128]
 
 proxy:
-  local_path: ./_data/synth_local_en
+  local_path: ./_data/proxy_local
   seq_len: 512 # overridden at runtime to max(opus.scoring_seq_len, opus.train_seq_len) if needed
   batch_size: 16
+  dataset_format: auto      # auto | token_ids | text | synth_qa
+  token_ids_column: input_ids
+  text_column: text
+  language_column: language
+  filter_language: null
   num_workers: 1
 
 train:
@@ -31,7 +36,7 @@ train:
 opus:
   # ── Pool sizing ──
   candidate_multiplier: 2 # candidate pool = micro_batch × this. Set to 1 to disable OPUS.
-  n_proxy_total: 1        # total proxy samples across all GPUs (auto-divided by world_size)
+  n_proxy_total: 8        # total proxy samples across all GPUs (auto-divided by world_size)
                            # production: 16 (gives 2 per GPU with 8 GPUs)
 
   # ── Sequence lengths ──

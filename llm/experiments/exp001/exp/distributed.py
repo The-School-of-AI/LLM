@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import random
 
 import numpy as np
@@ -12,11 +13,16 @@ def distributed_available() -> bool:
 
 
 def get_rank() -> int:
-    return dist.get_rank() if distributed_available() else 0
+    if distributed_available():
+        return dist.get_rank()
+    return int(os.environ.get("RANK", "0"))
 
 
 def get_world_size() -> int:
-    return dist.get_world_size() if distributed_available() else 1
+    if distributed_available():
+        return dist.get_world_size()
+    ws = int(os.environ.get("WORLD_SIZE", "1"))
+    return max(ws, 1)
 
 
 def is_rank0() -> bool:
