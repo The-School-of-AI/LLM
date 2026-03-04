@@ -51,7 +51,8 @@ if [ ! -d "${RULER_DIR}" ]; then
 fi
 
 if ! python -c "import vllm" 2>/dev/null; then
-    echo "[ERROR] vllm not installed. Run: pip install -r requirements.txt"
+    echo "[ERROR] vllm not found. Install with:"
+    echo "    uv sync   (from the ruler directory)"
     exit 1
 fi
 

@@ -2,7 +2,7 @@
 name = "ruler-benchmark"
 version = "0.1.0"
 description = "RULER long-context benchmark runner for NVIDIA L4"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "vllm>=0.4.0",
     "transformers>=4.40.0",
@@ -21,3 +21,13 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+# Use PyTorch CUDA 12.1 wheels (NVIDIA L4 compatible)
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+torchvision = { index = "pytorch-cu121" }
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
