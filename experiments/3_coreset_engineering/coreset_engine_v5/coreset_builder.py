@@ -871,6 +871,7 @@ class StreamingCoresetBuilder(CoresetBuilder):
                 columns = [
                     "chunk_id",
                     "dataset_id",
+                    "source",
                     "token_count_estimate",
                     "byte_length",
                     "domain",
