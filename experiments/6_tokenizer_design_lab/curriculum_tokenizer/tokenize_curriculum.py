@@ -173,6 +173,20 @@ def key_exists(s3, uri: str) -> bool:
     return os.path.exists(uri)
 
 
+def delete_s3_prefix(s3, prefix_uri: str) -> None:
+    """Delete all S3 objects under a given prefix URI."""
+    if s3 is None:
+        import boto3
+        s3 = boto3.client("s3")
+    bucket, prefix = parse_s3_url(prefix_uri)
+    prefix = prefix.rstrip("/") + "/"
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        objects = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+        if objects:
+            s3.delete_objects(Bucket=bucket, Delete={"Objects": objects})
+
+
 def list_parquet_files(s3, uri: str) -> List[str]:
     """List all .parquet files under an S3 prefix or a local folder."""
     files = []
@@ -229,7 +243,7 @@ def load_progress_state(s3, dst_uri: str, tmp_dir: str) -> dict:
     uri = f"{dst_uri.rstrip('/')}/progress_state.json"
     state = download_json(s3, uri, tmp_dir)
     if state is None:
-        return {"completed": [], "failed": []}
+        return {"completed": [], "interrupted": [], "failed": []}
     return state
 
 
@@ -916,8 +930,33 @@ def main():
     # Load progress state (cross-interrupt resume)
     progress = load_progress_state(s3, args.dst_uri, tmp_dir)
     completed_set = set(progress.get("completed", []))
-    # next_shard_idx is persisted so resume picks up the global counter correctly
     next_shard_idx = progress.get("next_shard_idx", 1)
+
+    # Clean up any interrupted batch from a previous run before re-queuing it
+    interrupted_list = progress.get("interrupted", [])
+    if interrupted_list:
+        print(f"[RESUME] Found {len(interrupted_list)} interrupted batch(es) — cleaning up partial shards...")
+        shards_base = f"{args.dst_uri.rstrip('/')}/shards"
+        for entry in interrupted_list:
+            shard_start = entry.get("shard_start", next_shard_idx)
+            shard_end = entry.get("shard_end", shard_start)
+            uri_label = os.path.basename(entry.get("uri", "?"))
+            for shard_num in range(shard_start, shard_end + 1):
+                shard_name = f"shard_{shard_num:03d}"
+                shard_path = f"{shards_base}/{shard_name}"
+                if is_s3_uri(shard_path):
+                    delete_s3_prefix(s3, shard_path)
+                elif os.path.isdir(shard_path):
+                    shutil.rmtree(shard_path)
+            print(f"    Cleared shards {shard_start}–{shard_end} from interrupted batch: {uri_label}")
+        # Reset counter to the earliest interrupted shard_start so numbering is contiguous
+        earliest_start = min(e.get("shard_start", next_shard_idx) for e in interrupted_list)
+        next_shard_idx = earliest_start
+        progress["interrupted"] = []
+        progress["next_shard_idx"] = next_shard_idx
+        save_progress_state(s3, args.dst_uri, progress, tmp_dir)
+        print(f"[RESUME] Global shard counter reset to: shard_{next_shard_idx:03d}")
+
     pending_files = [uri for uri in target_files if uri not in completed_set]
     if len(completed_set) > 0:
         print(f"Resuming: {len(completed_set)} already complete, {len(pending_files)} remaining.")
@@ -937,6 +976,23 @@ def main():
                     s3, uri, args.dst_uri, tokenizer, args, tmp_dir, tokenizer_hash,
                     start_shard_idx=next_shard_idx,
                 )
+                # Check AFTER the call — signal may have fired inside process_coreset_file
+                if _TERMINATION_DETECTED.is_set():
+                    # Batch is incomplete. Record which shard numbers were partially written
+                    # so resume can delete them before re-queuing the batch.
+                    interrupted_entry = {
+                        "uri": uri,
+                        "shard_start": next_shard_idx,
+                        "shard_end": stats.get("shard_end", next_shard_idx) if stats else next_shard_idx,
+                    }
+                    interrupted_list = progress.get("interrupted", [])
+                    interrupted_list.append(interrupted_entry)
+                    progress["interrupted"] = interrupted_list
+                    # next_shard_idx is NOT advanced — the interrupted shards will be deleted
+                    # on resume and the counter will restart from next_shard_idx
+                    save_progress_state(s3, args.dst_uri, progress, tmp_dir)
+                    print("\n[INTERRUPT] Stopping file loop.")
+                    break
                 if stats:
                     all_stats.append(stats)
                     next_shard_idx = stats["next_shard_idx"]
