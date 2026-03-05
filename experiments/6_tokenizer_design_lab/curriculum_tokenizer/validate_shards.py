@@ -16,10 +16,16 @@ Checks per shard:
   7. max(token_ids) < vocab_size
   8. band, domain, stage are non-empty in metadata.json
 
+Expected layout (output of flatten_shards.py):
+  <shards-dir>/
+    shards/
+      shard_001/ -> tokens.bin, tokens.idx, metadata.json
+      shard_002/ -> ...
+      ...
+
 Usage:
-  python validate_shards.py --shards-dir /tmp/tok_out --tokenizer-path ./tsai_131k_tokenizer
-  python validate_shards.py --shards-uri s3://bucket/tokenized/run_20260303 \\
-      --tokenizer-path ./tsai_131k_tokenizer --verbose
+  python validate_shards.py --shards-dir /tmp/output --tokenizer-path ./tsai_131k_tokenizer
+  python validate_shards.py --shards-dir /tmp/output --tokenizer-path ./tsai_131k_tokenizer --verbose
 """
 
 from __future__ import annotations
@@ -69,21 +75,18 @@ def read_json_local(path: str) -> dict:
 
 
 def list_shard_dirs_local(base_dir: str) -> List[str]:
-    """Return sorted list of shard_NNN subdirectories under each coreset subdir.
+    """Return sorted list of shard_NNN subdirectories under <base_dir>/shards/.
 
-    Layout: <base>/<coreset>/shard_NNN/
+    Layout: <base_dir>/shards/shard_NNN/
     """
-    shard_dirs = []
-    if not os.path.isdir(base_dir):
+    shards_dir = os.path.join(base_dir, "shards")
+    if not os.path.isdir(shards_dir):
         return []
-    for entry in sorted(os.listdir(base_dir)):
-        coreset_path = os.path.join(base_dir, entry)
-        if not os.path.isdir(coreset_path):
-            continue
-        for sub in sorted(os.listdir(coreset_path)):
-            if sub.startswith("shard_"):
-                shard_dirs.append(os.path.join(coreset_path, sub))
-    return shard_dirs
+    return sorted([
+        os.path.join(shards_dir, d)
+        for d in os.listdir(shards_dir)
+        if d.startswith("shard_") and os.path.isdir(os.path.join(shards_dir, d))
+    ])
 
 
 def compute_tokenizer_hash(tokenizer_dir: str) -> str:
@@ -258,7 +261,7 @@ def parse_args():
     p.add_argument(
         "--shards-dir",
         default=None,
-        help="Local directory containing coreset subdirs with shard_NNN folders",
+        help="Local output directory produced by flatten_shards.py (must contain a shards/ subdir)",
     )
     p.add_argument(
         "--tokenizer-path",
@@ -278,7 +281,7 @@ def main():
     args = parse_args()
 
     if not args.shards_dir:
-        print("ERROR: --shards-dir is required for local validation.", file=sys.stderr)
+        print("ERROR: --shards-dir is required.", file=sys.stderr)
         sys.exit(1)
 
     # Load live tokenizer for ground-truth token IDs
@@ -297,7 +300,8 @@ def main():
 
     shard_dirs = list_shard_dirs_local(args.shards_dir)
     if not shard_dirs:
-        print(f"No shard directories found under {args.shards_dir}")
+        print(f"No shard directories found under {args.shards_dir}/shards/")
+        print("Run flatten_shards.py first to produce the flat shards/ layout.")
         sys.exit(1)
 
     print(f"Validating {len(shard_dirs)} shard(s)...\n")

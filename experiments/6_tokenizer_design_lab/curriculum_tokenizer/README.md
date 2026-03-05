@@ -345,3 +345,93 @@ When running without PyTorch installed you may see:
 
 This is safe to ignore. The pipeline uses only the tokenizer utilities and
 does not load any model weights.
+
+---
+
+## Flat Global Shard Output (Updated Layout)
+
+The output layout has been updated from per-batch subdirectories to a single
+flat `shards/` directory with globally-continuous numbering.
+
+### New output structure
+
+```
+<dst-uri>/
+├── progress_state.json              ← resume tracker (updated after each batch)
+├── manifest.json                    ← global summary (written on clean completion)
+└── shards/
+    ├── shard_001/
+    │   ├── tokens.bin
+    │   ├── tokens.idx
+    │   └── metadata.json            ← source_file field preserves traceability
+    ├── shard_002/
+    ├── shard_003/
+    ├── shard_004/                   ← second coreset batch continues from here
+    └── shard_NNN/
+```
+
+Shard numbering is **global across all coreset batches** — there are no
+intermediate per-batch subdirectories. The `metadata.json` inside each shard
+retains `source_file` (the originating coreset URI) for full traceability.
+
+### Resume behaviour
+
+`progress_state.json` now also tracks `next_shard_idx`:
+
+```json
+{
+  "completed": ["uri_A", "uri_B"],
+  "next_shard_idx": 9,
+  "failed": []
+}
+```
+
+On interrupt and restart, the global shard counter resumes from where it left
+off. Re-running with the same `--dst-uri` is safe and idempotent.
+
+### Sequential vs parallel
+
+| Mode | Output layout | Global numbering |
+| :--- | :--- | :--- |
+| `--file-parallelism 1` (default) | `shards/shard_NNN/` flat | Yes — automatic |
+| `--file-parallelism N` | `shards/shard_NNN/` flat | Local per-batch (1, 2, …) — use `flatten_shards.py` to renumber globally after completion |
+
+### Validating the new layout
+
+Pass the `--dst-uri` root (the parent of `shards/`) to `validate_shards.py`:
+
+```bash
+python validate_shards.py \
+    --shards-dir   dataset/final/small/tok_out \
+    --tokenizer-path ../tsai_131k_tokenizer
+```
+
+The validator now looks for shards under `<shards-dir>/shards/shard_NNN/`
+instead of the old two-level `<shards-dir>/<coreset>/shard_NNN/` layout.
+
+### `flatten_shards.py` (parallel runs only)
+
+For parallel runs (`--file-parallelism N > 1`), run `flatten_shards.py` once
+after all batches complete to renumber shards globally:
+
+```bash
+# Local
+python flatten_shards.py \
+    --src-dir dataset/final/small/tok_out \
+    --dst-dir dataset/final/small/tok_out_flat
+
+# S3
+python flatten_shards.py \
+    --src-uri s3://your-bucket/tokenized/stage1 \
+    --dst-uri s3://your-bucket/tokenized/stage1_flat
+
+# Dry-run first to preview
+python flatten_shards.py \
+    --src-dir dataset/final/small/tok_out \
+    --dst-dir dataset/final/small/tok_out_flat \
+    --dry-run
+```
+
+The script is resumable — re-running it skips shards already present in the
+destination. It writes a `flatten_manifest.json` recording which coreset batch
+maps to which global shard range.

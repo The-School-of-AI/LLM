@@ -19,7 +19,10 @@ S3 Curriculum Tokenization Pipeline
   Each T1 parquet contains: id (== chunk_id), text, and other columns.
 
 Output Structure:
-  <dst-uri>/<coreset_filename>/shards/shard_NNN/tokens.bin + tokens.idx + metadata.json
+  <dst-uri>/shards/shard_NNN/tokens.bin + tokens.idx + metadata.json
+
+  Shards are numbered globally across all coreset batches (sequential mode).
+  Each shard's metadata.json carries source_file for full traceability.
 
 Features:
   - Multi-File Support: Processes a single coreset file OR a folder of parquet files.
@@ -310,6 +313,7 @@ class ShardWriter:
         tokenizer_version: str = "v1",
         stage: int = 1,
         source_file: str = "",
+        start_shard_idx: int = 1,
     ):
         self.s3 = s3_client
         self.dst_uri = dst_uri.rstrip("/")
@@ -329,7 +333,7 @@ class ShardWriter:
         self.blocks_per_shard = tokens_per_shard // block_size
 
         # State
-        self.shard_idx = 1
+        self.shard_idx = start_shard_idx
         self.accumulated_blocks: List[List[int]] = []
         self.shard_stats: List[dict] = []
 
@@ -505,8 +509,14 @@ def process_coreset_file(
     args: argparse.Namespace,
     tmp_dir: str,
     tokenizer_hash: str = "",
+    start_shard_idx: int = 1,
 ) -> dict:
-    """Process a single coreset parquet file."""
+    """Process a single coreset parquet file.
+
+    Shards are written directly into <dst_base_uri>/shards/ using global
+    numbering that starts at start_shard_idx.  The returned dict includes
+    next_shard_idx so the caller can thread the counter across batches.
+    """
 
     filename = (
         os.path.basename(urlparse(coreset_uri).path)
@@ -515,8 +525,11 @@ def process_coreset_file(
     )
     coreset_name = os.path.splitext(filename)[0]
 
+    # Shards go directly into the flat <dst>/shards/ directory
+    shards_uri = f"{dst_base_uri.rstrip('/')}/shards"
+
     print(f"\nProcessing Coreset: {filename}")
-    print(f"Output folder: {dst_base_uri.rstrip('/')}/{coreset_name}/")
+    print(f"Output folder: {shards_uri}/ (start index: shard_{start_shard_idx:03d})")
 
     # Download Coreset (or use locally)
     local_path = download_to_temp(s3_client, coreset_uri, tmp_dir)
@@ -544,7 +557,7 @@ def process_coreset_file(
     # Initialize Writer for this coreset file
     writer = ShardWriter(
         s3_client=s3_client,
-        dst_uri=f"{dst_base_uri.rstrip('/')}/{coreset_name}",
+        dst_uri=shards_uri,
         block_size=args.block_size,
         shard_size_mb=args.shard_size_mb,
         tmp_dir=tmp_dir,
@@ -557,6 +570,7 @@ def process_coreset_file(
         tokenizer_version=getattr(args, "tokenizer_version", "v1"),
         stage=getattr(args, "stage", 1),
         source_file=coreset_uri,
+        start_shard_idx=start_shard_idx,
     )
 
     buffer: List[int] = []
@@ -716,12 +730,16 @@ def process_coreset_file(
 
     total_time = time.perf_counter() - t0_start
 
+    num_shards_written = len(shard_stats)
     return {
         "coreset_file": filename,
         "coreset_name": coreset_name,
         "num_source_files": len(grouped_sources),
         "num_docs": total_docs,
-        "num_shards": len(shard_stats),
+        "num_shards": num_shards_written,
+        "shard_start": start_shard_idx,
+        "shard_end": start_shard_idx + num_shards_written - 1,
+        "next_shard_idx": start_shard_idx + num_shards_written,
         "total_tokens": sum(s["total_tokens"] for s in shard_stats),
         "total_size_bytes": sum(s["file_size_bytes"] for s in shard_stats),
         "tokens_dropped": batch_tokens_dropped,
@@ -735,7 +753,13 @@ def process_coreset_file(
 
 
 def _worker_process_coreset(worker_args: tuple) -> dict:
-    """Pool worker: creates its own S3 client and tokenizer after fork/spawn."""
+    """Pool worker: creates its own S3 client and tokenizer after fork/spawn.
+
+    Parallel workers each write to their own isolated per-batch subfolder inside
+    <dst>/shards/ using start_shard_idx=1.  The main process is responsible for
+    renaming the per-batch dirs to global shard numbers after pool.map() completes
+    (not applicable for the sequential path, which passes the real start index).
+    """
     uri, dst_base_uri, tokenizer_path, args_dict, worker_id, tokenizer_hash = worker_args
 
     worker_tmp = os.path.join(args_dict.get("tmp_dir") or tempfile.gettempdir(),
@@ -756,7 +780,10 @@ def _worker_process_coreset(worker_args: tuple) -> dict:
 
     args = argparse.Namespace(**args_dict)
     try:
-        result = process_coreset_file(s3, uri, dst_base_uri, tokenizer, args, worker_tmp, tokenizer_hash)
+        result = process_coreset_file(
+            s3, uri, dst_base_uri, tokenizer, args, worker_tmp, tokenizer_hash,
+            start_shard_idx=1,
+        )
     except Exception as e:
         print(f"[Worker {worker_id}] ERROR processing {uri}: {e}")
         result = {}
@@ -868,30 +895,39 @@ def main():
     # Load progress state (cross-interrupt resume)
     progress = load_progress_state(s3, args.dst_uri, tmp_dir)
     completed_set = set(progress.get("completed", []))
+    # next_shard_idx is persisted so resume picks up the global counter correctly
+    next_shard_idx = progress.get("next_shard_idx", 1)
     pending_files = [uri for uri in target_files if uri not in completed_set]
     if len(completed_set) > 0:
         print(f"Resuming: {len(completed_set)} already complete, {len(pending_files)} remaining.")
+        print(f"Resuming global shard counter at: shard_{next_shard_idx:03d}")
 
     all_stats = []
 
     try:
         if args.file_parallelism <= 1:
-            # Sequential path
+            # Sequential path — global shard counter threads across batches
             for idx, uri in enumerate(pending_files):
                 if _TERMINATION_DETECTED.is_set():
                     print("\n[INTERRUPT] Stopping file loop.")
                     break
                 print(f"\n--- File {idx+1}/{len(pending_files)} ---")
                 stats = process_coreset_file(
-                    s3, uri, args.dst_uri, tokenizer, args, tmp_dir, tokenizer_hash
+                    s3, uri, args.dst_uri, tokenizer, args, tmp_dir, tokenizer_hash,
+                    start_shard_idx=next_shard_idx,
                 )
                 if stats:
                     all_stats.append(stats)
+                    next_shard_idx = stats["next_shard_idx"]
                     completed_set.add(uri)
                     progress["completed"] = list(completed_set)
+                    progress["next_shard_idx"] = next_shard_idx
                     save_progress_state(s3, args.dst_uri, progress, tmp_dir)
         else:
-            # Parallel path using spawn context (safe with boto3 + HF tokenizers)
+            # Parallel path — each worker writes to <dst>/shards/ with local shard_001, 002…
+            # Shard dirs from different workers may overlap in name; parallel mode is
+            # intended for runs where per-batch isolation is acceptable and a subsequent
+            # flatten_shards.py pass renumbers globally.
             args_dict = vars(args)
             args_dict["tmp_dir"] = tmp_dir  # share base tmp dir; workers create subdirs
 
