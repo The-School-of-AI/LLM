@@ -40,7 +40,30 @@ language_and_context:
       - lang: "en"
         max_share: 0.92
     secondary_languages:
-      - lang: ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"]
+      - lang:
+          [
+            "as",
+            "bn",
+            "gu",
+            "hi",
+            "kn",
+            "ml",
+            "mr",
+            "or",
+            "pa",
+            "ta",
+            "te",
+            "bn_roman",
+            "gu_roman",
+            "hi_roman",
+            "ml_roman",
+            "mr_roman",
+            "or_roman",
+            "pa_roman",
+            "ta_roman",
+            "te_roman",
+            "kn_roman",
+          ]
         max_share: 0.08
         earliest_stage: "1B"
     excluded_languages: ["zh", "ja", "ko", "fr", "de", "es"]
