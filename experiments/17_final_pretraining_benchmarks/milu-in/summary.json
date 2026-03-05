@@ -1,0 +1,88 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "overall_accuracy": 25.81,
+  "total_correct": 17053,
+  "total_items": 66073,
+  "per_language": {
+    "Bengali": {
+      "language": "Bengali",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 6637,
+      "correct": 1711,
+      "accuracy": 25.78,
+      "avg_latency_s": 0.068
+    },
+    "Odia": {
+      "language": "Odia",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 4525,
+      "correct": 1066,
+      "accuracy": 23.56,
+      "avg_latency_s": 0.072
+    },
+    "Kannada": {
+      "language": "Kannada",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 6234,
+      "correct": 1635,
+      "accuracy": 26.23,
+      "avg_latency_s": 0.069
+    },
+    "Gujarati": {
+      "language": "Gujarati",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 4826,
+      "correct": 1184,
+      "accuracy": 24.53,
+      "avg_latency_s": 0.071
+    },
+    "Punjabi": {
+      "language": "Punjabi",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 4099,
+      "correct": 1054,
+      "accuracy": 25.71,
+      "avg_latency_s": 0.07
+    },
+    "Tamil": {
+      "language": "Tamil",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 6372,
+      "correct": 1685,
+      "accuracy": 26.44,
+      "avg_latency_s": 0.068
+    },
+    "Malayalam": {
+      "language": "Malayalam",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 4321,
+      "correct": 1045,
+      "accuracy": 24.18,
+      "avg_latency_s": 0.07
+    },
+    "Telugu": {
+      "language": "Telugu",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 7304,
+      "correct": 1858,
+      "accuracy": 25.44,
+      "avg_latency_s": 0.071
+    },
+    "Hindi": {
+      "language": "Hindi",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 14831,
+      "correct": 4050,
+      "accuracy": 27.31,
+      "avg_latency_s": 0.065
+    },
+    "Marathi": {
+      "language": "Marathi",
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "total": 6924,
+      "correct": 1765,
+      "accuracy": 25.49,
+      "avg_latency_s": 0.068
+    }
+  }
+}
