@@ -73,9 +73,3 @@ class Watchdog:
                 time.sleep(self.poll_interval)
         except KeyboardInterrupt:
             print("Watchdog Stopped.")
-
-
-if __name__ == "__main__":
-    # For testing, we can run this standalone
-    wd = Watchdog()
-    wd.run()

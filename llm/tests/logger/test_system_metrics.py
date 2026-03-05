@@ -3,7 +3,7 @@ import os
 import shutil
 import time
 
-from llm.logger.system_metrics.collector import SystemMetricsCollector
+from llm.logger.p12.system_metrics.collector import SystemMetricsCollector
 
 
 def test_system_metrics_collector():

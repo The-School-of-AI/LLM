@@ -165,7 +165,6 @@ def _token_keep_mask(
     if mask.dim() == 2:
         pass
     elif mask.dim() == 3 and mask.size(1) == 1:
-
         mask = mask[:, 0, :]
     elif mask.dim() == 4 and mask.size(1) == 1 and mask.size(2) == 1:
         mask = mask[:, 0, 0, :]
@@ -423,60 +422,65 @@ PFConfig = KroneckerConfig
 # ============================================================================
 
 
+@dataclass
 class ModelConfig:
     """1B Dense Model Configuration"""
 
     # Architecture
-    vocab_size = 131072  # 2^17
-    hidden_size = 4096
-    num_layers = 8
+    vocab_size: int = 131072  # 2^17
+    hidden_size: int = 4096
+    num_layers: int = 8
 
     # Attention Mix (75% DeltaNet / 25% GSA) -- DDDGDDDG pattern
-    num_deltanet_layers = 6
-    num_gsa_layers = 2
+    num_deltanet_layers: int = 6
+    num_gsa_layers: int = 2
 
     # DeltaNet Configuration
-    delta_v_heads = 32  # hidden_size / delta_head_dim = 4096 / 128
-    delta_head_dim = 128
-    delta_gate_dim = 384  # 9.4% of hidden_size
+    delta_v_heads: int = 32  # hidden_size / delta_head_dim = 4096 / 128
+    delta_head_dim: int = 128
+    delta_gate_dim: int = 384  # 9.4% of hidden_size
 
     # GSA Configuration
-    gsa_num_heads = 16  # hidden_size / attn_head_dim = 4096 / 256
-    gsa_head_dim = 256
-    gsa_k_base = 128  # FIX-PERF-02: Reduced from 512 -- at T=4096, 512 keys/query = 25% dense; 128 is sufficient
-    gsa_k_min = 32
-    gsa_k_max = 256  # FIX-PERF-02: Reduced from 1024 -- limits atomic scatter in dK/dV backward kernel
-    gsa_indexer_heads = 4
+    gsa_num_heads: int = 16  # hidden_size / attn_head_dim = 4096 / 256
+    gsa_head_dim: int = 256
+    gsa_k_base: int = (
+        128  # FIX-PERF-02: Reduced from 512 -- at T=4096, 512 keys/query = 25% dense; 128 is sufficient
+    )
+    gsa_k_min: int = 32
+    gsa_k_max: int = (
+        256  # FIX-PERF-02: Reduced from 1024 -- limits atomic scatter in dK/dV backward kernel
+    )
+    gsa_indexer_heads: int = 4
 
     # MoE Configuration (DENSE MODEL - No MoE) -- same as Test 5 for parity
-    num_real_experts = 0
-    num_null_experts = 0
-    total_expert_slots = 0
-    top_k = 0  # Not used in dense model
-    expert_intermediate_size = 1024  # Not used in dense model
-    shared_expert_intermediate_size = 2048  # Acts as dense FFN
-    data_sparsity = 0.0  # No data sparsity (dense)
+    num_real_experts: int = 0
+    num_null_experts: int = 0
+    total_expert_slots: int = 0
+    top_k: int = 0  # Not used in dense model
+    expert_intermediate_size: int = 1024  # Not used in dense model
+    shared_expert_intermediate_size: int = 2048  # Acts as dense FFN
+    data_sparsity: float = 0.0  # No data sparsity (dense)
 
     # MTP Configuration
-    enable_mtp = True
-    mtp_num_predictions = 2
+    enable_mtp: bool = True
+    mtp_num_predictions: int = 2
 
     # mHC Configuration
-    n_streams = 4
-    sinkhorn_iters = (
+    n_streams: int = 4
+    sinkhorn_iters: int = (
         20  # Keep at 20 -- sufficient for mHC routing quality; do not reduce
     )
 
     # Context and RoPE (standard RoPE)
-    max_seq_len = 262144  # 256k context
-    rope_base = 10000
-    rope_original_max_position = 8192  # Original training context
-    rope_scaling_factor = 32.0  # 256k / 8k = 32x extension
+    max_seq_len: int = 262144  # 256k context
+    rope_base: int = 10000
+    rope_original_max_position: int = 8192  # Original training context
+    rope_scaling_factor: float = 32.0  # 256k / 8k = 32x extension
 
     # Training
-    dropout = 0.0  # Required for reversible integration
-    require_fused_deltanet_kernel = True
-    require_fused_gsa_kernel = True
+    dropout: float = 0.0  # Required for reversible integration
+    require_fused_deltanet_kernel: bool = True
+    require_fused_gsa_kernel: bool = True
 
 
 # ============================================================================
@@ -1419,7 +1423,9 @@ class MHCCoeffs(nn.Module):
             )
             logits_all = F.linear(x_flat, phi_all_weight)
             pre_raw, post_raw, res_raw = torch.split(
-                logits_all, (self.n, self.n, self.n * self.n), dim=-1  # type: ignore
+                logits_all,
+                (self.n, self.n, self.n * self.n),  # type: ignore
+                dim=-1,
             )
             pre_logits = self.alpha_pre * pre_raw + self.b_pre
             post_logits = self.alpha_post * post_raw + self.b_post
@@ -1875,10 +1881,10 @@ class Model1B(nn.Module):
             )
         print(f"\n   Total Layers: {config.num_layers}")
         print(
-            f"   - DeltaNet: {config.num_deltanet_layers} layers ({100*config.num_deltanet_layers//config.num_layers}%) - O(N) linear attention"
+            f"   - DeltaNet: {config.num_deltanet_layers} layers ({100 * config.num_deltanet_layers // config.num_layers}%) - O(N) linear attention"
         )
         print(
-            f"   - GSA: {config.num_gsa_layers} layers ({100*config.num_gsa_layers//config.num_layers}%) - Adaptive sparse"
+            f"   - GSA: {config.num_gsa_layers} layers ({100 * config.num_gsa_layers // config.num_layers}%) - Adaptive sparse"
         )
         print(f"\n   Context Target: {config.max_seq_len:,} tokens (standard RoPE)")
         print(
@@ -1889,7 +1895,7 @@ class Model1B(nn.Module):
             if config.enable_mtp
             else "   MTP: Disabled"
         )
-        print(f"\n   Total Parameters: {total_params:,} (~{total_params/1e9:.2f}B)")
+        print(f"\n   Total Parameters: {total_params:,} (~{total_params / 1e9:.2f}B)")
         print("   Active Parameters: ~1.513B (100% active, no MoE sparsity)")
 
     def _init_weights(self, module):

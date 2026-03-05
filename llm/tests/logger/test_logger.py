@@ -3,7 +3,7 @@ import os
 import shutil
 import time
 
-from llm.logger.train_logger.json_logger import JSONLogger
+from llm.logger.p12.train_logger.json_logger import JSONLogger
 
 
 def test_logger():

@@ -8,7 +8,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from llm.logger.training_ops import TrainingOps
+from llm.logger.p12.training_ops import TrainingOps
 
 
 def test_training_ops():
@@ -46,18 +46,6 @@ def test_training_ops():
         )
         time.sleep(0.1)
     print("✓ Logged 5 training steps")
-
-    # ---- 3. Simulate a checkpoint save ----
-    print("\n--- Simulating checkpoint ---")
-    ops.log_checkpoint(
-        step=4,
-        path="/mnt/checkpoints/ckpt_step_4.pt",
-        s3_key=f"s3://test-bucket/{run_id}/ckpt_step_4.pt",
-        loss=3.0,
-        tag="temporary",
-        duration_s=12.5,
-        size_bytes=1024 * 1024 * 500,
-    )
 
     # ---- 4. Verify MetricsServer is serving live data ----
     print("\n--- Checking MetricsServer HTTP API ---")
@@ -108,20 +96,6 @@ def test_training_ops():
         == f"s3://test-bucket/{run_id}/ckpt_step_4.pt"
     )
     print("✓ Checkpoint event found in JSONL with correct s3_key")
-
-    # ---- 6. Verify CheckpointRegistry in ClickHouse ----
-    print("\n--- Checking ClickHouse checkpoint registry ---")
-    try:
-        ckpts = ops.checkpoint_registry.list_checkpoints(run_id)
-        assert len(ckpts) == 1, f"Expected 1 checkpoint in registry, got {len(ckpts)}"
-        assert ckpts[0]["step"] == 4
-        assert ckpts[0]["tag"] == "temporary"
-        assert ckpts[0]["is_protected"] is False
-        print(
-            f"✓ ClickHouse registry: step={ckpts[0]['step']}, tag={ckpts[0]['tag']}, s3_key={ckpts[0]['s3_key']}"
-        )
-    except Exception as e:
-        print(f"⚠ ClickHouse registry check: {e}")
 
     # ---- 7. Verify system metrics file exists ----
     print("\n--- Checking system metrics ---")

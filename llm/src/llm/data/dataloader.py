@@ -398,10 +398,10 @@ def _build_causal_lm_collate_fn(pad_token_id: int):
 
 
 def get_dataloaders(
-    tokenized_dataset_path: str,
-    dataset_name: str = "wikitext",
-    dataset_config: str = "wikitext-2-raw-v1",
     tokenizer=None,
+    tokenized_dataset_path: str | None = None,
+    dataset_name: str | None = None,
+    dataset_config: str | None = None,
     batch_size: int = 8,
     max_length: int = 128,
     dataset_cache_dir: Optional[str] = None,
@@ -445,7 +445,6 @@ def get_dataloaders(
     if tokenizer is None:
         raise ValueError("tokenizer must be provided")
 
-    resolved_tokenized_path = tokenized_dataset_path
     if tokenized_dataset_path:
         if _is_s3_uri(tokenized_dataset_path):
             if not local_nvme_cache_dir:
@@ -453,28 +452,32 @@ def get_dataloaders(
                     "tokenized_dataset_path is S3 but local_nvme_cache_dir is not set. "
                     "Training must stage shards to local NVMe first."
                 )
-            resolved_tokenized_path = _stage_s3_dataset_to_local_nvme(
+            tokenized_dataset_path = _stage_s3_dataset_to_local_nvme(
                 tokenized_dataset_path, local_nvme_cache_dir
             )
 
         if require_local_nvme and local_nvme_cache_dir:
             nvme_root = Path(local_nvme_cache_dir).expanduser().resolve()
-            resolved = Path(resolved_tokenized_path).expanduser().resolve()
+            resolved = Path(tokenized_dataset_path).expanduser().resolve()
             if nvme_root not in resolved.parents and resolved != nvme_root:
                 raise RuntimeError(
                     "require_local_nvme=True but tokenized dataset path is outside local NVMe root."
                 )
 
         print_rank_0(
-            f"Loading pre-tokenized dataset from disk: {resolved_tokenized_path}"
+            f"Loading pre-tokenized dataset from disk: {tokenized_dataset_path}"
         )
-        tokenized_dataset = load_from_disk(resolved_tokenized_path)
+        tokenized_dataset = load_from_disk(tokenized_dataset_path)
     else:
         if require_local_nvme:
             raise RuntimeError(
                 "require_local_nvme=True requires tokenized_dataset_path (local or s3://). "
                 "Online tokenization path is disabled."
             )
+
+        assert (
+            dataset_name is not None
+        ), "dataset name should be given if tokenized dataset path is not given"
 
         print_rank_0(f"Loading dataset: {dataset_name} ({dataset_config})")
         dataset = load_dataset(
@@ -668,7 +671,7 @@ def get_dataloaders(
         "train_sampler": train_sampler,
         "eval_sampler": eval_sampler,
         "test_sampler": test_sampler,
-        "resolved_tokenized_dataset_path": resolved_tokenized_path,
+        "resolved_tokenized_dataset_path": tokenized_dataset_path,
         "worker_config": {
             "num_workers": train_loader.num_workers,
             "persistent_workers": persistent_workers,

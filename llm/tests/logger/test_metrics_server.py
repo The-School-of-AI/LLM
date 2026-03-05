@@ -5,7 +5,7 @@ import time
 import urllib.error
 import urllib.request
 
-from llm.logger.metrics_server import MetricsServer
+from llm.logger.p12.metrics_server import MetricsServer
 
 
 def test_metrics_server():

@@ -1,0 +1,128 @@
+run_id: my_run_001
+output_dir: ../_data/output
+
+data:
+  tokenizer_dir: ../_data/tokenizer
+  max_length: 128
+  dataset_name: wikitext
+  dataset_config: wikitext-2-raw-v1
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes: [128]
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+  num_workers: 1
+  tokenize_num_proc: null
+
+model:
+  variant: 1b_reversible
+  embedding_type: kronecker
+  overrides:
+    vocab_size: 131072
+    hidden_size: 512 # Down from 4096 — biggest VRAM saving
+    num_layers: 2
+
+    # Attention Mix (1 of each)
+    num_deltanet_layers: 1
+    num_gsa_layers: 1
+
+    # DeltaNet — heads must satisfy: num_heads * head_dim == hidden_size
+    delta_v_heads: 4 # 512 / 128 = 4
+    delta_head_dim: 128
+    delta_gate_dim: 64 # ~12% of hidden_size
+
+    # GSA — head_dim = hidden_size / num_heads
+    gsa_num_heads: 4 # 512 / 128 = 4
+    gsa_head_dim: 128 # Down from 256
+    gsa_k_base: 32
+    gsa_k_min: 4
+    gsa_k_max: 64
+    gsa_indexer_heads: 2
+
+    # MoE (dense, no change needed)
+    num_real_experts: 0
+    num_null_experts: 0
+    total_expert_slots: 0
+    top_k: 0
+    expert_intermediate_size: 512
+    shared_expert_intermediate_size: 512 # Down from 2048
+    data_sparsity: 0.0
+
+    # MTP
+    enable_mtp: false
+    mtp_num_predictions: 1
+
+    # mHC — n_streams=2 instead of 4 cuts stream memory in half
+    n_streams: 2
+    sinkhorn_iters: 5 # 20 is overkill for a forward pass check
+
+    # Context — keep short for the test
+    max_seq_len: 4096
+    rope_base: 10000
+    rope_original_max_position: 4096
+    rope_scaling_factor: 1.0
+
+    # Training
+    dropout: 0.0
+    require_fused_deltanet_kernel: true
+    require_fused_gsa_kernel: true
+
+training:
+  max_epochs: 1
+  eval_interval: 500
+  max_steps_per_epoch: 20
+  max_val_steps: 1
+  log_interval: 10
+  generation_interval: 0
+  deepspeed_config: ./zero-0.yaml
+  seed: 42
+  require_fused_kernels: true
+  fused_ce_chunk_gb: 16.0
+  profile_steps: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+  flops_profiler_step: null
+  check_for_gsa_leak: false
+
+checkpoint:
+  save_interval: 500
+  backend: none # "s3" | "none"
+  resume_from: null
+  resume_step: 0
+  s3: null
+  # Uncomment and fill in if backend: s3
+  # s3:
+  #   bucket: my-training-bucket
+  #   prefix: training/checkpoints
+  #   region: us-east-1
+  #   keep_last_n: 3
+  #   cleanup_after_upload: false
+  #   max_concurrency: 10
+  #   max_retries: 3
+
+observability:
+  backend: none # "none" | "p12"
+  p12: null
+  # Uncomment and fill in if backend: p12
+  # p12:
+  #   log_dir: /tmp/training_logs
+  #   metrics_port: 8000
+  #   system_metrics_interval: 5.0
+  #   vector_service_name: p12-vector.service
+  #   skip_vector_check: false
+  #   check_clickhouse_preflight: false
+  #   clickhouse_url: null
+  #   clickhouse_user: null
+  #   clickhouse_password: null
+  #   clickhouse_ca_cert: null
+
+generation:
+  prompt: "The history of artificial intelligence begins with"
+  max_new_tokens: 200
+  temperature: 0.8
+  top_k: 50
+  top_p: 0.92
+  greedy: false

@@ -32,17 +32,16 @@ import os
 import shutil
 import ssl
 import subprocess
-import sys
 import urllib.parse
 import urllib.request
 
-from llm.logger.checkpoint_registry import CheckpointRegistry
-from llm.logger.metrics_server import MetricsServer
-from llm.logger.system_metrics.collector import SystemMetricsCollector
-from llm.logger.train_logger.json_logger import JSONLogger
+from llm.logger import Logger
+from llm.logger.p12.metrics_server import MetricsServer
+from llm.logger.p12.system_metrics.collector import SystemMetricsCollector
+from llm.logger.p12.train_logger.json_logger import JSONLogger
 
 
-class TrainingOps:
+class TrainingOps(Logger):
     """
     Facade that boots all P12 backend services and exposes a minimal API
     for the training team.
@@ -163,14 +162,6 @@ class TrainingOps:
         self.metrics_server.config["training"]["metrics_port"] = metrics_port
         self.metrics_server.start(system_collector=self.system_collector)
 
-        # ---- CheckpointRegistry (ClickHouse-backed) ----
-        self.checkpoint_registry = CheckpointRegistry(
-            clickhouse_url=self._clickhouse_url,
-            user=self._ch_user,
-            password=self._ch_password,
-            ca_cert=self._ch_ca_cert,
-        )
-
         print("=" * 60)
         print("  P12 TrainingOps — ready")
         print("=" * 60)
@@ -184,14 +175,9 @@ class TrainingOps:
         if self._vector_service_name:
             systemctl_bin = shutil.which("systemctl")
             if systemctl_bin is None:
-                print("=" * 60)
-                print(
-                    "  FATAL: systemctl not found; cannot verify Vector service health."
+                raise RuntimeError(
+                    "systemctl not found; cannot verify Vector service health"
                 )
-                print()
-                print(f"  Expected active service: {self._vector_service_name}")
-                print("=" * 60)
-                sys.exit(1)
 
             try:
                 result = subprocess.run(
@@ -205,18 +191,14 @@ class TrainingOps:
                     )
                     return
             except Exception:
-                pass
-
-            print("=" * 60)
-            print("  FATAL: Vector service is not active!")
-            print()
-            print(f"  Expected service: {self._vector_service_name}")
-            print("  Check service status:")
-            print(f"    systemctl --no-pager --full status {self._vector_service_name}")
-            print("  Inspect logs:")
-            print(f"    journalctl -u {self._vector_service_name} -n 200 --no-pager")
-            print("=" * 60)
-            sys.exit(1)
+                raise RuntimeError(
+                    f"\n  FATAL: Vector service is not active!\n"
+                    f"\n  Expected service: {self._vector_service_name}\n"
+                    f"  Check service status:\n"
+                    f"    systemctl --no-pager --full status {self._vector_service_name}\n"
+                    f"  Inspect logs:\n"
+                    f"    journalctl -u {self._vector_service_name} -n 200 --no-pager"
+                )
 
         # Check for vector binary first
         vector_bin = shutil.which("vector")
@@ -239,18 +221,12 @@ class TrainingOps:
                 print(f"✓ Preflight: Vector is running (PID: {', '.join(pids)})")
                 return
         except Exception:
-            pass
-
-        # Not running — fatal
-        print("=" * 60)
-        print("  FATAL: Vector sidecar is not running!")
-        print()
-        print("  Training logs will not be shipped to ClickHouse.")
-        print("  Start Vector before launching training:")
-        print()
-        print("    vector --config /path/to/vector.toml")
-        print("=" * 60)
-        sys.exit(1)
+            raise RuntimeError(
+                "\n  FATAL: Vector sidecar is not running!\n"
+                "\n  Training logs will not be shipped to ClickHouse.\n"
+                "  Start Vector before launching training:\n"
+                "\n    vector --config /path/to/vector.toml"
+            )
 
     def _check_clickhouse(self):
         """Verify ClickHouse is reachable (with auth). WARN if not (Vector buffers)."""
@@ -370,122 +346,12 @@ class TrainingOps:
         }
         self.logger.log_step(step=step, metrics={}, context=array_context)
 
-    def log_checkpoint(
-        self,
-        step: int,
-        path: str,
-        s3_key: str | None = None,
-        loss: float = 0.0,
-        tag: str = "temporary",
-        duration_s: float = 0.0,
-        size_bytes: int = 0,
-        metadata: dict | None = None,
-    ):
-        """
-        Record a checkpoint after it has been saved.
-
-        The canonical path stored is ``s3_key`` if provided, otherwise ``path``
-        (local filesystem).  Both are recorded in metadata for traceability.
-
-        Data flow (two paths to ClickHouse ``checkpoints`` table):
-
-          1. **Durable (guaranteed):** JSONL → Vector ``to_checkpoints``
-             transform → ClickHouse ``checkpoints`` table.  Works even if
-             ClickHouse is temporarily unreachable — Vector buffers & retries.
-          2. **Fast path (best-effort):** Direct HTTP INSERT via
-             ``CheckpointRegistry``.  Gives immediate query-ability but may
-             fail if ClickHouse is down.  The durable path catches up.
-
-        Additionally:
-          3. The same JSONL line also flows through ``to_raw_logs`` →
-             ClickHouse ``logs`` table (audit trail).
-          4. MetricsServer counters updated (live dashboard).
-
-        Parameters
-        ----------
-        step : int
-            Training step at which the checkpoint was saved.
-        path : str
-            Local filesystem path where the checkpoint was saved.
-        s3_key : str | None
-            S3 URI if the checkpoint was uploaded. Preferred canonical path.
-        loss : float
-            Loss value at checkpoint time.
-        tag : str
-            Governance tag: "temporary", "growth", "lora", "release_candidate".
-        duration_s : float
-            How long the save took (seconds).
-        size_bytes : int
-            Checkpoint file size.
-        metadata : dict | None
-            Arbitrary extra metadata.
-        """
-        canonical_path = s3_key or path
-
-        # 1. Durable path: JSONL → Vector → ClickHouse (logs + checkpoints tables)
-        #    Vector's to_checkpoints transform filters on context.event == "checkpoint_saved"
-        #    and maps the fields to the checkpoints table schema.
-        ckpt_metrics = {
-            "checkpoint_step": step,
-            "checkpoint_loss": loss,
-            "checkpoint_duration_s": duration_s,
-            "checkpoint_size_bytes": size_bytes,
-        }
-        ckpt_context = {
-            "event": "checkpoint_saved",
-            "path": path,
-            "s3_key": s3_key or "",
-            "tag": tag,
-            "canonical_path": canonical_path,
-        }
-        if metadata:
-            ckpt_context["metadata"] = metadata  # type: ignore
-        self.logger.log_step(step=step, metrics=ckpt_metrics, context=ckpt_context)
-
-        # Also write a typed event for dashboards/alerts.
-        self.log_event(
-            step=step,
-            event_type="checkpoint_saved",
-            message=f"Checkpoint saved: {canonical_path}",
-            severity="info",
-            payload={
-                "path": path,
-                "s3_key": s3_key or "",
-                "canonical_path": canonical_path,
-                "tag": tag,
-                "duration_s": duration_s,
-                "size_bytes": size_bytes,
-            },
-        )
-
-        # 2. Fast path (best-effort): direct INSERT for immediate query-ability.
-        #    If this fails, the durable JSONL path above guarantees delivery.
-        try:
-            self.checkpoint_registry.register_checkpoint(
-                run_id=self.run_id,
-                step=step,
-                s3_key=canonical_path,
-                loss=loss,
-                tag=tag,
-                duration_s=duration_s,
-                size_bytes=size_bytes,
-                metadata=metadata,
-            )
-        except Exception as e:
-            print(f"⚠ TrainingOps: direct checkpoint registry insert failed: {e}")
-            print("  (durable path: JSONL → Vector will deliver it)")
-
-        # 3. Live metrics
-        self.metrics_server.record_checkpoint(duration_s, success=True)
-
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     def shutdown(self):
         """Gracefully stop all P12 services."""
-        print("\nP12 TrainingOps — shutting down...")
         self.logger.close()
-        self.metrics_server.stop()
         # system_collector is stopped by metrics_server.stop()
-        print("P12 TrainingOps — shutdown complete.")
+        self.metrics_server.stop()

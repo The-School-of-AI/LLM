@@ -10,6 +10,7 @@ Centralized Triton kernels and PyTorch fallbacks for:
 """
 
 from .compat import HAS_TRITON
+from .triton_cross_entropy import FusedLinearCrossEntropyLoss
 from .triton_delta_entrance import fused_delta_entrance
 from .triton_indexer import pytorch_gated_indexer, triton_gated_indexer
 from .triton_indexer_streaming import fused_indexer_topk, streaming_indexer_variance
@@ -36,4 +37,5 @@ __all__ = [
     "fused_indexer_topk",
     "streaming_indexer_variance",
     "fused_delta_entrance",
+    "FusedLinearCrossEntropyLoss",
 ]

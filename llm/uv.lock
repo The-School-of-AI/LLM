@@ -636,6 +636,18 @@ wheels = [
 ]
 
 [[package]]
+name = "jsonargparse"
+version = "4.46.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6a/0f/333d4aa9c62edf3cf2c11f5bac8f487ece29b94be7ea2c6acb1a9265a723/jsonargparse-4.46.0.tar.gz", hash = "sha256:4c331448841fea9cb2b41bf99adbea70a63f82cac516f2f13030378b3d93c329", size = 222042, upload-time = "2026-02-02T10:29:13.837Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c0/6d/55e0db968193fcb12a3b4a9d823f6f9c8a39df1e28345daa3772b61f4389/jsonargparse-4.46.0-py3-none-any.whl", hash = "sha256:1f218fc2af1190c6425860e40af2003c8ca1f59e10d656fc67bbc32380a25ec3", size = 246093, upload-time = "2026-02-02T10:29:11.837Z" },
+]
+
+[[package]]
 name = "llm"
 version = "0.1.0"
 source = { editable = "." }
@@ -644,12 +656,14 @@ dependencies = [
     { name = "datasets" },
     { name = "deepspeed" },
     { name = "flash-linear-attention" },
+    { name = "jsonargparse" },
     { name = "numpy" },
     { name = "nvidia-ml-py" },
     { name = "psutil" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "torch" },
+    { name = "tqdm" },
     { name = "transformers" },
     { name = "triton", marker = "sys_platform == 'linux'" },
 ]
@@ -665,12 +679,14 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.6.0" },
     { name = "deepspeed", specifier = ">=0.18.6" },
     { name = "flash-linear-attention", specifier = ">=0.4.1" },
+    { name = "jsonargparse", specifier = ">=4.46.0" },
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "nvidia-ml-py", specifier = ">=13.590.48" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "torch", specifier = ">=2.9.1" },
+    { name = "tqdm", specifier = ">=4.67.3" },
     { name = "transformers", specifier = ">=5.2.0" },
     { name = "triton", marker = "sys_platform == 'linux'", specifier = ">=3.6.0" },
 ]

@@ -52,7 +52,8 @@ import os
 import queue
 import threading
 import time as _time
-from contextlib import contextmanager
+from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -302,10 +303,99 @@ class StepRecord:
         return row
 
 
+# ─── Abstract base class ─────────────────────────────────────────────────────
+
+
+class BaseStepProfiler(ABC):
+    """
+    Abstract interface for step-level profilers.
+
+    Both the real StepProfiler and the no-op variant implement this contract,
+    so call-sites in train.py can accept either without any conditional logic.
+    """
+
+    @abstractmethod
+    def activate(self):
+        """Register this profiler as the global singleton."""
+        ...
+
+    @abstractmethod
+    def deactivate(self):
+        """Remove this profiler from the global singleton."""
+        ...
+
+    @abstractmethod
+    def register_model(self, model):
+        """Attach timing hooks to the model's sub-modules."""
+        ...
+
+    @abstractmethod
+    def start_step(self, global_step: int, tokens: int = 0):
+        """Call just before the forward pass of a step."""
+        ...
+
+    @abstractmethod
+    def end_step(self, tokens: int = 0):
+        """Call after optimizer.step() to finalise and emit the step record."""
+        ...
+
+    @abstractmethod
+    def phase(self, name: str) -> AbstractContextManager:
+        """Context manager that times a coarse training phase."""
+        ...
+
+    @abstractmethod
+    def write_report(self, path: Optional[str] = None):
+        """Write a human-readable summary table."""
+        ...
+
+    @abstractmethod
+    def write_jsonl(self, path: Optional[str] = None):
+        """Write all collected step records to a JSONL file."""
+        ...
+
+
+# ─── No-op implementation ────────────────────────────────────────────────────
+
+
+class NoOpStepProfiler(BaseStepProfiler):
+    """
+    A profiler that does nothing.
+
+    Use this as a drop-in replacement for StepProfiler when profiling is
+    disabled, eliminating all ``if profiler is not None`` guards at call-sites.
+    """
+
+    def activate(self):
+        pass
+
+    def deactivate(self):
+        pass
+
+    def register_model(self, model):
+        pass
+
+    def start_step(self, global_step: int, tokens: int = 0):
+        pass
+
+    def end_step(self, tokens: int = 0):
+        pass
+
+    @contextmanager
+    def phase(self, name: str):
+        yield
+
+    def write_report(self, path: Optional[str] = None):
+        pass
+
+    def write_jsonl(self, path: Optional[str] = None):
+        pass
+
+
 # ─── Main profiler class ─────────────────────────────────────────────────────
 
 
-class StepProfiler:
+class StepProfiler(BaseStepProfiler):
     """
     Collects per-step kernel and layer timing for the 1B recurrence model.
 
@@ -611,7 +701,7 @@ class StepProfiler:
             "\n── Step Phases ──────────────────────────────────────────────────"
         )
         lines.append(f"  {'Region':<30}  {'ms':>8}  {'%step':>7}")
-        lines.append(f"  {'-'*30}  {'-'*8}  {'-'*7}")
+        lines.append(f"  {'-' * 30}  {'-' * 8}  {'-' * 7}")
         step_total = avgs.get(
             "step_total", sum(avgs.get(k, 0) for k in phase_keys) or 1
         )
@@ -625,7 +715,7 @@ class StepProfiler:
             "\n── Per-Layer Forward (ms) ───────────────────────────────────────"
         )
         lines.append(f"  {'Layer':<38}  {'fwd ms':>8}")
-        lines.append(f"  {'-'*38}  {'-'*8}")
+        lines.append(f"  {'-' * 38}  {'-' * 8}")
         layer_keys = sorted(
             k for k in avgs if k.startswith("layer") and k.endswith(".fwd")
         )
@@ -667,7 +757,7 @@ class StepProfiler:
                 "\n── Kernel-Type Totals (all layers summed) ───────────────────────"
             )
             lines.append(f"  {'Kernel':<30}  {'total ms':>10}")
-            lines.append(f"  {'-'*30}  {'-'*10}")
+            lines.append(f"  {'-' * 30}  {'-' * 10}")
             for ktype, total_ms in sorted(kernel_totals.items(), key=lambda x: -x[1]):
                 lines.append(f"  {ktype:<30}  {total_ms:>10.2f}")
 
@@ -676,7 +766,7 @@ class StepProfiler:
             "\n── Granular Kernel Operations (avg per call) ────────────────────"
         )
         lines.append(f"  {'Operation':<52}  {'per-call ms':>10}  {'calls':>8}")
-        lines.append(f"  {'-'*52}  {'-'*10}  {'-'*8}")
+        lines.append(f"  {'-' * 52}  {'-' * 10}  {'-' * 8}")
 
         # Filter for detailed kernel operations (those with dots indicating nesting)
         detailed_ops = sorted(
@@ -699,7 +789,7 @@ class StepProfiler:
             "\n── All Regions (sorted by avg ms) ───────────────────────────────"
         )
         lines.append(f"  {'Region':<44}  {'avg ms':>8}  {'calls':>6}  {'per-call':>8}")
-        lines.append(f"  {'-'*44}  {'-'*8}  {'-'*6}  {'-'*8}")
+        lines.append(f"  {'-' * 44}  {'-' * 8}  {'-' * 6}  {'-' * 8}")
         for k, v in sorted(avgs.items(), key=lambda x: -x[1])[:60]:
             calls = region_counts[k]
             per_call_ms = v / (calls / n) if calls > 0 else 0
@@ -825,7 +915,7 @@ class PipelineProfiler:
         lines.append(
             f"  {'Stage':<35}  {'Time':>10}  {'%total':>7}  {'Cumulative':>11}"
         )
-        lines.append(f"  {'-'*35}  {'-'*10}  {'-'*7}  {'-'*11}")
+        lines.append(f"  {'-' * 35}  {'-' * 10}  {'-' * 7}  {'-' * 11}")
 
         cumulative = 0.0
         for name, t0, t1, meta in self._records:
@@ -855,7 +945,7 @@ class PipelineProfiler:
                 f"  {'(unaccounted / gaps)':<35}  {_fmt_duration(unaccounted):>10}  {pct:>6.1f}%"
             )
 
-        lines.append(f"  {'-'*35}  {'-'*10}  {'-'*7}  {'-'*11}")
+        lines.append(f"  {'-' * 35}  {'-' * 10}  {'-' * 7}  {'-' * 11}")
         lines.append(
             f"  {'TOTAL':<35}  {_fmt_duration(total_elapsed):>10}  {'100.0%':>7}"
         )
