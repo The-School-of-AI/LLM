@@ -465,23 +465,40 @@ PIPELINE_PID=$!
 echo "[OK] Pipeline launched (PID: ${PIPELINE_PID})"
 
 # ==============================================================================
-# 7b. Background S3 Sync (every 15 minutes)
+# 7b. Background S3 Sync (every 10 minutes)
 # ==============================================================================
 SYNC_PID=""
+S3_SYNC_INTERVAL="${S3_SYNC_INTERVAL:-600}"  # 10 minutes (configurable)
+
+_s3_sync_once() {
+    local ts
+    ts="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo "[S3 SYNC] ${ts} Syncing outputs to ${S3_SYNC_DEST}..."
+    # Sync NVMe outputs (indices, manifests, used_chunks DB)
+    if ! aws s3 sync "${CORESET_OUTPUT_DIR}" "${S3_SYNC_DEST}/coresets/" --only-show-errors --no-progress 2>&1; then
+        echo "[S3 SYNC] ${ts} ERROR: coresets sync failed"
+    fi
+    if ! aws s3 sync "${MANIFEST_OUTPUT_DIR}" "${S3_SYNC_DEST}/manifests/" --only-show-errors --no-progress 2>&1; then
+        echo "[S3 SYNC] ${ts} ERROR: manifests sync failed"
+    fi
+    # Sync EBS outputs (checkpoints)
+    if ! aws s3 sync "output/checkpoints/" "${S3_SYNC_DEST}/checkpoints/" --only-show-errors --no-progress 2>&1; then
+        echo "[S3 SYNC] ${ts} ERROR: checkpoints sync failed"
+    fi
+    echo "[S3 SYNC] $(date '+%Y-%m-%d %H:%M:%S') Sync complete."
+}
+
 if [ -n "${S3_SYNC_DEST}" ]; then
-    echo "### [7b] Starting Background S3 Sync (every 15 min) ###"
+    echo "### [7b] Starting Background S3 Sync (every $((S3_SYNC_INTERVAL / 60)) min) ###"
     echo "  Sync destination: ${S3_SYNC_DEST}"
     (
         while kill -0 ${PIPELINE_PID} 2>/dev/null; do
-            sleep 900  # 15 minutes
-            echo "[S3 SYNC] $(date '+%Y-%m-%d %H:%M:%S') Syncing outputs to ${S3_SYNC_DEST}..."
-            # Sync NVMe outputs (indices, manifests, used_chunks DB)
-            aws s3 sync "${CORESET_OUTPUT_DIR}" "${S3_SYNC_DEST}/coresets/" --quiet --no-progress 2>&1 || true
-            aws s3 sync "${MANIFEST_OUTPUT_DIR}" "${S3_SYNC_DEST}/manifests/" --quiet --no-progress 2>&1 || true
-            # Sync EBS outputs (checkpoints)
-            aws s3 sync "output/checkpoints/" "${S3_SYNC_DEST}/checkpoints/" --quiet --no-progress 2>&1 || true
-            echo "[S3 SYNC] $(date '+%Y-%m-%d %H:%M:%S') Sync complete."
+            sleep ${S3_SYNC_INTERVAL}
+            _s3_sync_once
         done
+        # Final sync after pipeline exits
+        echo "[S3 SYNC] Pipeline finished. Running final sync..."
+        _s3_sync_once
     ) >> s3_sync.log 2>&1 &
     SYNC_PID=$!
     echo "[OK] Background S3 sync started (PID: ${SYNC_PID})"
@@ -503,7 +520,7 @@ echo "    Manifest Output: ${MANIFEST_OUTPUT_DIR}"
 echo "    Checkpoints:     output/checkpoints/ (EBS)"
 if [ -n "${S3_SYNC_DEST}" ]; then
     echo "    S3 Destination:  ${S3_SYNC_DEST}"
-    echo "    Sync Interval:   Every 15 minutes"
+    echo "    Sync Interval:   Every $((S3_SYNC_INTERVAL / 60)) minutes (+ auto final sync)"
 fi
 echo ""
 echo "  After pipeline finishes, run post-run validation:"
@@ -516,11 +533,4 @@ echo "    python3 ${ENGINE_DIR}/tools/validate_coreset_outputs.py \\"
 echo "        --curriculum ${ENGINE_DIR}/config/curriculum.yaml \\"
 echo "        --output-dir ${CORESET_OUTPUT_DIR} \\"
 echo "        --stages ${STAGES} --format both"
-if [ -n "${S3_SYNC_DEST}" ]; then
-    echo ""
-    echo "    # Final S3 sync (run after pipeline completes):"
-    echo "    aws s3 sync ${CORESET_OUTPUT_DIR} ${S3_SYNC_DEST}/coresets/ --quiet"
-    echo "    aws s3 sync ${MANIFEST_OUTPUT_DIR} ${S3_SYNC_DEST}/manifests/ --quiet"
-    echo "    aws s3 sync output/checkpoints/ ${S3_SYNC_DEST}/checkpoints/ --quiet"
-fi
 echo "-----------------------------------------------------------------------"
