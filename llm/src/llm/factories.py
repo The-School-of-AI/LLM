@@ -12,6 +12,7 @@ from llm.checkpoint import S3CheckpointManager
 from llm.config import (
     CheckpointConfig,
     DataConfig,
+    LossSpikeConfig,
     ModelConfig,
     ObservabilityConfig,
     TrainingConfig,
@@ -168,6 +169,23 @@ def build_step_profiler(
     return StepProfiler(
         rank=rank,
         profile_steps=set(cfg.profile_steps),
+    )
+
+
+def build_loss_spike_detector(
+    cfg: LossSpikeConfig,
+) -> "LossSpikeDetector | None":
+    """Build a LossSpikeDetector from config, or None if disabled."""
+    if not cfg.enabled:
+        return None
+
+    from llm.loss_spike_recovery import LossSpikeDetector
+
+    return LossSpikeDetector(
+        window_size=cfg.window_size,
+        z_threshold=cfg.z_threshold,
+        min_spike_ratio=cfg.min_spike_ratio,
+        min_abs_delta=cfg.min_abs_delta,
     )
 
 

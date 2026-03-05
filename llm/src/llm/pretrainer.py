@@ -10,8 +10,13 @@ import llm.factories as ft
 from llm.config import Config
 from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
+from llm.loss_spike_recovery import (
+    RecoveryAction,
+    broadcast_action,
+    prompt_user_for_action,
+)
 from llm.profiler import PipelineProfiler
-from llm.utils import is_main_process
+from llm.utils import is_main_process, print_rank_0
 
 
 class PreTrainer:
@@ -62,6 +67,10 @@ class PreTrainer:
         self._step_profiler.activate()
         self._step_profiler.register_model(self._engine.module)
 
+        self._spike_detector = ft.build_loss_spike_detector(c.training.loss_spike)
+        self._spike_config = c.training.loss_spike
+        self._last_checkpoint_tag: str | None = None
+
     def run(self):
         start_epoch, start_step, global_step = self._resume()
         max_epochs = self._config.training.max_epochs
@@ -69,7 +78,8 @@ class PreTrainer:
         device = self._engine.device
         ckpt_interval = self._config.checkpoint.save_interval
 
-        for epoch in range(start_epoch, max_epochs):
+        epoch = start_epoch
+        while epoch < max_epochs:
             if self._train_sampler:
                 self._train_sampler.set_epoch(epoch)
 
@@ -79,6 +89,7 @@ class PreTrainer:
 
             steps = 0
             total_loss = 0.0
+            rolled_back = False
             self._engine.train()
             for step, batch in enumerate(progress_bar):
                 if step < start_step:
@@ -100,6 +111,25 @@ class PreTrainer:
                     loss, forward_metrics = self._forward(
                         epoch, step, input_ids, attention_mask
                     )
+
+                # --- Loss spike detection ---
+                if self._spike_detector is not None and self._spike_detector.update(
+                    loss.item()
+                ):
+                    action = self._handle_loss_spike(epoch, step, global_step)
+                    if action in (RecoveryAction.SKIP_BATCH, RecoveryAction.REDUCE_LR):
+                        self._step_profiler.end_step()
+                        global_step += 1
+                        steps += 1
+                        continue
+                    elif action == RecoveryAction.ROLLBACK_CHECKPOINT:
+                        epoch, start_step, global_step = (
+                            self._rollback_to_checkpoint()
+                        )
+                        rolled_back = True
+                        break  # restart the while loop at the restored epoch
+                    # IGNORE falls through to normal backward + optimizer step
+
                 with self._step_profiler.phase("step/train_backward"):
                     self._backward(loss)
                 with self._step_profiler.phase("step/train_optimizer_step"):
@@ -121,6 +151,7 @@ class PreTrainer:
                         global_step,
                         loss=loss.item(),
                     )
+                    self._last_checkpoint_tag = f"epoch_{epoch}_step_{step}"
 
                 global_step += 1
                 steps += 1
@@ -137,6 +168,10 @@ class PreTrainer:
                 if max_steps_per_epoch is not None and step >= max_steps_per_epoch:
                     break
 
+            # If we broke out due to rollback, restart without advancing epoch.
+            if rolled_back:
+                continue
+
             start_step = 0
             avg_loss = total_loss / steps if steps > 0 else 0
 
@@ -152,6 +187,8 @@ class PreTrainer:
                 val_loss=val_loss,
                 val_perplexity=val_perplexity,
             )
+            self._last_checkpoint_tag = f"epoch_{epoch + 1}_step_0"
+            epoch += 1
 
         self._cleanup()
 
@@ -413,6 +450,80 @@ class PreTrainer:
             }
             | kwargs,
         )
+
+    def _handle_loss_spike(
+        self, epoch: int, step: int, global_step: int
+    ) -> RecoveryAction:
+        """Prompt the user for a recovery action and execute it. Returns the chosen action."""
+        stats = self._spike_detector.get_stats()
+        current_lr = self._engine.optimizer.param_groups[0]["lr"]
+
+        # Rank 0 prompts the user; all other ranks wait for the broadcast.
+        if is_main_process():
+            action = prompt_user_for_action(
+                stats=stats,
+                epoch=epoch,
+                step=step,
+                global_step=global_step,
+                current_lr=current_lr,
+                lr_reduction_factor=self._spike_config.lr_reduction_factor,
+                last_checkpoint_tag=self._last_checkpoint_tag,
+                timeout=self._spike_config.user_prompt_timeout,
+            )
+        else:
+            action = RecoveryAction.SKIP_BATCH  # placeholder, overwritten by broadcast
+
+        action = broadcast_action(action, src=0)
+
+        # Log the spike event.
+        spike_metrics = Metrics()
+        spike_metrics.add("spike_detected", True)
+        spike_metrics.add("spike_action", action.name)
+        spike_metrics.add("spike_loss", stats["current_loss"])
+        spike_metrics.add("spike_window_mean", stats["window_mean"])
+        self._logger.log_metrics(global_step, spike_metrics)
+
+        # Execute the chosen action.
+        if action == RecoveryAction.REDUCE_LR:
+            factor = self._spike_config.lr_reduction_factor
+            for pg in self._engine.optimizer.param_groups:
+                pg["lr"] *= factor
+            print_rank_0(
+                f"  LR reduced by {factor}x -> {self._engine.optimizer.param_groups[0]['lr']:.2e}"
+            )
+
+        return action
+
+    def _rollback_to_checkpoint(self) -> tuple[int, int, int]:
+        """
+        Reload model, optimizer, and training state from the last saved checkpoint.
+
+        Returns (start_epoch, start_step, global_step) to resume from.
+        """
+        tag = self._last_checkpoint_tag
+        if tag is None or self._ckpt_manager is None:
+            raise RuntimeError(
+                "Rollback requested but no checkpoint is available. "
+                "Ensure checkpoint.save_interval is configured."
+            )
+
+        print_rank_0(f"  Rolling back to checkpoint '{tag}' ...")
+
+        client_state = self._ckpt_manager.load_checkpoint(
+            self._engine, step=0, tag=tag
+        )
+
+        if client_state:
+            start_epoch = client_state.get("epoch", 0)
+            start_step = client_state.get("step", 0)
+            global_step = client_state.get("global_step", 0)
+        else:
+            start_epoch, start_step, global_step = 0, 0, 0
+
+        print_rank_0(
+            f"  Rolled back to epoch={start_epoch}, step={start_step}, global_step={global_step}"
+        )
+        return start_epoch, start_step, global_step
 
     def _generate(self):
         pass

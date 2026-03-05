@@ -42,6 +42,32 @@ class ModelConfig:
 
 
 @dataclass
+class LossSpikeConfig:
+    """Configuration for loss spike detection and recovery."""
+
+    # Enable / disable loss spike detection entirely.
+    enabled: bool = True
+
+    # Number of recent loss values kept in the sliding window.
+    window_size: int = 100
+
+    # Z-score threshold: flag spike when loss > mean + z_threshold * std.
+    z_threshold: float = 3.0
+
+    # Ratio guard: also flag when loss > min_spike_ratio * mean.
+    min_spike_ratio: float = 2.0
+
+    # Minimum absolute increase (loss - mean) to avoid nuisance alerts.
+    min_abs_delta: float = 0.5
+
+    # Factor by which LR is multiplied when the "Reduce LR" action is chosen.
+    lr_reduction_factor: float = 0.5
+
+    # Seconds to wait for user input before auto-selecting the default action.
+    user_prompt_timeout: int = 300
+
+
+@dataclass
 class TrainingConfig:
     """Configuration for the training loop."""
 
@@ -90,6 +116,9 @@ class TrainingConfig:
     flops_profiler_step: int | None = None
 
     check_for_gsa_leak: bool = False
+
+    # Loss spike detection and recovery configuration.
+    loss_spike: LossSpikeConfig = field(default_factory=LossSpikeConfig)
 
 
 @dataclass
