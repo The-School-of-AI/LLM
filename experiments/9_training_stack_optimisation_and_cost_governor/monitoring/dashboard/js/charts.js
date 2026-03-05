@@ -39,6 +39,8 @@ export async function generateCharts() {
         const hasData = state.selectedRuns.some(r => (runDataMap[r.run_id]?.[metric] || []).length > 0);
         if (hasData) createChart(grid, metric, runDataMap, i);
     });
+
+    setupDragAndDrop(grid);
 }
 
 // ─── Create a single chart card ───
@@ -49,6 +51,8 @@ function createChart(container, metric, runDataMap, idx) {
 
     const card = document.createElement('div');
     card.className = 'chart-card' + (state.expandedMetrics.has(metric) ? ' expanded' : '');
+    card.draggable = true;
+    card.dataset.metric = metric;
 
     const ps = stats(firstData);
     const cvId = `cv${idx}`;
@@ -72,11 +76,16 @@ function createChart(container, metric, runDataMap, idx) {
         ` : ''}
         <button class="chart-tool-btn chart-tool-expand" data-action="expand" data-cv="${cvId}" data-metric="${metric}" title="Expand / Collapse">${isExpanded ? ICON.collapse : ICON.expand}</button>
         <button class="chart-tool-btn" data-action="download" data-cv="${cvId}" data-metric="${metric}" title="Download as PNG">${ICON.download}</button>
+        <div class="chart-tool-sep"></div>
+        <button class="chart-tool-btn chart-tool-close" data-action="close" data-cv="${cvId}" data-metric="${metric}" title="Remove chart">${ICON.close}</button>
     </div>`;
 
     card.innerHTML = `
         <div class="chart-header">
-            <div class="chart-name">${metric}</div>
+            <div class="chart-title-area">
+                <div class="chart-drag-handle" title="Drag to reorder">${ICON.grip}</div>
+                <div class="chart-name">${metric}</div>
+            </div>
             ${toolbarHtml}
         </div>
         <div class="chart-stats-row">
@@ -101,6 +110,8 @@ function createChart(container, metric, runDataMap, idx) {
             btn.addEventListener('click', () => chartToggleExpand(cvId, metric));
         } else if (action === 'download') {
             btn.addEventListener('click', () => chartDownload(cvId, metric));
+        } else if (action === 'close') {
+            btn.addEventListener('click', () => removeChart(cvId, metric, card));
         }
     });
 
@@ -266,6 +277,73 @@ function chartToggleExpand(cvId, metric) {
     if (btn) btn.innerHTML = expanding ? ICON.collapse : ICON.expand;
     const chart = state.chartInsts[cvId];
     if (chart) setTimeout(() => chart.resize(), 280);
+}
+
+// ─── Remove a single chart without re-fetching ───
+function removeChart(cvId, metric, card) {
+    state.selectedMetrics.delete(metric);
+    state.expandedMetrics.delete(metric);
+    const chart = state.chartInsts[cvId];
+    if (chart) { chart.destroy(); delete state.chartInsts[cvId]; }
+    card.remove();
+    // Uncheck the sidebar checkbox
+    const id = `m-${metric.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    const cb = document.getElementById(id);
+    if (cb) cb.checked = false;
+    // Show empty state if no charts remain
+    const el = document.getElementById('chartsContent');
+    const grid = el?.querySelector('.charts-grid');
+    if (grid && grid.children.length === 0) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">&#11041;</div><div class="empty-title">No metrics selected</div><div class="empty-sub">Check metrics in the sidebar</div></div>';
+    }
+}
+
+// ─── Drag-and-drop reorder for chart grid ───
+function setupDragAndDrop(grid) {
+    let dragSrc = null;
+    let dragOriginIsHeader = false;
+
+    grid.addEventListener('mousedown', e => {
+        dragOriginIsHeader = !!e.target.closest('.chart-header');
+    });
+
+    grid.addEventListener('dragstart', e => {
+        if (!dragOriginIsHeader) { e.preventDefault(); return; }
+        const card = e.target.closest('.chart-card');
+        if (!card) { e.preventDefault(); return; }
+        dragSrc = card;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+
+    grid.addEventListener('dragend', e => {
+        const card = e.target.closest('.chart-card');
+        if (card) card.classList.remove('dragging');
+        grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+        dragSrc = null;
+    });
+
+    grid.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const target = e.target.closest('.chart-card');
+        if (!target || target === dragSrc) return;
+        grid.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+        target.classList.add('drag-over');
+    });
+
+    grid.addEventListener('drop', e => {
+        e.preventDefault();
+        const target = e.target.closest('.chart-card');
+        if (!target || target === dragSrc || !dragSrc) return;
+        const rect = target.getBoundingClientRect();
+        const isAfter = e.clientY > rect.top + rect.height / 2;
+        grid.insertBefore(dragSrc, isAfter ? target.nextSibling : target);
+        target.classList.remove('drag-over');
+        // Sync selectedMetrics order to match new DOM order
+        const newOrder = Array.from(grid.querySelectorAll('.chart-card')).map(c => c.dataset.metric);
+        state.selectedMetrics = new Set(newOrder);
+    });
 }
 
 function chartSetMode(cvId, mode) {
