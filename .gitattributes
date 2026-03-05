@@ -1,0 +1,2 @@
+# Force LF for tokenizer files to ensure consistent hashing across platforms
+experiments/**/tsai_131k_tokenizer/*.json text eol=lf

@@ -141,6 +141,7 @@ logs/
 
 *.pt 
 *.pth
+*.parquet
 
 # macOS specific files
 *.DS_Store
