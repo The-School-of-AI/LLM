@@ -1,0 +1,74 @@
+python test/test_dataloader.py 
+Benchmark config: block_size=4096, batch_size=8, world_size=2
+
+============================================================
+Phase 1: Simulating S3 -> local NVMe staging
+  Created mock NVMe staging directory: C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i
+  Staged 8 shards (753.0 MB) in 4.55s (165.3 MB/s)
+
+============================================================
+Phase 2: Standard PyTorch DataLoader (baseline)
+
+  Launching 2 parallel processes for [Standard]...
+    [Standard] Rank 0/2 scanning 4 shards
+    [Standard] Rank 1/2 scanning 4 shards
+SPDL source: Rank 0/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+    [Standard] Rank 0/2 scanning 4 shards
+SPDL source: Rank 1/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+SPDL source: Rank 0/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+    [Standard] Rank 1/2 scanning 4 shards
+SPDL source: Rank 1/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+SPDL source: Rank 1 yielded 24,084 sequences
+    [Standard] Rank 1 yielded 24,084 sequences
+SPDL source: Rank 0 yielded 24,084 sequences
+    [Standard] Rank 0 yielded 24,084 sequences
+SPDL source: Rank 1 yielded 24,084 sequences
+    [Standard] Rank 1 yielded 24,084 sequences
+SPDL source: Rank 0 yielded 24,084 sequences
+    [Standard] Rank 0 yielded 24,084 sequences
+  Wall-clock time: 43.00s
+    Rank 0: 6022 batches | 197,296,128 tokens | 4,903,656 tok/s | DataLoader wait=6.76s (16.8% of total)
+    Rank 1: 6022 batches | 197,296,128 tokens | 4,903,127 tok/s | DataLoader wait=6.74s (16.8% of total)
+Exception ignored in: <function ResourceTracker.__del__ at 0x0000025704F33D80>
+  
+
+============================================================
+Phase 3: SPDL pipeline
+
+  Launching 2 parallel processes for [SPDL]...
+SPDL source: Rank 1/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+SPDL source: Rank 1/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+SPDL source: Rank 0/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+SPDL source: Rank 0/2 scanning 4 shards from C:\Users\user\AppData\Local\Temp\mock_nvme_qk38a71i (io=mmap)
+SPDL source: Rank 1 yielded 24,084 sequences
+SPDL source: Rank 1 yielded 24,084 sequences
+SPDL source: Rank 0 yielded 24,084 sequences
+SPDL source: Rank 0 yielded 24,084 sequences
+  Wall-clock time: 42.24s
+    Rank 0: 6022 batches | 197,296,128 tokens | 4,995,528 tok/s | DataLoader wait=5.43s (13.7% of total)
+    Rank 1: 6022 batches | 197,296,128 tokens | 4,997,594 tok/s | DataLoader wait=5.42s (13.7% of total)
+
+========================================================================
+BENCHMARK COMPARISON: Standard DataLoader vs SPDL Pipeline
+========================================================================
+
+  Standard PyTorch DataLoader
+  Rank    Batches        Tokens   Thruput (tok/s)   FetchWait (s)   WaitRatio
+  ------------------------------------------------------------------------
+     0      6,022   197,296,128         4,903,656            6.76      16.8%
+     1      6,022   197,296,128         4,903,127            6.74      16.8%
+
+  SPDL Pipeline
+  Rank    Batches        Tokens   Thruput (tok/s)   FetchWait (s)   WaitRatio
+  ------------------------------------------------------------------------
+     0      6,022   197,296,128         4,995,528            5.43      13.7%
+     1      6,022   197,296,128         4,997,594            5.42      13.7%
+
+  Metric                               Standard           SPDL SPDL Speedup
+  ------------------------------------------------------------------------
+  Aggregate throughput (tok/s)        9,806,253      9,991,056        1.02x
+  Avg DataLoader wait ratio              16.8%         13.7% 18.1% (lower)
+========================================================================
+
+============================================================
+Cleaning up mock NVMe directory...

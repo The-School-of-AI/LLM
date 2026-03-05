@@ -1,0 +1,52 @@
+# ============================================================================
+# 8k Throughput Preset — Optimized for maximum tokens/sec on p4de (8×A100 80GB)
+# ============================================================================
+# Usage: deepspeed main.py --config config_8k_throughput.yaml
+
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-2-raw-v1"
+  max_length: 8192
+  num_workers: 8
+  tokenized_dataset_path: null
+  prefetch_to_gpu: true
+  prefetch_depth: 2
+
+training:
+  num_epochs: 1
+  max_train_steps: null
+  max_eval_steps: 2
+  log_interval: 20
+  seed: 42
+  enable_system_metrics: false
+  require_fused_kernels: true
+
+deepspeed:
+  config_path: "deepspeed/zero-2-dense-8k-throughput.json"
+  local_rank: -1
+
+model:
+  embedding_type: "kronecker"
+  max_seq_len: 8192
+  gsa_k_base: 256
+  gsa_k_min: 32
+  gsa_k_max: 512
+
+checkpoint:
+  output_dir: "./checkpoints"
+  save_checkpoint: false
+  checkpoint_interval: 100
+  keep_last_n_checkpoints: 3
+  resume_from_checkpoint: null
+  resume_step: null
+
+s3:
+  enabled: false
+  bucket: null
+  prefix: "training/checkpoints"
+  region: "us-east-1"
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: "The history of artificial intelligence begins with"

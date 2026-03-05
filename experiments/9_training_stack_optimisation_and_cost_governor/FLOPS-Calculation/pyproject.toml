@@ -1,0 +1,10 @@
+[project]
+name = "flops-calculator"
+version = "1.0.0"
+description = "Training FLOPS and cost calculator for LLMs (Dense and MoE)"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["llm", "flops", "moe", "sparse-attention", "deepseek", "training-cost"]
+dependencies = [
+    "streamlit>=1.53.1",
+]
