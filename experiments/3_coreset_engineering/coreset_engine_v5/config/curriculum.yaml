@@ -117,7 +117,6 @@ difficulty_system:
           "language_literacy",
           "conversation",
           "translation",
-          "golden",
         ]
       constraints:
         tokenizer:
@@ -144,7 +143,6 @@ difficulty_system:
           "language_literacy",
           "conversation",
           "translation",
-          "golden",
         ]
       constraints:
         tokenizer:
@@ -170,7 +168,6 @@ difficulty_system:
           "qa",
           "conversation",
           "translation",
-          "golden",
         ]
       constraints:
         tokenizer:
@@ -195,7 +192,6 @@ difficulty_system:
           "literature",
           "conversation",
           "translation",
-          "golden",
         ]
       constraints:
         tokenizer:
@@ -213,7 +209,7 @@ difficulty_system:
       name: "Graduate"
       intent: "Explicit abstraction and algorithms"
       allowed_modalities: ["technical_text", "math", "code"]
-      allowed_domains: ["science", "math", "code", "instruction", "golden"]
+      allowed_domains: ["science", "math", "code", "instruction"]
       constraints:
         tokenizer:
           avg_max: 70000
@@ -231,7 +227,7 @@ difficulty_system:
       intent: "Planning and system-level reasoning"
       allowed_modalities:
         ["hard_reasoning", "math", "advanced_code", "planning"]
-      allowed_domains: ["instruction", "science", "math", "code", "golden"]
+      allowed_domains: ["instruction", "science", "math", "code"]
       constraints:
         tokenizer:
           avg_max: .inf
@@ -441,7 +437,6 @@ domains:
         "language_literacy",
         "conversation",
         "translation",
-        "golden",
       ]
     B1:
       [
@@ -454,7 +449,6 @@ domains:
         "language_literacy",
         "conversation",
         "translation",
-        "golden",
       ]
     B2:
       [
@@ -466,7 +460,6 @@ domains:
         "qa",
         "conversation",
         "translation",
-        "golden",
       ]
     B3:
       [
@@ -477,10 +470,9 @@ domains:
         "literature",
         "conversation",
         "translation",
-        "golden",
       ]
-    B4: ["science", "math", "code", "instruction", "golden"]
-    B5: ["instruction", "science", "math", "code", "golden"]
+    B4: ["science", "math", "code", "instruction"]
+    B5: ["instruction", "science", "math", "code"]
 
 # ============================================================
 # EVALUATION SIGNAL INTERFACE
