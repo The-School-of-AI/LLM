@@ -510,12 +510,19 @@ def process_coreset_file(
     tmp_dir: str,
     tokenizer_hash: str = "",
     start_shard_idx: int = 1,
+    staging_mode: bool = False,
 ) -> dict:
     """Process a single coreset parquet file.
 
-    Shards are written directly into <dst_base_uri>/shards/ using global
-    numbering that starts at start_shard_idx.  The returned dict includes
-    next_shard_idx so the caller can thread the counter across batches.
+    Sequential mode (staging_mode=False):
+      Shards are written directly into <dst_base_uri>/shards/ using global
+      numbering that starts at start_shard_idx.  The returned dict includes
+      next_shard_idx so the caller can thread the counter across batches.
+
+    Staging mode (staging_mode=True):
+      Shards are written into <dst_base_uri>/<coreset_name>/shard_NNN/ so
+      each parallel worker has an isolated namespace with no name collisions.
+      start_shard_idx is always 1 in this mode.
     """
 
     filename = (
@@ -525,11 +532,16 @@ def process_coreset_file(
     )
     coreset_name = os.path.splitext(filename)[0]
 
-    # Shards go directly into the flat <dst>/shards/ directory
-    shards_uri = f"{dst_base_uri.rstrip('/')}/shards"
-
-    print(f"\nProcessing Coreset: {filename}")
-    print(f"Output folder: {shards_uri}/ (start index: shard_{start_shard_idx:03d})")
+    if staging_mode:
+        # Per-batch isolated dir — parallel workers can't collide
+        shards_uri = f"{dst_base_uri.rstrip('/')}/{coreset_name}"
+        print(f"\nProcessing Coreset: {filename}")
+        print(f"Output folder (staging): {shards_uri}/")
+    else:
+        # Flat global layout — sequential mode with threaded counter
+        shards_uri = f"{dst_base_uri.rstrip('/')}/shards"
+        print(f"\nProcessing Coreset: {filename}")
+        print(f"Output folder: {shards_uri}/ (start index: shard_{start_shard_idx:03d})")
 
     # Download Coreset (or use locally)
     local_path = download_to_temp(s3_client, coreset_uri, tmp_dir)
@@ -755,10 +767,13 @@ def process_coreset_file(
 def _worker_process_coreset(worker_args: tuple) -> dict:
     """Pool worker: creates its own S3 client and tokenizer after fork/spawn.
 
-    Parallel workers each write to their own isolated per-batch subfolder inside
-    <dst>/shards/ using start_shard_idx=1.  The main process is responsible for
-    renaming the per-batch dirs to global shard numbers after pool.map() completes
-    (not applicable for the sequential path, which passes the real start index).
+    Each worker writes to its own isolated staging dir:
+      <dst>/_staging/<coreset_name>/shard_NNN/
+
+    This gives every worker a collision-free namespace regardless of how many
+    shards other workers produce.  The main process calls run_flatten() after
+    pool.map() completes to move all staging shards into the final flat
+    <dst>/shards/ layout with global continuous numbering.
     """
     uri, dst_base_uri, tokenizer_path, args_dict, worker_id, tokenizer_hash = worker_args
 
@@ -778,11 +793,17 @@ def _worker_process_coreset(worker_args: tuple) -> dict:
     # Tokenizer must be loaded AFTER fork
     tokenizer = get_tokenizer(tokenizer_path)
 
+    # Workers write to <dst>/_staging/<coreset_name>/shard_NNN/ (staging_mode=True)
+    # The staging base is one level up from dst_base_uri so the coreset_name subdir
+    # lands inside _staging/, not directly in dst/.
+    staging_base_uri = f"{dst_base_uri.rstrip('/')}/_staging"
+
     args = argparse.Namespace(**args_dict)
     try:
         result = process_coreset_file(
-            s3, uri, dst_base_uri, tokenizer, args, worker_tmp, tokenizer_hash,
+            s3, uri, staging_base_uri, tokenizer, args, worker_tmp, tokenizer_hash,
             start_shard_idx=1,
+            staging_mode=True,
         )
     except Exception as e:
         print(f"[Worker {worker_id}] ERROR processing {uri}: {e}")
@@ -924,10 +945,14 @@ def main():
                     progress["next_shard_idx"] = next_shard_idx
                     save_progress_state(s3, args.dst_uri, progress, tmp_dir)
         else:
-            # Parallel path — each worker writes to <dst>/shards/ with local shard_001, 002…
-            # Shard dirs from different workers may overlap in name; parallel mode is
-            # intended for runs where per-batch isolation is acceptable and a subsequent
-            # flatten_shards.py pass renumbers globally.
+            # Parallel path — workers write to <dst>/_staging/<coreset_name>/shard_NNN/
+            # (each worker has an isolated namespace, no shard name collisions).
+            # After pool.map() completes, run_flatten() moves everything into the
+            # final <dst>/shards/ layout with global continuous numbering.
+            from flatten_shards import run_flatten
+
+            staging_uri = f"{args.dst_uri.rstrip('/')}/_staging"
+
             args_dict = vars(args)
             args_dict["tmp_dir"] = tmp_dir  # share base tmp dir; workers create subdirs
 
@@ -947,6 +972,28 @@ def main():
 
             progress["completed"] = list(completed_set)
             save_progress_state(s3, args.dst_uri, progress, tmp_dir)
+
+            # Flatten staging shards into the final flat <dst>/shards/ layout
+            if not _TERMINATION_DETECTED.is_set():
+                print("\n[FLATTEN] Moving staging shards to flat global layout...")
+                flatten_result = run_flatten(
+                    src=staging_uri,
+                    dst=args.dst_uri,
+                    s3_client=s3,
+                )
+                if flatten_result["failed"] == 0:
+                    # Clean up staging dir — all shards successfully moved
+                    print("[FLATTEN] Cleaning up staging directory...")
+                    if is_s3_uri(staging_uri):
+                        # S3: staging files were already deleted streaming during flatten
+                        pass
+                    else:
+                        shutil.rmtree(staging_uri, ignore_errors=True)
+                else:
+                    print(
+                        f"[FLATTEN] WARNING: {flatten_result['failed']} shard(s) failed to move. "
+                        f"Staging directory preserved at: {staging_uri}"
+                    )
 
         if not _TERMINATION_DETECTED.is_set():
             # Global Manifest

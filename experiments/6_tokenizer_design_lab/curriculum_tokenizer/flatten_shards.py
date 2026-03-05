@@ -352,30 +352,52 @@ def write_flatten_manifest_s3(s3, dst_bucket: str, dst_prefix: str, manifest: di
 # ---------------------------------------------------------------------------
 
 
-def run_flatten(args: argparse.Namespace) -> None:
-    use_s3 = is_s3_uri(args.src_uri or "") or is_s3_uri(args.dst_uri or "")
+def run_flatten(
+    src: str,
+    dst: str,
+    s3_client=None,
+    dry_run: bool = False,
+    fail_fast: bool = False,
+) -> dict:
+    """
+    Flatten per-batch staging shards into a global flat shards/ directory.
 
-    s3 = None
-    if use_s3:
+    Can be called as a library function from tokenize_curriculum.py or via CLI.
+
+    Args:
+        src: Local path or S3 URI of the staging directory
+             (contains <coreset_name>/shard_NNN/ subdirs).
+        dst: Local path or S3 URI of the output directory
+             (shards/ will be created under it).
+        s3_client: Optional pre-created boto3 S3 client. Created automatically
+                   if None and src/dst are S3 URIs.
+        dry_run: If True, print the plan without making any changes.
+        fail_fast: If True, stop on the first shard error.
+
+    Returns:
+        dict with keys: total_shards_moved, failed, manifest_entries
+    """
+    src_is_s3 = is_s3_uri(src)
+    dst_is_s3 = is_s3_uri(dst)
+
+    s3 = s3_client
+    if (src_is_s3 or dst_is_s3) and s3 is None:
         s3 = _get_s3()
 
     # ------------------------------------------------------------------
     # Resolve source / destination
     # ------------------------------------------------------------------
-    src_is_s3 = is_s3_uri(args.src_uri or "")
-    dst_is_s3 = is_s3_uri(args.dst_uri or "")
-
     if src_is_s3:
-        src_bucket, src_prefix = parse_s3_url(args.src_uri)
+        src_bucket, src_prefix = parse_s3_url(src)
     else:
-        src_dir = args.src_dir
+        src_dir = src
 
     if dst_is_s3:
-        dst_bucket, dst_prefix = parse_s3_url(args.dst_uri)
+        dst_bucket, dst_prefix = parse_s3_url(dst)
         # Output shards go under <dst>/shards/
         shards_prefix = _s3_key_join(dst_prefix, "shards")
     else:
-        dst_dir = args.dst_dir
+        dst_dir = dst
         shards_dir = os.path.join(dst_dir, "shards")
         os.makedirs(shards_dir, exist_ok=True)
 
@@ -390,7 +412,7 @@ def run_flatten(args: argparse.Namespace) -> None:
 
     if not batches:
         print("No batch directories with shards found. Nothing to do.")
-        return
+        return {"total_shards_moved": 0, "failed": 0, "manifest_entries": {}}
 
     print(f"Found {len(batches)} batch(es).")
 
@@ -442,9 +464,9 @@ def run_flatten(args: argparse.Namespace) -> None:
     print(f"Total shards to move: {total_shards}")
     if total_shards == 0:
         print("Nothing to flatten (all shards may already be in destination).")
-        return
+        return {"total_shards_moved": 0, "failed": 0, "manifest_entries": {}}
 
-    if args.dry_run:
+    if dry_run:
         print("\n[DRY-RUN MODE] No files will be written.\n")
 
     # ------------------------------------------------------------------
@@ -468,21 +490,18 @@ def run_flatten(args: argparse.Namespace) -> None:
         try:
             if src_is_s3 and dst_is_s3:
                 src_shard_prefix_key = parse_s3_url(src_path)[1]
-                dst_shard_prefix_key = parse_s3_url(dst_shard_prefix)[1] if dst_is_s3 else None
                 flatten_shard_s3(
                     s3,
                     src_bucket, src_shard_prefix_key,
                     dst_bucket, _s3_key_join(shards_prefix, new_shard_name),
                     new_shard_name,
-                    dry_run=args.dry_run,
+                    dry_run=dry_run,
                 )
             elif not src_is_s3 and not dst_is_s3:
-                flatten_shard_local(src_path, dst_shard_dir, new_shard_name, dry_run=args.dry_run)
+                flatten_shard_local(src_path, dst_shard_dir, new_shard_name, dry_run=dry_run)
             else:
-                # Mixed local/S3 — not a typical use case, raise clearly
                 raise NotImplementedError(
-                    "Mixed local-source and S3-destination (or vice versa) is not supported. "
-                    "Use either both local or both S3."
+                    "Mixed local-source and S3-destination (or vice versa) is not supported."
                 )
 
             # Track per-batch shard range for manifest
@@ -496,8 +515,8 @@ def run_flatten(args: argparse.Namespace) -> None:
         except Exception as e:
             print(f"    ERROR: {e}")
             failed += 1
-            if args.fail_fast:
-                print("Stopping due to --fail-fast.")
+            if fail_fast:
+                print("Stopping due to fail_fast.")
                 break
 
     # ------------------------------------------------------------------
@@ -505,8 +524,8 @@ def run_flatten(args: argparse.Namespace) -> None:
     # ------------------------------------------------------------------
     manifest = {
         "format": "flatten_manifest_v1",
-        "src": args.src_uri or args.src_dir,
-        "dst": args.dst_uri or args.dst_dir,
+        "src": src,
+        "dst": dst,
         "total_shards_moved": processed,
         "batches": [
             {
@@ -520,7 +539,7 @@ def run_flatten(args: argparse.Namespace) -> None:
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
-    if not args.dry_run:
+    if not dry_run:
         if dst_is_s3:
             write_flatten_manifest_s3(s3, dst_bucket, dst_prefix, manifest)
         else:
@@ -533,12 +552,11 @@ def run_flatten(args: argparse.Namespace) -> None:
     print(f"Flatten complete: {processed}/{total_shards} shards moved.")
     if failed:
         print(f"  WARNING: {failed} shard(s) failed.")
-    if args.dry_run:
+    if dry_run:
         print("  (DRY-RUN — no files were written)")
     print("=" * 60)
 
-    if failed and not args.dry_run:
-        sys.exit(1)
+    return {"total_shards_moved": processed, "failed": failed, "manifest_entries": manifest_entries}
 
 
 # ---------------------------------------------------------------------------
@@ -594,10 +612,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    src = args.src_uri or args.src_dir
+    dst = args.dst_uri or args.dst_dir
+
     # Basic validation: src and dst must both be local or both be S3
-    src_is_s3 = is_s3_uri(args.src_uri or "")
-    dst_is_s3 = is_s3_uri(args.dst_uri or "")
-    if src_is_s3 != dst_is_s3:
+    if is_s3_uri(src) != is_s3_uri(dst):
         print(
             "ERROR: --src-uri/--src-dir and --dst-uri/--dst-dir must both be S3 "
             "or both be local paths.",
@@ -607,13 +626,15 @@ def main() -> None:
 
     print("=" * 60)
     print("Flatten Shards")
-    print(f"  Source : {args.src_uri or args.src_dir}")
-    print(f"  Dest   : {args.dst_uri or args.dst_dir}")
+    print(f"  Source : {src}")
+    print(f"  Dest   : {dst}")
     if args.dry_run:
         print("  Mode   : DRY-RUN")
     print("=" * 60)
 
-    run_flatten(args)
+    result = run_flatten(src, dst, dry_run=args.dry_run, fail_fast=args.fail_fast)
+    if result["failed"] and not args.dry_run:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
