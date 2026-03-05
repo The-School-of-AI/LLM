@@ -117,16 +117,40 @@ BATCH_PREFETCH_AUTO_MIN_WAIT_MS="${BATCH_PREFETCH_AUTO_MIN_WAIT_MS:-2.0}"
 BATCH_PREFETCH_AUTO_WARMUP_BATCHES="${BATCH_PREFETCH_AUTO_WARMUP_BATCHES:-5}"
 RESUME="${RESUME:-false}" 
 
-# Hybrid Storage Configuration (Safe high-volume output)
-# If ENABLE_NVME is true, we redirect batch 'part' files to NVMe to avoid EBS I/O storm.
-# Final checkpoints and manifests remain on EBS for durability.
+# NVMe Storage Redirection (Speed-with-Safety)
+# If ENABLE_NVME is true, we generate a runtime pipeline config that redirects
+# all high-volume outputs (indices, manifests, used_chunks DB) to NVMe.
+# Checkpoints (.pkl) remain on EBS for durability.
+# A background S3 sync runs every 15 minutes to persist NVMe data.
 NVME_MOUNT="${NVME_MOUNT:-/mnt/nvme}"
+PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline.yaml"
 CORESET_OUTPUT_DIR="${ENGINE_DIR}/output/coresets"
+MANIFEST_OUTPUT_DIR="${ENGINE_DIR}/output/manifests"
+S3_SYNC_DEST=""  # Set later if NVMe is enabled
 
 if [ "${ENABLE_NVME}" = "true" ] && [ -d "${NVME_MOUNT}" ]; then
-    echo "[INFO] Hybrid Storage Enabled: Redirecting high-volume outputs to ${NVME_MOUNT}/coresets"
-    CORESET_OUTPUT_DIR="${NVME_MOUNT}/coresets"
-    mkdir -p "${CORESET_OUTPUT_DIR}"
+    echo "[INFO] NVMe Storage Enabled: Generating runtime config with NVMe paths"
+    PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline_runtime.yaml"
+    CORESET_OUTPUT_DIR="${NVME_MOUNT}/output/coresets"
+    MANIFEST_OUTPUT_DIR="${NVME_MOUNT}/output/manifests"
+    mkdir -p "${CORESET_OUTPUT_DIR}" "${MANIFEST_OUTPUT_DIR}"
+
+    # Generate runtime pipeline.yaml with NVMe-redirected output paths
+    python3 -c "
+import yaml
+with open('${ENGINE_DIR}/config/pipeline.yaml') as f:
+    cfg = yaml.safe_load(f)
+cfg['io']['output_coreset_path'] = '${NVME_MOUNT}/output/coresets'
+cfg['io']['output_manifest_path'] = '${NVME_MOUNT}/output/manifests'
+with open('${PIPELINE_CONFIG}', 'w') as f:
+    yaml.dump(cfg, f, default_flow_style=False)
+print('[OK] Runtime config written: ${PIPELINE_CONFIG}')
+print('     output_coreset_path  = ${NVME_MOUNT}/output/coresets')
+print('     output_manifest_path = ${NVME_MOUNT}/output/manifests')
+"
+
+    S3_SYNC_DEST="s3://t2-datacurriculum-353/coreset_outputs/"
+    echo "[INFO] S3 sync destination: ${S3_SYNC_DEST}"
 fi
 # ------------------------------------------------------------------------------
 
@@ -382,10 +406,21 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "  Resume:       ${RESUME}"
         echo ""
         echo "  Infra Thresholds:"
-        echo "    NVMe:       ${ENABLE_NVME:-auto}"
+        echo "    NVMe:           ${ENABLE_NVME:-auto}"
+        echo "    Pipeline Config: ${PIPELINE_CONFIG}"
+        echo ""
+        echo "  Storage Layout:"
+        echo "    Coreset Output: ${CORESET_OUTPUT_DIR}"
+        echo "    Manifest Output: ${MANIFEST_OUTPUT_DIR}"
+        echo "    Checkpoints:    output/checkpoints/ (EBS)"
+        if [ -n "${S3_SYNC_DEST}" ]; then
+        echo "    S3 Sync Dest:   ${S3_SYNC_DEST}"
+        echo "    Sync Interval:  Every 15 minutes"
+        fi
         echo ""
         echo "  Would execute:"
         echo "    bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh"
+        echo "      --config \"${PIPELINE_CONFIG}\""
         echo "      --num-shards ${NUM_SHARDS} --stages \"${STAGES}\""
         echo "      --input-path \"${S3_INPUT_PATH}\" --total-tokens ${TOTAL_TOKENS} --batch-size ${BATCH_SIZE}"
         echo "      --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} ${RESUME_FLAG}"
@@ -407,6 +442,7 @@ fi
 # Background: Used for manual EC2 runs with nohup for SSH disconnect safety
 echo "Starting shard.sh in background via nohup..."
 nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
+    --config "${PIPELINE_CONFIG}" \
     --num-shards ${NUM_SHARDS} \
     --stages "${STAGES}" \
     --input-path "${S3_INPUT_PATH}" \
@@ -425,13 +461,52 @@ nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
     ${RESUME_FLAG} \
     > shard_run.log 2>&1 &
 
+PIPELINE_PID=$!
+echo "[OK] Pipeline launched (PID: ${PIPELINE_PID})"
+
+# ==============================================================================
+# 7b. Background S3 Sync (every 15 minutes)
+# ==============================================================================
+SYNC_PID=""
+if [ -n "${S3_SYNC_DEST}" ]; then
+    echo "### [7b] Starting Background S3 Sync (every 15 min) ###"
+    echo "  Sync destination: ${S3_SYNC_DEST}"
+    (
+        while kill -0 ${PIPELINE_PID} 2>/dev/null; do
+            sleep 900  # 15 minutes
+            echo "[S3 SYNC] $(date '+%Y-%m-%d %H:%M:%S') Syncing outputs to ${S3_SYNC_DEST}..."
+            # Sync NVMe outputs (indices, manifests, used_chunks DB)
+            aws s3 sync "${CORESET_OUTPUT_DIR}" "${S3_SYNC_DEST}/coresets/" --quiet --no-progress 2>&1 || true
+            aws s3 sync "${MANIFEST_OUTPUT_DIR}" "${S3_SYNC_DEST}/manifests/" --quiet --no-progress 2>&1 || true
+            # Sync EBS outputs (checkpoints)
+            aws s3 sync "output/checkpoints/" "${S3_SYNC_DEST}/checkpoints/" --quiet --no-progress 2>&1 || true
+            echo "[S3 SYNC] $(date '+%Y-%m-%d %H:%M:%S') Sync complete."
+        done
+    ) >> s3_sync.log 2>&1 &
+    SYNC_PID=$!
+    echo "[OK] Background S3 sync started (PID: ${SYNC_PID})"
+fi
+
+# ==============================================================================
+# 8. Post-Run: Final Persistence & Validation
+# ==============================================================================
 echo "-----------------------------------------------------------------------"
 echo "DEPLOYMENT COMPLETE — Pipeline running in background."
 echo "  Monitor logs:    tail -f ${REPO_ROOT}/shard_run.log"
+echo "  S3 sync logs:    tail -f ${REPO_ROOT}/s3_sync.log"
 echo "  Check process:   ps aux | grep shard.sh"
 echo "  Stop pipeline:   pkill -f shard.sh"
 echo ""
-echo "  After pipeline finishes, run post-run validation manually:"
+echo "  Storage Layout:"
+echo "    Coreset Output:  ${CORESET_OUTPUT_DIR}"
+echo "    Manifest Output: ${MANIFEST_OUTPUT_DIR}"
+echo "    Checkpoints:     output/checkpoints/ (EBS)"
+if [ -n "${S3_SYNC_DEST}" ]; then
+    echo "    S3 Destination:  ${S3_SYNC_DEST}"
+    echo "    Sync Interval:   Every 15 minutes"
+fi
+echo ""
+echo "  After pipeline finishes, run post-run validation:"
 echo "    # Stop monitoring"
 echo "    kill \$(cat ${LOG_DIR}/monitor.pid)"
 echo "    # Generate monitoring report"
@@ -441,10 +516,11 @@ echo "    python3 ${ENGINE_DIR}/tools/validate_coreset_outputs.py \\"
 echo "        --curriculum ${ENGINE_DIR}/config/curriculum.yaml \\"
 echo "        --output-dir ${CORESET_OUTPUT_DIR} \\"
 echo "        --stages ${STAGES} --format both"
-echo ""
-if [ "${ENABLE_NVME}" = "true" ]; then
-    echo "    # Sync high-volume outputs to S3"
-    echo "    aws s3 sync ${CORESET_OUTPUT_DIR} s3://${S3_BUCKET}/final_outputs/coresets/ --quiet --no-progress"
+if [ -n "${S3_SYNC_DEST}" ]; then
+    echo ""
+    echo "    # Final S3 sync (run after pipeline completes):"
+    echo "    aws s3 sync ${CORESET_OUTPUT_DIR} ${S3_SYNC_DEST}/coresets/ --quiet"
+    echo "    aws s3 sync ${MANIFEST_OUTPUT_DIR} ${S3_SYNC_DEST}/manifests/ --quiet"
+    echo "    aws s3 sync output/checkpoints/ ${S3_SYNC_DEST}/checkpoints/ --quiet"
 fi
 echo "-----------------------------------------------------------------------"
-

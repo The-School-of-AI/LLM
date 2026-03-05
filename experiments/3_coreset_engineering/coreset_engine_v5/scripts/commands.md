@@ -9,13 +9,13 @@ This document covers how to run the coreset pipeline on an EC2 instance, using e
 ### How to login to EC2 from local machine
 
 ```bash
-ssh -i "T3-Coreset.pem" ubuntu@<public-ip>
+ssh -i "<key_file>.pem" ubuntu@<public-ip>
 ```
 
 ### Copy scripts to EC2
 
 ```bash
-scp -i T3-Coreset.pem /Users/user name/Documents/git/TSAI/ERA4/final-capstone/LLM/experiments/3_coreset_engineering/coreset_engine_v5/scripts/* ubuntu@<public-ip>:/home/ubuntu/
+scp -i <key_file>.pem /Users/user name/Documents/git/TSAI/ERA4/final-capstone/LLM/experiments/3_coreset_engineering/coreset_engine_v5/scripts/* ubuntu@<public-ip>:/home/ubuntu/
 ```
 
 ---
