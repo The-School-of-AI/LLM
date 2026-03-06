@@ -92,6 +92,12 @@ if [ "${DRY_RUN}" = "true" ]; then
     echo "============================================"
 fi
 
+# --- Resolve ENGINE_DIR and REPO_ROOT early (needed for NVMe config block) ----
+COMMANDS_SCRIPT="${BASH_SOURCE[0]:-.}"
+SCRIPT_DIR="$(cd "$(dirname "${COMMANDS_SCRIPT}")" && pwd)"
+ENGINE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+
 # --- Configuration (UPDATE THESE) ---------------------------------------------
 # These can be overridden by environment variables (e.g. for CI/CD)
 BRANCH_NAME="${BRANCH_NAME:-p3/feat/stage-wise-coreset-selection_v2}"
