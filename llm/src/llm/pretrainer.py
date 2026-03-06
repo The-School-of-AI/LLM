@@ -115,15 +115,6 @@ class PreTrainer:
                         epoch, step, input_ids, attention_mask
                     )
 
-                # --- Loss spike detection ---
-                # Fix 1: All-reduce the loss across all ranks before feeding it
-                # to the spike detector.  Without this, each rank sees only its
-                # own mini-batch loss (which differs between ranks).  If rank-0
-                # detects a spike but rank-N does not, rank-0 enters
-                # broadcast_action() while rank-N continues training — causing
-                # a collective deadlock.  Averaging first ensures every rank
-                # makes the same spike decision and enters the collective
-                # simultaneously.
                 loss_for_spike = loss.detach().clone()
                 if dist.is_available() and dist.is_initialized():
                     dist.all_reduce(loss_for_spike, op=dist.ReduceOp.AVG)
@@ -141,23 +132,12 @@ class PreTrainer:
                             self._rollback_to_checkpoint()
                         )
                         rolled_back = True
-                        break  # restart the while loop at the restored epoch
-                    # IGNORE falls through to normal backward + optimizer step
+                        break
+                    # IGNORE falls through
 
                 with self._step_profiler.phase("step/train_backward"):
                     self._backward(loss)
 
-                # --- Gradient norm check (after backward, before optimizer step) ---
-                # Fix 2: Prefer DeepSpeed's globally-consistent grad norm.
-                # Under ZeRO Stage 3, parameter gradients are sharded across
-                # ranks, so computing clip_grad_norm_ locally gives the norm of
-                # only that rank's shard — incorrect AND different between
-                # ranks, which would cause divergent spike decisions and a
-                # collective deadlock.  DeepSpeed already aggregates the global
-                # norm inside engine.backward(); get_global_grad_norm() returns
-                # that value safely for all ZeRO stages.  We fall back to the
-                # local computation only when the DS API is unavailable (e.g.
-                # ZeRO Stage 1/2 without the norm accessor).
                 _ds_grad_norm = getattr(self._engine, "get_global_grad_norm", None)
                 if _ds_grad_norm is not None:
                     grad_norm = _ds_grad_norm() or 0.0
@@ -217,7 +197,6 @@ class PreTrainer:
                 metrics.add("toks/sec", toks_per_sec, pbar=True)
                 metrics.add("grad_norm", grad_norm, pbar=True)
 
-                # Embedding norms (throttled to avoid excessive metric volume).
                 emb_interval = self._spike_config.emb_norm_log_interval
                 if emb_interval == 0 or global_step % emb_interval == 0:
                     emb_norms = compute_embedding_norms(self._engine.module)
@@ -232,7 +211,6 @@ class PreTrainer:
                 if max_steps_per_epoch is not None and step >= max_steps_per_epoch:
                     break
 
-            # If we broke out due to rollback, restart without advancing epoch.
             if rolled_back:
                 continue
 
@@ -547,9 +525,6 @@ class PreTrainer:
         current_lr = self._engine.optimizer.param_groups[0]["lr"]
         cfg = self._spike_config
 
-        # Fix 3: Guard interactive mode in multi-GPU environments.
-        # Blocking rank-0 on stdin for up to user_prompt_timeout seconds
-        # while other ranks are running would cause a collective deadlock.
         if not cfg.auto_recover and dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
             raise RuntimeError(
                 "auto_recover=False (interactive / debug mode) is not supported "
@@ -558,7 +533,6 @@ class PreTrainer:
                 "Set loss_spike.auto_recover=True in your config."
             )
 
-        # --- Choose action ---------------------------------------------------
         if cfg.auto_recover:
             action = auto_select_action(
                 spike_count=self._spike_detector.spike_count + 1,  # +1 for this spike
@@ -566,7 +540,6 @@ class PreTrainer:
                 patience_lr=cfg.patience_lr,
                 last_checkpoint_tag=self._last_checkpoint_tag,
             )
-            # Log what the automatic policy decided.
             grad_info = f", grad_norm={grad_norm:.2f}" if grad_norm is not None else ""
             print_rank_0(
                 f"  [{spike_reason}] epoch={epoch} step={step} "
@@ -576,8 +549,6 @@ class PreTrainer:
                 f"spike #{stats['spike_count'] + 1} -> {action.name}"
             )
         else:
-            # Interactive mode — rank-0 prompts, broadcast to all ranks.
-            # (Only reachable in single-GPU runs; multi-GPU is guarded above.)
             if is_main_process():
                 action = prompt_user_for_action(
                     stats=stats,
@@ -596,7 +567,6 @@ class PreTrainer:
 
             action = broadcast_action(action, src=0)
 
-        # --- Log spike event --------------------------------------------------
         spike_metrics = Metrics()
         spike_metrics.add("spike_detected", True)
         spike_metrics.add("spike_reason", spike_reason)
@@ -608,7 +578,6 @@ class PreTrainer:
             spike_metrics.add("spike_grad_norm", grad_norm)
         self._logger.log_metrics(global_step, spike_metrics)
 
-        # --- Execute side-effects --------------------------------------------
         if action == RecoveryAction.REDUCE_LR:
             factor = cfg.lr_reduction_factor
             for pg in self._engine.optimizer.param_groups:
@@ -618,7 +587,6 @@ class PreTrainer:
                 f"{self._engine.optimizer.param_groups[0]['lr']:.2e}"
             )
 
-        # Record the spike so cooldown + escalation counter advance.
         self._spike_detector.record_spike_action()
 
         return action
@@ -651,11 +619,9 @@ class PreTrainer:
         else:
             start_epoch, start_step, global_step = 0, 0, 0
 
-        # Skip past the problematic data-state region (LLaMA-style mitigation).
         skip = self._spike_config.rollback_skip_batches
         start_step += skip
 
-        # Clear stale window statistics — model state has changed.
         if self._spike_detector is not None:
             self._spike_detector.reset()
 

@@ -29,8 +29,6 @@ from statistics import mean, stdev
 import torch
 import torch.distributed as dist
 
-from llm.utils import is_main_process
-
 
 class RecoveryAction(IntEnum):
     """Recovery actions available when a loss spike is detected."""
@@ -75,14 +73,10 @@ class LossSpikeDetector:
         self._min_abs_delta = min_abs_delta
         self._last_loss: float | None = None
 
-        # Cooldown state
         self._cooldown_steps = cooldown_steps
         self._cooldown_remaining: int = 0
 
-        # Consecutive spike counter for escalation policy
         self._spike_count: int = 0
-
-    # -- public API ----------------------------------------------------------
 
     def update(self, loss: float) -> bool:
         """
@@ -93,24 +87,18 @@ class LossSpikeDetector:
         """
         self._last_loss = loss
 
-        # Not enough history yet — still in warmup.
         if len(self._window) < self._window_size:
             self._window.append(loss)
             return False
 
-        # Cooldown active — tick down, add to window, no detection.
         if self._cooldown_remaining > 0:
             self._cooldown_remaining -= 1
             if self._cooldown_remaining == 0:
-                # Cooldown expired without another spike → reset counter.
                 self._spike_count = 0
             self._window.append(loss)
             return False
 
         is_spike = self._check_spike(loss)
-
-        # Only add non-spike values to the window so that a single spike
-        # doesn't corrupt the running statistics.
         if not is_spike:
             self._window.append(loss)
 
@@ -156,32 +144,22 @@ class LossSpikeDetector:
             "spike_count": self._spike_count,
         }
 
-    # -- internal ------------------------------------------------------------
-
     def _check_spike(self, loss: float) -> bool:
         """Check whether *loss* qualifies as a spike against the current window."""
         w_mean = mean(self._window)
         w_std = stdev(self._window) if len(self._window) > 1 else 0.0
         delta = loss - w_mean
 
-        # Guard: absolute delta must exceed minimum threshold.
         if delta < self._min_abs_delta:
             return False
 
-        # Check z-score threshold.
         if w_std > 0 and loss > w_mean + self._z_threshold * w_std:
             return True
 
-        # Fallback: ratio-based check (handles near-zero variance).
         if w_mean > 0 and loss > self._min_spike_ratio * w_mean:
             return True
 
         return False
-
-
-# ---------------------------------------------------------------------------
-# Gradient norm utilities
-# ---------------------------------------------------------------------------
 
 
 def compute_grad_norm(model: torch.nn.Module) -> float:
@@ -210,7 +188,6 @@ def compute_embedding_norms(model: torch.nn.Module) -> dict[str, float]:
     """
     norms: dict[str, float] = {}
 
-    # Kronecker path: pf_to_model projection + embed_norm (RMSNorm scale)
     pf_to_model = getattr(model, "pf_to_model", None)
     if pf_to_model is not None:
         norms["emb_proj_norm"] = torch.norm(
@@ -224,15 +201,12 @@ def compute_embedding_norms(model: torch.nn.Module) -> dict[str, float]:
                 p.detach().float(), 2
             ).item()
 
-    # Standard embedding path
     token_embed = getattr(model, "token_embed", None)
     if token_embed is not None:
         norms["token_emb_norm"] = torch.norm(
             token_embed.weight.detach().float(), 2
         ).item()
 
-    # lm_head (output embedding) — often tied with token_embed but worth
-    # tracking separately to catch divergence.
     lm_head = getattr(model, "lm_head", None)
     if lm_head is not None:
         norms["lm_head_norm"] = torch.norm(
@@ -240,11 +214,6 @@ def compute_embedding_norms(model: torch.nn.Module) -> dict[str, float]:
         ).item()
 
     return norms
-
-
-# ---------------------------------------------------------------------------
-# Automatic escalation policy
-# ---------------------------------------------------------------------------
 
 
 def auto_select_action(
@@ -269,11 +238,6 @@ def auto_select_action(
     if last_checkpoint_tag is not None:
         return RecoveryAction.ROLLBACK_CHECKPOINT
     return RecoveryAction.SKIP_BATCH
-
-
-# ---------------------------------------------------------------------------
-# User interaction (opt-in via auto_recover=False)
-# ---------------------------------------------------------------------------
 
 
 def prompt_user_for_action(
@@ -365,11 +329,6 @@ def _parse_choice(raw: str, last_checkpoint_tag: str | None) -> RecoveryAction:
 
     print(f"  Unrecognised input '{raw}' — defaulting to skip batch.", flush=True)
     return RecoveryAction.SKIP_BATCH
-
-
-# ---------------------------------------------------------------------------
-# Distributed broadcast
-# ---------------------------------------------------------------------------
 
 
 def broadcast_action(action: RecoveryAction, src: int = 0) -> RecoveryAction:
