@@ -28,6 +28,21 @@ class PreTrainer:
 
         with self._pipe_prof.stage("tokenizer_load"):
             tokenizer = ft.build_tokenizer(c.data)
+        self._tokenizer = tokenizer
+        self._bos_token_id = getattr(tokenizer, "bos_token_id", None)
+        self._eos_token_id = getattr(tokenizer, "eos_token_id", None)
+        self._pad_token_id = getattr(tokenizer, "pad_token_id", None)
+        self._unk_token_id = getattr(tokenizer, "unk_token_id", None)
+        try:
+            self._tokenizer_vocab_size = int(len(tokenizer))
+        except Exception:
+            self._tokenizer_vocab_size = 0
+        self._drop_remainder_metric = 1.0 if c.data.drop_remainder else 0.0
+        self._log_interval = max(1, int(c.training.log_interval))
+        if c.training.token_log_interval is None:
+            self._token_log_interval = self._log_interval
+        else:
+            self._token_log_interval = max(1, int(c.training.token_log_interval))
 
         with self._pipe_prof.stage("data_load"):
             (
@@ -85,6 +100,7 @@ class PreTrainer:
                     continue
 
                 self._step_profiler.start_step(global_step)
+                token_analysis = self._collect_token_analysis(batch)
                 input_ids = batch["input_ids"].to(device, non_blocking=True)
                 attention_mask = batch["attention_mask"].to(device, non_blocking=True)
                 if (
@@ -109,10 +125,22 @@ class PreTrainer:
                 num_tokens = torch.tensor(
                     input_ids.numel(), dtype=torch.float32, device=device
                 )
+                effective_tokens = torch.tensor(
+                    float(token_analysis.pop("_effective_tokens", 0.0)),
+                    dtype=torch.float32,
+                    device=device,
+                )
                 if dist.is_available() and dist.is_initialized():
                     dist.all_reduce(num_tokens, op=dist.ReduceOp.SUM)
+                    dist.all_reduce(effective_tokens, op=dist.ReduceOp.SUM)
                 self._step_profiler.end_step(tokens=int(num_tokens.item()))
                 toks_per_sec = num_tokens.item() / step_time if step_time > 0 else 0
+                token_analysis["token.effective_tokens_per_step"] = float(
+                    effective_tokens.item()
+                )
+                token_analysis["token.tokens_per_sec"] = (
+                    effective_tokens.item() / step_time if step_time > 0 else 0.0
+                )
 
                 if ckpt_interval is not None and (step + 1) % ckpt_interval == 0:
                     self._save_checkpoint(
@@ -132,7 +160,14 @@ class PreTrainer:
                 metrics = metrics | forward_metrics
 
                 progress_bar.set_postfix(metrics.get_pbar_values())
-                self._logger.log_metrics(global_step, metrics)
+                if global_step % self._log_interval == 0:
+                    self._logger.log_metrics(global_step, metrics)
+                if global_step % self._token_log_interval == 0:
+                    self._logger.log_step(
+                        step=global_step,
+                        metrics=token_analysis,
+                        context={"collector": "token_analysis"},
+                    )
 
                 if max_steps_per_epoch is not None and step >= max_steps_per_epoch:
                     break
@@ -413,6 +448,86 @@ class PreTrainer:
             }
             | kwargs,
         )
+
+    def _collect_token_analysis(self, batch: dict[str, Tensor]) -> dict[str, float]:
+        """
+        Compute per-step token analysis metrics on the CPU batch prior to H2D copy.
+
+        These are logged through the regular logger path and become ClickHouse
+        metric_points when the p12 backend is enabled.
+        """
+        input_ids = batch["input_ids"]
+        attention_mask = batch.get("attention_mask")
+
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids, dtype=torch.long)
+
+        seq_lens = attention_mask.sum(dim=1).to(dtype=torch.float32)
+        total_tokens = float(input_ids.numel())
+        non_pad_tokens = float(attention_mask.sum().item())
+        batch_size = int(seq_lens.numel())
+
+        if batch_size > 0:
+            seq_len_median = float(torch.quantile(seq_lens, 0.5).item())
+            seq_len_p95 = float(torch.quantile(seq_lens, 0.95).item())
+            seq_len_max = float(seq_lens.max().item())
+        else:
+            seq_len_median = 0.0
+            seq_len_p95 = 0.0
+            seq_len_max = 0.0
+
+        input_ids_2d = input_ids if input_ids.dim() == 2 else input_ids.unsqueeze(0)
+        bad_short = seq_lens <= 2.0
+        bad_negative = (input_ids_2d < 0).any(dim=1)
+        if self._tokenizer_vocab_size > 0:
+            bad_overflow = (input_ids_2d >= self._tokenizer_vocab_size).any(dim=1)
+        else:
+            bad_overflow = torch.zeros_like(bad_negative)
+        bad_samples = float((bad_short | bad_negative | bad_overflow).sum().item())
+
+        pad_ratio = (
+            (total_tokens - non_pad_tokens) / total_tokens if total_tokens > 0 else 0.0
+        )
+
+        pad_rate = (
+            self._token_occurrence_rate(input_ids_2d, self._pad_token_id, total_tokens)
+            if self._pad_token_id is not None
+            else pad_ratio
+        )
+        eos_rate = self._token_occurrence_rate(
+            input_ids_2d, self._eos_token_id, non_pad_tokens
+        )
+        bos_rate = self._token_occurrence_rate(
+            input_ids_2d, self._bos_token_id, non_pad_tokens
+        )
+        unk_rate = self._token_occurrence_rate(
+            input_ids_2d, self._unk_token_id, non_pad_tokens
+        )
+
+        return {
+            "token.seq_len.median": seq_len_median,
+            "token.seq_len.p95": seq_len_p95,
+            "token.seq_len.max": seq_len_max,
+            "token.pad_ratio": pad_ratio,
+            "token.drop_remainder": self._drop_remainder_metric,
+            "token.bad_samples": bad_samples,
+            "token.special_token.bos": bos_rate,
+            "token.special_token.eos": eos_rate,
+            "token.special_token.pad": pad_rate,
+            "token.special_token.unk": unk_rate,
+            "_effective_tokens": non_pad_tokens,
+        }
+
+    def _token_occurrence_rate(
+        self,
+        input_ids: Tensor,
+        token_id: int | None,
+        denom: float,
+    ) -> float:
+        if token_id is None or denom <= 0:
+            return 0.0
+        count = float((input_ids == int(token_id)).sum().item())
+        return count / denom
 
     def _generate(self):
         pass

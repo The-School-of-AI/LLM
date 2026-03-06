@@ -78,6 +78,7 @@ training:
   max_steps_per_epoch: 20
   max_val_steps: 1
   log_interval: 10
+  token_log_interval: 1
   generation_interval: 0
   deepspeed_config: ./zero-0.yaml
   seed: 42
