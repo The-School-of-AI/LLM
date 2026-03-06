@@ -8,7 +8,7 @@ from torch.utils.data.distributed import DistributedSampler
 from transformers.tokenization_utils_tokenizers import TokenizersBackend
 
 from llm.aws import S3Config
-from llm.checkpoint import S3CheckpointManager
+from llm.checkpoint import LocalCheckpointManager, S3CheckpointManager
 from llm.config import (
     CheckpointConfig,
     DataConfig,
@@ -125,8 +125,13 @@ def build_deepspeed(model: nn.Module, ds_config: dict[str, Any]) -> DeepSpeedEng
 
 def build_checkpoint_manager(
     cfg: CheckpointConfig, checkpoint_output_dir: str
-) -> S3CheckpointManager | None:
+) -> S3CheckpointManager | LocalCheckpointManager | None:
     match cfg.backend:
+        case "local":
+            return LocalCheckpointManager(
+                checkpoint_dir=checkpoint_output_dir,
+                keep_last_n=cfg.keep_last_n,
+            )
         case "s3":
             ckpt_config = cfg.s3
             assert (

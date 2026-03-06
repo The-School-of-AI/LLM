@@ -705,3 +705,169 @@ class S3CheckpointManager:
             return max(steps)
         except (ValueError, IndexError):
             return None
+
+
+class LocalCheckpointManager:
+    """
+    Lightweight local-disk checkpoint manager for DeepSpeed.
+
+    Saves and loads checkpoints to/from a local directory with no cloud
+    dependency. Supports keep-last-N pruning and resuming from a tag.
+
+    Usage in config.yaml:
+        checkpoint:
+          backend: local
+          save_interval: 100
+          keep_last_n: 3          # optional, defaults to 3
+    """
+
+    def __init__(self, checkpoint_dir: str, keep_last_n: int = 3):
+        """
+        Args:
+            checkpoint_dir: Directory where checkpoint subdirs will be saved.
+            keep_last_n:    How many most-recent checkpoints to retain on disk.
+        """
+        self.checkpoint_dir = checkpoint_dir
+        self.keep_last_n = keep_last_n
+
+        self.local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        self.global_rank = int(os.environ.get("RANK", 0))
+        self.is_main = self.global_rank == 0
+
+        os.makedirs(checkpoint_dir, exist_ok=True)
+
+        if self.is_main:
+            print(f"[LocalCheckpointManager] Saving checkpoints to: {checkpoint_dir}")
+            print(f"[LocalCheckpointManager] Keeping last {keep_last_n} checkpoints.")
+
+    # ------------------------------------------------------------------
+    # Public API (matches S3CheckpointManager interface used in pretrainer)
+    # ------------------------------------------------------------------
+
+    def save_checkpoint(
+        self,
+        model_engine,
+        step: int,
+        client_state: Optional[Dict[str, Any]] = None,
+        tag: Optional[str] = None,
+    ) -> None:
+        """
+        Save a DeepSpeed checkpoint to local disk.
+
+        Args:
+            model_engine:  DeepSpeed engine instance.
+            step:          Current global training step (used for tagging).
+            client_state:  Optional dict saved alongside model weights.
+            tag:           Checkpoint subdirectory name. Defaults to
+                           ``step_{step}``.
+        """
+        if tag is None:
+            tag = f"step_{step}"
+
+        if client_state is None:
+            client_state = {}
+        client_state.setdefault("step", step)
+
+        start = time.time()
+        try:
+            model_engine.save_checkpoint(
+                save_dir=self.checkpoint_dir,
+                tag=tag,
+                client_state=client_state,
+            )
+        except Exception as exc:
+            print(f"[LocalCheckpointManager] ERROR saving checkpoint '{tag}': {exc}")
+            raise
+
+        if self.is_main:
+            elapsed = time.time() - start
+            save_path = os.path.join(self.checkpoint_dir, tag)
+            print(
+                f"[LocalCheckpointManager] ✔ Saved '{tag}' "
+                f"to {save_path} in {elapsed:.2f}s"
+            )
+            self._prune_old_checkpoints()
+
+    def load_checkpoint(
+        self,
+        model_engine,
+        step: int,
+        tag: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Load a DeepSpeed checkpoint from local disk.
+
+        Args:
+            model_engine: DeepSpeed engine instance.
+            step:         Training step to load (used to derive default tag).
+            tag:          Override the checkpoint tag to load.
+
+        Returns:
+            The ``client_state`` dict stored at save time, or ``None``.
+        """
+        if tag is None:
+            tag = f"step_{step}"
+
+        checkpoint_path = os.path.join(self.checkpoint_dir, tag)
+        if not os.path.isdir(checkpoint_path):
+            raise FileNotFoundError(
+                f"[LocalCheckpointManager] Checkpoint not found: {checkpoint_path}"
+            )
+
+        if self.is_main:
+            print(f"[LocalCheckpointManager] Loading checkpoint '{tag}'...")
+
+        try:
+            _, client_state = model_engine.load_checkpoint(
+                load_dir=self.checkpoint_dir, tag=tag
+            )
+            if self.is_main:
+                print(f"[LocalCheckpointManager] ✔ Loaded '{tag}'")
+            return client_state
+        except Exception as exc:
+            print(
+                f"[LocalCheckpointManager] ERROR loading checkpoint '{tag}': {exc}"
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # Housekeeping
+    # ------------------------------------------------------------------
+
+    def _prune_old_checkpoints(self) -> None:
+        """
+        Remove old checkpoint directories, keeping only the most recent
+        ``keep_last_n``.  Only called from rank-0.
+        """
+        try:
+            entries = []
+            for name in os.listdir(self.checkpoint_dir):
+                full = os.path.join(self.checkpoint_dir, name)
+                if os.path.isdir(full) and name.startswith("step_"):
+                    try:
+                        step_num = int(name.split("_")[1])
+                        entries.append((step_num, full))
+                    except (ValueError, IndexError):
+                        pass
+                elif os.path.isdir(full) and name.startswith("epoch_"):
+                    # Support epoch_{N}_step_{M} tags from pretrainer
+                    try:
+                        parts = name.split("_")
+                        # epoch_1_step_0  -> sort key = epoch * 1e9 + step
+                        e = int(parts[1])
+                        s = int(parts[3]) if len(parts) >= 4 else 0
+                        entries.append((e * 10**9 + s, full))
+                    except (ValueError, IndexError):
+                        pass
+
+            entries.sort(key=lambda x: x[0])
+
+            to_remove = entries[: max(0, len(entries) - self.keep_last_n)]
+            for _, path in to_remove:
+                print(
+                    f"[LocalCheckpointManager] 🗑️  Removing old checkpoint: "
+                    f"{os.path.basename(path)}"
+                )
+                shutil.rmtree(path)
+        except Exception as exc:
+            print(f"[LocalCheckpointManager] WARNING during pruning: {exc}")

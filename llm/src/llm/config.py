@@ -116,10 +116,12 @@ class S3CheckpointConfig:
 @dataclass
 class CheckpointConfig:
     save_interval: int | None = None
-    backend: Literal["s3", "none"] = "none"
+    backend: Literal["s3", "local", "none"] = "none"
     resume_from: str | None = None
     resume_step: int = 0
     s3: S3CheckpointConfig | None = None
+    # Number of most-recent checkpoints to keep on disk (local backend only).
+    keep_last_n: int = 3
 
 
 @dataclass
