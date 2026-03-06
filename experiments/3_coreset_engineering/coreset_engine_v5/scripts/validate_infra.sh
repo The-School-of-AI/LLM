@@ -206,18 +206,19 @@ fi
 # ============================================================
 header "8. NVMe Mount"
 if [ "${ENABLE_NVME}" = "true" ]; then
-    NVME_FREE_GB=$(df -BG "$NVME_MOUNT" \
-      | awk 'NR==2{gsub("G","",$4); print $4}')
-    pass "Mounted at $NVME_MOUNT (${NVME_FREE_GB} GB free)"
-  else
-    fail "NVMe mount" "$NVME_MOUNT not mounted"
-    echo "       Fix:  sudo mkfs.ext4 $NVME_DEV"
-    echo "             sudo mkdir -p $NVME_MOUNT"
-    echo "             sudo mount $NVME_DEV $NVME_MOUNT"
-    echo "             sudo chown ubuntu:ubuntu $NVME_MOUNT"
-  fi
+    if mountpoint -q "$NVME_MOUNT" 2>/dev/null; then
+        NVME_FREE_GB=$(df -BG "$NVME_MOUNT" \
+          | awk 'NR==2{gsub("G","",$4); print $4}')
+        pass "Mounted at $NVME_MOUNT (${NVME_FREE_GB} GB free)"
+    else
+        fail "NVMe mount" "$NVME_MOUNT not mounted"
+        echo "       Fix:  sudo mkfs.ext4 $NVME_DEV"
+        echo "             sudo mkdir -p $NVME_MOUNT"
+        echo "             sudo mount $NVME_DEV $NVME_MOUNT"
+        echo "             sudo chown ubuntu:ubuntu $NVME_MOUNT"
+    fi
 else
-  warn "NVMe mount skipped" "ENABLE_NVME=false"
+    warn "NVMe mount skipped" "ENABLE_NVME=false"
 fi
 
 # ============================================================
