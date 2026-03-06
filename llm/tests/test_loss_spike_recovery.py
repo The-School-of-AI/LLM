@@ -1,13 +1,15 @@
 """Tests for the loss spike detection and recovery module."""
 
-from unittest.mock import patch
-
+import torch
+import torch.nn as nn
 import pytest
 
 from llm.loss_spike_recovery import (
     LossSpikeDetector,
     RecoveryAction,
     _parse_choice,
+    compute_grad_norm,
+    compute_embedding_norms,
 )
 
 
@@ -52,7 +54,7 @@ class TestLossSpikeDetector:
         # Fill with very stable loss (near-zero std)
         for _ in range(10):
             detector.update(3.0)
-        # Loss = 6.5 → ratio = 2.17x, delta = 3.5 > 0.5
+        # Loss = 6.5 -> ratio = 2.17x, delta = 3.5 > 0.5
         assert detector.update(6.5) is True
 
     def test_no_spike_below_min_abs_delta(self):
@@ -60,7 +62,7 @@ class TestLossSpikeDetector:
         detector = LossSpikeDetector(window_size=10, min_abs_delta=1.0)
         for _ in range(10):
             detector.update(3.0)
-        # delta = 0.8 < 1.0 → no spike
+        # delta = 0.8 < 1.0 -> no spike
         assert detector.update(3.8) is False
 
     def test_spike_does_not_corrupt_window(self):
@@ -96,12 +98,7 @@ class TestLossSpikeDetector:
             loss = 3.0 + i * (2.0 / 30)
             # After warmup, gradual increases should generally not spike
             # (the window adapts)
-            if i >= 10:
-                # We don't assert False here because with a small window
-                # some edge cases could trigger; just ensure no crash.
-                detector.update(loss)
-            else:
-                detector.update(loss)
+            detector.update(loss)
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +168,7 @@ class TestLossSpikeConfig:
         assert cfg.z_threshold == 3.0
         assert cfg.min_spike_ratio == 2.0
         assert cfg.min_abs_delta == 0.5
+        assert cfg.grad_norm_threshold == 100.0
         assert cfg.lr_reduction_factor == 0.5
         assert cfg.user_prompt_timeout == 300
 
@@ -183,12 +181,20 @@ class TestLossSpikeConfig:
             z_threshold=2.0,
             min_spike_ratio=1.5,
             min_abs_delta=0.3,
+            grad_norm_threshold=50.0,
             lr_reduction_factor=0.25,
             user_prompt_timeout=60,
         )
         assert cfg.enabled is False
         assert cfg.window_size == 50
+        assert cfg.grad_norm_threshold == 50.0
         assert cfg.lr_reduction_factor == 0.25
+
+    def test_grad_norm_disabled(self):
+        from llm.config import LossSpikeConfig
+
+        cfg = LossSpikeConfig(grad_norm_threshold=None)
+        assert cfg.grad_norm_threshold is None
 
 
 # ---------------------------------------------------------------------------
@@ -213,3 +219,104 @@ class TestFactory:
 
         detector = build_loss_spike_detector(LossSpikeConfig(enabled=False))
         assert detector is None
+
+
+# ---------------------------------------------------------------------------
+# compute_grad_norm
+# ---------------------------------------------------------------------------
+
+
+class TestComputeGradNorm:
+    """Tests for the gradient norm utility."""
+
+    def test_zero_gradients(self):
+        """Model with zero gradients should return 0."""
+        model = nn.Linear(4, 2, bias=False)
+        # No backward called, no grads
+        assert compute_grad_norm(model) == 0.0
+
+    def test_known_grad_norm(self):
+        """Check grad norm against a known value."""
+        model = nn.Linear(4, 2, bias=False)
+        x = torch.randn(1, 4)
+        y = model(x)
+        y.sum().backward()
+
+        # Manually compute expected norm
+        expected = torch.norm(model.weight.grad.float(), 2).item()
+        actual = compute_grad_norm(model)
+        assert actual == pytest.approx(expected, rel=1e-4)
+
+    def test_multi_param_model(self):
+        """Grad norm should aggregate across all parameters."""
+        model = nn.Sequential(nn.Linear(4, 3), nn.Linear(3, 2))
+        x = torch.randn(1, 4)
+        y = model(x)
+        y.sum().backward()
+
+        norm = compute_grad_norm(model)
+        assert norm > 0
+
+        # Verify against manual computation
+        param_norms = []
+        for p in model.parameters():
+            if p.grad is not None:
+                param_norms.append(torch.norm(p.grad.float(), 2))
+        expected = torch.norm(torch.stack(param_norms), 2).item()
+        assert norm == pytest.approx(expected, rel=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# compute_embedding_norms
+# ---------------------------------------------------------------------------
+
+
+class TestComputeEmbeddingNorms:
+    """Tests for the embedding norm tracker."""
+
+    def test_standard_embedding(self):
+        """Should track token_embed and lm_head norms."""
+        model = nn.Module()
+        model.token_embed = nn.Embedding(100, 64)
+        model.lm_head = nn.Linear(64, 100, bias=False)
+        model.kronecker_embeddings = None
+        model.pf_to_model = None
+        model.embed_norm = None
+
+        norms = compute_embedding_norms(model)
+        assert "token_emb_norm" in norms
+        assert "lm_head_norm" in norms
+        assert norms["token_emb_norm"] > 0
+        assert norms["lm_head_norm"] > 0
+
+    def test_kronecker_embedding(self):
+        """Should track pf_to_model projection and embed_norm norms."""
+        model = nn.Module()
+        model.pf_to_model = nn.Linear(8192, 4096, bias=False)
+        model.embed_norm = nn.LayerNorm(4096)  # stand-in for RMSNorm
+        model.lm_head = nn.Linear(4096, 100, bias=False)
+        model.token_embed = None
+
+        norms = compute_embedding_norms(model)
+        assert "emb_proj_norm" in norms
+        assert "lm_head_norm" in norms
+        assert norms["emb_proj_norm"] > 0
+        # embed_norm (LayerNorm) has weight and bias params
+        assert any(k.startswith("emb_rmsnorm_") for k in norms)
+
+    def test_empty_model(self):
+        """Model without any embedding layers returns empty dict."""
+        model = nn.Module()
+        norms = compute_embedding_norms(model)
+        assert norms == {}
+
+    def test_norms_are_positive(self):
+        """All returned norms should be positive floats."""
+        model = nn.Module()
+        model.token_embed = nn.Embedding(50, 32)
+        model.lm_head = nn.Linear(32, 50, bias=False)
+
+        norms = compute_embedding_norms(model)
+        for key, val in norms.items():
+            assert isinstance(val, float), f"{key} is not float"
+            assert val > 0, f"{key} is not positive"

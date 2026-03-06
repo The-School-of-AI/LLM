@@ -60,8 +60,17 @@ class LossSpikeConfig:
     # Minimum absolute increase (loss - mean) to avoid nuisance alerts.
     min_abs_delta: float = 0.5
 
+    # Gradient norm threshold. When the pre-clip gradient L2 norm exceeds
+    # this value after backward, the same spike recovery flow is triggered.
+    # None = disabled.  100.0 is a common default for LLM training.
+    grad_norm_threshold: float | None = 100.0
+
     # Factor by which LR is multiplied when the "Reduce LR" action is chosen.
     lr_reduction_factor: float = 0.5
+
+    # Log embedding weight norms every N optimizer steps.
+    # Avoids excessive metric volume on long runs.  0 = every step.
+    emb_norm_log_interval: int = 50
 
     # Seconds to wait for user input before auto-selecting the default action.
     user_prompt_timeout: int = 300

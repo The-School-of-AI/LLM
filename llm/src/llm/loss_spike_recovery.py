@@ -1,7 +1,8 @@
 """
 Loss Spike Detection and Interactive Recovery.
 
-Monitors training loss using a sliding window and z-score threshold.
+Monitors training loss using a sliding window and z-score threshold,
+and optionally monitors gradient norms against a hard threshold.
 When a spike is detected, training pauses and the user is prompted
 to choose a recovery action: skip batch, reduce LR, rollback checkpoint,
 or ignore.
@@ -15,6 +16,7 @@ from statistics import mean, stdev
 
 import torch
 import torch.distributed as dist
+from torch import Tensor
 
 from llm.utils import is_main_process
 
@@ -111,6 +113,69 @@ class LossSpikeDetector:
 
 
 # ---------------------------------------------------------------------------
+# Gradient norm utilities
+# ---------------------------------------------------------------------------
+
+
+def compute_grad_norm(model: torch.nn.Module) -> float:
+    """
+    Compute the total L2 gradient norm across all parameters.
+
+    Uses ``torch.nn.utils.clip_grad_norm_`` with ``max_norm=inf`` so no
+    clipping occurs — only the fused C++ norm computation runs.  This is
+    significantly faster than a Python loop over parameters for large models.
+
+    Call after ``engine.backward()`` but before ``engine.step()``
+    (which applies its own gradient clipping).
+    """
+    params = [p for p in model.parameters() if p.grad is not None]
+    if not params:
+        return 0.0
+    return torch.nn.utils.clip_grad_norm_(params, max_norm=float("inf")).item()
+
+
+def compute_embedding_norms(model: torch.nn.Module) -> dict[str, float]:
+    """
+    Compute weight norms for embedding-related parameters.
+
+    Supports both Kronecker and standard embedding architectures.
+    Returns a dict of ``{metric_name: norm_value}`` suitable for logging.
+    """
+    norms: dict[str, float] = {}
+
+    # Kronecker path: pf_to_model projection + embed_norm (RMSNorm scale)
+    pf_to_model = getattr(model, "pf_to_model", None)
+    if pf_to_model is not None:
+        norms["emb_proj_norm"] = torch.norm(
+            pf_to_model.weight.detach().float(), 2
+        ).item()
+
+    embed_norm_layer = getattr(model, "embed_norm", None)
+    if embed_norm_layer is not None:
+        for name, p in embed_norm_layer.named_parameters():
+            norms[f"emb_rmsnorm_{name}_norm"] = torch.norm(
+                p.detach().float(), 2
+            ).item()
+
+    # Standard embedding path
+    token_embed = getattr(model, "token_embed", None)
+    if token_embed is not None:
+        norms["token_emb_norm"] = torch.norm(
+            token_embed.weight.detach().float(), 2
+        ).item()
+
+    # lm_head (output embedding) — often tied with token_embed but worth
+    # tracking separately to catch divergence.
+    lm_head = getattr(model, "lm_head", None)
+    if lm_head is not None:
+        norms["lm_head_norm"] = torch.norm(
+            lm_head.weight.detach().float(), 2
+        ).item()
+
+    return norms
+
+
+# ---------------------------------------------------------------------------
 # User interaction
 # ---------------------------------------------------------------------------
 
@@ -131,6 +196,8 @@ def prompt_user_for_action(
     lr_reduction_factor: float,
     last_checkpoint_tag: str | None,
     timeout: int = 300,
+    spike_reason: str = "LOSS SPIKE",
+    grad_norm: float | None = None,
 ) -> RecoveryAction:
     """
     Print a spike alert and read the user's recovery choice from stdin.
@@ -146,6 +213,9 @@ def prompt_user_for_action(
         lr_reduction_factor: factor by which LR will be multiplied.
         last_checkpoint_tag: tag of the most recent checkpoint, or None.
         timeout: seconds to wait for input before auto-selecting default.
+        spike_reason: label for the alert header (e.g. "LOSS SPIKE",
+            "GRADIENT NORM SPIKE").
+        grad_norm: if provided, displayed alongside loss stats.
 
     Returns:
         The chosen ``RecoveryAction``.
@@ -153,13 +223,18 @@ def prompt_user_for_action(
     new_lr = current_lr * lr_reduction_factor
     ckpt_label = last_checkpoint_tag or "none available"
 
+    grad_line = ""
+    if grad_norm is not None:
+        grad_line = f"    Grad norm:     {grad_norm:.4f}\n"
+
     print(
         f"\n{'=' * 70}\n"
-        f"  LOSS SPIKE DETECTED at epoch {epoch}, step {step} (global_step {global_step})\n"
+        f"  {spike_reason} DETECTED at epoch {epoch}, step {step} (global_step {global_step})\n"
         f"    Current loss:  {stats['current_loss']:.4f}\n"
         f"    Window mean:   {stats['window_mean']:.4f}\n"
         f"    Window std:    {stats['window_std']:.4f}\n"
         f"    Spike ratio:   {stats['spike_ratio']:.2f}x mean\n"
+        f"{grad_line}"
         f"\n"
         f"  Choose recovery action:\n"
         f"    [1] Skip batch (recommended - discard this batch, continue training)\n"

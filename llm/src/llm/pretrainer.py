@@ -13,6 +13,8 @@ from llm.logger import Metrics
 from llm.loss_spike_recovery import (
     RecoveryAction,
     broadcast_action,
+    compute_embedding_norms,
+    compute_grad_norm,
     prompt_user_for_action,
 )
 from llm.profiler import PipelineProfiler
@@ -132,6 +134,33 @@ class PreTrainer:
 
                 with self._step_profiler.phase("step/train_backward"):
                     self._backward(loss)
+
+                # --- Gradient norm check (after backward, before optimizer step) ---
+                grad_norm = compute_grad_norm(self._engine.module)
+                grad_norm_threshold = self._spike_config.grad_norm_threshold
+                if (
+                    grad_norm_threshold is not None
+                    and grad_norm > grad_norm_threshold
+                ):
+                    action = self._handle_loss_spike(
+                        epoch, step, global_step,
+                        spike_reason="GRADIENT NORM SPIKE",
+                        grad_norm=grad_norm,
+                    )
+                    if action in (RecoveryAction.SKIP_BATCH, RecoveryAction.REDUCE_LR):
+                        self._engine.optimizer.zero_grad()
+                        self._step_profiler.end_step()
+                        global_step += 1
+                        steps += 1
+                        continue
+                    elif action == RecoveryAction.ROLLBACK_CHECKPOINT:
+                        epoch, start_step, global_step = (
+                            self._rollback_to_checkpoint()
+                        )
+                        rolled_back = True
+                        break
+                    # IGNORE falls through
+
                 with self._step_profiler.phase("step/train_optimizer_step"):
                     self._optimizer_step()
                 self._step_profiler.end_step()
@@ -160,6 +189,15 @@ class PreTrainer:
                 metrics.add("loss", loss.item(), pbar=True)
                 metrics.add("global_step", global_step, pbar=True)
                 metrics.add("toks/sec", toks_per_sec, pbar=True)
+                metrics.add("grad_norm", grad_norm, pbar=True)
+
+                # Embedding norms (throttled to avoid excessive metric volume).
+                emb_interval = self._spike_config.emb_norm_log_interval
+                if emb_interval == 0 or global_step % emb_interval == 0:
+                    emb_norms = compute_embedding_norms(self._engine.module)
+                    for emb_key, emb_val in emb_norms.items():
+                        metrics.add(emb_key, emb_val)
+
                 metrics = metrics | forward_metrics
 
                 progress_bar.set_postfix(metrics.get_pbar_values())
@@ -452,7 +490,12 @@ class PreTrainer:
         )
 
     def _handle_loss_spike(
-        self, epoch: int, step: int, global_step: int
+        self,
+        epoch: int,
+        step: int,
+        global_step: int,
+        spike_reason: str = "LOSS SPIKE",
+        grad_norm: float | None = None,
     ) -> RecoveryAction:
         """Prompt the user for a recovery action and execute it. Returns the chosen action."""
         stats = self._spike_detector.get_stats()
@@ -469,6 +512,8 @@ class PreTrainer:
                 lr_reduction_factor=self._spike_config.lr_reduction_factor,
                 last_checkpoint_tag=self._last_checkpoint_tag,
                 timeout=self._spike_config.user_prompt_timeout,
+                spike_reason=spike_reason,
+                grad_norm=grad_norm,
             )
         else:
             action = RecoveryAction.SKIP_BATCH  # placeholder, overwritten by broadcast
@@ -478,9 +523,12 @@ class PreTrainer:
         # Log the spike event.
         spike_metrics = Metrics()
         spike_metrics.add("spike_detected", True)
+        spike_metrics.add("spike_reason", spike_reason)
         spike_metrics.add("spike_action", action.name)
         spike_metrics.add("spike_loss", stats["current_loss"])
         spike_metrics.add("spike_window_mean", stats["window_mean"])
+        if grad_norm is not None:
+            spike_metrics.add("spike_grad_norm", grad_norm)
         self._logger.log_metrics(global_step, spike_metrics)
 
         # Execute the chosen action.
