@@ -1,0 +1,9 @@
+# T1 Source File Report,generated=2026-03-06 11:15:51
+# t1_base,dataset/final/small/t1
+
+seq,total_files,t1_file_path,size_bytes,size_mb,size_human,status
+1/5,5,source=C4/part-00000-8299c866-c99b-45fc-92d0-4d8b5c1f7503-c000.zstd.parquet,106307,0.1014,103.82 KB,found
+2/5,5,source=C4/part-00001-8299c866-c99b-45fc-92d0-4d8b5c1f7503-c000.zstd.parquet,95326,0.0909,93.09 KB,found
+3/5,5,source=C4/part-00002-8299c866-c99b-45fc-92d0-4d8b5c1f7503-c000.zstd.parquet,121307,0.1157,118.46 KB,found
+4/5,5,source=C4/part-00003-8299c866-c99b-45fc-92d0-4d8b5c1f7503-c000.zstd.parquet,119010,0.1135,116.22 KB,found
+5/5,5,source=C4/part-00004-8299c866-c99b-45fc-92d0-4d8b5c1f7503-c000.zstd.parquet,131198,0.1251,128.12 KB,found

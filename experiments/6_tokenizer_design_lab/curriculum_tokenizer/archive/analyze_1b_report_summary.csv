@@ -1,0 +1,19 @@
+# Analysis Summary,generated=2026-03-06 11:15:51
+# t3_dir,dataset/final/small/t3
+# t1_base,dataset/final/small/t1
+
+metric,value,note
+t3_file_count,10,
+t3_total_rows,250,
+t3_total_tokens,355281,
+t3_total_tokens_B,0.000355,billion tokens
+t1_unique_files,5,
+t1_files_found,5,
+t1_files_not_found,0,only relevant for local runs
+t1_avg_size_bytes,114629,of found files
+t1_avg_size_mb,0.1093,of found files
+t1_total_size_found_bytes,573148,sum of found files
+t1_total_size_found_mb,0.5466,
+t1_total_size_found_gb,0.0005,
+blocks_4096_tokens,86,floor(total_tokens / 4096)
+shards_512mb_uint16,0,blocks * 4096 * 2B / 512MB

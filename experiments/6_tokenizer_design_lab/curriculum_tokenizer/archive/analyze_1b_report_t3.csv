@@ -1,0 +1,16 @@
+# T3 Coreset File Report,generated=2026-03-06 11:15:51
+# t3_dir,dataset/final/small/t3
+
+seq,total_files,t3_file,rows,tokens
+1/10,10,selected_indices_small_batch000000.parquet,25,29603
+2/10,10,selected_indices_small_batch000001.parquet,25,33857
+3/10,10,selected_indices_small_batch000002.parquet,25,22652
+4/10,10,selected_indices_small_batch000003.parquet,25,59425
+5/10,10,selected_indices_small_batch000004.parquet,25,24609
+6/10,10,selected_indices_small_batch000005.parquet,25,32258
+7/10,10,selected_indices_small_batch000006.parquet,25,33577
+8/10,10,selected_indices_small_batch000007.parquet,25,44066
+9/10,10,selected_indices_small_batch000008.parquet,25,27659
+10/10,10,selected_indices_small_batch000009.parquet,25,47575
+
+TOTAL,,,250,355281

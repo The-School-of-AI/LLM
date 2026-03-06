@@ -1,8 +1,8 @@
 # Tokenization Pipeline Review & AWS Strategy
 
-**Document version:** 2026-03-04
+**Document version:** 2026-03-06
 **Pipeline:** `tokenize_curriculum.py` — S3 Curriculum Tokenization Pipeline
-**Data scale:** ~20B tokens (production), 11.7B (current Stage 1B coreset)
+**Data scale:** 9.896B tokens (Stage 1B actual) · 12,231 T3 batch files · 25,420 unique T1 files · 4,305 GB T1 source data
 **Source data region:** us-east-1 (already available)
 
 ---
@@ -507,347 +507,316 @@ for a test-only path.
 
 ## 4. AWS Deployment Guide
 
-**Recommended instance:** c5.9xlarge Spot
-**Estimated cost:** ~$1.80–$2.50 total compute
+> **Platform prep** (S3 bucket creation, IAM role, EC2 launch commands) is in [Appendix A](#appendix-a-s3-setup--iam) and [Appendix B](#appendix-b-ec2-launch--run). This section covers strategy, feasibility, instance selection, and cost only.
 
-### 4.1 Execution Strategy
+---
 
-#### Architecture Overview
+### 4.1 Scale & Feasibility Analysis
 
-```
-S3 us-east-1 (CORESET INDEX — T3, already available):
-  s3://t2-datacurriculum-353/coreset_outputs/coresets/1B/
-    selected_indices_part_shard000_batch000000.parquet
-    selected_indices_part_shard000_batch000001.parquet
-    ...  (multiple batch files; each contains chunk_id + t1_file_path + band + domain columns)
+#### Actual Dataset Numbers (Stage 1B)
 
-S3 us-east-1 (RAW TEXT — T1, already available):
-  s3://t1-dataacquisition-datasets/processed_dataset/normalized_data/
-    source=C4/
-      part-00759-8299c866-c99b-45fc-92d0-4d8b5c1f7503-c000.zstd.parquet
-      ...  (thousands of parquet files; looked up via T3.t1_file_path)
+| Metric | Value |
+|--------|-------|
+| T3 coreset batch files | 12,231 |
+| T3 total rows (documents) | 19,882,213 |
+| Total tokens (after filtering) | **9,895,522,858 (~9.896B)** |
+| Unique T1 source parquets | 25,420 |
+| T1 total size on S3 | 4,305 GB |
+| T1 avg / max file size | 173 MB / **2.68 GB** |
+| Avg T1 files per T3 batch | ~2.1 |
+| Output shards at 512 MB | **~74** |
+| Output shards at 1 GB | **~37** |
+| Output shards at 2 GB | **~19** |
+| Total output size (all shard sizes) | **~40–42 GB** |
 
-Local → uploaded to S3 before run:
-  tsai_131k_tokenizer/
-    tokenizer.json, special_tokens_map.json, tokenizer_config.json
-  tokenize_curriculum.py  (+ validate_shards.py, scripts/)
+> Output size is constant across shard sizes — it only changes how many files the training dataloader opens.
 
-S3 us-east-1 (DESTINATION — created during run):
-  s3://your-training-bucket/tokenized/run_YYYYMMDD/
-    progress_state.json                          ← cross-interrupt resume state
-    manifest.json                                ← global summary after completion
-    selected_indices_part_shard000_batch000000/
-      shard_000/
-        tokens.bin        ← uint32 little-endian token IDs (512 MB)
-        tokens.idx        ← spdl-compatible binary index
-        metadata.json     ← rich metadata (tokenizer_hash, band, rows_input, ...)
-      shard_001/ ...
-    selected_indices_part_shard000_batch000001/
-      ...
-```
+#### Can the Script Handle This Scale?
 
-#### Why Single Large Instance (Not Distributed)
+**Yes — no modifications required.** Confirmed scalability at each layer:
 
-- S3 source reads from EC2 in the **same region** (us-east-1) are **free** and very fast
-- The bottleneck is **CPU tokenization**, not I/O
-- A single `c5.9xlarge` (36 vCPU) with 12-way file-level parallelism saturates all cores
-- No distributed coordination overhead — the checkpoint system handles interrupts natively
-- EMR/ECS setup would add hours of overhead for a job that runs in ~4 hours
+| Concern | Scale at 12,231 files | How it's handled |
+|---------|-----------------------|-----------------|
+| Pool task queue | 12,231 `apply_async` submissions | Python multiprocessing handles this without issue; `Pool(N)` processes N concurrently |
+| `.done` marker loading on resume | 12,231 S3 `GetObject` calls (~13 paginated `list_objects_v2` pages) | One-time cost of ~30–90 seconds on resume startup; acceptable |
+| `progress_state.json` size | 12,231 completed URI strings ≈ 1.5–3 MB JSON | Trivial for S3 read/write |
+| Shard counter scanning | Only ~74 shard folder names listed (not contents) | `get_next_shard_idx_from_existing` uses S3 `Delimiter` listing, very fast |
+| Output shard count | 74 shards at 512 MB | Minimal; Megatron loaders handle thousands of shards |
 
-#### Step 1 — Prerequisite: Verify AWS Credentials and Bucket Access
+#### Why Single Instance (Not Distributed)
 
-```bash
-# From your local machine
-aws sts get-caller-identity  # verify credentials are set
+- S3 → EC2 intra-region reads are **free** and fast (10–25 Gbps ENA networking)
+- The bottleneck is **CPU tokenization** (BPE is Rust-based, memory-bound, not I/O-bound)
+- A single instance with `--file-parallelism 8–10` saturates all cores
+- Distributed coordination (EMR/ECS) would add hours of setup for a ~5-hour job
+- The checkpoint system already handles Spot interruptions natively — no orchestration needed
 
-# Verify read access to T3 coreset bucket
-aws s3 ls s3://t2-datacurriculum-353/coreset_outputs/coresets/1B/ --region us-east-1
+#### Why Not GPU Instances?
 
-# Verify read access to T1 raw text bucket
-aws s3 ls s3://t1-dataacquisition-datasets/processed_dataset/normalized_data/ --region us-east-1
+BPE tokenization (HuggingFace `tokenizers` library, Rust-based) is **CPU-only**. There is no CUDA-accelerated BPE implementation available. GPU instances (g4dn, p3, p4) would provide **zero throughput improvement** and cost significantly more than CPU-optimized instances.
 
-# Create destination bucket if not already existing (see Section 4.3)
-aws s3 ls s3://your-training-bucket || aws s3 mb s3://your-training-bucket --region us-east-1
-```
+The correct scaling axis is **vCPU count**, not GPU cores.
 
-#### Step 2 — Upload Tokenizer and Code to S3
+---
 
-T3 coresets and T1 raw text are already on S3 — no upload needed for source data.
-Only the tokenizer and pipeline code need to be uploaded from your local machine.
+### 4.2 Instance Selection & Efficiency
 
-> **Note:** Alternatively, the tokenizer JSON files (`tokenizer.json`, `special_tokens_map.json`,
-> `tokenizer_config.json`) can be synced directly from the project GitHub repository onto the EC2
-> instance instead of uploading from local.
+#### Memory Constraint: The 2.68 GB T1 File
 
-```bash
-# Set your bucket name
-BUCKET="your-training-bucket"
+This is the most important sizing consideration. The pipeline reads each T1 file fully into RAM as a pandas DataFrame before filtering. Parquet with zstd typically expands 3–6× in memory:
 
-# Upload tokenizer (~5 MB)
-aws s3 sync tsai_131k_tokenizer/ s3://${BUCKET}/tsai_131k_tokenizer/ \
-  --region us-east-1
+- **Average T1 file**: 173 MB compressed → ~600 MB–1 GB in RAM
+- **Largest T1 file**: 2.68 GB compressed → **~8–16 GB in RAM**
 
-# Upload code
-aws s3 sync . s3://${BUCKET}/tokenizer-code/ \
-  --region us-east-1 \
-  --exclude ".git/*" \
-  --exclude "*.pyc" \
-  --exclude "__pycache__/*" \
-  --exclude ".DS_Store" \
-  --exclude "datasets/*" \
-  --exclude "coresets/*" \
-  --exclude "tsai_131k_tokenizer/*"
-```
+Per-worker peak memory = T1 DataFrame + HF Dataset (filtered subset) + ShardWriter accumulated_blocks buffer:
 
-#### Step 3 — Create IAM Role for EC2 (one-time setup)
+| `--shard-size-mb` | ShardWriter buffer/worker | Per-worker peak (avg) | Per-worker peak (worst — 2.68 GB T1) |
+|-------------------|--------------------------|----------------------|--------------------------------------|
+| 512 MB | up to 512 MB | ~1.5–2 GB | ~9–17 GB |
+| 1 GB | up to 1 GB | ~2–3 GB | ~10–18 GB |
+| 2 GB | up to 2 GB | ~3–4 GB | ~11–19 GB |
 
-See [Section 4.3](#43-s3-setup-and-iam) for the full IAM policy. Quick setup:
+**Implication**: with `--file-parallelism 12` and 512 MB shards, worst-case RAM = 12 × 17 GB = 204 GB — far beyond any single instance. However, the probability of all 12 workers simultaneously loading the 2.68 GB outlier file is extremely low. With `--file-parallelism 8`, the realistic peak is 8 × 2 GB = 16 GB (typical) with occasional spikes.
 
-```bash
-# Save the trust policy
-cat > /tmp/ec2-trust.json << 'EOF'
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": {"Service": "ec2.amazonaws.com"},
-    "Action": "sts:AssumeRole"
-  }]
-}
-EOF
+**Recommendation: use `--file-parallelism 8` or less** on instances with ≤ 96 GB RAM.
 
-# Create role and instance profile
-aws iam create-role \
-  --role-name TokenizationInstanceRole \
-  --assume-role-policy-document file:///tmp/ec2-trust.json
+#### Recommended Instance Configurations
 
-aws iam create-instance-profile --instance-profile-name TokenizationRole
-aws iam add-role-to-instance-profile \
-  --instance-profile-name TokenizationRole \
-  --role-name TokenizationInstanceRole
+Duration basis: 12,231 batches ÷ `--file-parallelism` = pool rounds × ~13 s/round (download + tokenize + write).
 
-# Attach the inline policy (see Section 4.3 for full JSON)
-aws iam put-role-policy \
-  --role-name TokenizationInstanceRole \
-  --policy-name TokenizationPolicy \
-  --policy-document file:///tmp/tokenization-policy.json
-```
+| Instance | vCPU | RAM | `--file-parallelism` | `--num-proc` | Est. Duration | Spot $/hr | Cost (512 MB) | Cost (1 GB) | Cost (2 GB) |
+|----------|------|-----|---------------------|-------------|--------------|-----------|--------------|------------|------------|
+| c5.4xlarge | 16 | 32 GB | 4 | 4 | ~14 hrs | $0.15–0.22 | $2.10–3.08 | same | same |
+| c5.9xlarge | 36 | 72 GB | 8 | 4 | ~6 hrs | $0.35–0.55 | $2.10–3.30 | same | same |
+| c5.18xlarge | 72 | 144 GB | 16 | 4 | ~3 hrs | $0.65–1.00 | $1.95–3.00 | same | same |
+| **c6a.12xlarge** | **48** | **96 GB** | **10** | **4** | **~4.5 hrs** | **$0.25–0.40** | **~$1.13–1.80** | **same** | **same** |
+| c6i.12xlarge | 48 | 96 GB | 10 | 4 | ~4.5 hrs | $0.30–0.50 | $1.35–2.25 | same | same |
 
-#### Step 4 — Launch EC2 Spot Instance
+> **Cost is identical across all shard sizes** — shard size affects output file count and peak RAM, not tokenization speed or wall time.
+
+**c6a.12xlarge Spot is the recommended choice:** 48 vCPU, 96 GB RAM (comfortable margin for large T1 files with 10 workers), AMD EPYC (competitive BPE throughput), ~30–40% cheaper per vCPU than c5.9xlarge.
+
+**c5.9xlarge** is a solid fallback with historically higher Spot availability in us-east-1.
+
+#### Shard Size Recommendation
+
+| Shard size | Shards | RAM impact | Recommendation |
+|------------|--------|-----------|----------------|
+| 512 MB | 74 | Lowest | **Default — use this.** Megatron standard; compatible with all training tooling |
+| 1 GB | 37 | +~500 MB/worker | Use only if training team explicitly requests fewer shard files |
+| 2 GB | 19 | +~1.5 GB/worker | Minimal additional benefit; risk of tight RAM on smaller instances |
+
+#### Recommended Production Command
 
 ```bash
-BUCKET="your-training-bucket"
-RUN_ID="run_$(date +%Y%m%d)"
-KEY_NAME="your-key-pair"       # Replace with your EC2 key pair name
-SUBNET_ID="subnet-xxxxxxxx"   # Replace with a us-east-1 subnet
-SG_ID="sg-xxxxxxxx"           # Replace with your security group
-
-aws ec2 run-instances \
-  --region us-east-1 \
-  --image-id ami-0c02fb55956c7d316 \
-  --instance-type c5.9xlarge \
-  --key-name ${KEY_NAME} \
-  --security-group-ids ${SG_ID} \
-  --subnet-id ${SUBNET_ID} \
-  --iam-instance-profile Name=TokenizationRole \
-  --block-device-mappings '[{
-    "DeviceName": "/dev/xvda",
-    "Ebs": {
-      "VolumeSize": 200,
-      "VolumeType": "gp3",
-      "Iops": 3000,
-      "Throughput": 125,
-      "DeleteOnTermination": true
-    }
-  }]' \
-  --instance-market-options '{
-    "MarketType": "spot",
-    "SpotOptions": {
-      "SpotInstanceType": "one-time",
-      "InstanceInterruptionBehavior": "terminate"
-    }
-  }' \
-  --tag-specifications \
-    'ResourceType=instance,Tags=[{Key=Name,Value=tokenization-run},{Key=RunId,Value='${RUN_ID}'}]' \
-  --query 'Instances[0].InstanceId' \
-  --output text
-# Save the instance ID printed above
-```
-
-> **Tip:** If `c5.9xlarge` spot capacity is unavailable, try `c5.18xlarge` or `c5.4xlarge` as alternatives.
-
-#### Step 5 — SSH and Run Tokenization
-
-```bash
-# Wait ~60 seconds for instance to boot, then SSH
-INSTANCE_IP=$(aws ec2 describe-instances \
-  --instance-ids i-xxxxxxxxxxxxxxxxx \
-  --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
-
-ssh -i ${KEY_NAME}.pem ec2-user@${INSTANCE_IP}
-```
-
-On the instance, run the following bootstrap once:
-
-```bash
-# ---- BOOTSTRAP (run once after SSH) ----
-BUCKET="your-training-bucket"
-RUN_ID="run_$(date +%Y%m%d)"
-
-# Install Python deps
-sudo yum install -y python3.11 python3.11-pip tmux htop 2>/dev/null || \
-  sudo apt-get install -y python3 python3-pip tmux htop 2>/dev/null || true
-
-pip3 install numpy pandas pyarrow transformers datasets boto3 botocore tokenizers
-
-# Download code + data
-aws s3 sync s3://${BUCKET}/tokenizer-code/ ~/tokenizer/ --region us-east-1
-aws s3 sync s3://${BUCKET}/coresets/1B/ ~/tokenizer/coresets/1B/ --region us-east-1
-aws s3 sync s3://${BUCKET}/tsai_131k_tokenizer/ ~/tokenizer/tsai_131k_tokenizer/ --region us-east-1
-
-cd ~/tokenizer
-```
-
-Then run the tokenizer inside tmux (protects against SSH disconnects):
-
-```bash
-# Start a tmux session so the job survives SSH disconnect
-tmux new -s tokenize
-
-# Full production run — adjust BUCKET and RUN_ID
-BUCKET="your-training-bucket"
-RUN_ID="run_$(date +%Y%m%d)"
-
 python tokenize_curriculum.py \
-  --coreset-uri   s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
-  --dst-uri       s3://${BUCKET}/tokenized/${RUN_ID} \
+  --coreset-uri    s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
+  --dst-uri        s3://your-training-bucket/tokenized/run_$(date +%Y%m%d) \
   --tokenizer-path ./tsai_131k_tokenizer \
-  --t1-base-uri   s3://t1-dataacquisition-datasets/processed_dataset/normalized_data \
-  --block-size    4096 \
-  --shard-size-mb 512 \
-  --num-proc      3 \
-  --file-parallelism 12 \
+  --t1-base-uri    s3://t1-dataacquisition-datasets/processed_dataset/normalized_data \
+  --block-size     4096 \
+  --shard-size-mb  512 \
+  --num-proc       4 \
+  --file-parallelism 10 \
   --drop-remainder \
-  --stage         1 \
+  --stage          1 \
   --tokenizer-version v1 \
-  --tmp-dir       /tmp/tok_tmp \
+  --tmp-dir        /tmp/tok_tmp \
   2>&1 | tee ~/tokenize_$(date +%Y%m%d_%H%M%S).log
-
-# Detach from tmux: Ctrl+B, then D
-# Reattach later: tmux attach -t tokenize
 ```
 
-#### Step 6 — Monitor Progress
+> Adjust `--file-parallelism` to match your instance: 8 for c5.9xlarge, 10 for c6a.12xlarge/c6i.12xlarge, 16 for c5.18xlarge.
 
-```bash
-# Watch log (from another terminal)
-tail -f ~/tokenize_*.log
+---
 
-# Check how many shards have been uploaded
-aws s3 ls s3://${BUCKET}/tokenized/${RUN_ID}/ --recursive | grep metadata.json | wc -l
+### 4.3 Cost & Duration Breakdown
 
-# Check progress state
-aws s3 cp s3://${BUCKET}/tokenized/${RUN_ID}/progress_state.json - | python3 -c \
-  "import json,sys; s=json.load(sys.stdin); print(f'Completed: {len(s[\"completed\"])} files')"
+#### S3 Data Flow
 
-# Monitor CPU usage on instance
-htop
+```
+S3 us-east-1 (T3 — read-only, already exists):
+  s3://t2-datacurriculum-353/coreset_outputs/coresets/1B/
+    12,231 × selected_indices_*.parquet   (~few GB total)
+
+S3 us-east-1 (T1 — read-only, already exists):
+  s3://t1-dataacquisition-datasets/processed_dataset/normalized_data/
+    25,420 × part-*.zstd.parquet          (~4,305 GB total)
+    avg 173 MB · max 2.68 GB
+
+S3 us-east-1 (output — created during run):
+  s3://your-training-bucket/tokenized/run_YYYYMMDD/
+    progress_state.json                   ← resume state (updated after each batch)
+    manifest.json                         ← global summary (written on clean completion)
+    completed/
+      selected_indices_*_batch000000.done ← per-batch completion marker (12,231 files)
+      ...
+    shards/
+      shard_001/
+        tokens.bin    ← uint32 token IDs (512 MB per shard)
+        tokens.idx    ← spdl-compatible binary byte offsets
+        metadata.json ← per-shard metadata (tokenizer_hash, band, domain, source_file, ...)
+      shard_002/ … shard_074/             (~74 shards total at 512 MB)
 ```
 
-#### Step 7 — Validate Output
+#### Throughput Model
 
-After the run completes (or any time):
+- T1 download per batch: ~2.1 files × 173 MB / 100 MB/s per worker ≈ **3–4 seconds**
+- Tokenization per batch: ~809K tokens / (3M tokens/min/worker × 4 HF procs) ≈ **8–10 seconds**
+- Shard write: few MB to S3 ≈ **< 1 second** (overlaps with next download)
+- **Per batch: ~12–15 seconds end-to-end**
+- S3 intra-region transfer: 4,305 GB / (10 workers × 100 MB/s) ≈ **72 minutes** (overlaps fully with tokenization — not on critical path)
+
+#### Duration Estimates (9.896B tokens)
+
+| Instance | `--file-parallelism` | Pool rounds | Est. wall time |
+|----------|---------------------|-------------|----------------|
+| c5.4xlarge | 4 | 3,058 | ~12–14 hrs |
+| c5.9xlarge | 8 | 1,529 | ~5–6 hrs |
+| **c6a.12xlarge** | **10** | **1,224** | **~4–5 hrs** |
+| c5.18xlarge | 16 | 765 | ~2.5–3 hrs |
+
+#### Output Size (Post-Processing)
+
+Every shard directory (`shards/shard_NNN/`) contains three files:
+
+| File | Per-shard size | 74 shards total | Description |
+|------|---------------|-----------------|-------------|
+| `tokens.bin` | 512 MB (exact) | **37.9 GB** | uint32 token IDs, packed 4096-token blocks |
+| `tokens.idx` | ~2–3 MB | **~150–220 MB** | spdl-compatible binary index: block count, byte offsets, doc offsets |
+| `metadata.json` | ~2–5 KB | **~150–370 KB** | tokenizer hash, band/domain distribution, shard stats |
+
+Runtime artifacts (at `<dst>/`):
+
+| File | Size | Description |
+|------|------|-------------|
+| `.done` markers (12,231 files) | ~12–24 MB total | Per-batch completion markers with token/row stats |
+| `progress_state.json` | ~1.5–3 MB | Resume state; lists completed batch URIs |
+| `manifest.json` | ~few KB | Global summary (total shards, tokens, processed files) |
+
+**Total output: ~38–40 GB** (dominated by `tokens.bin`; all other artifacts are < 250 MB combined)
+
+> Same total output size regardless of `--shard-size-mb` — only the file count and per-shard size change.
+
+#### Cost Estimates (us-east-1, Spot)
+
+| Component | c5.9xlarge (6 hrs) | c6a.12xlarge (4.5 hrs) | c5.18xlarge (3 hrs) |
+|-----------|-------------------|------------------------|---------------------|
+| Compute (Spot) | $2.10–3.30 | **$1.13–1.80** | $1.95–3.00 |
+| EBS gp3 100 GB | $0.05 | $0.05 | $0.05 |
+| S3 intra-region reads (T1, T3) | **$0.00** | **$0.00** | **$0.00** |
+| S3 PUT — shard files (222 PUTs) | $0.001 | $0.001 | $0.001 |
+| S3 PUT — `.done` markers (12,231) | $0.06 | $0.06 | $0.06 |
+| S3 PUT — `progress_state.json` (~12,231 updates) | $0.06 | $0.06 | $0.06 |
+| S3 GET — T1 GetObject (25,420) | $0.01 | $0.01 | $0.01 |
+| **Total one-time run cost** | **~$2.28–3.48** | **~$1.30–1.97** | **~$2.12–3.17** |
+| S3 output storage — Standard (~39 GB/month) | $0.90/mo | $0.90/mo | $0.90/mo |
+| S3 output storage — Infrequent Access (~39 GB/month) | $0.49/mo | $0.49/mo | $0.49/mo |
+
+> **S3 API cost breakdown**: ~24,685 PUT requests × $0.005/1000 ≈ **$0.12**; ~25,420 GET requests × $0.0004/1000 ≈ **$0.01**. Total S3 API overhead per run: **~$0.13**. S3 data transfer is $0.00 for EC2→S3 within us-east-1.
+
+---
+
+### 4.4 Spot Instance Interrupt Handling
+
+#### How AWS Spot Interrupts Work
+
+1. AWS reclaims capacity → **2-minute warning** via IMDS: `GET http://169.254.169.254/latest/meta-data/spot/termination-time` returns HTTP 200
+2. **SIGTERM** sent ~30 seconds before hard shutdown
+3. Instance terminated
+
+#### What `tokenize_curriculum.py` Does on Interruption
+
+**Layer 1 — IMDS polling thread**: polls every 5 s; sets `_TERMINATION_DETECTED` event on HTTP 200.
+
+**Layer 2 — SIGTERM handler**: registered at startup; sets the same event. Also captures SIGINT (Ctrl+C) for local testing.
+
+**Layer 3 — Graceful shutdown**:
+- The `apply_async` polling loop calls `pool.terminate()` within 2 seconds of detection
+- Workers mid-batch: discard partial `accumulated_blocks` — only fully uploaded shards (those with `metadata.json`) are kept
+- Fully completed batches already have `.done` markers → skipped on resume
+- Orphan shards (from interrupted workers) are purged automatically on the next resume startup (`purge_orphan_shards()`)
+
+#### Resume at 12,231-File Scale
+
+Re-running with identical arguments resumes safely:
+1. Reads `progress_state.json` → skips completed batch URIs
+2. Loads all `.done` markers (~13 paginated S3 list calls + JSON reads, ~30–90 s one-time cost)
+3. Purges any orphan shards from prior interrupted workers
+4. Initialises shard counter from `max(existing shard numbers) + 1`
+5. Submits only pending batches to the pool
+
+**At <5% Spot interruption probability for a 5-hour job:**
+- Expected extra cost per run: 5% × ~$0.45 (one Spot-hour) ≈ **~$0.02**
+- Work lost per interruption: at most 1 partially-accumulated shard; all completed batches preserved
+
+#### Manual Resume After Interruption
 
 ```bash
-# Run on instance or locally after syncing outputs
+# Check completed batch count
+aws s3 cp s3://${BUCKET}/tokenized/${RUN_ID}/progress_state.json - | \
+  python3 -c "import json,sys; s=json.load(sys.stdin); \
+  print(f'Completed: {len(s[\"completed\"])} / 12231 batches')"
+
+# Re-run with identical arguments — resumes automatically
+python tokenize_curriculum.py \
+  --coreset-uri    s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
+  --dst-uri        s3://${BUCKET}/tokenized/${RUN_ID} \
+  # ... same args as original run
+```
+
+---
+
+## Quick Reference
+
+### Recommended Command (Production Run — c6a.12xlarge)
+
+```bash
+python tokenize_curriculum.py \
+  --coreset-uri    s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
+  --dst-uri        s3://your-training-bucket/tokenized/run_$(date +%Y%m%d) \
+  --tokenizer-path ./tsai_131k_tokenizer \
+  --t1-base-uri    s3://t1-dataacquisition-datasets/processed_dataset/normalized_data \
+  --block-size     4096 \
+  --shard-size-mb  512 \
+  --num-proc       4 \
+  --file-parallelism 10 \
+  --drop-remainder \
+  --stage          1 \
+  --tokenizer-version v1 \
+  --tmp-dir        /tmp/tok_tmp
+```
+
+### Validation Command (After Run)
+
+```bash
 python validate_shards.py \
   --shards-dir /tmp/tok_out_synced \
   --tokenizer-path ./tsai_131k_tokenizer \
-  --verbose \
-  2>&1 | tee ~/validation_$(date +%Y%m%d).log
-
-# Or sync metadata only for a quick check
-aws s3 sync s3://${BUCKET}/tokenized/${RUN_ID}/ /tmp/tok_out_synced/ \
-  --exclude "*.bin" --include "*/metadata.json"
-python validate_shards.py \
-  --shards-dir /tmp/tok_out_synced \
-  --tokenizer-path ./tsai_131k_tokenizer
+  --verbose
 ```
 
-#### Step 8 — Terminate Instance
+### Cost Summary (9.896B tokens, Stage 1B)
 
-```bash
-# From your laptop — only after validating output
-aws ec2 terminate-instances \
-  --instance-ids i-xxxxxxxxxxxxxxxxx \
-  --region us-east-1
-```
+| What | Value |
+|------|-------|
+| Recommended instance | c6a.12xlarge Spot, us-east-1 |
+| Fallback instance | c5.9xlarge Spot (higher availability) |
+| Estimated duration | ~4.5 hrs (c6a.12xlarge, 10 workers) |
+| Compute cost (Spot) | **~$1.13–1.80** |
+| S3 transfer cost | **$0.00** (intra-region EC2↔S3) |
+| S3 API cost (PUTs + GETs per run) | **~$0.13** |
+| **Total one-time run cost** | **~$1.30–1.97** |
+| Output size | **~38–40 GB** (74 × tokens.bin + idx + markers) |
+| Output storage — S3 Standard | ~$0.90/month |
+| Output storage — S3 Infrequent Access | ~$0.49/month |
+| Spot interruption risk | <5% for 5-hour job in us-east-1 |
+| Expected extra cost from interruption | **~$0.02** |
 
 ---
 
-### 4.2 Cost and Duration Breakdown
+## Appendix A: S3 Setup & IAM
 
-#### Throughput Assumptions
-
-- TSAI 131K BPE tokenization throughput: ~3–5 million tokens/minute per vCPU
-- S3 same-region read latency (EC2 → S3, us-east-1): negligible for this workload
-- Each source parquet: ~50–200 MB compressed; ~5,000 unique source files total
-- With 12-way file-level parallelism, 12 source files download concurrently
-- S3 sustained read throughput to one instance: 2–5 GB/s for concurrent requests
-
-**Estimated wall time (20B tokens, c5.9xlarge, 12 workers × 3 HF procs = 36 cores):**
-- Tokenization: 20B tokens / (4M tokens/min × 36 cores) ≈ 140 min ≈ **~3–5 hours**
-- S3 download overhead: ~500 GB source data / 2 GB/s = ~4 minutes (negligible)
-- **Total: ~4 hours on c5.9xlarge**
-
-#### Instance Options
-
-| Instance | vCPU | RAM | `--file-parallelism` | `--num-proc` | Est. Duration | On-Demand $/hr | Spot $/hr (est.) |
-|----------|------|-----|---------------------|-------------|--------------|----------------|-----------------|
-| c5.xlarge | 4 | 8 GB | 1 | 4 | ~40 hrs | $0.17 | $0.05–0.07 |
-| c5.4xlarge | 16 | 32 GB | 8 | 2 | ~10 hrs | $0.68 | $0.15–0.22 |
-| **c5.9xlarge** | **36** | **72 GB** | **12** | **3** | **~4 hrs** | **$1.53** | **$0.35–0.55** |
-| c5.18xlarge | 72 | 144 GB | 20 | 3 | ~2.5 hrs | $3.06 | $0.65–1.00 |
-| r5.4xlarge | 16 | 128 GB | 8 | 2 | ~10 hrs | $1.01 | $0.22–0.35 |
-
-> Use `r5.4xlarge` only if large source parquets (>300 MB) cause memory pressure on `c5`.
-
-#### Total Cost Estimates (20B tokens, us-east-1)
-
-| Component | Cost |
-|-----------|------|
-| c5.9xlarge Spot (~4 hrs) | $1.40–$2.20 |
-| EBS gp3 200 GB (4 hrs) | $0.09 |
-| S3 data transfer (same-region) | **$0.00** |
-| S3 PUT requests (~500) | $0.003 |
-| S3 GET requests (~5,000) | $0.002 |
-| **Total compute** | **~$1.50–$2.30** |
-
-#### Output Storage Cost
-
-- Output shards: 20B tokens × 4 bytes = 80 GB minimum; with index files and metadata: ~90–100 GB
-- S3 Standard: $0.023/GB/month → ~**$2.07–$2.30/month**
-- S3 Infrequent Access (for archival): $0.0125/GB/month → **~$1.13–$1.25/month**
-
-#### Cost Comparison Summary
-
-| Strategy | Duration | Cost |
-|----------|----------|------|
-| c5.xlarge Spot (cheap, slow) | ~40 hrs | ~$2.00–$2.80 |
-| c5.4xlarge Spot | ~10 hrs | ~$1.50–$2.20 |
-| **c5.9xlarge Spot (recommended)** | **~4 hrs** | **~$1.50–$2.30** |
-| c5.18xlarge Spot | ~2.5 hrs | ~$1.65–$2.50 |
-| On-Demand c5.9xlarge (no Spot) | ~4 hrs | ~$6.12 |
-
-**The c5.9xlarge Spot is the sweet spot**: fastest per-dollar, fits comfortably in 72 GB RAM
-(12 workers × ~900 MB peak each = ~10.8 GB, leaving 61 GB headroom), and has high Spot
-availability in us-east-1 during off-peak hours (Spot interruption rate < 5% for 4-hour jobs).
-
----
-
-### 4.3 S3 Setup and IAM
-
-#### IAM Policy for EC2 Instance
+### IAM Policy for EC2 Instance
 
 Save as `tokenization-policy.json`:
 
@@ -858,11 +827,7 @@ Save as `tokenization-policy.json`:
     {
       "Sid": "ReadCoresetIndex",
       "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:HeadObject",
-        "s3:ListBucket"
-      ],
+      "Action": ["s3:GetObject", "s3:HeadObject", "s3:ListBucket"],
       "Resource": [
         "arn:aws:s3:::t2-datacurriculum-353",
         "arn:aws:s3:::t2-datacurriculum-353/coreset_outputs/*"
@@ -871,11 +836,7 @@ Save as `tokenization-policy.json`:
     {
       "Sid": "ReadRawTextData",
       "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:HeadObject",
-        "s3:ListBucket"
-      ],
+      "Action": ["s3:GetObject", "s3:HeadObject", "s3:ListBucket"],
       "Resource": [
         "arn:aws:s3:::t1-dataacquisition-datasets",
         "arn:aws:s3:::t1-dataacquisition-datasets/processed_dataset/normalized_data/*"
@@ -885,11 +846,8 @@ Save as `tokenization-policy.json`:
       "Sid": "ReadWriteTrainingBucket",
       "Effect": "Allow",
       "Action": [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:HeadObject",
-        "s3:ListBucket",
-        "s3:DeleteObject"
+        "s3:GetObject", "s3:PutObject", "s3:HeadObject",
+        "s3:ListBucket", "s3:DeleteObject"
       ],
       "Resource": [
         "arn:aws:s3:::your-training-bucket",
@@ -900,69 +858,63 @@ Save as `tokenization-policy.json`:
 }
 ```
 
-#### Destination Bucket Setup
+### Create IAM Role and Instance Profile (one-time)
+
+```bash
+cat > /tmp/ec2-trust.json << 'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}]
+}
+EOF
+
+aws iam create-role \
+  --role-name TokenizationInstanceRole \
+  --assume-role-policy-document file:///tmp/ec2-trust.json
+
+aws iam create-instance-profile --instance-profile-name TokenizationRole
+aws iam add-role-to-instance-profile \
+  --instance-profile-name TokenizationRole \
+  --role-name TokenizationInstanceRole
+
+aws iam put-role-policy \
+  --role-name TokenizationInstanceRole \
+  --policy-name TokenizationPolicy \
+  --policy-document file:///tmp/tokenization-policy.json
+```
+
+### Destination Bucket Setup (one-time)
 
 ```bash
 BUCKET="your-training-bucket"
-REGION="us-east-1"
-
-# Create bucket
-aws s3api create-bucket \
-  --bucket ${BUCKET} \
-  --region ${REGION}
-
-# Block all public access
-aws s3api put-public-access-block \
-  --bucket ${BUCKET} \
+aws s3api create-bucket --bucket ${BUCKET} --region us-east-1
+aws s3api put-public-access-block --bucket ${BUCKET} \
   --public-access-block-configuration \
-    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-
-# Enable server-side encryption (AES-256)
-aws s3api put-bucket-encryption \
-  --bucket ${BUCKET} \
-  --server-side-encryption-configuration '{
-    "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
-  }'
+  "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+aws s3api put-bucket-encryption --bucket ${BUCKET} \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 ```
 
-#### S3 Prefix Structure
+### Verify Access
 
-```
-s3://t2-datacurriculum-353/            (T3 coreset index — read-only source, already exists)
-  coreset_outputs/coresets/1B/
-    selected_indices_part_shard000_batch000000.parquet
-    ...
-
-s3://t1-dataacquisition-datasets/     (T1 raw text — read-only source, already exists)
-  processed_dataset/normalized_data/
-    source=C4/
-      part-00759-8299c866-....parquet
-      ...
-
-s3://your-training-bucket/            (training output bucket)
-  tsai_131k_tokenizer/
-    tokenizer.json
-    special_tokens_map.json
-    tokenizer_config.json
-  tokenizer-code/
-    tokenize_curriculum.py
-    validate_shards.py
-    scripts/
-  tokenized/
-    run_20260303/                    ← one directory per run (timestamped)
-      progress_state.json            ← interrupt/resume state (updated after each batch file)
-      manifest.json                  ← global summary (written on successful completion)
-      selected_indices_part_shard000_batch000000/
-        shard_000/
-          tokens.bin                 ← 512 MB uint32 token IDs
-          tokens.idx                 ← spdl-compatible offset index
-          metadata.json              ← rich metadata (see below)
-        shard_001/ ...
-      selected_indices_part_shard000_batch000001/
-        ...
+```bash
+aws sts get-caller-identity
+aws s3 ls s3://t2-datacurriculum-353/coreset_outputs/coresets/1B/ --region us-east-1
+aws s3 ls s3://t1-dataacquisition-datasets/processed_dataset/normalized_data/ --region us-east-1
 ```
 
-#### metadata.json Schema (per shard)
+### Upload Tokenizer and Code
+
+```bash
+BUCKET="your-training-bucket"
+aws s3 sync tsai_131k_tokenizer/ s3://${BUCKET}/tsai_131k_tokenizer/ --region us-east-1
+aws s3 sync . s3://${BUCKET}/tokenizer-code/ --region us-east-1 \
+  --exclude ".git/*" --exclude "*.pyc" --exclude "__pycache__/*" \
+  --exclude "dataset/*" --exclude "tsai_131k_tokenizer/*"
+```
+
+### metadata.json Schema (per shard)
 
 ```json
 {
@@ -974,10 +926,10 @@ s3://your-training-bucket/            (training output bucket)
   "vocab_size": 131072,
   "pad_token_id": 130718,
   "eos_token_id": 130717,
-  "num_blocks": 131072,
-  "total_tokens": 536870912,
-  "file_size_bytes": 2147483648,
-  "shard_name": "shard_000",
+  "num_blocks": 32768,
+  "total_tokens": 134217728,
+  "file_size_bytes": 536870912,
+  "shard_name": "shard_001",
   "tokenizer_hash": "sha256-of-tokenizer.json+special_tokens_map.json",
   "tokenizer_version": "v1",
   "band": "B0",
@@ -985,85 +937,134 @@ s3://your-training-bucket/            (training output bucket)
   "domain": "web",
   "domain_distribution": {"web": 1.0},
   "stage": 1,
-  "source_file": "coresets/1B/selected_indices_part_shard000_batch000000.parquet",
+  "source_file": "s3://t2-datacurriculum-353/coreset_outputs/coresets/1B/selected_indices_*_batch000000.parquet",
   "rows_input": 245000,
   "rows_with_eos": 244997,
   "rows_dropped": 3,
   "tokens_dropped": 8192,
   "drop_reason": "tail_truncation_at_block_boundary",
-  "created_at": "2026-03-03T14:30:00Z"
+  "created_at": "2026-03-06T10:00:00Z"
 }
 ```
 
 ---
 
-### 4.4 Spot Instance Interrupt Handling
+## Appendix B: EC2 Launch & Run
 
-#### How AWS Spot Interrupts Work
-
-1. AWS decides to reclaim the instance (capacity needed elsewhere)
-2. **2-minute warning**: posted to EC2 Instance Metadata Service (IMDS)
-   - `GET http://169.254.169.254/latest/meta-data/spot/termination-time`
-   - Returns HTTP 200 + timestamp when termination is scheduled; HTTP 404 otherwise
-3. **OS signal**: SIGTERM sent ~30 seconds before hard shutdown
-4. **Hard shutdown**: instance is terminated
-
-#### What `tokenize_curriculum.py` Does on Interruption
-
-The updated script handles this at three layers:
-
-**Layer 1 — IMDS polling daemon thread**
-- Background thread polls IMDS every 5 seconds
-- On HTTP 200 response: sets `_TERMINATION_DETECTED` threading.Event
-- Processing loop checks this flag before each source file download
-
-**Layer 2 — SIGTERM signal handler**
-- `signal.signal(SIGTERM, handler)` registered at startup
-- Also captures SIGINT (Ctrl+C) for local testing
-- Handler sets the same `_TERMINATION_DETECTED` event
-
-**Layer 3 — Graceful shutdown logic**
-- On termination detected: the processing loop breaks before the next source file
-- Partial `accumulated_blocks` in `ShardWriter` are **discarded** (not flushed)
-- Only **fully uploaded shards** (with `metadata.json` on S3) are counted as complete
-- `progress_state.json` on S3 records which batch files completed fully
-
-#### Checkpoint and Resume Mechanism
-
-The script has two levels of checkpointing:
-
-| Level | Granularity | How it works |
-|-------|-------------|-------------|
-| **Shard level** | Per 512 MB shard | `flush_shard()` checks if `metadata.json` exists at S3 key; if yes, skips |
-| **Batch file level** | Per coreset batch file | `progress_state.json` lists completed batch file URIs |
-
-On resume (instance relaunched with same arguments):
-1. `progress_state.json` is read from S3
-2. Already-completed batch files are skipped immediately (no S3 HEAD requests)
-3. In-progress batch files from the previous run are re-processed with shard-level skipping
-4. Fully fresh batch files are processed normally
-
-#### Auto-Restart with Auto Scaling Group (Optional)
-
-For fully automated restart without manual intervention:
+### Launch EC2 Spot Instance
 
 ```bash
-# 1. Create launch template
+BUCKET="your-training-bucket"
+RUN_ID="run_$(date +%Y%m%d)"
+KEY_NAME="your-key-pair"
+SUBNET_ID="subnet-xxxxxxxx"
+SG_ID="sg-xxxxxxxx"
+
+aws ec2 run-instances \
+  --region us-east-1 \
+  --image-id ami-0c02fb55956c7d316 \
+  --instance-type c6a.12xlarge \
+  --key-name ${KEY_NAME} \
+  --security-group-ids ${SG_ID} \
+  --subnet-id ${SUBNET_ID} \
+  --iam-instance-profile Name=TokenizationRole \
+  --block-device-mappings '[{
+    "DeviceName": "/dev/xvda",
+    "Ebs": {"VolumeSize": 100, "VolumeType": "gp3", "Iops": 3000, "DeleteOnTermination": true}
+  }]' \
+  --instance-market-options '{
+    "MarketType": "spot",
+    "SpotOptions": {"SpotInstanceType": "one-time", "InstanceInterruptionBehavior": "terminate"}
+  }' \
+  --tag-specifications \
+    'ResourceType=instance,Tags=[{Key=Name,Value=tokenization-run},{Key=RunId,Value='${RUN_ID}'}]' \
+  --query 'Instances[0].InstanceId' --output text
+```
+
+> If `c6a.12xlarge` Spot capacity is unavailable, substitute `c5.9xlarge` or `c6i.12xlarge`.
+
+### SSH, Bootstrap, and Run
+
+```bash
+# SSH
+INSTANCE_IP=$(aws ec2 describe-instances \
+  --instance-ids i-xxxxxxxxxxxxxxxxx \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+ssh -i ${KEY_NAME}.pem ec2-user@${INSTANCE_IP}
+
+# Bootstrap (run once on instance)
+BUCKET="your-training-bucket"
+RUN_ID="run_$(date +%Y%m%d)"
+sudo yum install -y python3.11 python3.11-pip tmux htop 2>/dev/null || \
+  sudo apt-get install -y python3 python3-pip tmux htop 2>/dev/null || true
+pip3 install numpy pandas pyarrow transformers datasets boto3 botocore tokenizers
+aws s3 sync s3://${BUCKET}/tokenizer-code/ ~/tokenizer/ --region us-east-1
+aws s3 sync s3://${BUCKET}/tsai_131k_tokenizer/ ~/tokenizer/tsai_131k_tokenizer/ --region us-east-1
+cd ~/tokenizer
+
+# Run inside tmux (survives SSH disconnect)
+tmux new -s tokenize
+python tokenize_curriculum.py \
+  --coreset-uri    s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
+  --dst-uri        s3://${BUCKET}/tokenized/${RUN_ID} \
+  --tokenizer-path ./tsai_131k_tokenizer \
+  --t1-base-uri    s3://t1-dataacquisition-datasets/processed_dataset/normalized_data \
+  --block-size     4096 \
+  --shard-size-mb  512 \
+  --num-proc       4 \
+  --file-parallelism 10 \
+  --drop-remainder \
+  --stage          1 \
+  --tokenizer-version v1 \
+  --tmp-dir        /tmp/tok_tmp \
+  2>&1 | tee ~/tokenize_$(date +%Y%m%d_%H%M%S).log
+# Detach: Ctrl+B then D  |  Reattach: tmux attach -t tokenize
+```
+
+### Monitor Progress
+
+```bash
+tail -f ~/tokenize_*.log
+aws s3 ls s3://${BUCKET}/tokenized/${RUN_ID}/shards/ --recursive | grep metadata.json | wc -l
+aws s3 cp s3://${BUCKET}/tokenized/${RUN_ID}/progress_state.json - | \
+  python3 -c "import json,sys; s=json.load(sys.stdin); print(f'Completed: {len(s[\"completed\"])}/12231')"
+```
+
+### Validate Output
+
+```bash
+# Sync metadata only for fast check
+aws s3 sync s3://${BUCKET}/tokenized/${RUN_ID}/ /tmp/tok_synced/ \
+  --exclude "*.bin" --include "*/metadata.json"
+python validate_shards.py --shards-dir /tmp/tok_synced --tokenizer-path ./tsai_131k_tokenizer --verbose
+```
+
+### Terminate Instance
+
+```bash
+# Only after validating output
+aws ec2 terminate-instances --instance-ids i-xxxxxxxxxxxxxxxxx --region us-east-1
+```
+
+### Auto-Restart with ASG (Optional — fully automated)
+
+For unattended restart after Spot interruption:
+
+```bash
+# Create launch template
 aws ec2 create-launch-template \
   --launch-template-name tokenization-lt \
   --launch-template-data '{
-    "InstanceType": "c5.9xlarge",
+    "InstanceType": "c6a.12xlarge",
     "ImageId": "ami-0c02fb55956c7d316",
     "IamInstanceProfile": {"Name": "TokenizationRole"},
     "KeyName": "your-key-pair",
-    "BlockDeviceMappings": [{
-      "DeviceName": "/dev/xvda",
-      "Ebs": {"VolumeSize": 200, "VolumeType": "gp3", "Iops": 3000}
-    }],
+    "BlockDeviceMappings": [{"DeviceName": "/dev/xvda",
+      "Ebs": {"VolumeSize": 100, "VolumeType": "gp3", "Iops": 3000}}],
     "UserData": "'$(base64 -w 0 userdata_auto_restart.sh)'"
   }'
 
-# 2. Create ASG with Spot + capacity-optimized strategy
+# Create ASG — min/max/desired all 1; scale to 0 when job finishes
 aws autoscaling create-auto-scaling-group \
   --auto-scaling-group-name tokenization-asg \
   --launch-template LaunchTemplateName=tokenization-lt,Version='$Latest' \
@@ -1071,155 +1072,48 @@ aws autoscaling create-auto-scaling-group \
   --vpc-zone-identifier "subnet-xxxxxxxx" \
   --mixed-instances-policy '{
     "InstancesDistribution": {
-      "OnDemandBaseCapacity": 0,
-      "OnDemandPercentageAboveBaseCapacity": 0,
+      "OnDemandBaseCapacity": 0, "OnDemandPercentageAboveBaseCapacity": 0,
       "SpotAllocationStrategy": "capacity-optimized"
     },
-    "LaunchTemplate": {
-      "LaunchTemplateSpecification": {
-        "LaunchTemplateName": "tokenization-lt",
-        "Version": "$Latest"
-      },
-      "Overrides": [
-        {"InstanceType": "c5.9xlarge"},
-        {"InstanceType": "c5.18xlarge"},
-        {"InstanceType": "c5.4xlarge"}
-      ]
-    }
+    "LaunchTemplate": {"LaunchTemplateSpecification":
+      {"LaunchTemplateName": "tokenization-lt", "Version": "$Latest"},
+      "Overrides": [{"InstanceType": "c6a.12xlarge"}, {"InstanceType": "c5.9xlarge"},
+                    {"InstanceType": "c6i.12xlarge"}]}
   }'
 
-# 3. When the job is fully done, scale down to 0
-aws autoscaling set-desired-capacity \
-  --auto-scaling-group-name tokenization-asg \
-  --desired-capacity 0
+# Scale down to 0 once manifest.json is confirmed on S3
+aws autoscaling set-desired-capacity --auto-scaling-group-name tokenization-asg --desired-capacity 0
 ```
 
-**`userdata_auto_restart.sh`** — the script that runs on every instance launch:
+**`userdata_auto_restart.sh`:**
 
 ```bash
 #!/bin/bash
 set -e
 BUCKET="your-training-bucket"
-RUN_ID="run_20260303"   # Fixed: always resume the same run
+RUN_ID="run_20260306"   # Fixed: same RUN_ID always resumes the same run
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Bootstrap starting..."
-
-# Install deps (idempotent)
 yum install -y python3.11 python3.11-pip tmux 2>/dev/null || \
   apt-get install -y python3 python3-pip tmux 2>/dev/null || true
-
 pip3 install numpy pandas pyarrow transformers datasets boto3 botocore tokenizers
 
-# Sync code and tokenizer (T3 and T1 data are already on S3 — no sync needed)
 aws s3 sync s3://${BUCKET}/tokenizer-code/ /home/ec2-user/tokenizer/ --region us-east-1
 aws s3 sync s3://${BUCKET}/tsai_131k_tokenizer/ /home/ec2-user/tokenizer/tsai_131k_tokenizer/ --region us-east-1
-# Alternative: clone tokenizer files from GitHub instead of S3 if preferred
-
 cd /home/ec2-user/tokenizer
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting tokenization (will auto-resume via progress_state.json)..."
-
 python tokenize_curriculum.py \
-  --coreset-uri   s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
-  --dst-uri       s3://${BUCKET}/tokenized/${RUN_ID} \
+  --coreset-uri    s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
+  --dst-uri        s3://${BUCKET}/tokenized/${RUN_ID} \
   --tokenizer-path ./tsai_131k_tokenizer \
-  --t1-base-uri   s3://t1-dataacquisition-datasets/processed_dataset/normalized_data \
-  --block-size    4096 \
-  --shard-size-mb 512 \
-  --num-proc      3 \
-  --file-parallelism 12 \
-  --drop-remainder \
-  --stage         1 \
-  --tokenizer-version v1 \
-  --tmp-dir       /tmp/tok_tmp \
+  --t1-base-uri    s3://t1-dataacquisition-datasets/processed_dataset/normalized_data \
+  --block-size 4096 --shard-size-mb 512 --num-proc 4 --file-parallelism 10 \
+  --drop-remainder --stage 1 --tokenizer-version v1 --tmp-dir /tmp/tok_tmp \
   2>&1 | tee /home/ec2-user/tokenize_$(date +%Y%m%d_%H%M%S).log
 
-EXIT_CODE=$?
-
-if [ ${EXIT_CODE} -eq 0 ]; then
-  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Tokenization COMPLETE. Self-terminating instance."
-  # Upload logs to S3
+if [ $? -eq 0 ]; then
   aws s3 cp /home/ec2-user/tokenize_*.log s3://${BUCKET}/tokenized/${RUN_ID}/logs/ --region us-east-1
-  # Self-terminate to stop billing
   INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
   aws ec2 terminate-instances --instance-ids ${INSTANCE_ID} --region us-east-1
-else
-  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Tokenization ended with exit code ${EXIT_CODE}. Instance kept for investigation."
-  # Do NOT self-terminate on failure — allows SSH investigation
 fi
+# Non-zero exit: instance stays up for investigation (continues billing — check manually)
 ```
-
-> **Important:** The script does NOT self-terminate on failure (non-zero exit). This allows you to
-> SSH in and investigate. Failed instances will continue billing until you terminate them manually.
-
-#### Manual Resume After Spot Interruption
-
-If using a single instance (no ASG) and the instance was interrupted:
-
-```bash
-# 1. Launch a new instance (same configuration as Step 4)
-# 2. SSH in and run the exact same tokenize_curriculum.py command
-#    with the SAME --dst-uri arguments
-# 3. The script will automatically:
-#    a. Read progress_state.json from S3 → skip completed batch files
-#    b. For in-progress batch files: check shard metadata.json → skip complete shards
-#    c. Resume from the last checkpoint
-
-# Check what was completed before the interruption
-aws s3 cp s3://${BUCKET}/tokenized/${RUN_ID}/progress_state.json - | \
-  python3 -c "import json,sys; s=json.load(sys.stdin); \
-  print(f'Completed: {len(s[\"completed\"])} / total batch files')"
-```
-
-#### Estimated Cost Impact of Interruptions
-
-A Spot interruption at the midpoint of a 4-hour run on c5.9xlarge:
-- Work lost: at most 1 shard (512 MB) worth of tokens — the last partially-accumulated shard
-- Resume overhead: ~2–3 minutes to relaunch and re-download code/data from S3
-- Extra cost for re-run: one additional Spot-hour × $0.45 = ~$0.45
-
-For a 4-hour job at <5% interruption probability, expected extra cost is:
-- 5% × $0.45 = **~$0.02 expected extra cost per run**
-
----
-
-## Quick Reference
-
-### Recommended Command (Production Run)
-
-```bash
-python tokenize_curriculum.py \
-  --coreset-uri   s3://t2-datacurriculum-353/coreset_outputs/coresets/1B \
-  --dst-uri       s3://your-training-bucket/tokenized/run_20260304 \
-  --tokenizer-path ./tsai_131k_tokenizer \
-  --t1-base-uri   s3://t1-dataacquisition-datasets/processed_dataset/normalized_data \
-  --block-size    4096 \
-  --shard-size-mb 512 \
-  --num-proc      3 \
-  --file-parallelism 12 \
-  --drop-remainder \
-  --stage         1 \
-  --tokenizer-version v1 \
-  --tmp-dir       /tmp/tok_tmp
-```
-
-### Validation Command (After Run)
-
-```bash
-python validate_shards.py \
-  --shards-dir /tmp/synced_output \
-  --tokenizer-path ./tsai_131k_tokenizer \
-  --verbose
-```
-
-### Cost Summary
-
-| What | Value |
-|------|-------|
-| Recommended instance | c5.9xlarge Spot, us-east-1 |
-| Estimated duration | ~4 hours (20B tokens, 12 workers) |
-| Estimated compute cost | **~$1.50–$2.30** |
-| S3 transfer cost | **$0.00** (same-region) |
-| Output storage | ~$2.07–$2.30/month (S3 Standard) |
-| Spot interruption risk | <5% for 4-hour job in us-east-1 |
-| Cost of interruption | ~$0.02 expected extra |
