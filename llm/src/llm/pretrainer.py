@@ -11,7 +11,7 @@ from llm.config import Config
 from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
 from llm.profiler import PipelineProfiler
-from llm.utils import is_main_process
+from llm.utils import is_main_process, verify_optimizer_scheduler_restored
 
 
 class PreTrainer:
@@ -420,54 +420,24 @@ class PreTrainer:
 
     def _verify_optimizer_scheduler_restored(self, expected_global_step: int):
         """Verify optimizer momentum/variance and scheduler state after resume."""
-        # Unwrap DeepSpeed optimizer wrapper to access raw Adam state
-        raw_optimizer = getattr(self._optimizer, "optimizer", self._optimizer)
-        opt_state = raw_optimizer.state
-
-        if not opt_state:
-            raise RuntimeError(
-                "Optimizer state is empty after checkpoint restore — "
-                "momentum and variance buffers were not loaded."
-            )
-
-        restored_count = 0
-        total_count = 0
-        for _param_id, state in opt_state.items():
-            total_count += 1
-            has_momentum = "exp_avg" in state and state["exp_avg"].any().item()
-            has_variance = "exp_avg_sq" in state and state["exp_avg_sq"].any().item()
-            if has_momentum and has_variance:
-                restored_count += 1
-
-        # Only enforce non-zero check after early steps where Adam buffers
-        # may legitimately still be zero.
-        if expected_global_step > 2 and restored_count == 0:
-            raise RuntimeError(
-                f"Optimizer has {total_count} param states but none contain "
-                "non-zero momentum/variance — restore likely failed."
-            )
-
-        # Check scheduler state
-        current_lr = None
-        last_epoch = None
-        if self._lr_scheduler is not None:
-            if hasattr(self._lr_scheduler, "get_last_lr"):
-                current_lr = self._lr_scheduler.get_last_lr()[0]
-            elif hasattr(self._lr_scheduler, "get_lr"):
-                current_lr = self._lr_scheduler.get_lr()[0]
-
-            if hasattr(self._lr_scheduler, "state_dict"):
-                sched_state = self._lr_scheduler.state_dict()
-                last_epoch = sched_state.get("last_epoch", None)
+        result = verify_optimizer_scheduler_restored(
+            self._optimizer, self._lr_scheduler, expected_global_step
+        )
 
         if is_main_process():
             print(
-                f"[Resume] Optimizer state verified: {restored_count}/{total_count} "
+                f"[Resume] Optimizer state verified: "
+                f"{result['restored_count']}/{result['total_count']} "
                 f"params have non-zero momentum & variance. "
-                f"Current LR: {current_lr}, scheduler last_epoch: {last_epoch}, "
+                f"Current LR: {result['current_lr']}, "
+                f"scheduler last_epoch: {result['last_epoch']}, "
                 f"global_step: {expected_global_step}"
             )
-            if last_epoch is not None and last_epoch == 0 and expected_global_step > 0:
+            if (
+                result["last_epoch"] is not None
+                and result["last_epoch"] == 0
+                and expected_global_step > 0
+            ):
                 print(
                     "[Resume] WARNING: scheduler last_epoch is 0 despite "
                     f"global_step={expected_global_step} — scheduler state "
