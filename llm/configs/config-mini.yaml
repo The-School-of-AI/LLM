@@ -89,7 +89,7 @@ training:
 
 checkpoint:
   save_interval: 100
-  backend: none # "s3" | "none"
+  backend: local # "s3" | "none" | "local"
   resume_from: null
   resume_step: 0
   s3: null
