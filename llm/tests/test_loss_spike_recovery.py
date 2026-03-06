@@ -87,6 +87,28 @@ class TestLossSpikeDetector:
             loss = 3.0 + i * (2.0 / 30)
             detector.update(loss)
 
+    def test_reset_clears_all_state(self):
+        """reset() should clear window, cooldown, and spike counter."""
+        detector = LossSpikeDetector(window_size=5, cooldown_steps=10, min_abs_delta=0.5)
+        for _ in range(5):
+            detector.update(3.0)
+        assert detector.update(20.0) is True
+        detector.record_spike_action()
+        assert detector.spike_count == 1
+
+        detector.reset()
+
+        assert detector.spike_count == 0
+        stats = detector.get_stats()
+        assert stats["current_loss"] is None
+        assert stats["window_mean"] == 0.0
+
+        # After reset, detector is in warmup again — no spikes during fill.
+        for _ in range(5):
+            assert detector.update(3.0) is False
+        # Now window is full, a spike should be detected again.
+        assert detector.update(20.0) is True
+
 
 # ---------------------------------------------------------------------------
 # Cooldown

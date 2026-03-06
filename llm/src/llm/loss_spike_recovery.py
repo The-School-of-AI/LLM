@@ -126,6 +126,17 @@ class LossSpikeDetector:
         self._spike_count += 1
         self._cooldown_remaining = self._cooldown_steps
 
+    def reset(self) -> None:
+        """Clear all state (window, cooldown, spike counter).
+
+        Call after a checkpoint rollback — the model weights have changed
+        so historical loss values are no longer meaningful.
+        """
+        self._window.clear()
+        self._last_loss = None
+        self._cooldown_remaining = 0
+        self._spike_count = 0
+
     @property
     def spike_count(self) -> int:
         """Number of consecutive spikes since the last cooldown reset."""
