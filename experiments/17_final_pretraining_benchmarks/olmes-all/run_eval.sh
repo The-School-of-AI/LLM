@@ -13,7 +13,7 @@ set -euo pipefail
 # Defaults
 # ---------------------------------------------------------------------------
 DEFAULT_TASKS="mmlu:mc::olmes mmlu_pro:mc::none triviaqa::olmes arc_challenge::olmes gsm8k::olmes minerva_math_500::olmo3:midtrain truthfulqa::olmo1 bbh:qa::none"
-DEFAULT_MODEL="google/gemma-3-1b-it"
+DEFAULT_MODEL="./tsai_model"
 DEFAULT_OUTPUT_DIR="./results"
 OLMES_REPO="https://github.com/allenai/olmes.git"
 OLMES_DIR="olmes"
@@ -25,10 +25,10 @@ TASKS="${TASKS:-$DEFAULT_TASKS}"
 MODEL="${MODEL:-$DEFAULT_MODEL}"
 OUTPUT_DIR="${OUTPUT_DIR:-$DEFAULT_OUTPUT_DIR}"
 REMOTE_OUTPUT_DIR="${REMOTE_OUTPUT_DIR:-}"   # e.g. s3://my-bucket/results
-MODEL_ARGS="${MODEL_ARGS:-}"                 # e.g. '{"trust_remote_code": true}'
+#MODEL_ARGS="${MODEL_ARGS:-}"                 # e.g. '{"trust_remote_code": true}'
+MODEL_ARGS="${MODEL_ARGS:-{\"trust_remote_code\": true, \"dtype\": \"bfloat16\"}}"
                                              # Note: vLLM default sets trust_remote_code=false automatically
-MODEL_TYPE="${MODEL_TYPE:-vllm}"               # hf | vllm | litellm
-                                             # Note: vllm backend requires vLLM <0.8 for lm_eval compatibility
+MODEL_TYPE="${MODEL_TYPE:-hf}"               # hf | vllm | litellm                                             # Note: vllm backend requires vLLM <0.8 for lm_eval compatibility
 LIMIT="${LIMIT:-}"                           # optional: limit instances per task
 DRY_RUN="${DRY_RUN:-false}"
 
@@ -140,8 +140,13 @@ if [[ "$DRY_RUN" == "true" ]]; then
   echo "==> Dry-run commands (one per task):"
   for task in $TASKS; do
     TASK_OUT="${OUTPUT_DIR_ABS}/${task}"
-    CMD=(uv run olmes --model "$MODEL" #--model-type "$MODEL_TYPE"
-      --task "$task" --output-dir "$TASK_OUT")
+    CMD=(uv run olmes
+    --model "$MODEL"
+    --model-type "$MODEL_TYPE"
+    --task "$task"
+    --output-dir "$TASK_OUT"
+    --batch-size 4
+    )
     [[ -n "$MODEL_ARGS" ]]        && CMD+=(--model-args "$MODEL_ARGS")
     [[ -n "$REMOTE_OUTPUT_DIR" ]] && CMD+=(--remote-output-dir "${REMOTE_OUTPUT_DIR}/${task}")
     [[ -n "$LIMIT" ]]             && CMD+=(--limit "$LIMIT")
@@ -163,7 +168,7 @@ for task in $TASKS; do
 
   CMD=(uv run olmes
     --model "$MODEL"
-    #--model-type "$MODEL_TYPE"
+    --model-type "$MODEL_TYPE"
     --task "$task"
     --output-dir "$TASK_OUT"
   )
@@ -177,7 +182,8 @@ for task in $TASKS; do
   echo ""
 
   # vLLM v1 requires spawn start method to avoid CUDA re-init errors in forked subprocesses
-  if VLLM_WORKER_MULTIPROC_METHOD=spawn "${CMD[@]}"; then
+  #if VLLM_WORKER_MULTIPROC_METHOD=spawn "${CMD[@]}"; then
+  if "${CMD[@]}"; then
     echo "    [OK] $task"
   else
     echo "    [FAILED] $task — continuing with remaining tasks"

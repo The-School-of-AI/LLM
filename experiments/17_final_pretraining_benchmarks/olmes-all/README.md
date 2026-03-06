@@ -190,3 +190,221 @@ results/
 
 **Task not found**
 > Run `uv run olmes --list-tasks` inside the `olmes/` directory to see all available task names.
+
+
+---
+
+## Running OLMES on a Custom TSAI Model
+
+In addition to running evaluations on HuggingFace-hosted models, this runner can also evaluate **locally trained models** (e.g., models trained with DeepSpeed).
+
+This section documents the steps required to run OLMES on the TSAI model used in our experiments.
+
+---
+
+### 1. Model Conversion Pipeline
+
+Training produced a **DeepSpeed ZeRO checkpoint**, which must be converted to a format that HuggingFace can load.
+
+```
+DeepSpeed ZeRO checkpoint
+        ↓
+zero_to_fp32.py (optional)
+        ↓
+pytorch_model.bin / model.safetensors
+        ↓
+HuggingFace model directory
+        ↓
+OLMES evaluation
+```
+
+If the checkpoint is already consolidated, the conversion step is unnecessary.
+
+Example conversion:
+
+```bash
+python zero_to_fp32.py checkpoint_dir pytorch_model.bin
+```
+
+If a consolidated checkpoint file is given, convert it to a .bin or a .safetensors file using the convert_model.py file.       
+
+---
+
+### 2. HuggingFace Model Directory
+
+Create a directory containing:
+
+```
+tsai_model/
+  pytorch_model.bin  (or model.safetensors)
+  config.json
+  modeling_tsai.py
+
+  recurrence_model_1b.py
+  reversible_ops_midpoint.py
+  liger_ops.py
+
+  tokenizer.json
+  tokenizer_config.json
+  special_tokens_map.json
+```
+
+All model code must live in the same directory so that HuggingFace can load it with:
+
+```
+trust_remote_code=True
+```
+
+---
+
+### 3. Code Fixes - 
+#### ONLY for testing if benchmarking scripts are working properly on our checkpoint files and tokenizer
+
+
+The original training code relied on internal dependencies and custom kernels that are not present in the evaluation environment. Several small patches were required.
+
+---
+
+#### 3.1. Profiler Fallback
+
+The model references an internal profiler module:
+```llm.profiler.time_region```  
+Add a fallback implementation.
+
+---
+
+#### 3.2. Fix Relative Imports
+
+Dynamic module loading in HuggingFace does not support relative imports.
+
+Change imports in `recurrence_model_1b.py`.
+
+Example:
+```
+from .reversible_ops_midpoint import ReversibleMidpointStack
+..
+from .liger_ops import ...
+```
+
+---
+
+#### 3.3. Kernel Dependencies
+
+The model expects several custom kernels.
+Install required dependencies:
+
+```bash
+pip install triton
+pip install git+https://github.com/sustcsonglin/flash-linear-attention.git
+```
+
+These provide kernels required for:
+* DeltaNet attention
+* Flash linear attention
+
+---
+
+#### 3.4. Sinkhorn Fallback
+
+If Triton kernels are unavailable, add a PyTorch fallback implementation of Sinkhorn normalization.
+
+---
+
+#### 3.5. Sparse Attention Fallback
+
+The Gated Sparse Attention (GSA) block originally requires Triton kernels.
+During evaluation we allow a fallback to dense attention. This allows inference to proceed without sparse kernels.
+
+---
+
+#### 3.6. Indexer Kernel Fallback
+
+The fused routing kernel (`fused_indexer_topk`) may also be unavailable.
+Add a simple fallback that returns placeholder routing indices.
+This bypasses sparse routing during benchmarking.
+
+---
+
+**Note**:
+HuggingFace dynamically copies model code into a cache directory.
+After modifying model files, clear the cache:
+
+```bash
+rm -rf ~/.cache/huggingface/modules
+```
+
+Otherwise HuggingFace will continue using stale versions of the code.
+
+---
+
+### 4. Validate Model Loading
+
+Before running benchmarks, verify that the model loads correctly.
+
+Example test script:
+
+```
+python test_model.py
+```
+
+Recommended checks:
+
+* Model loads successfully
+* Tokenizer loads successfully
+* Forward pass produces logits
+* Logits have reasonable statistics
+
+Example:
+
+```
+logits mean ≈ 0
+logits std  ≈ 1–10
+```
+
+Also verify that most parameters loaded from the checkpoint:
+
+```
+fraction loaded ≈ 0.99+
+```
+
+---
+
+### 5. Running OLMES with the TSAI Model
+
+Once the model loads correctly, run the evaluation:
+
+```bash
+./run_eval.sh \
+ --model tsai_model \
+ --model-type hf \
+ --model-args '{"trust_remote_code": true}'
+```
+
+---
+
+### 6. Quick Test Run
+
+To test the pipeline before running the full benchmark suite:
+
+```bash
+./run_eval.sh \
+ --model tsai_model \
+ --model-type hf \
+ --limit 20
+```
+
+This evaluates a small subset of instances for each task.
+
+---
+
+### 7. Summary
+
+Key steps required to run OLMES on the TSAI model:
+
+* Convert DeepSpeed checkpoint to HuggingFace format
+* Package model code and tokenizer in a single directory
+* Patch missing internal dependencies
+* Add fallbacks for unavailable kernels
+* Verify model loading before running benchmarks
+
+Once these steps are completed, the TSAI model runs successfully under the OLMES evaluation harness.

@@ -1,0 +1,18 @@
+{
+  "model_type": "tsai",
+  "architectures": ["TsaiForCausalLM"],
+  "auto_map": {
+    "AutoConfig": "modeling_tsai.TsaiConfig",
+    "AutoModelForCausalLM": "modeling_tsai.TsaiForCausalLM"
+  },
+  "code_files": [
+      "recurrence_model_1b.py",
+      "liger_ops.py",
+      "reversible_ops_midpoint.py"
+  ],
+  "code_revision": "main",
+
+  "vocab_size": 131072,
+  "hidden_size": 4096,
+  "num_layers": 8
+}
