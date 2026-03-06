@@ -11,6 +11,7 @@ This module provides a universal checkpoint manager that:
 """
 
 import os
+import random
 import shutil
 import threading
 import time
@@ -18,11 +19,59 @@ from queue import Queue
 from typing import Any, Dict, Optional
 
 import boto3
+import numpy as np
 import torch
 import torch.distributed as dist
 from botocore.exceptions import ClientError
 
 from llm.aws.config import S3Config
+
+
+# ---------------------------------------------------------------------------
+# RNG state helpers
+# ---------------------------------------------------------------------------
+
+def _capture_rng_state() -> Dict[str, Any]:
+    """Capture the current RNG state for all random sources.
+
+    Captures:
+    - Python built-in ``random`` module state
+    - PyTorch CPU RNG state
+    - CUDA RNG state for all devices visible to this rank
+      (via ``get_rng_state_all`` so multi-GPU ranks are fully covered)
+    - NumPy RNG state
+
+    Returns a dict that can be embedded in *client_state* and later passed
+    to :func:`_restore_rng_state` to reproduce the exact same random stream.
+    """
+    state: Dict[str, Any] = {
+        "random_rng_state": random.getstate(),
+        "cpu_rng_state": torch.get_rng_state(),
+        "numpy_rng_state": np.random.get_state(),
+    }
+    if torch.cuda.is_available():
+        # get_rng_state_all() returns a list — one entry per visible CUDA device.
+        state["cuda_rng_state_all"] = torch.cuda.get_rng_state_all()
+    return state
+
+
+def _restore_rng_state(client_state: Dict[str, Any]) -> None:
+    """Restore all RNG states previously saved by :func:`_capture_rng_state`.
+
+    Silently skips any key that is absent so that old checkpoints
+    (created before this feature was added) still load without error.
+    """
+    if "random_rng_state" in client_state:
+        random.setstate(client_state["random_rng_state"])
+    if "cpu_rng_state" in client_state:
+        torch.set_rng_state(client_state["cpu_rng_state"])
+    if "cuda_rng_state_all" in client_state and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(client_state["cuda_rng_state_all"])
+    elif "cuda_rng_state" in client_state and torch.cuda.is_available():
+        # Fallback for checkpoints saved before the _all migration.
+        torch.cuda.set_rng_state(client_state["cuda_rng_state"])
+    if "numpy_rng_state" in client_state:
+        np.random.set_state(client_state["numpy_rng_state"])
 
 
 class S3CheckpointManager:
@@ -196,6 +245,12 @@ class S3CheckpointManager:
             client_state = {"step": step}
         elif "step" not in client_state:
             client_state["step"] = step
+
+        # Capture per-rank RNG state so training can be resumed identically.
+        # We namespace under "rng_state_rank_{rank}" so that every rank's
+        # state is preserved when client_state is merged across the cluster.
+        global_rank = int(os.environ.get("RANK", 0))
+        client_state[f"rng_state_rank_{global_rank}"] = _capture_rng_state()
 
         # All ranks save locally (DeepSpeed requirement)
         start_time = time.time()
@@ -456,6 +511,18 @@ class S3CheckpointManager:
 
             if self.is_global_main and self.config.verbose:
                 print(f"✓ Loaded checkpoint: step {step}")
+
+            # Restore this rank's RNG state if it was saved.
+            if client_state:
+                global_rank = int(os.environ.get("RANK", 0))
+                rank_key = f"rng_state_rank_{global_rank}"
+                if rank_key in client_state:
+                    _restore_rng_state(client_state[rank_key])
+                    if self.is_global_main and self.config.verbose:
+                        print(f"✓ Restored RNG state for rank {global_rank}")
+                else:
+                    # Fallback: try a single shared key (older checkpoints)
+                    _restore_rng_state(client_state)
 
             return client_state
 
@@ -768,6 +835,10 @@ class LocalCheckpointManager:
             client_state = {}
         client_state.setdefault("step", step)
 
+        # Capture per-rank RNG state so training can be resumed identically.
+        global_rank = int(os.environ.get("RANK", 0))
+        client_state[f"rng_state_rank_{global_rank}"] = _capture_rng_state()
+
         start = time.time()
         try:
             model_engine.save_checkpoint(
@@ -823,6 +894,22 @@ class LocalCheckpointManager:
             )
             if self.is_main:
                 print(f"[LocalCheckpointManager] ✔ Loaded '{tag}'")
+
+            # Restore this rank's RNG state if it was saved.
+            if client_state:
+                global_rank = int(os.environ.get("RANK", 0))
+                rank_key = f"rng_state_rank_{global_rank}"
+                if rank_key in client_state:
+                    _restore_rng_state(client_state[rank_key])
+                    if self.is_main:
+                        print(
+                            f"[LocalCheckpointManager] ✔ Restored RNG state "
+                            f"for rank {global_rank}"
+                        )
+                else:
+                    # Fallback: try top-level keys (older checkpoints)
+                    _restore_rng_state(client_state)
+
             return client_state
         except Exception as exc:
             print(
