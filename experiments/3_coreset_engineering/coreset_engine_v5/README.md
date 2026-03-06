@@ -91,6 +91,26 @@ python coreset_builder.py \
 
 Note: default `--batch-size` is `80000`; reduce it on low-memory machines.
 
+### Local pipeline test (books)
+
+To run the **entire pipeline once** locally on a small "books" source (no S3, ~800 chunks, 1 shard, 1B stage):
+
+```bash
+# From repo root
+bash experiments/3_coreset_engineering/coreset_engine_v5/scripts/run_local_books_test.sh
+
+# Or from engine dir (coreset_engine_v5)
+bash scripts/run_local_books_test.sh
+```
+
+This script (1) generates `data/local_test/books/sample.jsonl` if missing, (2) runs `shard.sh` with 1 shard and stage 1B, (3) writes to `output/coresets/1B/` and `output/checkpoints/`, (4) runs validation. Optional: `NUM_CHUNKS=500 SKIP_CLEAN=1 bash scripts/run_local_books_test.sh` to use 500 chunks or skip cleaning outputs.
+
+**Real books source (T2):** For runs against the actual books dataset on S3, use:
+
+`s3://t2-datacurriculum-353/processed_dataset/curriculum_pyspark_output/source=books/`
+
+Set `S3_INPUT_PATH` (or `--input-path`) to this URL and provide the matching `TOTAL_TOKENS` (e.g. from `T3StatsFromT2.txt`: books ≈ 2.8B tokens).
+
 ### How to Pick `--total-input-tokens-estimate` and `--stage-target-scale`
 
 - `--stage-target-scale` multiplies the **global** curriculum stage targets (e.g., `70B.total_tokens`) so you can run end-to-end on small samples.

@@ -207,9 +207,9 @@ fi
 
 echo "  Python       : ${PYTHON_CMD[*]}"
 
-# Resolve output paths from pipeline config for cleanup and reporting
-CORESET_PATH=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('io',{}).get('output_coreset_path','output/coresets'))" 2>/dev/null || echo "output/coresets")
-MANIFEST_PATH=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('io',{}).get('output_manifest_path','output/manifests'))" 2>/dev/null || echo "output/manifests")
+# Resolve output paths from pipeline config for cleanup and reporting (use same interpreter as shards)
+CORESET_PATH=$("${PYTHON_CMD[@]}" -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('io',{}).get('output_coreset_path','output/coresets'))" 2>/dev/null || echo "output/coresets")
+MANIFEST_PATH=$("${PYTHON_CMD[@]}" -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('io',{}).get('output_manifest_path','output/manifests'))" 2>/dev/null || echo "output/manifests")
 
 # Clean old outputs
 if [[ "$RESUME" != "true" ]]; then

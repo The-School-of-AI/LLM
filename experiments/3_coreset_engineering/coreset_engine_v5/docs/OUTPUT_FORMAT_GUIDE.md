@@ -203,10 +203,10 @@ Each row/object contains:
 - **band**: Difficulty band (B0-B5)
 - **source**: Original dataset source label when provided (often same as dataset_id)
 - **source_doc_id**: Document source file name
-- **source_url**: URL if available
-- **t1_file_path**: Path/URI to the original raw source file (recorded by the T1 dataset team) that contains the raw data for this chunk
+- **source_url**: When `io.t1_dataset_base_url` is set in pipeline config, this is the **direct T1 dataset URL** so downstream can access source data in one hop: `{t1_dataset_base_url}/source={source}/{parquet_filename}` (e.g. `s3://t1-dataacquisition-datasets/processed_dataset/normalized_data/source=erav4_lang_as/part-00000-....parquet`). Otherwise, passthrough from input.
+- **t1_file_path**: Path/URI to the original raw source file when provided by upstream (e.g. T2).
 
-* `t1_file_path` and/or `source_url`+`source_doc_id` can be used for traceability to the source dataset; use `chunk_id` to locate the exact record within that source.
+* When `t1_dataset_base_url` is configured, use **source_url** for one-hop access to the T1 source file; use `chunk_id` to locate the exact record within that file.
 
 ## Performance Comparison
 

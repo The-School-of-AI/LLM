@@ -18,3 +18,14 @@ venv
 *.pem
 gogi
 coreset_engine_v5 - Copy
+
+# Initial review / one-off (not needed for pipeline run)
+/t2_starcoder.py
+/starcoder_preview.csv
+/starcoder.md
+/T3StatsFromT2.txt
+/validation_output.txt
+/VALIDATION_COMPLETE.md
+# Sample/generated parquet in project root (not needed for run)
+/part-*.parquet
+/selected_indices*.parquet

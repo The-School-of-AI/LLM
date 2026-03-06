@@ -52,6 +52,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _source_url_for_output(meta: Any) -> Optional[str]:
+    """Pass through T2 source_url in selected_indices (no T1 URL construction)."""
+    return getattr(meta, "source_url", None)
+
+
 class CoresetBuilder:
     """Main orchestrator for coreset selection"""
 
@@ -258,19 +263,16 @@ class CoresetBuilder:
         logger.info("Saving outputs...")
         writer = CoresetWriter(self.config.io.output_coreset_path)
 
-        # Save index
+        # Save index (source_url = T2 source_url passthrough; schema matches production)
         metadata_dict = {
             cid: {
                 "dataset_id": all_chunks[cid].dataset_id,
-                # Canonical field name going forward.
                 "token_count": all_chunks[cid].token_count,
-                # Backward compatibility for older tooling.
                 "token_count_estimate": all_chunks[cid].token_count,
                 "byte_length": getattr(all_chunks[cid], "byte_length", 0),
                 "source_doc_id": getattr(all_chunks[cid], "source_doc_id", ""),
-                "source_url": getattr(all_chunks[cid], "source_url", None),
+                "source_url": _source_url_for_output(all_chunks[cid]),
                 "t1_file_path": getattr(all_chunks[cid], "t1_file_path", None),
-                # Many datasets use `source` as the dataset identifier; keep both.
                 "source": getattr(all_chunks[cid], "dataset_id", None)
                 or all_chunks[cid].dataset_id,
                 "band": all_chunks[cid].band.value,
@@ -1416,17 +1418,14 @@ class StreamingCoresetBuilder(CoresetBuilder):
                             {
                                 "chunk_id": meta.chunk_id,
                                 "dataset_id": meta.dataset_id,
-                                # Canonical field name going forward.
                                 "token_count": tc,
-                                # Backward compatibility for older tooling.
                                 "token_count_estimate": tc,
                                 "byte_length": int(
                                     getattr(meta, "byte_length", 0) or 0
                                 ),
                                 "source_doc_id": getattr(meta, "source_doc_id", ""),
-                                "source_url": getattr(meta, "source_url", None),
+                                "source_url": _source_url_for_output(meta),
                                 "t1_file_path": getattr(meta, "t1_file_path", None),
-                                # Preserve original `source` when present; fallback to dataset_id.
                                 "source": getattr(meta, "source", None)
                                 or meta.dataset_id,
                                 "band": meta.band.value,

@@ -115,17 +115,18 @@ BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE="${BATCH_PREFETCH_AUTO_MIN_BATCH_SIZE:-50000}
 BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO="${BATCH_PREFETCH_AUTO_MAX_SHARD_CPU_RATIO:-1.0}"
 BATCH_PREFETCH_AUTO_MIN_WAIT_MS="${BATCH_PREFETCH_AUTO_MIN_WAIT_MS:-2.0}"
 BATCH_PREFETCH_AUTO_WARMUP_BATCHES="${BATCH_PREFETCH_AUTO_WARMUP_BATCHES:-5}"
-RESUME="${RESUME:-false}" 
+RESUME="${RESUME:-false}"
+S3_SYNC_INTERVAL="${S3_SYNC_INTERVAL:-600}"  # seconds (default 10 min); used when NVMe + S3 sync enabled
 
 # NVMe Storage Redirection (Speed-with-Safety)
 # If ENABLE_NVME is true, we generate a runtime pipeline config that redirects
-# all high-volume outputs (indices, manifests, used_chunks DB) to NVMe.
-# Checkpoints (.pkl) remain on EBS for durability.
-# A background S3 sync runs every 15 minutes to persist NVMe data.
+# all high-volume outputs (indices, manifests, checkpoints, used_chunks DB) to NVMe.
+# A background S3 sync runs periodically to persist outputs to S3.
 NVME_MOUNT="${NVME_MOUNT:-/mnt/nvme}"
 PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline.yaml"
 CORESET_OUTPUT_DIR="${ENGINE_DIR}/output/coresets"
 MANIFEST_OUTPUT_DIR="${ENGINE_DIR}/output/manifests"
+CHECKPOINT_OUTPUT_DIR=""  # Set when NVMe enabled below, or after ENGINE_DIR is set
 S3_SYNC_DEST=""  # Set later if NVMe is enabled
 
 if [ "${ENABLE_NVME}" = "true" ] && [ -d "${NVME_MOUNT}" ]; then
@@ -133,7 +134,8 @@ if [ "${ENABLE_NVME}" = "true" ] && [ -d "${NVME_MOUNT}" ]; then
     PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline_runtime.yaml"
     CORESET_OUTPUT_DIR="${NVME_MOUNT}/output/coresets"
     MANIFEST_OUTPUT_DIR="${NVME_MOUNT}/output/manifests"
-    mkdir -p "${CORESET_OUTPUT_DIR}" "${MANIFEST_OUTPUT_DIR}"
+    CHECKPOINT_OUTPUT_DIR="${NVME_MOUNT}/output/checkpoints"
+    mkdir -p "${CORESET_OUTPUT_DIR}" "${MANIFEST_OUTPUT_DIR}" "${CHECKPOINT_OUTPUT_DIR}"
 
     # Generate runtime pipeline.yaml with NVMe-redirected output paths
     python3 -c "
@@ -149,7 +151,10 @@ print('     output_coreset_path  = ${NVME_MOUNT}/output/coresets')
 print('     output_manifest_path = ${NVME_MOUNT}/output/manifests')
 "
 
-    S3_SYNC_DEST="s3://t2-datacurriculum-353/coreset_outputs/"
+    # S3 destination for periodic sync: override with S3_SYNC_DEST or use S3_BUCKET.
+    # Normalize to exactly one trailing slash to avoid double-slash paths (e.g. .../t3-coreset_outputs//checkpoints/).
+    S3_SYNC_DEST="${S3_SYNC_DEST:-s3://${S3_BUCKET}/t3-coreset_outputs}"
+    S3_SYNC_DEST="${S3_SYNC_DEST%/}/"
     echo "[INFO] S3 sync destination: ${S3_SYNC_DEST}"
 fi
 # ------------------------------------------------------------------------------
@@ -306,6 +311,8 @@ fi
 # echo "### [4/8] Dependency Sync (via UV) ###"
 EXPERIMENT_DIR="${REPO_ROOT}/experiments/3_coreset_engineering"
 ENGINE_DIR="${EXPERIMENT_DIR}/coreset_engine_v5"
+# Checkpoint dir: use NVMe path if already set, else EBS/engine path
+CHECKPOINT_OUTPUT_DIR="${CHECKPOINT_OUTPUT_DIR:-${ENGINE_DIR}/output/checkpoints}"
 
 if [ -d "${EXPERIMENT_DIR}" ]; then
     cd "${EXPERIMENT_DIR}"
@@ -412,10 +419,10 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "  Storage Layout:"
         echo "    Coreset Output: ${CORESET_OUTPUT_DIR}"
         echo "    Manifest Output: ${MANIFEST_OUTPUT_DIR}"
-        echo "    Checkpoints:    output/checkpoints/ (EBS)"
+        echo "    Checkpoints:    ${CHECKPOINT_OUTPUT_DIR}"
         if [ -n "${S3_SYNC_DEST}" ]; then
         echo "    S3 Sync Dest:   ${S3_SYNC_DEST}"
-        echo "    Sync Interval:  Every 15 minutes"
+        echo "    Sync Interval:  Every $((S3_SYNC_INTERVAL / 60)) minutes"
         fi
         echo ""
         echo "  Would execute:"
@@ -423,7 +430,7 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "      --config \"${PIPELINE_CONFIG}\""
         echo "      --num-shards ${NUM_SHARDS} --stages \"${STAGES}\""
         echo "      --input-path \"${S3_INPUT_PATH}\" --total-tokens ${TOTAL_TOKENS} --batch-size ${BATCH_SIZE}"
-        echo "      --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} ${RESUME_FLAG}"
+        echo "      --checkpoint-base \"${CHECKPOINT_OUTPUT_DIR}\" --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} ${RESUME_FLAG}"
         echo "      --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} --used-cache-stats-every ${USED_CACHE_STATS_EVERY}"
         echo "      --batch-prefetch-mode ${BATCH_PREFETCH_MODE}"
         echo "      --batch-prefetch-queue-size ${BATCH_PREFETCH_QUEUE_SIZE}"
@@ -449,6 +456,7 @@ nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
     --input-format parquet \
     --total-tokens ${TOTAL_TOKENS} \
     --batch-size ${BATCH_SIZE} \
+    --checkpoint-base "${CHECKPOINT_OUTPUT_DIR}" \
     --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
     --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} \
     --used-cache-stats-every ${USED_CACHE_STATS_EVERY} \
@@ -468,21 +476,20 @@ echo "[OK] Pipeline launched (PID: ${PIPELINE_PID})"
 # 7b. Background S3 Sync (every 10 minutes)
 # ==============================================================================
 SYNC_PID=""
-S3_SYNC_INTERVAL="${S3_SYNC_INTERVAL:-600}"  # 10 minutes (configurable)
 
 _s3_sync_once() {
     local ts
     ts="$(date '+%Y-%m-%d %H:%M:%S')"
     echo "[S3 SYNC] ${ts} Syncing outputs to ${S3_SYNC_DEST}..."
-    # Sync NVMe outputs (indices, manifests, used_chunks DB)
-    if ! aws s3 sync "${CORESET_OUTPUT_DIR}" "${S3_SYNC_DEST}/coresets/" --only-show-errors --no-progress 2>&1; then
+    # S3_SYNC_DEST is normalized to one trailing slash; append subpath with no extra slash
+    if ! aws s3 sync "${CORESET_OUTPUT_DIR}" "${S3_SYNC_DEST}coresets/" --only-show-errors --no-progress 2>&1; then
         echo "[S3 SYNC] ${ts} ERROR: coresets sync failed"
     fi
-    if ! aws s3 sync "${MANIFEST_OUTPUT_DIR}" "${S3_SYNC_DEST}/manifests/" --only-show-errors --no-progress 2>&1; then
+    if ! aws s3 sync "${MANIFEST_OUTPUT_DIR}" "${S3_SYNC_DEST}manifests/" --only-show-errors --no-progress 2>&1; then
         echo "[S3 SYNC] ${ts} ERROR: manifests sync failed"
     fi
-    # Sync EBS outputs (checkpoints)
-    if ! aws s3 sync "output/checkpoints/" "${S3_SYNC_DEST}/checkpoints/" --only-show-errors --no-progress 2>&1; then
+    # Sync checkpoints
+    if ! aws s3 sync "${CHECKPOINT_OUTPUT_DIR}/" "${S3_SYNC_DEST}checkpoints/" --only-show-errors --no-progress 2>&1; then
         echo "[S3 SYNC] ${ts} ERROR: checkpoints sync failed"
     fi
     echo "[S3 SYNC] $(date '+%Y-%m-%d %H:%M:%S') Sync complete."
@@ -517,9 +524,10 @@ echo ""
 echo "  Storage Layout:"
 echo "    Coreset Output:  ${CORESET_OUTPUT_DIR}"
 echo "    Manifest Output: ${MANIFEST_OUTPUT_DIR}"
-echo "    Checkpoints:     output/checkpoints/ (EBS)"
+echo "    Checkpoints:     ${CHECKPOINT_OUTPUT_DIR}"
 if [ -n "${S3_SYNC_DEST}" ]; then
     echo "    S3 Destination:  ${S3_SYNC_DEST}"
+    echo "    S3 Paths:       coresets/  manifests/  checkpoints/"
     echo "    Sync Interval:   Every $((S3_SYNC_INTERVAL / 60)) minutes (+ auto final sync)"
 fi
 echo ""

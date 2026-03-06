@@ -61,6 +61,9 @@ io:
   num_parallel_loaders: 16
   cache_metadata: true
   cache_dir: cache/coreset_cache
+  # Direct T1 dataset URL base for selected_indices source_url (one-hop access for downstream).
+  # Output source_url = {t1_dataset_base_url}/source={source}/{parquet_filename}
+  t1_dataset_base_url: "s3://t1-dataacquisition-datasets/processed_dataset/normalized_data/"
 
 # Validation
 validation:

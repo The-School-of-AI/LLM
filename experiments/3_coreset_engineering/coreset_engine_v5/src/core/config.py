@@ -117,6 +117,8 @@ class IOConfig:
     num_parallel_loaders: int = 16
     cache_metadata: bool = True
     cache_dir: str = "/tmp/coreset_cache"
+    # Unused: T3 output uses T2 source_url passthrough only (no T1 URL construction).
+    t1_dataset_base_url: Optional[str] = None
 
 
 @dataclass
