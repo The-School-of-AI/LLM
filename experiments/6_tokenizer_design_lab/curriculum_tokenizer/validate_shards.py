@@ -300,8 +300,14 @@ def main():
 
     shard_dirs = list_shard_dirs_local(args.shards_dir)
     if not shard_dirs:
-        print(f"No shard directories found under {args.shards_dir}/shards/")
-        print("Run flatten_shards.py first to produce the flat shards/ layout.")
+        shards_subdir = os.path.join(args.shards_dir, "shards")
+        if not os.path.isdir(shards_subdir):
+            print(f"ERROR: No 'shards/' subdirectory found under: {args.shards_dir}")
+            print("  Check that --shards-dir points to the tokenizer output root.")
+            print("  For parallel runs: run flatten_shards.py first to produce the flat shards/ layout.")
+        else:
+            print(f"ERROR: 'shards/' directory exists but contains no shard_NNN subdirectories: {shards_subdir}")
+            print("  The tokenizer may not have produced any output yet, or the run was interrupted before the first shard was flushed.")
         sys.exit(1)
 
     print(f"Validating {len(shard_dirs)} shard(s)...\n")

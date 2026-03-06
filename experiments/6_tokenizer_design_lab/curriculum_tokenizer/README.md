@@ -33,21 +33,23 @@ documents from T1 survived quality filtering. The script:
 
 ```
 <dst-uri>/
-├── progress_state.json              ← resume tracker (updated after each file)
+├── progress_state.json              ← resume tracker (updated after each batch)
 ├── manifest.json                    ← global summary (written on clean completion)
-│
-├── <coreset_stem>/                  ← named after the coreset .parquet filename
-│   ├── shard_001/
-│   │   ├── tokens.bin               (packed uint32 blocks, block_size tokens each)
-│   │   ├── tokens.idx               (spdl-compatible binary byte offsets)
-│   │   └── metadata.json            (per-shard stats + curriculum metadata)
-│   ├── shard_002/
-│   │   └── …
-│   └── shard_NNN/
-│
-└── <coreset_stem_2>/
-    └── …
+└── shards/
+    ├── shard_001/
+    │   ├── tokens.bin               (packed uint32 blocks, block_size tokens each)
+    │   ├── tokens.idx               (spdl-compatible binary byte offsets)
+    │   └── metadata.json            (per-shard stats + curriculum metadata)
+    ├── shard_002/
+    │   └── …
+    └── shard_NNN/
 ```
+
+Shard numbering is **global across all coreset batches**. The `metadata.json`
+inside each shard retains `source_file` (the originating coreset URI) for full
+traceability. For parallel runs (`--file-parallelism N`), an atomic counter shared
+across workers ensures globally-unique shard numbers are assigned at write time —
+no post-processing step is required.
 
 ### `metadata.json` fields (per shard)
 
@@ -318,8 +320,11 @@ given output directory:
 
 ### Usage
 
+Pass the **output root** (the parent of `shards/`) as `--shards-dir`. The
+validator looks for shards under `<shards-dir>/shards/shard_NNN/`.
+
 ```bash
-# Basic validation
+# Validate after tokenize_curriculum.py completes (sequential or parallel)
 python validate_shards.py \
     --shards-dir   dataset/final/small/tok_out \
     --tokenizer-path ../tsai_131k_tokenizer
@@ -376,25 +381,35 @@ retains `source_file` (the originating coreset URI) for full traceability.
 
 ### Resume behaviour
 
-`progress_state.json` now also tracks `next_shard_idx`:
+`progress_state.json` tracks completed batches, the global shard counter, and
+any interrupted state:
 
 ```json
 {
   "completed": ["uri_A", "uri_B"],
+  "interrupted": [
+    {"uri": "uri_C", "shard_start": 9, "shard_end": 10}
+  ],
   "next_shard_idx": 9,
-  "failed": []
+  "failed": [],
+  "last_updated": "2026-03-06T10:00:00Z"
 }
 ```
 
-On interrupt and restart, the global shard counter resumes from where it left
-off. Re-running with the same `--dst-uri` is safe and idempotent.
+| Key | Set when |
+| :--- | :--- |
+| `completed` | A batch finished without interruption |
+| `interrupted` | A SIGTERM/SIGINT fired mid-batch (sequential mode); partial shards are cleaned up and the batch is re-queued on next run |
+| `next_shard_idx` | After every completed batch; ensures the global counter is continuous across runs |
+
+Re-running with the same `--dst-uri` is safe and idempotent.
 
 ### Sequential vs parallel
 
 | Mode | Output layout | Global numbering |
 | :--- | :--- | :--- |
-| `--file-parallelism 1` (default) | `shards/shard_NNN/` flat | Yes — automatic |
-| `--file-parallelism N` | `shards/shard_NNN/` flat | Local per-batch (1, 2, …) — use `flatten_shards.py` to renumber globally after completion |
+| `--file-parallelism 1` (default) | `shards/shard_NNN/` flat | Yes — automatic via sequential counter |
+| `--file-parallelism N` | `shards/shard_NNN/` flat | Yes — automatic via atomic `Manager.Value` counter shared across all workers |
 
 ### Validating the new layout
 
@@ -409,29 +424,3 @@ python validate_shards.py \
 The validator now looks for shards under `<shards-dir>/shards/shard_NNN/`
 instead of the old two-level `<shards-dir>/<coreset>/shard_NNN/` layout.
 
-### `flatten_shards.py` (parallel runs only)
-
-For parallel runs (`--file-parallelism N > 1`), run `flatten_shards.py` once
-after all batches complete to renumber shards globally:
-
-```bash
-# Local
-python flatten_shards.py \
-    --src-dir dataset/final/small/tok_out \
-    --dst-dir dataset/final/small/tok_out_flat
-
-# S3
-python flatten_shards.py \
-    --src-uri s3://your-bucket/tokenized/stage1 \
-    --dst-uri s3://your-bucket/tokenized/stage1_flat
-
-# Dry-run first to preview
-python flatten_shards.py \
-    --src-dir dataset/final/small/tok_out \
-    --dst-dir dataset/final/small/tok_out_flat \
-    --dry-run
-```
-
-The script is resumable — re-running it skips shards already present in the
-destination. It writes a `flatten_manifest.json` recording which coreset batch
-maps to which global shard range.

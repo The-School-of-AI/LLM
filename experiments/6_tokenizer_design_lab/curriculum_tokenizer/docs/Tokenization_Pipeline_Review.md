@@ -119,6 +119,143 @@
 
 ---
 
+### Post-Parallel-Run Bug Fixes (2026-03-05)
+
+The following bugs were discovered and fixed during local parallel and halt-and-resume testing.
+All fixes are in `tokenize_curriculum.py` only — no changes to any other file.
+
+---
+
+#### [BUG-P1] Doubled `tmp_dir` Path — First 3 Workers Crash Immediately
+
+**Symptom:**
+Workers 0, 1, and 2 crashed immediately on the first parallel run with:
+```
+[Errno 2] No such file or directory:
+  '...tokenize_curriculum_tmp\tokenize_curriculum_tmp\worker_001\tokens.bin'
+```
+Workers 3–9 completed successfully. All 10 shards from those workers passed validation, confirming the logic was correct — only the path construction was wrong.
+
+**Root cause:**
+`main()` constructs `tmp_dir` as:
+```python
+tmp_dir = os.path.join(base_tmp, "tokenize_curriculum_tmp")
+args_dict["tmp_dir"] = tmp_dir   # already includes the suffix
+```
+`_worker_process_coreset` then did:
+```python
+worker_tmp = os.path.join(
+    args_dict.get("tmp_dir"),
+    "tokenize_curriculum_tmp",   # ← BUG: re-appended the suffix
+    f"worker_{worker_id:03d}",
+)
+```
+This doubled the `tokenize_curriculum_tmp` segment. Three concurrent workers raced to create the same non-existent nested parent directory on NTFS, all failing with `FileNotFoundError`.
+
+**Fix:**
+Removed the extra `"tokenize_curriculum_tmp"` segment from `_worker_process_coreset`:
+```python
+# Fix: args_dict["tmp_dir"] already includes the "tokenize_curriculum_tmp" suffix
+# set in main(). Do NOT re-append it here or the path is doubled.
+worker_tmp = os.path.join(
+    args_dict.get("tmp_dir") or tempfile.gettempdir(),
+    f"worker_{worker_id:03d}",
+)
+```
+
+**Decision:** Fix applied directly. No backward-compat shim needed — this was a clean path construction bug with no ambiguity.
+
+---
+
+#### [BUG-P2] Orphan Shards After Mid-Batch Interruption Cause Data Duplication on Resume
+
+**Symptom:**
+After pressing Ctrl+C mid-batch during a parallel run, the `shards/` directory contained shard directories that had no corresponding `.done` marker. On resume, those batches were re-queued and re-processed, producing new shard numbers for the same documents. The orphan shards from the interrupted run remained on disk, resulting in duplicate token data across two shard numbers.
+
+**Root cause:**
+The parallel path used per-coreset `.done` marker files to track completion. A batch was only considered complete once its `.done` file was written. However, `flush_shard()` writes individual shard directories eagerly as soon as enough blocks accumulate. If a worker is killed between its last `flush_shard()` call and its `write_done_marker()` call, those shard directories exist on disk with no claim.
+
+On resume, the shard counter advanced past the orphan numbers (since the counter is initialised from `max(existing shard numbers) + 1`), so the orphan shards were never overwritten — they just silently coexisted with the new ones produced for the same documents.
+
+**Fix — three changes:**
+
+*Change 1:* Add `shard_names` to the `process_coreset_file` return dict:
+```python
+"shard_names": [s["shard_name"] for s in shard_stats],
+```
+
+*Change 2:* Store the full stats dict (including `shard_names`) inside the `.done` marker file via `data.update(stats)`, replacing the previous hard-coded subset of fields.
+
+*Change 3:* Add `purge_orphan_shards()` — called once on resume before the pool starts. It loads all `.done` markers, collects the union of all claimed `shard_names`, then deletes any `shards/shard_NNN/` directory that is not in that claimed set:
+```python
+def purge_orphan_shards(s3, dst_uri: str, markers: list) -> int:
+    if not markers:
+        return 0
+    if not all("shard_names" in m for m in markers):
+        print("[RESUME] Skipping orphan-shard purge: some .done markers predate shard_names tracking.")
+        return 0
+    claimed = set()
+    for m in markers:
+        claimed.update(m.get("shard_names", []))
+    # delete any shard_NNN/ not in claimed ...
+```
+
+**Backward compatibility guard:** If any `.done` marker on disk lacks `shard_names` (written by an older version of the script), the purge is skipped entirely and a warning is printed. This prevents false deletions when resuming a run that was started before this fix was applied.
+
+**Decision:** The purge-on-resume approach was chosen over alternatives (e.g., staging directory per worker, write-ahead log) because:
+- It requires no change to the hot write path — `flush_shard()` is untouched.
+- It is idempotent — running it twice produces the same result.
+- It is cheap — only reads `.done` markers (tiny JSON files) and deletes a small number of directories.
+- The staging+flatten alternative would add a per-worker temp prefix and a post-pool merge step, adding complexity for a scenario (local testing) that is not the production path.
+
+---
+
+#### [BUG-P3] Manifest Missing Batches Completed in Prior Runs
+
+**Symptom:**
+After a two-run sequence (run 1 interrupted after 3 batches, run 2 completing the remaining 7), `manifest.json` listed only 7 `processed_files` — the batches completed in run 2. The 3 batches completed in run 1 were absent, making `total_shards` and `total_tokens` incorrect.
+
+**Root cause:**
+`all_stats` was accumulated only from the return values of the current run's pool workers. Batches that were already in `completed_set` at the start of run 2 were skipped by the pool (correct) but never added to `all_stats` (wrong). The manifest was written from `all_stats` alone.
+
+**Fix:**
+After the pool exits, load all `.done` markers and merge any batch whose `coreset_name` is not already in `all_stats`:
+```python
+final_markers = load_all_markers(s3, args.dst_uri)
+current_run_names = {s.get("coreset_name") for s in all_stats}
+for m in final_markers:
+    cname = m.get("coreset_name")
+    if cname and cname not in current_run_names:
+        all_stats.append({
+            "coreset_file":      m.get("coreset_file", cname),
+            "coreset_name":      cname,
+            "num_shards":        m.get("num_shards", 0),
+            "total_tokens":      m.get("total_tokens", 0),
+            "tokens_dropped":    m.get("tokens_dropped", 0),
+            "shard_names":       m.get("shard_names", []),
+            "elapsed_seconds":   m.get("elapsed_seconds", 0),
+            "num_docs":          m.get("num_docs", 0),
+            "num_source_files":  m.get("num_source_files", 0),
+        })
+        current_run_names.add(cname)
+```
+
+**Decision:** The `.done` marker was already the source of truth for resume correctness. Extending it to also carry the full stats dict (Change 2 from BUG-P2) made this fix trivial — no additional I/O, no new data structures. The manifest merge is a post-pool, single-threaded operation with no race conditions.
+
+---
+
+#### Halt-and-Resume Test Results (2026-03-05)
+
+Validated locally using the small profile (10 batches) with `--shard-size-mb 0.025`:
+
+| Run | Action | Outcome |
+|-----|--------|---------|
+| Run 1 | Ctrl+C after 3 batches completed | 3 `.done` markers written; shards 001–011 on disk; no `manifest.json` |
+| Resume | Identical command re-run | `Resuming: 3 already complete, 7 remaining`; orphan purge executed (0 orphans in this sequence); shards 012–036 written |
+| Validation | `validate_shards.py` on full output | **36/36 PASS** — all 8 checks green; `manifest.json` shows `processed_files: 10`, `total_shards: 36`, `total_tokens: 147456` |
+
+---
+
 ## 2. Local Testing Strategy
 
 ### Step 1 — Create mock source parquets (no S3 needed)
@@ -295,6 +432,76 @@ Worker function (`_worker_process_coreset`):
 | c5.4xlarge | 16 | 32 GB | 8 | 2 |
 | **c5.9xlarge** | **36** | **72 GB** | **12** | **3** |
 | r5.4xlarge | 16 | 128 GB | 8 | 2 |
+
+### What `--file-parallelism N` Parallelizes — Exact Mechanism
+
+The parameter name can be misleading. It does **not** parallelize T1 files within a single batch. It parallelizes **entire coreset batches** (one per T3 parquet file) against each other.
+
+```
+--file-parallelism 3
+        │
+        ▼
+Pool(processes=3)         ← multiprocessing.get_context("spawn").Pool
+        │
+        ├── Worker 0  → processes coreset batch_000000 end-to-end
+        │     ├── downloads T1 file(s) referenced by that coreset
+        │     ├── filters rows (T1.id == T3.chunk_id)
+        │     ├── tokenizes via dataset.map(..., num_proc=min(args.num_proc, 4))
+        │     └── writes shards to <dst>/shards/shard_NNN/ (atomic counter)
+        │
+        ├── Worker 1  → processes coreset batch_000001 end-to-end  (parallel)
+        │
+        └── Worker 2  → processes coreset batch_000002 end-to-end  (parallel)
+```
+
+**`--num-proc` role:** Inside each worker, `dataset.map(..., num_proc=min(args.num_proc, 4))` is the HuggingFace internal parallelism for **tokenizing rows within a single T1 file**. It spawns up to 4 sub-processes per worker to tokenize the filtered row set faster.
+
+**Full concurrency picture with `--file-parallelism 3 --num-proc 2`:**
+```
+Main process
+ ├── Worker A (batch 0)  → HF tokenizer with min(2, 4) = 2 sub-procs
+ ├── Worker B (batch 1)  → HF tokenizer with min(2, 4) = 2 sub-procs
+ └── Worker C (batch 2)  → HF tokenizer with min(2, 4) = 2 sub-procs
+
+Total OS processes = 1 main + 3 workers + up to 6 HF sub-procs = up to 10
+```
+
+**Why NTFS is slow with parallelism > 1:** All 3 workers write `shard_NNN/` subdirectories under the same `shards/` parent simultaneously. Windows NTFS serializes directory-entry updates under a shared parent, so concurrent `mkdir` calls to `shards/` serialize — causing ~2× per-batch slowdown locally. On S3 there is no such contention: concurrent `PutObject` calls to keys under the same prefix are fully independent.
+
+**Token drop rate is unaffected by shard count.** `--drop-remainder` discards the tail partial block **once per batch** (at the very end, after all T1 files in that batch are exhausted). The drop is at most `block_size − 1 = 4095` tokens per batch regardless of how many shards that batch produces. Smaller `--shard-size-mb` creates more shards but does not increase token drops.
+
+---
+
+### Known Platform Behavior: Local Filesystem Contention (Windows / NTFS)
+
+When running with `--file-parallelism > 1` against a **local (non-S3) destination**, all workers
+write their output shards to the same `<dst>/shards/` parent directory concurrently.  On Windows
+NTFS this causes filesystem-level serialization of directory-entry updates, resulting in
+approximately **2× slower throughput per batch** compared to sequential execution.
+
+**Observed numbers (small profile, 10 batches, `--file-parallelism 3`, Windows 11):**
+
+| Mode | Workers | Per-batch time | Total time |
+|------|---------|----------------|------------|
+| Sequential | 1 | ~55 s | ~550 s |
+| Parallel (direct write) | 3 | ~110 s | ~183 s |
+
+The parallel run is still ~3× faster wall-clock than sequential despite the per-batch slowdown,
+because 3 batches run simultaneously.  However, per-core throughput drops by ~2×.
+
+**This does NOT affect S3 runs.**  S3 is an object store with no directory-lock semantics —
+concurrent `PutObject` calls to keys under the same prefix are fully parallel and independent.
+The observed contention is entirely a local-NTFS artifact.
+
+**The same behavior is expected on macOS HFS+/APFS** when multiple processes create
+subdirectories under the same parent simultaneously (though APFS contention is generally lighter
+than NTFS).
+
+**Recommendation:** For local testing, the 2× slowdown is acceptable — local runs use tiny
+profiles and finish in minutes.  For production (S3, EC2), parallel throughput is unaffected.
+If local parallel throughput becomes a bottleneck, each worker could be given an isolated
+per-batch staging directory; however, this adds a flatten step and is not worth implementing
+for a test-only path.
 
 ---
 

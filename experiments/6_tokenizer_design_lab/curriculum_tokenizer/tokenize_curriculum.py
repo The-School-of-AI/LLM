@@ -254,6 +254,167 @@ def save_progress_state(s3, dst_uri: str, state: dict, tmp_dir: str) -> None:
     upload_json(s3, state, uri, tmp_dir)
 
 
+def write_done_marker(
+    s3, dst_uri: str, coreset_name: str, coreset_uri: str, stats: dict, tmp_dir: str
+) -> None:
+    """Write a per-coreset completion marker to <dst>/completed/<coreset_name>.done.
+
+    Called by parallel workers AFTER the last shard's metadata.json is confirmed
+    written — this ordering guarantee is critical for safe resume.
+    """
+    marker_uri = f"{dst_uri.rstrip('/')}/completed/{coreset_name}.done"
+    # Start with identity fields, then merge in the full stats dict so that the
+    # manifest can be reconstructed from .done markers on resume (includes
+    # shard_names for orphan-purge, total_tokens / tokens_dropped for totals, etc.)
+    data = {
+        "coreset_uri": coreset_uri,
+        "coreset_name": coreset_name,
+        "completed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    data.update(stats)
+    upload_json(s3, data, marker_uri, tmp_dir)
+
+
+def load_all_markers(s3, dst_uri: str) -> list:
+    """Load every .done file under <dst>/completed/ and return a list of their dicts."""
+    markers = []
+    completed_dir = f"{dst_uri.rstrip('/')}/completed"
+
+    if is_s3_uri(completed_dir):
+        if s3 is None:
+            return markers
+        bucket, prefix = parse_s3_url(completed_dir)
+        prefix = prefix.rstrip("/") + "/"
+        try:
+            paginator = s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    if obj["Key"].endswith(".done"):
+                        try:
+                            response = s3.get_object(Bucket=bucket, Key=obj["Key"])
+                            markers.append(json.loads(response["Body"].read().decode()))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+    else:
+        if os.path.isdir(completed_dir):
+            for fname in sorted(os.listdir(completed_dir)):
+                if fname.endswith(".done"):
+                    fpath = os.path.join(completed_dir, fname)
+                    try:
+                        with open(fpath, "r", encoding="utf-8") as f:
+                            markers.append(json.load(f))
+                    except Exception:
+                        pass
+    return markers
+
+
+def load_completed_from_markers(s3, dst_uri: str) -> set:
+    """Return the set of completed coreset URIs from .done markers."""
+    return {
+        m["coreset_uri"]
+        for m in load_all_markers(s3, dst_uri)
+        if "coreset_uri" in m
+    }
+
+
+def purge_orphan_shards(s3, dst_uri: str, markers: list) -> int:
+    """Delete shard directories not claimed by any .done marker.
+
+    Called at the start of each resume run to remove partial shards left by an
+    interrupted batch, preventing data duplication when those batches re-run.
+    Returns the number of shard directories deleted.
+
+    Safety guards (skip purge if either is true):
+      - No markers present: first run, nothing to purge.
+      - Any marker lacks 'shard_names': old-format markers written before this
+        field existed; cannot safely determine orphans without it.
+    """
+    if not markers:
+        return 0
+    if not all("shard_names" in m for m in markers):
+        print(
+            "[RESUME] Skipping orphan-shard purge: some .done markers predate "
+            "shard_names tracking (old format)."
+        )
+        return 0
+
+    claimed = set()
+    for m in markers:
+        claimed.update(m.get("shard_names", []))
+
+    shards_dir = f"{dst_uri.rstrip('/')}/shards"
+    deleted = 0
+
+    if is_s3_uri(shards_dir):
+        if s3 is None:
+            return 0
+        bucket, prefix = parse_s3_url(shards_dir)
+        prefix = prefix.rstrip("/") + "/"
+        try:
+            paginator = s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
+                for cp in page.get("CommonPrefixes", []):
+                    name = cp["Prefix"].rstrip("/").split("/")[-1]
+                    if name.startswith("shard_") and name not in claimed:
+                        delete_s3_prefix(s3, f"{shards_dir.rstrip('/')}/{name}")
+                        print(f"  [PURGE] Deleted orphan shard: {name}")
+                        deleted += 1
+        except Exception as e:
+            print(f"  [PURGE] Warning during S3 purge: {e}")
+    else:
+        if os.path.isdir(shards_dir):
+            for name in sorted(os.listdir(shards_dir)):
+                if name.startswith("shard_") and name not in claimed:
+                    shard_path = os.path.join(shards_dir, name)
+                    if os.path.isdir(shard_path):
+                        shutil.rmtree(shard_path, ignore_errors=True)
+                        print(f"  [PURGE] Deleted orphan shard: {name}")
+                        deleted += 1
+
+    return deleted
+
+
+def get_next_shard_idx_from_existing(s3, dst_uri: str) -> int:
+    """Scan <dst>/shards/ and return max existing shard number + 1.
+
+    Used to initialise the atomic counter on resume so parallel workers
+    never overwrite shards written by a previous run.
+    """
+    shards_dir = f"{dst_uri.rstrip('/')}/shards"
+    max_num = 0
+
+    if is_s3_uri(shards_dir):
+        if s3 is None:
+            return 1
+        bucket, prefix = parse_s3_url(shards_dir)
+        prefix = prefix.rstrip("/") + "/"
+        try:
+            paginator = s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
+                for cp in page.get("CommonPrefixes", []):
+                    name = cp["Prefix"].rstrip("/").split("/")[-1]
+                    if name.startswith("shard_"):
+                        try:
+                            max_num = max(max_num, int(name[6:]))
+                        except ValueError:
+                            pass
+        except Exception:
+            pass
+    else:
+        if os.path.isdir(shards_dir):
+            for name in os.listdir(shards_dir):
+                if name.startswith("shard_") and os.path.isdir(
+                    os.path.join(shards_dir, name)
+                ):
+                    try:
+                        max_num = max(max_num, int(name[6:]))
+                    except ValueError:
+                        pass
+    return max_num + 1
+
+
 # ---------------------------------------------------------------------------
 # Tokenizer
 # ---------------------------------------------------------------------------
@@ -328,6 +489,8 @@ class ShardWriter:
         stage: int = 1,
         source_file: str = "",
         start_shard_idx: int = 1,
+        shard_counter=None,
+        shard_lock=None,
     ):
         self.s3 = s3_client
         self.dst_uri = dst_uri.rstrip("/")
@@ -340,6 +503,12 @@ class ShardWriter:
         self.tokenizer_version = tokenizer_version
         self.stage = stage
         self.source_file = source_file
+
+        # Parallel-mode atomic counter (multiprocessing.Manager proxies).
+        # When set, flush_shard() acquires the lock to obtain a globally unique
+        # shard number instead of using the local self.shard_idx counter.
+        self._shard_counter = shard_counter
+        self._shard_lock = shard_lock
 
         # Calculate blocks per shard
         shard_bytes = shard_size_mb * 1024 * 1024
@@ -382,7 +551,16 @@ class ShardWriter:
         if not self.accumulated_blocks:
             return None
 
-        shard_name = f"shard_{self.shard_idx:03d}"
+        # Parallel mode: acquire the shared counter to get a globally unique number.
+        # The lock is held only for the read-increment (microseconds), not during I/O.
+        if self._shard_counter is not None and self._shard_lock is not None:
+            with self._shard_lock:
+                shard_num = self._shard_counter.value
+                self._shard_counter.value += 1
+        else:
+            shard_num = self.shard_idx
+
+        shard_name = f"shard_{shard_num:03d}"
         target_prefix = f"{self.dst_uri}/{shard_name}"
         num_blocks = len(self.accumulated_blocks)
 
@@ -525,17 +703,24 @@ def process_coreset_file(
     tokenizer_hash: str = "",
     start_shard_idx: int = 1,
     staging_mode: bool = False,
+    shard_counter=None,
+    shard_lock=None,
 ) -> dict:
     """Process a single coreset parquet file.
 
-    Sequential mode (staging_mode=False):
+    Sequential mode (staging_mode=False, shard_counter=None):
       Shards are written directly into <dst_base_uri>/shards/ using global
       numbering that starts at start_shard_idx.  The returned dict includes
       next_shard_idx so the caller can thread the counter across batches.
 
+    Parallel mode (staging_mode=False, shard_counter provided):
+      Shards are written directly into <dst_base_uri>/shards/ using a globally
+      unique number obtained from the shared atomic counter.  No staging or
+      flatten step is needed — all workers write to the same flat shards/ dir.
+
     Staging mode (staging_mode=True):
-      Shards are written into <dst_base_uri>/<coreset_name>/shard_NNN/ so
-      each parallel worker has an isolated namespace with no name collisions.
+      Legacy path retained for backward compatibility.  Shards are written into
+      <dst_base_uri>/<coreset_name>/shard_NNN/ per-worker.
       start_shard_idx is always 1 in this mode.
     """
 
@@ -597,6 +782,8 @@ def process_coreset_file(
         stage=getattr(args, "stage", 1),
         source_file=coreset_uri,
         start_shard_idx=start_shard_idx,
+        shard_counter=shard_counter,
+        shard_lock=shard_lock,
     )
 
     buffer: List[int] = []
@@ -770,6 +957,7 @@ def process_coreset_file(
         "total_size_bytes": sum(s["file_size_bytes"] for s in shard_stats),
         "tokens_dropped": batch_tokens_dropped,
         "elapsed_seconds": round(total_time, 1),
+        "shard_names": [s["shard_name"] for s in shard_stats],
     }
 
 
@@ -781,18 +969,32 @@ def process_coreset_file(
 def _worker_process_coreset(worker_args: tuple) -> dict:
     """Pool worker: creates its own S3 client and tokenizer after fork/spawn.
 
-    Each worker writes to its own isolated staging dir:
-      <dst>/_staging/<coreset_name>/shard_NNN/
+    Workers write shards directly to <dst>/shards/shard_{N:03d}/ using a
+    globally unique number obtained from the shared atomic counter (Manager.Value
+    + Manager.Lock).  No staging directory or flatten step is needed.
 
-    This gives every worker a collision-free namespace regardless of how many
-    shards other workers produce.  The main process calls run_flatten() after
-    pool.map() completes to move all staging shards into the final flat
-    <dst>/shards/ layout with global continuous numbering.
+    On successful completion the worker writes a per-coreset .done marker to
+    <dst>/completed/<coreset_name>.done.  The marker is written AFTER the last
+    shard's metadata.json is confirmed written — this ordering is the key safety
+    invariant that makes marker-based resume reliable.
     """
-    uri, dst_base_uri, tokenizer_path, args_dict, worker_id, tokenizer_hash = worker_args
+    (
+        uri,
+        dst_base_uri,
+        tokenizer_path,
+        args_dict,
+        worker_id,
+        tokenizer_hash,
+        shard_counter,
+        shard_lock,
+    ) = worker_args
 
-    worker_tmp = os.path.join(args_dict.get("tmp_dir") or tempfile.gettempdir(),
-                              "tokenize_curriculum_tmp", f"worker_{worker_id:03d}")
+    # Fix: args_dict["tmp_dir"] already includes the "tokenize_curriculum_tmp" suffix
+    # set in main(). Do NOT re-append it here or the path is doubled.
+    worker_tmp = os.path.join(
+        args_dict.get("tmp_dir") or tempfile.gettempdir(),
+        f"worker_{worker_id:03d}",
+    )
     os.makedirs(worker_tmp, exist_ok=True)
 
     # Boto3 client must be created AFTER fork (not safe to share across processes)
@@ -807,18 +1009,34 @@ def _worker_process_coreset(worker_args: tuple) -> dict:
     # Tokenizer must be loaded AFTER fork
     tokenizer = get_tokenizer(tokenizer_path)
 
-    # Workers write to <dst>/_staging/<coreset_name>/shard_NNN/ (staging_mode=True)
-    # The staging base is one level up from dst_base_uri so the coreset_name subdir
-    # lands inside _staging/, not directly in dst/.
-    staging_base_uri = f"{dst_base_uri.rstrip('/')}/_staging"
-
     args = argparse.Namespace(**args_dict)
+    result = {}
     try:
+        # Direct flat write — workers share the global shards/ dir via the atomic counter.
+        # staging_mode=False means shards go to <dst>/shards/shard_{N:03d}/ directly.
         result = process_coreset_file(
-            s3, uri, staging_base_uri, tokenizer, args, worker_tmp, tokenizer_hash,
-            start_shard_idx=1,
-            staging_mode=True,
+            s3,
+            uri,
+            dst_base_uri,
+            tokenizer,
+            args,
+            worker_tmp,
+            tokenizer_hash,
+            start_shard_idx=1,   # ignored when shard_counter is provided
+            staging_mode=False,
+            shard_counter=shard_counter,
+            shard_lock=shard_lock,
         )
+
+        # Write .done marker AFTER process_coreset_file returns (i.e. after all
+        # metadata.json files are confirmed written).  If the worker is killed
+        # before reaching this line, no marker is written and the batch is
+        # re-queued on resume — safe because existing shards are skipped via
+        # the metadata.json existence check inside flush_shard().
+        if result:
+            coreset_name = result.get("coreset_name", "")
+            write_done_marker(s3, dst_base_uri, coreset_name, uri, result, worker_tmp)
+
     except Exception as e:
         print(f"[Worker {worker_id}] ERROR processing {uri}: {e}")
         result = {}
@@ -1001,55 +1219,138 @@ def main():
                     progress["next_shard_idx"] = next_shard_idx
                     save_progress_state(s3, args.dst_uri, progress, tmp_dir)
         else:
-            # Parallel path — workers write to <dst>/_staging/<coreset_name>/shard_NNN/
-            # (each worker has an isolated namespace, no shard name collisions).
-            # After pool.map() completes, run_flatten() moves everything into the
-            # final <dst>/shards/ layout with global continuous numbering.
-            from flatten_shards import run_flatten
+            # Parallel path — direct flat write with atomic shard counter.
+            #
+            # Workers write shards directly to <dst>/shards/shard_{N:03d}/ using
+            # a Manager.Value counter protected by a Manager.Lock.  No staging
+            # directory or flatten step is required.
+            #
+            # Completed batches are tracked via per-coreset .done marker files in
+            # <dst>/completed/.  This is more reliable than a single pool-level
+            # progress_state.json because each worker writes its own marker
+            # independently — partially-completed work is preserved even when the
+            # main process is hard-killed before pool.map() can return.
+            #
+            # Interrupt handling: apply_async + a 2-second polling loop lets the
+            # main process call pool.terminate() as soon as _TERMINATION_DETECTED
+            # is set, ensuring we exit within the 2-minute Spot window.
 
-            staging_uri = f"{args.dst_uri.rstrip('/')}/_staging"
+            # (Re)build completed set from .done markers — more reliable than
+            # progress_state.json["completed"] which requires pool.map() to return.
+            # Load the full marker dicts once; reuse for purge + manifest below.
+            prior_markers = load_all_markers(s3, args.dst_uri)
+            marker_completed = {
+                m["coreset_uri"] for m in prior_markers if "coreset_uri" in m
+            }
+            if marker_completed:
+                new_completions = marker_completed - completed_set
+                if new_completions:
+                    print(
+                        f"[RESUME] Found {len(new_completions)} additional batch(es) "
+                        f"completed via .done markers."
+                    )
+                completed_set.update(marker_completed)
+                pending_files = [uri for uri in target_files if uri not in completed_set]
 
-            args_dict = vars(args)
-            args_dict["tmp_dir"] = tmp_dir  # share base tmp dir; workers create subdirs
+                # Purge orphan shards left by prior interrupted runs to prevent
+                # data duplication when those batches re-run.
+                n_purged = purge_orphan_shards(s3, args.dst_uri, prior_markers)
+                if n_purged:
+                    print(
+                        f"[RESUME] Purged {n_purged} orphan shard(s) to prevent "
+                        f"data duplication."
+                    )
 
-            worker_inputs = [
-                (uri, args.dst_uri, args.tokenizer_path, args_dict, idx, tokenizer_hash)
-                for idx, uri in enumerate(pending_files)
-            ]
+            if not pending_files:
+                print("[INFO] All batches already completed (confirmed via .done markers).")
+            else:
+                # Initialise the atomic counter from existing shards so a resumed
+                # run never overwrites shards written by a prior run.
+                counter_start = get_next_shard_idx_from_existing(s3, args.dst_uri)
+                print(f"[PARALLEL] Atomic shard counter starts at: shard_{counter_start:03d}")
 
-            ctx = multiprocessing.get_context("spawn")
-            with ctx.Pool(processes=args.file_parallelism) as pool:
-                results = pool.map(_worker_process_coreset, worker_inputs)
+                args_dict = vars(args)
+                args_dict["tmp_dir"] = tmp_dir
 
-            for uri, stats in zip(pending_files, results):
-                if stats:
-                    all_stats.append(stats)
-                    completed_set.add(uri)
+                ctx = multiprocessing.get_context("spawn")
+                with ctx.Manager() as manager:
+                    shard_counter = manager.Value("i", counter_start)
+                    shard_lock = manager.Lock()
 
+                    worker_inputs = [
+                        (
+                            uri,
+                            args.dst_uri,
+                            args.tokenizer_path,
+                            args_dict,
+                            idx,
+                            tokenizer_hash,
+                            shard_counter,
+                            shard_lock,
+                        )
+                        for idx, uri in enumerate(pending_files)
+                    ]
+
+                    with ctx.Pool(processes=args.file_parallelism) as pool:
+                        futures = [
+                            pool.apply_async(_worker_process_coreset, (w,))
+                            for w in worker_inputs
+                        ]
+
+                        # Poll every 2 s so we can react to SIGTERM / IMDS notice
+                        # and call pool.terminate() within the 2-minute Spot window.
+                        terminated_early = False
+                        while not all(f.ready() for f in futures):
+                            if _TERMINATION_DETECTED.is_set():
+                                print(
+                                    "\n[INTERRUPT] Termination detected — "
+                                    "stopping worker pool."
+                                )
+                                pool.terminate()
+                                pool.join()
+                                terminated_early = True
+                                break
+                            time.sleep(2)
+
+                        if not terminated_early:
+                            # Collect results from successfully completed workers
+                            for uri, f in zip(pending_files, futures):
+                                try:
+                                    stats = f.get()
+                                    if stats:
+                                        all_stats.append(stats)
+                                        completed_set.add(uri)
+                                except Exception as e:
+                                    print(f"[Worker] ERROR for {uri}: {e}")
+
+            # Rebuild completed set from .done markers (captures any workers that
+            # finished before pool.terminate() was called during an interruption).
+            final_markers = load_all_markers(s3, args.dst_uri)
+            final_marker_completed = {
+                m["coreset_uri"] for m in final_markers if "coreset_uri" in m
+            }
+            completed_set.update(final_marker_completed)
             progress["completed"] = list(completed_set)
             save_progress_state(s3, args.dst_uri, progress, tmp_dir)
 
-            # Flatten staging shards into the final flat <dst>/shards/ layout
-            if not _TERMINATION_DETECTED.is_set():
-                print("\n[FLATTEN] Moving staging shards to flat global layout...")
-                flatten_result = run_flatten(
-                    src=staging_uri,
-                    dst=args.dst_uri,
-                    s3_client=s3,
-                )
-                if flatten_result["failed"] == 0:
-                    # Clean up staging dir — all shards successfully moved
-                    print("[FLATTEN] Cleaning up staging directory...")
-                    if is_s3_uri(staging_uri):
-                        # S3: staging files were already deleted streaming during flatten
-                        pass
-                    else:
-                        shutil.rmtree(staging_uri, ignore_errors=True)
-                else:
-                    print(
-                        f"[FLATTEN] WARNING: {flatten_result['failed']} shard(s) failed to move. "
-                        f"Staging directory preserved at: {staging_uri}"
-                    )
+            # Merge stats from batches completed in prior runs into all_stats so
+            # the manifest reflects ALL processed batches, not only this run's.
+            current_run_names = {s.get("coreset_name") for s in all_stats}
+            for m in final_markers:
+                cname = m.get("coreset_name")
+                if cname and cname not in current_run_names:
+                    all_stats.append({
+                        "coreset_file": m.get("coreset_file", cname),
+                        "coreset_name": cname,
+                        "num_shards": m.get("num_shards", 0),
+                        "total_tokens": m.get("total_tokens", 0),
+                        "tokens_dropped": m.get("tokens_dropped", 0),
+                        "shard_names": m.get("shard_names", []),
+                        "elapsed_seconds": m.get("elapsed_seconds", 0),
+                        "num_docs": m.get("num_docs", 0),
+                        "num_source_files": m.get("num_source_files", 0),
+                    })
+                    current_run_names.add(cname)
 
         if not _TERMINATION_DETECTED.is_set():
             # Global Manifest
