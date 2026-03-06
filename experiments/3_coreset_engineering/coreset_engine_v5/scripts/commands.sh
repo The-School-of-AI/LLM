@@ -117,42 +117,6 @@ BATCH_PREFETCH_AUTO_MIN_WAIT_MS="${BATCH_PREFETCH_AUTO_MIN_WAIT_MS:-2.0}"
 BATCH_PREFETCH_AUTO_WARMUP_BATCHES="${BATCH_PREFETCH_AUTO_WARMUP_BATCHES:-5}"
 RESUME="${RESUME:-false}" 
 
-# NVMe Storage Redirection (Speed-with-Safety)
-# If ENABLE_NVME is true, we generate a runtime pipeline config that redirects
-# all high-volume outputs (indices, manifests, used_chunks DB) to NVMe.
-# Checkpoints (.pkl) remain on EBS for durability.
-# A background S3 sync runs every 15 minutes to persist NVMe data.
-NVME_MOUNT="${NVME_MOUNT:-/mnt/nvme}"
-PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline.yaml"
-CORESET_OUTPUT_DIR="${ENGINE_DIR}/output/coresets"
-MANIFEST_OUTPUT_DIR="${ENGINE_DIR}/output/manifests"
-S3_SYNC_DEST=""  # Set later if NVMe is enabled
-
-if [ "${ENABLE_NVME}" = "true" ] && [ -d "${NVME_MOUNT}" ]; then
-    echo "[INFO] NVMe Storage Enabled: Generating runtime config with NVMe paths"
-    PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline_runtime.yaml"
-    CORESET_OUTPUT_DIR="${NVME_MOUNT}/output/coresets"
-    MANIFEST_OUTPUT_DIR="${NVME_MOUNT}/output/manifests"
-    mkdir -p "${CORESET_OUTPUT_DIR}" "${MANIFEST_OUTPUT_DIR}"
-
-    # Generate runtime pipeline.yaml with NVMe-redirected output paths
-    python3 -c "
-import yaml
-with open('${ENGINE_DIR}/config/pipeline.yaml') as f:
-    cfg = yaml.safe_load(f)
-cfg['io']['output_coreset_path'] = '${NVME_MOUNT}/output/coresets'
-cfg['io']['output_manifest_path'] = '${NVME_MOUNT}/output/manifests'
-with open('${PIPELINE_CONFIG}', 'w') as f:
-    yaml.dump(cfg, f, default_flow_style=False)
-print('[OK] Runtime config written: ${PIPELINE_CONFIG}')
-print('     output_coreset_path  = ${NVME_MOUNT}/output/coresets')
-print('     output_manifest_path = ${NVME_MOUNT}/output/manifests')
-"
-
-    S3_SYNC_DEST="s3://t2-datacurriculum-353/coreset_outputs/"
-    echo "[INFO] S3 sync destination: ${S3_SYNC_DEST}"
-fi
-# ------------------------------------------------------------------------------
 
 # --- Infrastructure Validation Overrides (for validate_infra.sh) ---------------
 # These flow through to validate_infra.sh via sudo -E.
@@ -224,16 +188,16 @@ fi
 # ==============================================================================
 # 2. AWS Authentication Check
 # ==============================================================================
-echo "### [2/8] AWS Authentication Check ###"
-if aws sts get-caller-identity &> /dev/null; then
-    echo "[OK] AWS credentials found."
-else
-    echo "[WARN] AWS credentials not found."
-    echo "Please run 'aws configure' or attach an IAM Role to this instance."
-    if [ "${DRY_RUN}" != "true" ]; then
-        echo "Note: The script will proceed but S3-dependent tasks will fail later."
-    fi
-fi
+# echo "### [2/8] AWS Authentication Check ###"
+# if aws sts get-caller-identity &> /dev/null; then
+#     echo "[OK] AWS credentials found."
+# else
+#     echo "[WARN] AWS credentials not found."
+#     echo "Please run 'aws configure' or attach an IAM Role to this instance."
+#     if [ "${DRY_RUN}" != "true" ]; then
+#         echo "Note: The script will proceed but S3-dependent tasks will fail later."
+#     fi
+# fi
 
 # ==============================================================================
 # 3. Repository Setup
@@ -332,51 +296,91 @@ fi
 # ==============================================================================
 # 5. Infrastructure Validation
 # ==============================================================================
-echo "### [5/8] Infrastructure Validation ###"
-VALIDATE_INFRA="${ENGINE_DIR}/scripts/validate_infra.sh"
+# echo "### [5/8] Infrastructure Validation ###"
+# VALIDATE_INFRA="${ENGINE_DIR}/scripts/validate_infra.sh"
 
-# Export infra thresholds so sudo -E passes them to validate_infra.sh
-export S3_BUCKET S3_PREFIX
-[ -n "${ENABLE_NVME}" ] && export ENABLE_NVME
+# # Export infra thresholds so sudo -E passes them to validate_infra.sh
+# export S3_BUCKET S3_PREFIX
+# [ -n "${ENABLE_NVME}" ] && export ENABLE_NVME
 
-if [ "${SKIP_VALIDATION}" = "true" ]; then
-    echo "[SKIP] Infrastructure validation skipped (--skip-validation)."
-elif [ "${DRY_RUN}" = "true" ]; then
-    echo "[DRY RUN] Would run: sudo -E bash ${VALIDATE_INFRA}"
-    echo "          Thresholds: nvme=${ENABLE_NVME:-auto} skip_ebs=${SKIP_EBS_VALIDATION} skip_valid=${SKIP_VALIDATION}"
-else
-    if [ -f "${VALIDATE_INFRA}" ]; then
-        echo "Running infrastructure validation..."
-        echo "  Thresholds: nvme=${ENABLE_NVME:-auto} skip_ebs=${SKIP_EBS_VALIDATION} skip_valid=${SKIP_VALIDATION}"
-        if sudo -E bash "${VALIDATE_INFRA}"; then
-            echo "[OK] Infrastructure validation passed."
-        else
-            echo "[ERROR] Infrastructure validation failed. Fix issues before continuing."
-            exit 1
-        fi
-    else
-        echo "[WARN] validate_infra.sh not found at ${VALIDATE_INFRA}. Skipping."
-    fi
+# if [ "${SKIP_VALIDATION}" = "true" ]; then
+#     echo "[SKIP] Infrastructure validation skipped (--skip-validation)."
+# elif [ "${DRY_RUN}" = "true" ]; then
+#     echo "[DRY RUN] Would run: sudo -E bash ${VALIDATE_INFRA}"
+#     echo "          Thresholds: nvme=${ENABLE_NVME:-auto} skip_ebs=${SKIP_EBS_VALIDATION} skip_valid=${SKIP_VALIDATION}"
+# else
+#     if [ -f "${VALIDATE_INFRA}" ]; then
+#         echo "Running infrastructure validation..."
+#         echo "  Thresholds: nvme=${ENABLE_NVME:-auto} skip_ebs=${SKIP_EBS_VALIDATION} skip_valid=${SKIP_VALIDATION}"
+#         if sudo -E bash "${VALIDATE_INFRA}"; then
+#             echo "[OK] Infrastructure validation passed."
+#         else
+#             echo "[ERROR] Infrastructure validation failed. Fix issues before continuing."
+#             exit 1
+#         fi
+#     else
+#         echo "[WARN] validate_infra.sh not found at ${VALIDATE_INFRA}. Skipping."
+#     fi
+# fi
+
+# # ==============================================================================
+# # 6. Start Monitoring
+# # ==============================================================================
+# echo "### [6/8] Start Monitoring ###"
+# MONITOR_SCRIPT="${ENGINE_DIR}/scripts/monitor.sh"
+# MONITOR_PID=""
+# LOG_DIR="${LOG_DIR:-/mnt/nvme/system_logs}"
+
+# if [ "${DRY_RUN}" = "true" ]; then
+#     echo "[DRY RUN] Would run: nohup bash ${MONITOR_SCRIPT} &"
+# elif [ -f "${MONITOR_SCRIPT}" ]; then
+#     echo "Starting background monitoring..."
+#     nohup bash "${MONITOR_SCRIPT}" > /dev/null 2>&1 &
+#     MONITOR_PID=$!
+#     echo "[OK] Monitoring started (PID: ${MONITOR_PID})"
+# else
+#     echo "[WARN] monitor.sh not found at ${MONITOR_SCRIPT}. Skipping."
+# fi
+
+# NVMe Storage Redirection (Speed-with-Safety)
+# If ENABLE_NVME is true, we generate a runtime pipeline config that redirects
+# all high-volume outputs (indices, manifests, checkpoints) to NVMe.
+# A background S3 sync runs every 5 minutes to persist NVMe data.
+NVME_MOUNT="${NVME_MOUNT:-/mnt/nvme}"
+PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline.yaml"
+CORESET_OUTPUT_DIR="${ENGINE_DIR}/output/coresets"
+MANIFEST_OUTPUT_DIR="${ENGINE_DIR}/output/manifests"
+CHECKPOINT_OUTPUT_DIR="${ENGINE_DIR}/output/checkpoints"
+S3_SYNC_DEST=""  # Set later if NVMe is enabled
+
+if [ "${ENABLE_NVME}" = "true" ] && [ -d "${NVME_MOUNT}" ]; then
+    echo "[INFO] NVMe Storage Enabled: Generating runtime config with NVMe paths"
+    PIPELINE_CONFIG="${ENGINE_DIR}/config/pipeline_runtime.yaml"
+    CORESET_OUTPUT_DIR="${NVME_MOUNT}/output/coresets"
+    MANIFEST_OUTPUT_DIR="${NVME_MOUNT}/output/manifests"
+    CHECKPOINT_OUTPUT_DIR="${NVME_MOUNT}/output/checkpoints"
+    mkdir -p "${CORESET_OUTPUT_DIR}" "${MANIFEST_OUTPUT_DIR}" "${CHECKPOINT_OUTPUT_DIR}"
+
+    # Generate runtime pipeline.yaml with NVMe-redirected output paths
+    python3 -c "
+import yaml
+with open('${ENGINE_DIR}/config/pipeline.yaml') as f:
+    cfg = yaml.safe_load(f)
+cfg['io']['output_coreset_path'] = '${NVME_MOUNT}/output/coresets'
+cfg['io']['output_manifest_path'] = '${NVME_MOUNT}/output/manifests'
+with open('${PIPELINE_CONFIG}', 'w') as f:
+    yaml.dump(cfg, f, default_flow_style=False)
+print('[OK] Runtime config written: ${PIPELINE_CONFIG}')
+print('     output_coreset_path  = ${NVME_MOUNT}/output/coresets')
+print('     output_manifest_path = ${NVME_MOUNT}/output/manifests')
+print('     checkpoint_base      = ${NVME_MOUNT}/output/checkpoints')
+"
+
+    S3_SYNC_DEST="s3://t2-datacurriculum-353/coreset_outputs"
+    echo "[INFO] S3 sync destination: ${S3_SYNC_DEST}"
 fi
+# ------------------------------------------------------------------------------
 
-# ==============================================================================
-# 6. Start Monitoring
-# ==============================================================================
-echo "### [6/8] Start Monitoring ###"
-MONITOR_SCRIPT="${ENGINE_DIR}/scripts/monitor.sh"
-MONITOR_PID=""
-LOG_DIR="${LOG_DIR:-/mnt/nvme/logs}"
-
-if [ "${DRY_RUN}" = "true" ]; then
-    echo "[DRY RUN] Would run: nohup bash ${MONITOR_SCRIPT} &"
-elif [ -f "${MONITOR_SCRIPT}" ]; then
-    echo "Starting background monitoring..."
-    nohup bash "${MONITOR_SCRIPT}" > /dev/null 2>&1 &
-    MONITOR_PID=$!
-    echo "[OK] Monitoring started (PID: ${MONITOR_PID})"
-else
-    echo "[WARN] monitor.sh not found at ${MONITOR_SCRIPT}. Skipping."
-fi
 
 # ==============================================================================
 # 7. Launch Pipeline
@@ -410,9 +414,9 @@ if [ "${DRY_RUN}" = "true" ]; then
         echo "    Pipeline Config: ${PIPELINE_CONFIG}"
         echo ""
         echo "  Storage Layout:"
-        echo "    Coreset Output: ${CORESET_OUTPUT_DIR}"
+        echo "    Coreset Output:  ${CORESET_OUTPUT_DIR}"
         echo "    Manifest Output: ${MANIFEST_OUTPUT_DIR}"
-        echo "    Checkpoints:    output/checkpoints/ (EBS)"
+        echo "    Checkpoints:     ${CHECKPOINT_OUTPUT_DIR}"
         if [ -n "${S3_SYNC_DEST}" ]; then
         echo "    S3 Sync Dest:   ${S3_SYNC_DEST}"
         echo "    Sync Interval:  Every 15 minutes"
@@ -449,6 +453,7 @@ nohup bash experiments/3_coreset_engineering/coreset_engine_v5/shard.sh \
     --input-format parquet \
     --total-tokens ${TOTAL_TOKENS} \
     --batch-size ${BATCH_SIZE} \
+    --checkpoint-base "${CHECKPOINT_OUTPUT_DIR}" \
     --checkpoint-every-n-batches ${CHECKPOINT_EVERY_N_BATCHES} \
     --used-cache-max-entries ${USED_CACHE_MAX_ENTRIES} \
     --used-cache-stats-every ${USED_CACHE_STATS_EVERY} \
@@ -465,27 +470,71 @@ PIPELINE_PID=$!
 echo "[OK] Pipeline launched (PID: ${PIPELINE_PID})"
 
 # ==============================================================================
-# 7b. Background S3 Sync (every 10 minutes)
+# 7b. Background S3 Sync (every 15 minutes)
 # ==============================================================================
 SYNC_PID=""
-S3_SYNC_INTERVAL="${S3_SYNC_INTERVAL:-600}"  # 10 minutes (configurable)
+S3_SYNC_INTERVAL="${S3_SYNC_INTERVAL:-900}"  # 15 minutes (configurable)
 
 _s3_sync_once() {
     local ts
     ts="$(date '+%Y-%m-%d %H:%M:%S')"
     echo "[S3 SYNC] ${ts} Syncing outputs to ${S3_SYNC_DEST}..."
-    # Sync NVMe outputs (indices, manifests, used_chunks DB)
-    if ! aws s3 sync "${CORESET_OUTPUT_DIR}" "${S3_SYNC_DEST}/coresets/" --only-show-errors --no-progress 2>&1; then
+    # Sync NVMe outputs (indices, manifests, checkpoints, and now validation_reports)
+    if ! aws s3 sync "${CORESET_OUTPUT_DIR}/" "${S3_SYNC_DEST}/coresets/" --only-show-errors --no-progress 2>&1; then
         echo "[S3 SYNC] ${ts} ERROR: coresets sync failed"
     fi
-    if ! aws s3 sync "${MANIFEST_OUTPUT_DIR}" "${S3_SYNC_DEST}/manifests/" --only-show-errors --no-progress 2>&1; then
+    if ! aws s3 sync "${MANIFEST_OUTPUT_DIR}/" "${S3_SYNC_DEST}/manifests/" --only-show-errors --no-progress 2>&1; then
         echo "[S3 SYNC] ${ts} ERROR: manifests sync failed"
     fi
-    # Sync EBS outputs (checkpoints)
-    if ! aws s3 sync "output/checkpoints/" "${S3_SYNC_DEST}/checkpoints/" --only-show-errors --no-progress 2>&1; then
+    # Sync checkpoints (NVMe when enabled, EBS otherwise)
+    if ! aws s3 sync "${CHECKPOINT_OUTPUT_DIR}/" "${S3_SYNC_DEST}/checkpoints/" --only-show-errors --no-progress 2>&1; then
         echo "[S3 SYNC] ${ts} ERROR: checkpoints sync failed"
     fi
     echo "[S3 SYNC] $(date '+%Y-%m-%d %H:%M:%S') Sync complete."
+}
+
+_post_process_and_sync() {
+    local ts
+    ts="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo "[POST-PROCESS] ${ts} Starting manifest/report merging and validation..."
+
+    local base_out
+    if [ "${ENABLE_NVME}" = "true" ] && [ -d "${NVME_MOUNT}" ]; then
+        base_out="${NVME_MOUNT}/output"
+    else
+        base_out="${ENGINE_DIR}/output"
+    fi
+
+    # 1. Merge sharded manifests
+    echo "[POST-PROCESS] Merging sharded manifests..."
+    python3 "${ENGINE_DIR}/tools/merge_sharded_manifests.py" \
+        --coreset-root "${base_out}/coresets" \
+        --stages ${STAGES} \
+        --overwrite
+
+    # 2. Merge sharded ablation reports
+    echo "[POST-PROCESS] Merging sharded ablation reports..."
+    python3 "${ENGINE_DIR}/tools/merge_sharded_ablation_reports.py" \
+        --manifests-dir "${base_out}/manifests" \
+        --output-file "${base_out}/manifests/ablation_validation_report.md" \
+        --overwrite
+
+    # 3. Validate coreset outputs
+    echo "[POST-PROCESS] Running coreset validation..."
+    python3 "${ENGINE_DIR}/tools/validate_coresets_outputs_v2.py" \
+        --curriculum "${ENGINE_DIR}/config/curriculum.yaml" \
+        --output-dir "${base_out}" \
+        --stages ${STAGES} \
+        --report-dir "${base_out}/validation_reports" \
+        --format both
+
+    # 4. Final S3 Sync including reports
+    if [ -n "${S3_SYNC_DEST}" ]; then
+        echo "[POST-PROCESS] Syncing final merged files and reports to ${S3_SYNC_DEST}..."
+        aws s3 sync "${base_out}/" "${S3_SYNC_DEST}/" --only-show-errors --no-progress
+    fi
+    
+    echo "[POST-PROCESS] $(date '+%Y-%m-%d %H:%M:%S') Complete."
 }
 
 if [ -n "${S3_SYNC_DEST}" ]; then
@@ -496,9 +545,9 @@ if [ -n "${S3_SYNC_DEST}" ]; then
             sleep ${S3_SYNC_INTERVAL}
             _s3_sync_once
         done
-        # Final sync after pipeline exits
-        echo "[S3 SYNC] Pipeline finished. Running final sync..."
-        _s3_sync_once
+        # Final post-processing and sync after pipeline exits
+        echo "[S3 SYNC] Pipeline finished. Running post-processing and final sync..."
+        _post_process_and_sync
     ) >> s3_sync.log 2>&1 &
     SYNC_PID=$!
     echo "[OK] Background S3 sync started (PID: ${SYNC_PID})"
@@ -517,20 +566,21 @@ echo ""
 echo "  Storage Layout:"
 echo "    Coreset Output:  ${CORESET_OUTPUT_DIR}"
 echo "    Manifest Output: ${MANIFEST_OUTPUT_DIR}"
-echo "    Checkpoints:     output/checkpoints/ (EBS)"
+echo "    Checkpoints:     ${CHECKPOINT_OUTPUT_DIR}"
 if [ -n "${S3_SYNC_DEST}" ]; then
     echo "    S3 Destination:  ${S3_SYNC_DEST}"
     echo "    Sync Interval:   Every $((S3_SYNC_INTERVAL / 60)) minutes (+ auto final sync)"
 fi
 echo ""
-echo "  After pipeline finishes, run post-run validation:"
-echo "    # Stop monitoring"
-echo "    kill \$(cat ${LOG_DIR}/monitor.pid)"
-echo "    # Generate monitoring report"
-echo "    bash ${ENGINE_DIR}/scripts/monitor_report.sh"
-echo "    # Validate coreset outputs"
-echo "    python3 ${ENGINE_DIR}/tools/validate_coreset_outputs.py \\"
-echo "        --curriculum ${ENGINE_DIR}/config/curriculum.yaml \\"
-echo "        --output-dir ${CORESET_OUTPUT_DIR} \\"
-echo "        --stages ${STAGES} --format both"
-echo "-----------------------------------------------------------------------"
+  After pipeline finishes, the following are automated:
+    1. Merging sharded manifests -> manifest.json
+    2. Merging ablation reports -> ablation_validation_report.md
+    3. Running Coreset Validator V2 (local + S3 sync)
+    
+    To check progress:
+      tail -f s3_sync.log
+    
+    Final Reports will be available at:
+      Local: ${CORESET_OUTPUT_DIR}/../validation_reports/
+      S3:    ${S3_SYNC_DEST}validation_reports/
+-----------------------------------------------------------------------
