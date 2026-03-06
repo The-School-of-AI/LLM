@@ -12,6 +12,7 @@ from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
 from llm.loss_spike_recovery import (
     RecoveryAction,
+    auto_select_action,
     broadcast_action,
     compute_embedding_norms,
     compute_grad_norm,
@@ -497,54 +498,90 @@ class PreTrainer:
         spike_reason: str = "LOSS SPIKE",
         grad_norm: float | None = None,
     ) -> RecoveryAction:
-        """Prompt the user for a recovery action and execute it. Returns the chosen action."""
+        """
+        Decide on a recovery action and execute side-effects (LR reduction).
+
+        In **auto_recover** mode (default / production), the action is chosen
+        by an escalating policy based on consecutive spike count.
+        In **interactive** mode, rank-0 prompts the user via stdin and the
+        choice is broadcast to all ranks.
+
+        After the action is chosen, the detector's cooldown is started via
+        ``record_spike_action()``.
+        """
         stats = self._spike_detector.get_stats()
         current_lr = self._engine.optimizer.param_groups[0]["lr"]
+        cfg = self._spike_config
 
-        # Rank 0 prompts the user; all other ranks wait for the broadcast.
-        if is_main_process():
-            action = prompt_user_for_action(
-                stats=stats,
-                epoch=epoch,
-                step=step,
-                global_step=global_step,
-                current_lr=current_lr,
-                lr_reduction_factor=self._spike_config.lr_reduction_factor,
+        # --- Choose action ---------------------------------------------------
+        if cfg.auto_recover:
+            action = auto_select_action(
+                spike_count=self._spike_detector.spike_count + 1,  # +1 for this spike
+                patience_skip=cfg.patience_skip,
+                patience_lr=cfg.patience_lr,
                 last_checkpoint_tag=self._last_checkpoint_tag,
-                timeout=self._spike_config.user_prompt_timeout,
-                spike_reason=spike_reason,
-                grad_norm=grad_norm,
+            )
+            # Log what the automatic policy decided.
+            grad_info = f", grad_norm={grad_norm:.2f}" if grad_norm is not None else ""
+            print_rank_0(
+                f"  [{spike_reason}] epoch={epoch} step={step} "
+                f"loss={stats['current_loss']:.4f} "
+                f"(mean={stats['window_mean']:.4f}, "
+                f"ratio={stats['spike_ratio']:.2f}x{grad_info}) "
+                f"spike #{stats['spike_count'] + 1} -> {action.name}"
             )
         else:
-            action = RecoveryAction.SKIP_BATCH  # placeholder, overwritten by broadcast
+            # Interactive mode — rank-0 prompts, broadcast to all ranks.
+            if is_main_process():
+                action = prompt_user_for_action(
+                    stats=stats,
+                    epoch=epoch,
+                    step=step,
+                    global_step=global_step,
+                    current_lr=current_lr,
+                    lr_reduction_factor=cfg.lr_reduction_factor,
+                    last_checkpoint_tag=self._last_checkpoint_tag,
+                    timeout=cfg.user_prompt_timeout,
+                    spike_reason=spike_reason,
+                    grad_norm=grad_norm,
+                )
+            else:
+                action = RecoveryAction.SKIP_BATCH  # overwritten by broadcast
 
-        action = broadcast_action(action, src=0)
+            action = broadcast_action(action, src=0)
 
-        # Log the spike event.
+        # --- Log spike event --------------------------------------------------
         spike_metrics = Metrics()
         spike_metrics.add("spike_detected", True)
         spike_metrics.add("spike_reason", spike_reason)
         spike_metrics.add("spike_action", action.name)
         spike_metrics.add("spike_loss", stats["current_loss"])
         spike_metrics.add("spike_window_mean", stats["window_mean"])
+        spike_metrics.add("spike_count", stats["spike_count"] + 1)
         if grad_norm is not None:
             spike_metrics.add("spike_grad_norm", grad_norm)
         self._logger.log_metrics(global_step, spike_metrics)
 
-        # Execute the chosen action.
+        # --- Execute side-effects --------------------------------------------
         if action == RecoveryAction.REDUCE_LR:
-            factor = self._spike_config.lr_reduction_factor
+            factor = cfg.lr_reduction_factor
             for pg in self._engine.optimizer.param_groups:
                 pg["lr"] *= factor
             print_rank_0(
-                f"  LR reduced by {factor}x -> {self._engine.optimizer.param_groups[0]['lr']:.2e}"
+                f"  LR reduced by {factor}x -> "
+                f"{self._engine.optimizer.param_groups[0]['lr']:.2e}"
             )
+
+        # Record the spike so cooldown + escalation counter advance.
+        self._spike_detector.record_spike_action()
 
         return action
 
     def _rollback_to_checkpoint(self) -> tuple[int, int, int]:
         """
-        Reload model, optimizer, and training state from the last saved checkpoint.
+        Reload model, optimizer, and training state from the last saved
+        checkpoint, then advance ``start_step`` by ``rollback_skip_batches``
+        so that training resumes *past* the problematic data region.
 
         Returns (start_epoch, start_step, global_step) to resume from.
         """
@@ -568,8 +605,13 @@ class PreTrainer:
         else:
             start_epoch, start_step, global_step = 0, 0, 0
 
+        # Skip past the problematic data-state region (LLaMA-style mitigation).
+        skip = self._spike_config.rollback_skip_batches
+        start_step += skip
+
         print_rank_0(
-            f"  Rolled back to epoch={start_epoch}, step={start_step}, global_step={global_step}"
+            f"  Rolled back to epoch={start_epoch}, step={start_step} "
+            f"(skipping {skip} batches), global_step={global_step}"
         )
         return start_epoch, start_step, global_step
 

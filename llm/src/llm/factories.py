@@ -186,6 +186,7 @@ def build_loss_spike_detector(
         z_threshold=cfg.z_threshold,
         min_spike_ratio=cfg.min_spike_ratio,
         min_abs_delta=cfg.min_abs_delta,
+        cooldown_steps=cfg.cooldown_steps,
     )
 
 

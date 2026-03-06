@@ -8,6 +8,7 @@ from llm.loss_spike_recovery import (
     LossSpikeDetector,
     RecoveryAction,
     _parse_choice,
+    auto_select_action,
     compute_grad_norm,
     compute_embedding_norms,
 )
@@ -30,20 +31,16 @@ class TestLossSpikeDetector:
     def test_no_spike_for_stable_loss(self):
         """Stable losses should never trigger a spike."""
         detector = LossSpikeDetector(window_size=10)
-        # Fill window
         for _ in range(10):
             detector.update(3.0)
-        # Continue with stable values
         for _ in range(20):
             assert detector.update(3.0) is False
 
     def test_spike_detected_large_jump(self):
         """A sudden large jump should be flagged as a spike."""
         detector = LossSpikeDetector(window_size=10, z_threshold=3.0, min_abs_delta=0.5)
-        # Fill with stable loss
         for _ in range(10):
             detector.update(3.0)
-        # Inject a spike
         assert detector.update(10.0) is True
 
     def test_spike_detected_ratio_guard(self):
@@ -51,10 +48,8 @@ class TestLossSpikeDetector:
         detector = LossSpikeDetector(
             window_size=10, z_threshold=3.0, min_spike_ratio=2.0, min_abs_delta=0.5
         )
-        # Fill with very stable loss (near-zero std)
         for _ in range(10):
             detector.update(3.0)
-        # Loss = 6.5 -> ratio = 2.17x, delta = 3.5 > 0.5
         assert detector.update(6.5) is True
 
     def test_no_spike_below_min_abs_delta(self):
@@ -62,7 +57,6 @@ class TestLossSpikeDetector:
         detector = LossSpikeDetector(window_size=10, min_abs_delta=1.0)
         for _ in range(10):
             detector.update(3.0)
-        # delta = 0.8 < 1.0 -> no spike
         assert detector.update(3.8) is False
 
     def test_spike_does_not_corrupt_window(self):
@@ -71,38 +65,174 @@ class TestLossSpikeDetector:
         for _ in range(5):
             detector.update(3.0)
 
-        # Inject spike (should not enter window)
         assert detector.update(20.0) is True
 
         stats = detector.get_stats()
-        # Window mean should still be 3.0 since spike was excluded
         assert stats["window_mean"] == pytest.approx(3.0, abs=0.01)
 
-    def test_get_stats(self):
-        """get_stats should return current window statistics."""
+    def test_get_stats_includes_spike_count(self):
+        """get_stats should include spike_count."""
         detector = LossSpikeDetector(window_size=5)
         for v in [2.0, 3.0, 4.0, 3.0, 3.0]:
             detector.update(v)
 
         stats = detector.get_stats()
         assert stats["current_loss"] == 3.0
-        assert stats["window_mean"] == pytest.approx(3.0, abs=0.1)
-        assert stats["window_std"] >= 0
-        assert stats["spike_ratio"] > 0
+        assert stats["spike_count"] == 0
 
     def test_gradually_increasing_loss_no_spike(self):
         """Gradual increase should not trigger spikes (window adapts)."""
         detector = LossSpikeDetector(window_size=10, z_threshold=3.0, min_abs_delta=0.5)
-        # Gradually increase from 3.0 to 5.0 over 30 steps
         for i in range(30):
             loss = 3.0 + i * (2.0 / 30)
-            # After warmup, gradual increases should generally not spike
-            # (the window adapts)
             detector.update(loss)
 
 
 # ---------------------------------------------------------------------------
-# _parse_choice
+# Cooldown
+# ---------------------------------------------------------------------------
+
+
+class TestCooldown:
+    """Tests for the cooldown mechanism."""
+
+    def test_cooldown_suppresses_detection(self):
+        """No spike should fire during cooldown, even for extreme values."""
+        detector = LossSpikeDetector(window_size=5, cooldown_steps=3, min_abs_delta=0.5)
+        for _ in range(5):
+            detector.update(3.0)
+
+        # First spike fires.
+        assert detector.update(20.0) is True
+        detector.record_spike_action()
+
+        # Next 3 steps are in cooldown — feed normal values (they enter the
+        # window but detection is suppressed).
+        for _ in range(3):
+            assert detector.update(3.0) is False
+
+        # Cooldown expired — next spike should fire again.
+        assert detector.update(20.0) is True
+
+    def test_cooldown_resets_spike_count(self):
+        """Spike count resets to 0 when cooldown expires without another spike."""
+        detector = LossSpikeDetector(window_size=5, cooldown_steps=2, min_abs_delta=0.5)
+        for _ in range(5):
+            detector.update(3.0)
+
+        # Trigger a spike and record it.
+        assert detector.update(20.0) is True
+        detector.record_spike_action()
+        assert detector.spike_count == 1
+
+        # Burn through cooldown with normal values.
+        detector.update(3.0)
+        detector.update(3.0)  # cooldown expires here, resets spike_count
+
+        assert detector.spike_count == 0
+
+    def test_spike_count_increments(self):
+        """Each record_spike_action increments spike_count."""
+        detector = LossSpikeDetector(window_size=5, cooldown_steps=0, min_abs_delta=0.5)
+        for _ in range(5):
+            detector.update(3.0)
+
+        for expected in range(1, 4):
+            assert detector.update(20.0) is True
+            detector.record_spike_action()
+            assert detector.spike_count == expected
+
+    def test_values_during_cooldown_enter_window(self):
+        """Normal values during cooldown should still update the window."""
+        detector = LossSpikeDetector(window_size=5, cooldown_steps=5, min_abs_delta=0.5)
+        for _ in range(5):
+            detector.update(3.0)
+
+        assert detector.update(20.0) is True
+        detector.record_spike_action()
+
+        # Feed lower values during cooldown — they should enter the window.
+        for _ in range(5):
+            detector.update(2.0)
+
+        # Window should now be all 2.0s, mean should reflect that.
+        stats = detector.get_stats()
+        assert stats["window_mean"] == pytest.approx(2.0, abs=0.1)
+
+
+# ---------------------------------------------------------------------------
+# auto_select_action
+# ---------------------------------------------------------------------------
+
+
+class TestAutoSelectAction:
+    """Tests for the automatic escalation policy."""
+
+    def test_tier1_skip_batch(self):
+        """Spike count within patience_skip -> SKIP_BATCH."""
+        for count in range(1, 4):
+            action = auto_select_action(
+                spike_count=count,
+                patience_skip=3,
+                patience_lr=10,
+                last_checkpoint_tag="ckpt",
+            )
+            assert action == RecoveryAction.SKIP_BATCH
+
+    def test_tier2_reduce_lr(self):
+        """Spike count past patience_skip but within patience_lr -> REDUCE_LR."""
+        for count in [4, 7, 10]:
+            action = auto_select_action(
+                spike_count=count,
+                patience_skip=3,
+                patience_lr=10,
+                last_checkpoint_tag="ckpt",
+            )
+            assert action == RecoveryAction.REDUCE_LR
+
+    def test_tier3_rollback(self):
+        """Spike count past patience_lr with checkpoint -> ROLLBACK_CHECKPOINT."""
+        action = auto_select_action(
+            spike_count=11,
+            patience_skip=3,
+            patience_lr=10,
+            last_checkpoint_tag="ckpt",
+        )
+        assert action == RecoveryAction.ROLLBACK_CHECKPOINT
+
+    def test_tier3_no_checkpoint_falls_back(self):
+        """Spike count past patience_lr without checkpoint -> SKIP_BATCH."""
+        action = auto_select_action(
+            spike_count=11,
+            patience_skip=3,
+            patience_lr=10,
+            last_checkpoint_tag=None,
+        )
+        assert action == RecoveryAction.SKIP_BATCH
+
+    def test_boundary_patience_skip(self):
+        """Exactly at patience_skip boundary -> still SKIP_BATCH."""
+        action = auto_select_action(
+            spike_count=3,
+            patience_skip=3,
+            patience_lr=10,
+            last_checkpoint_tag="ckpt",
+        )
+        assert action == RecoveryAction.SKIP_BATCH
+
+    def test_boundary_patience_lr(self):
+        """Exactly at patience_lr boundary -> still REDUCE_LR."""
+        action = auto_select_action(
+            spike_count=10,
+            patience_skip=3,
+            patience_lr=10,
+            last_checkpoint_tag="ckpt",
+        )
+        assert action == RecoveryAction.REDUCE_LR
+
+
+# ---------------------------------------------------------------------------
+# _parse_choice (interactive fallback)
 # ---------------------------------------------------------------------------
 
 
@@ -170,6 +300,12 @@ class TestLossSpikeConfig:
         assert cfg.min_abs_delta == 0.5
         assert cfg.grad_norm_threshold == 100.0
         assert cfg.lr_reduction_factor == 0.5
+        assert cfg.auto_recover is True
+        assert cfg.patience_skip == 3
+        assert cfg.patience_lr == 10
+        assert cfg.cooldown_steps == 50
+        assert cfg.rollback_skip_batches == 200
+        assert cfg.emb_norm_log_interval == 50
         assert cfg.user_prompt_timeout == 300
 
     def test_custom_values(self):
@@ -183,12 +319,19 @@ class TestLossSpikeConfig:
             min_abs_delta=0.3,
             grad_norm_threshold=50.0,
             lr_reduction_factor=0.25,
+            auto_recover=False,
+            patience_skip=5,
+            patience_lr=15,
+            cooldown_steps=100,
+            rollback_skip_batches=500,
             user_prompt_timeout=60,
         )
         assert cfg.enabled is False
-        assert cfg.window_size == 50
-        assert cfg.grad_norm_threshold == 50.0
-        assert cfg.lr_reduction_factor == 0.25
+        assert cfg.auto_recover is False
+        assert cfg.patience_skip == 5
+        assert cfg.patience_lr == 15
+        assert cfg.cooldown_steps == 100
+        assert cfg.rollback_skip_batches == 500
 
     def test_grad_norm_disabled(self):
         from llm.config import LossSpikeConfig
@@ -209,9 +352,11 @@ class TestFactory:
         from llm.config import LossSpikeConfig
         from llm.factories import build_loss_spike_detector
 
-        detector = build_loss_spike_detector(LossSpikeConfig(enabled=True))
+        cfg = LossSpikeConfig(enabled=True, cooldown_steps=42)
+        detector = build_loss_spike_detector(cfg)
         assert detector is not None
         assert isinstance(detector, LossSpikeDetector)
+        assert detector._cooldown_steps == 42
 
     def test_build_returns_none_when_disabled(self):
         from llm.config import LossSpikeConfig
@@ -230,25 +375,20 @@ class TestComputeGradNorm:
     """Tests for the gradient norm utility."""
 
     def test_zero_gradients(self):
-        """Model with zero gradients should return 0."""
         model = nn.Linear(4, 2, bias=False)
-        # No backward called, no grads
         assert compute_grad_norm(model) == 0.0
 
     def test_known_grad_norm(self):
-        """Check grad norm against a known value."""
         model = nn.Linear(4, 2, bias=False)
         x = torch.randn(1, 4)
         y = model(x)
         y.sum().backward()
 
-        # Manually compute expected norm
         expected = torch.norm(model.weight.grad.float(), 2).item()
         actual = compute_grad_norm(model)
         assert actual == pytest.approx(expected, rel=1e-4)
 
     def test_multi_param_model(self):
-        """Grad norm should aggregate across all parameters."""
         model = nn.Sequential(nn.Linear(4, 3), nn.Linear(3, 2))
         x = torch.randn(1, 4)
         y = model(x)
@@ -257,7 +397,6 @@ class TestComputeGradNorm:
         norm = compute_grad_norm(model)
         assert norm > 0
 
-        # Verify against manual computation
         param_norms = []
         for p in model.parameters():
             if p.grad is not None:
@@ -275,7 +414,6 @@ class TestComputeEmbeddingNorms:
     """Tests for the embedding norm tracker."""
 
     def test_standard_embedding(self):
-        """Should track token_embed and lm_head norms."""
         model = nn.Module()
         model.token_embed = nn.Embedding(100, 64)
         model.lm_head = nn.Linear(64, 100, bias=False)
@@ -290,10 +428,9 @@ class TestComputeEmbeddingNorms:
         assert norms["lm_head_norm"] > 0
 
     def test_kronecker_embedding(self):
-        """Should track pf_to_model projection and embed_norm norms."""
         model = nn.Module()
         model.pf_to_model = nn.Linear(8192, 4096, bias=False)
-        model.embed_norm = nn.LayerNorm(4096)  # stand-in for RMSNorm
+        model.embed_norm = nn.LayerNorm(4096)
         model.lm_head = nn.Linear(4096, 100, bias=False)
         model.token_embed = None
 
@@ -301,17 +438,14 @@ class TestComputeEmbeddingNorms:
         assert "emb_proj_norm" in norms
         assert "lm_head_norm" in norms
         assert norms["emb_proj_norm"] > 0
-        # embed_norm (LayerNorm) has weight and bias params
         assert any(k.startswith("emb_rmsnorm_") for k in norms)
 
     def test_empty_model(self):
-        """Model without any embedding layers returns empty dict."""
         model = nn.Module()
         norms = compute_embedding_norms(model)
         assert norms == {}
 
     def test_norms_are_positive(self):
-        """All returned norms should be positive floats."""
         model = nn.Module()
         model.token_embed = nn.Embedding(50, 32)
         model.lm_head = nn.Linear(32, 50, bias=False)

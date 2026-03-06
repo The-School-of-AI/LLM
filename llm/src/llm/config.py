@@ -72,7 +72,30 @@ class LossSpikeConfig:
     # Avoids excessive metric volume on long runs.  0 = every step.
     emb_norm_log_interval: int = 50
 
+    # ---- Automatic recovery policy (default) ----
+    # When True, spikes are handled automatically using an escalating policy:
+    #   spike_count <= patience_skip  -> skip batch
+    #   spike_count <= patience_lr    -> reduce LR + skip batch
+    #   spike_count >  patience_lr    -> rollback checkpoint + skip batches
+    # When False, the user is prompted interactively via stdin.
+    auto_recover: bool = True
+
+    # Number of consecutive spikes (before cooldown resets) that trigger
+    # each escalation tier.
+    patience_skip: int = 3
+    patience_lr: int = 10
+
+    # After any spike action, suppress further spike detection for this
+    # many steps.  Prevents cascading alerts in noisy regions.
+    cooldown_steps: int = 50
+
+    # After a rollback, skip this many data batches to move past the
+    # problematic data-state region (informed by LLaMA training report:
+    # "re-started ~100 steps before the spike and skipped 200-500 batches").
+    rollback_skip_batches: int = 200
+
     # Seconds to wait for user input before auto-selecting the default action.
+    # Only used when auto_recover=False.
     user_prompt_timeout: int = 300
 
 
