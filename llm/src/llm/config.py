@@ -60,7 +60,7 @@ class TrainingConfig:
     max_val_steps: int | None = None
 
     # Log training metrics every N optimizer steps.
-    log_interval: int = 1
+    log_interval: int = 10
     # Log token-analysis metrics every N optimizer steps.
     # None = reuse log_interval.
     token_log_interval: int | None = None
