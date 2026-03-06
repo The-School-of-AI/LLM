@@ -75,7 +75,7 @@ model:
 training:
   max_epochs: 1
   eval_interval: 500
-  max_steps_per_epoch: 20
+  max_steps_per_epoch: 1000
   max_val_steps: 1
   log_interval: 10
   generation_interval: 0
@@ -88,7 +88,7 @@ training:
   check_for_gsa_leak: false
 
 checkpoint:
-  save_interval: 500
+  save_interval: 100
   backend: none # "s3" | "none"
   resume_from: null
   resume_step: 0
