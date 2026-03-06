@@ -1,0 +1,314 @@
+{
+  "english_sft": {
+    "language": "English",
+    "old": {
+      "lines": 9710,
+      "chars": 16318925,
+      "tokens": 6026727,
+      "words": 3397284,
+      "byte_frags": 935478,
+      "token_pieces": 6026727,
+      "chars_per_token": 2.7077591203318154,
+      "tokens_per_word": 1.7739838647578476,
+      "byte_frag_pct": 15.522156553631847
+    },
+    "hybrid": {
+      "lines": 9710,
+      "chars": 16318925,
+      "tokens": 6026727,
+      "words": 3397284,
+      "byte_frags": 935478,
+      "token_pieces": 6026727,
+      "chars_per_token": 2.7077591203318154,
+      "tokens_per_word": 1.7739838647578476,
+      "byte_frag_pct": 15.522156553631847
+    },
+    "delta_tokens_pct": 0.0
+  },
+  "indic_as": {
+    "language": "Assamese",
+    "old": {
+      "lines": 33333,
+      "chars": 847686,
+      "tokens": 454908,
+      "words": 145902,
+      "byte_frags": 8554,
+      "token_pieces": 454908,
+      "chars_per_token": 1.8634229338679469,
+      "tokens_per_word": 3.117901056873792,
+      "byte_frag_pct": 1.8803802087455044
+    },
+    "hybrid": {
+      "lines": 33333,
+      "chars": 847686,
+      "tokens": 445066,
+      "words": 145902,
+      "byte_frags": 1785,
+      "token_pieces": 445066,
+      "chars_per_token": 1.904629875119645,
+      "tokens_per_word": 3.050444819125166,
+      "byte_frag_pct": 0.4010641118395923
+    },
+    "delta_tokens_pct": -2.1635143809297706
+  },
+  "indic_bn": {
+    "language": "Bengali",
+    "old": {
+      "lines": 49999,
+      "chars": 12684304,
+      "tokens": 4687589,
+      "words": 1965252,
+      "byte_frags": 72921,
+      "token_pieces": 4687589,
+      "chars_per_token": 2.7059334766763894,
+      "tokens_per_word": 2.3852355830193788,
+      "byte_frag_pct": 1.5556184639907635
+    },
+    "hybrid": {
+      "lines": 49999,
+      "chars": 12684304,
+      "tokens": 4672217,
+      "words": 1965252,
+      "byte_frags": 71065,
+      "token_pieces": 4672217,
+      "chars_per_token": 2.714836232991747,
+      "tokens_per_word": 2.3774136853696115,
+      "byte_frag_pct": 1.5210124016072029
+    },
+    "delta_tokens_pct": -0.32792977370669657
+  },
+  "indic_gu": {
+    "language": "Gujarati",
+    "old": {
+      "lines": 50000,
+      "chars": 13835635,
+      "tokens": 5370602,
+      "words": 2383589,
+      "byte_frags": 91942,
+      "token_pieces": 5370602,
+      "chars_per_token": 2.576179541883759,
+      "tokens_per_word": 2.25315773818389,
+      "byte_frag_pct": 1.7119496101181952
+    },
+    "hybrid": {
+      "lines": 50000,
+      "chars": 13835635,
+      "tokens": 5331881,
+      "words": 2383589,
+      "byte_frags": 86733,
+      "token_pieces": 5331881,
+      "chars_per_token": 2.59488818298833,
+      "tokens_per_word": 2.2369129073846206,
+      "byte_frag_pct": 1.6266867171266575
+    },
+    "delta_tokens_pct": -0.720980627497625
+  },
+  "indic_hi": {
+    "language": "Hindi",
+    "old": {
+      "lines": 33333,
+      "chars": 768039,
+      "tokens": 347113,
+      "words": 159328,
+      "byte_frags": 3651,
+      "token_pieces": 347113,
+      "chars_per_token": 2.212648330658892,
+      "tokens_per_word": 2.1786063968668405,
+      "byte_frag_pct": 1.051818860140646
+    },
+    "hybrid": {
+      "lines": 33333,
+      "chars": 768039,
+      "tokens": 338870,
+      "words": 159328,
+      "byte_frags": 141,
+      "token_pieces": 338870,
+      "chars_per_token": 2.26647091805117,
+      "tokens_per_word": 2.126870355493071,
+      "byte_frag_pct": 0.04160887656033287
+    },
+    "delta_tokens_pct": -2.374730995381907
+  },
+  "indic_kn": {
+    "language": "Kannada",
+    "old": {
+      "lines": 33333,
+      "chars": 795689,
+      "tokens": 381750,
+      "words": 119059,
+      "byte_frags": 4822,
+      "token_pieces": 381750,
+      "chars_per_token": 2.0843195808775374,
+      "tokens_per_word": 3.206393468784384,
+      "byte_frag_pct": 1.2631303208906353
+    },
+    "hybrid": {
+      "lines": 33333,
+      "chars": 795689,
+      "tokens": 372957,
+      "words": 119059,
+      "byte_frags": 2097,
+      "token_pieces": 372957,
+      "chars_per_token": 2.1334604257327254,
+      "tokens_per_word": 3.1325393292401245,
+      "byte_frag_pct": 0.5622632099679051
+    },
+    "delta_tokens_pct": -2.303339882121808
+  },
+  "indic_ml": {
+    "language": "Malayalam",
+    "old": {
+      "lines": 49999,
+      "chars": 13666096,
+      "tokens": 4744733,
+      "words": 1405940,
+      "byte_frags": 84874,
+      "token_pieces": 4744733,
+      "chars_per_token": 2.8802666029890407,
+      "tokens_per_word": 3.37477630624351,
+      "byte_frag_pct": 1.788804554439628
+    },
+    "hybrid": {
+      "lines": 49999,
+      "chars": 13666096,
+      "tokens": 4707328,
+      "words": 1405940,
+      "byte_frags": 71717,
+      "token_pieces": 4707328,
+      "chars_per_token": 2.9031535512290625,
+      "tokens_per_word": 3.3481713302132383,
+      "byte_frag_pct": 1.5235182252012183
+    },
+    "delta_tokens_pct": -0.7883478374863244
+  },
+  "indic_mr": {
+    "language": "Marathi",
+    "old": {
+      "lines": 33333,
+      "chars": 784118,
+      "tokens": 364029,
+      "words": 141598,
+      "byte_frags": 4255,
+      "token_pieces": 364029,
+      "chars_per_token": 2.1539987198822073,
+      "tokens_per_word": 2.5708625828048417,
+      "byte_frag_pct": 1.1688629202618472
+    },
+    "hybrid": {
+      "lines": 33333,
+      "chars": 784118,
+      "tokens": 353605,
+      "words": 141598,
+      "byte_frags": 972,
+      "token_pieces": 353605,
+      "chars_per_token": 2.217496924534438,
+      "tokens_per_word": 2.4972457238096584,
+      "byte_frag_pct": 0.274882990907934
+    },
+    "delta_tokens_pct": -2.863508127099764
+  },
+  "indic_or": {
+    "language": "Odia",
+    "old": {
+      "lines": 50000,
+      "chars": 14093495,
+      "tokens": 13784338,
+      "words": 2241775,
+      "byte_frags": 1863733,
+      "token_pieces": 13784338,
+      "chars_per_token": 1.0224281354679492,
+      "tokens_per_word": 6.148849906881823,
+      "byte_frag_pct": 13.520656559640368
+    },
+    "hybrid": {
+      "lines": 50000,
+      "chars": 14093495,
+      "tokens": 8456317,
+      "words": 2241775,
+      "byte_frags": 42082,
+      "token_pieces": 8456317,
+      "chars_per_token": 1.66662330657661,
+      "tokens_per_word": 3.772152423860557,
+      "byte_frag_pct": 0.4976398117525632
+    },
+    "delta_tokens_pct": -38.652715857663964
+  },
+  "indic_pa": {
+    "language": "Punjabi",
+    "old": {
+      "lines": 33333,
+      "chars": 877373,
+      "tokens": 524235,
+      "words": 160363,
+      "byte_frags": 8331,
+      "token_pieces": 524235,
+      "chars_per_token": 1.6736253779316528,
+      "tokens_per_word": 3.2690520880751794,
+      "byte_frag_pct": 1.5891727946436236
+    },
+    "hybrid": {
+      "lines": 33333,
+      "chars": 877373,
+      "tokens": 481671,
+      "words": 160363,
+      "byte_frags": 3962,
+      "token_pieces": 481671,
+      "chars_per_token": 1.8215192527679682,
+      "tokens_per_word": 3.00362926610253,
+      "byte_frag_pct": 0.8225531535010412
+    },
+    "delta_tokens_pct": -8.119259492403216
+  },
+  "indic_ta": {
+    "language": "Tamil",
+    "old": {
+      "lines": 50000,
+      "chars": 11741717,
+      "tokens": 4141202,
+      "words": 1320962,
+      "byte_frags": 57495,
+      "token_pieces": 4141202,
+      "chars_per_token": 2.835340319066783,
+      "tokens_per_word": 3.1349895000764594,
+      "byte_frag_pct": 1.3883650205906402
+    },
+    "hybrid": {
+      "lines": 50000,
+      "chars": 11741717,
+      "tokens": 4103902,
+      "words": 1320962,
+      "byte_frags": 48540,
+      "token_pieces": 4103902,
+      "chars_per_token": 2.861110474860267,
+      "tokens_per_word": 3.1067525031000134,
+      "byte_frag_pct": 1.1827767817067756
+    },
+    "delta_tokens_pct": -0.9007046746331137
+  },
+  "indic_te": {
+    "language": "Telugu",
+    "old": {
+      "lines": 39123,
+      "chars": 5488066,
+      "tokens": 2255875,
+      "words": 713165,
+      "byte_frags": 50216,
+      "token_pieces": 2255875,
+      "chars_per_token": 2.4327881642378233,
+      "tokens_per_word": 3.1631880420379574,
+      "byte_frag_pct": 2.226009863135147
+    },
+    "hybrid": {
+      "lines": 39123,
+      "chars": 5488066,
+      "tokens": 2237543,
+      "words": 713165,
+      "byte_frags": 43846,
+      "token_pieces": 2237543,
+      "chars_per_token": 2.4527197913068037,
+      "tokens_per_word": 3.1374829106868676,
+      "byte_frag_pct": 1.9595601067778363
+    },
+    "delta_tokens_pct": -0.8126336787277665
+  }
+}
