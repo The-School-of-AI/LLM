@@ -1,0 +1,114 @@
+﻿{
+  "schema": {
+    "id_field": "id",
+    "text_fields": [
+      "text",
+      "payload.body"
+    ],
+    "lang_field": "lang",
+    "source_field": "source"
+  },
+  "detection": {
+    "enable_email": true,
+    "enable_phone": true,
+    "enable_ip_address": true,
+    "enable_physical_address": true,
+    "enable_government_id": true,
+    "enable_payment_card": true,
+    "enable_account_number": true,
+    "enable_url_sanitization": true,
+    "name_detection_mode": "anchored",
+    "person_name_anchors": [
+      "name",
+      "contact",
+      "employee",
+      "patient",
+      "customer",
+      "user",
+      "नाम"
+    ],
+    "account_anchors": [
+      "account",
+      "acct",
+      "a/c",
+      "bank account",
+      "खाता",
+      "खाते"
+    ],
+    "address_anchors": [
+      "address",
+      "addr",
+      "location",
+      "located at",
+      "residence",
+      "resident at",
+      "पता"
+    ],
+    "aadhaar_anchors": [
+      "aadhaar",
+      "uid",
+      "uidai",
+      "आधार"
+    ],
+    "phone_context_blocklist": [
+      "account",
+      "acct",
+      "aadhaar",
+      "uid",
+      "card",
+      "ssn",
+      "pan",
+      "खाता",
+      "आधार"
+    ],
+    "sensitive_query_params": [
+      "access_token",
+      "account",
+      "acct",
+      "aadhaar",
+      "api_key",
+      "apikey",
+      "auth",
+      "authorization",
+      "card",
+      "card_number",
+      "code",
+      "cvv",
+      "dob",
+      "email",
+      "key",
+      "name",
+      "otp",
+      "pan",
+      "password",
+      "phone",
+      "session",
+      "ssn",
+      "token",
+      "userid"
+    ]
+  },
+  "redaction": {
+    "placeholder_style": "typed",
+    "generic_placeholder": "[REDACTED]",
+    "preserve_separator_spacing": true
+  },
+  "drop_policy": {
+    "drop_if_total_entities_gte": 4,
+    "drop_if_high_risk_entities_gte": 2,
+    "drop_if_entity_density_gte": 0.18,
+    "drop_if_entity_density_min_entities": 5,
+    "high_risk_labels": [
+      "ACCOUNT_NUMBER",
+      "AADHAAR_NUMBER",
+      "CREDIT_CARD_NUMBER",
+      "PAN_NUMBER",
+      "SSN"
+    ]
+  },
+  "runtime": {
+    "max_audit_samples": 50,
+    "write_per_file_metrics": true,
+    "resume": true
+  }
+}

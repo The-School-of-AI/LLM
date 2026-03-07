@@ -1,0 +1,14 @@
+{
+  "files": [
+    {
+      "notes": "Mixed LLM-style web, chat, log, markdown, code, and multilingual structured PII samples.",
+      "path": "C:\\Users\\nmahesh\\code_offline\\PII_redaction\\datasets\\synthetic\\llm_multilingual_structured.jsonl",
+      "record_count": 18
+    },
+    {
+      "notes": "Nested-schema samples for payload.body style inputs.",
+      "path": "C:\\Users\\nmahesh\\code_offline\\PII_redaction\\datasets\\synthetic\\llm_nested_records.jsonl",
+      "record_count": 2
+    }
+  ]
+}
