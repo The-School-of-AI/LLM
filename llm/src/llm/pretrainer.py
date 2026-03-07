@@ -11,7 +11,7 @@ from llm.config import Config
 from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
 from llm.profiler import PipelineProfiler
-from llm.utils import is_main_process
+from llm.utils import is_main_process, verify_optimizer_scheduler_restored
 
 
 class PreTrainer:
@@ -175,6 +175,7 @@ class PreTrainer:
             start_epoch = client_state.get("epoch", 0)
             global_step = client_state.get("global_step", 0)
             start_step = client_state.get("step", 0)
+            self._verify_optimizer_scheduler_restored(global_step)
             return start_epoch, start_step, global_step
 
         return 0, 0, 0
@@ -416,6 +417,32 @@ class PreTrainer:
 
     def _generate(self):
         pass
+
+    def _verify_optimizer_scheduler_restored(self, expected_global_step: int):
+        """Verify optimizer momentum/variance and scheduler state after resume."""
+        result = verify_optimizer_scheduler_restored(
+            self._optimizer, self._lr_scheduler, expected_global_step
+        )
+
+        if is_main_process():
+            print(
+                f"[Resume] Optimizer state verified: "
+                f"{result['restored_count']}/{result['total_count']} "
+                f"params have non-zero momentum & variance. "
+                f"Current LR: {result['current_lr']}, "
+                f"scheduler last_epoch: {result['last_epoch']}, "
+                f"global_step: {expected_global_step}"
+            )
+            if (
+                result["last_epoch"] is not None
+                and result["last_epoch"] == 0
+                and expected_global_step > 0
+            ):
+                print(
+                    "[Resume] WARNING: scheduler last_epoch is 0 despite "
+                    f"global_step={expected_global_step} — scheduler state "
+                    "may not have been restored."
+                )
 
     def _validate_kernel_policy(self, require_fused_kernels: bool):
         if require_fused_kernels and not HAS_TRITON:
