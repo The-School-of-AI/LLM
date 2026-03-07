@@ -100,7 +100,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 # --- Configuration (UPDATE THESE) ---------------------------------------------
 # These can be overridden by environment variables (e.g. for CI/CD)
-BRANCH_NAME="${BRANCH_NAME:-p3/feat/stage-wise-coreset-selection_v2}"
+BRANCH_NAME="${BRANCH_NAME:-p3/feat/coreset-engine-v5-production}"
 S3_BUCKET="${S3_BUCKET:-t2-datacurriculum-353}"
 S3_INPUT_PATH="${S3_INPUT_PATH:-s3://${S3_BUCKET}/processed_dataset/curriculum_pyspark_output/}"
 S3_PREFIX="${S3_PREFIX:-processed_dataset/curriculum_pyspark_output/source=C4/}"
