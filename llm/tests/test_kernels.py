@@ -500,6 +500,8 @@ class TestDeltaEntrance:
         )
         (qo_t.sum() + ko_t.sum() + vo_t.sum()).backward()
         gq_t = q_t.grad.clone()
+        gk_t = k_t.grad.clone()
+        gv_t = v_t.grad.clone()
 
         # Reference path
         q_r = self.q.clone().requires_grad_(True)
@@ -513,8 +515,17 @@ class TestDeltaEntrance:
         )
         (qo_r.sum() + ko_r.sum() + vo_r.sum()).backward()
         gq_r = q_r.grad.clone()
+        gk_r = k_r.grad.clone()
+        gv_r = v_r.grad.clone()
 
         # Relaxed tolerance due to tl.atomic_add non-determinism
         assert torch.allclose(gq_t.float(), gq_r.float(), atol=1e-2), (
             f"grad_q max diff: {(gq_t.float() - gq_r.float()).abs().max().item():.6e}"
         )
+        assert torch.allclose(gk_t.float(), gk_r.float(), atol=1e-2), (
+            f"grad_k max diff: {(gk_t.float() - gk_r.float()).abs().max().item():.6e}"
+        )
+        assert torch.allclose(gv_t.float(), gv_r.float(), atol=1e-2), (
+            f"grad_v max diff: {(gv_t.float() - gv_r.float()).abs().max().item():.6e}"
+        )
+
