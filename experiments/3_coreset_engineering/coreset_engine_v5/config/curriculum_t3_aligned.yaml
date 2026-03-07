@@ -131,18 +131,9 @@ difficulty_system:
       name: "Nursery"
       intent: "Surface language acquisition"
       allowed_modalities: ["general_text"]
-      # web, social, qa, education, language_literacy, conversation, translation (optional: news)
+      # web, social, qa, education, language_literacy, conversation, translation
       allowed_domains:
-        [
-          "conversation",
-          "education",
-          "language_literacy",
-          "news",
-          "qa",
-          "social",
-          "translation",
-          "web",
-        ]
+        ["conversation", "education", "language_literacy", "qa", "social", "translation", "web"]
       constraints:
         tokenizer:
           avg_max: 5000
@@ -159,19 +150,7 @@ difficulty_system:
       allowed_modalities: ["general_text", "clean_exposition"]
       # web, encyclopedia, news, social, qa, education, language_literacy, conversation, translation, literature, code
       allowed_domains:
-        [
-          "code",
-          "conversation",
-          "education",
-          "encyclopedia",
-          "language_literacy",
-          "literature",
-          "news",
-          "qa",
-          "social",
-          "translation",
-          "web",
-        ]
+        ["code", "conversation", "education", "encyclopedia", "language_literacy", "literature", "news", "qa", "social", "translation", "web"]
       constraints:
         tokenizer:
           avg_max: 10000
@@ -188,20 +167,7 @@ difficulty_system:
       allowed_modalities: ["general_text", "structured_knowledge"]
       # web, encyclopedia, news, social, qa, education, literature, conversation, translation, code, science, math
       allowed_domains:
-        [
-          "code",
-          "conversation",
-          "education",
-          "encyclopedia",
-          "literature",
-          "math",
-          "news",
-          "qa",
-          "science",
-          "social",
-          "translation",
-          "web",
-        ]
+        ["code", "conversation", "education", "encyclopedia", "literature", "math", "news", "qa", "science", "social", "translation", "web"]
       constraints:
         tokenizer:
           avg_max: 20000
@@ -216,22 +182,9 @@ difficulty_system:
       name: "Undergraduate"
       intent: "Reasoning emergence"
       allowed_modalities: ["structured_knowledge", "technical_text", "code"]
-      # science, math, education, code, literature, conversation, translation, instruction, preference (optional: web, qa, encyclopedia)
+      # science, math, education, code, literature, conversation, translation, instruction, preference
       allowed_domains:
-        [
-          "code",
-          "conversation",
-          "education",
-          "encyclopedia",
-          "instruction",
-          "literature",
-          "math",
-          "preference",
-          "qa",
-          "science",
-          "translation",
-          "web",
-        ]
+        ["code", "conversation", "education", "instruction", "literature", "math", "preference", "science", "translation"]
       constraints:
         tokenizer:
           avg_max: 40000
@@ -250,15 +203,7 @@ difficulty_system:
       allowed_modalities: ["technical_text", "math", "code"]
       # science, math, code, instruction, education, literature, encyclopedia
       allowed_domains:
-        [
-          "code",
-          "education",
-          "encyclopedia",
-          "instruction",
-          "literature",
-          "math",
-          "science",
-        ]
+        ["code", "education", "encyclopedia", "instruction", "literature", "math", "science"]
       constraints:
         tokenizer:
           avg_max: 70000
@@ -278,14 +223,7 @@ difficulty_system:
         ["hard_reasoning", "math", "advanced_code", "planning"]
       # instruction, science, math, code, education, preference
       allowed_domains:
-        [
-          "code",
-          "education",
-          "instruction",
-          "math",
-          "preference",
-          "science",
-        ]
+        ["code", "education", "instruction", "math", "preference", "science"]
       constraints:
         tokenizer:
           avg_max: .inf
@@ -496,107 +434,20 @@ domains:
     - id: "translation"
     - id: "preference"
 
-  # From T3StatsFromT2.txt PER-SOURCE PER-BAND PER-DOMAIN (all observed pairs).
-  # Conversation added to B1–B5 to include smoltalk2/reddit/samvaad_hi in-pool data.
+  # Band–domain policy: exact table from product/lead (allowed domains per band).
   band_domain_policy:
     B0:
-      [
-        "code",
-        "conversation",
-        "education",
-        "encyclopedia",
-        "instruction",
-        "language_literacy",
-        "literature",
-        "math",
-        "news",
-        "qa",
-        "science",
-        "social",
-        "translation",
-        "web",
-      ]
+      ["conversation", "education", "language_literacy", "qa", "social", "translation", "web"]
     B1:
-      [
-        "code",
-        "conversation",
-        "education",
-        "encyclopedia",
-        "instruction",
-        "literature",
-        "math",
-        "news",
-        "qa",
-        "science",
-        "social",
-        "translation",
-        "web",
-      ]
+      ["code", "conversation", "education", "encyclopedia", "language_literacy", "literature", "news", "qa", "social", "translation", "web"]
     B2:
-      [
-        "code",
-        "conversation",
-        "education",
-        "encyclopedia",
-        "instruction",
-        "literature",
-        "math",
-        "news",
-        "qa",
-        "science",
-        "social",
-        "translation",
-        "web",
-      ]
+      ["code", "conversation", "education", "encyclopedia", "literature", "math", "news", "qa", "science", "social", "translation", "web"]
     B3:
-      [
-        "code",
-        "conversation",
-        "education",
-        "encyclopedia",
-        "instruction",
-        "literature",
-        "math",
-        "news",
-        "preference",
-        "qa",
-        "science",
-        "social",
-        "translation",
-        "web",
-      ]
+      ["code", "conversation", "education", "instruction", "literature", "math", "preference", "science", "translation"]
     B4:
-      [
-        "code",
-        "conversation",
-        "education",
-        "encyclopedia",
-        "instruction",
-        "literature",
-        "math",
-        "news",
-        "preference",
-        "qa",
-        "science",
-        "social",
-        "web",
-      ]
+      ["code", "education", "encyclopedia", "instruction", "literature", "math", "science"]
     B5:
-      [
-        "code",
-        "conversation",
-        "education",
-        "encyclopedia",
-        "instruction",
-        "literature",
-        "math",
-        "news",
-        "preference",
-        "qa",
-        "science",
-        "social",
-        "web",
-      ]
+      ["code", "education", "instruction", "math", "preference", "science"]
 
 # ============================================================
 # EVALUATION SIGNAL INTERFACE
