@@ -365,17 +365,16 @@ No changes in BOS/EOS handling between OLD and HYBRID. The vocabulary surgery di
 | `broken_utf8` | 0 | 20 |
 | **Total garbage** | **24 (0.018%)** | **46 (0.035%)** |
 
-HYBRID has 22 more garbage tokens (20 `broken_utf8` + 4 `private_use`) inherited from the OpenAI o200k_base training corpus. These are the same artifacts documented in `TOKENIZER_COMPARISON_REPORT.md §7.4`. They represent 0.035% of vocab and are benign — they will simply never fire in clean training data.
+HYBRID has 22 more garbage tokens (20 `broken_utf8` + 4 `private_use`) inherited from o200k_base. These same tokens were identified in the 03-Mar-26 audit and fixed in OLD via `build_clean_tokenizer.py`'s `BLOCKED_RANGES` filter — but HYBRID was built through direct vocab surgery that bypassed that pipeline, so the garbage tokens survived. They are baked into `tokenizer.json` and the primary fix is there, not in the dataset.
 
 #### Fix Classification by Layer
 
 | Category | Count | Fix Layer | Action |
 |---|---|---|---|
-| `broken_utf8` | 20 | **Dataset** | Strip U+FFFD from source documents during corpus preprocessing |
-| `html_artifact` | 4 | **Dataset** | HTML-unescape + strip tags from scraped web text during preprocessing |
-| `private_use` | 4 | **Dataset** | Strip PUA chars (U+E000–U+F8FF) from corpus during preprocessing |
+| `broken_utf8` | 20 | **Tokenizer** (`tokenizer.json`) | Remove 20 token IDs from vocab using `BLOCKED_RANGES` logic in `build_clean_tokenizer.py` (same fix applied to OLD); dataset cleaning alone does not remove already-baked vocab entries |
+| `private_use` | 4 | **Tokenizer** (`tokenizer.json`) | Add PUA range (`0xE000–0xF8FF`) to `BLOCKED_RANGES` in `build_clean_tokenizer.py` and re-run vocab surgery to replace these 4 IDs |
+| `html_artifact` | 4 | **Dataset** | HTML-unescape + strip tags from scraped web text during preprocessing (present in both OLD and HYBRID; low priority) |
 | `zero_width_noise` | 18 | **Dataset** + **Application** | Strip invisible controls from corpus; also strip from user input at inference (prompt-injection defence for bidi controls) |
-| **Tokenizer** | — | None | No tokenizer fix needed — all tokens are benign and won't fire on clean data. Removing from vocab requires full retraining; not worth the cost at 0.035% of vocab. |
 
 #### Garbage Token Detail — HYBRID (source: `report/hybrid/garbage_tokens.csv`)
 
@@ -406,7 +405,15 @@ U+FFFD replacement characters baked into token strings, indicating the o200k_bas
 | 113903 | `ï¿½m` | `<FFFD>m` |
 | 114227 | `ï¿½Ċ` | `<FFFD>\n` |
 
-**Dataset fix** — strip U+FFFD from all source documents in the preprocessing pipeline before tokenization:
+**Tokenizer fix (primary)** — these 20 token IDs are baked into `tokenizer.json`. Remove them via the same `BLOCKED_RANGES` surgery used to build HYBRID, or re-run `build_clean_tokenizer.py` with the U+FFFD pruning logic that was added after the 03-Mar-26 audit (which is why OLD has 0 `broken_utf8`):
+```python
+# In build_clean_tokenizer.py BLOCKED_RANGES / removal logic
+# Skip any token whose decoded string contains U+FFFD
+if "\ufffd" in decoded_token:
+    continue  # exclude from vocab
+```
+
+**Dataset fix (preventive)** — also strip U+FFFD from source documents so future retraining does not re-introduce these tokens:
 ```python
 text = text.replace("\ufffd", "")
 ```
@@ -460,7 +467,13 @@ Unicode Private Use Area characters (U+E000–U+F8FF) with no standardised meani
 | 77811 | `ïĤ§` | U+F127 |
 | 99490 | `ïĥĺ` | U+F17A |
 
-**Dataset fix** — strip PUA characters from corpus during preprocessing:
+**Tokenizer fix (primary)** — these 4 token IDs are baked into `tokenizer.json`. Add the PUA codepoint range to `BLOCKED_RANGES` in `build_clean_tokenizer.py` (lines 68–106) and re-run vocab surgery to replace these 4 slots — this is the fix recommended in the 03-Mar-26 audit report (`Garbage-Tokens-tokenizer-fix.md`) that was applied to OLD but not HYBRID:
+```python
+# In build_clean_tokenizer.py BLOCKED_RANGES
+BLOCKED_RANGES.append((0xE000, 0xF8FF))  # Unicode Private Use Area
+```
+
+**Dataset fix (preventive)** — also strip PUA chars from corpus so future retraining does not re-introduce these tokens:
 ```python
 import re
 PUA = re.compile(r"[\ue000-\uf8ff\U000f0000-\U000fffff]")
