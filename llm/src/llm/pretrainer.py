@@ -1,3 +1,4 @@
+import logging
 import time
 
 import torch
@@ -11,7 +12,10 @@ from llm.config import Config
 from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
 from llm.profiler import PipelineProfiler
+from llm.training_state_manager import StepManager
 from llm.utils import is_main_process
+
+log = logging.getLogger(__name__)
 
 
 class PreTrainer:
@@ -62,6 +66,8 @@ class PreTrainer:
         self._step_profiler.activate()
         self._step_profiler.register_model(self._engine.module)
 
+        self._step_manager = StepManager()
+
     def run(self):
         start_epoch, start_step, global_step = self._resume()
         max_epochs = self._config.training.max_epochs
@@ -84,7 +90,7 @@ class PreTrainer:
                 if step < start_step:
                     continue
 
-                self._step_profiler.start_step(global_step)
+                self._step_profiler.start_step(global_step + 1)
                 input_ids = batch["input_ids"].to(device, non_blocking=True)
                 attention_mask = batch["attention_mask"].to(device, non_blocking=True)
                 if (
@@ -104,7 +110,6 @@ class PreTrainer:
                     self._backward(loss)
                 with self._step_profiler.phase("step/train_optimizer_step"):
                     self._optimizer_step()
-                self._step_profiler.end_step()
                 step_time = time.time() - step_start_time
                 num_tokens = torch.tensor(
                     input_ids.numel(), dtype=torch.float32, device=device
@@ -122,7 +127,11 @@ class PreTrainer:
                         loss=loss.item(),
                     )
 
-                global_step += 1
+                self._step_manager.increment(
+                    tokens=int(num_tokens.item()),
+                    samples=input_ids.shape[0],
+                )
+                global_step = self._step_manager.global_step
                 steps += 1
                 total_loss += loss.item()
 
@@ -132,12 +141,13 @@ class PreTrainer:
                 metrics = metrics | forward_metrics
 
                 progress_bar.set_postfix(metrics.get_pbar_values())
-                self._logger.log_metrics(global_step, metrics)
+                self._step_manager.log(metrics, self._logger)
 
                 if max_steps_per_epoch is not None and step >= max_steps_per_epoch:
                     break
 
             start_step = 0
+            self._step_manager.epoch = epoch + 1
             avg_loss = total_loss / steps if steps > 0 else 0
 
             with self._pipe_prof.stage(f"epoch_{epoch}_val"):
@@ -158,6 +168,7 @@ class PreTrainer:
     def _resume(self) -> tuple[int, int, int]:
         ckpt_config = self._config.checkpoint
         if not ckpt_config.resume_from:
+            self._step_manager.restore(None)
             return 0, 0, 0
 
         if self._ckpt_manager is None:
@@ -172,11 +183,21 @@ class PreTrainer:
         )
 
         if client_state:
-            start_epoch = client_state.get("epoch", 0)
-            global_step = client_state.get("global_step", 0)
+            state = self._step_manager.restore(client_state)
             start_step = client_state.get("step", 0)
-            return start_epoch, start_step, global_step
+            if is_main_process():
+                lr_info = (
+                    self._lr_scheduler.get_last_lr()
+                    if self._lr_scheduler is not None
+                    else "N/A"
+                )
+                log.info(
+                    f"Resumed training from global_step={state.global_step}, "
+                    f"epoch={state.epoch}. LR={lr_info}"
+                )
+            return state.epoch, start_step, state.global_step
 
+        self._step_manager.restore(None)
         return 0, 0, 0
 
     def _forward(
@@ -402,16 +423,17 @@ class PreTrainer:
             return
 
         tag = f"epoch_{epoch}_step_{step}"
+        client_state: dict = {
+            "epoch": epoch,
+            "step": step,
+            "global_step": global_step,
+        } | kwargs
+        client_state = self._step_manager.inject_state(client_state)
         self._ckpt_manager.save_checkpoint(
             self._engine,
             step=global_step,
             tag=tag,
-            client_state={
-                "epoch": epoch,
-                "step": step,
-                "global_step": global_step,
-            }
-            | kwargs,
+            client_state=client_state,
         )
 
     def _generate(self):
