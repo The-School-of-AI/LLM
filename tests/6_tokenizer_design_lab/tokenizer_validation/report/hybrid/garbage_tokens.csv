@@ -1,0 +1,54 @@
+﻿token_id,token_raw,token_decoded,categories,notes
+2740,ï¿½,�,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+2787,âĢĭ,​,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+8100,ï¿½ï¿½,��,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+10363,âĢ¬,‬,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+10417,ĠâĢĭ, ​,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+14642,ĠâĢĭâĢĭ, ​​,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+18635,&#,&#,html_artifact,"Unescaped HTML entity (&#…, &amp;, &lt;, etc.). Indicates raw HTML was not stripped from training data."
+18982,âĢª,‪,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+19568,âĢ«,‫,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+19836,âĢĭĊĊ,"​
+
+",zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+21607,ï¿½ï¿½ï¿½ï¿½,����,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+21812,Ġï¿½, �,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+22545,âĢĭâĢĭ,​​,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+42631,Ġ&#, &#,html_artifact,"Unescaped HTML entity (&#…, &amp;, &lt;, etc.). Indicates raw HTML was not stripped from training data."
+45060,;&#,;&#,html_artifact,"Unescaped HTML entity (&#…, &amp;, &lt;, etc.). Indicates raw HTML was not stripped from training data."
+47472,ï¿½s,�s,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+49176,âĢ¬Ċ,"‬
+",zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+49529,ïĤ·,,private_use,Unicode Private Use Area character (U+E000–U+F8FF or U+F0000+). No standard meaning; renders as a box or glyph in most fonts.
+51441,ï¿½ĊĊ,"�
+
+",broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+54350,ï¿½ï¿½ï¿½,���,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+55055,ï¿½n,�n,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+55932,âĢĭĊ,"​
+",zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+61113,Ġï¿½ï¿½ï¿½ï¿½, ����,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+63696,ï¿½t,�t,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+68156,?ï¿½,?�,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+76039,ĠïĤ·, ,private_use,Unicode Private Use Area character (U+E000–U+F8FF or U+F0000+). No standard meaning; renders as a box or glyph in most fonts.
+77811,ïĤ§,,private_use,Unicode Private Use Area character (U+E000–U+F8FF or U+F0000+). No standard meaning; renders as a box or glyph in most fonts.
+79325,ï¿½?,�?,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+80203,ĠâĢ«, ‫,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+80851,ï¿½a,�a,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+86647,.âĢĭ,.​,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+88806,ï¿½r,�r,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+89190,âĢŃ,‭,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+90817,ĠâĢª, ‪,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+96843,âĢĭâĢĭâĢĭâĢĭ,​​​​,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+98892,ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½,��������,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+99490,ïĥĺ,,private_use,Unicode Private Use Area character (U+E000–U+F8FF or U+F0000+). No standard meaning; renders as a box or glyph in most fonts.
+101501,ï¿½o,�o,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+101607,Ġ'&#, '&#,html_artifact,"Unescaped HTML entity (&#…, &amp;, &lt;, etc.). Indicates raw HTML was not stripped from training data."
+102216,âģł,⁠,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+106278,âĤ¬ï¿½,€�,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+107765,âĢĭ.,​.,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+110669,âĢ®,‮,zero_width_noise,"Noise-class invisible character: ZWSP (U+200B), bidi control (U+202A–202E), BOM (U+FEFF), or Word Joiner (U+2060). No linguistic function in clean text; potential prompt-injection risk."
+113213,Ġï¿½ï¿½, ��,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+113903,ï¿½m,�m,broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).
+114227,ï¿½Ċ,"�
+",broken_utf8,Contains genuine U+FFFD replacement character baked into the token. Real corpus corruption (not a byte-fragment token — those are excluded).

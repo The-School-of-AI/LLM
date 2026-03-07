@@ -6,7 +6,7 @@ Runs a comprehensive battery of tests against a HuggingFace-compatible tokenizer
 and produces a detailed Markdown + JSON report.
 
 ALL datasets are processed individually AND combined:
-  data/golden_samples_cleaned_v3.jsonl  -- 128 golden QA samples
+  data/golden_samples_256.jsonl  -- 128 golden QA samples
   data/raw_shard.parquet                -- 630k rows with 'text' column
   data/raw_manifest.parquet             -- 629k rows (metadata only, no text)
   data/manifest.parquet                 -- 3.3M rows (metadata only)
@@ -68,7 +68,7 @@ REPORT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path("data")
 SFT_DIR  = Path("sft_data")
 
-GOLDEN_JSONL    = DATA_DIR / "golden_samples_cleaned_v3.jsonl"
+GOLDEN_JSONL    = DATA_DIR / "golden_samples_256.jsonl"
 RAW_SHARD       = DATA_DIR / "raw_shard.parquet"
 RAW_MANIFEST    = DATA_DIR / "raw_manifest.parquet"
 MANIFEST_FILE   = DATA_DIR / "manifest.parquet"
@@ -157,9 +157,9 @@ GHOST_TAGS = [
 datasets: dict[str, dict] = {}   # name → dataset dict
 
 # ──────────────────────────────────────────────────────────
-# DS-A: golden_samples_cleaned_v3.jsonl
+# DS-A: golden_samples_256.jsonl
 # ──────────────────────────────────────────────────────────
-section("DS-A  golden_samples_cleaned_v3.jsonl")
+section("DS-A  golden_samples_256.jsonl")
 
 ds_golden = empty_ds()
 ds_golden["name"] = "golden_samples"
