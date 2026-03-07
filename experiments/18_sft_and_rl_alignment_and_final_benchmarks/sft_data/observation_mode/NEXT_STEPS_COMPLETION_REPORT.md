@@ -3,7 +3,7 @@
 This document records the **performance and results** of the next steps from the Dataset Sourcing Strategy (Study, Observation mode, Contamination). Fill each section as the team completes the corresponding runbook steps. Keep this report updated so that observation mode completion and readiness to finalize the dataset list are clearly documented.
 
 **Runbook:** [OBSERVATION_MODE_RUNBOOK.md](./OBSERVATION_MODE_RUNBOOK.md)  
-**Strategy:** [DATASET_SOURCING_STRATEGY.md](../DATASET_SOURCING_STRATEGY.md) / [DATASET_SOURCING_STRATEGY_v1.md](../DATASET_SOURCING_STRATEGY_v1.md)
+**Strategy:** [DATASET_SOURCING_STRATEGY.md](../DATASET_SOURCING_STRATEGY.md)
 
 ---
 
