@@ -21,6 +21,9 @@ Run:
 
 import os
 
+# Enable Delta Entrance kernel for testing (off by default in production)
+os.environ["T17_DN_USE_DELTA_ENTRANCE"] = "1"
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -409,13 +412,6 @@ class TestSparseAttention:
 # 6. Delta Entrance (optional — off by default)
 # ═════════════════════════════════════════════════════════════════════════════
 
-DELTA_ENTRANCE_ENABLED = os.environ.get("T17_DN_USE_DELTA_ENTRANCE", "0") == "1"
-
-
-@pytest.mark.skipif(
-    not DELTA_ENTRANCE_ENABLED,
-    reason="Delta Entrance off by default (set T17_DN_USE_DELTA_ENTRANCE=1 to enable)",
-)
 class TestDeltaEntrance:
     """fused_delta_entrance vs pytorch_unfused_exact — optional."""
 
