@@ -4,13 +4,4 @@
 .venv/
 venv/
 
-out/
-out2/
-out3/
-out4/
-out5/
-out_eval/
-out_eval2/
-reports/
-
 tests/.tmp/

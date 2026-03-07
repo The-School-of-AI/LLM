@@ -1,0 +1,731 @@
+{
+  "mismatch_count": 86,
+  "mismatches": [
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Lesушки Noris peuvent être atteints à rocalça@outlook.com pour les demandes de partenariat pour les événements de danse.",
+      "uid": 5258368
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Massan ist ein großer Fan von Haitian Yanvalou Tanz und hat kürzlich ein neues Muster (Waldliesborner Straße) für seine nächste Tanz-Performance erstellt.",
+      "uid": 5262740
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Lhiam Ciocarelli has sent a document to Thavamanidevi Jvon Truchard regarding the 5038655754968 and 328708963 required for the small-scale farming project.",
+      "uid": 5279579
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Lhiam Ciocarelli has sent a document to Thavamanidevi Jvon Truchard regarding the 5038655754968 and 328708963 required for the small-scale farming project.",
+      "uid": 5279579
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "The world map paper design for Nini's birthday party is now available at North Sport Lane 170, Florence. Please bring 0722539281 to collect it.",
+      "uid": 5281930
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "ప్రియమైన విద్యార్థులు, మీరు Piprasiలోని మా కార్యాలయాన్ని సందర్శించడానికి ప్రణాళిక వేయండి. మీ 01.7972 4383ని మాకు పంపండి.",
+      "uid": 5282765
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 2,
+      "text_preview": "Maddalena Yudy Gläßner Bellabarba Duman 15:05 Dehgam Mau Atal Setu 1055 500101 NM1961@yahoo.com 031.4719297  ZWDO4SSA46",
+      "uid": 5310429
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 2,
+      "text_preview": "Für die Teilnahme am Projekt benötigen wir Ihre 99 176 376 956 und R11P9381U. Bitte senden Sie diese an +49 09.217 3933.",
+      "uid": 5311530
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Die Gruppe traf sich am 16:34 bei Breitenloo 41 in Mels. Lián brachte eine Karte von Medel (Lucmagn) mit.",
+      "uid": 5316135
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Concevez un projet de scrapbooking pour Erleta Rabia avec des pages sur ses 38804052906979 et 9535092046.",
+      "uid": 5340998
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 2,
+      "text_preview": "Concevez un projet de scrapbooking pour Erleta Rabia avec des pages sur ses 38804052906979 et 9535092046.",
+      "uid": 5340998
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "jkuhlbör@yahoo.com has been sent a reminder about the upcoming 5 birthday party at Québec.",
+      "uid": 5344524
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Potresti gentilmente fornire la tua 756.3605.5335.10 e la tua abubingemann@protonmail.com in modo da poter completare la tua registrazione?",
+      "uid": 5344821
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 1,
+      "text_preview": "श्रीमती Stanacev ने एक लेख में 37PL45YPOD और 58176.70265 के बारे में लिखा। उन्होंने Lucknow Outer Ring Road और 83 पर अपने पते को साझा किया।",
+      "uid": 5345522
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Pour valider votre inscription, veuillez nous fournir une copie de votre pièce d'identité LM3900604 et confirmer votre adresse e-mail frdal toè@hotmail.com.",
+      "uid": 5345565
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Iurie a partagé sa liste de tâches quotidienne, qui incluait une visite au Impasse Claude Berthier 1247 pour récupérer son 40GQ63938.",
+      "uid": 5345650
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To-Do List for Rukmone: Meet Storm at 200th Street 1030, pick up Brush Creek tickets, and buy 85259-3825 map.",
+      "uid": 5360729
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Vitezslav Sanji ha reportado una 2202400355876201 sospechosa",
+      "uid": 5362879
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Je souhaite concevoir une maison high-tech avec des fonctionnalités innovantes comme 50201414111781088 et CHE-429.918.837. Pouvez-vous me aider?",
+      "uid": 5363596
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Der Workshop findet in Leichlingen (Rheinland) statt. Bitte planen Sie Ihre Anreise entsprechend und beachten Sie die Ortsring und 15.",
+      "uid": 5364567
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Salut Reinis, j'ai réservé un guide pour notre randonnée sur le glacier de County Road 47. Il faudra fournir nos numéros de 35635.64354 pour les formalités.",
+      "uid": 5364650
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Morine Serna invites you to their art exhibition, taking place on 1st July 1970 at Mumbai Highway",
+      "uid": 5364726
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "In Neuenbrook gibt es einen Im Kauert- Markt, auf dem Fiorella Josefien umweltfreundliche Produkte verkauft.",
+      "uid": 5366635
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Le groupe de Annagret et Remiel Ayomide a exploré le quartier de Boissei-la-Lande et a découvert un petit café charmant. L'adresse du café est Route de la Seigneurie 5696.",
+      "uid": 5366967
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "Sayyed Small Nedanovska Gillardon heeft een notitie over spoorwegexploratie geschreven: 'Zuiddijk is een belangrijke locatie voor het spoorwegnetwerk.'",
+      "uid": 5248616
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Htet Germann a acheté un système d'aquaponie pour son projet personnel. Il a besoin d'aide pour optimiser le cycle des nutriments. Son adresse est Rinderbiel 31, Wangen-Brüttisellen, 7438.",
+      "uid": 5248739
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Estimado Özer, hemos detectado algunas diferencias en tus registros. Por favor, verifica tu 6292328646505128 y 369213310404 para asegurarte de que sean correctos.",
+      "uid": 5266976
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Orkhan Dahmaj Ohlmeyer Kashoush ने अपने 391135 और Zorawar Singh Marg के साथ अपने पते का उल्लेख किया है, जिसमें उन्होंने अपने UQDM45HLH5 और 17/02/1975 के साथ अपनी पहचान का उल्लेख किया है",
+      "uid": 5267478
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Per accedere al diario di riflessione, per favore inserisci la tua email vitafiocch@outlook.com e la password 756.1205.5833.86.",
+      "uid": 5277567
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Sehr geehrte Meister Musey Eyal, wir teilen Ihnen mit, dass die Personalverwaltung umgezogen ist. Bitte besuchen Sie uns an unserem neuen Standort: Großpösna Lindenhorst 12.",
+      "uid": 5279378
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Your order EL30361MM for the Chelmsford terrarium kit is being shipped to Upper South Wraxall 2011",
+      "uid": 5386758
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "De brief moet worden verzonden naar Schapendijk 32 in Nijmegen.",
+      "uid": 5400612
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il Senatore Archer ha creato un progetto di agricoltura sostenibile a Località Torrio Casetta, 795.",
+      "uid": 5403898
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La dirección de Ayten Nguyen es Calle de Joan Miró 390",
+      "uid": 5422307
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La reunión del ayuntamiento se llevará a cabo el agosto/55 en Ronda del Ferrol 39. Los asistentes deben llegar con su documento de identificación D3727035Z.",
+      "uid": 5464791
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Azizul: Salut, je suis photographe de rue. Voici mon portfolio 167 rue La Bustière à Montpellier",
+      "uid": 5478622
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The workshop will be held at Horseshoe Bay - Langdale 4900.",
+      "uid": 5478645
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Raagavi Jeyaruby Yeldan: 'Meine Adresse ist Industrie 340, 4524 Gansingen.'",
+      "uid": 5479735
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Silvo Blent ने मुझे 20YB@outlook.com पर एक संदेश भेजा है। कृपया अपना 64428871634416760 भेजें।",
+      "uid": 5481994
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 2,
+      "text_preview": "22h20 +76.92-054 0422 : '4736018824. Oops désolée.'",
+      "uid": 5490803
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "అందరికీ: DY Nanu Road 905, Junnar వద్ద పార్కింగ్ పరిమితం. కార్‌పూలింగ్ లేదా పబ్లిక్ ట్రాన్స్‌పోర్టేషన్‌ను పరిగణించండి. మమ్మల్ని +8.57 483 0417కి కాల్ చేయండి.",
+      "uid": 5500284
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Se ha encontrado un problema con el sistema de pago en la estación Carretera Ramal al Zapotillo 323. Los pasajeros Hirant y Hossam Plejic no pudieron pagar con sus tarjetas 379136523072566.",
+      "uid": 5500586
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Welcome Niramol to the Wine Tasting Instructions To-Do List. Your wine tasting kit has been shipped to Bunkers Hill 51, Maldon.",
+      "uid": 5501932
+    },
+    {
+      "gold": 0,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Attenzione a tutti gli utenti: si prega di notare che i nostri orari di apertura sono cambiati. Contattateci al 0039-55 939 8506 per ulteriori informazioni.",
+      "uid": 5502026
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Attenzione a tutti gli utenti: si prega di notare che i nostri orari di apertura sono cambiati. Contattateci al 0039-55 939 8506 per ulteriori informazioni.",
+      "uid": 5502026
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "El equipo de Theepan requiere tu ayuda para un proyecto de historia cívica. Por favor, proporciona情報 sobre Camino de los Valles y 498.",
+      "uid": 5507912
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "012 90-293 1554: Unsere neue Adresse ist 2B Radeberger Landstraße, 59427 Dortmund",
+      "uid": 5518234
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Buenos días, estoy buscando un editor para mi libro de no ficción. Mi nombre es Keng Amer Geretto y mi correo electrónico es emmeritokaçoglu@protonmail.com.",
+      "uid": 5519178
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "Omnia Idea reageert: 'Het adres is Leiding 120 in Middenmeer Middenmeer'",
+      "uid": 5533345
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "Galila Devi Waltzer Volel Rambadh: నా గురించి - 057.7510-2741, DRB@hotmail.com, D R Road 481",
+      "uid": 5533815
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Cher Junice Yamilet, j'ai besoin de vos informations personnelles, y compris votre numéro de téléphone, +331 54 851.2397, et votre adresse, Rue de Montoille 171",
+      "uid": 5534521
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Nazike: Ja, ich habe einige neue Stücke gefunden, die ich gerne mit dir teilen würde. Wie wäre es mit einem Treffen in der À Vauroux 3.1 in Bern?",
+      "uid": 5535798
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "నిన్న నేను Gangoh Roadపై నెమ్మదిగా ఉండే సలూన్ చేసాను. వారు కట్ చేసే ధర Fumio ఉందని నాకు తెలుసు",
+      "uid": 5536098
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "మా ప్రయాణంలో 2200179132468145 క్రెడిట్ కార్డ్ ఉపయోగించి చెల్లింపు చేశాం.",
+      "uid": 5537424
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Necesitamos su 2771221327 para verificar su crédito antes de ofrecerle un préstamo para su proyecto de construcción en Carretera La Huasteca-La Presa Rompepicos 1602, Ayutla de los Libres Tutepec.",
+      "uid": 5548803
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Necesitamos su 2771221327 para verificar su crédito antes de ofrecerle un préstamo para su proyecto de construcción en Carretera La Huasteca-La Presa Rompepicos 1602, Ayutla de los Libres Tutepec.",
+      "uid": 5548803
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 2,
+      "text_preview": "01:40 +41.771.845 5490: Ich habe eine Frage zu den Datenschutzbestimmungen. Wie werden meine Daten (3536496585796849, 7223866346) geschützt?",
+      "uid": 5550938
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Artin, ich benötige deine Hilfe bei der Suche nach einer geeigneten Location für unsere astronomische Beobachtung. Hast du Zugang zu den Orden Dent-Karten?",
+      "uid": 5551800
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Ketty Bregman: What is the ideal environment for growing a bonsai tree? Is it good for indoor spaces like homes in 425 Bhimashankar Road?",
+      "uid": 5552837
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Hola Gasparino Thevarasa, me gustaría compartir contigo un mapa de observación astronómica que incluye la ubicación de Avenida del Fraile en Ciudad Juárez Zona Federal.",
+      "uid": 5552894
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Almen: Just spent the day researching cold weather phenomena. Some mind-blowing stuff. Sharing my findings with the group tonight @ Columbia Pike 1811.",
+      "uid": 5553392
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Steffen, ich bin Aurél Hadrian Montesissa und freue mich darauf, unsereshiv.SELECTED Francorian.-class Bier zu brauen. Bitte sende mir deine MCT2024@outlook.com-Adresse, um weitere Informationen zu erhalten.",
+      "uid": 5565548
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour, je viens de finir mon profil linguistique et je me demandais si je pouvais partager mes résultats avec benedsentürk@outlook.com.",
+      "uid": 5580627
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Abhinandan, ich habe deine Adresse verloren. Kannst du mir bitte deine Kronberg und 635 senden?",
+      "uid": 5581608
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Les résultats du rapport de laboratoire sont prêts à être récupérés au 1 Allmisried, Kandersteg.",
+      "uid": 5582421
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "We need to verify your identity. Please enter your Given Name: Hygerta, Surname: Pandjaj, Phone Number: 0012.77-937.6968, and Address: Honey Creek Boulevard, Houma, 94043-1390.",
+      "uid": 5603002
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Mapping project-ID-:20123 +.: 4068Circuito San Roque Norte. ",
+      "uid": 5603912
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Egr. Sig.na Djaber Barham,\nLa sua quota annuale per il club di creazione di terrari è stata aumentata a 501863914285 €. Grazie per la sua comprensione.",
+      "uid": 5605246
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Egr. Sig.na Djaber Barham,\nLa sua quota annuale per il club di creazione di terrari è stata aumentata a 501863914285 €. Grazie per la sua comprensione.",
+      "uid": 5605246
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Un recordatorio amistoso a todos: es importante mantener sus registros actualizados. Por favor, revisen sus Camino de la Sierra Gruesa y 250 para asegurarse de que estén correctos.",
+      "uid": 5616227
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Khatere Annaël, nous avons réçu votre paiement pour l'abri-arbre. Merci de fournir les documents suivants pour poursuivre le processus : 08 24 356 707 933, 2202525590869709.",
+      "uid": 5616570
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Bonjour Khatere Annaël, nous avons réçu votre paiement pour l'abri-arbre. Merci de fournir les documents suivants pour poursuivre le processus : 08 24 356 707 933, 2202525590869709.",
+      "uid": 5616570
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "Chhang గ్రూప్ చాట్‌లో మీరు అందించిన వివరాలు ఉపయోగకరంగా ఉన్నాయి, మీరు అందించిన 6698-139.8696 మరియు surychlik@tutanota.comలను ఉపయోగించి Punpunలోని Nathupur Road వద్ద కలుద్దాం.",
+      "uid": 5616888
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "¡Interesante! Yunier. He escuchado que algunas personas creen que los nombres de los lugares Carretera a Baturi tienen un significado especial. ¿Tú has oído algo sobre eso?",
+      "uid": 5634622
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Saly Gunvor, j'aimerais vous demander si vous avez reçu mon message concernant notre projet de bijou de design classique. Pouvez-vous me donner votre 4753202673567 pour que nous puissions procéder au paiement ?",
+      "uid": 5636840
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Bonjour Saly Gunvor, j'aimerais vous demander si vous avez reçu mon message concernant notre projet de bijou de design classique. Pouvez-vous me donner votre 4753202673567 pour que nous puissions procéder au paiement ?",
+      "uid": 5636840
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Per poterti aiutare con la tua collezione di distintivi e patch, avremmo bisogno di conoscere il tuo indirizzo di residenza Wallismatt 106 e il tuo numero di carta di identità Z2440657.",
+      "uid": 5637302
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Shujun: 'Hola, ¿cómo puedo obtener ayuda para iniciar mi proyecto de pequeña agricultura?';\n007802628 5059: 'Llama al centro de Carretera Puebla-Acatzingo 1149 en Villa de Almoloya de Juárez para obtener más información.'",
+      "uid": 5646879
+    },
+    {
+      "gold": 0,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "te",
+      "predicted": 1,
+      "text_preview": "3:49:14 PM 0015 16-039-2138: నేను డ్రెస్సులను కలిగి ఉన్నాను. నేను పంచుకొంటాను.",
+      "uid": 5648345
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "3:49:14 PM 0015 16-039-2138: నేను డ్రెస్సులను కలిగి ఉన్నాను. నేను పంచుకొంటాను.",
+      "uid": 5648345
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "When making a payment with your 95896-91232 in Shri Malang Gad Road RU-217, please provide your Mihaela-Claudia Nanette and Kjosev.",
+      "uid": 5649389
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Hi Basel, thanks for showing interest in our terrarium workshop. We'll send the materials to Dab Green 43. If that's incorrect, please reply with the correct address.",
+      "uid": 5650503
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Bitte bestätigen Sie mir, dass Sie meine Lieferadresse Mikro-Forum-Ring 2 in Bonn Nordstadt haben.",
+      "uid": 5651308
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Lucky Zekie, deine Daten: Adresse - Breiniger Berg, 80, Lengerich, Telefonnummer - +4 76 679.4992",
+      "uid": 5665009
+    }
+  ],
+  "per_label": {
+    "CREDIT_CARD_NUMBER": {
+      "gold": 25,
+      "matched": 15,
+      "precision": 0.8824,
+      "predicted": 17,
+      "recall": 0.6
+    },
+    "EMAIL_ADDRESS": {
+      "gold": 143,
+      "matched": 136,
+      "precision": 1.0,
+      "predicted": 136,
+      "recall": 0.951
+    },
+    "PHONE_NUMBER": {
+      "gold": 161,
+      "matched": 156,
+      "precision": 0.8914,
+      "predicted": 175,
+      "recall": 0.9689
+    },
+    "PHYSICAL_ADDRESS": {
+      "gold": 111,
+      "matched": 67,
+      "precision": 1.0,
+      "predicted": 67,
+      "recall": 0.6036
+    }
+  },
+  "summary": {
+    "gold_entities": 440,
+    "matched_entities": 374,
+    "precision": 0.9468,
+    "predicted_entities": 395,
+    "recall": 0.85,
+    "records_evaluated": 366
+  }
+}

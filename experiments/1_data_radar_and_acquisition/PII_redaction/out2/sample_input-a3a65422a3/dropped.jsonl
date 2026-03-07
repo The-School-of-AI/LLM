@@ -1,0 +1,1 @@
+{"drop_reason": "total_entity_threshold", "entities_by_type": {"CREDIT_CARD_NUMBER": 1, "EMAIL_ADDRESS": 1, "PHONE_NUMBER": 1, "SENSITIVE_URL": 1}, "id": "doc-1", "line_number": 1}

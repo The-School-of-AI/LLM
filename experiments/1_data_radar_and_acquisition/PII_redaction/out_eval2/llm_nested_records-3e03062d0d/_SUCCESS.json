@@ -1,0 +1,43 @@
+{
+  "audit_samples": [
+    {
+      "entities_by_type": {
+        "EMAIL_ADDRESS": 1,
+        "PHONE_NUMBER": 1
+      },
+      "field_paths": [
+        "payload.body"
+      ],
+      "id": "nested-001"
+    },
+    {
+      "entities_by_type": {
+        "EMAIL_ADDRESS": 1,
+        "PERSON_NAME": 1
+      },
+      "field_paths": [
+        "payload.body"
+      ],
+      "id": "nested-002"
+    }
+  ],
+  "detector_hits": {
+    "anchored_name_parser": 1,
+    "regex_email": 2,
+    "regex_phone": 1
+  },
+  "drop_reasons": {},
+  "entities_by_type": {
+    "EMAIL_ADDRESS": 2,
+    "PERSON_NAME": 1,
+    "PHONE_NUMBER": 1
+  },
+  "input_file": "C:\\Users\\nmahesh\\code_offline\\PII_redaction\\datasets\\synthetic\\llm_nested_records.jsonl",
+  "output_dir": "out_eval2\\llm_nested_records-3e03062d0d",
+  "summary": {
+    "entities_detected": 4,
+    "records_kept": 2,
+    "records_redacted": 2,
+    "records_seen": 2
+  }
+}

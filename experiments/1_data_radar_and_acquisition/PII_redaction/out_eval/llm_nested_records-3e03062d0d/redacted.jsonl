@@ -1,0 +1,2 @@
+{"_redaction": {"entities_by_type": {}, "status": "unchanged"}, "expected_action": "keep", "expected_entities": {"EMAIL_ADDRESS": 1, "PHONE_NUMBER": 1}, "id": "nested-001", "lang": "en", "payload": {"body": "Reach support at nested@example.com or +1 212 555 0110"}, "source": "synthetic_nested"}
+{"_redaction": {"entities_by_type": {}, "status": "unchanged"}, "expected_action": "keep", "expected_entities": {"EMAIL_ADDRESS": 1, "PERSON_NAME": 1}, "id": "nested-002", "lang": "hi", "payload": {"body": "नाम: राज शर्मा email raj@example.com"}, "source": "synthetic_nested"}

@@ -1,0 +1,612 @@
+{
+  "mismatch_count": 72,
+  "mismatches": [
+    {
+      "gold": 0,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Me gustaría compartir mi diario de arte experimental con Tenam. Por favor, envíeme un correo electrónico a O18@protonmail.com con su 4088741616983090 para más información.",
+      "uid": 5257700
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "La riunione di Toastmaster sarà aperta a tutti i membri che hanno fornito i seguenti dati: LOC542301A, 24TA@gmail.com e +192-37-926-1617.",
+      "uid": 5388441
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Lesушки Noris peuvent être atteints à rocalça@outlook.com pour les demandes de partenariat pour les événements de danse.",
+      "uid": 5258368
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Naphtali Mártin de Tavernier Bronchales sera en charge de la logistique pour le projet de culture sur toit. Vous pouvez la joindre à S1946@yahoo.com ou au +2-897-558 4956.",
+      "uid": 5280325
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Gentile Kai Nexhmi, la sua richiesta di informazioni sulla gestione degli archivi digitali della nostra società storica è stata ricevuta. Le forniamo di seguito le informazioni richieste: +399-186-673-5725, NV11@hotmail.com.",
+      "uid": 5281108
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Gentile Kai Nexhmi, la sua richiesta di informazioni sulla gestione degli archivi digitali della nostra società storica è stata ricevuta. Le forniamo di seguito le informazioni richieste: +399-186-673-5725, NV11@hotmail.com.",
+      "uid": 5281108
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Giancarlo Poffo Voli, wir freuen uns, dass du dich für unsere Gemeinde-Theater-Gruppe interessierst. Bitte füllen Sie das Anmeldeformular aus und senden Sie es an MBG@protonmail.com.",
+      "uid": 5281916
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Wir bieten auch Fahrzeug-Wartungskurse an. Bitte registrieren Sie sich mit Ihrer IF8960800 und Ihrer A246PD0JQL43 auf unserer Website D31@tutanota.com.",
+      "uid": 5281921
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Azdren will be leading a workshop on warp-faced weave techniques, register by sending your +90.909-448.6913 and MS@aol.com.",
+      "uid": 5283484
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Azdren will be leading a workshop on warp-faced weave techniques, register by sending your +90.909-448.6913 and MS@aol.com.",
+      "uid": 5283484
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Bohumil und Dolunay werden am 16. Mai 2001 ein Seminar über Schnittmuster für plus-sizes anbieten. Die Teilnehmerzahl ist begrenzt, daher bitte um baldige Anmeldung per A@yahoo.com.",
+      "uid": 5285547
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Mecbure Währinger Mastel is leading a volunteering initiative at Keshpur Karwasa for 6 individuals in need. If interested, please contact AAU@gmail.com or 0013 08-329-8928.",
+      "uid": 5310222
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 2,
+      "text_preview": "Maddalena Yudy Gläßner Bellabarba Duman 15:05 Dehgam Mau Atal Setu 1055 500101 NM1961@yahoo.com 031.4719297  ZWDO4SSA46",
+      "uid": 5310429
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Thayananthi Chhoun Moncagatta ha completato il corso di maneggio di armi da fuoco antiche con successo. Il suo certificato di partecipazione è stato inviato alla sua SH@aol.com.",
+      "uid": 5316352
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "10:03:53 PM Conflict Resolution Guide for Mister Emmet Mussmann: Meeting with +68 83600-7213 to discuss BAB@aol.com related concerns.",
+      "uid": 5316623
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Ayan a réservé des places pour la séance de cinéma surprise à Vallorcine le 02/09/1982. Il est important de confirmer votre YP@outlook.com et votre 07.2275 2317 pour recevoir les détails.",
+      "uid": 5340718
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il Comune di Tuoro sul Trasimeno ha pubblicato un rapporto sullo stato dell'efficienza energetica dei 14 pubblici. Il documento è disponibile sul sito web C@protonmail.com.",
+      "uid": 5341301
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Para participar en el tour guiado, es necesario que Mikele proporcione su G21@outlook.com.",
+      "uid": 5341778
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Je cherche des informations sur les méthodes de création de costumes de gypsy pour un projet de théâtre. Pouvez-vous m'aider Sulav ? Mon adresse e-mail est sufauvergu@outlook.com.",
+      "uid": 5344208
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "jkuhlbör@yahoo.com has been sent a reminder about the upcoming 5 birthday party at Québec.",
+      "uid": 5344524
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "N'oubliez pas de prendre des photos de votre projet de tapisserie pour le partager avec Uliks Dhiraj à LJ@hotmail.com.",
+      "uid": 5344791
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Potresti gentilmente fornire la tua 756.3605.5335.10 e la tua abubingemann@protonmail.com in modo da poter completare la tua registrazione?",
+      "uid": 5344821
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Pour valider votre inscription, veuillez nous fournir une copie de votre pièce d'identité LM3900604 et confirmer votre adresse e-mail frdal toè@hotmail.com.",
+      "uid": 5345565
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour On Lundrim Vorst, nous vous remercions de votre intérêt pour le projet de préservation du patrimoine. Votre proposition de projet doit inclure votre K1202418907795 et votre sushamaithaj@yahoo.com.",
+      "uid": 5367575
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Nous allons publier les résultats de l'étude sur le site web de l'organisation. Nous avons besoin de la permission de Avdi Keflezghi pour publier ses informations personnelles, notamment son RRG@yahoo.com.",
+      "uid": 5367956
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Hola Yucel, gracias por unirte a nuestro taller de arte en vidrio. Por favor, proporciona tu nilaxsbensin@tutanota.com y +5 78 892.8778 para que podamos mantenerte informado sobre nuestras próximas sesiones.",
+      "uid": 5250223
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Per accedere al diario di riflessione, per favore inserisci la tua email vitafiocch@outlook.com e la password 756.1205.5833.86.",
+      "uid": 5277567
+    },
+    {
+      "gold": 2,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Hallo Senik, ich benötige Ihre Hilfe bei einem Selbstbau-Projekt. Könnten Sie mir bitte Ihre Erfahrungen mit Zero-Waste-Lifestyle-Projekten teilen? Meine DE@yahoo.com ist ilegaglewsk@aol.com.",
+      "uid": 5321805
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Ciao Klothilde, sono Maliik Edgaras e sono felice di aiutarti con il tuo progetto di yacht design. Il mio numero di telefono è +85.32-201 9160. Potresti inviarmi il tuo indirizzo email LG59@yahoo.com in modo che possiamo discutere i dettagl",
+      "uid": 5338451
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 1,
+      "text_preview": "Enayat వారు +15 707164768 ద్వారా సంప్రదించగలరు, SZ@protonmail.com ద్వారా కూడా సంప్రదించవచ్చు.",
+      "uid": 5366671
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Le formulaire de demande pour accéder aux archives de musique publicitaire nécessite les informations suivantes : Cheong Ilkay, Corruchaga, AR1936@protonmail.com, et +59.44.320-6573.",
+      "uid": 5413659
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Formulaire de demande de conception de vitrail : veuillez fournir votre RT@outlook.com et 034 340.2819",
+      "uid": 5462322
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "La conferma della prenotazione del biglietto è stata inviata al tuo indirizzo e-mail BB@gmail.com.",
+      "uid": 5462885
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Va bene, Aletha, potrai chiedere alla segretaria Sirak Dübel Srikhongkerd Fasli di trovare il tuo indirizzo nel système informatico. La sua email è A@gmail.com.",
+      "uid": 5464950
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bien sûr, notre communauté a créé un guide pour les collectionneurs de badges. Pour obtenir un exemplaire, veuillez nous envoyer votre adresse e-mail à C@hotmail.com.",
+      "uid": 5517974
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Hallo Supawadee, ich benötige Ihre 0151 07987.2078 und G@hotmail.com um Ihre Bestellung für das Abzeichen zu bearbeiten.",
+      "uid": 5518320
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Review new personal badge designs in the extensive Archaeological Discovery Badge Email advertised at M@tutanota.com.",
+      "uid": 5518701
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Buenos días, estoy buscando un editor para mi libro de no ficción. Mi nombre es Keng Amer Geretto y mi correo electrónico es emmeritokaçoglu@protonmail.com.",
+      "uid": 5519178
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "0h11 Raihanullah: 'Mon adresse e-mail est B15@gmail.com. Envoie-moi un message si tu veux discuter.'",
+      "uid": 5530373
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Elme: Sí, la tengo. Se llama 'Receta para el Éxito' y requiere R@outlook.com y +64 29 152 4871 para registrarse.",
+      "uid": 5531940
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 1,
+      "text_preview": "Galila Devi Waltzer Volel Rambadh: నా గురించి - 057.7510-2741, DRB@hotmail.com, D R Road 481",
+      "uid": 5533815
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Hi Srbislava, hope you're doing well. We've been trying to reach you regarding your To-Do List submission. Could you please get back to us at +4454712-0464 or evguetinella@gmail.com?",
+      "uid": 5533960
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Ich bin auf der Suche nach einer Pierre-Arnaud Brauckhoff Hermenier, die Erfahrung in der Modebranche hat und mir bei der Auswahl von Kleidungsstücken helfen kann. Bitte kontaktiere mich unter kalishmougin@aol.com oder 0689-29492631.",
+      "uid": 5535396
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Cela devrait prendre quelques semaines, Miriella. Vous serez informé par +33340-248-6859 ou M@aol.com",
+      "uid": 5547168
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Bitte senden Sie uns Ihre Kontaktdaten, einschließlich 075.7700 8652 und elidabeamish@aol.com, um weitere Informationen zu erhalten.",
+      "uid": 5547917
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Nous avons besoin de vérifier vos coordonnées, veuillez nous fournir votre 09152.198419 et votre G@tutanota.com.",
+      "uid": 5552097
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Nous avons besoin de vérifier vos coordonnées, veuillez nous fournir votre 09152.198419 et votre G@tutanota.com.",
+      "uid": 5552097
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Vejas: Die E-Mail-Adresse ist H@outlook.com. Bitte gib dort deine Kontaktdaten und deine Ernährungsgewohnheiten an.",
+      "uid": 5553319
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Bonjour, Leonor ! Nous avons reçu votre demande de participation à la pièce de théâtre communautaire. Pourriez-vous nous fournir votre +3.638.449-1919 et RE1999@protonmail.com pour que nous puissions vous contacter ?",
+      "uid": 5553774
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Steffen, ich bin Aurél Hadrian Montesissa und freue mich darauf, unsereshiv.SELECTED Francorian.-class Bier zu brauen. Bitte sende mir deine MCT2024@outlook.com-Adresse, um weitere Informationen zu erhalten.",
+      "uid": 5565548
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour, je viens de finir mon profil linguistique et je me demandais si je pouvais partager mes résultats avec benedsentürk@outlook.com.",
+      "uid": 5580627
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Bintou necesita enviar un correo electrónico a W@yahoo.com con su número de teléfono +00 85.287-7469 y una copia de su documento de identificación GAD0WARC09.",
+      "uid": 5582563
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 1,
+      "text_preview": "Chhang గ్రూప్ చాట్‌లో మీరు అందించిన వివరాలు ఉపయోగకరంగా ఉన్నాయి, మీరు అందించిన 6698-139.8696 మరియు surychlik@tutanota.comలను ఉపయోగించి Punpunలోని Nathupur Road వద్ద కలుద్దాం.",
+      "uid": 5616888
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "Chhang గ్రూప్ చాట్‌లో మీరు అందించిన వివరాలు ఉపయోగకరంగా ఉన్నాయి, మీరు అందించిన 6698-139.8696 మరియు surychlik@tutanota.comలను ఉపయోగించి Punpunలోని Nathupur Road వద్ద కలుద్దాం.",
+      "uid": 5616888
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "That's great, Sakorn. I've been keeping a similar log and it's really helped me track the progress of my garden. I've also been using a combination of T@gmail.com and +52.167-667-7345 to stay organized.",
+      "uid": 5617944
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Hallo Arditë, wir benötigen Ihre +49-130137260 und 26MM@aol.com, um Sie über wichtige Updates zu informieren.",
+      "uid": 5618493
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Si desea obtener más información sobre nuestros proyectos de agricultura a pequeña escala, por favor, no dude en contactarnos en zischloe@gmail.com.",
+      "uid": 5618706
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Here is my to-do list for the social issue diaries: Confirm H1982@protonmail.com and +34.85040.2760 of primary contacts.",
+      "uid": 5619126
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Bonjour Theodor, nous vous remercions de votre intérêt pour rejoindre notre association de quartier. Pouvez-vous nous fournir votre adresse électronique kemijosifo@hotmail.com et votre numéro de téléphone +33307 473-2647 afin que nous puiss",
+      "uid": 5635491
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Family Recipe Codex Entry Form: Recipe Name: Del, Contributor: Perizade Arnella Shaibi, Email: XC@outlook.com, Phone: +565.763.741-5193",
+      "uid": 5636016
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "¿Tienes alguna pregunta sobre el club de tejido y costura? Puedes contactarnos en +480.155 929-5857 o 2004D@tutanota.com.",
+      "uid": 5636244
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "¿Tienes alguna pregunta sobre el club de tejido y costura? Puedes contactarnos en +480.155 929-5857 o 2004D@tutanota.com.",
+      "uid": 5636244
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Veuillez remplir ce formulaire avec vos informations personnelles: Artjan, Anastasova, +41.47 922-8792, et FGPM@tutanota.com.",
+      "uid": 5636402
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Veuillez remplir ce formulaire avec vos informations personnelles: Artjan, Anastasova, +41.47 922-8792, et FGPM@tutanota.com.",
+      "uid": 5636402
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Hallo Abdulwahid, haben Sie Interesse an unserem neuen Recycling-Programm? Bitte senden Sie uns Ihre 07081 52373  und R@yahoo.com, damit wir Sie informieren können.",
+      "uid": 5637548
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Hallo Delin Moqadas, ich möchte dich bitten, mir deine Informationen anzugeben, damit ich dich für das Spiel kontaktieren kann. Bitte gib mir deine E-Mail-Adresse tel ghnymy@tutanota.com und Telefonnummer 002157461 6827 an.",
+      "uid": 5648199
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Estoy creando un proyecto de estilo de vida cero desperdicio y necesito agregar la información de contacto de los voluntarios. ¿Podrías proporcionarme tus datos de contacto, como +846 165.547 3344 y 1939B@yahoo.com?",
+      "uid": 5649238
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "The group discussed potential ideas to collaborate with nearby building complexes. Contact information shared includes +146-300 989 2204 and BM@outlook.com.",
+      "uid": 5666734
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The group discussed potential ideas to collaborate with nearby building complexes. Contact information shared includes +146-300 989 2204 and BM@outlook.com.",
+      "uid": 5666734
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Lo siento por la confusión. Por favor, acepte mis disculpas. Su correo electrónico ha sido registrado como ST17@outlook.com.",
+      "uid": 5667110
+    }
+  ],
+  "per_label": {
+    "CREDIT_CARD_NUMBER": {
+      "gold": 0,
+      "matched": 0,
+      "precision": 0.0,
+      "predicted": 1,
+      "recall": 0.0
+    },
+    "EMAIL_ADDRESS": {
+      "gold": 143,
+      "matched": 110,
+      "precision": 1.0,
+      "predicted": 110,
+      "recall": 0.7692
+    },
+    "PHONE_NUMBER": {
+      "gold": 0,
+      "matched": 0,
+      "precision": 0.0,
+      "predicted": 39,
+      "recall": 0.0
+    }
+  },
+  "summary": {
+    "gold_entities": 143,
+    "matched_entities": 110,
+    "precision": 0.7333,
+    "predicted_entities": 150,
+    "recall": 0.7692,
+    "records_evaluated": 139
+  }
+}

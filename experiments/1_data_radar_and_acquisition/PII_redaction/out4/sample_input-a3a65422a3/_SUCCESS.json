@@ -1,0 +1,49 @@
+{
+  "audit_samples": [
+    {
+      "entities_by_type": {
+        "IP_ADDRESS": 1,
+        "PHYSICAL_ADDRESS": 1
+      },
+      "field_paths": [
+        "text"
+      ],
+      "id": "doc-2"
+    }
+  ],
+  "detector_hits": {
+    "regex_aadhaar": 1,
+    "regex_account_number": 1,
+    "regex_address": 1,
+    "regex_email": 1,
+    "regex_ipv4": 1,
+    "regex_name_anchored": 1,
+    "regex_payment_card": 1,
+    "regex_phone": 1,
+    "url_query_sanitizer": 1
+  },
+  "drop_reasons": {
+    "high_risk_entity_threshold": 1,
+    "total_entity_threshold": 1
+  },
+  "entities_by_type": {
+    "AADHAAR_NUMBER": 1,
+    "ACCOUNT_NUMBER": 1,
+    "CREDIT_CARD_NUMBER": 1,
+    "EMAIL_ADDRESS": 1,
+    "IP_ADDRESS": 1,
+    "PERSON_NAME": 1,
+    "PHONE_NUMBER": 1,
+    "PHYSICAL_ADDRESS": 1,
+    "SENSITIVE_URL": 1
+  },
+  "input_file": "C:\\Users\\nmahesh\\code_offline\\PII_redaction\\examples\\sample_input.jsonl",
+  "output_dir": "out4\\sample_input-a3a65422a3",
+  "summary": {
+    "entities_detected": 9,
+    "records_dropped": 2,
+    "records_kept": 1,
+    "records_redacted": 1,
+    "records_seen": 3
+  }
+}

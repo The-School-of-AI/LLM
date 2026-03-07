@@ -1,0 +1,2 @@
+{"_redaction": {"entities_by_type": {"IP_ADDRESS": 1, "PHYSICAL_ADDRESS": 1}, "status": "redacted"}, "id": "doc-2", "lang": "en", "source": "crawl-b", "text": "Public figure Barack Obama spoke in Delhi. The server IP was <IP_ADDRESS>, and address:<PHYSICAL_ADDRESS>"}
+{"_redaction": {"entities_by_type": {"AADHAAR_NUMBER": 1, "PERSON_NAME": 1}, "status": "redacted"}, "id": "doc-3", "lang": "hi", "source": "crawl-c", "text": "Customer name: <PERSON_NAME> 009988776655 and Aadhaar <AADHAAR_NUMBER>"}

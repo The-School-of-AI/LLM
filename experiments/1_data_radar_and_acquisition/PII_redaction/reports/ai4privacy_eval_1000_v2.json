@@ -1,0 +1,1657 @@
+{
+  "mismatch_count": 417,
+  "mismatches": [
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Ma mère Astrit Nani Kofi est née à Ruswil en février/75",
+      "uid": 5706814
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Ellenberger ha estado planeando su viaje durante 48 años. Su KB@gmail.com está lleno de correos electrónicos de Langreo.",
+      "uid": 5257582
+    },
+    {
+      "gold": 2,
+      "label": "SSN",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Rinard, ich bin Arié Noè und ich habe eine Frage zu Ihren Ornamental Birdhouse Designs. Können Sie mir bitte mitteilen, ob Sie auch M-spezifische Designs anbieten? Meine 44260972K654 ist 83 06 12 02 T13 5.",
+      "uid": 5257990
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La creación de Dacio Ruedy Ege para el cómic 'La paradoja' es un ejemplo de cómo la imaginación puede crear mundos y personajes como Noè Matiatos, una persona con 21500 y Femenino.",
+      "uid": 5258318
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Lesушки Noris peuvent être atteints à rocalça@outlook.com pour les demandes de partenariat pour les événements de danse.",
+      "uid": 5258368
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Tenbit Kamber lädt zur Birresborn-Kochen-Veranstaltung ein.",
+      "uid": 5258675
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La SF2029133 de Pati es necesaria para viajar a Contepec.",
+      "uid": 5258985
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "Hallo Lián Blinor, ik ben Behara en ik wil je vragen om een fietsroute door Loon op Zand te delen.",
+      "uid": 5259832
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Selamet envió un correo electrónico a AV@protonmail.com para preguntar sobre los horarios de los autobuses en Jerécuaro.",
+      "uid": 5260170
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Ramzia Stanko: 'Sounds like a plan to me! I'll meet you guys at the 1180 entrance at 20:30. Don't forget to bring your YV9022888!'",
+      "uid": 5260500
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "मैंने Tolga Ayham के साथ एक समझौते पर हस्ताक्षर किए, जिसमें 506303 से संबंधित था।",
+      "uid": 5260682
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Kulvinder Aridon Gruzelier के साथ एक सामूहिक शराब स्वाद परियोजना में शामिल हों। हमारे Tonk Khurd Kamalpur स्थान पर दोपहर 3 बजे से 6 बजे तक के आयोजन में शामिल हों",
+      "uid": 5261920
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Loriana Ylla, je me demandais si vous seriez intéressé pour participer à un atelier sur les symboles culturels et les motifs maritimes. Il aura lieu à Luthern le 7e janvier 1993. Pouvez-vous me donner votre R7017365 pour que je puis",
+      "uid": 5262418
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Massan ist ein großer Fan von Haitian Yanvalou Tanz und hat kürzlich ein neues Muster (Waldliesborner Straße) für seine nächste Tanz-Performance erstellt.",
+      "uid": 5262740
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Sergejs Krister, ich bin Fanette und ich habe Ihre Anfrage zum Desert-Oasis-Journal-Form-Fill-Workshop erhalten. Bitte senden Sie mir Ihre 51373 und Engenser Weg, damit ich Ihre Teilnahme bestätigen kann.",
+      "uid": 5262987
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Jhony Fleischlin orally recounts their story of migration from Deline to East Dover, detailing their experiences with Mayoress officials and the process of obtaining XT58ACI3SX.",
+      "uid": 5263466
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Atención Razvan-George Orly, es importante que verifiques tu 96431-00939 y 46 para participar en nuestros eventos de paddling.",
+      "uid": 5263488
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Atención Razvan-George Orly, es importante que verifiques tu 96431-00939 y 46 para participar en nuestros eventos de paddling.",
+      "uid": 5263488
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Lhiam Ciocarelli has sent a document to Thavamanidevi Jvon Truchard regarding the 5038655754968 and 328708963 required for the small-scale farming project.",
+      "uid": 5279579
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Lhiam Ciocarelli has sent a document to Thavamanidevi Jvon Truchard regarding the 5038655754968 and 328708963 required for the small-scale farming project.",
+      "uid": 5279579
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "1h27 Evica Shalaku Tepedino : 'J'ai trouvé un document intéressant sur la bataille de Bordeaux Chartrons-Grand Parc-Jardin Public. Il contient des informations sur les 34 soldats qui y ont participé.'",
+      "uid": 5279716
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Estimado Celiné, estamos desarrollando un nuevo proyecto de agricultura en Alicante y necesitamos su experiencia en Femenino para llevarlo a cabo.",
+      "uid": 5279819
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il Yuleisy Assétou si trova in Frauenfeld Kurzdorf per un documentario sulla vita rurale. La sua dinesontan@tutanota.com è disponibile per contatti.",
+      "uid": 5280092
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Gentile Kai Nexhmi, la sua richiesta di informazioni sulla gestione degli archivi digitali della nostra società storica è stata ricevuta. Le forniamo di seguito le informazioni richieste: +399-186-673-5725, NV11@hotmail.com.",
+      "uid": 5281108
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Le N0H 1B0 de Tüba est L9N.",
+      "uid": 5281489
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Giancarlo Poffo Voli, wir freuen uns, dass du dich für unsere Gemeinde-Theater-Gruppe interessierst. Bitte füllen Sie das Anmeldeformular aus und senden Sie es an MBG@protonmail.com.",
+      "uid": 5281916
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Wir bieten auch Fahrzeug-Wartungskurse an. Bitte registrieren Sie sich mit Ihrer IF8960800 und Ihrer A246PD0JQL43 auf unserer Website D31@tutanota.com.",
+      "uid": 5281921
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The world map paper design for Nini's birthday party is now available at North Sport Lane 170, Florence. Please bring 0722539281 to collect it.",
+      "uid": 5281930
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "The world map paper design for Nini's birthday party is now available at North Sport Lane 170, Florence. Please bring 0722539281 to collect it.",
+      "uid": 5281930
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To get started with personal loom weaving, Floresha suggests investing in a 718087585 loom and 77964-83568 threads.",
+      "uid": 5282345
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "To get started with personal loom weaving, Floresha suggests investing in a 718087585 loom and 77964-83568 threads.",
+      "uid": 5282345
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il asignor Mâlik Maalel Guitton si è recato presso il sito storico di Illnau il maggio/60. La sua visita è stata registrata con il numero di documento D2628780.",
+      "uid": 5282662
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Gentile Valhida, le inviamo questo messaggio per informarla che il suo progetto di giardino monastico medievale è stato selezionato per la pubblicazione sulla nostra rivista. Il suo indirizzo è Via Lidi Ferraresi 54.",
+      "uid": 5282720
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "ప్రియమైన విద్యార్థులు, మీరు Piprasiలోని మా కార్యాలయాన్ని సందర్శించడానికి ప్రణాళిక వేయండి. మీ 01.7972 4383ని మాకు పంపండి.",
+      "uid": 5282765
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "ప్రియమైన విద్యార్థులు, మీరు Piprasiలోని మా కార్యాలయాన్ని సందర్శించడానికి ప్రణాళిక వేయండి. మీ 01.7972 4383ని మాకు పంపండి.",
+      "uid": 5282765
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Azdren will be leading a workshop on warp-faced weave techniques, register by sending your +90.909-448.6913 and MS@aol.com.",
+      "uid": 5283484
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il nostro team di ricerca ha scoperto una nuova specie di fungo che colpisce gli anfibi vicino al Pressana.",
+      "uid": 5283791
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "నేను Romilda Vinski తో 261303 గురించి చర్చించాను",
+      "uid": 5284142
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Bohumil und Dolunay werden am 16. Mai 2001 ein Seminar über Schnittmuster für plus-sizes anbieten. Die Teilnehmerzahl ist begrenzt, daher bitte um baldige Anmeldung per A@yahoo.com.",
+      "uid": 5285547
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Les membres de l'équipe de Löhningen peuvent ajuster la sensibilité du cisaillement du vent dans le simulateur de vol en fonction de leurs préférences personnelles.",
+      "uid": 5285846
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "मुझे अपने पूर्वजों के नामों के बारे में जानकारी चाहिए, क्या आप मुझे Ring Road और 118 जैसी जानकारी प्रदान कर सकते हैं?",
+      "uid": 5286198
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Marieken Fatoux wants to share a story about their grandparents who lived in Stead during 7th December 2003.",
+      "uid": 5309508
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Sehr geehrte Professorin Sakellaris, ich bitte um Ihre Teilnahme an unserem Wein-Verkostungskurs am 1966-03-09T00:00:00 in Darmstadt. Bitte bestätigen Sie Ihre Teilnahme unter 0149.23643.1816.",
+      "uid": 5309533
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Yue Elmostafa a créé un chat pour discuter de l'importance des 4543256230675317 dans la vie quotidienne, particulièrement lorsqu'il s'agit de gestion du temps pour 28/08/1938.",
+      "uid": 5309659
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "2:14:17 PM Amédée Sulowski: 'నమస్కారం, మేము Rajnagar రైల్వే స్టేషన్‌లో సమావేశమై 209209 ప్రాంతంలోని Sector 35 Road వద్ద జరిగిన రైలు ప్రమాదం గురించి చర్చించాము.'",
+      "uid": 5309994
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Historical Railway Exploration Notes\nDate: 19/06/1983\nExplorer: Shyann Filize Dutriat\nNotes: The team, led by Efram Korrodi, discovered a hidden Mawal station while exploring the Sironj Vidisha Road railway line.",
+      "uid": 5310110
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "L'archivio digitale della Società Storica Zeiningen richiede l'assistenza di Jaber Dafniet Pirazzi Raznatovic per la gestione dei documenti.",
+      "uid": 5310185
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Mecbure Währinger Mastel is leading a volunteering initiative at Keshpur Karwasa for 6 individuals in need. If interested, please contact AAU@gmail.com or 0013 08-329-8928.",
+      "uid": 5310222
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Roxan Dena is sharing a traditional recipe for Kingswinford-style gravy.",
+      "uid": 5310324
+    },
+    {
+      "gold": 4,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Maddalena Yudy Gläßner Bellabarba Duman 15:05 Dehgam Mau Atal Setu 1055 500101 NM1961@yahoo.com 031.4719297  ZWDO4SSA46",
+      "uid": 5310429
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 2,
+      "text_preview": "Maddalena Yudy Gläßner Bellabarba Duman 15:05 Dehgam Mau Atal Setu 1055 500101 NM1961@yahoo.com 031.4719297  ZWDO4SSA46",
+      "uid": 5310429
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "+7 568.310-8915: 'क्या आप Navi Mumbai Nerul में एक अच्छा बॉटैनिकल गार्डन थीम वाला विंड चाइम कहां से खरीद सकते हैं?'",
+      "uid": 5310704
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Für die Teilnahme am Projekt benötigen wir Ihre 99 176 376 956 und R11P9381U. Bitte senden Sie diese an +49 09.217 3933.",
+      "uid": 5311530
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 2,
+      "text_preview": "Für die Teilnahme am Projekt benötigen wir Ihre 99 176 376 956 und R11P9381U. Bitte senden Sie diese an +49 09.217 3933.",
+      "uid": 5311530
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "A conversation between Geovanni Sherman and Jetsada revealed their shared interest in Bheemadevarpalli and its rich cultural heritage.",
+      "uid": 5311823
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il modello di intreccio che preferisco è il Burgstrasse per la sua resistenza e flessibilità.",
+      "uid": 5312031
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Fleischner asks Siméo for the secret ingredient in their Palkonda Vizianagaram Road famous gravy",
+      "uid": 5312282
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To Whom It May Concern, This letter is to confirm that Tejo Fourquez is a resident of Huntley. ",
+      "uid": 5312484
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "56 ha deciso di provare la dieta dei 02/04/1996 e ha chiesto aiuto ai suoi amici per trovare i migliori AV5856996.",
+      "uid": 5312504
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "04954.915916 heeft een klacht ingediend over een Mariënwaerdt Dwarssteeg product.",
+      "uid": 5313430
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Sehr geehrte Prof Barnabas Redzepovski, ich möchte Sie auf die bevorstehende Änderung in Bezug auf 8610 hinweisen. Bitte bleiben Sie auf dem Laufenden.",
+      "uid": 5313831
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il mio diario marittimo: Ho incontrato Redon Robenson Ziboni a Oberwil im Simmental. Ha un Q2953194 valido.",
+      "uid": 5315967
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Cher Shqipton, nous avons reçu votre 3504874195173986 pour les frais d'inscription. Veuillez confirmer votre 73 pour finaliser votre inscription.",
+      "uid": 5316073
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "J90ZW1568756 is required to rent a vehicle for the Wendell expedition.",
+      "uid": 5427982
+    },
+    {
+      "gold": 4,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Die Gruppe traf sich am 16:34 bei Breitenloo 41 in Mels. Lián brachte eine Karte von Medel (Lucmagn) mit.",
+      "uid": 5316135
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Thayananthi Chhoun Moncagatta ha completato il corso di maneggio di armi da fuoco antiche con successo. Il suo certificato di partecipazione è stato inviato alla sua SH@aol.com.",
+      "uid": 5316352
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "VQ79773JG is the ID card number of Mohea Curau, who lives at Bredhurst Road 1741.",
+      "uid": 5316425
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Sevlija Flachsmann ha prenotato i biglietti per la serie 'Phenomenal Women' al cinema di Bassins. La data dell'evento è agosto/49.",
+      "uid": 5316974
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Dries Dragos-Costin è un esperto di aerobica e prepara piani di allenamento personalizzati, come ad esempio il piano di 88.",
+      "uid": 5316990
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Narcis and Aiza visited the Princes Risborough art gallery on 09/09/1959. They spent 20 hours admiring the artwork, including pieces by Patrick-Marc Faverjon.",
+      "uid": 5339419
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Pella Baysang Chibraoui Zettel: 'Interessante! Sapevi che il mio SRD275682U è stato rilasciato proprio a Montefusco?'",
+      "uid": 5339673
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Fionnuala Bada Schwender Gogniat a participé à l'événement civique à Burgdorf le 1960-09-08T00:00:00. Son expérience était très enrichissante.",
+      "uid": 5339890
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "Mumbai Nashik Expressway 521 వద్ద ఉన్న మన చారిత్రక భవనం యొక్క చిత్రాలను పంచుకోవడానికి Z@hotmail.com ద్వారా అనుమతించండి.",
+      "uid": 5339931
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Salut Aliman, j'ai besoin de votre aide pour comprendre les règlements de préservation pour les bâtiments historiques à Shell Lake. Pouvez-vous me donner des informations sur les lois et les règlements qui s'appliquent aux Concession 6 Road",
+      "uid": 5340281
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Ayan a réservé des places pour la séance de cinéma surprise à Vallorcine le 02/09/1982. Il est important de confirmer votre YP@outlook.com et votre 07.2275 2317 pour recevoir les détails.",
+      "uid": 5340718
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Por favor, Olayinka, proporcione su 419337932755 para verificar su identidad y acceder a los horarios de cine personalizados.",
+      "uid": 5340812
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Por favor, Olayinka, proporcione su 419337932755 para verificar su identidad y acceder a los horarios de cine personalizados.",
+      "uid": 5340812
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 2,
+      "text_preview": "Concevez un projet de scrapbooking pour Erleta Rabia avec des pages sur ses 38804052906979 et 9535092046.",
+      "uid": 5340998
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Concevez un projet de scrapbooking pour Erleta Rabia avec des pages sur ses 38804052906979 et 9535092046.",
+      "uid": 5340998
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Concevez un projet de scrapbooking pour Erleta Rabia avec des pages sur ses 38804052906979 et 9535092046.",
+      "uid": 5340998
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Alberina Weening Gielen Joggi benötigt Ihre CHE-534-110-241 und O9511013, um Ihre Bestellung abzuschließen.",
+      "uid": 5341003
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il Comune di Tuoro sul Trasimeno ha pubblicato un rapporto sullo stato dell'efficienza energetica dei 14 pubblici. Il documento è disponibile sul sito web C@protonmail.com.",
+      "uid": 5341301
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il Comune di Tuoro sul Trasimeno ha pubblicato un rapporto sullo stato dell'efficienza energetica dei 14 pubblici. Il documento è disponibile sul sito web C@protonmail.com.",
+      "uid": 5341301
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "L'adresse de Srinivas est Side Road 27 & 28 623 à Maple Ridge. Il a envoyé un email à A@protonmail.com pour demander des conseils sur son design.",
+      "uid": 5341676
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Para participar en el tour guiado, es necesario que Mikele proporcione su G21@outlook.com.",
+      "uid": 5341778
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Dragos-Paul Dennie and Nikischer co-authored a paper on Miss and its effects on S Rayavaram Murbad MIDC.",
+      "uid": 5342107
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Ciao, il pagamento per il tuo corso di brew è stato rifiutato. Si prega di verificare il tuo 3824019558364899 o di fornire un metodo di pagamento alternativo.",
+      "uid": 5342267
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Mecnun Gary ha scritto una poesia su Predappio sotto le stelle.",
+      "uid": 5342324
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Shewita Waterlot-Buisine Korolov ha scritto una poesia intitolata 'Silhouettes in the Starlight'， contenente le seguenti informazioni: marzo 1º, 2013, Samedan, 6436.",
+      "uid": 5342754
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "Eniya Draganova Monzeglio Ricciardelli heeft een nieuw aquaponics project opgezet in Gilze en Rijen Gilze. Het project richt zich op het optimaliseren van de nutrientencyclus.",
+      "uid": 5342977
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Efraïm Caran believes that the philosophy of history is a matter of understanding the underlying Miss of human events. In a recent (47)-0416-7774 conversation, Amavi argued that Pittsburgh is a prime example of 30 Non-binary values in actio",
+      "uid": 5343198
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Kajanthan Alket Bokulich tiene un proyecto de acuaponía en Santa María la Real de Nieva. ¿Quiere unirme para discutir medidas de adaptación climática?",
+      "uid": 5343517
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Je cherche des informations sur les méthodes de création de costumes de gypsy pour un projet de théâtre. Pouvez-vous m'aider Sulav ? Mon adresse e-mail est sufauvergu@outlook.com.",
+      "uid": 5344208
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "jkuhlbör@yahoo.com has been sent a reminder about the upcoming 5 birthday party at Québec.",
+      "uid": 5344524
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "jkuhlbör@yahoo.com has been sent a reminder about the upcoming 5 birthday party at Québec.",
+      "uid": 5344524
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "N'oubliez pas de prendre des photos de votre projet de tapisserie pour le partager avec Uliks Dhiraj à LJ@hotmail.com.",
+      "uid": 5344791
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Potresti gentilmente fornire la tua 756.3605.5335.10 e la tua abubingemann@protonmail.com in modo da poter completare la tua registrazione?",
+      "uid": 5344821
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Potresti gentilmente fornire la tua 756.3605.5335.10 e la tua abubingemann@protonmail.com in modo da poter completare la tua registrazione?",
+      "uid": 5344821
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Nadire noticed a S0K connection between the aquarium's water temperature and the fish's behavior.",
+      "uid": 5344905
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Refat, j'ai vu vos œuvres d'art en ligne et je suis impressionné par votre style unique. Aimeriez-vous exposer vos travaux à Levallois-Perret ? Q1012984721651",
+      "uid": 5345056
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Ermire deve fornire la sua 81037 per la consegna del pacco",
+      "uid": 5345115
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "La Villa d'Ogna è il luogo dove Misael Stéve può trovare il materiale necessario per il progetto di tessitura della tappezzeria.",
+      "uid": 5345232
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "श्रीमती Stanacev ने एक लेख में 37PL45YPOD और 58176.70265 के बारे में लिखा। उन्होंने Lucknow Outer Ring Road और 83 पर अपने पते को साझा किया।",
+      "uid": 5345522
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "श्रीमती Stanacev ने एक लेख में 37PL45YPOD और 58176.70265 के बारे में लिखा। उन्होंने Lucknow Outer Ring Road और 83 पर अपने पते को साझा किया।",
+      "uid": 5345522
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 1,
+      "text_preview": "श्रीमती Stanacev ने एक लेख में 37PL45YPOD और 58176.70265 के बारे में लिखा। उन्होंने Lucknow Outer Ring Road और 83 पर अपने पते को साझा किया।",
+      "uid": 5345522
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Pour valider votre inscription, veuillez nous fournir une copie de votre pièce d'identité LM3900604 et confirmer votre adresse e-mail frdal toè@hotmail.com.",
+      "uid": 5345565
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Iurie a partagé sa liste de tâches quotidienne, qui incluait une visite au Impasse Claude Berthier 1247 pour récupérer son 40GQ63938.",
+      "uid": 5345650
+    },
+    {
+      "gold": 4,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To-Do List for Rukmone: Meet Storm at 200th Street 1030, pick up Brush Creek tickets, and buy 85259-3825 map.",
+      "uid": 5360729
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Emerenciana Mirela swapped Madame 'The Railway History of Surbiton Tolworth' with Malang for 'Water Conservation Instructions'",
+      "uid": 5360830
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Sangeeth, votre projet de bijoux en LED et à lumière est prêt. Veuillez trouver les détails ci-dessous : Seestrasse 17, Buchs (Aargau).",
+      "uid": 5361372
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Dear Nathanaëlle Emory Bolhuis Alfred Zaharievski, I am writing to inform you that our office will be closed on June/15 for the Consett Blanchland public holiday.",
+      "uid": 5361533
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "10:17 Vojkan: 'मैं Bathsheba के साथ एक अभियान पर जा रहा हूँ। हम Vasai जा रहे हैं।'",
+      "uid": 5362097
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La receta de Abdennour para el arroz con pollo requiere W1DBMH6E4A piezas de pollo, aymincamacaro@gmail.com tazas de arroz y 6205595668139337 especias.",
+      "uid": 5362852
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Vitezslav Sanji ha reportado una 2202400355876201 sospechosa",
+      "uid": 5362879
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 1,
+      "text_preview": "14:06 Luam Westenberg: 'నమస్కారం, నేను Dilamar Grisanova. నా సొషల్ నంబర్ 0753720992. మీరు నాకు మీ అభిప్రాయాన్ని పంపించగలరా?'",
+      "uid": 5363356
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "14:06 Luam Westenberg: 'నమస్కారం, నేను Dilamar Grisanova. నా సొషల్ నంబర్ 0753720992. మీరు నాకు మీ అభిప్రాయాన్ని పంపించగలరా?'",
+      "uid": 5363356
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Je souhaite concevoir une maison high-tech avec des fonctionnalités innovantes comme 50201414111781088 et CHE-429.918.837. Pouvez-vous me aider?",
+      "uid": 5363596
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Je souhaite concevoir une maison high-tech avec des fonctionnalités innovantes comme 50201414111781088 et CHE-429.918.837. Pouvez-vous me aider?",
+      "uid": 5363596
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Le 4153 de Sijan Abdukadir est nécessaire pour calculer les frais de livraison.",
+      "uid": 5363669
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "De wandeling begint om 07:27 uur bij Ir. Enschedéweg 7. Zorg ervoor dat je op tijd bent, want we willen niet te laat beginnen. Mijn mbelleva@yahoo.com is syrinladouceur@gmail.com als je nog vragen hebt.",
+      "uid": 5364102
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Skender Marlow e Fettel stanno pianificando una escursione sul ghiacciaio Entlebuch. La data prevista è 20/01/2017.",
+      "uid": 5364272
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Der Workshop findet in Leichlingen (Rheinland) statt. Bitte planen Sie Ihre Anreise entsprechend und beachten Sie die Ortsring und 15.",
+      "uid": 5364567
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Salut Reinis, j'ai réservé un guide pour notre randonnée sur le glacier de County Road 47. Il faudra fournir nos numéros de 35635.64354 pour les formalités.",
+      "uid": 5364650
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Salut Reinis, j'ai réservé un guide pour notre randonnée sur le glacier de County Road 47. Il faudra fournir nos numéros de 35635.64354 pour les formalités.",
+      "uid": 5364650
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Salut Reinis, j'ai réservé un guide pour notre randonnée sur le glacier de County Road 47. Il faudra fournir nos numéros de 35635.64354 pour les formalités.",
+      "uid": 5364650
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Morine Serna invites you to their art exhibition, taking place on 1st July 1970 at Mumbai Highway",
+      "uid": 5364726
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Salve Suncana, mi chiamo Andrian Gajan Cerezuela e sono un artista di Ormont-Dessus. Sto cercando di contattare Sasko Abdelwaheb per discutere di una possibile collaborazione per il mio progetto Theatrical Diary Chronicles.",
+      "uid": 5365394
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Batuhan, je suis très intéressé par les poèmes de voyage qui décrivent les merveilles de Arvillard. J'aimerais vous demander si vous avez des informations sur les 33 04 893 683 642 auteurs de ces poèmes.",
+      "uid": 5365917
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Batuhan, je suis très intéressé par les poèmes de voyage qui décrivent les merveilles de Arvillard. J'aimerais vous demander si vous avez des informations sur les 33 04 893 683 642 auteurs de ces poèmes.",
+      "uid": 5365917
+    },
+    {
+      "gold": 0,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Bonjour Batuhan, je suis très intéressé par les poèmes de voyage qui décrivent les merveilles de Arvillard. J'aimerais vous demander si vous avez des informations sur les 33 04 893 683 642 auteurs de ces poèmes.",
+      "uid": 5365917
+    },
+    {
+      "gold": 2,
+      "label": "PAN_NUMBER",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "Nirada Maysam Reekers Misita యొక్క 51924-65516 నెంబరు 13800 64776.",
+      "uid": 5366109
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 2,
+      "text_preview": "Nirada Maysam Reekers Misita యొక్క 51924-65516 నెంబరు 13800 64776.",
+      "uid": 5366109
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Vehap arbeitet als Bonsai-Experte in Boudry Champ-du-Moulin.",
+      "uid": 5366525
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "In Neuenbrook gibt es einen Im Kauert- Markt, auf dem Fiorella Josefien umweltfreundliche Produkte verkauft.",
+      "uid": 5366635
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "As part of the cultural exchange program, Stanzl will be staying with a host family in Delta.",
+      "uid": 5366690
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Murtezan documented their urban exploration on 078.128.9198, showcasing Tarporley's vibrant street art and 49 cultural landmarks.",
+      "uid": 5366838
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Murtezan documented their urban exploration on 078.128.9198, showcasing Tarporley's vibrant street art and 49 cultural landmarks.",
+      "uid": 5366838
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Murtezan documented their urban exploration on 078.128.9198, showcasing Tarporley's vibrant street art and 49 cultural landmarks.",
+      "uid": 5366838
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Le groupe de Annagret et Remiel Ayomide a exploré le quartier de Boissei-la-Lande et a découvert un petit café charmant. L'adresse du café est Route de la Seigneurie 5696.",
+      "uid": 5366967
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour On Lundrim Vorst, nous vous remercions de votre intérêt pour le projet de préservation du patrimoine. Votre proposition de projet doit inclure votre K1202418907795 et votre sushamaithaj@yahoo.com.",
+      "uid": 5367575
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "22618-62599 కి Ismoil Abou అని పిలుస్తారు.",
+      "uid": 5367675
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 1,
+      "text_preview": "22618-62599 కి Ismoil Abou అని పిలుస్తారు.",
+      "uid": 5367675
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La preferencia de Elvire es utilizar productos de limpieza biodegradables en Villamediana.",
+      "uid": 5367793
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Nous allons publier les résultats de l'étude sur le site web de l'organisation. Nous avons besoin de la permission de Avdi Keflezghi pour publier ses informations personnelles, notamment son RRG@yahoo.com.",
+      "uid": 5367956
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "El Trong Legler asked for advice on how to create a family tree, and Ramitha Sadeqi suggested using a service that requires a 692-826-6449 for verification.",
+      "uid": 5239569
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "El Trong Legler asked for advice on how to create a family tree, and Ramitha Sadeqi suggested using a service that requires a 692-826-6449 for verification.",
+      "uid": 5239569
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Die 52477 in Eppingen ist sehr bekannt. Bitte überprüfen Sie Ihre 36383096622820 und bestätigen Sie Ihre DFVZ@yahoo.com.",
+      "uid": 5248421
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "Sayyed Small Nedanovska Gillardon heeft een notitie over spoorwegexploratie geschreven: 'Zuiddijk is een belangrijke locatie voor het spoorwegnetwerk.'",
+      "uid": 5248616
+    },
+    {
+      "gold": 4,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Htet Germann a acheté un système d'aquaponie pour son projet personnel. Il a besoin d'aide pour optimiser le cycle des nutriments. Son adresse est Rinderbiel 31, Wangen-Brüttisellen, 7438.",
+      "uid": 5248739
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "12:06 Trayko: 'Ich bin Alyssia Truglia und ich bin 31 Jahre alt. Ich habe mich auf die Auswirkungen von Volkssagen auf die 6465-Bevölkerung konzentriert.'",
+      "uid": 5249647
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Madame Ia Kelman Sarg Zwissler a organisé un hackathon pour promouvoir la durabilité alimentaire. L'événement aura lieu le 08/12/2001 à Xivray-et-Marvoisin. Nous invitons tous les 34 intéressés à participer.",
+      "uid": 5264648
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Estimado Özer, hemos detectado algunas diferencias en tus registros. Por favor, verifica tu 6292328646505128 y 369213310404 para asegurarte de que sean correctos.",
+      "uid": 5266976
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Estimado Özer, hemos detectado algunas diferencias en tus registros. Por favor, verifica tu 6292328646505128 y 369213310404 para asegurarte de que sean correctos.",
+      "uid": 5266976
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Estimado Özer, hemos detectado algunas diferencias en tus registros. Por favor, verifica tu 6292328646505128 y 369213310404 para asegurarte de que sean correctos.",
+      "uid": 5266976
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Orkhan Dahmaj Ohlmeyer Kashoush ने अपने 391135 और Zorawar Singh Marg के साथ अपने पते का उल्लेख किया है, जिसमें उन्होंने अपने UQDM45HLH5 और 17/02/1975 के साथ अपनी पहचान का उल्लेख किया है",
+      "uid": 5267478
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "it",
+      "predicted": 1,
+      "text_preview": "Per accedere al diario di riflessione, per favore inserisci la tua email vitafiocch@outlook.com e la password 756.1205.5833.86.",
+      "uid": 5277567
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Per accedere al diario di riflessione, per favore inserisci la tua email vitafiocch@outlook.com e la password 756.1205.5833.86.",
+      "uid": 5277567
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Ciao Emoke Raphaëlla Stasny, è stato riscontrato un problema di inquinamento acustico in Hindelbank. Si prega di rispondere entro marzo/08.",
+      "uid": 5277714
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Sehr geehrte Meister Musey Eyal, wir teilen Ihnen mit, dass die Personalverwaltung umgezogen ist. Bitte besuchen Sie uns an unserem neuen Standort: Großpösna Lindenhorst 12.",
+      "uid": 5279378
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "te",
+      "predicted": 1,
+      "text_preview": "22:04:14 Parissa: 'నా వినియోగదారు సంఖ్య 8805577542 మరియు నా 6L2PODG6PB డ్రైవింగ్ లైసెన్స్ నంబర్.'",
+      "uid": 5309999
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "te",
+      "predicted": 0,
+      "text_preview": "22:04:14 Parissa: 'నా వినియోగదారు సంఖ్య 8805577542 మరియు నా 6L2PODG6PB డ్రైవింగ్ లైసెన్స్ నంబర్.'",
+      "uid": 5309999
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Afin de créer un système de compost à la maison, Siranus Balakumaran a acheté un bac à compost 65bis pour Longues-sur-Mer euros.",
+      "uid": 5321419
+    },
+    {
+      "gold": 2,
+      "label": "EMAIL_ADDRESS",
+      "language": "de",
+      "predicted": 1,
+      "text_preview": "Hallo Senik, ich benötige Ihre Hilfe bei einem Selbstbau-Projekt. Könnten Sie mir bitte Ihre Erfahrungen mit Zero-Waste-Lifestyle-Projekten teilen? Meine DE@yahoo.com ist ilegaglewsk@aol.com.",
+      "uid": 5321805
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Acabo de recibir un paquete con materiales de scrapbooking de Pénjamo y estoy emocionado de empezar a trabajar en mi próximo proyecto. ¿Alguien tiene sugerencias para mí?",
+      "uid": 5338449
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "+9 993 668-3190: 'Sì, per favore. Ho bisogno di un documento su Beckenried'",
+      "uid": 5385794
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Your order EL30361MM for the Chelmsford terrarium kit is being shipped to Upper South Wraxall 2011",
+      "uid": 5386758
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "nl",
+      "predicted": 0,
+      "text_preview": "De brief moet worden verzonden naar Schapendijk 32 in Nijmegen.",
+      "uid": 5400612
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Il Senatore Archer ha creato un progetto di agricoltura sostenibile a Località Torrio Casetta, 795.",
+      "uid": 5403898
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To-Do List for Ibraim Amarasingha Käshammer: Buy S0A zip ties for Moscrop Street railyard project.",
+      "uid": 5417006
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La dirección de Ayten Nguyen es Calle de Joan Miró 390",
+      "uid": 5422307
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "C@outlook.com from Kripa Kanzok about water-saving tips for 1438 Vavol Uvarsad Road.",
+      "uid": 5445465
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Liebe Roni Edric, ich danke dir für deine Gedanken zu meiner Kunst. Ich hoffe, du kannst meine Ausstellung in Wermelskirchen besuchen und meine Werke sehen.",
+      "uid": 5461617
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Bonjour Oriola Clelia ! Je suis désolé de vous déranger, mais j'ai besoin d'un certificat médical pour l'escalade. Pouvez-vous me recommander un médecin à Yellow Grass ?",
+      "uid": 5461672
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Los archivos que nos proporcionó contienen información personal identificable. Por favor, revise y elimine cualquier 347870898103131 o información financiera confidencial.",
+      "uid": 5462356
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Los archivos que nos proporcionó contienen información personal identificable. Por favor, revise y elimine cualquier 347870898103131 o información financiera confidencial.",
+      "uid": 5462356
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "La conferma della prenotazione del biglietto è stata inviata al tuo indirizzo e-mail BB@gmail.com.",
+      "uid": 5462885
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Cher Abderazak, j'ai oublié mon 756.1502.5644.70 à la maison. Pourrais-tu m'appeler pour me rappeler de le prendre ?",
+      "uid": 5463543
+    },
+    {
+      "gold": 1,
+      "label": "SSN",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Cher Abderazak, j'ai oublié mon 756.1502.5644.70 à la maison. Pourrais-tu m'appeler pour me rappeler de le prendre ?",
+      "uid": 5463543
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "In the upcoming meeting, Anne-Monika will be presenting his research about Morville family lines in Dodda Ballapur.",
+      "uid": 5464546
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Je suis à la recherche de documents sur l'histoire de la culture Avril. Pouvez-vous me fournir des informations sur les Brandi et Sabuco qui ont joué un rôle important dans la préservation de cette culture ?",
+      "uid": 5464783
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "La reunión del ayuntamiento se llevará a cabo el agosto/55 en Ronda del Ferrol 39. Los asistentes deben llegar con su documento de identificación D3727035Z.",
+      "uid": 5464791
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "Va bene, Aletha, potrai chiedere alla segretaria Sirak Dübel Srikhongkerd Fasli di trovare il tuo indirizzo nel système informatico. La sua email è A@gmail.com.",
+      "uid": 5464950
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Der nächste Fotowettbewerb wird am 1972-06-23T00:00:00 in Oberems abgehalten.",
+      "uid": 5465060
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Vérifier si l'expiration de 20-41-664-977-173 a un impact sur la valeur du produit",
+      "uid": 5465092
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "fr",
+      "predicted": 1,
+      "text_preview": "Vérifier si l'expiration de 20-41-664-977-173 a un impact sur la valeur du produit",
+      "uid": 5465092
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Hr Dügünyurdu, ich benötige Ihre Hilfe bei der Bearbeitung unserer Einsatzprotokolle. Können Sie bitte den 2 und den Birkenlacher Weg der betreffenden Einsatzorte überprüfen?",
+      "uid": 5477832
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Discurso sobre efectos agrícolas regenerativos\n Estimados ciudadanos de Luis Moya,\n Quiero hablar sobre los efectos de la agricultura regenerativa en nuestra comunidad.",
+      "uid": 5477984
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "it",
+      "predicted": 0,
+      "text_preview": "8:10 AM Devyn Adjan: 'Sì, ci sarò. Il mio indirizzo è Aarauerstrasse 4497, Muotathal.",
+      "uid": 5478290
+    },
+    {
+      "gold": 3,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "fr",
+      "predicted": 0,
+      "text_preview": "Azizul: Salut, je suis photographe de rue. Voici mon portfolio 167 rue La Bustière à Montpellier",
+      "uid": 5478622
+    },
+    {
+      "gold": 2,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The workshop will be held at Horseshoe Bay - Langdale 4900.",
+      "uid": 5478645
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "South Petherton banquet speaker: Mister Cary Bodivit, P.Eng., presenting an analysis on industry trends",
+      "uid": 5478646
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "2:55 AM Thanujan Joeri: 'Does anyone know how to renew a 79879 71153?'",
+      "uid": 5479510
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "2:55 AM Thanujan Joeri: 'Does anyone know how to renew a 79879 71153?'",
+      "uid": 5479510
+    },
+    {
+      "gold": 4,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Raagavi Jeyaruby Yeldan: 'Meine Adresse ist Industrie 340, 4524 Gansingen.'",
+      "uid": 5479735
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "de",
+      "predicted": 0,
+      "text_preview": "Hallo Sokha, wir brauchen Ihre Hilfe bei der Organisation unserer Meeresbiologie-Safari. Könnten Sie uns bitte Ihren CHE-823.185.096 und Ihren 1968PSA@yahoo.com senden, damit wir Ihre Teilnahme bestätigen können?",
+      "uid": 5480582
+    },
+    {
+      "gold": 1,
+      "label": "PAN_NUMBER",
+      "language": "es",
+      "predicted": 0,
+      "text_preview": "Atención a todos los pasajeros: Por favor, verifique sus U1XFOFQD79 y 83093 62567 antes de abordar el barco.",
+      "uid": 5480900
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "es",
+      "predicted": 1,
+      "text_preview": "Atención a todos los pasajeros: Por favor, verifique sus U1XFOFQD79 y 83093 62567 antes de abordar el barco.",
+      "uid": 5480900
+    }
+  ],
+  "per_label": {
+    "CREDIT_CARD_NUMBER": {
+      "gold": 25,
+      "matched": 3,
+      "precision": 0.4286,
+      "predicted": 7,
+      "recall": 0.12
+    },
+    "EMAIL_ADDRESS": {
+      "gold": 143,
+      "matched": 110,
+      "precision": 1.0,
+      "predicted": 110,
+      "recall": 0.7692
+    },
+    "PAN_NUMBER": {
+      "gold": 23,
+      "matched": 0,
+      "precision": 0.0,
+      "predicted": 0,
+      "recall": 0.0
+    },
+    "PHONE_NUMBER": {
+      "gold": 161,
+      "matched": 156,
+      "precision": 0.7647,
+      "predicted": 204,
+      "recall": 0.9689
+    },
+    "PHYSICAL_ADDRESS": {
+      "gold": 436,
+      "matched": 6,
+      "precision": 1.0,
+      "predicted": 6,
+      "recall": 0.0138
+    },
+    "SSN": {
+      "gold": 26,
+      "matched": 4,
+      "precision": 1.0,
+      "predicted": 4,
+      "recall": 0.1538
+    }
+  },
+  "summary": {
+    "gold_entities": 814,
+    "matched_entities": 279,
+    "precision": 0.8429,
+    "predicted_entities": 331,
+    "recall": 0.3428,
+    "records_evaluated": 525
+  }
+}

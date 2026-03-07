@@ -1,0 +1,14 @@
+{
+  "audit_samples": [],
+  "detector_hits": {},
+  "drop_reasons": {},
+  "entities_by_type": {},
+  "input_file": "C:\\Users\\nmahesh\\code_offline\\PII_redaction\\datasets\\synthetic\\llm_nested_records.jsonl",
+  "output_dir": "out_eval\\llm_nested_records-3e03062d0d",
+  "summary": {
+    "entities_detected": 0,
+    "records_kept": 2,
+    "records_seen": 2,
+    "records_unchanged": 2
+  }
+}
