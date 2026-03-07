@@ -3,7 +3,9 @@ from typing import Any
 
 
 def apply_runtime_overrides(
-    ds_config: dict[str, Any], overlap_communication: bool | None
+    ds_config: dict[str, Any],
+    overlap_communication: bool | None,
+    reduce_bucket_size: int | None,
 ) -> dict[str, Any]:
     """
     Return a DeepSpeed config with runtime overrides applied.
@@ -12,20 +14,23 @@ def apply_runtime_overrides(
     """
     resolved = deepcopy(ds_config)
 
-    if overlap_communication is None:
+    if overlap_communication is None and reduce_bucket_size is None:
         return resolved
 
     zero_optimization = resolved.get("zero_optimization")
     if zero_optimization is None:
         raise ValueError(
-            "training.overlap_communication requires a DeepSpeed "
+            "runtime DeepSpeed overrides require a DeepSpeed "
             "'zero_optimization' config block"
         )
     if not isinstance(zero_optimization, dict):
         raise ValueError(
             "DeepSpeed 'zero_optimization' must be a mapping when "
-            "training.overlap_communication is set"
+            "runtime DeepSpeed overrides are set"
         )
 
-    zero_optimization["overlap_comm"] = overlap_communication
+    if overlap_communication is not None:
+        zero_optimization["overlap_comm"] = overlap_communication
+    if reduce_bucket_size is not None:
+        zero_optimization["reduce_bucket_size"] = reduce_bucket_size
     return resolved

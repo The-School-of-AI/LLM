@@ -72,6 +72,10 @@ class TrainingConfig:
     # None = keep the backend config file's current setting.
     overlap_communication: bool | None = None
 
+    # Override DeepSpeed ZeRO reduce bucket size at runtime.
+    # None = keep the backend config file's current setting.
+    reduce_bucket_size: int | None = None
+
     # Seed applied to Python random, numpy, and torch at startup.
     seed: int = 42
 

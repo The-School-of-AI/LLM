@@ -24,7 +24,9 @@ class PreTrainer:
         with open(c.training.deepspeed_config, "r") as f:
             ds_config = yaml.safe_load(f)
         ds_config = apply_runtime_overrides(
-            ds_config, c.training.overlap_communication
+            ds_config,
+            c.training.overlap_communication,
+            c.training.reduce_bucket_size,
         )
         batch_size_per_gpu = ds_config["train_micro_batch_size_per_gpu"]
 
@@ -108,13 +110,13 @@ class PreTrainer:
                     self._backward(loss)
                 with self._step_profiler.phase("step/train_optimizer_step"):
                     self._optimizer_step()
-                self._step_profiler.end_step()
                 step_time = time.time() - step_start_time
                 num_tokens = torch.tensor(
                     input_ids.numel(), dtype=torch.float32, device=device
                 )
-                if dist.is_available() and dist.is_initialized():
-                    dist.all_reduce(num_tokens, op=dist.ReduceOp.SUM)
+                with self._step_profiler.phase("step/token_count_allreduce"):
+                    if dist.is_available() and dist.is_initialized():
+                        dist.all_reduce(num_tokens, op=dist.ReduceOp.SUM)
                 self._step_profiler.end_step(tokens=int(num_tokens.item()))
                 toks_per_sec = num_tokens.item() / step_time if step_time > 0 else 0
 
@@ -429,4 +431,8 @@ class PreTrainer:
             )
 
     def _cleanup(self):
+        self._step_profiler.write_report()
+        self._step_profiler.write_jsonl()
+        self._pipe_prof.write_report()
+        self._pipe_prof.write_jsonl()
         self._step_profiler.deactivate()
