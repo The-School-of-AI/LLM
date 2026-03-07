@@ -265,7 +265,8 @@ class TestChunkingAndComposition:
         assert aux_loss.item() >= 0, f"Aux loss should be >= 0, got {aux_loss.item()}"
         assert torch.isfinite(total_composed), "Composed loss is NaN or inf"
 
-        # Verify MTP weight is exactly 0.3
+        # Verify MTP weight is exactly 0.3 (algebraic identity —
+        # serves as documentation of the formula, not a behavioral test)
         total_without_mtp = loss_ntp_manual + aux_loss.detach().float()
         mtp_contribution = total_composed - total_without_mtp
         expected_mtp_contrib = 0.3 * loss_mtp_manual
@@ -274,8 +275,9 @@ class TestChunkingAndComposition:
             f"expected 0.3 * {loss_mtp_manual.item():.8f} = {expected_mtp_contrib.item():.8f}"
         )
 
-        # Verify total composition is algebraically correct
-        total_recomposed = loss_ntp_manual + 0.3 * loss_mtp_manual + aux_loss.detach().float()
-        assert torch.allclose(total_composed, total_recomposed, atol=1e-6), (
-            "Composition formula not self-consistent"
+        # Plausible range: random weights on vocab=256 → loss ≈ log(256) ≈ 5.55
+        # Allow wide range since aux_loss and MTP add to the total
+        assert 1.0 < total_composed.item() < 20.0, (
+            f"Composed loss {total_composed.item():.4f} outside plausible range "
+            f"for random weights on vocab={V_mini}"
         )
