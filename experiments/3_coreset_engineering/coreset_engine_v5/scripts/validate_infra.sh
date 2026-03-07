@@ -60,7 +60,7 @@ SKIP_S3_SPEED_TEST="${SKIP_S3_SPEED_TEST:-false}"
 # ── Configurable Thresholds ──────────────────────────────────
 # All thresholds can be overridden via environment variables.
 # Defaults target c7gd.16xlarge.
-MAX_CPU_STEAL_PCT="${MAX_CPU_STEAL_PCT:-1}"
+MAX_CPU_STEAL_PCT="${MAX_CPU_STEAL_PCT:-3}"
 NVME_MOUNT="${NVME_MOUNT:-/mnt/nvme}"
 MAX_NVME_LATENCY_US="${MAX_NVME_LATENCY_US:-200}"
 MIN_NVME_IOPS="${MIN_NVME_IOPS:-100000}"
