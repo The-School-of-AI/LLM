@@ -275,7 +275,9 @@ class TestEdgeCases:
     def test_prev_memory_injection(self, model_and_inputs):
         """Passing prev_memory_stream [B,H] should not change output shapes."""
         model, cfg, input_ids, next_ids, attn_mask = model_and_inputs
-        prev_mem = torch.randn(B, H, device=input_ids.device, dtype=torch.bfloat16)
+        # Match the model's parameter dtype (float32 in test, bfloat16 in production)
+        model_dtype = next(model.parameters()).dtype
+        prev_mem = torch.randn(B, H, device=input_ids.device, dtype=model_dtype)
 
         with torch.no_grad():
             h_ntp, h_mtp, aux_loss, memory_out = model(
