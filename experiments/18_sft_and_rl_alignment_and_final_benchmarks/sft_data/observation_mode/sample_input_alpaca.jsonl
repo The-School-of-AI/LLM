@@ -1,0 +1,5 @@
+{"instruction": "What is 2 + 2?", "input": "", "output": "2 + 2 equals 4."}
+{"instruction": "Write a Python function that returns the square of a number.", "input": "", "output": "def square(n):\n    return n * n"}
+{"instruction": "Explain what a loop is in one sentence.", "input": "", "output": "A loop is a control structure that repeats a block of code until a condition is met or a sequence is exhausted."}
+{"instruction": "Translate 'Hello' to Spanish.", "input": "", "output": "Hello in Spanish is 'Hola'."}
+{"instruction": "List the first three prime numbers.", "input": "", "output": "The first three prime numbers are 2, 3, and 5."}

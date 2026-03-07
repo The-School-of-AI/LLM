@@ -1,0 +1,5 @@
+{"text": "<|im_start|>user\nWhat is 2 + 2?<|im_end|>\n<|im_start|>assistant\n2 + 2 equals 4.<|im_end|>"}
+{"text": "<|im_start|>user\nWrite a Python function that returns the square of a number.<|im_end|>\n<|im_start|>assistant\ndef square(n):\n    return n * n<|im_end|>"}
+{"text": "<|im_start|>user\nExplain what a loop is in one sentence.<|im_end|>\n<|im_start|>assistant\nA loop is a control structure that repeats a block of code until a condition is met or a sequence is exhausted.<|im_end|>"}
+{"text": "<|im_start|>user\nTranslate 'Hello' to Spanish.<|im_end|>\n<|im_start|>assistant\nHello in Spanish is 'Hola'.<|im_end|>"}
+{"text": "<|im_start|>user\nList the first three prime numbers.<|im_end|>\n<|im_start|>assistant\nThe first three prime numbers are 2, 3, and 5.<|im_end|>"}

@@ -1,0 +1,4 @@
+{"conversations": [{"role": "user", "content": "Translate 'Hello' to Spanish."}, {"role": "assistant", "content": "Hello in Spanish is 'Hola'."}]}
+{"conversations": [{"role": "user", "content": "Write a Python function that returns the square of a number."}, {"role": "assistant", "content": "def square(n):\n    return n * n"}]}
+{"conversations": [{"role": "user", "content": "Explain what a loop is in one sentence."}, {"role": "assistant", "content": "A loop is a control structure that repeats a block of code until a condition is met or a sequence is exhausted."}]}
+{"conversations": [{"role": "user", "content": "List the first three prime numbers."}, {"role": "assistant", "content": "The first three prime numbers are 2, 3, and 5."}]}
