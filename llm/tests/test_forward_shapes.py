@@ -275,7 +275,7 @@ class TestEdgeCases:
     def test_prev_memory_injection(self, model_and_inputs):
         """Passing prev_memory_stream [B,H] should not change output shapes."""
         model, cfg, input_ids, next_ids, attn_mask = model_and_inputs
-        prev_mem = torch.randn(B, H, device=input_ids.device)
+        prev_mem = torch.randn(B, H, device=input_ids.device, dtype=torch.bfloat16)
 
         with torch.no_grad():
             h_ntp, h_mtp, aux_loss, memory_out = model(
@@ -320,6 +320,7 @@ class TestEdgeCases:
         assert torch.isfinite(h_mtp).all(), "h_mtp NaN/inf with partial mask"
         assert aux_loss.dim() == 0
         assert memory_out.shape == (B, H)
+        assert not memory_out.requires_grad, "memory should be detached"
 
     def test_mtp_mismatched_length(self, model_and_inputs):
         """
