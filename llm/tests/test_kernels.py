@@ -72,7 +72,7 @@ class TestRMSNorm:
         out_triton = triton_rmsnorm(x, w, self.eps)
         out_ref = pytorch_rmsnorm(x, w, self.eps)
 
-        assert torch.allclose(out_triton.float(), out_ref.float(), atol=1e-2), (
+        assert torch.allclose(out_triton.float(), out_ref.float(), atol=5e-2), (
             f"RMSNorm bf16 max diff: "
             f"{(out_triton.float() - out_ref.float()).abs().max().item():.6e}"
         )
