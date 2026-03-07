@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 import llm.factories as ft
 from llm.config import Config
+from llm.deepspeed_config import apply_runtime_overrides
 from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
 from llm.profiler import PipelineProfiler
@@ -22,6 +23,9 @@ class PreTrainer:
 
         with open(c.training.deepspeed_config, "r") as f:
             ds_config = yaml.safe_load(f)
+        ds_config = apply_runtime_overrides(
+            ds_config, c.training.overlap_communication
+        )
         batch_size_per_gpu = ds_config["train_micro_batch_size_per_gpu"]
 
         self._pipe_prof = PipelineProfiler(rank=local_rank)

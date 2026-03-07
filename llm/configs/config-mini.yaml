@@ -80,6 +80,7 @@ training:
   log_interval: 10
   generation_interval: 0
   deepspeed_config: ./zero-0.yaml
+  overlap_communication: true # Set false to disable DeepSpeed overlap_comm.
   seed: 42
   require_fused_kernels: true
   fused_ce_chunk_gb: 16.0

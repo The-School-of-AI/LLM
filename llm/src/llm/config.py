@@ -68,6 +68,10 @@ class TrainingConfig:
     # Path to the DeepSpeed YAML config file.
     deepspeed_config: str = "deepspeed_config.yaml"
 
+    # Override backend-specific communication overlap when supported.
+    # None = keep the backend config file's current setting.
+    overlap_communication: bool | None = None
+
     # Seed applied to Python random, numpy, and torch at startup.
     seed: int = 42
 
