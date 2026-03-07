@@ -55,6 +55,7 @@ header() {
 }
 
 SKIP_EBS_VALIDATION="${SKIP_EBS_VALIDATION:-true}"
+SKIP_S3_SPEED_TEST="${SKIP_S3_SPEED_TEST:-false}"
 
 # ── Configurable Thresholds ──────────────────────────────────
 # All thresholds can be overridden via environment variables.
@@ -374,6 +375,9 @@ fi
 # 14. S3 Download Speed (multiple files, parallel)
 # ============================================================
 header "14. S3 Download Speed"
+if [ "${SKIP_S3_SPEED_TEST}" = "true" ]; then
+  warn "S3 download speed test skipped" "SKIP_S3_SPEED_TEST=true"
+else
 # S3_TEST_COUNT already set in config block above
 # Use NVMe for scratch if available, otherwise /tmp
 if mountpoint -q "$NVME_MOUNT" 2>/dev/null; then
@@ -433,6 +437,7 @@ if command -v aws &>/dev/null; then
 else
   warn "S3 speed" \
     "AWS CLI missing or NVMe not mounted"
+fi
 fi
 
 # ============================================================

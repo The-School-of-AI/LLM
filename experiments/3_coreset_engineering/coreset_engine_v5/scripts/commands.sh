@@ -351,6 +351,7 @@ VALIDATE_INFRA="${ENGINE_DIR}/scripts/validate_infra.sh"
 # Export infra thresholds so sudo -E passes them to validate_infra.sh
 export S3_BUCKET S3_PREFIX
 [ -n "${ENABLE_NVME}" ] && export ENABLE_NVME
+[ -n "${SKIP_S3_SPEED_TEST}" ] && export SKIP_S3_SPEED_TEST
 
 if [ "${SKIP_VALIDATION}" = "true" ]; then
     echo "[SKIP] Infrastructure validation skipped (--skip-validation)."
