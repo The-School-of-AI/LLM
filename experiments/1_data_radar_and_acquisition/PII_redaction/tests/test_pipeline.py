@@ -191,6 +191,50 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(decision.record["payload"]["body"], "Reach me at <EMAIL_ADDRESS>")
 
+    def test_list_nested_text_field_path_is_supported(self) -> None:
+        config = PipelineConfig()
+        config.schema.text_fields = ["messages.text"]
+        decision = process_record(
+            {
+                "id": "nested-list-1",
+                "messages": [
+                    {"text": "Reach me at first@example.com"},
+                    {"text": "No pii here"},
+                ],
+            },
+            config,
+        )
+        self.assertEqual(decision.record["messages"][0]["text"], "Reach me at <EMAIL_ADDRESS>")
+        self.assertEqual(decision.record["messages"][1]["text"], "No pii here")
+
+    def test_phone_number_is_not_mislabeled_as_credit_card(self) -> None:
+        config = PipelineConfig()
+        decision = process_record(
+            {"id": "phone-card-1", "text": "Please call 0039-55 939 8506 for support."},
+            config,
+        )
+        self.assertEqual(decision.entities_by_type["PHONE_NUMBER"], 1)
+        self.assertNotIn("CREDIT_CARD_NUMBER", decision.entities_by_type)
+        self.assertIn("<PHONE_NUMBER> for support.", decision.record["text"])
+
+    def test_email_followed_by_hyphenated_suffix_is_redacted(self) -> None:
+        config = PipelineConfig()
+        decision = process_record(
+            {"id": "email-suffix-1", "text": "Bitte sende an MCT2024@outlook.com-Adresse weitere Infos."},
+            config,
+        )
+        self.assertEqual(decision.entities_by_type["EMAIL_ADDRESS"], 1)
+        self.assertIn("<EMAIL_ADDRESS>-Adresse", decision.record["text"])
+
+    def test_hindi_native_address_anchor_is_redacted(self) -> None:
+        config = PipelineConfig()
+        decision = process_record(
+            {"id": "hi-address-1", "text": "पता: 12 एमजी रोड, हैदराबाद"},
+            config,
+        )
+        self.assertEqual(decision.entities_by_type["PHYSICAL_ADDRESS"], 1)
+        self.assertIn("<PHYSICAL_ADDRESS>", decision.record["text"])
+
     def test_generic_placeholder_mode_is_supported(self) -> None:
         config = PipelineConfig()
         config.redaction.placeholder_style = "generic"

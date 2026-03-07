@@ -11,7 +11,10 @@ from urllib.parse import parse_qsl, quote, urlparse, urlunparse
 from .config import PipelineConfig
 from .models import EntityMatch
 
-EMAIL_RE = re.compile(r"(?<![\w.+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![\w-])", re.IGNORECASE)
+EMAIL_RE = re.compile(
+    r"(?<![A-Z0-9._%+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![A-Z0-9._%+])",
+    re.IGNORECASE,
+)
 PHONE_RE = re.compile(
     r"(?<!\w)(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,5}\)?[\s.-]?)?\d[\d\s().-]{7,}\d(?!\w)"
 )
@@ -20,7 +23,7 @@ IPV6_RE = re.compile(r"(?<![\w:])(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}(?![\
 SSN_RE = re.compile(r"(?<!\d)(\d{3}-\d{2}-\d{4})(?!\d)")
 AADHAAR_RE = re.compile(r"(?<!\d)(\d{4}[ -]?\d{4}[ -]?\d{4})(?!\d)")
 PAN_RE = re.compile(r"(?<![A-Z0-9])([A-Z]{5}\d{4}[A-Z])(?![A-Z0-9])")
-CARD_CANDIDATE_RE = re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)")
+CARD_CANDIDATE_RE = re.compile(r"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)")
 ACCOUNT_RE = re.compile(
     r"(?i)\b(?:account|acct|a/c|bank\s+account|खाता|खाते)\b(?:\s*(?:number|no\.?|#|:|-))?\s*([0-9][0-9 -]{5,33})\b"
 )
@@ -60,7 +63,31 @@ ADDRESS_HINTS = (
     "zip",
     "postal code",
     "pincode",
+    "highway",
+    "marg",
+    "gali",
+    "गली",
+    "सड़क",
+    "सडक",
+    "रोड",
+    "मार्ग",
+    "नगर",
+    "कॉलोनी",
+    "मोहल्ला",
+    "जिला",
+    "राज्य",
+    "पिन",
+    "पिनकोड",
+    "फ्लैट",
+    "मकान",
+    "घर",
 )
+
+STANDARD_CARD_GROUPINGS = {
+    (4, 4, 4, 4),
+    (4, 6, 5),
+    (4, 4, 4, 4, 3),
+}
 
 
 @dataclass(frozen=True)
@@ -82,7 +109,7 @@ def detect(text: str, config: PipelineConfig) -> list[EntityMatch]:
     if config.detection.enable_government_id:
         candidates.extend(_detect_government_ids(text, config))
     if config.detection.enable_payment_card:
-        candidates.extend(_detect_payment_cards(text))
+        candidates.extend(_detect_payment_cards(text, config))
     if config.detection.enable_account_number:
         candidates.extend(_detect_account_numbers(text))
     if config.detection.enable_physical_address:
@@ -112,6 +139,8 @@ def _detect_phone(text: str, config: PipelineConfig) -> Iterable[EntityMatch]:
         anchor_window = text[max(0, match.start() - 24) : match.start()].lower()
         has_structured_anchor = any(anchor.lower() in anchor_window for anchor in config.detection.phone_context_blocklist)
         if 10 <= len(digits) <= 15 and not has_structured_anchor and not looks_like_ipv4:
+            if _has_standard_card_grouping(candidate) and not _has_phone_context(text, match.start(), match.end(), config):
+                continue
             yield EntityMatch(match.start(), match.end(), "PHONE_NUMBER", "regex_phone", priority=80)
 
 
@@ -145,13 +174,17 @@ def _detect_government_ids(text: str, config: PipelineConfig) -> Iterable[Entity
         yield EntityMatch(match.start(1), match.end(1), "PAN_NUMBER", "regex_pan", priority=92)
 
 
-def _detect_payment_cards(text: str) -> Iterable[EntityMatch]:
+def _detect_payment_cards(text: str, config: PipelineConfig) -> Iterable[EntityMatch]:
     for match in CARD_CANDIDATE_RE.finditer(text):
-        digits = re.sub(r"\D", "", match.group(0))
+        candidate = match.group(0)
+        digits = re.sub(r"\D", "", candidate)
         if not 13 <= len(digits) <= 19:
             continue
-        has_card_shape = len(digits) in {15, 16} and digits[0] in {"3", "4", "5", "6"} and len(set(digits)) >= 4
-        if _passes_luhn(digits) or has_card_shape:
+        if _looks_like_phone_candidate(candidate, text, match.start(), match.end(), config):
+            continue
+        if _passes_luhn(digits) or (
+            _has_card_context(text, match.start(), match.end(), config) and _has_card_shape(candidate, digits)
+        ):
             yield EntityMatch(
                 match.start(),
                 match.end(),
@@ -258,6 +291,62 @@ def _passes_luhn(number: str) -> bool:
                 digit -= 9
         total += digit
     return total % 10 == 0
+
+
+def _digit_groups(candidate: str) -> tuple[int, ...]:
+    return tuple(len(group) for group in re.findall(r"\d+", candidate))
+
+
+def _has_standard_card_grouping(candidate: str) -> bool:
+    groups = _digit_groups(candidate)
+    return len(groups) > 1 and groups in STANDARD_CARD_GROUPINGS
+
+
+def _has_card_shape(candidate: str, digits: str) -> bool:
+    if not digits or digits[0] not in {"3", "4", "5", "6"} or len(set(digits)) < 4:
+        return False
+    groups = _digit_groups(candidate)
+    if len(groups) <= 1:
+        return 13 <= len(digits) <= 19
+    return groups in STANDARD_CARD_GROUPINGS
+
+
+def _context_window(text: str, start: int, end: int, window: int = 24) -> str:
+    return text[max(0, start - window) : min(len(text), end + window)].lower()
+
+
+def _has_phone_context(text: str, start: int, end: int, config: PipelineConfig) -> bool:
+    context = _context_window(text, start, end)
+    return any(anchor.lower() in context for anchor in config.detection.phone_context_anchors)
+
+
+def _has_card_context(text: str, start: int, end: int, config: PipelineConfig) -> bool:
+    context = _context_window(text, start, end)
+    return any(anchor.lower() in context for anchor in config.detection.card_context_anchors)
+
+
+def _looks_like_phone_candidate(
+    candidate: str,
+    text: str,
+    start: int,
+    end: int,
+    config: PipelineConfig,
+) -> bool:
+    digits = re.sub(r"\D", "", candidate)
+    if not 10 <= len(digits) <= 15:
+        return False
+    if _has_card_context(text, start, end, config):
+        return False
+    if _has_phone_context(text, start, end, config):
+        return True
+    if any(char in candidate for char in "+()"):
+        return True
+    groups = _digit_groups(candidate)
+    if len(groups) <= 1:
+        return False
+    if groups in STANDARD_CARD_GROUPINGS:
+        return False
+    return len(groups) >= 3 or any(size <= 3 for size in groups[:-1])
 
 
 def _resolve_overlaps(candidates: list[EntityMatch]) -> list[EntityMatch]:

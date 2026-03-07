@@ -1,0 +1,865 @@
+{
+  "mismatch_count": 101,
+  "mismatches": [
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Lhiam Ciocarelli has sent a document to Thavamanidevi Jvon Truchard regarding the 5038655754968 and 328708963 required for the small-scale farming project.",
+      "uid": 5279579
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Lhiam Ciocarelli has sent a document to Thavamanidevi Jvon Truchard regarding the 5038655754968 and 328708963 required for the small-scale farming project.",
+      "uid": 5279579
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "The world map paper design for Nini's birthday party is now available at North Sport Lane 170, Florence. Please bring 0722539281 to collect it.",
+      "uid": 5281930
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Azdren will be leading a workshop on warp-faced weave techniques, register by sending your +90.909-448.6913 and MS@aol.com.",
+      "uid": 5283484
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 2,
+      "text_preview": "Maddalena Yudy Gläßner Bellabarba Duman 15:05 Dehgam Mau Atal Setu 1055 500101 NM1961@yahoo.com 031.4719297  ZWDO4SSA46",
+      "uid": 5310429
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 1,
+      "text_preview": "श्रीमती Stanacev ने एक लेख में 37PL45YPOD और 58176.70265 के बारे में लिखा। उन्होंने Lucknow Outer Ring Road और 83 पर अपने पते को साझा किया।",
+      "uid": 5345522
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To-Do List for Rukmone: Meet Storm at 200th Street 1030, pick up Brush Creek tickets, and buy 85259-3825 map.",
+      "uid": 5360729
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Morine Serna invites you to their art exhibition, taking place on 1st July 1970 at Mumbai Highway",
+      "uid": 5364726
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Orkhan Dahmaj Ohlmeyer Kashoush ने अपने 391135 और Zorawar Singh Marg के साथ अपने पते का उल्लेख किया है, जिसमें उन्होंने अपने UQDM45HLH5 और 17/02/1975 के साथ अपनी पहचान का उल्लेख किया है",
+      "uid": 5267478
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Your order EL30361MM for the Chelmsford terrarium kit is being shipped to Upper South Wraxall 2011",
+      "uid": 5386758
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The workshop will be held at Horseshoe Bay - Langdale 4900.",
+      "uid": 5478645
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Silvo Blent ने मुझे 20YB@outlook.com पर एक संदेश भेजा है। कृपया अपना 64428871634416760 भेजें।",
+      "uid": 5481994
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Welcome Niramol to the Wine Tasting Instructions To-Do List. Your wine tasting kit has been shipped to Bunkers Hill 51, Maldon.",
+      "uid": 5501932
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Dear Embaba Gökcen,\nThe following vintage playing card descriptions have been updated on our platform: \nCard Name: Madame\nIssue Date: April 24th, 2009\nPublisher: Sahnaz Ashlie\nEstimated Value: 345911904751068",
+      "uid": 5509716
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Dear Embaba Gökcen,\nThe following vintage playing card descriptions have been updated on our platform: \nCard Name: Madame\nIssue Date: April 24th, 2009\nPublisher: Sahnaz Ashlie\nEstimated Value: 345911904751068",
+      "uid": 5509716
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Review new personal badge designs in the extensive Archaeological Discovery Badge Email advertised at M@tutanota.com.",
+      "uid": 5518701
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Ketty Bregman: What is the ideal environment for growing a bonsai tree? Is it good for indoor spaces like homes in 425 Bhimashankar Road?",
+      "uid": 5552837
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Almen: Just spent the day researching cold weather phenomena. Some mind-blowing stuff. Sharing my findings with the group tonight @ Columbia Pike 1811.",
+      "uid": 5553392
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "We need to verify your identity. Please enter your Given Name: Hygerta, Surname: Pandjaj, Phone Number: 0012.77-937.6968, and Address: Honey Creek Boulevard, Houma, 94043-1390.",
+      "uid": 5603002
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "When making a payment with your 95896-91232 in Shri Malang Gad Road RU-217, please provide your Mihaela-Claudia Nanette and Kjosev.",
+      "uid": 5649389
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Hi Basel, thanks for showing interest in our terrarium workshop. We'll send the materials to Dab Green 43. If that's incorrect, please reply with the correct address.",
+      "uid": 5650503
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The group discussed potential ideas to collaborate with nearby building complexes. Contact information shared includes +146-300 989 2204 and BM@outlook.com.",
+      "uid": 5666734
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Download your complimentary wind chime composition design guide by filling out the following: Albena, Goda, 1958B@gmail.com.",
+      "uid": 5669176
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "INTENDED ACTIONS,\n rapporteur: Ugyen Noran Kaptanoglu Hatkic Zizzari Re: infrastructure initiative concerning the necessity for renovated park benches around our area including South Highway W 15896 ",
+      "uid": 5677635
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Hello Bekjir Hiroki, this is Mr from the neighbourhood association. We are writing to inform you about the upcoming infrastructure development meeting on 10/02/1939 at Deadmantree Hill 940.",
+      "uid": 5677660
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Please address all documents to Mayoress Kalimwendo at The Dell 5, York Warthill",
+      "uid": 5700349
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "क्या आपको Krithika के बारे में पता है? वे कल रात Magadi में M B Road पर थे।",
+      "uid": 5717085
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "+80 33-026 3108: Yeah, I just sent it to your mafach@tutanota.com.",
+      "uid": 5753992
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "+1 533.492-7227: Yeah, I just sent it to your B@protonmail.com. Make sure to include your Isseyas and Janura in the form.",
+      "uid": 5753999
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "8. Don't forget to pay the outdoor gear vendor 2201606727637571!",
+      "uid": 5779404
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Need assistance with updating the contact information of Pirmina with the new 07.2745-1996 and VC@yahoo.com.",
+      "uid": 5796779
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "We are appraising a collection of pinback buttons at our Route Transtaïga location. Please bring your 1B1K20JTHQ for verification.",
+      "uid": 5820666
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Alfonso Eckerstein को Basanti Highway 1414, Karad पर मिलने के लिए कहें।",
+      "uid": 5847875
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Hello Luningning, this is Delegate Klenger from the aquarium maintenance team. We need your 4340766747589394 to process your payment.",
+      "uid": 5883840
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "कृपया अपने पते Bapuji Mandir Marg पर एक पैकेज भेजने के लिए अपना 029-7981 3344 नंबर प्रदान करें। ",
+      "uid": 5917835
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Please be aware that there will be utility work on 28/06/1996 affecting Boulevard Valcartier and surrounding areas.",
+      "uid": 5938585
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Please join us for our art show at Rang du Vingt, 14171, and enjoy refreshments while exploring the artwork.",
+      "uid": 5950856
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Hi Gülseren, our AI system has detected some unusual weather patterns in your area. Would you confirm your 6234502658304942 and 2012-09-16T00:00:00 for authentication purposes?",
+      "uid": 5964416
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Can Kelly Laurice access the home automation system for 747 Sant Dnyaneshwar Mauli Maharaj Marg remotely?",
+      "uid": 5994345
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Our phone lines are currently down due to the relocation. Please contact us via email at XT14@outlook.com.",
+      "uid": 5998908
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "By using 4929289241631376 rewards points, I was able to purchase eco-friendly cleaning products for my home.",
+      "uid": 6001650
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Dear Doela, we have sent a confirmation email to your registered email id SCB63@tutanota.com.",
+      "uid": 6016253
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "The archery equipment store at Fort Road Northwest 306 offers 45810.36577 discounts on bows and 1959-01-22T00:00:00 accessories.",
+      "uid": 5402229
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Kalaiyarasi has created a FS5296427 style journal to document their thrift store trading adventures. The 6587907139318056 pages are filled with stories of their travels and the people they have met along the way.",
+      "uid": 5402470
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Aga Alpay Akbarpour, a well-known Mr of mid-century modern Stookey, shares 04-09.57-31 68 expertise on AE@tutanota.com.",
+      "uid": 5404345
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Akkayalier ने अपने 64459 99859 और 6458263543123123 के बारे में जानकारी प्रदान की है।",
+      "uid": 5409673
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 1,
+      "text_preview": "Akkayalier ने अपने 64459 99859 और 6458263543123123 के बारे में जानकारी प्रदान की है।",
+      "uid": 5409673
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "09:30:57 Rajasekaran: '3479601877 08297.72826 '",
+      "uid": 5417197
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "March 22nd, 1992 is the manufacturing date of the rare 36106930471388 edition horse figurine owned by Jirí.",
+      "uid": 5420722
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "March 22nd, 1992 is the manufacturing date of the rare 36106930471388 edition horse figurine owned by Jirí.",
+      "uid": 5420722
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The Lake Mead National Recreation Area railway line is known for its scenic views, and passengers can enjoy Female commentary on the history of the line while onboard.",
+      "uid": 5455163
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "balthabou @aol.com पर Ferdinánd Kappali को एक ईमेल भेजने के लिए।",
+      "uid": 5249942
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The bylaws require that all members provide their C5MSDGU8FC and T@aol.com.",
+      "uid": 5265697
+    },
+    {
+      "gold": 0,
+      "label": "SSN",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "An exchange between 0010-69433.4331 and Buu Glücksman discussed the 087-51-6641 and 30451213 of a monastic community.",
+      "uid": 5287512
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Emer replied: 'That's a great idea! We can add a GroveportxPemberton kiln room. I'll send you the instructions for the ceramics crafting process via 18O@outlook.com.'",
+      "uid": 5289552
+    },
+    {
+      "gold": 2,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The Heritage Plant Preservation Project's 2200880762107866 is 379967799325188. Please do not share this information.",
+      "uid": 5291026
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "The Heritage Plant Preservation Project's 2200880762107866 is 379967799325188. Please do not share this information.",
+      "uid": 5291026
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Hello Paulus, I am Marry Begazo and I am interested in learning more about the 743.756.8915 scientific notations used in terrarium creation. Could you please provide me with some 4937483295656 resources and 199168244 information?",
+      "uid": 5256671
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 2,
+      "text_preview": "Hello Paulus, I am Marry Begazo and I am interested in learning more about the 743.756.8915 scientific notations used in terrarium creation. Could you please provide me with some 4937483295656 resources and 199168244 information?",
+      "uid": 5256671
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "The materials needed for the birdhouse include 326522619 packets of screws, 68337-19618 pieces of wood, and 2200511960991594 gallons of paint. Neyer will pick them up at 12:30:22.",
+      "uid": 5257038
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "14:15:00 Meliz Raheleh: 342442897286863 se payment karna",
+      "uid": 5272401
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 1,
+      "text_preview": "14:15:00 Meliz Raheleh: 342442897286863 se payment karna",
+      "uid": 5272401
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "5:55:43 PM San: 'I'm looking for a unique mosaic design for my vegetable archway, can you help me?';\n9:24 Necip Klucker: 'Yes, I'd be happy to help! What kind of design are you thinking of?';\n4:44 +50-69-700-6734: 'I was thinking of somethi",
+      "uid": 5295728
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "In preparation for the event, please review our document on Food Sustainability Planning, which can be found on our website at abcrapula@yahoo.com.",
+      "uid": 5300877
+    },
+    {
+      "gold": 2,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Hello Klarisa, I am trying to create a to-do list for my pet's Jegatheswaran care. Could you please provide me with some tips and advice? My pet's M@hotmail.com is SGMBR@tutanota.com.",
+      "uid": 5328076
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "Chalom Manzanza ने Sant Gagangiri Maharaj Marg 348 पर एक पुराने शैली के डायरी में एक टू-डू सूची बनाई",
+      "uid": 5354618
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Ratmir is looking for collaborators for a new sewing project. If interested, please contact them at M@aol.com.",
+      "uid": 5355086
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The document topic contains 5087460799877383 and 1472.",
+      "uid": 5249715
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The Apsara dance performance will feature Enkhtuul Hodo Sriramanakumar as the lead dancer, accompanied by +77-03 678 3154 musicians.",
+      "uid": 5264289
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "If you need help filling out the form, please contact Nagendra at 058.4304124  or S10@yahoo.com.",
+      "uid": 5266821
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Subagini shared an architectural diary with Jakow who lives at 11th Line 905.",
+      "uid": 5425159
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Jovanna Folasade Glomb is working on a life mapping log project to document the history of environmental regulations in Saint-Henri-de-Lévis, with a focus on 4th Line.",
+      "uid": 5288688
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "TH85W2Q2YX is required for registration to the event, along with a copy of OT2906310 and 1936JMR@gmail.com.",
+      "uid": 5292653
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To make Liselotti Alie's gluten-free bread, combine 5081439832467889 grams of legume flour with TB@aol.com grams of water.",
+      "uid": 5292768
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "15:43:00 Raneem ने कहा कि वह 1942395586 और 647148025705593748 का उपयोग करके बोनफायर बनाने के लिए भुगतान कर सकता है। वह Ghaziabad Nagla Firoj Mohanpur में अधिक जानकारी प्राप्त कर सकता है।",
+      "uid": 5302074
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 1,
+      "text_preview": "15:43:00 Raneem ने कहा कि वह 1942395586 और 647148025705593748 का उपयोग करके बोनफायर बनाने के लिए भुगतान कर सकता है। वह Ghaziabad Nagla Firoj Mohanpur में अधिक जानकारी प्राप्त कर सकता है।",
+      "uid": 5302074
+    },
+    {
+      "gold": 2,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The document regarding the rural exploration diaries of Julisa Mitrovski Büffing Catuara is now available. The 372638754150211 for this document is 4605255890885 and the 133 is 1502.",
+      "uid": 5306984
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 2,
+      "text_preview": "The document regarding the rural exploration diaries of Julisa Mitrovski Büffing Catuara is now available. The 372638754150211 for this document is 4605255890885 and the 133 is 1502.",
+      "uid": 5306984
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Surenthiran Perrotin has shared their weekly financial awareness goals with the group: '5387087790268961 payments, 00697 02773 returns, and 034.519.4719 verification.'",
+      "uid": 5308086
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 2,
+      "text_preview": "Surenthiran Perrotin has shared their weekly financial awareness goals with the group: '5387087790268961 payments, 00697 02773 returns, and 034.519.4719 verification.'",
+      "uid": 5308086
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Other Dirar made a gorgeous 343383163175337 stained glass terrarium with Q3YEN1MPVF layers of glass.",
+      "uid": 5308931
+    },
+    {
+      "gold": 0,
+      "label": "PHONE_NUMBER",
+      "language": "en",
+      "predicted": 1,
+      "text_preview": "Other Dirar made a gorgeous 343383163175337 stained glass terrarium with Q3YEN1MPVF layers of glass.",
+      "uid": 5308931
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "To participate in the Leeds Quarry Hill voting process, please provide your 998605650 and B@tutanota.com.",
+      "uid": 5318169
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The Waterford preservation society is working to restore the State Highway 128 and 319 to their original 12th May 1968 condition, with the help of Lüder Hanssens.",
+      "uid": 5321314
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Sajeevan met with Cabdicasiis at Homewood Cemetery to brainstorm ideas for a new diary entry, focusing on M and Female.",
+      "uid": 5332745
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Jabir Chiheb Haberla has been selected to receive a 2200113793602445 grant for their outstanding contributions to the movement.",
+      "uid": 5335849
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Elhome needs to fill out the application form with 96JUNO7J3H and NV@outlook.com.",
+      "uid": 5347150
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "16:41:54 Ünal: Lists of participants who have completed payment include Luej, Cillaroto Arrivabeni Volfová with email YB@hotmail.com.",
+      "uid": 5348875
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Tewelde Gheorghe-Marian has been assigned to the Mulshi space simulation program with a (28)-8331.0174 and mohammcutts@hotmail.com.",
+      "uid": 5350910
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Enhar Crislaine Häny Santeler's To-Do List: Purchase DE21 7AR Kingsmark Freeway foam protection liner options for 179 York City Centre. ",
+      "uid": 5369391
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Hello, the payment for your language course was declined. Please verify your 6076116909487284 or provide an alternative method of payment.",
+      "uid": 5376027
+    },
+    {
+      "gold": 1,
+      "label": "PHONE_NUMBER",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "04 72.50.14.16 पर कॉल करके Mehmed को अपने पसंदीदा मिठाई के बारे में बताना है",
+      "uid": 5383977
+    },
+    {
+      "gold": 0,
+      "label": "IP_ADDRESS",
+      "language": "hi",
+      "predicted": 1,
+      "text_preview": "04 72.50.14.16 पर कॉल करके Mehmed को अपने पसंदीदा मिठाई के बारे में बताना है",
+      "uid": 5383977
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Gora Tsehaie just published a new book about Lego designs and is looking for reviews. Check it out on SB@gmail.com.",
+      "uid": 5349006
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "hi",
+      "predicted": 0,
+      "text_preview": "00:53 Hamdin Hösch: 132024 Bakul Bagan Row 483",
+      "uid": 5374744
+    },
+    {
+      "gold": 1,
+      "label": "CREDIT_CARD_NUMBER",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "6:50 Amaranta: Not yet, but I've been meaning to. Do they take 6201802428418800 or is it cash only?",
+      "uid": 5470458
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "What's the plan for accomodations? Should we book a hotel room or try to find a Concession 6 West and 1164 to rent?",
+      "uid": 5471080
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Please review the attached memo for updates on your litigation. If you have any questions, please reach out to us at 1959LU@aol.com.",
+      "uid": 5472101
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The attached sales strategy memo is intended for Lawrence Vicko at K@tutanota.com.",
+      "uid": 5473114
+    },
+    {
+      "gold": 1,
+      "label": "EMAIL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "Memo from Tseten: Update on operational changes effective 25/12/1958. Please report any questions to kanyapmelc@gmail.com.",
+      "uid": 5473466
+    },
+    {
+      "gold": 1,
+      "label": "PHYSICAL_ADDRESS",
+      "language": "en",
+      "predicted": 0,
+      "text_preview": "The next game night is scheduled for 22/01/2016. Please note down the details in your calendar: Game Night with Farzaneh Thangaiah Jurjeff at 292 Coppergate, Grantham.",
+      "uid": 5484202
+    }
+  ],
+  "per_label": {
+    "CREDIT_CARD_NUMBER": {
+      "gold": 27,
+      "matched": 3,
+      "precision": 1.0,
+      "predicted": 3,
+      "recall": 0.1111
+    },
+    "EMAIL_ADDRESS": {
+      "gold": 123,
+      "matched": 97,
+      "precision": 1.0,
+      "predicted": 97,
+      "recall": 0.7886
+    },
+    "IP_ADDRESS": {
+      "gold": 0,
+      "matched": 0,
+      "precision": 0.0,
+      "predicted": 1,
+      "recall": 0.0
+    },
+    "PHONE_NUMBER": {
+      "gold": 151,
+      "matched": 147,
+      "precision": 0.8802,
+      "predicted": 167,
+      "recall": 0.9735
+    },
+    "PHYSICAL_ADDRESS": {
+      "gold": 119,
+      "matched": 89,
+      "precision": 1.0,
+      "predicted": 89,
+      "recall": 0.7479
+    },
+    "SSN": {
+      "gold": 0,
+      "matched": 0,
+      "precision": 0.0,
+      "predicted": 1,
+      "recall": 0.0
+    }
+  },
+  "summary": {
+    "gold_entities": 420,
+    "matched_entities": 336,
+    "precision": 0.9385,
+    "predicted_entities": 358,
+    "recall": 0.8,
+    "records_evaluated": 362
+  }
+}

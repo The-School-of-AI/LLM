@@ -78,6 +78,36 @@ class DetectionConfig:
             "आधार",
         ]
     )
+    phone_context_anchors: list[str] = field(
+        default_factory=lambda: [
+            "phone",
+            "phone number",
+            "mobile",
+            "call",
+            "tel",
+            "telephone",
+            "contact number",
+            "फोन",
+            "फोन नंबर",
+            "मोबाइल",
+            "कॉल",
+        ]
+    )
+    card_context_anchors: list[str] = field(
+        default_factory=lambda: [
+            "card",
+            "credit card",
+            "debit card",
+            "visa",
+            "mastercard",
+            "amex",
+            "rupay",
+            "cvv",
+            "expiry",
+            "exp",
+            "कार्ड",
+        ]
+    )
     sensitive_query_params: list[str] = field(
         default_factory=lambda: [
             "access_token",

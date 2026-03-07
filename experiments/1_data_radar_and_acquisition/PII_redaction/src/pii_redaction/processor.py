@@ -164,24 +164,22 @@ def process_record(record: dict[str, Any], config: PipelineConfig) -> DocumentDe
     high_risk_labels = set(config.drop_policy.high_risk_labels)
 
     for field_path in config.schema.text_fields:
-        value = _get_path(cloned, field_path)
-        if not isinstance(value, str):
-            continue
-        entities = detect(value, config)
-        redacted_text = _apply_redactions(value, entities, config)
-        field_result = FieldRedactionResult(
-            field_path=field_path,
-            original_length=len(value),
-            redacted_length=len(redacted_text),
-            text_changed=redacted_text != value,
-            entities=entities,
-        )
-        field_results.append(field_result)
-        total_original_chars += len(value)
-        if entities:
-            total_redacted_chars += sum(entity.length for entity in entities)
-            high_risk_hits += sum(1 for entity in entities if entity.label in high_risk_labels)
-            _set_path(cloned, field_path, redacted_text)
+        for resolved_path, container, key, value in _iter_text_targets(cloned, field_path):
+            entities = detect(value, config)
+            redacted_text = _apply_redactions(value, entities, config)
+            field_result = FieldRedactionResult(
+                field_path=resolved_path,
+                original_length=len(value),
+                redacted_length=len(redacted_text),
+                text_changed=redacted_text != value,
+                entities=entities,
+            )
+            field_results.append(field_result)
+            total_original_chars += len(value)
+            if entities:
+                total_redacted_chars += sum(entity.length for entity in entities)
+                high_risk_hits += sum(1 for entity in entities if entity.label in high_risk_labels)
+                container[key] = redacted_text
 
     total_entities = sum(field.entity_count for field in field_results)
     entity_density = (total_redacted_chars / total_original_chars) if total_original_chars else 0.0
@@ -266,6 +264,47 @@ def _get_path(payload: dict[str, Any], dotted_path: str) -> Any:
             return None
         current = current[part]
     return current
+
+
+def _iter_text_targets(payload: dict[str, Any], dotted_path: str) -> Iterable[tuple[str, Any, Any, str]]:
+    parts = dotted_path.split(".")
+    yield from _iter_text_targets_inner(payload, parts, prefix="")
+
+
+def _iter_text_targets_inner(
+    current: Any,
+    parts: list[str],
+    prefix: str,
+) -> Iterable[tuple[str, Any, Any, str]]:
+    if not parts:
+        return
+
+    part = parts[0]
+    rest = parts[1:]
+
+    if isinstance(current, list):
+        for index, item in enumerate(current):
+            next_prefix = f"{prefix}[{index}]" if prefix else f"[{index}]"
+            yield from _iter_text_targets_inner(item, parts, next_prefix)
+        return
+
+    if not isinstance(current, dict) or part not in current:
+        return
+
+    value = current[part]
+    next_prefix = f"{prefix}.{part}" if prefix else part
+    if rest:
+        yield from _iter_text_targets_inner(value, rest, next_prefix)
+        return
+
+    if isinstance(value, str):
+        yield next_prefix, current, part, value
+        return
+
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            if isinstance(item, str):
+                yield f"{next_prefix}[{index}]", value, index, item
 
 
 def _set_path(payload: dict[str, Any], dotted_path: str, value: Any) -> None:
