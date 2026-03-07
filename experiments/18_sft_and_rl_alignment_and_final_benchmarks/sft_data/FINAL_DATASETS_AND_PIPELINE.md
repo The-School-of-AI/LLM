@@ -8,7 +8,7 @@ Single reference for: **datasets to source** (and why), **relevant benchmarks**,
 
 ## 1. Final datasets identified to be sourced
 
-The following datasets are the **agreed set** to source for SFT. For each: **why** we use it, **relevant benchmarks** it supports, and **how to source** (script + IDs).
+The following datasets are the **proposed set** to source for SFT. For each: **why** we use it, **relevant benchmarks** it supports, and **how to source** (script + IDs).
 
 | Dataset | Why source it | Relevant benchmarks | Tier |
 |---------|----------------|----------------------|------|
