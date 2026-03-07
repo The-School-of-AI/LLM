@@ -25,6 +25,10 @@ class TsaiConfig(PretrainedConfig):
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+
+        # HF compatibility
+        self.num_hidden_layers = num_layers
+
         self.is_decoder = True
 
 
@@ -45,17 +49,9 @@ class TsaiForCausalLM(PreTrainedModel, GenerationMixin):
             num_layers=config.num_layers,
         )
 
-        # Kronecker embeddings require vocab + codec
-        # For evaluation we can bypass and use standard embeddings
+        # Training architecture supports Kronecker embeddings that require tokenizer codec metadata.
+        # For evaluation we bypass that mechanism and use a standard embedding table compatible with HF pipelines.
         self.model = Model1B(model_config, embedding_type="standard")
-
-        # self.lm_head = torch.nn.Linear(
-        #     config.hidden_size,
-        #     config.vocab_size,
-        #     bias=False
-        # )
-        # self.lm_head.weight = self.model.token_embed.weight
-
 
     def get_input_embeddings(self):
         return self.model.token_embed
@@ -63,7 +59,11 @@ class TsaiForCausalLM(PreTrainedModel, GenerationMixin):
     def set_input_embeddings(self, new_embeddings):
         self.model.token_embed = new_embeddings
 
+    def get_output_embeddings(self):
+        return self.model.token_embed
+
     def forward(self, input_ids, attention_mask=None, **kwargs):
+
         logits_ntp, logits_mtp = self.model(
             input_ids,
             attention_mask=attention_mask,

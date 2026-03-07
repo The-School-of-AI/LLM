@@ -295,7 +295,7 @@ Install required dependencies:
 
 ```bash
 pip install triton
-pip install git+https://github.com/sustcsonglin/flash-linear-attention.git
+pip install fla
 ```
 
 These provide kernels required for:

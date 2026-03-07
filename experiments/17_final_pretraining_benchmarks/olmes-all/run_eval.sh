@@ -145,7 +145,8 @@ if [[ "$DRY_RUN" == "true" ]]; then
     --model-type "$MODEL_TYPE"
     --task "$task"
     --output-dir "$TASK_OUT"
-    --batch-size 4
+    --batch-size 1
+    --max-length 1024
     )
     [[ -n "$MODEL_ARGS" ]]        && CMD+=(--model-args "$MODEL_ARGS")
     [[ -n "$REMOTE_OUTPUT_DIR" ]] && CMD+=(--remote-output-dir "${REMOTE_OUTPUT_DIR}/${task}")
@@ -171,6 +172,8 @@ for task in $TASKS; do
     --model-type "$MODEL_TYPE"
     --task "$task"
     --output-dir "$TASK_OUT"
+    --batch-size 1
+    --max-length 1024
   )
   [[ -n "$MODEL_ARGS" ]]        && CMD+=(--model-args "$MODEL_ARGS")
   [[ -n "$REMOTE_OUTPUT_DIR" ]] && CMD+=(--remote-output-dir "${REMOTE_OUTPUT_DIR}/${task}")

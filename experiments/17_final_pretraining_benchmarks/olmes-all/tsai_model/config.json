@@ -5,13 +5,14 @@
     "AutoConfig": "modeling_tsai.TsaiConfig",
     "AutoModelForCausalLM": "modeling_tsai.TsaiForCausalLM"
   },
+  "tokenizer_class": "PreTrainedTokenizerFast",
   "code_files": [
       "recurrence_model_1b.py",
       "liger_ops.py",
       "reversible_ops_midpoint.py"
   ],
   "code_revision": "main",
-
+  "torch_dtype": "bfloat16",
   "vocab_size": 131072,
   "hidden_size": 4096,
   "num_layers": 8
