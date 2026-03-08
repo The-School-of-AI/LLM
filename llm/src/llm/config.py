@@ -91,6 +91,14 @@ class TrainingConfig:
 
     check_for_gsa_leak: bool = False
 
+    # ── Overfitting detection ──
+    # Number of consecutive eval cycles where val_loss does not improve
+    # before an overfitting alert is raised. 0 = disabled.
+    overfit_patience: int = 5
+
+    # Minimum decrease in val_loss required to count as an improvement.
+    overfit_threshold: float = 0.0
+
 
 @dataclass
 class S3CheckpointConfig:
