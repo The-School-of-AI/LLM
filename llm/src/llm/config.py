@@ -171,10 +171,25 @@ class ObservabilityConfig:
 
 @dataclass
 class GenerationConfig:
-    """Configuration for periodic sample generation during training."""
+    """Configuration for periodic sample generation during training.
 
-    # Prompt fed to the model at every generation step.
-    prompt: str = "The history of artificial intelligence begins with"
+    Each prompt is a dict with ``category`` and ``text`` keys.  The default
+    suite covers factual, reasoning, creative, and code prompts so that
+    generation quality can be assessed across diverse domains.
+    """
+
+    prompts: list[dict[str, str]] = field(
+        default_factory=lambda: [
+            {"category": "factual", "text": "The capital of France is"},
+            {"category": "factual", "text": "The speed of light in a vacuum is approximately"},
+            {"category": "reasoning", "text": "If all cats are animals and all animals need food, then"},
+            {"category": "reasoning", "text": "To solve the equation 2x + 4 = 10, we first subtract"},
+            {"category": "creative", "text": "Once upon a time, in a forest where the trees whispered secrets,"},
+            {"category": "creative", "text": "The astronaut opened the airlock and discovered"},
+            {"category": "code", "text": "def fibonacci(n):\n    # Returns the nth Fibonacci number\n"},
+            {"category": "code", "text": "# Python function to reverse a linked list\ndef reverse_linked_list(head):"},
+        ]
+    )
 
     # Maximum number of new tokens to generate.
     max_new_tokens: int = 200
