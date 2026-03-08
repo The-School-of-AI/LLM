@@ -1,0 +1,79 @@
+data:
+  loader_type: bin_idx
+  shard_dir: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+  eval_shard_dir: null
+  tokenizer_dir: src/tokenizer
+  validate_tokenizer: true
+  dataset_name: wikitext
+  dataset_config: wikitext-103-raw-v1
+  tokenize_num_proc: 8
+  max_length: 1024
+  num_workers: 16
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes:
+  - 1024
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+training:
+  num_epochs: 1
+  max_train_steps: 15
+  max_eval_steps: null
+  log_interval: 1
+  seed: 42
+  init_model_path: ../results/init/model_init.pt
+  require_gsa_triton: true
+  require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 8
+  metrics_jsonl_path: ../results/run_opus_bs32/metrics.jsonl
+  profile_steps: []
+deepspeed:
+  config_path: ../deepspeed/zero-1b-opus-bs32.json
+  local_rank: -1
+model:
+  tokenizer_name: null
+  embedding_type: kronecker
+  model_variant: reversible
+  model_name: 1b_nonrev
+  moe_t4_enabled: false
+  moe_t4_dispatcher: deepep
+  moe_expert_parallel_size: 1
+checkpoint:
+  output_dir: ../results/run_opus_bs32/checkpoints
+  save_checkpoint: false
+  checkpoint_interval: 500
+  keep_last_n_checkpoints: 2
+  resume_from_checkpoint: null
+  resume_step: null
+s3:
+  enabled: false
+  bucket: null
+  prefix: training/checkpoints
+  region: us-east-1
+  cleanup_after_upload: false
+generation:
+  test_generation: false
+  generation_prompt: The history of artificial intelligence begins with
+
+# OPUS: 64 cand (8/GPU), 8 proxy (1/GPU), score@128, train@1024
+# Ratio: 1024/128 = 8:1 (same as production 4096/512)
+# Scoring: (8+1)*128 = 1152 tokens/GPU.  Training: 4*1024 = 4096 tokens/GPU.
+opus:
+  enabled: true
+  candidate_multiplier: 2    # cand/GPU = micro_batch(4) * 2 = 8/GPU = 64 global
+  n_proxy: 1                 # 1/GPU = 8 global proxy
+  proxy_seq_len: 128         # scoring at 128 tokens (prod: 512)
+  sketch_dim: 8192
+  temperature: 0.9
+  sketch_seed: 42
+  selection_ratio: 0.5       # select 32 from 64, train 32 (4/GPU)
+  max_selector_time_s: 30.0
+  fallback_random_on_error: true
+  train_batch: 4             # 4/GPU = 32 global @ 1024 tokens
+  score_interval: 1          # score every step

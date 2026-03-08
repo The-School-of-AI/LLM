@@ -1,0 +1,29 @@
+# Colab: match P4de env (avoids PyTorch 2.10 memory leak)
+# Best: use uv in the project dir: pip install uv && uv sync (see notebook). Then restart and add .venv to path.
+#
+# Or pip (single command so resolver does not pull torch 2.10):
+#   !pip install -r requirements-colab.txt --extra-index-url https://download.pytorch.org/whl/cu128
+# Then Runtime → Restart runtime.
+
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
+triton==3.6.0
+deepspeed==0.18.6
+einops==0.8.2
+transformers>=4.35.0
+datasets>=2.14.0
+accelerate>=0.24.0
+safetensors>=0.7.0
+tqdm>=4.65.0
+boto3
+pyyaml
+huggingface_hub
+numpy>=1.24.0
+pandas>=2.0.0
+ninja
+# Optional (for full training; fused_moe_expert test uses grouped_gemm if available).
+# grouped-gemm fails on Colab unless you set TORCH_CUDA_ARCH_LIST (setup.py calls torch.cuda.get_device_capability() during metadata). Example:
+#   import os; os.environ["TORCH_CUDA_ARCH_LIST"] = "7.5"   # T4; 8.0=A100, 8.9=L4
+#   !pip install "setuptools<81"
+#   !pip install grouped-gemm==0.3.0 --no-build-isolation
+# flash-linear-attention @ git+https://github.com/sustcsonglin/flash-linear-attention@d792da6dd544d28980205817b20535500c3f243e
