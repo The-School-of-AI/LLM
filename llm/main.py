@@ -1,4 +1,6 @@
+import datetime
 import os
+import socket
 
 import torch.distributed as dist
 from jsonargparse import ArgumentParser
@@ -7,7 +9,29 @@ from llm.config import Config
 from llm.pretrainer import PreTrainer
 
 
+def _log_rank_startup(local_rank: int, run_id: str) -> None:
+    rank = os.environ.get("RANK", "0")
+    env_local_rank = os.environ.get("LOCAL_RANK")
+    world_size = os.environ.get("WORLD_SIZE", "1")
+    local_rank_value = env_local_rank if env_local_rank is not None else str(local_rank)
+    host = socket.gethostname()
+    pid = os.getpid()
+    ts = (
+        datetime.datetime.now(datetime.UTC)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+    print(
+        f"{ts} startup run_id={run_id} rank={rank} local_rank={local_rank_value} "
+        f"world_size={world_size} pid={pid} host={host}",
+        flush=True,
+    )
+
+
 def main(local_rank: int, c: Config):
+    _log_rank_startup(local_rank, c.run_id or "unknown")
     pretrainer = PreTrainer(local_rank, c)
     pretrainer.run()
 

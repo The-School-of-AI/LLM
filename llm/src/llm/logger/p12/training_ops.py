@@ -279,7 +279,12 @@ class TrainingOps(Logger):
         # 2. Live gauges (in-memory → HTTP API)
         loss = metrics.get("loss") or metrics.get("training_loss")
         lr = metrics.get("lr") or metrics.get("learning_rate", 0)
-        tps = metrics.get("tokens_per_second") or metrics.get("tok_sec")
+        tps = (
+            metrics.get("tokens_per_second")
+            or metrics.get("tok_sec")
+            or metrics.get("toks/sec")
+            or metrics.get("throughput/tokens_per_sec")
+        )
         grad_norm = metrics.get("gradient_norm") or metrics.get("grad_norm")
 
         if loss is not None:

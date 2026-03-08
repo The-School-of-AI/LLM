@@ -14,6 +14,7 @@ from llm.config import (
     DataConfig,
     ModelConfig,
     ObservabilityConfig,
+    P12LoggerConfig,
     TrainingConfig,
 )
 from llm.data import get_dataloaders, get_tokenizer
@@ -179,5 +180,23 @@ def build_observability(
     match cfg.backend:
         case "none":
             return NoOpLogger()
+        case "p12":
+            from llm.logger.p12 import P12Logger
+
+            p12_cfg = cfg.p12 or P12LoggerConfig()
+            return P12Logger(
+                run_id=run_id,
+                rank=rank,
+                log_dir=p12_cfg.log_dir,
+                metrics_port=p12_cfg.metrics_port,
+                clickhouse_url=p12_cfg.clickhouse_url,
+                clickhouse_user=p12_cfg.clickhouse_user,
+                clickhouse_password=p12_cfg.clickhouse_password,
+                clickhouse_ca_cert=p12_cfg.clickhouse_ca_cert,
+                system_metrics_interval=p12_cfg.system_metrics_interval,
+                skip_vector_check=p12_cfg.skip_vector_check,
+                vector_service_name=p12_cfg.vector_service_name,
+                check_clickhouse_preflight=p12_cfg.check_clickhouse_preflight,
+            )
         case _:
             raise RuntimeError(f"observability backend {cfg.backend} not supported")
