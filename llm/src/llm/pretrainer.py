@@ -68,6 +68,7 @@ class PreTrainer:
         max_steps_per_epoch = self._config.training.max_steps_per_epoch
         device = self._engine.device
         ckpt_interval = self._config.checkpoint.save_interval
+        eval_interval = self._config.training.eval_interval
 
         for epoch in range(start_epoch, max_epochs):
             if self._train_sampler:
@@ -125,6 +126,14 @@ class PreTrainer:
                 global_step += 1
                 steps += 1
                 total_loss += loss.item()
+
+                if eval_interval and global_step % eval_interval == 0:
+                    val_loss, val_perplexity = self._validate()
+                    self._logger.log_step(global_step, {
+                        "val_loss": val_loss,
+                        "val_perplexity": val_perplexity,
+                    })
+                    self._engine.train()
 
                 metrics.add("loss", loss.item(), pbar=True)
                 metrics.add("global_step", global_step, pbar=True)
