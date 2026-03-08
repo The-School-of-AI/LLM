@@ -60,6 +60,43 @@ def test_fused_moe_expert_correctness():
     print("test_fused_moe_expert_correctness passed (use_triton=False)")
 
 
+def test_fused_moe_expert_triton():
+    """Fused MoE expert Triton kernel matches grouped_gemm reference."""
+    try:
+        from kernels.fused_moe_expert import fused_moe_expert_forward, has_fused_moe_expert_triton
+    except ImportError:
+        raise RuntimeError("kernels not importable (missing deps or path)")
+    if not has_fused_moe_expert_triton():
+        print("test_fused_moe_expert_triton skipped (Triton not available)")
+        return
+    try:
+        from kernels.moe_grouped_gemm import moe_grouped_gemm
+    except ImportError:
+        print("test_fused_moe_expert_triton skipped (grouped_gemm not available)")
+        return
+    if not torch.cuda.is_available():
+        return
+
+    E, D, H = 4, 128, 64
+    m_sizes = torch.tensor([16, 24, 8, 32], device="cuda")
+    expert_counts = m_sizes
+    N = int(m_sizes.sum().item())
+    dtype = torch.bfloat16
+    x = torch.randn(N, D, device="cuda", dtype=dtype) * 0.02
+    W_gate = torch.randn(E, D, H, device="cuda", dtype=dtype) * 0.02
+    W_up = torch.randn(E, D, H, device="cuda", dtype=dtype) * 0.02
+    W_down = torch.randn(E, H, D, device="cuda", dtype=dtype) * 0.02
+
+    out_triton = fused_moe_expert_forward(x, W_gate, W_up, W_down, expert_counts, use_triton=True)
+    gate_ref = moe_grouped_gemm(x, W_gate, expert_counts)
+    up_ref = moe_grouped_gemm(x, W_up, expert_counts)
+    h_ref = torch.nn.functional.silu(gate_ref) * up_ref
+    out_ref = moe_grouped_gemm(h_ref, W_down, expert_counts)
+
+    torch.testing.assert_close(out_triton.float(), out_ref.float(), atol=1e-2, rtol=1e-2)
+    print("test_fused_moe_expert_triton passed (use_triton=True)")
+
+
 def test_fused_qkv_correctness():
     """Fused QKV output matches three separate F.linear(x, W_*)."""
     try:
@@ -143,6 +180,7 @@ def test_fused_o_gate_correctness():
 
 if __name__ == "__main__":
     test_fused_moe_expert_correctness()
+    test_fused_moe_expert_triton()
     test_fused_qkv_correctness()
     test_fused_qkvg_correctness()
     test_fused_o_gate_correctness()
