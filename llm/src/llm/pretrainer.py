@@ -11,6 +11,7 @@ from llm.config import Config
 from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
 from llm.profiler import PipelineProfiler
+from llm.rng_state_manager import RNGStateManager
 from llm.utils import is_main_process
 
 
@@ -172,6 +173,10 @@ class PreTrainer:
         )
 
         if client_state:
+            rng_state = client_state.get("rng_state")
+            if rng_state:
+                RNGStateManager.restore(rng_state)
+
             start_epoch = client_state.get("epoch", 0)
             global_step = client_state.get("global_step", 0)
             start_step = client_state.get("step", 0)
@@ -410,6 +415,7 @@ class PreTrainer:
                 "epoch": epoch,
                 "step": step,
                 "global_step": global_step,
+                "rng_state": RNGStateManager.capture(),
             }
             | kwargs,
         )
