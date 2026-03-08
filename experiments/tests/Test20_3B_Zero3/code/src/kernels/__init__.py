@@ -61,6 +61,20 @@ from .fused_swiglu import (
     _FusedSwiGLUFunc,
 )
 
+from .fused_moe_expert import (
+    fused_moe_expert_forward,
+    has_fused_moe_expert_triton,
+)
+
+from .fused_qkv_proj import (
+    fused_qkv_proj_forward,
+    has_fused_qkv_proj,
+    fused_qkvg_proj_forward,
+    has_fused_qkvg_proj,
+    fused_o_gate_proj_forward,
+    has_fused_o_gate_proj,
+)
+
 __all__ = [
     "HAS_TRITON",
     "HAS_MOE_GROUPED_GEMM",
@@ -79,4 +93,12 @@ __all__ = [
     "fused_silu_mul",
     "fused_rope",
     "FusedSwiGLUForward",
+    "fused_moe_expert_forward",
+    "has_fused_moe_expert_triton",
+    "fused_qkv_proj_forward",
+    "has_fused_qkv_proj",
+    "fused_qkvg_proj_forward",
+    "has_fused_qkvg_proj",
+    "fused_o_gate_proj_forward",
+    "has_fused_o_gate_proj",
 ]
