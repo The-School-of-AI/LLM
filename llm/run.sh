@@ -2,7 +2,7 @@
 set -euo pipefail
 
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CFG="$TEST_ROOT/configs/config.yaml"
+CFG="${CFG:-$TEST_ROOT/configs/config.yaml}"
 RESULTS_DIR="$TEST_ROOT/_data/results"
 INIT_CKPT="$RESULTS_DIR/init/model_init.pt"
 INIT_META="$RESULTS_DIR/init/model_init_meta.json"
@@ -17,6 +17,17 @@ LOGROTATE_TEMPLATE="${LOGROTATE_TEMPLATE:-$TEST_ROOT/../infra/logging/logrotate.
 AUTO_INSTALL_LOGROTATE="${AUTO_INSTALL_LOGROTATE:-0}"
 LOGROTATE_TARGET="${LOGROTATE_TARGET:-/etc/logrotate.d/llm-training}"
 VERIFY_LOGROTATE="${VERIFY_LOGROTATE:-0}"
+WATCHDOG_ENABLED="${WATCHDOG_ENABLED:-1}"
+
+if [[ ! -f "$CFG" ]]; then
+  if [[ -f "$TEST_ROOT/configs/config-mini.yaml" ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Config not found at $CFG; falling back to config-mini.yaml"
+    CFG="$TEST_ROOT/configs/config-mini.yaml"
+  else
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Config file not found: $CFG"
+    exit 1
+  fi
+fi
 
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
@@ -38,11 +49,34 @@ print('' if val is None else str(val))
 "
 }
 
+_yaml_top_val() {
+  uv run python -c "
+import sys, yaml
+with open('$CFG') as f:
+    cfg = yaml.safe_load(f) or {}
+key = '$1'
+val = cfg.get(key)
+print('' if val is None else str(val))
+"
+}
+
+_yaml_observability_backend() {
+  uv run python -c "
+import yaml
+with open('$CFG') as f:
+    cfg = yaml.safe_load(f) or {}
+obs = cfg.get('observability') or {}
+print(str(obs.get('backend') or ''))
+"
+}
+
 LOADER_TYPE="$(_yaml_val loader_type)"
 _raw_shard_dir="$(_yaml_val shard_dir)"
 _raw_eval_shard_dir="$(_yaml_val eval_shard_dir)"
 _dataset_name="$(_yaml_val dataset_name)"
 _dataset_config="$(_yaml_val dataset_config)"
+RUN_ID_CFG="$(_yaml_top_val run_id)"
+OBS_BACKEND="$(_yaml_observability_backend)"
 
 # Resolve relative paths against config file directory (matches main.py _resolve_path)
 CFG_DIR="$(cd "$(dirname "$CFG")" && pwd)"
@@ -110,6 +144,9 @@ COMBINED_LOG="$RUN_LOG_DIR/training_combined.log"
 ISSUES_LOG="$RUN_LOG_DIR/rank_issues.log"
 RANK_TMP_DIR="$RUN_LOG_DIR/.rank_tmp"
 RENDERED_LOGROTATE_PATH="$RUN_LOG_DIR/logrotate.training.rendered.conf"
+WATCHDOG_STDOUT_LOG="$RUN_LOG_DIR/watchdog.log"
+WATCHDOG_TRAINING_PID_FILE="$RUN_LOG_DIR/training_launcher.pid"
+WATCHDOG_PID=""
 
 timestamp_stream() {
   if command -v ts >/dev/null 2>&1; then
@@ -179,10 +216,43 @@ setup_logrotate_config() {
   fi
 }
 
+start_watchdog() {
+  if [[ "$WATCHDOG_ENABLED" != "1" ]]; then
+    return 0
+  fi
+
+  export WATCHDOG_TRAINING_PID_FILE="$WATCHDOG_TRAINING_PID_FILE"
+  export WATCHDOG_TRACKING_LOG_PATH="${WATCHDOG_TRACKING_LOG_PATH:-/tmp/watchdog_metrics.jsonl}"
+  export WATCHDOG_ALERT_LOG_PATH="${WATCHDOG_ALERT_LOG_PATH:-/tmp/watchdog_alerts.jsonl}"
+  export WATCHDOG_CONTROL_FILE_PATH="${WATCHDOG_CONTROL_FILE_PATH:-/tmp/training_control.flag}"
+  export WATCHDOG_METRICS_URL="${WATCHDOG_METRICS_URL:-http://localhost:8000}"
+  export WATCHDOG_POLL_INTERVAL_S="${WATCHDOG_POLL_INTERVAL_S:-5}"
+  export WATCHDOG_ENABLE_ALERTER="${WATCHDOG_ENABLE_ALERTER:-1}"
+
+  if [[ -n "$RUN_ID_CFG" ]]; then
+    export WATCHDOG_RUN_ID="$RUN_ID_CFG"
+  fi
+
+  uv run python -u -m llm.logger.p12.watchdog.watchdog >> "$WATCHDOG_STDOUT_LOG" 2>&1 &
+  WATCHDOG_PID=$!
+}
+
+stop_watchdog() {
+  if [[ -z "${WATCHDOG_PID:-}" ]]; then
+    return 0
+  fi
+  if kill -0 "$WATCHDOG_PID" 2>/dev/null; then
+    kill "$WATCHDOG_PID" 2>/dev/null || true
+    wait "$WATCHDOG_PID" 2>/dev/null || true
+  fi
+}
+
 mkdir -p "$RANK_TMP_DIR"
 find "$RANK_TMP_DIR" -type f -delete
 : > "$COMBINED_LOG"
 : > "$ISSUES_LOG"
+rm -f "$WATCHDOG_TRAINING_PID_FILE"
+trap stop_watchdog EXIT
 
 if [[ "$NCCL_PER_PROCESS_LOGS" == "1" ]]; then
   export NCCL_DEBUG_FILE="$RUN_LOG_DIR/nccl.%h.%p.log"
@@ -197,10 +267,24 @@ if [[ "${NCCL_DEBUG_FILE:-}" != "" ]]; then
 fi
 echo "  NUM_GPUS:      $NUM_GPUS" | tee -a "$COMBINED_LOG"
 setup_logrotate_config | tee -a "$COMBINED_LOG"
+if [[ "$WATCHDOG_ENABLED" == "1" ]]; then
+  if [[ "$OBS_BACKEND" != "p12" ]]; then
+    echo "  ⚠ observability.backend='$OBS_BACKEND' (expected 'p12' for full watchdog metrics)" | tee -a "$COMBINED_LOG"
+  fi
+  start_watchdog
+  sleep 1
+  if ! kill -0 "$WATCHDOG_PID" 2>/dev/null; then
+    echo "  ❌ Watchdog failed to start. Check $WATCHDOG_STDOUT_LOG" | tee -a "$COMBINED_LOG"
+    exit 1
+  fi
+  echo "  Watchdog PID:  $WATCHDOG_PID" | tee -a "$COMBINED_LOG"
+  echo "  Watchdog log:  $WATCHDOG_STDOUT_LOG" | tee -a "$COMBINED_LOG"
+fi
 
 set +e
 (
-  uv run "$DEEPSPEED_BIN" \
+  echo "$BASHPID" > "$WATCHDOG_TRAINING_PID_FILE"
+  exec uv run "$DEEPSPEED_BIN" \
     --num_gpus="$NUM_GPUS" \
     --enable_each_rank_log "$RANK_TMP_DIR/rank" \
     main.py \
@@ -208,6 +292,7 @@ set +e
 ) 2>&1 | timestamp_stream | tee -a "$COMBINED_LOG"
 TRAIN_EXIT="${PIPESTATUS[0]}"
 set -e
+stop_watchdog
 
 _extract_rank_from_path() {
   local path="$1"

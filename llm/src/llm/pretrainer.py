@@ -128,7 +128,7 @@ class PreTrainer:
 
                 metrics.add("loss", loss.item(), pbar=True)
                 metrics.add("global_step", global_step, pbar=True)
-                metrics.add("toks/sec", toks_per_sec, pbar=True)
+                metrics.add("tokens_per_second", toks_per_sec, pbar=True)
                 metrics = metrics | forward_metrics
 
                 progress_bar.set_postfix(metrics.get_pbar_values())
@@ -426,3 +426,9 @@ class PreTrainer:
 
     def _cleanup(self):
         self._step_profiler.deactivate()
+        shutdown = getattr(self._logger, "shutdown", None)
+        if callable(shutdown):
+            try:
+                shutdown()
+            except Exception as e:
+                print(f"⚠ logger shutdown failed: {e}", flush=True)
