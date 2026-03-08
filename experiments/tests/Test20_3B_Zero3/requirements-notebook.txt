@@ -1,0 +1,11 @@
+# Minimal deps for fused LoRA kernel notebook (Colab / quick local test).
+# Same torch pin as requirements-pinned.txt — avoids PyTorch 2.10 memory leak.
+# Triton is left to torch's dependency (3.3.1 on Linux); for exact parity with
+# requirements-pinned.txt (triton 3.6.0) run after: pip install triton==3.6.0
+#
+# Install:
+#   pip install -r requirements-notebook.txt --index-url https://download.pytorch.org/whl/cu128
+#   pip uninstall torchaudio -y   # if present, to avoid conflict with torch 2.7.1
+
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
