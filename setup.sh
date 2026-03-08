@@ -34,7 +34,8 @@ pip install uv
 cd /mnt/local-nvme/LLM
 # ensure that the pyproject.toml file or uv.lock file is present in the root of the repo
 uv sync 
-
+uv pip install -U megatron-core transformer-engine
+uv pip install grouped-gemm
 
 ### For all the runs/new terminals, activate the venv before running run.sh
 source /mnt/local-nvme/LLM/.venv/bin/activate
