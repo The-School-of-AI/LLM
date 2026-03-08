@@ -10,6 +10,7 @@ import llm.factories as ft
 from llm.config import Config
 from llm.kernels import HAS_TRITON, FusedLinearCrossEntropyLoss
 from llm.logger import Metrics
+from llm.loss_continuity_guard import LossContinuityGuard
 from llm.profiler import PipelineProfiler
 from llm.utils import is_main_process
 
@@ -56,6 +57,8 @@ class PreTrainer:
         self._ckpt_manager = ft.build_checkpoint_manager(
             c.checkpoint, c.checkpoints_dir
         )
+
+        self._loss_guard = LossContinuityGuard()
 
         self._logger = ft.build_observability(c.observability, self.run_id, local_rank)
         self._step_profiler = ft.build_step_profiler(c.training, local_rank)
@@ -104,6 +107,7 @@ class PreTrainer:
                     self._backward(loss)
                 with self._step_profiler.phase("step/train_optimizer_step"):
                     self._optimizer_step()
+                self._loss_guard.observe(loss)
                 self._step_profiler.end_step()
                 step_time = time.time() - step_start_time
                 num_tokens = torch.tensor(
@@ -172,6 +176,7 @@ class PreTrainer:
         )
 
         if client_state:
+            self._loss_guard.restore(client_state.get("loss_guard", {}))
             start_epoch = client_state.get("epoch", 0)
             global_step = client_state.get("global_step", 0)
             start_step = client_state.get("step", 0)
@@ -410,6 +415,7 @@ class PreTrainer:
                 "epoch": epoch,
                 "step": step,
                 "global_step": global_step,
+                "loss_guard": self._loss_guard.state_dict(),
             }
             | kwargs,
         )
