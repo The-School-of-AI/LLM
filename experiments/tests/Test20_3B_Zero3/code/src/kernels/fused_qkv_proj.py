@@ -18,40 +18,35 @@ except ImportError:
     HAS_TRITON = False
 
 
-# Block sizes for tiled matmul (default: A100 / high shared-memory GPUs)
-BLOCK_M = 64
-BLOCK_D = 256
-
-# Small blocks for 64 KB shared-memory GPUs (e.g. T4 on Colab)
+# Block sizes for tiled matmul.
+# sm_80+ (A100/H100, ~163-228 KB shared mem): BLOCK_M=32, BLOCK_D=128
+# sm_75 and below (T4, ~48-64 KB shared mem): BLOCK_M=16, BLOCK_D=64
+# All launches use num_stages=1, num_warps=4 to avoid pipeline-staging blowup.
+BLOCK_M_DEFAULT = 32
+BLOCK_D_DEFAULT = 128
 BLOCK_M_SMALL = 16
-BLOCK_D_SMALL = 128
+BLOCK_D_SMALL = 64
 
-# Use small blocks when device limit is below what our large-block kernel needs.
-# Large kernel can need ~1.7 MB (Triton tl.dot staging); A100 default = 163 KB. T4 = 64 KB.
-SHARED_MEM_LIMIT_SMALL_BLOCKS = 1703936
-# Env override: TRITON_USE_SMALL_BLOCKS=1 forces small blocks (use on Colab if auto-detect fails).
-_USE_SMALL_BLOCKS_ENV = __import__("os").environ.get("TRITON_USE_SMALL_BLOCKS", "").strip().lower() in ("1", "true", "yes")
+_USE_SMALL_ENV = __import__("os").environ.get("TRITON_USE_SMALL_BLOCKS", "").strip().lower() in ("1", "true", "yes")
+_block_cache: dict[int, tuple[int, int]] = {}
 
 
 def _get_block_sizes(device: torch.device) -> tuple[int, int]:
-    """Use small blocks when device shared-memory limit < ~1.7 MB (e.g. T4 64 KB, A100 default 163 KB) or env TRITON_USE_SMALL_BLOCKS=1."""
-    if _USE_SMALL_BLOCKS_ENV:
+    """Pick block sizes based on GPU compute capability. sm_80+ gets default; older/smaller gets small."""
+    if _USE_SMALL_ENV:
         return BLOCK_M_SMALL, BLOCK_D_SMALL
-    if not device.type == "cuda":
-        return BLOCK_M, BLOCK_D
+    if device.type != "cuda":
+        return BLOCK_M_DEFAULT, BLOCK_D_DEFAULT
+    idx = device.index if device.index is not None else 0
+    if idx in _block_cache:
+        return _block_cache[idx]
     try:
-        idx = device.index if device.index is not None else 0
-        props = torch.cuda.get_device_properties(idx)
-        limit = (
-            getattr(props, "max_shared_memory_per_block", 0)
-            or getattr(props, "shared_memory_per_block", 0)
-            or 0
-        )
-        if limit > 0 and limit < SHARED_MEM_LIMIT_SMALL_BLOCKS:
-            return BLOCK_M_SMALL, BLOCK_D_SMALL
+        major, _ = torch.cuda.get_device_capability(idx)
+        result = (BLOCK_M_DEFAULT, BLOCK_D_DEFAULT) if major >= 8 else (BLOCK_M_SMALL, BLOCK_D_SMALL)
     except Exception:
-        pass
-    return BLOCK_M, BLOCK_D
+        result = (BLOCK_M_SMALL, BLOCK_D_SMALL)
+    _block_cache[idx] = result
+    return result
 
 
 if HAS_TRITON:
@@ -152,6 +147,8 @@ def fused_qkv_proj_forward(
         stride_w_d=W_q.stride(0),
         BLOCK_M=block_m,
         BLOCK_D=block_d,
+        num_stages=1,
+        num_warps=4,
     )
     return q, k, v
 
@@ -278,6 +275,8 @@ def fused_qkvg_proj_forward(
         stride_w_out=W_q.stride(0),
         BLOCK_M=block_m,
         BLOCK_D=block_d,
+        num_stages=1,
+        num_warps=4,
     )
     return q, k, v, g
 
@@ -371,6 +370,8 @@ def fused_o_gate_proj_forward(
         stride_w_d=W_go.stride(0),
         BLOCK_M=block_m,
         BLOCK_D=block_d,
+        num_stages=1,
+        num_warps=4,
     )
     return out
 

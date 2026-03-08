@@ -28,40 +28,37 @@ except ImportError:
 import torch.nn.functional as F
 
 
-# Block sizes for the fused kernel (tiled matmuls; default for A100 / high shared-memory)
-BLOCK_M = 64
-BLOCK_D = 256
-BLOCK_H = 256
-
-# Small blocks for 64 KB shared-memory GPUs (e.g. T4 on Colab)
+# Block sizes for the fused kernel (tiled matmuls).
+# sm_80+ (A100/H100): BLOCK_M=32, BLOCK_D=64, BLOCK_H=64
+# sm_75 and below (T4): BLOCK_M=16, BLOCK_D=32, BLOCK_H=32
+# All launches use num_stages=1, num_warps=4.
+BLOCK_M_DEFAULT = 32
+BLOCK_D_DEFAULT = 64
+BLOCK_H_DEFAULT = 64
 BLOCK_M_SMALL = 16
-BLOCK_D_SMALL = 128
-BLOCK_H_SMALL = 128
+BLOCK_D_SMALL = 32
+BLOCK_H_SMALL = 32
 
-# Use small blocks when device limit < ~1.7 MB (A100 default 163 KB, T4 64 KB).
-SHARED_MEM_LIMIT_SMALL_BLOCKS = 1703936
-_USE_SMALL_BLOCKS_ENV = __import__("os").environ.get("TRITON_USE_SMALL_BLOCKS", "").strip().lower() in ("1", "true", "yes")
+_USE_SMALL_ENV = __import__("os").environ.get("TRITON_USE_SMALL_BLOCKS", "").strip().lower() in ("1", "true", "yes")
+_block_cache_moe: dict[int, tuple[int, int, int]] = {}
 
 
 def _get_block_sizes_moe(device: torch.device) -> tuple[int, int, int]:
-    """Use small blocks when device limit < ~1.7 MB (e.g. A100 default 163 KB, T4 64 KB) or env TRITON_USE_SMALL_BLOCKS=1."""
-    if _USE_SMALL_BLOCKS_ENV:
+    """Pick block sizes based on GPU compute capability."""
+    if _USE_SMALL_ENV:
         return BLOCK_M_SMALL, BLOCK_D_SMALL, BLOCK_H_SMALL
-    if not device.type == "cuda":
-        return BLOCK_M, BLOCK_D, BLOCK_H
+    if device.type != "cuda":
+        return BLOCK_M_DEFAULT, BLOCK_D_DEFAULT, BLOCK_H_DEFAULT
+    idx = device.index if device.index is not None else 0
+    if idx in _block_cache_moe:
+        return _block_cache_moe[idx]
     try:
-        idx = device.index if device.index is not None else 0
-        props = torch.cuda.get_device_properties(idx)
-        limit = (
-            getattr(props, "max_shared_memory_per_block", 0)
-            or getattr(props, "shared_memory_per_block", 0)
-            or 0
-        )
-        if limit > 0 and limit < SHARED_MEM_LIMIT_SMALL_BLOCKS:
-            return BLOCK_M_SMALL, BLOCK_D_SMALL, BLOCK_H_SMALL
+        major, _ = torch.cuda.get_device_capability(idx)
+        result = (BLOCK_M_DEFAULT, BLOCK_D_DEFAULT, BLOCK_H_DEFAULT) if major >= 8 else (BLOCK_M_SMALL, BLOCK_D_SMALL, BLOCK_H_SMALL)
     except Exception:
-        pass
-    return BLOCK_M, BLOCK_D, BLOCK_H
+        result = (BLOCK_M_SMALL, BLOCK_D_SMALL, BLOCK_H_SMALL)
+    _block_cache_moe[idx] = result
+    return result
 
 
 if HAS_TRITON:
@@ -215,6 +212,8 @@ class _FusedMoEExpertFunction(torch.autograd.Function):
                     BLOCK_M=block_m,
                     BLOCK_D=block_d,
                     BLOCK_H=block_h,
+                    num_stages=1,
+                    num_warps=4,
                 )
             ctx.use_triton = use_triton
             ctx.save_for_backward(x_in, W_gate, W_up, W_down)
