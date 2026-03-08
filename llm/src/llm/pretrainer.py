@@ -1,3 +1,5 @@
+import json
+import os
 import time
 
 import torch
@@ -14,6 +16,26 @@ from llm.profiler import PipelineProfiler
 from llm.utils import is_main_process
 
 
+def _compute_repetition_score(text: str, n: int = 4) -> float:
+    """Compute a repetition score based on n-gram uniqueness.
+
+    Returns a value in [0, 1] where 0 means no repetition and 1 means
+    every n-gram is identical.  A score above ~0.3 suggests the model
+    has entered a repetition loop.
+    """
+    tokens = text.split()
+
+    if len(tokens) < n:
+        return 0.0
+
+    ngrams = [tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
+
+    total = len(ngrams)
+    unique = len(set(ngrams))
+
+    return 1.0 - (unique / total)
+
+
 class PreTrainer:
     def __init__(self, local_rank: int, c: Config):
         self._config = c
@@ -27,7 +49,7 @@ class PreTrainer:
         self._pipe_prof = PipelineProfiler(rank=local_rank)
 
         with self._pipe_prof.stage("tokenizer_load"):
-            tokenizer = ft.build_tokenizer(c.data)
+            self._tokenizer = ft.build_tokenizer(c.data)
 
         with self._pipe_prof.stage("data_load"):
             (
@@ -37,10 +59,10 @@ class PreTrainer:
                 self._val_sampler,
                 self._test_loader,
                 self._test_sampler,
-            ) = ft.build_dataloaders(c.data, batch_size_per_gpu, tokenizer)
+            ) = ft.build_dataloaders(c.data, batch_size_per_gpu, self._tokenizer)
 
         with self._pipe_prof.stage("model_build"):
-            model = ft.build_model(c.model, tokenizer)
+            model = ft.build_model(c.model, self._tokenizer)
 
         self._fused_ce_fn = FusedLinearCrossEntropyLoss(
             ignore_index=-100,
@@ -114,6 +136,7 @@ class PreTrainer:
                 self._step_profiler.end_step(tokens=int(num_tokens.item()))
                 toks_per_sec = num_tokens.item() / step_time if step_time > 0 else 0
 
+                generated_this_step = False
                 if ckpt_interval is not None and (step + 1) % ckpt_interval == 0:
                     self._save_checkpoint(
                         epoch,
@@ -121,8 +144,18 @@ class PreTrainer:
                         global_step,
                         loss=loss.item(),
                     )
+                    self._generate(global_step, greedy=True)
+                    generated_this_step = True
 
                 global_step += 1
+
+                gen_interval = self._config.training.generation_interval
+                if (
+                    gen_interval > 0
+                    and global_step % gen_interval == 0
+                    and not generated_this_step
+                ):
+                    self._generate(global_step, greedy=True)
                 steps += 1
                 total_loss += loss.item()
 
@@ -414,8 +447,133 @@ class PreTrainer:
             | kwargs,
         )
 
-    def _generate(self):
-        pass
+    def _generate(self, global_step: int, greedy: bool = True) -> None:
+        """Generate text from each prompt in the generation config.
+
+        All ranks participate in the forward pass to prevent ZeRO-3 deadlocks
+        (sharded parameters require collective AllGather from every rank).
+        Only rank 0 logs results to the JSONL file and emits alerts.
+        Prompts are batched into a single ``model.generate()`` call for speed.
+        """
+        gen_cfg = self._config.generation
+        device = self._engine.device
+        model = self._engine.module
+
+        was_training = model.training
+        model.eval()
+
+        results: list[dict] = []
+
+        with torch.no_grad():
+            texts = [p["text"] for p in gen_cfg.prompts]
+            categories = [p["category"] for p in gen_cfg.prompts]
+
+            # Left-pad so generated tokens are right-aligned in the batch.
+            orig_padding_side = self._tokenizer.padding_side
+            orig_pad_token = self._tokenizer.pad_token
+            if self._tokenizer.pad_token is None:
+                self._tokenizer.pad_token = self._tokenizer.eos_token
+            self._tokenizer.padding_side = "left"
+
+            inputs = self._tokenizer(
+                texts, return_tensors="pt", padding=True
+            ).to(device)
+
+            gen_kwargs: dict[str, object] = {
+                "max_new_tokens": gen_cfg.max_new_tokens,
+                "attention_mask": inputs["attention_mask"],
+            }
+            if greedy or gen_cfg.greedy:
+                gen_kwargs["do_sample"] = False
+            else:
+                gen_kwargs.update(
+                    {
+                        "do_sample": True,
+                        "temperature": gen_cfg.temperature,
+                        "top_k": gen_cfg.top_k,
+                        "top_p": gen_cfg.top_p,
+                    }
+                )
+
+            output_ids = model.generate(inputs["input_ids"], **gen_kwargs)
+
+            # Restore tokenizer state.
+            self._tokenizer.padding_side = orig_padding_side
+            if orig_pad_token is None:
+                self._tokenizer.pad_token = None
+
+            for i, out_ids in enumerate(output_ids):
+                generated_text = self._tokenizer.decode(
+                    out_ids, skip_special_tokens=True
+                )
+                rep_score = _compute_repetition_score(generated_text)
+                results.append(
+                    {
+                        "global_step": global_step,
+                        "category": categories[i],
+                        "prompt": texts[i],
+                        "generated": generated_text,
+                        "greedy": greedy or gen_cfg.greedy,
+                        "repetition_score": rep_score,
+                    }
+                )
+
+        # Restore original training state.
+        if was_training:
+            model.train()
+
+        # Only rank 0 writes to disk and emits alerts.
+        if is_main_process():
+            self._log_generation_samples(global_step, results)
+
+            high_rep = [r for r in results if r["repetition_score"] > 0.3]
+            critical_rep = [r for r in results if r["repetition_score"] > 0.7]
+
+            if critical_rep:
+                self._logger.log_event(
+                    "degeneration_critical",
+                    {
+                        "global_step": global_step,
+                        "count": len(critical_rep),
+                        "categories": [r["category"] for r in critical_rep],
+                        "max_score": max(
+                            r["repetition_score"] for r in critical_rep
+                        ),
+                    },
+                )
+            elif high_rep:
+                self._logger.log_event(
+                    "degeneration_warning",
+                    {
+                        "global_step": global_step,
+                        "count": len(high_rep),
+                        "categories": [r["category"] for r in high_rep],
+                        "max_score": max(
+                            r["repetition_score"] for r in high_rep
+                        ),
+                    },
+                )
+
+        if dist.is_available() and dist.is_initialized():
+            dist.barrier()
+
+    def _log_generation_samples(
+        self, global_step: int, results: list[dict]
+    ) -> None:
+        """Append generation results to a JSONL file (rank 0 only).
+
+        File is written to ``<output_dir>/generation_samples/run_<run_id>_samples.jsonl``.
+        """
+        if not is_main_process():
+            return
+
+        samples_dir = os.path.join(self._config.output_dir, "generation_samples")
+        os.makedirs(samples_dir, exist_ok=True)
+
+        jsonl_path = os.path.join(samples_dir, f"run_{self.run_id}_samples.jsonl")
+        with open(jsonl_path, "a") as f:
+            for result in results:
+                f.write(json.dumps(result) + "\n")
 
     def _validate_kernel_policy(self, require_fused_kernels: bool):
         if require_fused_kernels and not HAS_TRITON:
