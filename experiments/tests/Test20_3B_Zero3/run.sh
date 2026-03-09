@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
+# Re-exec with bash if launched via sh (e.g. sh run.sh)
+if [[ -z "${BASH_VERSION:-}" ]]; then
+  exec bash "$0" "$@"
+fi
 set -euo pipefail
+# Prevent exit 141 (SIGPIPE) when a pipeline writer outlives the reader (e.g. cmd | head -1).
+trap '' PIPE
 
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$TEST_ROOT/code"
 export PYTHONPATH="${TEST_ROOT}:${PYTHONPATH:-}"
-CFG="${CFG:-$TEST_ROOT/configs/test17_3b_moe.yaml}"
+CFG="${CFG:-$TEST_ROOT/configs/test_70b_moe_lora_4096_bs32_10steps.yaml}"
 RESULTS_DIR="$TEST_ROOT/results"
 INIT_CKPT="$RESULTS_DIR/init/model_init.pt"
 INIT_META="$RESULTS_DIR/init/model_init_meta.json"
