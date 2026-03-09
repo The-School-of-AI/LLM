@@ -1,0 +1,1305 @@
+/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/torch/cuda/__init__.py:65: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-03-01 09:55:39,716] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-03-01 09:55:39,716] [INFO] [runner.py:630:main] cmd = /mnt/local-nvme/LLM/.venv/bin/python -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMCwgMSwgMiwgMywgNCwgNSwgNiwgN119 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/torch/cuda/__init__.py:65: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-03-01 09:55:44,974] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]}
+[2026-03-01 09:55:44,974] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=8, node_rank=0
+[2026-03-01 09:55:44,974] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]})
+[2026-03-01 09:55:44,974] [INFO] [launch.py:180:main] dist_world_size=8
+[2026-03-01 09:55:44,974] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+[2026-03-01 09:55:44,974] [INFO] [launch.py:272:main] process 170322 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=0', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+[2026-03-01 09:55:44,974] [INFO] [launch.py:272:main] process 170323 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=1', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+[2026-03-01 09:55:44,975] [INFO] [launch.py:272:main] process 170324 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=2', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+[2026-03-01 09:55:44,975] [INFO] [launch.py:272:main] process 170325 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=3', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+[2026-03-01 09:55:44,975] [INFO] [launch.py:272:main] process 170326 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=4', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+[2026-03-01 09:55:44,976] [INFO] [launch.py:272:main] process 170327 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=5', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+[2026-03-01 09:55:44,976] [INFO] [launch.py:272:main] process 170328 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=6', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+[2026-03-01 09:55:44,976] [INFO] [launch.py:272:main] process 170329 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=7', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml']
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml
+DeepSpeed Version: 0.18.6
+PyTorch Version: 2.10.0+cu128
+CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  Batch Size: 1
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run/checkpoints
+  Random Seed: 42
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/deepspeed/zero-3-moe-bf16.json
+  train_micro_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 8
+  ⚠️  WARNING: train_batch_size (8) != micro_batch (1) × accum_steps (1) × num_gpus (1) = 1
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=1 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=7
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=6
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+  Tokenizer loaded:
+    - Vocab size: 131,072
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+  Tokenizer loaded:
+    - Vocab size: 131,072
+Shard assignment: rank=7/8, assigned=3/30 shards
+✓ All 3 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=7/8 | shards=3/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Shard assignment: rank=6/8, assigned=3/30 shards
+✓ All 3 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=6/8 | shards=3/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=5
+  Tokenizer loaded:
+    - Vocab size: 131,072
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=0
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=1
+  WARNING: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/shard_00029/tokens.bin: 1 rows dropped at tail (2114 tokens). Logged for auditability.
+Shard assignment: rank=5/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=5/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+  Updated model vocab_size to match tokenizer: 131,072
+  Updated model vocab_size to match tokenizer: 131,072
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=3
+Shard assignment: rank=0/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=0/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Shard assignment: rank=1/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=1/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=2
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Updated model vocab_size to match tokenizer: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+Shard assignment: rank=3/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=3/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+  Updated model vocab_size to match tokenizer: 131,072
+Shard assignment: rank=2/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=2/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Updated model vocab_size to match tokenizer: 131,072
+  Updated model vocab_size to match tokenizer: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Updated model vocab_size to match tokenizer: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Setting up Kronecker Product Embeddings (byte-level)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=4
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+Shard assignment: rank=4/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=1 | rank=4/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 1B Dense Model (reversible / ReversibleMidpointStack)...
+  Updated model vocab_size to match tokenizer: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 1073.7M (vocab × 8192, non-trainable)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 8
+   - DeltaNet: 6 layers (75%) - O(N) linear attention
+   - GSA: 2 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 20 real + 20 null = 40 slots
+   Top-k: 2 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 3,918,764,401 (~3.92B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+  Loading init model weights from: ../results/init/model_init.pt
+  Loading init model weights from: ../results/init/model_init.pt
+  Loading init model weights from: ../results/init/model_init.pt
+  Loading init model weights from: ../results/init/model_init.pt
+  Loading init model weights from: ../results/init/model_init.pt
+  Loading init model weights from: ../results/init/model_init.pt
+  Loading init model weights from: ../results/init/model_init.pt
+  Loading init model weights from: ../results/init/model_init.pt
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+  ✓ Init model weights loaded
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+Stage 3 initialize beginning
+MA 9.3 GB         Max_MA 9.3 GB         CA 9.3 GB         Max_CA 9 GB 
+CPU Virtual Memory:  used = 89.82 GB, percent = 8.0%
+DeepSpeedZeRoOffload initialize [begin]
+MA 9.3 GB         Max_MA 9.3 GB         CA 9.3 GB         Max_CA 9 GB 
+CPU Virtual Memory:  used = 89.86 GB, percent = 8.0%
+Parameter Offload - Persistent parameters statistics: param_count = 292, numel = 3905905
+DeepSpeedZeRoOffload initialize [end]
+MA 2.91 GB         Max_MA 9.31 GB         CA 9.32 GB         Max_CA 9 GB 
+CPU Virtual Memory:  used = 89.76 GB, percent = 8.0%
+Before creating fp16 partitions
+MA 2.91 GB         Max_MA 2.91 GB         CA 9.32 GB         Max_CA 9 GB 
+CPU Virtual Memory:  used = 89.78 GB, percent = 8.0%
+After creating fp16 partitions: 1
+MA 2.91 GB         Max_MA 2.91 GB         CA 2.95 GB         Max_CA 9 GB 
+CPU Virtual Memory:  used = 89.74 GB, percent = 8.0%
+Before creating fp32 partitions
+MA 2.91 GB         Max_MA 2.91 GB         CA 2.95 GB         Max_CA 3 GB 
+CPU Virtual Memory:  used = 89.74 GB, percent = 8.0%
+After creating fp32 partitions
+MA 4.74 GB         Max_MA 6.56 GB         CA 6.58 GB         Max_CA 7 GB 
+CPU Virtual Memory:  used = 89.76 GB, percent = 8.0%
+Before initializing optimizer states
+MA 4.74 GB         Max_MA 4.74 GB         CA 6.58 GB         Max_CA 7 GB 
+CPU Virtual Memory:  used = 89.75 GB, percent = 8.0%
+After initializing optimizer states
+MA 4.74 GB         Max_MA 6.56 GB         CA 6.58 GB         Max_CA 7 GB 
+CPU Virtual Memory:  used = 89.76 GB, percent = 8.0%
+[2026-03-01 09:57:39,413] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-01 09:57:39,413] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-01 09:57:39,413] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-01 09:57:39,413] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-01 09:57:39,413] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-01 09:57:39,413] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-01 09:57:39,413] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+After initializing ZeRO optimizer
+MA 5.74 GB         Max_MA 6.74 GB         CA 7.6 GB         Max_CA 8 GB 
+CPU Virtual Memory:  used = 90.04 GB, percent = 8.0%
+[2026-03-01 09:57:39,644] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+ZeRO Stage: 3
+
+[4/5] Training...
+Checkpoint interval: Every 500 steps
+Starting from epoch 0, global step 0
+
+================================================================================
+Epoch 1/1
+================================================================================
+Epoch 0: 0it [00:00, ?it/s]
+[MEMORY] Before forward pass: 6.17GB
+[MEMORY] After forward pass: 10.27GB (peak: 11.03GB)
+[MEMORY] Forward allocated: 4.11GB
+[MEMORY] After loss_ntp: 11.38GB
+[MEMORY] Before backward: 10.34GB
+[MEMORY] === MEMORY SUMMARY ===
+|===========================================================================|
+|                  PyTorch CUDA memory summary, device ID 0                 |
+|---------------------------------------------------------------------------|
+|            CUDA OOMs: 0            |        cudaMalloc retries: 0         |
+|===========================================================================|
+|        Metric         | Cur Usage  | Peak Usage | Tot Alloc  | Tot Freed  |
+|---------------------------------------------------------------------------|
+| Allocated memory      |   9862 MiB |  14469 MiB |  83029 MiB |  73166 MiB |
+|---------------------------------------------------------------------------|
+| Active memory         |   9862 MiB |  14469 MiB |  83029 MiB |  73166 MiB |
+|---------------------------------------------------------------------------|
+| Requested memory      |   9862 MiB |  14469 MiB |  83023 MiB |  73160 MiB |
+|---------------------------------------------------------------------------|
+| GPU reserved memory   |  15624 MiB |  15624 MiB |  23086 MiB |   7462 MiB |
+|---------------------------------------------------------------------------|
+| Non-releasable memory |      0 B   |      0 B   |      0 B   |      0 B   |
+|---------------------------------------------------------------------------|
+| Allocations           |     188    |     206    |   16647    |   16459    |
+|---------------------------------------------------------------------------|
+| Active allocs         |     188    |     206    |   16647    |   16459    |
+|---------------------------------------------------------------------------|
+| GPU reserved segments |       0    |       0    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Non-releasable allocs |       0    |       0    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Oversize allocations  |       0    |       0    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Oversize GPU segments |       0    |       0    |       0    |       0    |
+|===========================================================================|
+
+[MEMORY] After backward & step: 21.80GB
+Epoch 0: 0it [00:06, ?it/s, loss=12.5833, global_step=1, toks/s=6231.7, loss2=12.5488, r_loss=0.3276]2026-03-01 09:57:46,532 | step 1 | loss: 12.5833 | loss2: 12.5488 | r_loss: 0.3276 | lr: 0.00e+00 | dt: 5258.26ms | tok/sec:   6231.72
+Epoch 0: 1it [00:07,  7.38s/it, loss=12.5833, global_step=1, toks/s=6231.7, loss2=12.5488, r_loss=0.3276]Epoch 0: 1it [00:10,  7.38s/it, loss=12.5838, global_step=2, toks/s=9719.4, loss2=12.5378, r_loss=0.3277]2026-03-01 09:57:50,404 | step 2 | loss: 12.5838 | loss2: 12.5378 | r_loss: 0.3277 | lr: 6.00e-06 | dt: 3371.40ms | tok/sec:   9719.41
+Epoch 0: 2it [00:11,  5.34s/it, loss=12.5838, global_step=2, toks/s=9719.4, loss2=12.5378, r_loss=0.3277]Epoch 0: 2it [00:13,  5.34s/it, loss=12.5847, global_step=3, toks/s=12207.2, loss2=12.5451, r_loss=0.3277]2026-03-01 09:57:53,631 | step 3 | loss: 12.5847 | loss2: 12.5451 | r_loss: 0.3277 | lr: 1.20e-05 | dt: 2684.31ms | tok/sec:  12207.23
+Epoch 0: 3it [00:14,  4.35s/it, loss=12.5847, global_step=3, toks/s=12207.2, loss2=12.5451, r_loss=0.3277]Epoch 0: 3it [00:17,  4.35s/it, loss=12.5962, global_step=4, toks/s=12026.4, loss2=12.5587, r_loss=0.3276]2026-03-01 09:57:56,832 | step 4 | loss: 12.5962 | loss2: 12.5587 | r_loss: 0.3276 | lr: 1.80e-05 | dt: 2724.67ms | tok/sec:  12026.43
+Epoch 0: 4it [00:17,  3.95s/it, loss=12.5962, global_step=4, toks/s=12026.4, loss2=12.5587, r_loss=0.3276]Epoch 0: 4it [00:21,  3.95s/it, loss=12.5467, global_step=5, toks/s=9817.6, loss2=12.4738, r_loss=0.3275] 2026-03-01 09:58:00,776 | step 5 | loss: 12.5467 | loss2: 12.4738 | r_loss: 0.3275 | lr: 2.40e-05 | dt: 3337.69ms | tok/sec:   9817.57
+Epoch 0: 5it [00:21,  3.92s/it, loss=12.5467, global_step=5, toks/s=9817.6, loss2=12.4738, r_loss=0.3275][rank7]: Traceback (most recent call last):
+[rank7]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank7]:     main()
+[rank7]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank7]:     avg_loss, global_step = train_epoch(
+[rank7]:                             ^^^^^^^^^^^^
+[rank7]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank7]:     model_engine.step()
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank7]:     self._take_model_step(lr_kwargs)
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank7]:     self.optimizer.step()
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank7]:     ret_val = func(*args, **kwargs)
+[rank7]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank7]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank7]:     ret_val = func(*args, **kwargs)
+[rank7]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank7]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank7]:     ret_val = func(*args, **kwargs)
+[rank7]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank7]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank7]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank7]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank7]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 7 has a total capacity of 79.25 GiB of which 1.15 GiB is free. Including non-PyTorch memory, this process has 78.09 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 1.22 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank6]: Traceback (most recent call last):
+[rank6]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank6]:     main()
+[rank6]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank6]:     avg_loss, global_step = train_epoch(
+[rank6]:                             ^^^^^^^^^^^^
+[rank6]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank6]:     model_engine.step()
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank6]:     self._take_model_step(lr_kwargs)
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank6]:     self.optimizer.step()
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank6]:     ret_val = func(*args, **kwargs)
+[rank6]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank6]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank6]:     ret_val = func(*args, **kwargs)
+[rank6]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank6]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank6]:     ret_val = func(*args, **kwargs)
+[rank6]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank6]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank6]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank6]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank6]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 6 has a total capacity of 79.25 GiB of which 1.23 GiB is free. Including non-PyTorch memory, this process has 78.01 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 1.14 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank4]: Traceback (most recent call last):
+[rank4]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank4]:     main()
+[rank4]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank4]:     avg_loss, global_step = train_epoch(
+[rank4]:                             ^^^^^^^^^^^^
+[rank4]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank4]:     model_engine.step()
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank4]:     self._take_model_step(lr_kwargs)
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank4]:     self.optimizer.step()
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank4]:     ret_val = func(*args, **kwargs)
+[rank4]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank4]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank4]:     ret_val = func(*args, **kwargs)
+[rank4]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank4]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank4]:     ret_val = func(*args, **kwargs)
+[rank4]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank4]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank4]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank4]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank4]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 4 has a total capacity of 79.25 GiB of which 1.36 GiB is free. Including non-PyTorch memory, this process has 77.88 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 1.00 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank1]:     main()
+[rank1]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank1]:     avg_loss, global_step = train_epoch(
+[rank1]:                             ^^^^^^^^^^^^
+[rank1]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank1]:     model_engine.step()
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank1]:     self._take_model_step(lr_kwargs)
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank1]:     self.optimizer.step()
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank1]:     ret_val = func(*args, **kwargs)
+[rank1]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank1]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank1]:     ret_val = func(*args, **kwargs)
+[rank1]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank1]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank1]:     ret_val = func(*args, **kwargs)
+[rank1]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank1]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank1]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 1 has a total capacity of 79.25 GiB of which 1.56 GiB is free. Including non-PyTorch memory, this process has 77.68 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 825.54 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Epoch 0: 5it [00:24,  4.95s/it, loss=12.5467, global_step=5, toks/s=9817.6, loss2=12.4738, r_loss=0.3275]
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank0]:     main()
+[rank0]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank0]:     avg_loss, global_step = train_epoch(
+[rank0]:                             ^^^^^^^^^^^^
+[rank0]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank0]:     model_engine.step()
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank0]:     self._take_model_step(lr_kwargs)
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank0]:     self.optimizer.step()
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank0]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank0]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank0]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank0]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 0 has a total capacity of 79.25 GiB of which 1.42 GiB is free. Including non-PyTorch memory, this process has 77.82 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 965.29 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank5]: Traceback (most recent call last):
+[rank5]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank5]:     main()
+[rank5]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank5]:     avg_loss, global_step = train_epoch(
+[rank5]:                             ^^^^^^^^^^^^
+[rank5]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank5]:     model_engine.step()
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank5]:     self._take_model_step(lr_kwargs)
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank5]:     self.optimizer.step()
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank5]:     ret_val = func(*args, **kwargs)
+[rank5]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank5]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank5]:     ret_val = func(*args, **kwargs)
+[rank5]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank5]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank5]:     ret_val = func(*args, **kwargs)
+[rank5]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank5]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank5]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank5]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank5]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 5 has a total capacity of 79.25 GiB of which 1.42 GiB is free. Including non-PyTorch memory, this process has 77.82 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 965.11 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank3]: Traceback (most recent call last):
+[rank3]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank3]:     main()
+[rank3]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank3]:     avg_loss, global_step = train_epoch(
+[rank3]:                             ^^^^^^^^^^^^
+[rank3]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank3]:     model_engine.step()
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank3]:     self._take_model_step(lr_kwargs)
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank3]:     self.optimizer.step()
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank3]:     ret_val = func(*args, **kwargs)
+[rank3]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank3]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank3]:     ret_val = func(*args, **kwargs)
+[rank3]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank3]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank3]:     ret_val = func(*args, **kwargs)
+[rank3]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank3]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank3]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank3]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 3 has a total capacity of 79.25 GiB of which 1.37 GiB is free. Including non-PyTorch memory, this process has 77.88 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 1023.25 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank2]: Traceback (most recent call last):
+[rank2]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 757, in <module>
+[rank2]:     main()
+[rank2]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/main.py", line 613, in main
+[rank2]:     avg_loss, global_step = train_epoch(
+[rank2]:                             ^^^^^^^^^^^^
+[rank2]:   File "/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/code/src/train.py", line 378, in train_epoch
+[rank2]:     model_engine.step()
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2771, in step
+[rank2]:     self._take_model_step(lr_kwargs)
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/engine.py", line 2666, in _take_model_step
+[rank2]:     self.optimizer.step()
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank2]:     ret_val = func(*args, **kwargs)
+[rank2]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2249, in step
+[rank2]:     self._prepare_sub_group(sub_group_id, timer_names)
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank2]:     ret_val = func(*args, **kwargs)
+[rank2]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2042, in _prepare_sub_group
+[rank2]:     self._prepare_fp32_grad_for_sub_group(sub_group_id)
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank2]:     ret_val = func(*args, **kwargs)
+[rank2]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/mnt/local-nvme/LLM/.venv/lib64/python3.12/site-packages/deepspeed/runtime/zero/stage3.py", line 2018, in _prepare_fp32_grad_for_sub_group
+[rank2]:     single_grad_partition = self.flatten(self.averaged_gradients[sub_group_id]).to(
+[rank2]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank2]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.83 GiB. GPU 2 has a total capacity of 79.25 GiB of which 1.42 GiB is free. Including non-PyTorch memory, this process has 77.82 GiB memory in use. Of the allocated memory 75.30 GiB is allocated by PyTorch, and 963.07 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[2026-03-01 09:59:27,012] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170322
+[2026-03-01 09:59:27,996] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170323
+[2026-03-01 09:59:28,588] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170324
+[2026-03-01 09:59:29,015] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170325
+[2026-03-01 09:59:29,029] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170326
+[2026-03-01 09:59:29,044] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170327
+[2026-03-01 09:59:29,058] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170328
+[2026-03-01 09:59:29,072] [INFO] [launch.py:335:sigkill_handler] Killing subprocess 170329
+[2026-03-01 09:59:29,072] [ERROR] [launch.py:341:sigkill_handler] ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=7', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/configs/test17_3b_moe.yaml'] exits with return code = 1

@@ -39,7 +39,6 @@ from typing import Any, Dict
 if "PYTORCH_ALLOC_CONF" not in os.environ:
     os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 # Runtime-retention hardening default for ZeRO-3 debug runs.
-# Overridden when training.torch_compile is enabled in config.
 if "TORCHDYNAMO_DISABLE" not in os.environ:
     os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
@@ -52,102 +51,6 @@ warnings.filterwarnings(
 
 import deepspeed
 import torch
-
-# Monkey-patch for PyTorch 2.5+ where module._parameters is dict (no attr assignment).
-# See: https://github.com/microsoft/DeepSpeed/issues/6961
-def _apply_deepspeed_pytorch25_patch():
-    engine = deepspeed.runtime.engine.DeepSpeedEngine
-    _orig_prologue = engine._forward_prologue
-    _orig_epilogue = engine._forward_epilogue
-
-    def _safe_set_in_forward(module, value):
-        try:
-            module._parameters._in_forward = value
-        except AttributeError:
-            setattr(module, "_ds_in_forward", value)
-
-    def _patched_prologue(self, inputs, kwargs):
-        # Run original prologue but skip the failing loop; we do it ourselves with safe setter.
-        # The original fails at: for m in self.module.modules(): m._parameters._in_forward = True
-        return_modified = False
-        if not self.autotuning_profile_model_info():
-            deepspeed.runtime.utils.see_memory_usage(
-                "Engine before forward", force=self.memory_breakdown()
-            )
-        flops_profiler_active = (
-            self.flops_profiler_enabled()
-            and self.global_steps == self.flops_profiler_profile_step()
-            and self.global_rank == 0
-        )
-        if self.global_steps == 0 and hasattr(self, "compression_scheduler"):
-            self.compression_scheduler.step(step_zero_check=True)
-        if self.quantizer:
-            tensor_to_quantize = (
-                self.optimizer.bit16_groups
-                if self.zero_optimization_stage() == 2
-                else self.optimizer.fp16_groups
-            )
-            if self.compression_scheduler.weight_quantization_enabled:
-                self.quantizer.quantize(
-                    tensor_to_quantize,
-                    (self.optimizer.overflow if self.fp16_enabled() else False),
-                    self.eigenvalue_enabled(),
-                    None,
-                )
-                return_modified = True
-        if flops_profiler_active:
-            self.flops_profiler.start_profile(ignore_list=None)
-        if kwargs is not None:
-            if self.module.training and self.progressive_layer_drop:
-                kwargs.update(self.progressive_layer_drop.get_state())
-            if (
-                self.__class__.__name__ != "PipelineEngine"
-                and self.module.training
-                and self.curriculum_enabled_legacy()
-            ):
-                self.curriculum_scheduler_legacy.update_difficulty(self.global_steps + 1)
-                if self.curriculum_params_legacy()["curriculum_type"] == "seqlen":
-                    kwargs.update(
-                        {
-                            "curriculum_seqlen": self.curriculum_scheduler_legacy.get_current_difficulty()
-                        }
-                    )
-                    return_modified = True
-            if self.module.training and self.random_ltd_enabled():
-                self.random_ltd_scheduler.update_seq(self.global_steps)
-        if self.training_dataloader is None:
-            self.tput_timer.start()
-        self._start_timers(self.engine_timers.forward_timers)
-        if self.zero_optimization_partition_weights():
-            for module in self.module.modules():
-                _safe_set_in_forward(module, True)
-        if self.fp16_auto_cast():
-            inputs = self._cast_inputs_half(inputs)
-            return_modified = True
-        return (inputs, kwargs) if return_modified else None
-
-    def _patched_epilogue(self):
-        if self.zero_optimization_partition_weights():
-            for module in self.module.modules():
-                _safe_set_in_forward(module, False)
-        self._stop_timers(self.engine_timers.forward_timers)
-        flops_profiler_active = (
-            self.flops_profiler_enabled()
-            and self.global_steps == self.flops_profiler_profile_step()
-            and self.global_rank == 0
-        )
-        if flops_profiler_active:
-            self.flops_profiler.stop_profile()
-        if not self.autotuning_profile_model_info():
-            deepspeed.runtime.utils.see_memory_usage(
-                "Engine after forward", force=self.memory_breakdown()
-            )
-
-    engine._forward_prologue = _patched_prologue
-    engine._forward_epilogue = _patched_epilogue
-
-
-_apply_deepspeed_pytorch25_patch()
 import yaml
 from aws.config import S3Config
 from src.checkpoint import S3CheckpointManager
@@ -250,11 +153,6 @@ class Config:
         self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 8.0)
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
         self.use_fused_delta_entrance = config_dict["training"].get("use_fused_delta_entrance", True)
-
-        # torch.compile: "off" (default), "default", "reduce-overhead", "max-autotune"
-        self.torch_compile = config_dict["training"].get("torch_compile", "off")
-        # When torch_compile != "off", compile individual decoder layers (safer than full model with ZeRO-3)
-        self.torch_compile_layers = config_dict["training"].get("torch_compile_layers", True)
 
         # Profiler configuration
         # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
@@ -406,7 +304,6 @@ def validate_kernel_policy(require_fused_kernels: bool) -> None:
 
 def main():
     """Main training pipeline."""
-    import torch  # Ensure torch is in local scope (avoids UnboundLocalError with torch.compile path)
     # Parse command line args (only --config and --local_rank)
     cmd_args = parse_args()
 
@@ -486,7 +383,6 @@ def main():
     print_rank_0(f"  Fused SiLU*Mul (Triton): auto (via liger_ops)")
     print_rank_0(f"  Fused RoPE (Triton): auto (via liger_ops)")
     print_rank_0(f"  Fused SwiGLU (shared expert): auto")
-    print_rank_0(f"  torch.compile: {args.torch_compile}")
     if args.use_s3:
         print_rank_0("  S3 Enabled: Yes")
         print_rank_0(f"  S3 Bucket: {args.s3_bucket}")
@@ -801,40 +697,6 @@ def main():
         print_rank_0(f"  Trainable: {trainable:,} ({trainable / 1e6:.2f}M)")
         print_rank_0(f"  Frozen:    {frozen:,} ({frozen / 1e9:.3f}B)")
         print_lora_summary(model)
-
-    # ========================================
-    # Step 2.4: torch.compile (optional, Exp 2)
-    # ========================================
-    if args.torch_compile != "off":
-        os.environ.pop("TORCHDYNAMO_DISABLE", None)
-        import torch._dynamo
-        torch._dynamo.config.suppress_errors = True
-        compile_mode = args.torch_compile
-        print_rank_0(f"\n[2.4/5] Enabling torch.compile (mode={compile_mode})...")
-
-        if args.torch_compile_layers:
-            _n_compiled = 0
-            for name, module in model.named_modules():
-                if module.__class__.__name__ == "LightningDecoderLayer":
-                    try:
-                        compiled = torch.compile(module, mode=compile_mode)
-                        parent_name = ".".join(name.split(".")[:-1])
-                        child_name = name.split(".")[-1]
-                        parent = model
-                        if parent_name:
-                            for part in parent_name.split("."):
-                                parent = getattr(parent, part)
-                        setattr(parent, child_name, compiled)
-                        _n_compiled += 1
-                    except Exception as e:
-                        print_rank_0(f"  WARNING: Failed to compile {name}: {e}")
-            print_rank_0(f"  Compiled {_n_compiled} LightningDecoderLayer modules")
-        else:
-            try:
-                model = torch.compile(model, mode=compile_mode)
-                print_rank_0(f"  Compiled entire model")
-            except Exception as e:
-                print_rank_0(f"  WARNING: Full model compile failed: {e}")
 
     validate_precision_policy(deepspeed_config, next(model.parameters()).dtype)
 

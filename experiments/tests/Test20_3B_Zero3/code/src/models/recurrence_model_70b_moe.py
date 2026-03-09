@@ -99,14 +99,6 @@ if _kernels_module is not None:
     triton_deltanet_post_fused = getattr(_kernels_module, "triton_deltanet_post_fused", None)
     moe_grouped_gemm = getattr(_kernels_module, "moe_grouped_gemm", None)
     FusedSwiGLUForward = getattr(_kernels_module, "FusedSwiGLUForward", None)
-    fused_moe_expert_forward = getattr(_kernels_module, "fused_moe_expert_forward", None)
-    has_fused_moe_expert_triton = getattr(_kernels_module, "has_fused_moe_expert_triton", lambda: False)
-    fused_qkv_proj_forward = getattr(_kernels_module, "fused_qkv_proj_forward", None)
-    has_fused_qkv_proj = getattr(_kernels_module, "has_fused_qkv_proj", lambda: False)
-    fused_qkvg_proj_forward = getattr(_kernels_module, "fused_qkvg_proj_forward", None)
-    has_fused_qkvg_proj = getattr(_kernels_module, "has_fused_qkvg_proj", lambda: False)
-    fused_o_gate_proj_forward = getattr(_kernels_module, "fused_o_gate_proj_forward", None)
-    has_fused_o_gate_proj = getattr(_kernels_module, "has_fused_o_gate_proj", lambda: False)
 else:
     HAS_TRITON = False
     HAS_MOE_GROUPED_GEMM = False
@@ -123,14 +115,6 @@ else:
     triton_deltanet_post_fused = None
     moe_grouped_gemm = None
     FusedSwiGLUForward = None
-    fused_moe_expert_forward = None
-    has_fused_moe_expert_triton = lambda: False
-    fused_qkv_proj_forward = None
-    has_fused_qkv_proj = lambda: False
-    fused_qkvg_proj_forward = None
-    has_fused_qkvg_proj = lambda: False
-    fused_o_gate_proj_forward = None
-    has_fused_o_gate_proj = lambda: False
 
 HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
@@ -652,21 +636,20 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
         self._use_triton = HAS_TRITON and triton_rmsnorm is not None
 
-    def forward(self, x: torch.Tensor, residual: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Triton path: Liger-style fused forward+backward (LigerRMSNormFunction in kernels).
-        # When residual is provided, the add is fused inside the Triton kernel (no intermediate tensor).
+        # Safe with grad enabled -- reversible backward uses this during recompute.
         if self._use_triton and x.is_cuda:
             try:
-                return triton_rmsnorm(x, self.weight, self.eps, residual)
+                return triton_rmsnorm(x, self.weight, self.eps)
             except Exception:
                 pass  # Fall through to PyTorch path
 
         # PyTorch fallback (FIX #43: fp32 variance for stability)
-        if residual is not None:
-            x = x + residual
         x_f = x.float()
         norm = x_f.pow(2).mean(dim=-1, keepdim=True)
         x = x * torch.rsqrt(norm.to(x.dtype) + self.eps)
+        # REPRO-FIX: Cast weight to x.dtype to avoid implicit fp32 upcast in reversible recompute
         return self.weight.to(dtype=x.dtype) * x
 
 
@@ -885,43 +868,16 @@ class GatedDeltaNet(nn.Module):
         token_keep_f = None
 
         with time_region("deltanet.entry.proj"):
-            use_fused_qkvg = (
-                fused_qkvg_proj_forward is not None
-                and has_fused_qkvg_proj()
-                and x.is_cuda
-                and isinstance(self.q_proj, nn.Linear)
-                and isinstance(self.k_proj, nn.Linear)
-                and isinstance(self.v_proj, nn.Linear)
-                and isinstance(self.g_proj, nn.Linear)
-            )
-            if use_fused_qkvg:
-                x_flat = x.view(B * T, self.hidden_size)
-                q_in, k_in, v_in, g = fused_qkvg_proj_forward(
-                    x_flat,
-                    self.q_proj.weight,
-                    self.k_proj.weight,
-                    self.v_proj.weight,
-                    self.g_proj.weight,
-                )
-                q_in = q_in.view(B, T, self.num_heads * self.head_dim)
-                k_in = k_in.view(B, T, self.num_heads * self.head_dim)
-                v_in = v_in.view(B, T, self.num_heads * self.head_dim)
-                g = g.view(B, T, self.num_heads * self.head_dim)
-            else:
-                q_in = self.q_proj(x)
-                k_in = self.k_proj(x)
-                v_in = self.v_proj(x)
-                g = self.g_proj(x)
+            q_in = self.q_proj(x)
+            k_in = self.k_proj(x)
+            v_in = self.v_proj(x)
+            g = self.g_proj(x)
 
         use_fused_entry = (
             self.use_fused_delta_entrance
             and fused_delta_entrance is not None
             and q_in.is_cuda
         )
-        if not hasattr(self, "_logged_entry_path"):
-            self._logged_entry_path = True
-            _path_str = "FUSED (Triton)" if use_fused_entry else "UNFUSED (PyTorch)"
-            _kernel_log.info(f"[GatedDeltaNet] delta entrance path: {_path_str}")
         if use_fused_entry:
             # Reference behavior from FLA/NVLabs gated DeltaNet paths:
             # short-conv + qk normalization + kernel-compatible inputs.
@@ -1239,50 +1195,10 @@ class GatedSparseAttention(nn.Module):
                 self._cached_base_idx = base_idx
                 self._cached_keep_mask = keep_mask
 
-        # Dual Gating & Attention Projections (fused QKV when available)
-        is_lora_qkv = (
-            hasattr(self.W_q, "linear") and hasattr(self.W_q, "lora_A") and hasattr(self.W_q, "lora_B")
-            and hasattr(self.W_k, "linear") and hasattr(self.W_k, "lora_A") and hasattr(self.W_k, "lora_B")
-            and hasattr(self.W_v, "linear") and hasattr(self.W_v, "lora_A") and hasattr(self.W_v, "lora_B")
-        )
-        use_fused_qkv = (
-            fused_qkv_proj_forward is not None
-            and has_fused_qkv_proj()
-            and x.is_cuda
-            and (
-                (isinstance(self.W_q, nn.Linear) and isinstance(self.W_k, nn.Linear) and isinstance(self.W_v, nn.Linear))
-                or is_lora_qkv
-            )
-        )
-        if use_fused_qkv:
-            x_flat = x.view(B * T, self.hidden_size)
-            if is_lora_qkv:
-                base_q, base_k, base_v = fused_qkv_proj_forward(
-                    x_flat,
-                    self.W_q.linear.weight,
-                    self.W_k.linear.weight,
-                    self.W_v.linear.weight,
-                )
-                lora_q = F.linear(F.linear(x_flat, self.W_q.lora_A), self.W_q.lora_B) * self.W_q.scaling
-                lora_k = F.linear(F.linear(x_flat, self.W_k.lora_A), self.W_k.lora_B) * self.W_k.scaling
-                lora_v = F.linear(F.linear(x_flat, self.W_v.lora_A), self.W_v.lora_B) * self.W_v.scaling
-                q = (base_q + lora_q).view(B, T, self.hidden_size)
-                k_attn = (base_k + lora_k).view(B, T, self.hidden_size)
-                v = (base_v + lora_v).view(B, T, self.hidden_size)
-            else:
-                q, k_attn, v = fused_qkv_proj_forward(
-                    x_flat,
-                    self.W_q.weight,
-                    self.W_k.weight,
-                    self.W_v.weight,
-                )
-                q = q.view(B, T, self.hidden_size)
-                k_attn = k_attn.view(B, T, self.hidden_size)
-                v = v.view(B, T, self.hidden_size)
-        else:
-            q = self.W_q(x)
-            k_attn = self.W_k(x)
-            v = self.W_v(x)
+        # Dual Gating & Attention Projections
+        q = self.W_q(x)
+        k_attn = self.W_k(x)
+        v = self.W_v(x)
 
         g_v = torch.sigmoid(self.W_gv(x))
         v = v * g_v
@@ -1344,21 +1260,9 @@ class GatedSparseAttention(nn.Module):
         # Output is [B, T, H, D] from kernel, reshape to [B, T, hidden_size]
         o_sparse = o_sparse.contiguous().view(B, T, self.hidden_size)
 
-        # Output gate (fused o_proj(o_sparse * sigmoid(W_go(x))) when available and plain Linear)
-        use_fused_o_gate = (
-            fused_o_gate_proj_forward is not None
-            and has_fused_o_gate_proj()
-            and o_sparse.is_cuda
-            and isinstance(self.W_go, nn.Linear)
-            and isinstance(self.o_proj, nn.Linear)
-        )
-        if use_fused_o_gate:
-            o_flat = o_sparse.view(B * T, self.hidden_size)
-            x_flat = x.view(B * T, self.hidden_size)
-            return fused_o_gate_proj_forward(
-                x_flat, o_flat, self.W_go.weight, self.o_proj.weight
-            ).view(B, T, self.hidden_size)
+        # Output gate
         g_o = torch.sigmoid(self.W_go(x))
+
         return self.o_proj(o_sparse * g_o)
 
 
@@ -1625,26 +1529,12 @@ class MoEFFN(nn.Module):
 
     def _moe_grouped(self, sorted_x: torch.Tensor, expert_counts: torch.Tensor):
         x_in = sorted_x.to(dtype=self.W_gate.dtype)
-        use_fused = (
-            fused_moe_expert_forward is not None
-            and (not self.training or self.dropout == 0)
-        )
-        if use_fused:
-            out = fused_moe_expert_forward(
-                x_in,
-                self.W_gate,
-                self.W_up,
-                self.W_down,
-                expert_counts,
-                use_triton=has_fused_moe_expert_triton(),
-            )
-        else:
-            gate_out = moe_grouped_gemm(x_in, self.W_gate, expert_counts)
-            up_out = moe_grouped_gemm(x_in, self.W_up, expert_counts)
-            h = liger_silu_mul(gate_out, up_out)
-            if self.training and self.dropout > 0:
-                h = F.dropout(h, p=self.dropout)
-            out = moe_grouped_gemm(h, self.W_down, expert_counts)
+        gate_out = moe_grouped_gemm(x_in, self.W_gate, expert_counts)
+        up_out = moe_grouped_gemm(x_in, self.W_up, expert_counts)
+        h = liger_silu_mul(gate_out, up_out)
+        if self.training and self.dropout > 0:
+            h = F.dropout(h, p=self.dropout)
+        out = moe_grouped_gemm(h, self.W_down, expert_counts)
         return out.to(dtype=sorted_x.dtype)
 
     def forward(self, x: torch.Tensor):
