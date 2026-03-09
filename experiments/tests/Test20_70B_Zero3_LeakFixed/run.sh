@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
+# Re-exec with bash if launched via sh (e.g. sh run.sh)
+if [[ -z "${BASH_VERSION:-}" ]]; then
+  exec bash "$0" "$@"
+fi
 set -euo pipefail
+# Prevent exit 141 (SIGPIPE) when a pipeline writer outlives the reader (e.g. cmd | head -1).
+trap '' PIPE
 
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$TEST_ROOT/code"
