@@ -310,6 +310,7 @@ def validate_kernel_policy(require_fused_kernels: bool) -> None:
 
 def main():
     """Main training pipeline."""
+    import torch  # Ensure torch is in local scope (avoids UnboundLocalError with torch.compile path)
     # Parse command line args (only --config and --local_rank)
     cmd_args = parse_args()
 
