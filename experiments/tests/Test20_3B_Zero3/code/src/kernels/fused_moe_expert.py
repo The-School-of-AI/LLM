@@ -294,7 +294,8 @@ class _FusedMoEExpertFunction(torch.autograd.Function):
                 d_gate_g = (sigma * (1.0 + gate_g * (1.0 - sigma)) * up_g * dh_g)
             grad_W_gate[g] = x_g.t() @ d_gate_g
             grad_W_up[g] = x_g.t() @ d_up_g
-            grad_x[start:end] = d_gate_g @ W_gate[g] + d_up_g @ W_up[g]
+            # grad_x = d_gate @ W_gate.T + d_up @ W_up.T  (forward: gate = x @ W, so d/dx = d_gate @ W.T)
+            grad_x[start:end] = d_gate_g @ W_gate[g].t() + d_up_g @ W_up[g].t()
 
         return grad_x, grad_W_gate, grad_W_up, grad_W_down, None, None
 
