@@ -1,0 +1,15 @@
+# Dev: small subset for debugging with a real model
+data:
+  split: dev
+  languages: [hi, bn]
+  max_samples_per_lang: 20
+
+model:
+  backend: hf
+  model_name_or_path: google/gemma-3-1b-it
+  device: cpu
+  max_new_tokens: 128
+
+run:
+  tasks: [crosssum, flores, xquad, xorqa]
+  seed: 42

@@ -1,0 +1,14 @@
+# Smoke test: minimal samples, dummy model, no GPU required
+data:
+  split: dev
+  languages: [hi]
+  max_samples_per_lang: 5
+
+model:
+  backend: small
+  device: cpu
+  max_new_tokens: 64
+
+run:
+  tasks: [crosssum, flores, xquad, xorqa]
+  seed: 42

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "benchmark-indicgenbench"
+version = "1.0.0"
+description = "Benchmark harness for IndicGenBench: evaluate LLM generation on 29 Indic languages across summarization, translation, and QA tasks (dev/test/verify)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "datasets>=2.14.0",
+    "huggingface_hub>=0.17.0",
+    "torch>=1.13.0",
+    "transformers>=4.30.0",
+    "accelerate>=0.20.0",
+    "sacrebleu>=2.3.0",
+    "rouge-score>=0.1.2",
+    "nltk>=3.8.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.65.0",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+benchmark-indicgenbench = "benchmark_indicgenbench.cli:run"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["benchmark_indicgenbench*"]
