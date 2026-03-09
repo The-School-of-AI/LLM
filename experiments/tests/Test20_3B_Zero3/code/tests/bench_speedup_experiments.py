@@ -330,25 +330,32 @@ def bench_exp4_zero3_guidance():
     import json
 
     # Try multiple paths for the base deepspeed config
+    # Script is at code/tests/, deepspeed is at ../../deepspeed/ (sibling of code/)
     _script_dir = os.path.dirname(os.path.abspath(__file__))
     _candidates = [
-        os.path.join(_script_dir, "..", "deepspeed", "zero-3-70b-moe-lora-bs8.json"),
         os.path.join(_script_dir, "..", "..", "deepspeed", "zero-3-70b-moe-lora-bs8.json"),
+        os.path.join(_script_dir, "..", "deepspeed", "zero-3-70b-moe-lora-bs8.json"),
     ]
     ds_base_path = None
     for _p in _candidates:
-        if os.path.exists(_p):
-            ds_base_path = _p
+        _resolved = os.path.abspath(_p)
+        if os.path.exists(_resolved):
+            ds_base_path = _resolved
             break
     if ds_base_path:
         with open(ds_base_path) as f:
             ds_base = json.load(f)
+        print(f"  Found base config: {ds_base_path}")
     else:
-        print(f"  WARNING: Base config not found. Searched: {_candidates}")
+        print(f"  WARNING: Base config not found. Searched:")
+        for _p in _candidates:
+            print(f"    {os.path.abspath(_p)}")
         ds_base = None
 
     print("\n  Generated ZeRO-3 variant configs for benchmarking:")
-    out_dir = os.path.join(os.path.dirname(__file__), "..", "deepspeed")
+    # Output to same directory as the base config
+    out_dir = os.path.dirname(ds_base_path) if ds_base_path else os.path.join(_script_dir, "..", "..", "deepspeed")
+    os.makedirs(out_dir, exist_ok=True)
 
     for name, overrides in variants.items():
         print(f"\n  --- {name} ---")
@@ -462,8 +469,13 @@ def bench_exp5_fused_ce_tuning():
         saved_gb = mem_unfused - mem_fused
         print(f"      Unfused peak: {mem_unfused:.2f} GB")
         print(f"      Fused peak:   {mem_fused:.2f} GB")
-        print(f"      SAVED:        {saved_gb:.2f} GB  ({saved_gb/mem_unfused*100:.0f}% reduction)")
-        print(f"      (Fused CE is slower but saves ~{logits_size_gb:.1f}GB by not materializing logits)")
+        if saved_gb > 0:
+            print(f"      SAVED:        {saved_gb:.2f} GB  ({saved_gb/mem_unfused*100:.0f}% reduction)")
+        else:
+            print(f"      OVERHEAD:     {-saved_gb:.2f} GB  (fused uses more at small T)")
+            print(f"      NOTE: Fused CE eagerly allocates grad_weight [V,D]={V}x{D}=1.0GB + weight_T=1.0GB.")
+            print(f"            At small T the unfused logits tensor is smaller than this overhead.")
+            print(f"            Fused CE saves memory only when T*V*4 > ~2GB, i.e. T > ~{int(2e9/V/4)}.")
 
         # BLOCK_SIZE tuning (quick)
         print(f"\n    BLOCK_SIZE tuning (best of chunk sizes):")
