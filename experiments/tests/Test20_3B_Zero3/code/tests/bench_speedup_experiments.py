@@ -114,6 +114,9 @@ def bench_exp2_torch_compile():
     """
     Measure speedup from torch.compile on representative elementwise chains
     that occur between matmuls in the model (sigmoid, gating, residual adds).
+
+    Falls back to backend="eager" or "aot_eager" if inductor (Triton) is unavailable
+    due to version mismatch.
     """
     print("\n" + "=" * 70)
     print("EXPERIMENT 2: torch.compile on Elementwise Chains")
@@ -122,6 +125,32 @@ def bench_exp2_torch_compile():
     device = torch.device("cuda")
     dtype = torch.bfloat16
 
+    # Detect which backends are available
+    available_backends = []
+    _test_fn = lambda x: x + 1
+    _test_t = torch.tensor(1.0, device=device)
+    for backend in ["inductor", "aot_eager", "eager"]:
+        try:
+            _c = torch.compile(_test_fn, backend=backend)
+            _c(_test_t)
+            available_backends.append(backend)
+        except Exception:
+            pass
+
+    if not available_backends:
+        print("  ERROR: No torch.compile backends available. Skipping.")
+        print("  FIX: Install triton-nightly to match PyTorch 2.7:")
+        print("    pip install -U triton-nightly")
+        return
+
+    backend = available_backends[0]
+    mode = "reduce-overhead" if backend == "inductor" else None
+    print(f"  Using backend: {backend} (available: {available_backends})")
+    if backend != "inductor":
+        print(f"  NOTE: 'inductor' failed (likely Triton version mismatch).")
+        print(f"  FIX: pip install -U triton-nightly   (to match PyTorch {torch.__version__})")
+        print(f"  Using '{backend}' for now — inductor would give better speedups.")
+
     D = 4096
     for label, N in [("N=4096", 4096), ("N=16384", 16384), ("N=32768", 32768)]:
         x = torch.randn(N, D, device=device, dtype=dtype)
@@ -129,7 +158,6 @@ def bench_exp2_torch_compile():
         residual = torch.randn(N, D, device=device, dtype=dtype)
         weight = torch.ones(D, device=device, dtype=dtype)
 
-        # Typical model elementwise chain: sigmoid gating + residual + rmsnorm-like
         def chain_eager(x, gate, residual, weight):
             g = torch.sigmoid(gate)
             x = x * g + residual
@@ -139,11 +167,13 @@ def bench_exp2_torch_compile():
             return weight * x
 
         try:
-            chain_compiled = torch.compile(chain_eager, mode="reduce-overhead")
+            compile_kwargs = {"backend": backend}
+            if mode:
+                compile_kwargs["mode"] = mode
+            chain_compiled = torch.compile(chain_eager, **compile_kwargs)
 
             t_eager = _timer(lambda: chain_eager(x, gate, residual, weight))
 
-            # Warmup compile (extra warmup needed for compilation)
             for _ in range(5):
                 chain_compiled(x, gate, residual, weight)
             torch.cuda.synchronize()
@@ -155,8 +185,7 @@ def bench_exp2_torch_compile():
         except Exception as e:
             print(f"  {label} D={D}: torch.compile failed: {e}")
 
-    # Test with a mini model-like module
-    print("\n  --- Module-level compile (simulates decoder sublayer elementwise ops) ---")
+    print("\n  --- Module-level compile ---")
 
     class ElemChain(torch.nn.Module):
         def __init__(self, d):
@@ -180,7 +209,10 @@ def bench_exp2_torch_compile():
         t_eager = _timer(lambda: mod(x, residual))
 
         try:
-            mod_c = torch.compile(mod, mode="reduce-overhead")
+            compile_kwargs = {"backend": backend}
+            if mode:
+                compile_kwargs["mode"] = mode
+            mod_c = torch.compile(mod, **compile_kwargs)
             for _ in range(5):
                 mod_c(x, residual)
             torch.cuda.synchronize()
@@ -201,6 +233,7 @@ def bench_exp2_torch_compile():
 def bench_exp3_delta_entrance():
     """
     Compare fused delta entrance (conv+SiLU+L2Norm+RoPE) vs unfused PyTorch ops.
+    Conv weights are depthwise: shape (C, 1, K) where C = H * D, K = 4.
     """
     print("\n" + "=" * 70)
     print("EXPERIMENT 3: Fused Delta Entrance (Conv + SiLU + L2Norm + RoPE)")
@@ -226,9 +259,10 @@ def bench_exp3_delta_entrance():
         k_in = torch.randn(B, T, key_dim, device=device, dtype=dtype)
         v_in = torch.randn(B, T, key_dim, device=device, dtype=dtype)
 
-        wq = torch.randn(1, 1, K, device=device, dtype=dtype)
-        wk = torch.randn(1, 1, K, device=device, dtype=dtype)
-        wv = torch.randn(1, 1, K, device=device, dtype=dtype)
+        # Depthwise conv weights: (C, 1, K) for groups=C convolution
+        wq = torch.randn(key_dim, 1, K, device=device, dtype=dtype)
+        wk = torch.randn(key_dim, 1, K, device=device, dtype=dtype)
+        wv = torch.randn(key_dim, 1, K, device=device, dtype=dtype)
         bq = torch.zeros(key_dim, device=device, dtype=dtype)
         bk = torch.zeros(key_dim, device=device, dtype=dtype)
         bv = torch.zeros(key_dim, device=device, dtype=dtype)
@@ -237,7 +271,7 @@ def bench_exp3_delta_entrance():
         sin = torch.randn(T, D // 2, device=device, dtype=dtype)
 
         def run_unfused():
-            return pytorch_unfused_exact(q_in, k_in, v_in, wq, wk, wv, bq, bk, bv, cos, sin, H, D)
+            return pytorch_unfused_exact(q_in, k_in, v_in, wq, wk, wv, bq, bk, bv, cos, sin, None)
 
         def run_fused():
             return fused_delta_entrance(q_in, k_in, v_in, wq, wk, wv, bq, bk, bv, cos, sin, None)
@@ -295,12 +329,22 @@ def bench_exp4_zero3_guidance():
 
     import json
 
-    ds_base_path = os.path.join(os.path.dirname(__file__), "..", "deepspeed", "zero-3-70b-moe-lora-bs8.json")
-    if os.path.exists(ds_base_path):
+    # Try multiple paths for the base deepspeed config
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _candidates = [
+        os.path.join(_script_dir, "..", "deepspeed", "zero-3-70b-moe-lora-bs8.json"),
+        os.path.join(_script_dir, "..", "..", "deepspeed", "zero-3-70b-moe-lora-bs8.json"),
+    ]
+    ds_base_path = None
+    for _p in _candidates:
+        if os.path.exists(_p):
+            ds_base_path = _p
+            break
+    if ds_base_path:
         with open(ds_base_path) as f:
             ds_base = json.load(f)
     else:
-        print(f"  WARNING: Base config not found at {ds_base_path}")
+        print(f"  WARNING: Base config not found. Searched: {_candidates}")
         ds_base = None
 
     print("\n  Generated ZeRO-3 variant configs for benchmarking:")
@@ -331,10 +375,18 @@ def bench_exp4_zero3_guidance():
 
 def bench_exp5_fused_ce_tuning():
     """
-    Benchmark fused linear + cross entropy with different chunk sizes and BLOCK_SIZE.
+    Benchmark fused linear + cross entropy: both speed and PEAK MEMORY.
+
+    The main value of fused CE is MEMORY savings (avoids materializing the
+    [B*T, vocab] logits tensor). For V=131072, D=4096, N=4096:
+      - Unfused logits: 4096 * 131072 * 4 bytes = 2.0 GB
+      - Fused: processes in chunks, peak is just one chunk
+
+    Speed-wise fused CE is slower (chunked matmul + Triton CE vs single cuBLAS + F.cross_entropy),
+    but the memory savings enable training that would otherwise OOM.
     """
     print("\n" + "=" * 70)
-    print("EXPERIMENT 5: Fused Linear + Cross Entropy Tuning")
+    print("EXPERIMENT 5: Fused Linear + Cross Entropy (Speed + Memory)")
     print("=" * 70)
 
     from src.kernels.triton_cross_entropy import FusedLinearCrossEntropyLoss
@@ -351,54 +403,83 @@ def bench_exp5_fused_ce_tuning():
         ("B=1 T=2048", (1, 2048)),
     ]:
         N = B * T
+
+        logits_size_gb = N * V * 4 / 1e9
+        print(f"\n  {label}, V={V}, D={D}:")
+        print(f"    Unfused logits tensor: {N}x{V} x 4 bytes = {logits_size_gb:.1f} GB")
+
         hidden = torch.randn(N, D, device=device, dtype=dtype, requires_grad=True)
         lm_head_weight = torch.randn(V, D, device=device, dtype=dtype, requires_grad=True)
         targets = torch.randint(0, V, (N,), device=device)
 
-        # Baseline: unfused (matmul + F.cross_entropy)
+        # --- Speed comparison ---
         def unfused():
             with torch.no_grad():
                 logits = hidden.detach() @ lm_head_weight.detach().T
                 return F.cross_entropy(logits.float(), targets)
 
         t_unfused = _timer(unfused, warmup=3, iters=10)
-        print(f"\n  {label}, V={V}, D={D}:")
-        print(f"    Unfused (matmul+CE): {t_unfused:.1f}ms")
+        print(f"    Unfused speed: {t_unfused:.1f}ms")
 
-        # Test different chunk sizes
-        for chunk_gb in [0.5, 2.0, 4.0, 8.0]:
+        for chunk_gb in [0.5, 2.0, 8.0]:
             fused_ce = FusedLinearCrossEntropyLoss(max_chunk_gb=chunk_gb)
-
-            def fused():
+            def fused(ce=fused_ce):
                 h = hidden.detach().requires_grad_(True)
                 w = lm_head_weight.detach().requires_grad_(True)
-                return fused_ce(h, w, targets)
-
+                return ce(h, w, targets)
             try:
                 t_fused = _timer(fused, warmup=3, iters=10)
-                speedup = t_unfused / t_fused if t_fused > 0 else float("inf")
-                print(f"    Fused (chunk={chunk_gb}GB): {t_fused:.1f}ms  speedup={speedup:.2f}x")
+                print(f"    Fused (chunk={chunk_gb}GB): {t_fused:.1f}ms  ({t_unfused/t_fused:.2f}x)")
             except Exception as e:
                 print(f"    Fused (chunk={chunk_gb}GB): FAILED: {e}")
 
-        # Test different BLOCK_SIZE values
+        # --- Memory comparison (the real benefit) ---
+        print(f"\n    Peak memory comparison:")
+
+        # Unfused memory
+        torch.cuda.reset_peak_memory_stats()
+        gc.collect()
+        torch.cuda.empty_cache()
+        _base_mem = torch.cuda.memory_allocated() / 1e9
+        for _ in range(3):
+            _ = unfused()
+        torch.cuda.synchronize()
+        mem_unfused = (torch.cuda.max_memory_allocated() / 1e9) - _base_mem
+
+        # Fused memory (chunk=0.5GB)
+        fused_ce_small = FusedLinearCrossEntropyLoss(max_chunk_gb=0.5)
+        torch.cuda.reset_peak_memory_stats()
+        gc.collect()
+        torch.cuda.empty_cache()
+        _base_mem = torch.cuda.memory_allocated() / 1e9
+        for _ in range(3):
+            h = hidden.detach().requires_grad_(True)
+            w = lm_head_weight.detach().requires_grad_(True)
+            _ = fused_ce_small(h, w, targets)
+        torch.cuda.synchronize()
+        mem_fused = (torch.cuda.max_memory_allocated() / 1e9) - _base_mem
+
+        saved_gb = mem_unfused - mem_fused
+        print(f"      Unfused peak: {mem_unfused:.2f} GB")
+        print(f"      Fused peak:   {mem_fused:.2f} GB")
+        print(f"      SAVED:        {saved_gb:.2f} GB  ({saved_gb/mem_unfused*100:.0f}% reduction)")
+        print(f"      (Fused CE is slower but saves ~{logits_size_gb:.1f}GB by not materializing logits)")
+
+        # BLOCK_SIZE tuning (quick)
+        print(f"\n    BLOCK_SIZE tuning (best of chunk sizes):")
         orig_block_size = ce_module._MAX_FUSED_SIZE
         for block_size in [4096, 8192, 16384, 32768]:
             ce_module._MAX_FUSED_SIZE = block_size
-            fused_ce = FusedLinearCrossEntropyLoss(max_chunk_gb=8.0)
-
-            def fused():
+            fused_ce_bs = FusedLinearCrossEntropyLoss(max_chunk_gb=8.0)
+            def fused_bs(ce=fused_ce_bs):
                 h = hidden.detach().requires_grad_(True)
                 w = lm_head_weight.detach().requires_grad_(True)
-                return fused_ce(h, w, targets)
-
+                return ce(h, w, targets)
             try:
-                t_fused = _timer(fused, warmup=3, iters=10)
-                speedup = t_unfused / t_fused if t_fused > 0 else float("inf")
-                print(f"    Fused (BLOCK_SIZE={block_size}): {t_fused:.1f}ms  speedup={speedup:.2f}x")
+                t_fused = _timer(fused_bs, warmup=3, iters=10)
+                print(f"      BLOCK_SIZE={block_size:>5}: {t_fused:.1f}ms")
             except Exception as e:
-                print(f"    Fused (BLOCK_SIZE={block_size}): FAILED: {e}")
-
+                print(f"      BLOCK_SIZE={block_size:>5}: FAILED: {e}")
         ce_module._MAX_FUSED_SIZE = orig_block_size
 
     print()
