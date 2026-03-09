@@ -133,7 +133,7 @@ if HAS_TRITON:
 
         # silu(gate) * up -> h [actual_M, H]
         gate_silu = gate_acc * tl.sigmoid(gate_acc)
-        h = gate_silu * up_acc
+        h_fp32 = gate_silu * up_acc
 
         # out [actual_M, D] = h @ W_down, tile over D and store each tile
         out_row_start = row_off + row_in_expert
@@ -146,7 +146,7 @@ if HAS_TRITON:
                 h_mask = h_offs < H
                 w_d_ptrs = W_down_ptr + w_down_base + h_offs[:, None] * stride_w_down_h + d_offs[None, :] * stride_w_down_d
                 w_d_block = tl.load(w_d_ptrs, mask=h_mask[:, None] & d_mask[None, :], other=0.0)
-                out_acc += tl.dot(h, w_d_block)
+                out_acc += tl.dot(h_fp32.to(w_d_block.dtype), w_d_block)
             out_ptrs = out_ptr + (out_row_start + gate_offs_m[:, None]) * D + d_offs[None, :]
             tl.store(out_ptrs, out_acc.to(out_ptr.dtype.element_ty), mask=gate_mask_m[:, None] & d_mask[None, :])
 

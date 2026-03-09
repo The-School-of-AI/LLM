@@ -652,20 +652,21 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
         self._use_triton = HAS_TRITON and triton_rmsnorm is not None
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, residual: Optional[torch.Tensor] = None) -> torch.Tensor:
         # Triton path: Liger-style fused forward+backward (LigerRMSNormFunction in kernels).
-        # Safe with grad enabled -- reversible backward uses this during recompute.
+        # When residual is provided, the add is fused inside the Triton kernel (no intermediate tensor).
         if self._use_triton and x.is_cuda:
             try:
-                return triton_rmsnorm(x, self.weight, self.eps)
+                return triton_rmsnorm(x, self.weight, self.eps, residual)
             except Exception:
                 pass  # Fall through to PyTorch path
 
         # PyTorch fallback (FIX #43: fp32 variance for stability)
+        if residual is not None:
+            x = x + residual
         x_f = x.float()
         norm = x_f.pow(2).mean(dim=-1, keepdim=True)
         x = x * torch.rsqrt(norm.to(x.dtype) + self.eps)
-        # REPRO-FIX: Cast weight to x.dtype to avoid implicit fp32 upcast in reversible recompute
         return self.weight.to(dtype=x.dtype) * x
 
 
@@ -917,6 +918,10 @@ class GatedDeltaNet(nn.Module):
             and fused_delta_entrance is not None
             and q_in.is_cuda
         )
+        if not hasattr(self, "_logged_entry_path"):
+            self._logged_entry_path = True
+            _path_str = "FUSED (Triton)" if use_fused_entry else "UNFUSED (PyTorch)"
+            _kernel_log.info(f"[GatedDeltaNet] delta entrance path: {_path_str}")
         if use_fused_entry:
             # Reference behavior from FLA/NVLabs gated DeltaNet paths:
             # short-conv + qk normalization + kernel-compatible inputs.

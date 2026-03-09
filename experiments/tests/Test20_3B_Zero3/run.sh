@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
+# Re-exec with bash if launched via sh (e.g. sh run.sh)
+if [[ -z "${BASH_VERSION:-}" ]]; then
+  exec bash "$0" "$@"
+fi
 set -euo pipefail
+# Prevent exit 141 (SIGPIPE) when a pipeline writer outlives the reader (e.g. cmd | head -1).
+trap '' PIPE
 
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$TEST_ROOT/code"
 export PYTHONPATH="${TEST_ROOT}:${PYTHONPATH:-}"
-CFG="${CFG:-$TEST_ROOT/configs/test17_3b_moe.yaml}"
+CFG="${CFG:-$TEST_ROOT/configs/test_70b_moe_lora_4096_bs32_10steps.yaml}"
 RESULTS_DIR="$TEST_ROOT/results"
 INIT_CKPT="$RESULTS_DIR/init/model_init.pt"
 INIT_META="$RESULTS_DIR/init/model_init_meta.json"
+
+# Single log: script + training. Tee so you see output in terminal and it’s saved to run.log.
+mkdir -p "$RESULTS_DIR/init" "$RESULTS_DIR/run"
+RUN_LOG="$RESULTS_DIR/run/run.log"
+exec 1> >(tee -a "$RUN_LOG") 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] run.sh started (PID $$)"
 
 NUM_GPUS="${NUM_GPUS:-8}"
 DEEPSPEED_BIN="${DEEPSPEED_BIN:-deepspeed}"
@@ -18,7 +30,8 @@ FORCE_REWRITE_INIT="${FORCE_REWRITE_INIT:-1}"
 # On A100-80GB (p4de): even 8B uses only ~25% VRAM, so expandable_segments hurts everywhere.
 # Rule: only enable when model is large AND GPU memory is <=48GB (i.e. 40GB class).
 if [[ -z "${PYTORCH_CUDA_ALLOC_CONF:-}" ]]; then
-  _gpu_mem_mib=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+  # head -1 exits after one line; nvidia-smi then gets SIGPIPE (141). Avoid with || true.
+  _gpu_mem_mib=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ' || true)
   _model_name=$("$PYTHON_BIN" -c "import yaml; print(yaml.safe_load(open('$CFG'))['model']['model_name'])" 2>/dev/null || echo "unknown")
   if [[ "${_gpu_mem_mib:-0}" -le 49152 ]]; then
     # 40GB GPU (p4d): only large models need expandable_segments
@@ -39,8 +52,6 @@ export T19_ZERO3_FORCE_CLEAR_CONTAINERS="${T19_ZERO3_FORCE_CLEAR_CONTAINERS:-0}"
 export T19_CLEAR_ROUTER_CACHE_EVERY="${T19_CLEAR_ROUTER_CACHE_EVERY:-1}"
 export T19_TRACK_CUDA_MEMORY="${T19_TRACK_CUDA_MEMORY:-1}"
 export T19_REV_CKPT_USE_REENTRANT="${T19_REV_CKPT_USE_REENTRANT:-0}"
-
-mkdir -p "$RESULTS_DIR/init" "$RESULTS_DIR/run"
 
 # ---------------------------------------------------------------------------
 # Pre-flight version check — refuse to run if critical libs don't match
@@ -177,14 +188,13 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Test 14 (GSA-only, Liger RoPE/MLP/
 (
   cd "$CODE_DIR"
   "$DEEPSPEED_BIN" --num_gpus="$NUM_GPUS" main.py --config "$CFG"
-) 2>&1 | tee "$RESULTS_DIR/run/train.log"
+)
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Test 14 completed"
 echo "  Init model:      $INIT_CKPT"
-echo "  Train log:       $RESULTS_DIR/run/train.log"
+echo "  Log (also):      $RUN_LOG"
 echo "  Metrics:         $RESULTS_DIR/run/metrics.jsonl"
-echo "  Profile report:  $RESULTS_DIR/run/profile_report.txt  (if profile_steps were set)"
-echo "  Profile JSONL:   $RESULTS_DIR/run/profile.jsonl       (if profile_steps were set)"
+echo "  Profile:         $RESULTS_DIR/run/profile_report.txt / profile.jsonl (if profile_steps set)"
 if [[ "$LOADER_TYPE" == "bin_idx" ]]; then
   echo "  Train shards:    $SHARD_DIR"
   [[ -n "$EVAL_SHARD_DIR" ]] && echo "  Eval shards:     $EVAL_SHARD_DIR"

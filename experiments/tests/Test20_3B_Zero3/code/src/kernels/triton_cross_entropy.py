@@ -6,7 +6,7 @@ import triton
 import triton.language as tl
 import os
 
-_MAX_FUSED_SIZE = 32768
+_MAX_FUSED_SIZE = int(os.environ.get("FUSED_CE_BLOCK_SIZE", "32768"))
 
 @triton.jit
 def _liger_cross_entropy_kernel(
@@ -134,10 +134,6 @@ class _FusedLinearCEFunction(torch.autograd.Function):
              if grad_input is not None: grad_input *= grad_output
              if grad_weight is not None: grad_weight *= grad_output
         return grad_input, grad_weight, None, None, None, None
-
-_MAX_FUSED_SIZE = 8192
-
-# ... (kernel kept as is) ...
 
 class FusedLinearCrossEntropyLoss(torch.nn.Module):
     def __init__(self, ignore_index=-100, reduction="mean", max_chunk_gb=8.0):

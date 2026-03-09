@@ -39,6 +39,7 @@ from typing import Any, Dict
 if "PYTORCH_ALLOC_CONF" not in os.environ:
     os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 # Runtime-retention hardening default for ZeRO-3 debug runs.
+# Overridden when training.torch_compile is enabled in config.
 if "TORCHDYNAMO_DISABLE" not in os.environ:
     os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
@@ -153,6 +154,11 @@ class Config:
         self.max_chunk_gb = config_dict["training"].get("max_chunk_gb", 8.0)
         # use_fused_ce removed: FusedLinearCE is always-on (FIX-PERF-04 v3)
         self.use_fused_delta_entrance = config_dict["training"].get("use_fused_delta_entrance", True)
+
+        # torch.compile: "off" (default), "default", "reduce-overhead", "max-autotune"
+        self.torch_compile = config_dict["training"].get("torch_compile", "off")
+        # When torch_compile != "off", compile individual decoder layers (safer than full model with ZeRO-3)
+        self.torch_compile_layers = config_dict["training"].get("torch_compile_layers", True)
 
         # Profiler configuration
         # profile_steps: list of global step numbers to profile (e.g. [10, 11, 12])
@@ -383,6 +389,7 @@ def main():
     print_rank_0(f"  Fused SiLU*Mul (Triton): auto (via liger_ops)")
     print_rank_0(f"  Fused RoPE (Triton): auto (via liger_ops)")
     print_rank_0(f"  Fused SwiGLU (shared expert): auto")
+    print_rank_0(f"  torch.compile: {args.torch_compile}")
     if args.use_s3:
         print_rank_0("  S3 Enabled: Yes")
         print_rank_0(f"  S3 Bucket: {args.s3_bucket}")
@@ -697,6 +704,40 @@ def main():
         print_rank_0(f"  Trainable: {trainable:,} ({trainable / 1e6:.2f}M)")
         print_rank_0(f"  Frozen:    {frozen:,} ({frozen / 1e9:.3f}B)")
         print_lora_summary(model)
+
+    # ========================================
+    # Step 2.4: torch.compile (optional, Exp 2)
+    # ========================================
+    if args.torch_compile != "off":
+        os.environ.pop("TORCHDYNAMO_DISABLE", None)
+        import torch._dynamo
+        torch._dynamo.config.suppress_errors = True
+        compile_mode = args.torch_compile
+        print_rank_0(f"\n[2.4/5] Enabling torch.compile (mode={compile_mode})...")
+
+        if args.torch_compile_layers:
+            _n_compiled = 0
+            for name, module in model.named_modules():
+                if module.__class__.__name__ == "LightningDecoderLayer":
+                    try:
+                        compiled = torch.compile(module, mode=compile_mode)
+                        parent_name = ".".join(name.split(".")[:-1])
+                        child_name = name.split(".")[-1]
+                        parent = model
+                        if parent_name:
+                            for part in parent_name.split("."):
+                                parent = getattr(parent, part)
+                        setattr(parent, child_name, compiled)
+                        _n_compiled += 1
+                    except Exception as e:
+                        print_rank_0(f"  WARNING: Failed to compile {name}: {e}")
+            print_rank_0(f"  Compiled {_n_compiled} LightningDecoderLayer modules")
+        else:
+            try:
+                model = torch.compile(model, mode=compile_mode)
+                print_rank_0(f"  Compiled entire model")
+            except Exception as e:
+                print_rank_0(f"  WARNING: Full model compile failed: {e}")
 
     validate_precision_policy(deepspeed_config, next(model.parameters()).dtype)
 

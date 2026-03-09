@@ -60,6 +60,7 @@ if HAS_TRITON:
         X_ptr,          # Input tensor
         W_ptr,          # RMSNorm weight
         RSTD_ptr,       # Saved reciprocal std (for backward)
+        R_ptr,          # Residual tensor (may be same as X_ptr if no residual)
         # Dimensions
         n_cols,
         # Hyperparameters
@@ -67,45 +68,48 @@ if HAS_TRITON:
         # Strides
         stride_x_row,
         stride_y_row,
+        stride_r_row,
         # Meta-parameters
+        HAS_RESIDUAL: tl.constexpr,
+        STORE_RESIDUAL_OUT: tl.constexpr,
         BLOCK_SIZE: tl.constexpr,
     ):
         """
-        Fused RMSNorm forward: computes output AND saves RSTD for backward.
+        Fused RMSNorm forward with optional in-kernel residual add.
 
-        out = (x / RMS(x)) * w
-        rstd = 1 / sqrt(mean(x^2) + eps)
+        If HAS_RESIDUAL: x = x + residual (fused, no intermediate tensor)
+        Then: out = (x / RMS(x)) * w, rstd saved for backward.
 
-        Computation done in fp32 for numerical stability (Llama-style).
+        If STORE_RESIDUAL_OUT: writes x (after add) back to X_ptr in-place
+        so the caller can use the updated residual without a separate copy.
         """
         row_idx = tl.program_id(0)
         col_offsets = tl.arange(0, BLOCK_SIZE)
         mask = col_offsets < n_cols
 
-        # Load input row
         x_base = X_ptr + row_idx * stride_x_row
         X_row = tl.load(x_base + col_offsets, mask=mask, other=0.0)
-        X_row_dtype = X_row.dtype
 
-        # Upcast to fp32 for variance computation (Llama-style)
+        if HAS_RESIDUAL:
+            r_base = R_ptr + row_idx * stride_r_row
+            R_row = tl.load(r_base + col_offsets, mask=mask, other=0.0)
+            X_row = X_row + R_row
+
+        if STORE_RESIDUAL_OUT:
+            tl.store(x_base + col_offsets, X_row, mask=mask)
+
+        X_row_dtype = X_row.dtype
         X_row_f32 = X_row.to(tl.float32)
 
-        # Compute RMSNorm
         mean_square = tl.sum(X_row_f32 * X_row_f32, axis=0) / n_cols
         rstd = 1.0 / tl.sqrt(mean_square + eps)
-
-        # Save RSTD for backward (tiny: 1 scalar per row)
         tl.store(RSTD_ptr + row_idx, rstd)
 
-        # Normalize
         normed = X_row_f32 * rstd
-
-        # Cast back to input dtype, then apply weight (Llama-style casting)
         normed = normed.to(X_row_dtype)
         W_row = tl.load(W_ptr + col_offsets, mask=mask, other=1.0)
         output = normed * W_row
 
-        # Store output
         y_base = Y_ptr + row_idx * stride_y_row
         tl.store(y_base + col_offsets, output, mask=mask)
 
@@ -213,19 +217,21 @@ if HAS_TRITON:
         """
         Fused RMSNorm with Triton forward + backward.
 
-        Forward:  Computes RMSNorm and saves RSTD (1 scalar per row)
-        Backward: Uses saved RSTD to compute dX and dW in a single kernel
+        Forward:  Computes RMSNorm and saves RSTD (1 scalar per row).
+                  Optionally fuses residual add (x = x + residual) inside the kernel.
+        Backward: Uses saved RSTD to compute dX and dW in a single kernel.
 
         Attribution: Based on Liger-Kernel (Apache-2.0)
         """
 
         @staticmethod
-        def forward(ctx, X, W, eps):
+        def forward(ctx, X, W, eps, residual=None):
             """
             Args:
                 X: Input tensor [..., hidden_size]
                 W: Weight parameter [hidden_size]
                 eps: Epsilon for numerical stability
+                residual: Optional residual to add before normalizing (fused in-kernel)
 
             Returns:
                 Normalized tensor, same dtype as X
@@ -233,17 +239,22 @@ if HAS_TRITON:
             with kernel_region("rmsnorm_fwd_total"):
                 orig_shape = X.shape
                 n_cols = X.shape[-1]
-                
+
                 with kernel_region("rmsnorm_fwd_reshape"):
                     X_2d = X.contiguous().reshape(-1, n_cols)
-                
+
+                has_residual = residual is not None
+                if has_residual:
+                    R_2d = residual.contiguous().reshape(-1, n_cols)
+                else:
+                    R_2d = X_2d  # dummy, not read
+
                 n_rows = X_2d.shape[0]
 
                 BLOCK_SIZE, num_warps = _calculate_settings(n_cols)
 
-                # Safety: fall back to PyTorch if dim is too large
                 if BLOCK_SIZE > 65536:
-                    return pytorch_rmsnorm(X, W, eps)
+                    return pytorch_rmsnorm(X, W, eps, residual)
 
                 with kernel_region("rmsnorm_fwd_alloc"):
                     Y = torch.empty_like(X_2d)
@@ -251,18 +262,22 @@ if HAS_TRITON:
 
                 with kernel_region("rmsnorm_fwd_kernel"):
                     _rmsnorm_fwd_kernel[(n_rows,)](
-                        Y, X_2d, W, RSTD,
+                        Y, X_2d, W, RSTD, R_2d,
                         n_cols, eps,
-                        X_2d.stride(0), Y.stride(0),
+                        X_2d.stride(0), Y.stride(0), R_2d.stride(0),
+                        HAS_RESIDUAL=has_residual,
+                        STORE_RESIDUAL_OUT=has_residual,
                         BLOCK_SIZE=BLOCK_SIZE,
                         num_warps=num_warps,
                     )
 
+                # If residual was fused, X_2d now contains x+residual (written back in-kernel)
+                X_saved = X_2d
+
                 with kernel_region("rmsnorm_fwd_reshape_out"):
                     Y = Y.reshape(orig_shape)
 
-                # Save for backward
-                ctx.save_for_backward(X_2d, W, RSTD)
+                ctx.save_for_backward(X_saved, W, RSTD)
                 ctx.BLOCK_SIZE = BLOCK_SIZE
                 ctx.num_warps = num_warps
                 ctx.n_rows = n_rows
@@ -308,7 +323,7 @@ if HAS_TRITON:
                 with kernel_region("rmsnorm_bwd_dw_reduce"):
                     dW = _dW.sum(dim=0).to(W.dtype)
 
-                return dX.reshape(ctx.orig_shape), dW, None
+                return dX.reshape(ctx.orig_shape), dW, None, None
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -340,13 +355,8 @@ def triton_rmsnorm(
         if not HAS_TRITON:
             raise ImportError("Triton is required for triton_rmsnorm")
 
-        # Handle optional residual (add before norm)
-        if residual is not None:
-            with kernel_region("rmsnorm_residual_add"):
-                x = x + residual
-
         with kernel_region("rmsnorm_apply"):
-            return LigerRMSNormFunction.apply(x, weight, eps)
+            return LigerRMSNormFunction.apply(x, weight, eps, residual)
 
 
 def pytorch_rmsnorm(
@@ -398,26 +408,30 @@ def triton_rmsnorm_fwd_only(
     if not HAS_TRITON:
         raise ImportError("Triton is required")
 
-    if residual is not None:
-        x = x + residual
-
     orig_shape = x.shape
     x_2d = x.contiguous().reshape(-1, x.shape[-1])
     n_rows, n_cols = x_2d.shape
+
+    has_residual = residual is not None
+    if has_residual:
+        r_2d = residual.contiguous().reshape(-1, n_cols)
+    else:
+        r_2d = x_2d
 
     out = torch.empty_like(x_2d)
     BLOCK_SIZE, num_warps = _calculate_settings(n_cols)
 
     if BLOCK_SIZE > 65536:
-        return pytorch_rmsnorm(x, weight, eps)
+        return pytorch_rmsnorm(x, weight, eps, residual)
 
-    # Dummy RSTD (not saved for backward since we don't have one)
     rstd_dummy = torch.empty(n_rows, dtype=torch.float32, device=x.device)
 
     _rmsnorm_fwd_kernel[(n_rows,)](
-        out, x_2d, weight, rstd_dummy,
+        out, x_2d, weight, rstd_dummy, r_2d,
         n_cols, eps,
-        x_2d.stride(0), out.stride(0),
+        x_2d.stride(0), out.stride(0), r_2d.stride(0),
+        HAS_RESIDUAL=has_residual,
+        STORE_RESIDUAL_OUT=False,
         BLOCK_SIZE=BLOCK_SIZE,
         num_warps=num_warps,
     )

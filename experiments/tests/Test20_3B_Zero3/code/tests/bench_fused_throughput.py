@@ -10,6 +10,13 @@ Uses realistic model dimensions from recurrence_model_70b_moe.py:
 
 Run from code/:
   python tests/bench_fused_throughput.py
+
+Interpretation (A100, sm_80):
+  - QKV / QKVG / O+gate: Fused kernels use small blocks (num_stages=1) to fit 163 KB
+    shared memory, so cuBLAS (F.linear) is usually faster. Fused path is for correctness
+    and for small-GPU (e.g. T4) where it avoids OOM.
+  - MoE: Triton fused can beat 3x grouped_gemm at small/medium N; at large N
+    grouped_gemm may win. Prefer Triton for typical batch sizes if both are correct.
 """
 
 import sys

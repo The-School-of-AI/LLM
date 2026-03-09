@@ -284,6 +284,8 @@ def train_epoch(
     cleanup_gc_collect = _env_flag("T19_STEP_GC_COLLECT", "1")
     cleanup_empty_cache = _env_flag("T19_STEP_EMPTY_CACHE", "1")
     cleanup_ipc_collect = _env_flag("T19_STEP_IPC_COLLECT", "0")
+    # Exp 6: Run cleanup every N steps instead of every step (1 = every step, default)
+    cleanup_every_n = max(1, _env_int("T19_CLEANUP_EVERY_N", 1))
     zero3_release_every = max(0, _env_int("T19_ZERO3_RELEASE_EVERY", 1))
     clear_router_cache_every = max(0, _env_int("T19_CLEAR_ROUTER_CACHE_EVERY", 1))
     zero3_force_clear_containers = _env_flag("T19_ZERO3_FORCE_CLEAR_CONTAINERS", "0")
@@ -308,6 +310,7 @@ def train_epoch(
         f"gc_collect={int(cleanup_gc_collect)} "
         f"empty_cache={int(cleanup_empty_cache)} "
         f"ipc_collect={int(cleanup_ipc_collect)} "
+        f"cleanup_every_n={cleanup_every_n} "
         f"zero3_release_every={zero3_release_every} "
         f"clear_router_cache_every={clear_router_cache_every} "
         f"zero3_force_clear_containers={int(zero3_force_clear_containers)} "
@@ -821,15 +824,17 @@ def train_epoch(
         lm_weight = None
         _lm_param = None
 
-        # Free circular-ref and allocator-tracked GPU memory at end of each step.
-        if torch.cuda.is_available() and cleanup_sync:
-            torch.cuda.synchronize()
-        if cleanup_gc_collect:
-            gc.collect()
-        if torch.cuda.is_available() and cleanup_empty_cache:
-            torch.cuda.empty_cache()
-        if torch.cuda.is_available() and cleanup_ipc_collect:
-            torch.cuda.ipc_collect()
+        # Free circular-ref and allocator-tracked GPU memory (frequency controlled by T19_CLEANUP_EVERY_N).
+        _do_cleanup = (i % cleanup_every_n == 0)
+        if _do_cleanup:
+            if torch.cuda.is_available() and cleanup_sync:
+                torch.cuda.synchronize()
+            if cleanup_gc_collect:
+                gc.collect()
+            if torch.cuda.is_available() and cleanup_empty_cache:
+                torch.cuda.empty_cache()
+            if torch.cuda.is_available() and cleanup_ipc_collect:
+                torch.cuda.ipc_collect()
 
         # Early stopping for demo/debugging
         if max_steps is not None and i >= max_steps:
@@ -955,6 +960,7 @@ def train_epoch_opus(
     cleanup_gc_collect = _env_flag("T19_STEP_GC_COLLECT", "1")
     cleanup_empty_cache = _env_flag("T19_STEP_EMPTY_CACHE", "1")
     cleanup_ipc_collect = _env_flag("T19_STEP_IPC_COLLECT", "0")
+    cleanup_every_n = max(1, _env_int("T19_CLEANUP_EVERY_N", 1))
     zero3_release_every = int(os.environ.get("T19_ZERO3_RELEASE_EVERY", "0"))
     zero3_force_clear_containers = _env_flag("T19_ZERO3_FORCE_CLEAR_CONTAINERS", "0")
     clear_router_cache_every = int(os.environ.get("T19_CLEAR_ROUTER_CACHE_EVERY", "0"))
@@ -1305,14 +1311,16 @@ def train_epoch_opus(
         loss = None; loss_ntp = None; loss_mtp = None
         lm_weight = None; _lm_param = None; result = None; local_indices = None
 
-        if torch.cuda.is_available() and cleanup_sync:
-            torch.cuda.synchronize()
-        if cleanup_gc_collect:
-            gc.collect()
-        if torch.cuda.is_available() and cleanup_empty_cache:
-            torch.cuda.empty_cache()
-        if torch.cuda.is_available() and cleanup_ipc_collect:
-            torch.cuda.ipc_collect()
+        _do_cleanup = (i % cleanup_every_n == 0)
+        if _do_cleanup:
+            if torch.cuda.is_available() and cleanup_sync:
+                torch.cuda.synchronize()
+            if cleanup_gc_collect:
+                gc.collect()
+            if torch.cuda.is_available() and cleanup_empty_cache:
+                torch.cuda.empty_cache()
+            if torch.cuda.is_available() and cleanup_ipc_collect:
+                torch.cuda.ipc_collect()
 
         if max_steps is not None and i >= max_steps:
             break

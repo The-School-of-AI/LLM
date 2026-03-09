@@ -1,0 +1,1644 @@
+
+[2026-03-08 12:22:24] Running pre-flight version check...
+  OK:   torch=2.7.1+cu128
+  OK:   triton=3.6.0
+  OK:   deepspeed=0.18.6
+  OK:   fla=0.4.2
+[2026-03-08 12:22:42] Version check passed.
+[2026-03-08 12:22:42] Using config: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test17_3b_moe.yaml
+[2026-03-08 12:22:42] PYTORCH_CUDA_ALLOC_CONF=<unset>
+[2026-03-08 12:22:42] TORCHDYNAMO_DISABLE=1
+[2026-03-08 12:22:42] T19_STEP_CUDA_SYNC=1
+[2026-03-08 12:22:42] T19_STEP_GC_COLLECT=1
+[2026-03-08 12:22:42] T19_STEP_EMPTY_CACHE=1
+[2026-03-08 12:22:42] T19_ZERO3_RELEASE_EVERY=1
+[2026-03-08 12:22:42] T19_ZERO3_FORCE_CLEAR_CONTAINERS=0
+[2026-03-08 12:22:42] T19_CLEAR_ROUTER_CACHE_EVERY=1
+[2026-03-08 12:22:42] T19_REV_CKPT_USE_REENTRANT=0
+[2026-03-08 12:22:42] Saving deterministic init model for Test 14...
+/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+Traceback (most recent call last):
+  File "/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/scripts/save_init_model.py", line 151, in <module>
+    main()
+  File "/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/scripts/save_init_model.py", line 84, in main
+    model = Model3B(
+            ^^^^^^^^
+  File "/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/models/recurrence_model_3b_moe.py", line 2147, in __init__
+    self.apply(self._init_weights)
+  File "/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/nn/modules/module.py", line 1044, in apply
+    module.apply(fn)
+  File "/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/nn/modules/module.py", line 1044, in apply
+    module.apply(fn)
+  File "/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/nn/modules/module.py", line 1044, in apply
+    module.apply(fn)
+  [Previous line repeated 3 more times]
+  File "/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/nn/modules/module.py", line 1045, in apply
+    fn(self)
+  File "/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/models/recurrence_model_3b_moe.py", line 2203, in _init_weights
+    module.weight.data.normal_(mean=0.0, std=0.02)
+KeyboardInterrupt
+[2026-03-08 12:23:52] run.sh started (PID 106514)
+[2026-03-08 12:23:52] Running pre-flight version check...
+  OK:   torch=2.7.1+cu128
+  OK:   triton=3.6.0
+  OK:   deepspeed=0.18.6
+  OK:   fla=0.4.2
+[2026-03-08 12:24:11] Version check passed.
+[2026-03-08 12:24:11] Using config: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+[2026-03-08 12:24:11] PYTORCH_CUDA_ALLOC_CONF=<unset>
+[2026-03-08 12:24:11] TORCHDYNAMO_DISABLE=1
+[2026-03-08 12:24:11] T19_STEP_CUDA_SYNC=1
+[2026-03-08 12:24:11] T19_STEP_GC_COLLECT=1
+[2026-03-08 12:24:11] T19_STEP_EMPTY_CACHE=1
+[2026-03-08 12:24:11] T19_ZERO3_RELEASE_EVERY=1
+[2026-03-08 12:24:11] T19_ZERO3_FORCE_CLEAR_CONTAINERS=0
+[2026-03-08 12:24:11] T19_CLEAR_ROUTER_CACHE_EVERY=1
+[2026-03-08 12:24:11] T19_REV_CKPT_USE_REENTRANT=0
+[2026-03-08 12:24:11] Saving deterministic init model for Test 14...
+/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 20
+   - DeltaNet: 15 layers (75%) - O(N) linear attention
+   - GSA: 5 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 260 real + 260 null = 520 slots
+   Top-k: 8 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 71,757,884,113 (~71.76B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+Saved init model: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/results/init/model_init.pt
+Saved metadata: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/results/init/model_init_meta.json
+[2026-03-08 12:42:25] Starting Test 14 (GSA-only, Liger RoPE/MLP/fused CE, bin_idx loader support)...
+/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-03-08 12:42:32,215] [WARNING] [runner.py:232:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-03-08 12:42:32,215] [INFO] [runner.py:630:main] cmd = /mnt/local-nvme/LLM/.venv/bin/python -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMCwgMSwgMiwgMywgNCwgNSwgNiwgN119 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None --log_level=info main.py --config /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-03-08 12:42:37,328] [INFO] [launch.py:162:main] WORLD INFO DICT: {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]}
+[2026-03-08 12:42:37,328] [INFO] [launch.py:168:main] nnodes=1, num_local_procs=8, node_rank=0
+[2026-03-08 12:42:37,328] [INFO] [launch.py:179:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1, 2, 3, 4, 5, 6, 7]})
+[2026-03-08 12:42:37,328] [INFO] [launch.py:180:main] dist_world_size=8
+[2026-03-08 12:42:37,328] [INFO] [launch.py:184:main] Setting CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+[2026-03-08 12:42:37,329] [INFO] [launch.py:272:main] process 111761 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=0', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+[2026-03-08 12:42:37,329] [INFO] [launch.py:272:main] process 111762 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=1', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+[2026-03-08 12:42:37,330] [INFO] [launch.py:272:main] process 111763 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=2', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+[2026-03-08 12:42:37,330] [INFO] [launch.py:272:main] process 111764 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=3', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+[2026-03-08 12:42:37,330] [INFO] [launch.py:272:main] process 111765 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=4', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+[2026-03-08 12:42:37,331] [INFO] [launch.py:272:main] process 111766 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=5', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+[2026-03-08 12:42:37,331] [INFO] [launch.py:272:main] process 111767 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=6', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+[2026-03-08 12:42:37,331] [INFO] [launch.py:272:main] process 111768 spawned with command: ['/mnt/local-nvme/LLM/.venv/bin/python', '-u', 'main.py', '--local_rank=7', '--config', '/mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml']
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4============================================================
+
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42Kernel Availability Report (3B MoE Correct):
+
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  CUDA available:       True
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  MoE Grouped GEMM:     ENABLED
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.============================================================
+
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (3B MoE Correct):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+  MoE Grouped GEMM:     ENABLED
+============================================================
+============================================================
+Kernel Availability Report (1B):
+  CUDA available:       True
+  HAS_TRITON:           True
+  Triton RMSNorm:       ENABLED
+  Triton Sinkhorn:      ENABLED
+  Triton Sparse Attn:   ENABLED
+  fla GatedDeltaRule:   ENABLED
+============================================================
+================================================================================
+1B Dense Model Training - DeepSpeed + Reversible Architecture
+================================================================================
+Configuration File: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/configs/test_70b_moe_lora_4096_bs32_10steps.yaml
+  PyTorch:        2.7.1+cu128
+  Triton:         3.6.0
+  DeepSpeed:      0.18.6
+  FLA:            0.4.2
+  FLA source:     /mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/flash_linear_attention-0.4.2.dist-info
+  Einops:         0.8.2
+  Grouped-GEMM:   0.3.0
+  CUDA Available: True
+CUDA Devices: 8
+
+Configuration:
+  Model: 1B Dense (1.513B params, 100% active)
+  Tokenizer: TSAI 131K (2^17 = 131,072 vocab)
+  Embedding Type: kronecker
+  Model Variant: reversible
+  Model Name: 70bmoe
+  Dataset: wikitext/wikitext-103-raw-v1
+  Packed Blocks Enabled: True
+  Block Sizes: [4096]
+  Block Size Counts: None
+  Domain Column: None
+  Concat Across Domains: False
+  Loader Type: bin_idx
+  Require Local NVMe Dataset: False
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  Batch Size: 4
+  Max Length: 4096
+  DataLoader Workers: 16 per GPU
+  Epochs: 1
+  Checkpoint Interval: Every 500 steps
+  Output Directory: ../results/run_lora/checkpoints
+  Random Seed: 42
+  MoE T4 Enabled: False
+  MoE T4 Dispatcher: deepep
+  MoE Expert Parallel Size: 1
+  Fused DeltaNet Entrance: True
+  Fused SiLU*Mul (Triton): auto (via liger_ops)
+  Fused RoPE (Triton): auto (via liger_ops)
+  Fused SwiGLU (shared expert): auto
+================================================================================
+
+[0.5/5] Reading DeepSpeed configuration...
+  DeepSpeed Config: ../deepspeed/zero-3-70b-moe-lora-bs32.json
+  train_micro_batch_size_per_gpu: 4
+  gradient_accumulation_steps: 1
+  train_batch_size (from config): 32
+  ⚠️  WARNING: train_batch_size (32) != micro_batch (4) × accum_steps (1) × num_gpus (1) = 4
+  This mismatch may cause unexpected behavior.
+  ✓ Using micro_batch_size_per_gpu=4 for DataLoader
+
+[1/5] Loading tokenizer and data...
+  Using TSAI 131K Tokenizer (2^17 = 131,072 tokens)
+  Loading TSAI 131K tokenizer from: /mnt/local-nvme/LLM/experiments/tests/Test20_3B_Zero3/code/src/tokenizer
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=2
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+Shard assignment: rank=2/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=2/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+  Updated model vocab_size to match tokenizer: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=0
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+  Tokenizer loaded:
+    - Vocab size: 131,072
+Shard assignment: rank=0/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=0/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=3
+  Updated model vocab_size to match tokenizer: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=7
+Shard assignment: rank=3/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=3/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=1
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=6
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+Shard assignment: rank=7/8, assigned=3/30 shards
+✓ All 3 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=7/8 | shards=3/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+Shard assignment: rank=1/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=1/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+  Updated model vocab_size to match tokenizer: 131,072
+  Tokenizer loaded:
+    - Vocab size: 131,072
+Shard assignment: rank=6/8, assigned=3/30 shards
+✓ All 3 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=6/8 | shards=3/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+  Updated model vocab_size to match tokenizer: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Updated model vocab_size to match tokenizer: 131,072
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=4
+  Tokenizer loaded:
+    - Vocab size: 131,072
+  Updated model vocab_size to match tokenizer: 131,072
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+Shard assignment: rank=4/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=4/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+    - Total tokens (with special): 131,072
+    - BOS token: <|begin_of_text|> (ID: 130716)
+    - EOS token: <|end_of_text|> (ID: 130717)
+    - PAD token: <|pad|> (ID: 130718)
+  [bin_idx] Loading train shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Loading pre-tokenized shards from: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/
+Distributed context: is_distributed=True, world_size=8, rank=5
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+Tokenizer hash (first 16 chars): b1968b22a618c9ed...
+Block config: seq_len=4096 (1 block per sequence)
+  Updated model vocab_size to match tokenizer: 131,072
+  WARNING: /mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/shard_00029/tokens.bin: 1 rows dropped at tail (2114 tokens). Logged for auditability.
+Shard assignment: rank=5/8, assigned=4/30 shards
+✓ All 4 shard(s) passed tokenizer validation
+DataLoader worker config: num_workers=16, persistent_workers=True, pin_memory=True, prefetch_factor=4
+BinIdxDataLoader ready | shard_dir=/mnt/local-nvme/LLM/experiments/tests/Test17_3B_Zero3/data/wikitext_shards/ | seq_len=4096 | batch_size=4 | rank=5/8 | shards=4/30 | num_workers=16 | drop_last=True | pin_memory=True
+  [bin_idx] Train loader ready (seq_len=4096)
+  [bin_idx] No eval_shard_dir set — validation/test will be skipped.
+
+[2/5] Loading model...
+  Creating 70B MoE Model (reversible / ReversibleMidpointStack)...
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Updated model vocab_size to match tokenizer: 131,072
+    (tokenizer.vocab_size=131072, len(tokenizer)=131072)
+  Setting up Kronecker Product Embeddings (byte-level)...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+  Kronecker embeddings: POS_DIM=32 x CHAR_DIM=256 = D=8192
+  Fused DeltaNet entrance: ENABLED (conv+L2Norm+RoPE fused)
+  Using deepspeed.zero.Init for large model construction...
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+   🔧 pf_to_model (8192->4096) initialized with std=0.000221
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)
+   Vocabulary: 131,072      pf_to_model: 33.6M params (8192 × 4096)
+
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:   Hidden Size: 4096      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+
+
+   📐 Kronecker Embeddings:
+
+   Total Layers: 20
+      POS_DIM=32 x CHAR_DIM=256 = D=8192   Vocabulary: 131,072
+
+   - DeltaNet: 15 layers (75%) - O(N) linear attention   Hidden Size: 4096
+
+      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)   - GSA: 5 layers (25%) - Adaptive sparse
+
+   📐 Kronecker Embeddings:
+
+      pf_to_model: 33.6M params (8192 × 4096)      POS_DIM=32 x CHAR_DIM=256 = D=8192
+   Context Target: 262,144 tokens (standard RoPE)
+
+
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+   Experts: 260 real + 260 null = 520 slots      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)
+
+
+   Total Layers: 20   Top-k: 8 over total slots
+
+      pf_to_model: 33.6M params (8192 × 4096)
+   Shared Expert FFN: 2048 (always active)
+   - DeltaNet: 15 layers (75%) - O(N) linear attention      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+   Routed Expert FFN: 1024 (sparse)
+
+   - GSA: 5 layers (25%) - Adaptive sparse
+   Total Layers: 20
+   MTP: 2 predictions
+
+
+   Context Target: 262,144 tokens (standard RoPE)
+   - DeltaNet: 15 layers (75%) - O(N) linear attention
+   Total Parameters: 1 (~0.00B)
+
+   Experts: 260 real + 260 null = 520 slots   - GSA: 5 layers (25%) - Adaptive sparse   Active Parameters: dynamic (depends on real routes + shared expert)
+
+
+   Top-k: 8 over total slots
+   Context Target: 262,144 tokens (standard RoPE)
+
+   Shared Expert FFN: 2048 (always active)
+   Experts: 260 real + 260 null = 520 slots   Routed Expert FFN: 1024 (sparse)
+
+   Top-k: 8 over total slots
+   MTP: 2 predictions
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   Total Parameters: 1 (~0.00B)
+
+   Active Parameters: dynamic (depends on real routes + shared expert)   MTP: 2 predictions
+
+
+   Total Parameters: 1 (~0.00B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)
+      pf_to_model: 33.6M params (8192 × 4096)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+   Total Layers: 20
+   - DeltaNet: 15 layers (75%) - O(N) linear attention
+   - GSA: 5 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 260 real + 260 null = 520 slots
+   Top-k: 8 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 1 (~0.00B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Vocabulary: 131,072
+   Hidden Size: 4096
+
+   📐 Kronecker Embeddings:
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+   Vocabulary: 131,072
+   Hidden Size: 4096      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)
+
+
+   📐 Kronecker Embeddings:
+      POS_DIM=32 x CHAR_DIM=256 = D=8192      pf_to_model: 33.6M params (8192 × 4096)
+
+      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+      pf_to_model: 33.6M params (8192 × 4096)
+   Total Layers: 20
+
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Total Layers: 20   - DeltaNet: 15 layers (75%) - O(N) linear attention
+
+
+   - DeltaNet: 15 layers (75%) - O(N) linear attention   Vocabulary: 131,072   - GSA: 5 layers (25%) - Adaptive sparse
+
+
+   - GSA: 5 layers (25%) - Adaptive sparse   Hidden Size: 4096
+
+
+   📐 Kronecker Embeddings:
+   Context Target: 262,144 tokens (standard RoPE)
+   Context Target: 262,144 tokens (standard RoPE)
+
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+   Experts: 260 real + 260 null = 520 slots
+
+   Top-k: 8 over total slots   Experts: 260 real + 260 null = 520 slots
+      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)
+   Shared Expert FFN: 2048 (always active)
+
+   Top-k: 8 over total slots      pf_to_model: 33.6M params (8192 × 4096)
+   Routed Expert FFN: 1024 (sparse)
+
+   Shared Expert FFN: 2048 (always active)
+   MTP: 2 predictions      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)
+   Routed Expert FFN: 1024 (sparse)
+
+
+   Total Parameters: 1 (~0.00B)
+🤖 MODEL-3B-MOE-CORRECT INITIALIZED:
+   Total Layers: 20
+   MTP: 2 predictions
+
+   Active Parameters: dynamic (depends on real routes + shared expert)
+
+   - DeltaNet: 15 layers (75%) - O(N) linear attention   Vocabulary: 131,072
+
+   - GSA: 5 layers (25%) - Adaptive sparse   Hidden Size: 4096
+   Total Parameters: 1 (~0.00B)
+
+
+
+   📐 Kronecker Embeddings:
+   Context Target: 262,144 tokens (standard RoPE)   Active Parameters: dynamic (depends on real routes + shared expert)
+
+
+      POS_DIM=32 x CHAR_DIM=256 = D=8192
+   Experts: 260 real + 260 null = 520 slots
+   Top-k: 8 over total slots      Buffer size: 4.5M elements (4.5 MB, gpu_dynamic mode)
+
+   Shared Expert FFN: 2048 (always active)
+      pf_to_model: 33.6M params (8192 × 4096)
+   Routed Expert FFN: 1024 (sparse)
+      ⚠️  Embedding tying NOT possible (8192 ≠ 4096)   MTP: 2 predictions
+
+
+   Total Layers: 20
+
+   Total Parameters: 1 (~0.00B)
+   Active Parameters: dynamic (depends on real routes + shared expert)   - DeltaNet: 15 layers (75%) - O(N) linear attention
+
+   - GSA: 5 layers (25%) - Adaptive sparse
+
+   Context Target: 262,144 tokens (standard RoPE)
+   Experts: 260 real + 260 null = 520 slots
+   Top-k: 8 over total slots
+   Shared Expert FFN: 2048 (always active)
+   Routed Expert FFN: 1024 (sparse)
+   MTP: 2 predictions
+
+   Total Parameters: 1 (~0.00B)
+   Active Parameters: dynamic (depends on real routes + shared expert)
+  Casting model to bfloat16 to avoid autocast dtype mismatches in reversible backward pass...
+
+[2.5/5] Injecting LoRA adapters...
+  LoRA rank=16, alpha=32.0, fused_kernels=True
+  Injected 84 LoRA adapters
+  Trainable: 11,010,048 (11.01M)
+  Frozen:    0 (0.000B)
+
+======================================================================
+  LoRA INJECTION SUMMARY
+======================================================================
+  Total parameters:          11,010,048 (0.011B)
+  Trainable (LoRA):          11,010,048 (11.01M)
+  Frozen (base model):                0 (0.000B)
+  Trainable fraction:   100.0000%
+  LoRA modules:         84
+  LoRA optimizer est:   132.1 MB total
+======================================================================
+
+  ✓ Model cast to bfloat16
+  ✓ Model created successfully
+
+[3/5] Initializing DeepSpeed...
+/mnt/local-nvme/LLM/.venv/lib64/python3.11/site-packages/torch/utils/cpp_extension.py:2356: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+Stage 3 initialize beginning
+MA 16.71 GB         Max_MA 25.97 GB         CA 26.61 GB         Max_CA 27 GB 
+CPU Virtual Memory:  used = 28.51 GB, percent = 2.5%
+DeepSpeedZeRoOffload initialize [begin]
+MA 16.71 GB         Max_MA 16.71 GB         CA 26.61 GB         Max_CA 27 GB 
+CPU Virtual Memory:  used = 28.51 GB, percent = 2.5%
+Parameter Offload - Persistent parameters statistics: param_count = 907, numel = 36514513
+DeepSpeedZeRoOffload initialize [end]
+MA 16.71 GB         Max_MA 16.71 GB         CA 26.61 GB         Max_CA 27 GB 
+CPU Virtual Memory:  used = 28.71 GB, percent = 2.6%
+Before creating fp16 partitions
+MA 16.71 GB         Max_MA 16.71 GB         CA 26.61 GB         Max_CA 27 GB 
+CPU Virtual Memory:  used = 28.71 GB, percent = 2.6%
+After creating fp16 partitions: 1
+MA 16.71 GB         Max_MA 16.71 GB         CA 22.55 GB         Max_CA 27 GB 
+CPU Virtual Memory:  used = 28.71 GB, percent = 2.6%
+Before creating fp32 partitions
+MA 16.71 GB         Max_MA 16.71 GB         CA 22.55 GB         Max_CA 23 GB 
+CPU Virtual Memory:  used = 28.71 GB, percent = 2.6%
+After creating fp32 partitions
+MA 16.72 GB         Max_MA 16.72 GB         CA 22.55 GB         Max_CA 23 GB 
+CPU Virtual Memory:  used = 28.71 GB, percent = 2.6%
+Before initializing optimizer states
+MA 16.72 GB         Max_MA 16.72 GB         CA 22.55 GB         Max_CA 23 GB 
+CPU Virtual Memory:  used = 28.71 GB, percent = 2.6%
+After initializing optimizer states
+MA 16.72 GB         Max_MA 16.72 GB         CA 22.55 GB         Max_CA 23 GB 
+CPU Virtual Memory:  used = 28.72 GB, percent = 2.6%
+[2026-03-08 12:43:05,114] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-08 12:43:05,114] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-08 12:43:05,114] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-08 12:43:05,114] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-08 12:43:05,114] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-08 12:43:05,114] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-03-08 12:43:05,114] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+After initializing ZeRO optimizer
+MA 16.81 GB         Max_MA 16.81 GB         CA 22.55 GB         Max_CA 23 GB 
+CPU Virtual Memory:  used = 29.98 GB, percent = 2.7%
+[2026-03-08 12:43:05,509] [WARNING] [lr_schedules.py:862:get_lr] Attempting to get learning rate from scheduler before it has started
+ZeRO Stage: 3
+
+[4/5] Training...
+Checkpoint interval: Every 500 steps
+Starting from epoch 0, global step 0
+
+================================================================================
+Epoch 1/1
+================================================================================
+[versions] torch=2.7.1+cu128 triton=3.6.0 deepspeed=0.18.6 fla=0.4.2
+[T19 hardening] cuda_sync=1 gc_collect=1 empty_cache=1 ipc_collect=0 zero3_release_every=1 clear_router_cache_every=1 zero3_force_clear_containers=0 track_cuda_memory=1
+
+Epoch 0: 0it [00:00, ?it/s]
+[MEMORY] Before forward pass: 18.05GB
+[MEMORY] After forward pass: 40.80GB (peak: 55.51GB)
+[MEMORY] Forward allocated: 22.75GB
+[MEMORY] After loss_ntp: 42.01GB
+[MEMORY] Before backward: 42.15GB
+[MEMORY] === MEMORY SUMMARY ===
+|===========================================================================|
+|                  PyTorch CUDA memory summary, device ID 0                 |
+|---------------------------------------------------------------------------|
+|            CUDA OOMs: 0            |        cudaMalloc retries: 0         |
+|===========================================================================|
+|        Metric         | Cur Usage  | Peak Usage | Tot Alloc  | Tot Freed  |
+|---------------------------------------------------------------------------|
+| Allocated memory      |  40193 MiB |  52935 MiB |   1758 GiB |   1718 GiB |
+|---------------------------------------------------------------------------|
+| Active memory         |  40193 MiB |  52951 MiB |   1758 GiB |   1718 GiB |
+|---------------------------------------------------------------------------|
+| Requested memory      |  40183 MiB |  52940 MiB |   1758 GiB |   1718 GiB |
+|---------------------------------------------------------------------------|
+| GPU reserved memory   |  58432 MiB |  58432 MiB |  62594 MiB |   4162 MiB |
+|---------------------------------------------------------------------------|
+| Non-releasable memory |   1366 MiB |   5874 MiB |   1070 GiB |   1068 GiB |
+|---------------------------------------------------------------------------|
+| Allocations           |    1226    |    1264    |   14991    |   13765    |
+|---------------------------------------------------------------------------|
+| Active allocs         |    1226    |    1264    |   14991    |   13765    |
+|---------------------------------------------------------------------------|
+| GPU reserved segments |      80    |      80    |      82    |       2    |
+|---------------------------------------------------------------------------|
+| Non-releasable allocs |      37    |      43    |    5700    |    5663    |
+|---------------------------------------------------------------------------|
+| Oversize allocations  |       0    |       0    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Oversize GPU segments |       0    |       0    |       0    |       0    |
+|===========================================================================|
+
+[2026-03-08 12:43:28,711] [WARNING] [stage3.py:2274:step] 1 pytorch allocator cache flushes since last step. this happens when there is high memory pressure and is detrimental to performance. if this is happening frequently consider adjusting settings to reduce memory consumption. If you are unable to make the cache flushes go away consider adding get_accelerator().empty_cache() calls in your training loop to ensure that all ranks flush their caches at the same time
+[MEMORY] After backward & step: 19.50GB
+
+Epoch 0: 0it [00:23, ?it/s, loss=12.6069, global_step=1, toks/s=5729.2, loss2=12.6056, r_loss=1.3808, vram_alloc=19.5G]2026-03-08 12:43:28,714 | step 1 | loss: 12.6069 | loss2: 12.6056 | r_loss: 1.3808 | lr: 0.00e+00 | dt: 22877.77ms | tok/sec:   5729.23
+[T19 hardening] ZeRO release hooks active: engine.empty_partition_cache, optimizer.empty_partition_cache, parameter_offload.empty_partition_cache
+
+Epoch 0: 1it [00:24, 24.34s/it, loss=12.6069, global_step=1, toks/s=5729.2, loss2=12.6056, r_loss=1.3808, vram_alloc=19.5G]
+Epoch 0: 1it [00:36, 24.34s/it, loss=12.6015, global_step=2, toks/s=10953.5, loss2=12.6144, r_loss=1.3808, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:43:41,847 | step 2 | loss: 12.6015 | loss2: 12.6144 | r_loss: 1.3808 | lr: 4.00e-06 | dt: 11966.18ms | tok/sec:  10953.54
+
+Epoch 0: 2it [00:37, 17.69s/it, loss=12.6015, global_step=2, toks/s=10953.5, loss2=12.6144, r_loss=1.3808, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 2it [00:49, 17.69s/it, loss=12.5972, global_step=3, toks/s=11103.6, loss2=12.6014, r_loss=1.3807, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:43:54,716 | step 3 | loss: 12.5972 | loss2: 12.6014 | r_loss: 1.3807 | lr: 8.00e-06 | dt: 11804.50ms | tok/sec:  11103.56
+
+Epoch 0: 3it [00:50, 15.49s/it, loss=12.5972, global_step=3, toks/s=11103.6, loss2=12.6014, r_loss=1.3807, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 3it [01:01, 15.49s/it, loss=12.5973, global_step=4, toks/s=11310.6, loss2=12.6094, r_loss=1.3808, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:44:07,377 | step 4 | loss: 12.5973 | loss2: 12.6094 | r_loss: 1.3808 | lr: 1.20e-05 | dt: 11588.42ms | tok/sec:  11310.60
+
+Epoch 0: 4it [01:02, 14.37s/it, loss=12.5973, global_step=4, toks/s=11310.6, loss2=12.6094, r_loss=1.3808, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 4it [01:14, 14.37s/it, loss=12.6036, global_step=5, toks/s=11262.1, loss2=12.6083, r_loss=1.3807, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:44:20,084 | step 5 | loss: 12.6036 | loss2: 12.6083 | r_loss: 1.3807 | lr: 1.60e-05 | dt: 11638.36ms | tok/sec:  11262.06
+
+Epoch 0: 5it [01:15, 13.77s/it, loss=12.6036, global_step=5, toks/s=11262.1, loss2=12.6083, r_loss=1.3807, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 5it [01:27, 13.77s/it, loss=12.6028, global_step=6, toks/s=11293.3, loss2=12.6043, r_loss=1.3808, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:44:32,762 | step 6 | loss: 12.6028 | loss2: 12.6043 | r_loss: 1.3808 | lr: 2.00e-05 | dt: 11606.15ms | tok/sec:  11293.32
+
+Epoch 0: 6it [01:28, 13.40s/it, loss=12.6028, global_step=6, toks/s=11293.3, loss2=12.6043, r_loss=1.3808, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 6it [01:39, 13.40s/it, loss=12.6062, global_step=7, toks/s=11282.4, loss2=12.6064, r_loss=1.3809, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:44:45,451 | step 7 | loss: 12.6062 | loss2: 12.6064 | r_loss: 1.3809 | lr: 2.40e-05 | dt: 11617.39ms | tok/sec:  11282.39
+
+Epoch 0: 7it [01:40, 13.17s/it, loss=12.6062, global_step=7, toks/s=11282.4, loss2=12.6064, r_loss=1.3809, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 7it [01:52, 13.17s/it, loss=12.5843, global_step=8, toks/s=11278.2, loss2=12.6062, r_loss=1.3806, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:44:58,145 | step 8 | loss: 12.5843 | loss2: 12.6062 | r_loss: 1.3806 | lr: 2.80e-05 | dt: 11621.73ms | tok/sec:  11278.19
+
+Epoch 0: 8it [01:53, 13.02s/it, loss=12.5843, global_step=8, toks/s=11278.2, loss2=12.6062, r_loss=1.3806, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 8it [02:05, 13.02s/it, loss=12.5923, global_step=9, toks/s=11245.7, loss2=12.6025, r_loss=1.3807, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:45:10,865 | step 9 | loss: 12.5923 | loss2: 12.6025 | r_loss: 1.3807 | lr: 3.20e-05 | dt: 11655.33ms | tok/sec:  11245.67
+
+Epoch 0: 9it [02:06, 12.92s/it, loss=12.5923, global_step=9, toks/s=11245.7, loss2=12.6025, r_loss=1.3807, vram_alloc=19.5G, d_alloc=+0.00G]
+Epoch 0: 9it [02:17, 12.92s/it, loss=12.5936, global_step=10, toks/s=11301.2, loss2=12.6007, r_loss=1.3805, vram_alloc=19.5G, d_alloc=+0.00G]2026-03-08 12:45:23,535 | step 10 | loss: 12.5936 | loss2: 12.6007 | r_loss: 1.3805 | lr: 3.60e-05 | dt: 11598.09ms | tok/sec:  11301.17
