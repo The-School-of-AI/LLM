@@ -1630,13 +1630,20 @@ class MoEFFN(nn.Module):
             and (not self.training or self.dropout == 0)
         )
         if use_fused:
+            # At seq 4096, grouped_gemm is ~1.4× faster and reduces memory pressure (KERNEL_REPORT).
+            # Set USE_MOE_TRITON=0 to force grouped_gemm (recommended for 70B @ bs32).
+            use_triton = (
+                has_fused_moe_expert_triton()
+                and os.environ.get("USE_MOE_TRITON", "1").strip().lower()
+                in ("1", "true", "yes")
+            )
             out = fused_moe_expert_forward(
                 x_in,
                 self.W_gate,
                 self.W_up,
                 self.W_down,
                 expert_counts,
-                use_triton=has_fused_moe_expert_triton(),
+                use_triton=use_triton,
             )
         else:
             gate_out = moe_grouped_gemm(x_in, self.W_gate, expert_counts)

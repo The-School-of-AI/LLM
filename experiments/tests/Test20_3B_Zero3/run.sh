@@ -52,6 +52,11 @@ export T19_ZERO3_FORCE_CLEAR_CONTAINERS="${T19_ZERO3_FORCE_CLEAR_CONTAINERS:-0}"
 export T19_CLEAR_ROUTER_CACHE_EVERY="${T19_CLEAR_ROUTER_CACHE_EVERY:-1}"
 export T19_TRACK_CUDA_MEMORY="${T19_TRACK_CUDA_MEMORY:-1}"
 export T19_REV_CKPT_USE_REENTRANT="${T19_REV_CKPT_USE_REENTRANT:-0}"
+# MoE: use grouped_gemm (not Triton) for 70B @ seq 4096 — faster and lower memory (KERNEL_REPORT).
+# Default 0 for 70b configs; set USE_MOE_TRITON=1 for small models (3B) where Triton wins.
+if [[ -z "${USE_MOE_TRITON:-}" ]] && [[ "$CFG" == *70b* ]]; then
+  export USE_MOE_TRITON=0
+fi
 
 # ---------------------------------------------------------------------------
 # Pre-flight version check — refuse to run if critical libs don't match
@@ -102,6 +107,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] T19_ZERO3_RELEASE_EVERY=$T19_ZERO3_RELEASE_
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] T19_ZERO3_FORCE_CLEAR_CONTAINERS=$T19_ZERO3_FORCE_CLEAR_CONTAINERS"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] T19_CLEAR_ROUTER_CACHE_EVERY=$T19_CLEAR_ROUTER_CACHE_EVERY"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] T19_REV_CKPT_USE_REENTRANT=$T19_REV_CKPT_USE_REENTRANT"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] USE_MOE_TRITON=${USE_MOE_TRITON:-<unset>}"
 
 # ---------------------------------------------------------------------------
 # Parse loader_type, shard_dir, eval_shard_dir from YAML config
