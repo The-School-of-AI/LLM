@@ -336,7 +336,7 @@ if HAS_TRITON:
                 # W_o is (D, D) with W_o[d_out, d]; we need block (d, d_out) for scaled @ w_o_block
                 w_o_ptrs = W_o_ptr + d_out_offs[None, :] * stride_w_d + d_offs[:, None]
                 w_o_block = tl.load(w_o_ptrs, mask=d_mask[:, None] & d_out_mask[None, :], other=0.0)
-                out_acc += tl.dot(scaled, w_o_block)
+                out_acc += tl.dot(scaled.to(w_o_block.dtype), w_o_block)
 
             out_ptrs = out_ptr + row_offs[:, None] * stride_m + d_out_offs[None, :] * stride_d
             tl.store(out_ptrs, out_acc.to(out_ptr.dtype.element_ty), mask=mask_m[:, None] & d_out_mask[None, :])
