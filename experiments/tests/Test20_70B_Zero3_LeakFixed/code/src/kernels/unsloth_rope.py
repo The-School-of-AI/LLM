@@ -126,8 +126,7 @@ class FastRoPEQK(torch.autograd.Function):
         assert cos.shape == (T, D // 2) and sin.shape == (T, D // 2), (
             f"cos/sin must be (T, D//2), got cos={cos.shape}, sin={sin.shape}"
         )
-        q = q.contiguous()
-        k = k.contiguous()
+        # Kernel uses strides; no contiguous() on q/k to avoid extra allocations (70B OOM).
         cos = cos.contiguous()
         sin = sin.contiguous()
 
@@ -169,8 +168,7 @@ class FastRoPEQK(torch.autograd.Function):
     def backward(ctx, dq, dk):
         cos, sin = ctx.saved_tensors
         B, T, H, D = dq.shape
-        dq = dq.contiguous()
-        dk = dk.contiguous()
+        # Kernel uses strides; no contiguous() on dq/dk to avoid extra gradient copies (70B OOM).
         cos = cos.contiguous()
         sin = sin.contiguous()
 
