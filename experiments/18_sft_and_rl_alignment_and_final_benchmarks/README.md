@@ -3,6 +3,9 @@
 Team 18 QLoRA-based SFT pipeline for the 70B MoE model. Covers data preparation,
 QLoRA training (SFT, GRPO, DPO, IDFT), and post-training evaluation.
 
+Decision memo:
+- See `SFT_METHOD_DECISION_70B_MOE.md` for the current p18 rationale on LoRA vs QLoRA vs full fine-tune for the 70B MoE on `p4de.24xlarge`.
+
 ## Folder Structure
 
 ```
