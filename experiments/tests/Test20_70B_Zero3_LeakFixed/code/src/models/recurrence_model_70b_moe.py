@@ -98,6 +98,8 @@ if _kernels_module is not None:
     fused_delta_entrance = getattr(_kernels_module, "fused_delta_entrance", None)
     triton_deltanet_post_fused = getattr(_kernels_module, "triton_deltanet_post_fused", None)
     moe_grouped_gemm = getattr(_kernels_module, "moe_grouped_gemm", None)
+    fast_rope_qk = getattr(_kernels_module, "fast_rope_qk", None)
+    use_unsloth_rope = getattr(_kernels_module, "use_unsloth_rope", lambda: False)
 else:
     HAS_TRITON = False
     HAS_MOE_GROUPED_GEMM = False
@@ -113,6 +115,8 @@ else:
     fused_delta_entrance = None
     triton_deltanet_post_fused = None
     moe_grouped_gemm = None
+    fast_rope_qk = None
+    use_unsloth_rope = lambda: False
 
 HAS_FUSED_INDEXER = fused_indexer_topk is not None
 
@@ -975,8 +979,13 @@ class GatedDeltaNet(nn.Module):
                 k = F.normalize(k, p=2, dim=-1)
 
                 cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-                q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
-                k = self.rotary_emb._apply_rotary(k, _cos_b, _sin_b)
+                if use_unsloth_rope() and fast_rope_qk is not None and q.is_cuda:
+                    cos_half = cos[:, 0::2].contiguous()
+                    sin_half = sin[:, 0::2].contiguous()
+                    q, k = fast_rope_qk(q, k, cos_half, sin_half)
+                else:
+                    q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
+                    k = self.rotary_emb._apply_rotary(k, _cos_b, _sin_b)
 
         with time_region("deltanet.entry.alpha_beta"):
             beta = torch.sigmoid(self.b_proj(x)).unsqueeze(-1)  # (B, T, num_heads, 1)
@@ -1266,8 +1275,13 @@ class GatedSparseAttention(nn.Module):
         # Uses cache key (T, device, dtype, head_dim) - Safe for centralized sharing
         #   Consumes pre-broadcasted RoPE from centralized cache
         cos, sin, _cos_b, _sin_b = self.rotary_emb._compute_cos_sin(T, device, x.dtype)
-        q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
-        k_attn = self.rotary_emb._apply_rotary(k_attn, _cos_b, _sin_b)
+        if use_unsloth_rope() and fast_rope_qk is not None and q.is_cuda:
+            cos_half = cos[:, 0::2].contiguous()
+            sin_half = sin[:, 0::2].contiguous()
+            q, k_attn = fast_rope_qk(q, k_attn, cos_half, sin_half)
+        else:
+            q = self.rotary_emb._apply_rotary(q, _cos_b, _sin_b)
+            k_attn = self.rotary_emb._apply_rotary(k_attn, _cos_b, _sin_b)
 
 
 

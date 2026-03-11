@@ -250,6 +250,9 @@ class MidpointFunctionZero3(torch.autograd.Function):
                     retain_graph=False,
                     create_graph=False,
                 )
+                # Sync so any CUDA error in backward is reported here, not at ZeRO broadcast.
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
 
             grad_p_cur_through_f = p_cur_req.grad if p_cur_req.grad is not None else torch.zeros_like(p_cur)
 

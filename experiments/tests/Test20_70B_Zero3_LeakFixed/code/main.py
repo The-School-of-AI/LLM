@@ -173,6 +173,8 @@ class Config:
         self.model_name = config_dict["model"].get("model_name", "3bmoe")
         # DeltaNet Unsloth-style opts: one flag enables both fused QKVG and fused entrance (conv+norm+RoPE).
         self.deltanet_use_fused_entry = config_dict["model"].get("deltanet_use_fused_entry", False)
+        # Unsloth-style RoPE kernel in unfused delta entrance and GSA paths (T17_USE_UNSLOTH_ROPE=1).
+        self.use_unsloth_rope = config_dict["model"].get("use_unsloth_rope", False)
         self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
         self.model_variant = config_dict["model"].get(
             "model_variant", "reversible"
@@ -571,6 +573,9 @@ def main():
         os.environ["T17_DN_USE_FUSED_QKVG"] = "1"
         os.environ["T17_DN_USE_DELTA_ENTRANCE"] = "1"
         print_rank_0("  DeltaNet fused entry enabled (fused QKVG + fused conv/norm/RoPE)")
+    if getattr(args, "use_unsloth_rope", False):
+        os.environ["T17_USE_UNSLOTH_ROPE"] = "1"
+        print_rank_0("  Unsloth-style RoPE kernel enabled (unfused delta entrance + GSA paths)")
 
     # Test-folder pin: this run is strictly for reversible model.
     variant = args.model_variant

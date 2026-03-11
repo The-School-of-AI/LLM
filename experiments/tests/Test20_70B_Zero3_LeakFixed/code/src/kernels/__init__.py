@@ -58,6 +58,13 @@ from .fused_qkvg_proj import (
     FusedQKVGProjection,
 )
 
+try:
+    from .unsloth_rope import fast_rope_qk, use_unsloth_rope
+except Exception:
+    fast_rope_qk = None
+    def use_unsloth_rope():
+        return False
+
 __all__ = [
     "HAS_TRITON",
     "HAS_MOE_GROUPED_GEMM",
@@ -77,4 +84,6 @@ __all__ = [
     "FusedLoRALinear",
     "FusedLoRAFunction",
     "FusedQKVGProjection",
+    "fast_rope_qk",
+    "use_unsloth_rope",
 ]
