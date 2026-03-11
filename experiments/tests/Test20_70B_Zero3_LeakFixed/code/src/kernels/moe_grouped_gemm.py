@@ -82,24 +82,14 @@ def moe_grouped_gemm(
     ops = getattr(_grouped_gemm, "ops", _grouped_gemm)
 
     with kernel_region("moe_grouped_gemm"):
-        # Keep m_sizes on same device as a (usually GPU) to avoid GPU-CPU sync in hot path.
-        # Syncs here were responsible for large throughput drops (e.g. 11k -> 1k tok/s).
-        sizes_tensor = _normalize_m_sizes_tensor(m_sizes, a.device)
+        # grouped_gemm backends require batch_sizes on CPU (RuntimeError: Expected batch_sizes.is_cpu() to be true).
+        # Passing a CPU tensor; if m_sizes was on GPU this does one GPU->CPU sync per call.
+        sizes_cpu = _normalize_m_sizes_tensor(m_sizes, torch.device("cpu"))
 
         if hasattr(ops, "gmm"):
-            try:
-                return ops.gmm(a, b, sizes_tensor, trans_b=False)
-            except (TypeError, RuntimeError):
-                # Fallback to list API only if backend requires CPU list (causes sync)
-                sizes_list = _normalize_m_sizes_list(m_sizes)
-                return ops.gmm(a, b, sizes_list)
+            return ops.gmm(a, b, sizes_cpu, trans_b=False)
 
         if hasattr(ops, "grouped_gemm"):
-            try:
-                return ops.grouped_gemm(a, b, sizes_tensor)
-            except (TypeError, RuntimeError):
-                # Fallback to list API
-                sizes_list = _normalize_m_sizes_list(m_sizes)
-                return ops.grouped_gemm(a, b, sizes_list)
+            return ops.grouped_gemm(a, b, sizes_cpu)
 
     raise RuntimeError("Unsupported grouped_gemm API: expected ops.gmm or ops.grouped_gemm.")
