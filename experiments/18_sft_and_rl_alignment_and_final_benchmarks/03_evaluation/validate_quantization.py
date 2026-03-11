@@ -8,7 +8,7 @@ addressing GitHub Issue #333.
 
 Usage:
     # Run full validation suite
-    python validate_quantization.py --config default_config.yaml
+    python validate_quantization.py --config ../02_sft_training/default_config.yaml
     
     # Quick validation (memory + inference only)
     python validate_quantization.py --quick
@@ -31,6 +31,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import torch
+
+# Add 02_sft_training to path so qlora_config and training modules are importable
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "02_sft_training"))
 
 # Local imports
 from qlora_config import QLoRAConfig
@@ -1031,7 +1034,7 @@ def main():
     if args.config:
         config = QLoRAConfig.from_yaml(args.config)
     else:
-        default_path = os.path.join(os.path.dirname(__file__), "default_config.yaml")
+        default_path = os.path.join(os.path.dirname(__file__), "..", "02_sft_training", "default_config.yaml")
         if os.path.exists(default_path):
             config = QLoRAConfig.from_yaml(default_path)
         else:

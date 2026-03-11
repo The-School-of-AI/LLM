@@ -11,9 +11,9 @@ Runs all 4 phases of the IDFT smoke test:
   Phase 4: Decision framework & recommendation
 
 Usage:
-    python run_idft_smoke_test.py --config idft_smoke_config.yaml
-    python run_idft_smoke_test.py --config idft_smoke_config.yaml --skip_phase1
-    python run_idft_smoke_test.py --config idft_smoke_config.yaml --phase 2
+    python run_idft_smoke_test.py
+    python run_idft_smoke_test.py --config ../02_sft_training/idft_smoke_config.yaml --skip_phase1
+    python run_idft_smoke_test.py --config ../02_sft_training/idft_smoke_config.yaml --phase 2
 """
 
 import argparse
@@ -28,6 +28,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import torch
+
+# Add training and evaluation module directories to path
+_here = Path(__file__).parent
+sys.path.insert(0, str(_here.parent / "02_sft_training"))  # qlora_config, train_qlora, idft_trainer, idft_loss
+sys.path.insert(0, str(_here))                              # evaluate_smoke_test, phi_diagnostic
 
 logging.basicConfig(
     level=logging.INFO,
@@ -392,7 +397,7 @@ def main():
         "--config",
         "-c",
         type=str,
-        default="idft_smoke_config.yaml",
+        default=str(Path(__file__).parent.parent / "02_sft_training" / "idft_smoke_config.yaml"),
         help="Path to experiment config YAML",
     )
     parser.add_argument(
