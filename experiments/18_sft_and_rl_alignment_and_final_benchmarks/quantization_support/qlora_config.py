@@ -217,12 +217,23 @@ class DataFilters:
 class DataConfig:
     """Data configuration."""
 
+    # Path to local JSONL file (output of sft_data pipeline train.jsonl).
+    # If set, this takes priority over dataset_name.
+    local_dataset_path: Optional[str] = None
+
     dataset_name: str = "OpenAssistant/oasst1"
     dataset_split: str = "train"
     max_samples: Optional[int] = None
     val_split_ratio: float = 0.1
     text_column: str = "text"
     prompt_template: str = "User: {text}\nAssistant:"
+
+    # Token sequence that marks the start of the assistant turn.
+    # Used by DataCollatorForCompletionOnlyLM to mask prompt tokens from loss.
+    # ChatML default: "<|im_start|>assistant\n"
+    # Llama 3:        "<|start_header_id|>assistant<|end_header_id|>\n\n"
+    response_template: str = "<|im_start|>assistant\n"
+
     filters: DataFilters = field(default_factory=DataFilters)
 
 
@@ -307,6 +318,9 @@ class QLoRAConfig:
         # Data config with nested filters
         data_dict = dict(config_dict.get("data", {}))
         filters = DataFilters(**data_dict.pop("filters", {}))
+        # Strip unknown keys so old configs don't crash on new fields
+        known_data_fields = {f.name for f in DataConfig.__dataclass_fields__.values()}
+        data_dict = {k: v for k, v in data_dict.items() if k in known_data_fields}
         data_config = DataConfig(**data_dict, filters=filters)
 
         hardware_config = HardwareConfig(**config_dict.get("hardware", {}))
@@ -405,6 +419,9 @@ class QLoRAConfig:
 
         if hasattr(args, "dataset_name") and args.dataset_name is not None:
             config.data.dataset_name = args.dataset_name
+
+        if hasattr(args, "local_dataset_path") and args.local_dataset_path is not None:
+            config.data.local_dataset_path = args.local_dataset_path
 
         if hasattr(args, "max_samples") and args.max_samples is not None:
             config.data.max_samples = args.max_samples
@@ -581,7 +598,10 @@ class QLoRAConfig:
             )
 
         print("\n[Data]")
-        print(f"  Dataset: {self.data.dataset_name}")
+        if self.data.local_dataset_path:
+            print(f"  Dataset: {self.data.local_dataset_path} (local)")
+        else:
+            print(f"  Dataset: {self.data.dataset_name}")
         print(f"  Max samples: {self.data.max_samples or 'all'}")
 
         print("=" * 70)
@@ -658,6 +678,11 @@ def create_argument_parser() -> argparse.ArgumentParser:
     # Data settings
     parser.add_argument(
         "--dataset_name", type=str, help="Dataset name from HuggingFace Hub"
+    )
+    parser.add_argument(
+        "--local_dataset_path", type=str,
+        help="Path to local train.jsonl (output of sft_data pipeline). "
+             "Overrides dataset_name when set.",
     )
     parser.add_argument(
         "--max_samples", type=int, help="Maximum number of training samples"

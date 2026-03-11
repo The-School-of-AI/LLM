@@ -31,9 +31,11 @@ model:
   attn_implementation: "eager"
   
   # Maximum context lengths
-  max_seq_length: 512
-  max_prompt_length: 256
-  max_completion_length: 256
+  # 4096 covers the large majority of SFT conversations; increase to 8192
+  # if your dataset has very long chains-of-thought (e.g. NuminaMath-TIR).
+  max_seq_length: 4096
+  max_prompt_length: 2048
+  max_completion_length: 2048
 
 # -----------------------------------------------------------------------------
 # Quantization Configuration
@@ -256,30 +258,41 @@ training:
 # Data Configuration
 # -----------------------------------------------------------------------------
 data:
-  # Dataset name (HuggingFace Hub ID)
+  # Path to local JSONL produced by the sft_data pipeline (train.jsonl).
+  # Set this when running real SFT. Leave null to fall back to dataset_name.
+  # Example: "experiments/18_.../sft_data/outputs/train.jsonl"
+  local_dataset_path: null
+
+  # HuggingFace Hub dataset — used only when local_dataset_path is null.
   dataset_name: "OpenAssistant/oasst1"
-  
+
   # Dataset split to use
   dataset_split: "train"
-  
+
   # Maximum number of samples (null for all)
   max_samples: null
-  
-  # Validation split ratio (from training data)
+
+  # Validation split ratio — only applied when loading from HF Hub.
+  # Local data already has a val split from train_val_split.py.
   val_split_ratio: 0.1
-  
+
   # Text column name in dataset
   text_column: "text"
-  
-  # Prompt template (for SFT)
-  # Use {text} as placeholder for the input text
+
+  # Prompt template (for HF Hub data only)
   prompt_template: "User: {text}\nAssistant:"
-  
+
+  # Start-of-assistant-turn marker used for loss masking.
+  # Must match the chat template applied in apply_chat_template.py.
+  # ChatML (default): "<|im_start|>assistant\n"
+  # Llama 3:          "<|start_header_id|>assistant<|end_header_id|>\n\n"
+  response_template: "<|im_start|>assistant\n"
+
   # Dataset-specific filters
   filters:
     # Language filter (for multilingual datasets)
     language: "en"
-    
+
     # Minimum quality score (for datasets with quality labels)
     min_quality: 0.5
 

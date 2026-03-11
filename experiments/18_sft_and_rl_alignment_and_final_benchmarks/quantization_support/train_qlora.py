@@ -60,10 +60,12 @@ def load_model_and_tokenizer(config: QLoRAConfig) -> Tuple[Any, Any]:
     logger.info(f"Loading model: {config.model.name}")
 
     # Load tokenizer
+    # Right-padding is required for training so attention masks align correctly.
+    # (Left-padding is only for batched generation/inference.)
     tokenizer = AutoTokenizer.from_pretrained(
         config.model.name,
         trust_remote_code=config.model.trust_remote_code,
-        padding_side="left",
+        padding_side="right",
     )
 
     # Set pad token if not set
@@ -139,52 +141,65 @@ def prepare_dataset(
     """
     Load and prepare dataset for training.
 
-    Args:
-        config: QLoRA configuration
-        tokenizer: Tokenizer for the model
+    Supports two loading modes:
+    - Local JSONL (config.data.local_dataset_path): output of the sft_data pipeline.
+      The file must have a "text" column containing the fully-formatted conversation
+      (i.e. chat template already applied by apply_chat_template.py).
+    - HuggingFace Hub (config.data.dataset_name): fallback for quick experiments.
 
     Returns:
         Tuple of (train_dataset, eval_dataset)
     """
-    logger.info(f"Loading dataset: {config.data.dataset_name}")
-
-    # Load dataset
-    dataset = load_dataset(
-        config.data.dataset_name,
-        split=config.data.dataset_split,
-    )
-
-    logger.info(f"Dataset loaded: {len(dataset)} samples")
-
-    # Apply filters if dataset has the required columns
-    if config.data.filters.language and "lang" in dataset.column_names:
-        dataset = dataset.filter(
-            lambda x: x.get("lang") == config.data.filters.language
+    if config.data.local_dataset_path:
+        logger.info(f"Loading local dataset: {config.data.local_dataset_path}")
+        dataset = load_dataset(
+            "json",
+            data_files=config.data.local_dataset_path,
+            split="train",
         )
-        logger.info(f"After language filter: {len(dataset)} samples")
-
-    # Limit samples if specified
-    if config.data.max_samples and len(dataset) > config.data.max_samples:
-        dataset = dataset.select(range(config.data.max_samples))
-        logger.info(f"Limited to {len(dataset)} samples")
-
-    # Split into train and eval
-    if config.data.val_split_ratio > 0:
-        split = dataset.train_test_split(
-            test_size=config.data.val_split_ratio, seed=config.training.seed
-        )
-        train_dataset = split["train"]
-        eval_dataset = split["test"]
-        logger.info(f"Train: {len(train_dataset)}, Eval: {len(eval_dataset)}")
-    else:
+        logger.info(f"Local dataset loaded: {len(dataset)} samples")
+        # Local data already has train/val split from train_val_split.py,
+        # so we don't split again here unless a val path was not provided.
         train_dataset = dataset
         eval_dataset = None
+    else:
+        logger.info(f"Loading HuggingFace dataset: {config.data.dataset_name}")
+        dataset = load_dataset(
+            config.data.dataset_name,
+            split=config.data.dataset_split,
+        )
+        logger.info(f"Dataset loaded: {len(dataset)} samples")
 
-    # Format dataset for training method
-    if config.training.method == "sft":
-        train_dataset = format_sft_dataset(train_dataset, config, tokenizer)
-        if eval_dataset:
-            eval_dataset = format_sft_dataset(eval_dataset, config, tokenizer)
+        if config.data.filters.language and "lang" in dataset.column_names:
+            dataset = dataset.filter(
+                lambda x: x.get("lang") == config.data.filters.language
+            )
+            logger.info(f"After language filter: {len(dataset)} samples")
+
+        if config.data.max_samples and len(dataset) > config.data.max_samples:
+            dataset = dataset.select(range(config.data.max_samples))
+            logger.info(f"Limited to {len(dataset)} samples")
+
+        if config.data.val_split_ratio > 0:
+            split = dataset.train_test_split(
+                test_size=config.data.val_split_ratio, seed=config.training.seed
+            )
+            train_dataset = split["train"]
+            eval_dataset = split["test"]
+            logger.info(f"Train: {len(train_dataset)}, Eval: {len(eval_dataset)}")
+        else:
+            train_dataset = dataset
+            eval_dataset = None
+
+    # Format datasets for the chosen training method.
+    # SFT/IDFT: data must contain a "text" field with the full conversation.
+    # Local data already has this from apply_chat_template.py; HF data needs
+    # formatting via format_sft_dataset.
+    if config.training.method in ("sft", "idft"):
+        if not config.data.local_dataset_path:
+            train_dataset = format_sft_dataset(train_dataset, config, tokenizer)
+            if eval_dataset:
+                eval_dataset = format_sft_dataset(eval_dataset, config, tokenizer)
     elif config.training.method == "grpo":
         train_dataset = format_grpo_dataset(train_dataset, config)
         if eval_dataset:
@@ -193,11 +208,6 @@ def prepare_dataset(
         train_dataset = format_dpo_dataset(train_dataset, config)
         if eval_dataset:
             eval_dataset = format_dpo_dataset(eval_dataset, config)
-    elif config.training.method == "idft":
-        # IDFT uses the same data format as SFT
-        train_dataset = format_sft_dataset(train_dataset, config, tokenizer)
-        if eval_dataset:
-            eval_dataset = format_sft_dataset(eval_dataset, config, tokenizer)
 
     return train_dataset, eval_dataset
 
@@ -369,13 +379,24 @@ def train_sft(
     Returns:
         Trainer instance
     """
-    from trl import SFTConfig, SFTTrainer
+    from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
 
     logger.info("Starting SFT training...")
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = f"{config.training.output_dir}/sft_{timestamp}"
+
+    # Loss masking: only compute loss on assistant tokens, not user/system tokens.
+    # DataCollatorForCompletionOnlyLM masks every token before the response_template
+    # sequence so the model learns to generate responses, not regurgitate prompts.
+    logger.info(
+        f"Loss masking enabled. Response template: {repr(config.data.response_template)}"
+    )
+    data_collator = DataCollatorForCompletionOnlyLM(
+        response_template=config.data.response_template,
+        tokenizer=tokenizer,
+    )
 
     # Training arguments
     training_args = SFTConfig(
@@ -417,6 +438,7 @@ def train_sft(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         processing_class=tokenizer,
+        data_collator=data_collator,
     )
 
     # Train
