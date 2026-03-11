@@ -10,7 +10,7 @@ trap '' PIPE
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$TEST_ROOT/code"
 export PYTHONPATH="${TEST_ROOT}:${PYTHONPATH:-}"
-CFG="${CFG:-$TEST_ROOT/configs/test17_3b_moe.yaml}"
+CFG="${CFG:-$TEST_ROOT/configs/test_70b_moe_lora_4096_bs32_10steps.yaml}"
 RESULTS_DIR="$TEST_ROOT/results"
 INIT_CKPT="$RESULTS_DIR/init/model_init.pt"
 INIT_META="$RESULTS_DIR/init/model_init_meta.json"
