@@ -709,6 +709,26 @@ class TritonDeltaEntranceV19(torch.autograd.Function):
         H = C // D
         eps = ctx.eps
 
+        # Ensure contiguous layout so kernel indexing is valid (fixes illegal memory access
+        # when inputs are views from fused QKVG or gradient views from downstream).
+        q = q.contiguous()
+        k = k.contiguous()
+        v = v.contiguous()
+        dqo = dqo.contiguous()
+        dko = dko.contiguous()
+        dvo = dvo.contiguous()
+        cos = cos.contiguous()
+        sin = sin.contiguous()
+        mask_u8 = mask_u8.contiguous()
+        q_norm = q_norm.contiguous()
+        k_norm = k_norm.contiguous()
+        wq = wq.contiguous()
+        wk = wk.contiguous()
+        wv = wv.contiguous()
+        bq = bq.contiguous()
+        bk = bk.contiguous()
+        bv = bv.contiguous()
+
         dq = torch.zeros_like(q, dtype=torch.float32)
         dk = torch.zeros_like(k, dtype=torch.float32)
         dv = torch.zeros_like(v, dtype=torch.float32)
