@@ -379,7 +379,91 @@ def train_sft(
     Returns:
         Trainer instance
     """
-    from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
+    # SFTConfig and SFTTrainer are always at the top-level trl namespace.
+    from trl import SFTConfig, SFTTrainer
+
+    # DataCollatorForCompletionOnlyLM moved between TRL versions.
+    # Try the top-level namespace first (older TRL), then the sub-modules used
+    # in newer releases, and finally fall back to a minimal inline implementation.
+    try:
+        from trl import DataCollatorForCompletionOnlyLM
+    except ImportError:
+        try:
+            from trl.trainer.utils import DataCollatorForCompletionOnlyLM
+        except ImportError:
+            try:
+                from trl.data_utils import DataCollatorForCompletionOnlyLM
+            except ImportError:
+                import torch
+
+                class DataCollatorForCompletionOnlyLM:
+                    """
+                    Minimal drop-in replacement for TRL's DataCollatorForCompletionOnlyLM.
+
+                    Masks all token positions that appear *before* the response_template
+                    in each example by setting their label to -100, so the SFT loss is
+                    computed only on the assistant's reply tokens.
+                    """
+
+                    def __init__(self, response_template: str, tokenizer):
+                        self.tokenizer = tokenizer
+                        # Tokenise the template *without* any special tokens so we
+                        # get a clean token sequence to search for inside input_ids.
+                        self.template_ids: list = tokenizer.encode(
+                            response_template, add_special_tokens=False
+                        )
+                        if not self.template_ids:
+                            raise ValueError(
+                                f"response_template '{response_template}' encodes to an "
+                                "empty token list. Check the template string."
+                            )
+
+                    def __call__(self, features):
+                        import torch
+
+                        # Pad the batch using the tokenizer's default padding logic.
+                        batch = self.tokenizer.pad(
+                            features,
+                            padding=True,
+                            return_tensors="pt",
+                        )
+
+                        input_ids: torch.Tensor = batch["input_ids"]       # (B, L)
+                        attention_mask: torch.Tensor = batch["attention_mask"]
+                        labels: torch.Tensor = input_ids.clone()
+
+                        tpl = self.template_ids
+                        tpl_len = len(tpl)
+
+                        for i in range(input_ids.size(0)):
+                            ids = input_ids[i].tolist()
+                            # Find the *last* occurrence of the template so that, for
+                            # multi-turn conversations, we only train on the final turn.
+                            mask_up_to = 0
+                            for start in range(len(ids) - tpl_len + 1):
+                                if ids[start : start + tpl_len] == tpl:
+                                    # Mask everything up to (and including) the template.
+                                    mask_up_to = start + tpl_len
+
+                            if mask_up_to == 0:
+                                # Template not found: mask the entire example so it
+                                # contributes nothing to the loss rather than corrupt it.
+                                logger.warning(
+                                    "response_template not found in a training example; "
+                                    "masking the full sequence from the loss."
+                                )
+                                labels[i, :] = -100
+                            else:
+                                labels[i, :mask_up_to] = -100
+
+                            # Also mask padding tokens.
+                            labels[i, attention_mask[i] == 0] = -100
+
+                        return {
+                            "input_ids": input_ids,
+                            "attention_mask": attention_mask,
+                            "labels": labels,
+                        }
 
     logger.info("Starting SFT training...")
 
