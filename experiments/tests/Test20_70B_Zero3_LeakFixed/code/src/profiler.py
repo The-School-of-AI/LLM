@@ -603,9 +603,11 @@ class StepProfiler:
             lines.append(f"  {'mtp_block.fwd':<38}  {avgs['mtp_block.fwd']:>8.2f}")
 
         # ── Kernel-level breakdown ────────────────────────────────────────────
-        # Aggregate kernel types across layers
+        # Aggregate kernel types across layers (includes kernel_region names from kernels/)
         kernel_types = ["deltanet", "gsa", "sinkhorn_attn", "sinkhorn_mlp", "mlp",
-                        "indexer", "sparse_attn", "sinkhorn_knopp", "rmsnorm", "rope",
+                        "indexer", "sparse_attn", "sparse_attn_fwd", "sparse_attn_bwd",
+                        "sinkhorn_knopp", "sinkhorn_fwd", "sinkhorn_bwd", "rmsnorm", "rope",
+                        "fused_ce_forward", "fused_indexer_topk", "moe_grouped_gemm",
                         "deltanet_fla"]
         kernel_totals: Dict[str, float] = {}
         for ktype in kernel_types:

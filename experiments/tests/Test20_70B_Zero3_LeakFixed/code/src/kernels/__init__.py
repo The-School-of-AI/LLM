@@ -48,6 +48,16 @@ from .triton_delta_entrance import (
     fused_delta_entrance,
 )
 
+from .fused_lora import (
+    fused_lora_forward,
+    FusedLoRALinear,
+    FusedLoRAFunction,
+)
+
+from .fused_qkvg_proj import (
+    FusedQKVGProjection,
+)
+
 __all__ = [
     "HAS_TRITON",
     "HAS_MOE_GROUPED_GEMM",
@@ -63,4 +73,8 @@ __all__ = [
     "fused_indexer_topk",
     "moe_grouped_gemm",
     "fused_delta_entrance",
+    "fused_lora_forward",
+    "FusedLoRALinear",
+    "FusedLoRAFunction",
+    "FusedQKVGProjection",
 ]

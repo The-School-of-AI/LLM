@@ -37,6 +37,7 @@ class LoRAConfig:
         "q_proj", "k_proj", "v_proj", "o_proj",
         "W_q", "W_k", "W_v",
     ])
+    use_fused: bool = True  # Use memory-efficient fused LoRA (recompute in backward)
 
 
 class LoRALinear(nn.Module):
@@ -49,8 +50,9 @@ class LoRALinear(nn.Module):
     B is initialized to zeros so LoRA starts as identity (no change to base model).
     """
 
-    def __init__(self, original_linear: nn.Linear, rank: int, alpha: float, dropout: float = 0.0):
+    def __init__(self, original_linear: nn.Linear, rank: int, alpha: float, dropout: float = 0.0, use_fused: bool = False):
         super().__init__()
+        # Note: use_fused is ignored in standard LoRALinear (for API compatibility)
         self.in_features = original_linear.in_features
         self.out_features = original_linear.out_features
         self.rank = rank
@@ -124,6 +126,20 @@ def inject_lora(model: nn.Module, config: LoRAConfig) -> int:
 
     Returns number of LoRA adapters injected.
     """
+    # Try to import fused LoRA if requested
+    if config.use_fused:
+        try:
+            from .kernels.fused_lora import FusedLoRALinear
+            lora_class = FusedLoRALinear
+            logger.info("Using FusedLoRALinear (memory-efficient, recompute in backward)")
+        except ImportError:
+            logger.warning("FusedLoRALinear not available, falling back to standard LoRALinear")
+            lora_class = LoRALinear
+            config.use_fused = False
+    else:
+        lora_class = LoRALinear
+        logger.info("Using standard LoRALinear (saves intermediate in forward)")
+
     # Collect targets first to avoid modifying dict during iteration.
     targets = []
     for full_name, module in model.named_modules():
@@ -135,14 +151,16 @@ def inject_lora(model: nn.Module, config: LoRAConfig) -> int:
         targets.append((full_name, module))
 
     for full_name, original_linear in targets:
-        lora_module = LoRALinear(
+        lora_module = lora_class(
             original_linear=original_linear,
             rank=config.rank,
             alpha=config.alpha,
             dropout=config.dropout,
+            use_fused=config.use_fused,
         )
         _set_submodule(model, full_name, lora_module)
-        logger.info(f"  LoRA: {full_name} ({original_linear.in_features}x{original_linear.out_features}) rank={config.rank}")
+        fused_str = " [fused]" if config.use_fused else ""
+        logger.info(f"  LoRA: {full_name} ({original_linear.in_features}x{original_linear.out_features}) rank={config.rank}{fused_str}")
 
     return len(targets)
 

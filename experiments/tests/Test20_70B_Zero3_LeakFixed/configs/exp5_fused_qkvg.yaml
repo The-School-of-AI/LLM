@@ -22,7 +22,7 @@ data:
   drop_remainder: true
 training:
   num_epochs: 1
-  max_train_steps: 20
+  max_train_steps: 30
   max_eval_steps: null
   log_interval: 1
   seed: 42
@@ -32,11 +32,8 @@ training:
   use_fused_ce: true
   max_chunk_gb: 1
   metrics_jsonl_path: ../results/run_lora/metrics.jsonl
-  # Kernel profiler: set to a list of step numbers (e.g. [1, 2, 3]) to record
-  # CUDA timing for kernels (sparse_attn, indexer, rmsnorm, sinkhorn, fused_ce, moe_grouped_gemm, fused_lora).
-  # Output: <metrics_jsonl_dir>/profile.jsonl and profile_report.txt. Leave [] to disable.
-  # NOTE: Profiling adds overhead. Only profile first few steps, measure throughput on later steps.
-  profile_steps: [1, 2, 3, 4, 5]
+  # Exp5: No profiling to minimize overhead
+  profile_steps: []
 deepspeed:
   config_path: ../deepspeed/zero-3-70b-moe-lora-bs32.json
   local_rank: -1
@@ -48,8 +45,6 @@ model:
   moe_t4_enabled: false
   moe_t4_dispatcher: deepep
   moe_expert_parallel_size: 1
-  # DeltaNet Unsloth-style: true = fused QKVG + fused entrance (conv+norm+RoPE). Or set env: T17_DN_USE_FUSED_QKVG=1 T17_DN_USE_DELTA_ENTRANCE=1
-  deltanet_use_fused_entry: false
 lora:
   enabled: true
   rank: 16

@@ -124,6 +124,34 @@ except ImportError:
     chunk_gated_delta_rule = None
     HAS_FLA = False
 
+
+def _chunk_gated_delta_rule_maybe_recompute(q_fla, k_fla, v_fla, g_fla, beta_fla, scale=1.0):
+    """
+    Call FLA chunk_gated_delta_rule; when T17_DN_FLA_RECOMPUTE_BACKWARD=1 and grad is enabled,
+    wrap in checkpoint to recompute forward in backward (saves recurrence state memory).
+    """
+    if chunk_gated_delta_rule is None:
+        raise RuntimeError("chunk_gated_delta_rule is not available")
+    use_recompute = (
+        torch.is_grad_enabled()
+        and os.getenv("T17_DN_FLA_RECOMPUTE_BACKWARD", "0") == "1"
+    )
+    if not use_recompute:
+        return chunk_gated_delta_rule(
+            q_fla, k_fla, v_fla, g_fla, beta_fla,
+            scale=scale,
+            output_final_state=False,
+        )
+    def _fn(q, k, v, g, b):
+        o, _ = chunk_gated_delta_rule(q, k, v, g, b, scale=scale, output_final_state=False)
+        return o
+    o = torch.utils.checkpoint.checkpoint(
+        _fn, q_fla, k_fla, v_fla, g_fla, beta_fla,
+        use_reentrant=False,
+    )
+    return o, None
+
+
 # ── Liger ops (RoPE + MLP helpers, no fused CE here) ────────────────────────
 def _import_liger_ops_module():
     try:
@@ -809,14 +837,29 @@ class GatedDeltaNet(nn.Module):
         # Optional: use Triton fused Delta Entrance (conv+mask+norm+RoPE).
         # Keep off by default until fully validated on train + eval.
         self.use_fused_delta_entrance = os.getenv("T17_DN_USE_DELTA_ENTRANCE", "0") == "1"
+        # Optional: use fused QKVG projection (Unsloth-style; single matmul instead of 4).
+        self.use_fused_qkvg = os.getenv("T17_DN_USE_FUSED_QKVG", "0") == "1"
 
         key_dim = num_heads * head_dim
         value_dim = num_heads * head_dim
 
-        self.q_proj = nn.Linear(hidden_size, key_dim, bias=False)
-        self.k_proj = nn.Linear(hidden_size, key_dim, bias=False)
-        self.v_proj = nn.Linear(hidden_size, value_dim, bias=False)
-        self.g_proj = nn.Linear(hidden_size, value_dim, bias=False)
+        if self.use_fused_qkvg:
+            try:
+                from ..kernels import FusedQKVGProjection
+                self.qkvg_proj = FusedQKVGProjection(
+                    hidden_size, key_dim, value_dim, bias=False
+                )
+            except ImportError:
+                self.use_fused_qkvg = False
+                self.q_proj = nn.Linear(hidden_size, key_dim, bias=False)
+                self.k_proj = nn.Linear(hidden_size, key_dim, bias=False)
+                self.v_proj = nn.Linear(hidden_size, value_dim, bias=False)
+                self.g_proj = nn.Linear(hidden_size, value_dim, bias=False)
+        else:
+            self.q_proj = nn.Linear(hidden_size, key_dim, bias=False)
+            self.k_proj = nn.Linear(hidden_size, key_dim, bias=False)
+            self.v_proj = nn.Linear(hidden_size, value_dim, bias=False)
+            self.g_proj = nn.Linear(hidden_size, value_dim, bias=False)
         self.o_proj = nn.Linear(value_dim, hidden_size, bias=False)
 
         self.b_proj = nn.Linear(hidden_size, num_heads, bias=True)
@@ -847,7 +890,10 @@ class GatedDeltaNet(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        proj_modules = [self.o_proj, self.q_proj, self.k_proj, self.v_proj, self.g_proj]
+        if self.use_fused_qkvg:
+            proj_modules = [self.o_proj]
+        else:
+            proj_modules = [self.o_proj, self.q_proj, self.k_proj, self.v_proj, self.g_proj]
         for m in proj_modules:
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
         # STABILITY-FIX: Reduce init scale for alpha/beta gating logic
@@ -862,14 +908,18 @@ class GatedDeltaNet(nn.Module):
         B, T, C = x.shape
         device = x.device
         token_keep = _token_keep_mask(attention_mask, B, T, device)
-        x = x.to(dtype=self.q_proj.weight.dtype)
+        dtype = self.qkvg_proj.qkvg_weight.dtype if self.use_fused_qkvg else self.q_proj.weight.dtype
+        x = x.to(dtype=dtype)
         token_keep_f = None
 
         with time_region("deltanet.entry.proj"):
-            q_in = self.q_proj(x)
-            k_in = self.k_proj(x)
-            v_in = self.v_proj(x)
-            g = self.g_proj(x)
+            if self.use_fused_qkvg:
+                q_in, k_in, v_in, g = self.qkvg_proj(x)
+            else:
+                q_in = self.q_proj(x)
+                k_in = self.k_proj(x)
+                v_in = self.v_proj(x)
+                g = self.g_proj(x)
 
         use_fused_entry = (
             self.use_fused_delta_entrance
@@ -959,14 +1009,8 @@ class GatedDeltaNet(nn.Module):
             beta_fla = beta[:, :, :, 0].float()
 
         with time_region("deltanet.fla"):
-            o_fla, _ = chunk_gated_delta_rule(
-                q_fla,
-                k_fla,
-                v_fla,
-                g_fla,
-                beta_fla,
-                scale=1.0,
-                output_final_state=False,
+            o_fla, _ = _chunk_gated_delta_rule_maybe_recompute(
+                q_fla, k_fla, v_fla, g_fla, beta_fla, scale=1.0
             )
 
         use_fused_post = (

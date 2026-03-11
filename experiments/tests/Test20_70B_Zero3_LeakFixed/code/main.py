@@ -171,6 +171,8 @@ class Config:
 
         # Model configuration
         self.model_name = config_dict["model"].get("model_name", "3bmoe")
+        # DeltaNet Unsloth-style opts: one flag enables both fused QKVG and fused entrance (conv+norm+RoPE).
+        self.deltanet_use_fused_entry = config_dict["model"].get("deltanet_use_fused_entry", False)
         self.embedding_type = config_dict["model"].get("embedding_type", "kronecker")  # "kronecker" or "standard"
         self.model_variant = config_dict["model"].get(
             "model_variant", "reversible"
@@ -225,6 +227,35 @@ class Config:
         self.opus_fallback_random_on_error = _opus.get("fallback_random_on_error", True)
         self.opus_train_batch = _opus.get("train_batch", None)  # per GPU; None = use all selected
         self.opus_score_interval = _opus.get("score_interval", 1)  # score every N steps, random in between
+
+
+def _fuse_deltanet_qkvg_in_state_dict(model: torch.nn.Module, state_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Fuse separate q_proj, k_proj, v_proj, g_proj into qkvg_proj in state_dict for any
+    GatedDeltaNet with use_fused_qkvg, so loading a checkpoint saved with separate
+    projections works when training with T17_DN_USE_FUSED_QKVG=1.
+    """
+    state_dict = dict(state_dict)
+    for name, mod in model.named_modules():
+        if not getattr(mod, "use_fused_qkvg", False):
+            continue
+        prefix = name + "." if name else ""
+        qkvg_key = prefix + "qkvg_proj.qkvg_weight"
+        if qkvg_key in state_dict:
+            continue
+        qw = prefix + "q_proj.weight"
+        kw = prefix + "k_proj.weight"
+        vw = prefix + "v_proj.weight"
+        gw = prefix + "g_proj.weight"
+        if qw not in state_dict or kw not in state_dict or vw not in state_dict or gw not in state_dict:
+            continue
+        fused = torch.cat(
+            [state_dict[qw], state_dict[kw], state_dict[vw], state_dict[gw]],
+            dim=0,
+        )
+        state_dict[qkvg_key] = fused
+        del state_dict[qw], state_dict[kw], state_dict[vw], state_dict[gw]
+    return state_dict
 
 
 def load_config(config_path: str = "config.yaml") -> Config:
@@ -536,6 +567,10 @@ def main():
     # Step 2: Load Model (1B Dense Model)
     # ========================================
     print_rank_0("\n[2/5] Loading model...")
+    if getattr(args, "deltanet_use_fused_entry", False):
+        os.environ["T17_DN_USE_FUSED_QKVG"] = "1"
+        os.environ["T17_DN_USE_DELTA_ENTRANCE"] = "1"
+        print_rank_0("  DeltaNet fused entry enabled (fused QKVG + fused conv/norm/RoPE)")
 
     # Test-folder pin: this run is strictly for reversible model.
     variant = args.model_variant
@@ -656,6 +691,7 @@ def main():
                 if isinstance(init_payload, dict) and "state_dict" in init_payload
                 else init_payload
             )
+            init_state_dict = _fuse_deltanet_qkvg_in_state_dict(model, init_state_dict)
             model.load_state_dict(init_state_dict, strict=True)
             print_rank_0("  ✓ Init model weights loaded")
 

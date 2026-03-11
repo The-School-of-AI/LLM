@@ -15,6 +15,17 @@ from typing import Optional
 import triton
 import triton.language as tl
 
+# Profiler: kernel_region for step-level kernel timing (no-op when profiler inactive)
+try:
+    from ..profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    def kernel_region(name: str):
+        @contextmanager
+        def _noop():
+            yield
+        return _noop()
+
 HAS_TRITON = True
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -333,113 +344,116 @@ if HAS_TRITON:
     class TritonSparseAttnFnV2(torch.autograd.Function):
         @staticmethod
         def forward(ctx, q, k, v, indices, mask, scale):
-            B, T, H, D = q.shape
-            T_kv = k.shape[1]
-            k_sel = indices.size(-1)
+            with kernel_region("sparse_attn_fwd"):
+                B, T, H, D = q.shape
+                T_kv = k.shape[1]
+                k_sel = indices.size(-1)
 
-            if indices.dtype != torch.int32:
-                indices = indices.to(torch.int32)
-            if mask.dtype != torch.float32:
-                mask = mask.to(torch.float32)
+                if indices.dtype != torch.int32:
+                    indices = indices.to(torch.int32)
+                if mask.dtype != torch.float32:
+                    mask = mask.to(torch.float32)
 
-            out = torch.empty(B, T, H, D, device=q.device, dtype=torch.float32)
-            lse = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
+                out = torch.empty(B, T, H, D, device=q.device, dtype=torch.float32)
+                lse = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
 
-            BLOCK_Q = 1   
-            BLOCK_K = 128
-            BLOCK_D = triton.next_power_of_2(D)
-            grid = (B * H, T)
+                BLOCK_Q = 1   
+                BLOCK_K = 128
+                BLOCK_D = triton.next_power_of_2(D)
+                grid = (B * H, T)
 
-            _sparse_attn_fwd_kernel[grid](
-                q, k, v,
-                indices, mask,
-                out, lse,
-                B, T, T_kv, H, D, k_sel,
-                q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-                k.stride(0), k.stride(1), k.stride(2), k.stride(3),
-                v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
-                mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
-                out.stride(0), out.stride(1), out.stride(2), out.stride(3),
-                scale,
-                BLOCK_Q=BLOCK_Q, BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
-                num_warps=4, num_stages=2,
-            )
+                _sparse_attn_fwd_kernel[grid](
+                    q, k, v,
+                    indices, mask,
+                    out, lse,
+                    B, T, T_kv, H, D, k_sel,
+                    q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+                    k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+                    v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+                    indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
+                    mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
+                    out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+                    scale,
+                    BLOCK_Q=BLOCK_Q, BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
+                    num_warps=4, num_stages=2,
+                )
 
-            ctx.save_for_backward(q, k, v, indices, mask, out, lse)
-            ctx.scale = scale
-            ctx.BLOCK_K = BLOCK_K
-            ctx.BLOCK_D = BLOCK_D
-            return out.to(q.dtype)
+                ctx.save_for_backward(q, k, v, indices, mask, out, lse)
+                ctx.scale = scale
+                ctx.BLOCK_K = BLOCK_K
+                ctx.BLOCK_D = BLOCK_D
+                return out.to(q.dtype)
 
         @staticmethod
         def backward(ctx, grad_output):
-            q, k, v, indices, mask, out_fp32, lse = ctx.saved_tensors
-            scale = ctx.scale
-            BLOCK_K = ctx.BLOCK_K
-            BLOCK_D = ctx.BLOCK_D
+            with kernel_region("sparse_attn_bwd"):
+                q, k, v, indices, mask, out_fp32, lse = ctx.saved_tensors
+                scale = ctx.scale
+                BLOCK_K = ctx.BLOCK_K
+                BLOCK_D = ctx.BLOCK_D
 
-            B, T, H, D = q.shape
-            T_kv = k.shape[1]
-            k_sel = indices.size(-1)
-            grid = (B * H, T)
+                B, T, H, D = q.shape
+                T_kv = k.shape[1]
+                k_sel = indices.size(-1)
+                grid = (B * H, T)
 
-            do = grad_output.contiguous().to(torch.float32)
-            delta = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
-            
-            _sparse_attn_bwd_preprocess[grid](
-                out_fp32, do, delta,
-                T, H, D,
-                out_fp32.stride(0), out_fp32.stride(1), out_fp32.stride(2), out_fp32.stride(3),
-                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
-                BLOCK_D=BLOCK_D,
-            )
+                do = grad_output.contiguous().to(torch.float32)
+                delta = torch.empty(B, H, T, device=q.device, dtype=torch.float32)
 
-            dq = torch.empty_like(q, dtype=torch.float32)
-            _sparse_attn_bwd_dq_kernel[grid](
-                q, k, v, do,
-                indices, mask,
-                lse, delta,
-                dq,
-                T, T_kv, H, D, k_sel,
-                q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-                k.stride(0), k.stride(1), k.stride(2), k.stride(3),
-                v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
-                indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
-                mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
-                dq.stride(0), dq.stride(1), dq.stride(2), dq.stride(3),
-                scale,
-                BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
-            )
+                with kernel_region("sparse_attn_bwd_preprocess"):
+                    _sparse_attn_bwd_preprocess[grid](
+                        out_fp32, do, delta,
+                        T, H, D,
+                        out_fp32.stride(0), out_fp32.stride(1), out_fp32.stride(2), out_fp32.stride(3),
+                        do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                        BLOCK_D=BLOCK_D,
+                    )
 
-            # Step 3: Zero-Sync Inverse Index
-            inv_queries_sorted, inv_count, inv_offset = _build_inverse_index_v2_light(
-                indices, mask, T_kv
-            )
+                dq = torch.empty_like(q, dtype=torch.float32)
+                _sparse_attn_bwd_dq_kernel[grid](
+                    q, k, v, do,
+                    indices, mask,
+                    lse, delta,
+                    dq,
+                    T, T_kv, H, D, k_sel,
+                    q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+                    k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+                    v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+                    do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                    indices.stride(0), indices.stride(1), indices.stride(2), indices.stride(3),
+                    mask.stride(0), mask.stride(1), mask.stride(2), mask.stride(3),
+                    dq.stride(0), dq.stride(1), dq.stride(2), dq.stride(3),
+                    scale,
+                    BLOCK_K=BLOCK_K, BLOCK_D=BLOCK_D,
+                )
 
-            dk = torch.zeros_like(k, dtype=torch.float32)
-            dv = torch.zeros_like(v, dtype=torch.float32)
-            
-            grid_dkdv = (B * H, T_kv)
-            _sparse_attn_bwd_dkdv_keymajor_kernel[grid_dkdv](
-                q, k, v, do,
-                lse, delta,
-                dk, dv,
-                inv_queries_sorted, inv_count, inv_offset,
-                T, T_kv, H, D,
-                q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-                k.stride(0), k.stride(1), k.stride(2), k.stride(3),
-                v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-                do.stride(0), do.stride(1), do.stride(2), do.stride(3),
-                dk.stride(0), dk.stride(1), dk.stride(2), dk.stride(3),
-                dv.stride(0), dv.stride(1), dv.stride(2), dv.stride(3),
-                scale,
-                BLOCK_Q_INNER=4, BLOCK_D=BLOCK_D,
-                num_warps=4, num_stages=1,
-            )
+                # Step 3: Zero-Sync Inverse Index
+                inv_queries_sorted, inv_count, inv_offset = _build_inverse_index_v2_light(
+                    indices, mask, T_kv
+                )
 
-            return dq.to(q.dtype), dk.to(k.dtype), dv.to(v.dtype), None, None, None
+                dk = torch.zeros_like(k, dtype=torch.float32)
+                dv = torch.zeros_like(v, dtype=torch.float32)
+
+                grid_dkdv = (B * H, T_kv)
+                _sparse_attn_bwd_dkdv_keymajor_kernel[grid_dkdv](
+                    q, k, v, do,
+                    lse, delta,
+                    dk, dv,
+                    inv_queries_sorted, inv_count, inv_offset,
+                    T, T_kv, H, D,
+                    q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+                    k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+                    v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+                    do.stride(0), do.stride(1), do.stride(2), do.stride(3),
+                    dk.stride(0), dk.stride(1), dk.stride(2), dk.stride(3),
+                    dv.stride(0), dv.stride(1), dv.stride(2), dv.stride(3),
+                    scale,
+                    BLOCK_Q_INNER=4, BLOCK_D=BLOCK_D,
+                    num_warps=4, num_stages=1,
+                )
+
+                return dq.to(q.dtype), dk.to(k.dtype), dv.to(v.dtype), None, None, None
 
 def triton_sparse_attention_v2(q, k, v, indices, mask, scale, use_triton_backward=True):
     return TritonSparseAttnFnV2.apply(q, k, v, indices, mask, scale)

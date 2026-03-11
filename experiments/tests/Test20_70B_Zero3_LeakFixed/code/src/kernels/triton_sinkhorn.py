@@ -40,6 +40,17 @@ except ImportError:
     triton = None
     tl = None
 
+# Profiler: kernel_region for step-level kernel timing (no-op when profiler inactive)
+try:
+    from ..profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    def kernel_region(name: str):
+        @contextmanager
+        def _noop():
+            yield
+        return _noop()
+
 
 # ============================================================
 # Triton kernels
@@ -335,50 +346,52 @@ def _triton_fwd_save_uv(H: torch.Tensor, num_iters: int, eps: float):
     if H.shape[-2:] != (4, 4):
         raise ValueError(f"Only n=4 supported. Got {H.shape[-2:]}")
 
-    orig_shape = H.shape
-    H_flat = H.reshape(-1, 16).contiguous()
-    num_mats = H_flat.shape[0]
+    with kernel_region("sinkhorn_fwd"):
+        orig_shape = H.shape
+        H_flat = H.reshape(-1, 16).contiguous()
+        num_mats = H_flat.shape[0]
 
-    M_flat = torch.empty((num_mats, 16), device=H.device, dtype=torch.float32)
-    u = torch.empty((num_mats, 4), device=H.device, dtype=torch.float32)
-    v = torch.empty((num_mats, 4), device=H.device, dtype=torch.float32)
+        M_flat = torch.empty((num_mats, 16), device=H.device, dtype=torch.float32)
+        u = torch.empty((num_mats, 4), device=H.device, dtype=torch.float32)
+        v = torch.empty((num_mats, 4), device=H.device, dtype=torch.float32)
 
-    _sinkhorn4_fwd_save_uv_kernel[(num_mats,)](
-        H_flat,
-        M_flat,
-        u,
-        v,
-        num_mats,
-        EPS=float(eps),
-        NUM_ITERS=int(num_iters),
-        num_warps=1,
-        num_stages=1,
-    )
-    M = M_flat.reshape(orig_shape).to(H.dtype)
-    return M, u, v
+        _sinkhorn4_fwd_save_uv_kernel[(num_mats,)](
+            H_flat,
+            M_flat,
+            u,
+            v,
+            num_mats,
+            EPS=float(eps),
+            NUM_ITERS=int(num_iters),
+            num_warps=1,
+            num_stages=1,
+        )
+        M = M_flat.reshape(orig_shape).to(H.dtype)
+        return M, u, v
 
 
 def _triton_bwd_solve8(H: torch.Tensor, u: torch.Tensor, v: torch.Tensor, grad_out: torch.Tensor, eps: float):
     if not HAS_TRITON:
         raise ImportError("Triton is required.")
-    orig_shape = H.shape
-    H_flat = H.reshape(-1, 16).contiguous()
-    dM_flat = grad_out.reshape(-1, 16).contiguous()
-    num_mats = H_flat.shape[0]
+    with kernel_region("sinkhorn_bwd"):
+        orig_shape = H.shape
+        H_flat = H.reshape(-1, 16).contiguous()
+        dM_flat = grad_out.reshape(-1, 16).contiguous()
+        num_mats = H_flat.shape[0]
 
-    dH_flat = torch.empty((num_mats, 16), device=H.device, dtype=torch.float32)
+        dH_flat = torch.empty((num_mats, 16), device=H.device, dtype=torch.float32)
 
-    damp_env = os.getenv("T17_SINKHORN_DAMP", "").strip()
-    damp = float(damp_env) if damp_env else max(float(eps), 1e-7)
+        damp_env = os.getenv("T17_SINKHORN_DAMP", "").strip()
+        damp = float(damp_env) if damp_env else max(float(eps), 1e-7)
 
-    _sinkhorn4_implicit_bwd_solve8_kernel[(num_mats,)](
-        H_flat, u, v, dM_flat, dH_flat, num_mats,
-        EPS=float(eps),
-        DAMP=float(damp),
-        num_warps=1,
-        num_stages=1,
-    )
-    return dH_flat.reshape(orig_shape).to(H.dtype)
+        _sinkhorn4_implicit_bwd_solve8_kernel[(num_mats,)](
+            H_flat, u, v, dM_flat, dH_flat, num_mats,
+            EPS=float(eps),
+            DAMP=float(damp),
+            num_warps=1,
+            num_stages=1,
+        )
+        return dH_flat.reshape(orig_shape).to(H.dtype)
 
 
 def pytorch_sinkhorn_knopp(H: torch.Tensor, num_iters: int = 20, eps: float = 1e-8) -> torch.Tensor:

@@ -12,6 +12,17 @@ from typing import Iterable, List
 
 import torch
 
+# Profiler: kernel_region for step-level kernel timing (no-op when profiler inactive)
+try:
+    from ..profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    def kernel_region(name: str):
+        @contextmanager
+        def _noop():
+            yield
+        return _noop()
+
 try:
     import grouped_gemm as _grouped_gemm
 except Exception:
@@ -23,7 +34,14 @@ HAS_MOE_GROUPED_GEMM = _grouped_gemm is not None
 
 def _normalize_m_sizes_list(m_sizes: torch.Tensor | Iterable[int]) -> List[int]:
     if isinstance(m_sizes, torch.Tensor):
-        values = m_sizes.detach().cpu().tolist()
+        # Keep on CPU if already there, otherwise transfer (unavoidable for list API)
+        # This is only called if the backend requires list[int] instead of tensor
+        if m_sizes.device.type == 'cpu':
+            values = m_sizes.detach().tolist()
+        else:
+            # NOTE: This causes a GPU-CPU sync. Most backends now support tensor m_sizes,
+            # so this path is rarely taken in modern setups.
+            values = m_sizes.detach().cpu().tolist()
     else:
         values = list(m_sizes)
     return [int(v) for v in values]
@@ -60,20 +78,28 @@ def moe_grouped_gemm(
         raise ValueError(f"Invalid grouped GEMM shapes: a={tuple(a.shape)}, b={tuple(b.shape)}")
 
     # Different grouped_gemm variants accept either a 1D tensor or list[int].
-    sizes_tensor = _normalize_m_sizes_tensor(m_sizes, torch.device("cpu"))
-    sizes_list = _normalize_m_sizes_list(m_sizes)
+    # Prefer tensor API to avoid GPU-CPU sync.
     ops = getattr(_grouped_gemm, "ops", _grouped_gemm)
 
-    if hasattr(ops, "gmm"):
-        try:
-            return ops.gmm(a, b, sizes_tensor, trans_b=False)
-        except TypeError:
-            return ops.gmm(a, b, sizes_list)
+    with kernel_region("moe_grouped_gemm"):
+        # Keep m_sizes on same device as a (usually GPU) to avoid GPU-CPU sync in hot path.
+        # Syncs here were responsible for large throughput drops (e.g. 11k -> 1k tok/s).
+        sizes_tensor = _normalize_m_sizes_tensor(m_sizes, a.device)
 
-    if hasattr(ops, "grouped_gemm"):
-        try:
-            return ops.grouped_gemm(a, b, sizes_tensor)
-        except TypeError:
-            return ops.grouped_gemm(a, b, sizes_list)
+        if hasattr(ops, "gmm"):
+            try:
+                return ops.gmm(a, b, sizes_tensor, trans_b=False)
+            except (TypeError, RuntimeError):
+                # Fallback to list API only if backend requires CPU list (causes sync)
+                sizes_list = _normalize_m_sizes_list(m_sizes)
+                return ops.gmm(a, b, sizes_list)
+
+        if hasattr(ops, "grouped_gemm"):
+            try:
+                return ops.grouped_gemm(a, b, sizes_tensor)
+            except (TypeError, RuntimeError):
+                # Fallback to list API
+                sizes_list = _normalize_m_sizes_list(m_sizes)
+                return ops.grouped_gemm(a, b, sizes_list)
 
     raise RuntimeError("Unsupported grouped_gemm API: expected ops.gmm or ops.grouped_gemm.")

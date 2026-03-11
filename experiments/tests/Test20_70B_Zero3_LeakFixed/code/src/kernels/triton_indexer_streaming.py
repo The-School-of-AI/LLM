@@ -22,6 +22,17 @@ Based on the GSA paper implementation (arXiv:2601.15305v1).
 import torch
 from typing import Tuple, Optional
 
+# Profiler: kernel_region for step-level kernel timing (no-op when profiler inactive)
+try:
+    from ..profiler import kernel_region
+except ImportError:
+    from contextlib import contextmanager
+    def kernel_region(name: str):
+        @contextmanager
+        def _noop():
+            yield
+        return _noop()
+
 # Import the base indexer kernels
 from .triton_indexer import (
     HAS_TRITON,
@@ -74,134 +85,136 @@ def fused_indexer_topk(
         k_t: [batch, seq_q] — per-query adaptive k (long)
         top_indices: [batch, seq_q, k_limit] — topk key indices (int32)
     """
-    batch_size, seq_q, n_heads, d_idx = q.shape
-    seq_kv = k.shape[1]
-    device = q.device
+    with kernel_region("fused_indexer_topk"):
+        batch_size, seq_q, n_heads, d_idx = q.shape
+        seq_kv = k.shape[1]
+        device = q.device
 
-    # ---- Phase 1: Compute variance per chunk (single pass) ----
-    # We need variance first to compute k_t, then k_limit = max(k_t),
-    # then topk. But computing topk in the same pass as variance requires
-    # knowing k_limit upfront. Solution: two-phase single-pass.
-    #
-    # Phase 1: Chunked variance → var_t, k_t, k_limit
-    # Phase 2: Chunked topk using same kernel, now knowing k_limit
-    #
-    # At small T (where C >= T), both phases are a single kernel call each.
-    # At large T, the score computation is the bottleneck — but we must
-    # know k_limit before we can allocate the output tensor.
-    #
-    # OPTIMIZATION: If k_max is small enough, use k_max as k_limit directly
-    # to avoid the variance pass entirely when it would be a separate loop.
-    # This trades slightly larger output tensor for halving compute.
+        # ---- Phase 1: Compute variance per chunk (single pass) ----
+        # We need variance first to compute k_t, then k_limit = max(k_t),
+        # then topk. But computing topk in the same pass as variance requires
+        # knowing k_limit upfront. Solution: two-phase single-pass.
+        #
+        # Phase 1: Chunked variance → var_t, k_t, k_limit
+        # Phase 2: Chunked topk using same kernel, now knowing k_limit
+        #
+        # At small T (where C >= T), both phases are a single kernel call each.
+        # At large T, the score computation is the bottleneck — but we must
+        # know k_limit before we can allocate the output tensor.
+        #
+        # OPTIMIZATION: If k_max is small enough, use k_max as k_limit directly
+        # to avoid the variance pass entirely when it would be a separate loop.
+        # This trades slightly larger output tensor for halving compute.
 
-    C = _auto_chunk_size(batch_size, seq_kv)
-    use_triton = HAS_TRITON and q.is_cuda
+        C = _auto_chunk_size(batch_size, seq_kv)
+        use_triton = HAS_TRITON and q.is_cuda
 
-    # Check if we can do true single-pass (use k_max as k_limit)
-    # This avoids computing variance separately when k_max is reasonable.
-    # At T=256K with k_max=4096: output = B*T*k_max*4 bytes
-    # B=1: 4GB, B=16: 64GB — too much. Use dynamic k_limit.
-    #
-    # Heuristic: single-pass if output would be < 2GB, else two-phase.
-    output_bytes_at_kmax = batch_size * seq_q * min(k_max, seq_kv) * 4
-    single_pass = output_bytes_at_kmax < 2 * 1024 * 1024 * 1024  # 2GB
+        # Check if we can do true single-pass (use k_max as k_limit)
+        # This avoids computing variance separately when k_max is reasonable.
+        # At T=256K with k_max=4096: output = B*T*k_max*4 bytes
+        # B=1: 4GB, B=16: 64GB — too much. Use dynamic k_limit.
+        #
+        # Heuristic: single-pass if output would be < 2GB, else two-phase.
+        output_bytes_at_kmax = batch_size * seq_q * min(k_max, seq_kv) * 4
+        single_pass = output_bytes_at_kmax < 2 * 1024 * 1024 * 1024  # 2GB
 
-    if single_pass:
-        # ---- TRUE SINGLE PASS: variance + topk from same chunk ----
-        k_limit = min(seq_kv, max(k_max, sink_size))
-        var_t = torch.empty(batch_size, seq_q, device=device, dtype=torch.float32)
-        top_indices = torch.empty(batch_size, seq_q, k_limit, device=device, dtype=torch.int32)
+        if single_pass:
+            # ---- TRUE SINGLE PASS: variance + topk from same chunk ----
+            k_limit = min(seq_kv, max(k_max, sink_size))
+            var_t = torch.empty(batch_size, seq_q, device=device, dtype=torch.float32)
+            top_indices = torch.empty(batch_size, seq_q, k_limit, device=device, dtype=torch.int32)
 
-        for q_start in range(0, seq_q, C):
-            q_end = min(q_start + C, seq_q)
-            q_chunk = q[:, q_start:q_end]
-            w_chunk = w[:, q_start:q_end]
+            for q_start in range(0, seq_q, C):
+                q_end = min(q_start + C, seq_q)
+                q_chunk = q[:, q_start:q_end]
+                w_chunk = w[:, q_start:q_end]
 
-            # Compute (B, C_actual, seq_kv) importance scores
-            scores = _compute_scores(q_chunk, k, w_chunk, b, scale, causal, q_start, use_triton)
+                # Compute (B, C_actual, seq_kv) importance scores
+                scores = _compute_scores(q_chunk, k, w_chunk, b, scale, causal, q_start, use_triton)
 
-            # Variance from this chunk (replace -inf with 0)
-            scores_for_var = scores.masked_fill(scores == float('-inf'), 0.0)
-            var_t[:, q_start:q_end] = scores_for_var.var(dim=-1, unbiased=False)
-            del scores_for_var
+                # Variance from this chunk (replace -inf with 0)
+                scores_for_var = scores.masked_fill(scores == float('-inf'), 0.0)
+                var_t[:, q_start:q_end] = scores_for_var.var(dim=-1, unbiased=False)
+                del scores_for_var
 
-            # Attention sinks
-            if seq_kv > sink_size:
-                scores = scores.clone()
-                _apply_causal_safe_sinks(
-                    scores=scores,
-                    sink_size=sink_size,
-                    q_start=q_start,
-                    seq_kv=seq_kv,
-                )
+                # Attention sinks
+                if seq_kv > sink_size:
+                    scores = scores.clone()
+                    _apply_causal_safe_sinks(
+                        scores=scores,
+                        sink_size=sink_size,
+                        q_start=q_start,
+                        seq_kv=seq_kv,
+                    )
 
-            # TopK
-            _, chunk_idx = scores.topk(k_limit, dim=-1)
-            top_indices[:, q_start:q_end, :] = chunk_idx.to(torch.int32)
+                # TopK
+                _, chunk_idx = scores.topk(k_limit, dim=-1)
+                top_indices[:, q_start:q_end, :] = chunk_idx.to(torch.int32)
 
-            del scores, chunk_idx
+                del scores, chunk_idx
 
-        # Compute adaptive k_t from variance
-        if variance_ema is not None:
-            avg_V = variance_ema.clamp(min=1e-6)
+            # Compute adaptive k_t from variance
+            if variance_ema is not None:
+                avg_V = variance_ema.clamp(min=1e-6)
+            else:
+                avg_V = var_t.mean().clamp(min=1e-6)
+            k_t = (k_base * var_t / avg_V).floor().clamp(min=k_min, max=k_max).long()
+
+            # Update EMA
+            if is_training and variance_ema is not None:
+                variance_ema.mul_(0.99).add_(var_t.mean().detach(), alpha=0.01)
+
         else:
-            avg_V = var_t.mean().clamp(min=1e-6)
-        k_t = (k_base * var_t / avg_V).floor().clamp(min=k_min, max=k_max).long()
+            # ---- TWO-PHASE: variance first to get dynamic k_limit ----
 
-        # Update EMA
-        if is_training and variance_ema is not None:
-            variance_ema.mul_(0.99).add_(var_t.mean().detach(), alpha=0.01)
+            # Phase 1: Chunked variance
+            var_t = torch.empty(batch_size, seq_q, device=device, dtype=torch.float32)
+            for q_start in range(0, seq_q, C):
+                q_end = min(q_start + C, seq_q)
+                scores = _compute_scores(
+                    q[:, q_start:q_end], k, w[:, q_start:q_end],
+                    b, scale, causal, q_start, use_triton)
+                scores_for_var = scores.masked_fill(scores == float('-inf'), 0.0)
+                var_t[:, q_start:q_end] = scores_for_var.var(dim=-1, unbiased=False)
+                del scores, scores_for_var
 
-    else:
-        # ---- TWO-PHASE: variance first to get dynamic k_limit ----
+            # Compute adaptive k_t
+            if variance_ema is not None:
+                avg_V = variance_ema.clamp(min=1e-6)
+            else:
+                avg_V = var_t.mean().clamp(min=1e-6)
+            k_t = (k_base * var_t / avg_V).floor().clamp(min=k_min, max=k_max).long()
 
-        # Phase 1: Chunked variance
-        var_t = torch.empty(batch_size, seq_q, device=device, dtype=torch.float32)
-        for q_start in range(0, seq_q, C):
-            q_end = min(q_start + C, seq_q)
-            scores = _compute_scores(
-                q[:, q_start:q_end], k, w[:, q_start:q_end],
-                b, scale, causal, q_start, use_triton)
-            scores_for_var = scores.masked_fill(scores == float('-inf'), 0.0)
-            var_t[:, q_start:q_end] = scores_for_var.var(dim=-1, unbiased=False)
-            del scores, scores_for_var
+            # Update EMA
+            if is_training and variance_ema is not None:
+                variance_ema.mul_(0.99).add_(var_t.mean().detach(), alpha=0.01)
 
-        # Compute adaptive k_t
-        if variance_ema is not None:
-            avg_V = variance_ema.clamp(min=1e-6)
-        else:
-            avg_V = var_t.mean().clamp(min=1e-6)
-        k_t = (k_base * var_t / avg_V).floor().clamp(min=k_min, max=k_max).long()
+            # Dynamic k_limit (use k_max as upper bound to avoid GPU-CPU sync)
+            # Safe because k_t is clamped to [k_min, k_max] above
+            k_limit = min(seq_kv, max(k_max, sink_size, 1))
 
-        # Update EMA
-        if is_training and variance_ema is not None:
-            variance_ema.mul_(0.99).add_(var_t.mean().detach(), alpha=0.01)
+            # Phase 2: Chunked topk
+            top_indices = torch.empty(batch_size, seq_q, k_limit, device=device, dtype=torch.int32)
+            for q_start in range(0, seq_q, C):
+                q_end = min(q_start + C, seq_q)
+                scores = _compute_scores(
+                    q[:, q_start:q_end], k, w[:, q_start:q_end],
+                    b, scale, causal, q_start, use_triton)
 
-        # Dynamic k_limit
-        k_limit = min(seq_kv, max(int(k_t.max().item()), sink_size, 1))
+                if seq_kv > sink_size:
+                    scores = scores.clone()
+                    _apply_causal_safe_sinks(
+                        scores=scores,
+                        sink_size=sink_size,
+                        q_start=q_start,
+                        seq_kv=seq_kv,
+                    )
 
-        # Phase 2: Chunked topk
-        top_indices = torch.empty(batch_size, seq_q, k_limit, device=device, dtype=torch.int32)
-        for q_start in range(0, seq_q, C):
-            q_end = min(q_start + C, seq_q)
-            scores = _compute_scores(
-                q[:, q_start:q_end], k, w[:, q_start:q_end],
-                b, scale, causal, q_start, use_triton)
+                _, chunk_idx = scores.topk(k_limit, dim=-1)
+                top_indices[:, q_start:q_end, :] = chunk_idx.to(torch.int32)
+                del scores, chunk_idx
 
-            if seq_kv > sink_size:
-                scores = scores.clone()
-                _apply_causal_safe_sinks(
-                    scores=scores,
-                    sink_size=sink_size,
-                    q_start=q_start,
-                    seq_kv=seq_kv,
-                )
-
-            _, chunk_idx = scores.topk(k_limit, dim=-1)
-            top_indices[:, q_start:q_end, :] = chunk_idx.to(torch.int32)
-            del scores, chunk_idx
-
-    return var_t, k_t, top_indices
+        return var_t, k_t, top_indices
 
 
 def _compute_scores(q_chunk, k, w_chunk, b, scale, causal, q_offset, use_triton):
