@@ -55,7 +55,7 @@ training:
   learning_rate: 2.0e-5  # Overridden per LR grid point
   lr_scheduler_type: "cosine"
   warmup_ratio: 0.03
-  weight_decay: 0.01
+  weight_decay: 0.0
 
   num_train_epochs: 2
   max_steps: -1
