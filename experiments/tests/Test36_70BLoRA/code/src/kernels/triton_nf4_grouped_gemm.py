@@ -119,7 +119,11 @@ if HAS_TRITON:
         # packed as uint8 with 2 values per byte along the N dimension.
         # For a [K, N] weight matrix, packed shape is [K, N//2].
         # Element [k, n] maps to byte [k, n//2], nibble (n % 2).
-        num_blocks_per_row = (N + BLOCK_SIZE - 1) // BLOCK_SIZE
+
+        half_N = N // 2
+        byte_offs_n = offs_n // 2  # [BLOCK_N]
+        is_high_nibble = (offs_n % 2) == 0  # [BLOCK_N]
+        mask_n = offs_n < N
 
         for k_start in range(0, K, BLOCK_K):
             offs_k = k_start + tl.arange(0, BLOCK_K)
@@ -129,59 +133,49 @@ if HAS_TRITON:
             mask_a = (offs_m[:, None] < M_e) & (offs_k[None, :] < K)
             a_tile = tl.load(a_ptrs, mask=mask_a, other=0.0)
 
-            # Dequantize W tile [BLOCK_K, BLOCK_N] on-the-fly
-            # W is stored as [K, N] in row-major, packed along N: [K, N//2] uint8
-            # Each byte holds two N-adjacent values.
-            w_tile = tl.zeros((BLOCK_K, BLOCK_N), dtype=tl.float32)
-
-            # Load packed bytes for this tile
-            # Byte index for element [k, n] = k * (N//2) + n//2
-            half_N = N // 2
-            byte_offs_n = offs_n // 2  # [BLOCK_N]
-            is_high_nibble = (offs_n % 2) == 0  # [BLOCK_N]
-
-            for ki in range(BLOCK_K):
+            # Dequantize W tile [BLOCK_K, BLOCK_N] on-the-fly using
+            # vectorized loads per K-row. Triton doesn't support __setitem__
+            # on tensors, so we accumulate a_row * w_row into acc directly.
+            for ki in tl.static_range(BLOCK_K):
                 k_idx = k_start + ki
-                if k_idx < K:
-                    # Load packed bytes for this row
-                    byte_ptrs = w_base + k_idx * half_N + byte_offs_n
-                    mask_n = offs_n < N
-                    packed_bytes = tl.load(byte_ptrs, mask=mask_n, other=0).to(tl.uint8)
+                # Load packed bytes for this row
+                byte_ptrs = w_base + k_idx * half_N + byte_offs_n
+                packed_bytes = tl.load(byte_ptrs, mask=(mask_n & (k_idx < K)), other=0).to(tl.uint8)
 
-                    # Extract 4-bit indices
-                    high = (packed_bytes >> 4) & 0x0F
-                    low = packed_bytes & 0x0F
-                    nf4_idx = tl.where(is_high_nibble, high, low).to(tl.int32)
+                # Extract 4-bit indices
+                high = (packed_bytes >> 4) & 0x0F
+                low = packed_bytes & 0x0F
+                nf4_idx = tl.where(is_high_nibble, high, low).to(tl.int32)
 
-                    # NF4 lookup via cascading selects
-                    val = tl.where(nf4_idx == 0, nf4_0,
-                          tl.where(nf4_idx == 1, nf4_1,
-                          tl.where(nf4_idx == 2, nf4_2,
-                          tl.where(nf4_idx == 3, nf4_3,
-                          tl.where(nf4_idx == 4, nf4_4,
-                          tl.where(nf4_idx == 5, nf4_5,
-                          tl.where(nf4_idx == 6, nf4_6,
-                          tl.where(nf4_idx == 7, nf4_7,
-                          tl.where(nf4_idx == 8, nf4_8,
-                          tl.where(nf4_idx == 9, nf4_9,
-                          tl.where(nf4_idx == 10, nf4_10,
-                          tl.where(nf4_idx == 11, nf4_11,
-                          tl.where(nf4_idx == 12, nf4_12,
-                          tl.where(nf4_idx == 13, nf4_13,
-                          tl.where(nf4_idx == 14, nf4_14,
-                                   nf4_15)))))))))))))))
+                # NF4 lookup via cascading selects
+                val = tl.where(nf4_idx == 0, nf4_0,
+                      tl.where(nf4_idx == 1, nf4_1,
+                      tl.where(nf4_idx == 2, nf4_2,
+                      tl.where(nf4_idx == 3, nf4_3,
+                      tl.where(nf4_idx == 4, nf4_4,
+                      tl.where(nf4_idx == 5, nf4_5,
+                      tl.where(nf4_idx == 6, nf4_6,
+                      tl.where(nf4_idx == 7, nf4_7,
+                      tl.where(nf4_idx == 8, nf4_8,
+                      tl.where(nf4_idx == 9, nf4_9,
+                      tl.where(nf4_idx == 10, nf4_10,
+                      tl.where(nf4_idx == 11, nf4_11,
+                      tl.where(nf4_idx == 12, nf4_12,
+                      tl.where(nf4_idx == 13, nf4_13,
+                      tl.where(nf4_idx == 14, nf4_14,
+                               nf4_15)))))))))))))))
 
-                    # Load absmax for this element's block
-                    # Block index for element [k, n] in row-major [K, N]:
-                    # linear_idx = k * N + n, block_idx = linear_idx // BLOCK_SIZE
-                    linear_idx = k_idx * N + offs_n
-                    block_idx = linear_idx // BLOCK_SIZE
-                    absmax_vals = tl.load(am_base + block_idx, mask=mask_n, other=1.0)
+                # Load absmax for this element's block
+                linear_idx = k_idx * N + offs_n
+                block_idx = linear_idx // BLOCK_SIZE
+                absmax_vals = tl.load(am_base + block_idx, mask=(mask_n & (k_idx < K)), other=1.0)
 
-                    # Dequantize: value * absmax
-                    w_tile[ki, :] = val * absmax_vals
+                # Dequantize: value * absmax → w_row [BLOCK_N]
+                w_row = (val * absmax_vals).to(a_tile.dtype)
 
-            acc += tl.dot(a_tile, w_tile.to(a_tile.dtype))
+                # Outer product accumulation: a_col [BLOCK_M] × w_row [BLOCK_N]
+                a_col = a_tile[:, ki]  # [BLOCK_M]
+                acc += a_col[:, None] * w_row[None, :]
 
         # Store result
         c_ptrs = c_base + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn

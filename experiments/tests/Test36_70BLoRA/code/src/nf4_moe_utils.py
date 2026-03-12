@@ -168,69 +168,61 @@ def _moe_grouped_nf4(module, sorted_x, expert_counts):
     except ImportError:
         has_fused_nf4 = False
 
-    E_gate = module.W_gate_nf4_packed.shape[0] if hasattr(module, 'W_gate_nf4_packed') else 0
     K = module.d_model
     N_hidden = module.d_hidden
 
+    try:
+        from .models.liger_ops import liger_silu_mul
+    except ImportError:
+        liger_silu_mul = lambda g, u: torch.nn.functional.silu(g) * u
+
     if has_fused_nf4 and has_lora:
-        from .kernels.triton_nf4_grouped_gemm import nf4_lora_grouped_gemm
-
         try:
-            from .models.liger_ops import liger_silu_mul
-        except ImportError:
-            liger_silu_mul = lambda g, u: torch.nn.functional.silu(g) * u
+            # Gate + Up with fused NF4 dequant + LoRA
+            gate_out = nf4_lora_grouped_gemm(
+                x_in,
+                module.W_gate_nf4_packed, module.W_gate_nf4_absmax,
+                module.lora_A_W_gate, module.lora_B_W_gate,
+                expert_counts, K, N_hidden, scaling,
+                module._nf4_block_size,
+            )
+            up_out = nf4_lora_grouped_gemm(
+                x_in,
+                module.W_up_nf4_packed, module.W_up_nf4_absmax,
+                module.lora_A_W_up, module.lora_B_W_up,
+                expert_counts, K, N_hidden, scaling,
+                module._nf4_block_size,
+            )
 
-        # Gate + Up with fused NF4 dequant + LoRA
-        gate_out = nf4_lora_grouped_gemm(
-            x_in,
-            module.W_gate_nf4_packed, module.W_gate_nf4_absmax,
-            module.lora_A_W_gate, module.lora_B_W_gate,
-            expert_counts, K, N_hidden, scaling,
-            module._nf4_block_size,
-        )
-        up_out = nf4_lora_grouped_gemm(
-            x_in,
-            module.W_up_nf4_packed, module.W_up_nf4_absmax,
-            module.lora_A_W_up, module.lora_B_W_up,
-            expert_counts, K, N_hidden, scaling,
-            module._nf4_block_size,
-        )
+            h = liger_silu_mul(gate_out, up_out)
 
-        h = liger_silu_mul(gate_out, up_out)
+            if module.training and module.dropout > 0:
+                h = torch.nn.functional.dropout(h, p=module.dropout)
 
-        if module.training and module.dropout > 0:
-            h = torch.nn.functional.dropout(h, p=module.dropout)
-
-        # Down projection with fused NF4 + LoRA
-        out = nf4_lora_grouped_gemm(
-            h,
-            module.W_down_nf4_packed, module.W_down_nf4_absmax,
-            module.lora_A_W_down, module.lora_B_W_down,
-            expert_counts, N_hidden, K, scaling,
-            module._nf4_block_size,
-        )
-        return out.to(dtype=sorted_x.dtype)
+            # Down projection with fused NF4 + LoRA
+            out = nf4_lora_grouped_gemm(
+                h,
+                module.W_down_nf4_packed, module.W_down_nf4_absmax,
+                module.lora_A_W_down, module.lora_B_W_down,
+                expert_counts, N_hidden, K, scaling,
+                module._nf4_block_size,
+            )
+            return out.to(dtype=sorted_x.dtype)
+        except Exception as fused_exc:
+            logger.warning(
+                f"Fused NF4 GEMM failed ({type(fused_exc).__name__}: {fused_exc}), "
+                f"falling back to dequant-then-GEMM"
+            )
 
     # Fallback: dequantize then use existing grouped GEMM path
     W_gate = _get_nf4_weight(module, 'W_gate')
     W_up = _get_nf4_weight(module, 'W_up')
     W_down = _get_nf4_weight(module, 'W_down')
 
-    # Temporarily set the dequantized weights on the module
-    # so the existing _moe_grouped code path works
-    module.W_gate = nn.Parameter(W_gate, requires_grad=False)
-    module.W_up = nn.Parameter(W_up, requires_grad=False)
-    module.W_down = nn.Parameter(W_down, requires_grad=False)
-
     try:
-        # Use the original _moe_grouped with dequantized weights
+        # Use the existing fused LoRA grouped GEMM with dequantized weights
         from .kernels.fused_lora_grouped_gemm import fused_lora_gate_up_silu as fused_lora_gate_up_silu_fn
         from .kernels.fused_lora_grouped_gemm import fused_lora_grouped_gemm as fused_lora_grouped_gemm_fn
-
-        try:
-            from .models.liger_ops import liger_silu_mul
-        except ImportError:
-            liger_silu_mul = lambda g, u: torch.nn.functional.silu(g) * u
 
         if has_lora and fused_lora_gate_up_silu_fn is not None:
             h = fused_lora_gate_up_silu_fn(
@@ -269,10 +261,53 @@ def _moe_grouped_nf4(module, sorted_x, expert_counts):
 
         return out.to(dtype=sorted_x.dtype)
     finally:
-        # Clean up temporary dequantized weights to free memory
-        if hasattr(module, 'W_gate') and isinstance(module.W_gate, nn.Parameter):
-            del module.W_gate, module.W_up, module.W_down
-            torch.cuda.empty_cache()
+        # Dequantized weights are local tensors, no cleanup needed
+        del W_gate, W_up, W_down
+
+
+def _moe_vectorized_nf4(module, sorted_x, sorted_expert_indices):
+    """
+    NF4-aware MoE vectorized fallback path.
+
+    Replaces MoEFFN._moe_vectorized when expert weights are NF4-quantized.
+    Dequantizes full expert weights then indexes per-token.
+    """
+    m = sorted_x.size(0)
+    if m == 0:
+        return torch.empty_like(sorted_x)
+
+    try:
+        from .models.liger_ops import liger_silu_mul
+    except ImportError:
+        liger_silu_mul = lambda g, u: torch.nn.functional.silu(g) * u
+
+    # Dequantize all expert weights
+    W_gate = _get_nf4_weight(module, 'W_gate')
+    W_up = _get_nf4_weight(module, 'W_up')
+    W_down = _get_nf4_weight(module, 'W_down')
+
+    out = torch.empty((m, module.d_model), device=sorted_x.device, dtype=sorted_x.dtype)
+    chunk = getattr(module, 'vectorized_chunk_size', 64)
+
+    for start in range(0, m, chunk):
+        end = min(start + chunk, m)
+        x_chunk = sorted_x[start:end]
+        idx_chunk = sorted_expert_indices[start:end]
+
+        x_expanded = x_chunk.unsqueeze(1)  # [C, 1, D]
+        w_gate_sel = W_gate[idx_chunk]  # [C, D, H]
+        w_up_sel = W_up[idx_chunk]  # [C, D, H]
+        w_down_sel = W_down[idx_chunk]  # [C, H, D]
+
+        gate_out = torch.bmm(x_expanded, w_gate_sel).squeeze(1)
+        up_out = torch.bmm(x_expanded, w_up_sel).squeeze(1)
+        h = liger_silu_mul(gate_out, up_out)
+        if module.training and module.dropout > 0:
+            h = torch.nn.functional.dropout(h, p=module.dropout)
+        out[start:end] = torch.bmm(h.unsqueeze(1), w_down_sel).squeeze(1)
+
+    del W_gate, W_up, W_down
+    return out
 
 
 def patch_moe_nf4_forward(model: nn.Module) -> int:
@@ -280,8 +315,9 @@ def patch_moe_nf4_forward(model: nn.Module) -> int:
     Patch MoEFFN modules to use NF4-aware forward path.
 
     After quantize_moe_experts() has converted weights to NF4, this function
-    monkey-patches _moe_grouped on each quantized MoEFFN to use the NF4
-    dequant-on-the-fly path.
+    monkey-patches _moe_grouped AND _moe_vectorized on each quantized MoEFFN
+    to use the NF4 dequant-on-the-fly path. Both must be patched because
+    MoEFFN.forward falls back to _moe_vectorized if _moe_grouped raises.
 
     Args:
         model: model with NF4-quantized MoEFFN modules
@@ -301,7 +337,14 @@ def patch_moe_nf4_forward(model: nn.Module) -> int:
                 return _moe_grouped_nf4(self, sorted_x, expert_counts)
             return types.MethodType(_patched_moe_grouped, mod)
 
+        # Monkey-patch _moe_vectorized to use NF4 path (fallback safety)
+        def _make_nf4_vectorized(mod):
+            def _patched_moe_vectorized(self, sorted_x, sorted_expert_indices):
+                return _moe_vectorized_nf4(self, sorted_x, sorted_expert_indices)
+            return types.MethodType(_patched_moe_vectorized, mod)
+
         module._moe_grouped = _make_nf4_grouped(module)
+        module._moe_vectorized = _make_nf4_vectorized(module)
         count += 1
         logger.info(f"  NF4 forward patched: {mod_name}")
 
