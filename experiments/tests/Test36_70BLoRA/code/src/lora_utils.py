@@ -45,6 +45,8 @@ class LoRAConfig:
     ])
     # Use fused autograd (FusedLoRALinear) for attention LoRA — saves activation memory
     use_fused: bool = True
+    # Use manual backward (ManualLoRALinear) — bypasses autograd overhead entirely
+    use_manual_backward: bool = False
     # MoE expert LoRA settings
     moe_rank: Optional[int] = None  # defaults to rank if None
     moe_alpha: Optional[float] = None  # defaults to alpha if None
@@ -143,7 +145,15 @@ def inject_lora(model: nn.Module, config: LoRAConfig) -> int:
     """
     # Select LoRA class
     lora_cls = LoRALinear
-    if config.use_fused:
+    if config.use_manual_backward:
+        try:
+            from .kernels.manual_lora_backward import ManualLoRALinear
+            lora_cls = ManualLoRALinear
+        except ImportError:
+            logger.warning("ManualLoRALinear not available, falling back to FusedLoRALinear")
+            config.use_manual_backward = False
+
+    if config.use_fused and not config.use_manual_backward:
         try:
             from .kernels.fused_lora_linear import FusedLoRALinear
             lora_cls = FusedLoRALinear

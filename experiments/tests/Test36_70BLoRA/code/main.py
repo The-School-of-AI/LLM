@@ -208,6 +208,13 @@ class Config:
         self.observability_skip_vector_check = _obs.get("skip_vector_check", True)
         self.observability_system_metrics_interval = _obs.get("system_metrics_interval", 5.0)
 
+        # NF4 Quantization configuration (optional)
+        _nf4 = config_dict.get("nf4", {})
+        self.nf4_enabled = _nf4.get("enabled", False)
+        self.nf4_block_size = _nf4.get("block_size", 64)
+        self.nf4_double_quant = _nf4.get("double_quant", True)
+        self.nf4_quantize_experts = _nf4.get("quantize_experts", True)
+
 
 def load_config(config_path: str = "config.yaml") -> Config:
     if not os.path.exists(config_path):
@@ -568,6 +575,24 @@ def main():
         print_rank_0(f"  Trainable: {trainable:,} ({trainable / 1e6:.2f}M)")
         print_rank_0(f"  Frozen:    {frozen:,} ({frozen / 1e9:.3f}B)")
         print_lora_summary(model)
+
+    # ========================================
+    # Step 2.7: NF4 Quantization (optional)
+    # ========================================
+    if args.nf4_enabled and args.nf4_quantize_experts:
+        print_rank_0("\n[2.7/5] Quantizing MoE expert weights to NF4...")
+        from src.nf4_moe_utils import quantize_moe_experts, patch_moe_nf4_forward, print_nf4_summary
+        from src.kernels.nf4_quantize import NF4QuantConfig
+
+        nf4_cfg = NF4QuantConfig(
+            block_size=args.nf4_block_size,
+            double_quant=args.nf4_double_quant,
+        )
+        n_quantized = quantize_moe_experts(model, nf4_cfg)
+        n_patched = patch_moe_nf4_forward(model)
+        print_rank_0(f"  NF4: {n_quantized} expert weight tensors quantized")
+        print_rank_0(f"  NF4: {n_patched} MoE modules patched for NF4 forward")
+        print_nf4_summary(model)
 
     # ========================================
     # Step 3: Initialize DeepSpeed

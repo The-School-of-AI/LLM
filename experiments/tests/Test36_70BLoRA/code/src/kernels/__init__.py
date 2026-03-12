@@ -115,6 +115,28 @@ from .triton_moe_softmax_topk import (
 )
 
 
+# --- Phase 6: NF4 Quantization kernels ---
+
+from .nf4_quantize import (
+    NF4QuantConfig,
+    NF4Parameter,
+    NF4_LEVELS,
+    quantize_tensor_nf4,
+)
+
+from .triton_nf4_grouped_gemm import (
+    nf4_lora_grouped_gemm,
+    pytorch_nf4_lora_grouped_gemm,
+)
+
+# --- Phase 7: Manual backward LoRA ---
+
+from .manual_lora_backward import (
+    ManualLoRALinear,
+    ManualLoRALinearFn,
+)
+
+
 # --- Upgraded Cross Entropy: Cut CE (V-tiled, no [BT,V] materialization) ---
 
 from .cut_cross_entropy import (
@@ -161,6 +183,16 @@ __all__ = [
     "fused_lora_gate_up_silu",
     # Phase 5: MoE gate kernel
     "fused_softmax_topk",
+    # Phase 6: NF4 Quantization
+    "NF4QuantConfig",
+    "NF4Parameter",
+    "NF4_LEVELS",
+    "quantize_tensor_nf4",
+    "nf4_lora_grouped_gemm",
+    "pytorch_nf4_lora_grouped_gemm",
+    # Phase 7: Manual backward LoRA
+    "ManualLoRALinear",
+    "ManualLoRALinearFn",
     # Upgraded Cross Entropy
     "CutCrossEntropyLoss",
 ]

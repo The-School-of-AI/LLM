@@ -1,0 +1,121 @@
+# Experiment 2.1: NF4 QLoRA + Tight ZeRO-3 Buffers
+# Target: ≤50 GB peak on 8×A100-80GB (vs 77.8 GB fused baseline)
+#
+# Strategy: 4-bit NF4 quantization of MoE expert base weights.
+# Expert weights are the dominant memory consumer (~128 GB bf16 across 20 layers).
+# NF4 reduces this to ~32 GB (4× savings). LoRA adapters stay in bf16.
+#
+# This is the single biggest memory win available — enables path to Colab-class.
+#
+# Changes from baseline:
+#   - NF4 quantization of W_gate, W_up, W_down expert weights
+#   - MoE expert LoRA rank=8 (expert explosion strategy)
+#   - Tight ZeRO-3 buffers
+#   - Fused NF4 dequant+GEMM kernel for expert compute
+#   - Enable fused DeltaNet entrance via env: T17_DN_USE_DELTA_ENTRANCE=1
+#
+# Run:
+#   T17_DN_USE_DELTA_ENTRANCE=1 T19_NF4_MOE=1 deepspeed --num_gpus=8 code/main.py \
+#     --config configs/exp2_1_nf4_qlora_tight.yaml
+data:
+  loader_type: bin_idx
+  shard_dir: /mnt/local-nvme/data/d1_shards/
+  eval_shard_dir: null
+  tokenizer_dir: src/tokenizer
+  validate_tokenizer: true
+  dataset_name: wikitext
+  dataset_config: wikitext-103-raw-v1
+  tokenize_num_proc: 8
+  max_length: 4096
+  num_workers: 16
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes:
+  - 4096
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+training:
+  num_epochs: 1
+  max_train_steps: 10
+  max_eval_steps: null
+  log_interval: 1
+  seed: 42
+  init_model_path: null
+  require_gsa_triton: true
+  require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 1
+  metrics_jsonl_path: ../results/exp2_1/metrics.jsonl
+  profile_steps: []
+deepspeed:
+  config_path: ../deepspeed/zero-3-70b-moe-lora-bs32-tight.json
+  local_rank: -1
+model:
+  tokenizer_name: null
+  embedding_type: kronecker
+  model_variant: reversible
+  model_name: 70bmoe
+  moe_t4_enabled: false
+  moe_t4_dispatcher: deepep
+  moe_expert_parallel_size: 1
+lora:
+  enabled: true
+  rank: 16
+  alpha: 32.0
+  dropout: 0.0
+  target_modules:
+    # DeltaNet attention (15 layers)
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    # GSA attention (5 layers)
+    - W_q
+    - W_k
+    - W_v
+    # GSA sigmoid gates (5 layers)
+    - W_gv
+    - W_go
+    # GSA indexer projections (5 layers)
+    - W_Iq
+    - W_Ik
+    - W_Iw
+    # Shared expert FFN (always active, every layer)
+    - shared_gate
+    - shared_up
+    - shared_down
+    # MoE router
+    - gate
+  moe_enabled: true
+  moe_rank: 8
+  moe_alpha: 16.0
+  moe_target_params:
+    - W_gate
+    - W_up
+    - W_down
+nf4:
+  enabled: true
+  block_size: 64
+  double_quant: true
+  quantize_experts: true
+checkpoint:
+  output_dir: ../results/exp2_1/checkpoints
+  save_checkpoint: false
+  checkpoint_interval: 500
+  keep_last_n_checkpoints: 2
+  resume_from_checkpoint: null
+  resume_step: null
+s3:
+  enabled: false
+  bucket: null
+  prefix: training/checkpoints
+  region: us-east-1
+  cleanup_after_upload: false
+generation:
+  test_generation: false
+  generation_prompt: The history of artificial intelligence begins with

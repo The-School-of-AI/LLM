@@ -12,13 +12,16 @@ experiment plan.
 
 | Configuration | Throughput | Peak VRAM | Notes |
 |---|---|---|---|
-| Fused MoE + Fused LoRA | ~12.5–13.2k tok/s | 77.8 GB | Best speed, near 80GB limit |
-| Unfused MoE + Standard LoRA | ~11.5–12.6k tok/s | 72.7 GB | 5GB savings, slightly slower |
+| Baseline 1: Unfused MoE, unfused LoRA | ~12,650 tok/s | 72.7 GB | |
+| Baseline 2: Fused MoE, unfused LoRA | ~13,950 tok/s | 77.0 GB | Best speed |
+| Baseline 3: Fused MoE + Fused LoRA | ~13,150 tok/s | 77.8 GB | Near 80GB limit |
+| **Exp 1.1: Expert Explosion LoRA + tight buffers** | **~12,830 tok/s** | **74.7 GB** | **3 GB saved vs B3** |
 
 ### Target
 
 - Push Pareto frontier: ≥13k tok/s AND ≤72 GB peak on current hardware
 - Colab profile: 70B LoRA training on ≤40 GB per GPU (A100-40GB or A6000)
+- NF4 quantization of expert weights (Phase 6): target ≤50 GB peak
 
 ---
 
@@ -1086,6 +1089,297 @@ This trades throughput (~2k tok/s) for accessibility. It's useful for:
 For serious training throughput on smaller GPUs, the FSDP-QLoRA migration (P3) would
 be the long-term solution, enabling multi-GPU 4-bit training with proper parameter
 sharding.
+
+---
+
+## 13. Implementation Progress — Phase 6/7 Code & Config Alignment
+
+This section documents the concrete implementation work completed since the initial
+research report (Sections 1–12). It covers new kernel code, integration into the
+training pipeline, config alignment with the expert explosion strategy, and 70B
+experiment results.
+
+### 13.1 Expert Explosion Strategy — Config Alignment
+
+The lead clarified the 70B training strategy: the 70B model is an "expert explosion"
+from a well-trained 8B (20 experts → 260 experts). Since the 8B has been trained with
+the most tokens and its weight matrices have already collapsed to their natural low-rank
+structure, the 70B LoRA adaptation is inherently low-rank.
+
+Key implications for LoRA configuration:
+
+- **MoE expert rank=8** (not 16): Experts are expanded copies of 8B's converged experts.
+  The collapsed subspace from 8B training means rank=8 captures the adaptation capacity.
+- **ALL LoRA targets preserved**: Unlike the initial "lean LoRA" approach (Section 4.2
+  Strategy B), the expert explosion strategy requires keeping:
+  - `W_Iq, W_Ik, W_Iw` (GSA indexer): 8B's learned sparse attention patterns must transfer
+  - `gate` (MoE router): Router must learn the 20→260 expert distribution mapping
+
+All four experiment configs were updated to reflect this:
+- `configs/exp1_1_lean_lora_tight_buffers.yaml`
+- `configs/exp1_1_8bmoe_lean_lora_tight_buffers.yaml`
+- `configs/exp1_2_lean_lora_microbatch2.yaml`
+- `configs/exp1_2_8bmoe_lean_lora_microbatch2.yaml`
+
+### 13.2 Lead's 70B Baselines
+
+These baselines were run by the lead on 8×A100-80GB, BS32, SL4096, 252 LoRA targets:
+
+| Run | Configuration | Avg tok/s (steady) | Peak VRAM | dt (s/it) |
+|---|---|---|---|---|
+| Baseline 1 | Unfused MoE, unfused LoRA | ~12,650 | 72.7 GB | ~10.35 |
+| Baseline 2 | Fused MoE, unfused LoRA | ~13,950 | 77.0 GB | ~9.35 |
+| Baseline 3 | Fused MoE + Fused LoRA (252 targets) | ~13,150 | 77.8 GB | ~9.95 |
+
+### 13.3 Exp 1.1 — 70B Results (Expert Explosion LoRA + Tight Buffers)
+
+Config: `exp1_1_lean_lora_tight_buffers.yaml` with `T17_DN_USE_DELTA_ENTRANCE=1`.
+Changes from baseline: MoE expert rank 16→8, tight ZeRO-3 buffers (10M/25M), all
+LoRA targets preserved (indexer + router), fused DeltaNet entrance enabled.
+
+Three runs were captured. Steady-state metrics (steps 2–9, excluding warmup steps
+and final step):
+
+**Run 1 (initial code):**
+
+| Step | dt (s) | loss_ntp | tok/s | loss2 | peak VRAM |
+|---|---|---|---|---|---|
+| 0 | 68.64 | 12.591 | 1,910 | 12.607 | 74.72 GB |
+| 1 | 10.41 | 12.589 | 12,592 | 12.622 | 74.72 GB |
+| 2 | 10.20 | 12.592 | 12,849 | 12.628 | 74.72 GB |
+| 3 | 10.22 | 12.596 | 12,823 | 12.624 | 74.72 GB |
+| 4 | 10.22 | 12.607 | 12,827 | 12.616 | 74.72 GB |
+| 5 | 10.21 | 12.596 | 12,835 | 12.637 | 74.72 GB |
+| 6 | 10.28 | 12.579 | 12,752 | 12.633 | 74.72 GB |
+| 7 | 10.12 | 12.608 | 12,958 | 12.614 | 74.72 GB |
+| 8 | 10.21 | 12.597 | 12,832 | 12.619 | 74.72 GB |
+| 9 | 10.26 | 12.593 | 12,775 | 12.611 | 74.72 GB |
+| 10 | 11.23 | 12.596 | 11,674 | 12.621 | 74.72 GB |
+
+**Run 2 (initial code):**
+
+| Step | dt (s) | loss_ntp | tok/s | loss2 | peak VRAM |
+|---|---|---|---|---|---|
+| 0 | 45.20 | 12.591 | 2,900 | 12.607 | 74.73 GB |
+| 1 | 10.28 | 12.589 | 12,749 | 12.622 | 74.73 GB |
+| 2 | 10.15 | 12.592 | 12,919 | 12.628 | 74.73 GB |
+| 3 | 10.20 | 12.599 | 12,852 | 12.620 | 74.73 GB |
+| 4 | 10.19 | 12.611 | 12,866 | 12.623 | 74.73 GB |
+| 5 | 10.21 | 12.601 | 12,838 | 12.643 | 74.73 GB |
+| 6 | 10.22 | 12.575 | 12,830 | 12.637 | 74.73 GB |
+| 7 | 10.10 | 12.598 | 12,971 | 12.599 | 74.73 GB |
+| 8 | 10.17 | 12.587 | 12,888 | 12.609 | 74.73 GB |
+| 9 | 10.24 | 12.589 | 12,805 | 12.623 | 74.73 GB |
+| 10 | 11.34 | 12.614 | 11,556 | 12.627 | 74.73 GB |
+
+**Run 3 (updated LoRA code — `exp1_1_70B_updated.jsonl`):**
+
+| Step | dt (s) | loss | tok/s | loss2 | peak VRAM |
+|---|---|---|---|---|---|
+| 1 | 170.93 | 12.640 | 767 | 12.578 | 74.7 GB |
+| 2 | 10.93 | 12.627 | 11,990 | 12.574 | 74.7 GB |
+| 3 | 10.32 | 12.627 | 12,696 | 12.575 | 74.7 GB |
+| 4 | 10.37 | 12.598 | 12,636 | 12.570 | 74.7 GB |
+| 5 | 10.37 | 12.628 | 12,637 | 12.562 | 74.7 GB |
+| 6 | 10.51 | 12.629 | 12,476 | 12.556 | 74.7 GB |
+| 7 | 10.41 | 12.614 | 12,592 | 12.574 | 74.7 GB |
+| 8 | 10.62 | 12.624 | 12,342 | 12.577 | 74.7 GB |
+| 9 | 10.61 | 12.617 | 12,354 | 12.567 | 74.7 GB |
+
+**Summary (steady-state avg, steps 2–9):**
+
+| Metric | Run 1 | Run 2 | Run 3 (updated) | Baseline 3 (fused) |
+|---|---|---|---|---|
+| Avg tok/s | ~12,805 | ~12,857 | ~12,466 | ~13,150 |
+| Peak VRAM | 74.72 GB | 74.73 GB | 74.7 GB | 77.8 GB |
+| Avg dt (s) | ~10.21 | ~10.18 | ~10.52 | ~9.95 |
+| Avg loss | ~12.596 | ~12.593 | ~12.621 | — |
+
+**Analysis**: All three Exp 1.1 runs consistently save ~3 GB peak VRAM (74.7 vs 77.8 GB)
+from the tighter ZeRO-3 buffers. Run 3 (updated LoRA code) shows slightly lower
+throughput (~12,466 vs ~12,830 tok/s in Runs 1–2), a ~3% drop that may be from the
+updated LoRA injection path or run-to-run variance. The longer warmup step in Run 3
+(170.9s vs 68.6s/45.2s) suggests a heavier first-step compilation or ZeRO-3 gather.
+Peak VRAM is identical across all three runs. Loss values are not directly comparable
+to baselines (baseline was mid-training, Exp 1.1 from step 0), but loss2 in Run 3
+trends slightly lower (12.556–12.578) which is encouraging.
+
+The MoE rank reduction (16→8) had negligible throughput impact since expert LoRA params
+are tiny. Overall, Exp 1.1 trades ~2.5–5% throughput for 3 GB VRAM savings — a
+reasonable trade-off, especially as a foundation for NF4 quantization (Exp 2.1).
+
+### 13.4 Phase 6: NF4 Quantization Implementation
+
+Three new modules implement 4-bit NF4 quantization of MoE expert weights:
+
+#### K6: `code/src/kernels/nf4_quantize.py` — Block-wise NF4 Utilities
+
+Core quantization/dequantization for 3D expert weight tensors `[E, K, N]`.
+
+- `NF4_LEVELS`: 16-value lookup table from the QLoRA paper (normal distribution quantiles)
+- `NF4QuantConfig`: Configuration dataclass (`block_size=64`, `double_quant=True`, `compute_dtype=bf16`)
+- `_quantize_block_nf4()`: Quantizes flat tensor to NF4 with per-block absmax scaling.
+  Packs two 4-bit indices into one uint8 byte. Returns `(packed, absmax)`.
+- `_dequantize_block_nf4()`: Unpacks uint8 → 4-bit indices → NF4 lookup → scale by absmax.
+- `NF4Parameter`: Non-nn.Parameter storage class with `dequantize()`, `nbytes()`, `to(device)`.
+  Stores `packed` (uint8), `absmax` (float32 or FP8), `original_shape`, `block_size`.
+- `quantize_tensor_nf4()`: Top-level API. Optionally applies double quantization
+  (absmax scales → FP8 E4M3) for additional compression (~0.37 bits/param overhead
+  vs 0.5 bits without).
+
+Memory savings: `[260, 4096, 1024]` bf16 = 2.15 GB → NF4 ≈ 0.57 GB per param (3.8× reduction).
+
+#### K7: `code/src/kernels/triton_nf4_grouped_gemm.py` — Fused NF4 Dequant+GEMM
+
+Triton kernel that dequantizes NF4 weights tile-by-tile inside the grouped GEMM,
+never materializing the full bf16 weight tensor in HBM.
+
+- `_nf4_grouped_gemm_fwd_kernel`: Triton kernel with tile-level NF4 dequantization.
+  Reads packed uint8 weights, unpacks to 4-bit indices, looks up NF4 values, scales
+  by per-block absmax, then performs the standard tiled GEMM accumulation.
+  Block sizes: `BLOCK_M=64, BLOCK_N=64, BLOCK_K=64`.
+- `NF4GroupedGEMMFn`: Autograd Function wrapping the Triton kernel. Forward runs the
+  fused NF4 GEMM + LoRA path. Backward computes gradients for LoRA A/B only (base
+  NF4 weights are frozen — no gradient needed).
+- `nf4_lora_grouped_gemm()`: Top-level API matching the signature of
+  `fused_lora_grouped_gemm()` but accepting NF4 packed weights.
+- `pytorch_nf4_lora_grouped_gemm()`: Pure PyTorch reference implementation for
+  correctness testing (dequantizes then calls standard matmul).
+
+#### Integration: `code/src/nf4_moe_utils.py`
+
+Bridges NF4 quantization with the existing MoE training stack:
+
+- `quantize_moe_experts(model, config)`: Walks model, finds MoEFFN modules, quantizes
+  `W_gate`, `W_up`, `W_down` expert weights to NF4 in-place. Replaces `nn.Parameter`
+  with `NF4Parameter` stored as module attributes (`_nf4_W_gate`, etc.). Deletes
+  original bf16 parameters to free memory.
+- `patch_moe_nf4_forward(model)`: Monkey-patches each MoEFFN's forward to use the
+  NF4 compute path. If the fused Triton kernel is available, uses
+  `nf4_lora_grouped_gemm()`. Otherwise falls back to dequant-then-standard-GEMM.
+- `print_nf4_summary(model)`: Prints per-module NF4 memory usage.
+
+### 13.5 Phase 7: Manual Backward LoRA
+
+#### K8: `code/src/kernels/manual_lora_backward.py`
+
+Provides two backward paths for LoRA-augmented linear layers:
+
+1. **`ManualLoRALinearFn`** (autograd Function): Streamlined version of `FusedLoRALinearFn`.
+   Key difference: does NOT save `W_base` in `saved_tensors` — only saves `x`, `lora_A`,
+   `lora_B`, `lora_mid`. W_base is re-gathered from ZeRO-3 during backward. This reduces
+   the autograd tape's memory footprint.
+
+2. **`ManualLoRALinear`** (nn.Module): Drop-in replacement for `FusedLoRALinear` with:
+   - `forward()`: Standard autograd path via `ManualLoRALinearFn`
+   - `forward_no_grad()`: Runs under `torch.no_grad()` — zero autograd tape overhead.
+     Returns `(output, lora_mid)` for later manual backward.
+   - `manual_backward()`: Computes `grad_lora_A`, `grad_lora_B`, `grad_x` manually
+     under `torch.no_grad()`. Accumulates gradients directly into `.grad` buffers
+     (supports gradient accumulation). This is the Unsloth-style path.
+
+Memory savings vs standard autograd:
+- No autograd graph nodes (~1–2 KB per node × thousands of nodes across 252 targets)
+- No intermediate tensor references held by the tape
+- No Python dispatch overhead from autograd
+
+Integration: `code/src/lora_utils.py` now accepts `use_manual_backward` in `LoRAConfig`.
+When enabled, `inject_lora()` uses `ManualLoRALinear` instead of `FusedLoRALinear`.
+
+### 13.6 Pipeline Integration — `code/main.py`
+
+#### NF4 Config Parsing
+
+The `Config` class now reads an optional `nf4:` YAML section:
+
+```yaml
+nf4:
+  enabled: true
+  block_size: 64
+  double_quant: true
+  quantize_experts: true
+```
+
+Parsed into: `nf4_enabled`, `nf4_block_size`, `nf4_double_quant`, `nf4_quantize_experts`.
+
+#### Step 2.7: NF4 Quantization
+
+Inserted between Step 2.5 (LoRA injection) and Step 3 (DeepSpeed init):
+
+```
+[2.7/5] Quantizing MoE expert weights to NF4...
+  NF4: {n} expert weight tensors quantized
+  NF4: {n} MoE modules patched for NF4 forward
+```
+
+This ordering is critical: LoRA adapters are injected first (bf16), then base expert
+weights are quantized to NF4. The LoRA A/B matrices remain in bf16 for training.
+DeepSpeed init happens after quantization so ZeRO-3 sees the reduced memory footprint.
+
+#### Kernel Registration
+
+`code/src/kernels/__init__.py` exports Phase 6 and Phase 7 symbols:
+
+```python
+# Phase 6: NF4 Quantization
+from .nf4_quantize import NF4QuantConfig, NF4Parameter, NF4_LEVELS, quantize_tensor_nf4
+from .triton_nf4_grouped_gemm import nf4_lora_grouped_gemm, pytorch_nf4_lora_grouped_gemm
+
+# Phase 7: Manual backward LoRA
+from .manual_lora_backward import ManualLoRALinear, ManualLoRALinearFn
+```
+
+### 13.7 Experiment 2.1: NF4 QLoRA Configs
+
+Two configs created for NF4 validation:
+
+**70B** (`configs/exp2_1_nf4_qlora_tight.yaml`):
+- NF4 quantization of W_gate/W_up/W_down expert weights
+- All LoRA targets preserved (expert explosion strategy)
+- MoE expert rank=8, attention rank=16
+- Tight ZeRO-3 buffers
+- Target: ≤50 GB peak on 8×A100-80GB
+
+**8B proxy** (`configs/exp2_1_8bmoe_nf4_qlora_tight.yaml`):
+- Same NF4 config, scaled to 8B model (20 experts)
+- For validation before committing 70B GPU time
+
+Run commands:
+```bash
+# 8B proxy (validate first)
+T17_DN_USE_DELTA_ENTRANCE=1 T19_NF4_MOE=1 deepspeed --num_gpus=8 code/main.py \
+  --config configs/exp2_1_8bmoe_nf4_qlora_tight.yaml
+
+# 70B (after 8B validation)
+T17_DN_USE_DELTA_ENTRANCE=1 T19_NF4_MOE=1 deepspeed --num_gpus=8 code/main.py \
+  --config configs/exp2_1_nf4_qlora_tight.yaml
+```
+
+### 13.8 Updated Experiment Roadmap
+
+| Experiment | Status | VRAM | Throughput | Notes |
+|---|---|---|---|---|
+| 1.1 Expert Explosion LoRA + tight buffers | ✅ 70B done | 74.7 GB | ~12,830 tok/s | 3 GB saved vs baseline 3 |
+| 1.2 Micro-batch=2 + grad_accum=2 | ✅ 8B done | (14.2 GB 8B) | (~13,510 8B) | Ready for 70B |
+| 2.1 NF4 QLoRA (expert weights) | 🔧 Code ready | Target ≤50 GB | Target ≥10k | Run 8B proxy first |
+| 2.2 Full NF4 (experts + attention) | Planned | Target ≤45 GB | Target ≥9k | After 2.1 validation |
+| 3.1 Expert offloading (Colab) | Planned | Target ≤30 GB | Target ≥1k | Single GPU path |
+
+### 13.9 File Inventory — New/Modified
+
+| File | Type | Description |
+|---|---|---|
+| `code/src/kernels/nf4_quantize.py` | New | K6: NF4 quantization/dequantization utilities |
+| `code/src/kernels/triton_nf4_grouped_gemm.py` | New | K7: Fused Triton NF4 dequant+GEMM kernel |
+| `code/src/nf4_moe_utils.py` | New | NF4 ↔ MoE integration (quantize, patch, summary) |
+| `code/src/kernels/manual_lora_backward.py` | New | K8: Manual backward LoRA (Unsloth-style) |
+| `code/src/kernels/__init__.py` | Modified | Added Phase 6 + Phase 7 exports |
+| `code/src/lora_utils.py` | Modified | Added `use_manual_backward` config option |
+| `code/main.py` | Modified | Added NF4 config parsing + Step 2.7 quantization |
+| `configs/exp2_1_nf4_qlora_tight.yaml` | New | 70B NF4 QLoRA experiment config |
+| `configs/exp2_1_8bmoe_nf4_qlora_tight.yaml` | New | 8B NF4 QLoRA proxy config |
+| `configs/exp1_1_*.yaml` (×2) | Modified | Aligned with expert explosion strategy |
+| `configs/exp1_2_*.yaml` (×2) | Modified | Aligned with expert explosion strategy |
 
 ---
 
