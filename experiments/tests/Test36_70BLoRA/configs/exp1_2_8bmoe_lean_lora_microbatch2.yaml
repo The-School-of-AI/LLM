@@ -1,6 +1,7 @@
-# Experiment 1.2 (8B MoE proxy): Lean LoRA + Micro-Batch=2 + Grad Accum=2
+# Experiment 1.2 (8B MoE proxy): Expert Explosion LoRA + Micro-Batch=2 + Grad Accum=2
 # Proxy run for the 70B experiment — validates activation memory reduction.
 # Same global BS=32: micro_batch=2 × grad_accum=2 × 8 GPUs = 32
+# Full LoRA targets preserved per expert explosion strategy.
 #
 # Run:
 #   T17_DN_USE_DELTA_ENTRANCE=1 deepspeed --num_gpus=8 code/main.py \
@@ -67,9 +68,13 @@ lora:
     - W_v
     - W_gv
     - W_go
+    - W_Iq
+    - W_Ik
+    - W_Iw
     - shared_gate
     - shared_up
     - shared_down
+    - gate
   moe_enabled: true
   moe_rank: 8
   moe_alpha: 16.0

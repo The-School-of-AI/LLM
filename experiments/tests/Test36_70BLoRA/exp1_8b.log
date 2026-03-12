@@ -1,0 +1,533 @@
+---
+pid: 122550
+cwd: /mnt/local-nvme/LLM/experiments/tests/Test36_70BLoRA
+last_command: T17_DN_USE_DELTA_ENTRANCE=1 ./run.sh
+last_exit_code: 1
+---
+, 3.04 ms = 0.16% latency, 183.14 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                  )
+                  (shared_down): FusedLoRALinear(
+                    0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.46 ms = 0.18% latency, 160.81 TFLOPS, in=2048, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=2048, out_features=4096, bias=False)
+                  )
+                )
+              )
+              (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 701.67 us = 0.04% latency, 0 FLOPS)
+              (coeffs): MHCCoeffs(
+                0 = 0% Params, 12.88 GMACs = 0% MACs, 8.72 ms = 0.46% latency, 2.95 TFLOPS
+                (phi_pre): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 916.72 us = 0.05% latency, 4.68 TFLOPS, in_features=16384, out_features=4, bias=False)
+                (phi_post): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 885.49 us = 0.05% latency, 4.85 TFLOPS, in_features=16384, out_features=4, bias=False)
+                (phi_res): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 849.25 us = 0.04% latency, 20.22 TFLOPS, in_features=16384, out_features=16, bias=False)
+                (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 1.47 ms = 0.08% latency, 0 FLOPS)
+              )
+            )
+          )
+          (wrapper): _ForceWrapper(
+            0 = 0% Params, 4.23 TMACs = 1.39% MACs, 204.6 ms = 10.7% latency, 41.33 TFLOPS
+            (layer): LightningDecoderLayer(
+              0 = 0% Params, 4.23 TMACs = 1.39% MACs, 199.14 ms = 10.42% latency, 42.47 TFLOPS
+              (attn_block): MHCSublayer(
+                0 = 0% Params, 3.38 TMACs = 1.11% MACs, 142 ms = 7.43% latency, 47.59 TFLOPS
+                (sublayer): GatedSparseAttention(
+                  0 = 0% Params, 3.37 TMACs = 1.11% MACs, 126.79 ms = 6.63% latency, 53.09 TFLOPS
+                  (W_Iq): Linear(0 = 0% Params, 34.34 GMACs = 0.01% MACs, 392.91 us = 0.02% latency, 174.81 TFLOPS, in_features=4096, out_features=512, bias=False)
+                  (W_Ik): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 382.9 us = 0.02% latency, 44.85 TFLOPS, in_features=4096, out_features=128, bias=False)
+                  (W_Iw): Linear(0 = 0% Params, 268.3 MMACs = 0% MACs, 299.93 us = 0.02% latency, 1.79 TFLOPS, in_features=4096, out_features=4, bias=False)
+                  (W_q): FusedLoRALinear(
+                    0 = 0% Params, 553.78 GMACs = 0.18% MACs, 5.52 ms = 0.29% latency, 200.56 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                  )
+                  (W_k): FusedLoRALinear(
+                    0 = 0% Params, 553.78 GMACs = 0.18% MACs, 5.54 ms = 0.29% latency, 200.09 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                  )
+                  (W_v): FusedLoRALinear(
+                    0 = 0% Params, 553.78 GMACs = 0.18% MACs, 5.55 ms = 0.29% latency, 199.5 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                  )
+                  (o_proj): FusedLoRALinear(
+                    0 = 0% Params, 553.78 GMACs = 0.18% MACs, 5.55 ms = 0.29% latency, 199.69 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                  )
+                  (W_gv): FusedLoRALinear(
+                    0 = 0% Params, 553.78 GMACs = 0.18% MACs, 5.56 ms = 0.29% latency, 199.34 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                  )
+                  (W_go): FusedLoRALinear(
+                    0 = 0% Params, 553.78 GMACs = 0.18% MACs, 5.57 ms = 0.29% latency, 198.92 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                  )
+                  (rotary_emb): RotaryEmbedding(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS)
+                )
+                (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 707.15 us = 0.04% latency, 0 FLOPS)
+                (coeffs): MHCCoeffs(
+                  0 = 0% Params, 12.88 GMACs = 0% MACs, 8.72 ms = 0.46% latency, 2.95 TFLOPS
+                  (phi_pre): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 919.58 us = 0.05% latency, 4.67 TFLOPS, in_features=16384, out_features=4, bias=False)
+                  (phi_post): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 883.58 us = 0.05% latency, 4.86 TFLOPS, in_features=16384, out_features=4, bias=False)
+                  (phi_res): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 790.12 us = 0.04% latency, 21.73 TFLOPS, in_features=16384, out_features=16, bias=False)
+                  (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 1.47 ms = 0.08% latency, 0 FLOPS)
+                )
+              )
+              (mlp_block): MHCSublayer(
+                0 = 0% Params, 849.45 GMACs = 0.28% MACs, 57.14 ms = 2.99% latency, 29.73 TFLOPS
+                (sublayer): LightningMLP(
+                  0 = 0% Params, 836.57 GMACs = 0.28% MACs, 42.24 ms = 2.21% latency, 39.61 TFLOPS
+                  (moe): MoEFFN(
+                    0 = 0% Params, 836.57 GMACs = 0.28% MACs, 35.9 ms = 1.88% latency, 46.61 TFLOPS
+                    (gate): MoEGate(
+                      0 = 0% Params, 2.68 GMACs = 0% MACs, 4.22 ms = 0.22% latency, 1.27 TFLOPS
+                      (gate): Linear(0 = 0% Params, 2.68 GMACs = 0% MACs, 626.09 us = 0.03% latency, 8.57 TFLOPS, in_features=4096, out_features=20, bias=False)
+                    )
+                    (shared_gate): FusedLoRALinear(
+                      0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.04 ms = 0.16% latency, 183.02 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                      (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                    )
+                    (shared_up): FusedLoRALinear(
+                      0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.04 ms = 0.16% latency, 183.14 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                      (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                    )
+                    (shared_down): FusedLoRALinear(
+                      0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.46 ms = 0.18% latency, 160.81 TFLOPS, in=2048, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                      (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=2048, out_features=4096, bias=False)
+                    )
+                  )
+                )
+                (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 701.67 us = 0.04% latency, 0 FLOPS)
+                (coeffs): MHCCoeffs(
+                  0 = 0% Params, 12.88 GMACs = 0% MACs, 8.72 ms = 0.46% latency, 2.95 TFLOPS
+                  (phi_pre): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 916.72 us = 0.05% latency, 4.68 TFLOPS, in_features=16384, out_features=4, bias=False)
+                  (phi_post): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 885.49 us = 0.05% latency, 4.85 TFLOPS, in_features=16384, out_features=4, bias=False)
+                  (phi_res): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 849.25 us = 0.04% latency, 20.22 TFLOPS, in_features=16384, out_features=16, bias=False)
+                  (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 1.47 ms = 0.08% latency, 0 FLOPS)
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+    (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 558.38 us = 0.03% latency, 0 FLOPS)
+    (mtp_block): MTPTransformerBlock(
+      0 = 0% Params, 9.06 TMACs = 2.99% MACs, 133.17 ms = 6.96% latency, 136.08 TFLOPS
+      (fusion_proj): Linear(0 = 0% Params, 549.49 GMACs = 0.18% MACs, 4.2 ms = 0.22% latency, 261.77 TFLOPS, in_features=8192, out_features=4096, bias=False)
+      (attn): GatedSparseAttention(
+        0 = 0% Params, 1.7 TMACs = 0.56% MACs, 71.77 ms = 3.75% latency, 47.5 TFLOPS
+        (W_Iq): Linear(0 = 0% Params, 34.34 GMACs = 0.01% MACs, 387.91 us = 0.02% latency, 177.07 TFLOPS, in_features=4096, out_features=512, bias=False)
+        (W_Ik): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 356.67 us = 0.02% latency, 48.14 TFLOPS, in_features=4096, out_features=128, bias=False)
+        (W_Iw): Linear(0 = 0% Params, 268.3 MMACs = 0% MACs, 273.7 us = 0.01% latency, 1.96 TFLOPS, in_features=4096, out_features=4, bias=False)
+        (W_q): FusedLoRALinear(
+          0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.76 ms = 0.14% latency, 200.62 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+          (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+        )
+        (W_k): FusedLoRALinear(
+          0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.14% latency, 200.22 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+          (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+        )
+        (W_v): FusedLoRALinear(
+          0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.15% latency, 199.63 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+          (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+        )
+        (o_proj): FusedLoRALinear(
+          0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.14% latency, 199.82 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+          (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+        )
+        (W_gv): FusedLoRALinear(
+          0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.78 ms = 0.15% latency, 199.39 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+          (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+        )
+        (W_go): FusedLoRALinear(
+          0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.81 ms = 0.15% latency, 197.18 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+          (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+        )
+        (rotary_emb): RotaryEmbedding(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS)
+      )
+      (mlp): LightningMLP(
+        0 = 0% Params, 836.57 GMACs = 0.28% MACs, 48.72 ms = 2.55% latency, 34.35 TFLOPS
+        (moe): MoEFFN(
+          0 = 0% Params, 836.57 GMACs = 0.28% MACs, 40.43 ms = 2.11% latency, 41.39 TFLOPS
+          (gate): MoEGate(
+            0 = 0% Params, 2.68 GMACs = 0% MACs, 4.38 ms = 0.23% latency, 1.23 TFLOPS
+            (gate): Linear(0 = 0% Params, 2.68 GMACs = 0% MACs, 631.81 us = 0.03% latency, 8.49 TFLOPS, in_features=4096, out_features=20, bias=False)
+          )
+          (shared_gate): FusedLoRALinear(
+            0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.08 ms = 0.16% latency, 180.53 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+            (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+          )
+          (shared_up): FusedLoRALinear(
+            0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.06 ms = 0.16% latency, 181.74 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+            (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+          )
+          (shared_down): FusedLoRALinear(
+            0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.48 ms = 0.18% latency, 159.86 TFLOPS, in=2048, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+            (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=2048, out_features=4096, bias=False)
+          )
+        )
+      )
+      (reversible_stack): ReversibleMidpointStack(
+        0 = 0% Params, 5.97 TMACs = 1.97% MACs, 127.09 ms = 6.65% latency, 93.95 TFLOPS
+        (blocks): ModuleList(
+          (0): _ReversibleStreamSublayer(
+            0 = 0% Params, 1.71 TMACs = 0.56% MACs, 81.64 ms = 4.27% latency, 41.92 TFLOPS
+            (block): MHCSublayer(
+              0 = 0% Params, 1.71 TMACs = 0.56% MACs, 81.64 ms = 4.27% latency, 41.92 TFLOPS
+              (sublayer): GatedSparseAttention(
+                0 = 0% Params, 1.7 TMACs = 0.56% MACs, 71.77 ms = 3.75% latency, 47.5 TFLOPS
+                (W_Iq): Linear(0 = 0% Params, 34.34 GMACs = 0.01% MACs, 387.91 us = 0.02% latency, 177.07 TFLOPS, in_features=4096, out_features=512, bias=False)
+                (W_Ik): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 356.67 us = 0.02% latency, 48.14 TFLOPS, in_features=4096, out_features=128, bias=False)
+                (W_Iw): Linear(0 = 0% Params, 268.3 MMACs = 0% MACs, 273.7 us = 0.01% latency, 1.96 TFLOPS, in_features=4096, out_features=4, bias=False)
+                (W_q): FusedLoRALinear(
+                  0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.76 ms = 0.14% latency, 200.62 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                  (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                )
+                (W_k): FusedLoRALinear(
+                  0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.14% latency, 200.22 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                  (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                )
+                (W_v): FusedLoRALinear(
+                  0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.15% latency, 199.63 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                  (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                )
+                (o_proj): FusedLoRALinear(
+                  0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.14% latency, 199.82 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                  (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                )
+                (W_gv): FusedLoRALinear(
+                  0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.78 ms = 0.15% latency, 199.39 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                  (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                )
+                (W_go): FusedLoRALinear(
+                  0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.81 ms = 0.15% latency, 197.18 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                  (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+                )
+                (rotary_emb): RotaryEmbedding(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS)
+              )
+              (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 284.19 us = 0.01% latency, 0 FLOPS)
+              (coeffs): MHCCoeffs(
+                0 = 0% Params, 6.44 GMACs = 0% MACs, 3.66 ms = 0.19% latency, 3.52 TFLOPS
+                (phi_pre): Linear(0 = 0% Params, 1.07 GMACs = 0% MACs, 461.1 us = 0.02% latency, 4.66 TFLOPS, in_features=16384, out_features=4, bias=False)
+                (phi_post): Linear(0 = 0% Params, 1.07 GMACs = 0% MACs, 444.17 us = 0.02% latency, 4.83 TFLOPS, in_features=16384, out_features=4, bias=False)
+                (phi_res): Linear(0 = 0% Params, 4.29 GMACs = 0% MACs, 384.57 us = 0.02% latency, 22.33 TFLOPS, in_features=16384, out_features=16, bias=False)
+                (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 734.09 us = 0.04% latency, 0 FLOPS)
+              )
+            )
+          )
+          (1): _ReversibleStreamSublayer(
+            0 = 0% Params, 849.45 GMACs = 0.28% MACs, 66.46 ms = 3.48% latency, 25.57 TFLOPS
+            (block): MHCSublayer(
+              0 = 0% Params, 849.45 GMACs = 0.28% MACs, 66.46 ms = 3.48% latency, 25.57 TFLOPS
+              (sublayer): LightningMLP(
+                0 = 0% Params, 836.57 GMACs = 0.28% MACs, 48.72 ms = 2.55% latency, 34.35 TFLOPS
+                (moe): MoEFFN(
+                  0 = 0% Params, 836.57 GMACs = 0.28% MACs, 40.43 ms = 2.11% latency, 41.39 TFLOPS
+                  (gate): MoEGate(
+                    0 = 0% Params, 2.68 GMACs = 0% MACs, 4.38 ms = 0.23% latency, 1.23 TFLOPS
+                    (gate): Linear(0 = 0% Params, 2.68 GMACs = 0% MACs, 631.81 us = 0.03% latency, 8.49 TFLOPS, in_features=4096, out_features=20, bias=False)
+                  )
+                  (shared_gate): FusedLoRALinear(
+                    0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.08 ms = 0.16% latency, 180.53 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                  )
+                  (shared_up): FusedLoRALinear(
+                    0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.06 ms = 0.16% latency, 181.74 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                  )
+                  (shared_down): FusedLoRALinear(
+                    0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.48 ms = 0.18% latency, 159.86 TFLOPS, in=2048, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                    (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=2048, out_features=4096, bias=False)
+                  )
+                )
+              )
+              (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 676.16 us = 0.04% latency, 0 FLOPS)
+              (coeffs): MHCCoeffs(
+                0 = 0% Params, 12.88 GMACs = 0% MACs, 11.69 ms = 0.61% latency, 2.2 TFLOPS
+                (phi_pre): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 1 ms = 0.05% latency, 4.29 TFLOPS, in_features=16384, out_features=4, bias=False)
+                (phi_post): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 953.2 us = 0.05% latency, 4.5 TFLOPS, in_features=16384, out_features=4, bias=False)
+                (phi_res): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 810.62 us = 0.04% latency, 21.18 TFLOPS, in_features=16384, out_features=16, bias=False)
+                (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 4.73 ms = 0.25% latency, 0 FLOPS)
+              )
+            )
+          )
+        )
+        (bootstrap_layer): _ReversibleStreamSublayer(
+          0 = 0% Params, 1.71 TMACs = 0.56% MACs, 81.64 ms = 4.27% latency, 41.92 TFLOPS
+          (block): MHCSublayer(
+            0 = 0% Params, 1.71 TMACs = 0.56% MACs, 81.64 ms = 4.27% latency, 41.92 TFLOPS
+            (sublayer): GatedSparseAttention(
+              0 = 0% Params, 1.7 TMACs = 0.56% MACs, 71.77 ms = 3.75% latency, 47.5 TFLOPS
+              (W_Iq): Linear(0 = 0% Params, 34.34 GMACs = 0.01% MACs, 387.91 us = 0.02% latency, 177.07 TFLOPS, in_features=4096, out_features=512, bias=False)
+              (W_Ik): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 356.67 us = 0.02% latency, 48.14 TFLOPS, in_features=4096, out_features=128, bias=False)
+              (W_Iw): Linear(0 = 0% Params, 268.3 MMACs = 0% MACs, 273.7 us = 0.01% latency, 1.96 TFLOPS, in_features=4096, out_features=4, bias=False)
+              (W_q): FusedLoRALinear(
+                0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.76 ms = 0.14% latency, 200.62 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+              )
+              (W_k): FusedLoRALinear(
+                0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.14% latency, 200.22 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+              )
+              (W_v): FusedLoRALinear(
+                0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.15% latency, 199.63 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+              )
+              (o_proj): FusedLoRALinear(
+                0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.77 ms = 0.14% latency, 199.82 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+              )
+              (W_gv): FusedLoRALinear(
+                0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.78 ms = 0.15% latency, 199.39 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+              )
+              (W_go): FusedLoRALinear(
+                0 = 0% Params, 276.89 GMACs = 0.09% MACs, 2.81 ms = 0.15% latency, 197.18 TFLOPS, in=4096, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=4096, bias=False)
+              )
+              (rotary_emb): RotaryEmbedding(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS)
+            )
+            (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 284.19 us = 0.01% latency, 0 FLOPS)
+            (coeffs): MHCCoeffs(
+              0 = 0% Params, 6.44 GMACs = 0% MACs, 3.66 ms = 0.19% latency, 3.52 TFLOPS
+              (phi_pre): Linear(0 = 0% Params, 1.07 GMACs = 0% MACs, 461.1 us = 0.02% latency, 4.66 TFLOPS, in_features=16384, out_features=4, bias=False)
+              (phi_post): Linear(0 = 0% Params, 1.07 GMACs = 0% MACs, 444.17 us = 0.02% latency, 4.83 TFLOPS, in_features=16384, out_features=4, bias=False)
+              (phi_res): Linear(0 = 0% Params, 4.29 GMACs = 0% MACs, 384.57 us = 0.02% latency, 22.33 TFLOPS, in_features=16384, out_features=16, bias=False)
+              (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 734.09 us = 0.04% latency, 0 FLOPS)
+            )
+          )
+        )
+        (mid_layers): ModuleList(
+          (0): MidpointBlock(
+            0 = 0% Params, 1.7 TMACs = 0.56% MACs, 39.58 ms = 2.07% latency, 85.85 TFLOPS
+            (block): _ReversibleStreamSublayer(
+              0 = 0% Params, 849.45 GMACs = 0.28% MACs, 66.46 ms = 3.48% latency, 25.57 TFLOPS
+              (block): MHCSublayer(
+                0 = 0% Params, 849.45 GMACs = 0.28% MACs, 66.46 ms = 3.48% latency, 25.57 TFLOPS
+                (sublayer): LightningMLP(
+                  0 = 0% Params, 836.57 GMACs = 0.28% MACs, 48.72 ms = 2.55% latency, 34.35 TFLOPS
+                  (moe): MoEFFN(
+                    0 = 0% Params, 836.57 GMACs = 0.28% MACs, 40.43 ms = 2.11% latency, 41.39 TFLOPS
+                    (gate): MoEGate(
+                      0 = 0% Params, 2.68 GMACs = 0% MACs, 4.38 ms = 0.23% latency, 1.23 TFLOPS
+                      (gate): Linear(0 = 0% Params, 2.68 GMACs = 0% MACs, 631.81 us = 0.03% latency, 8.49 TFLOPS, in_features=4096, out_features=20, bias=False)
+                    )
+                    (shared_gate): FusedLoRALinear(
+                      0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.08 ms = 0.16% latency, 180.53 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                      (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                    )
+                    (shared_up): FusedLoRALinear(
+                      0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.06 ms = 0.16% latency, 181.74 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                      (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                    )
+                    (shared_down): FusedLoRALinear(
+                      0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.48 ms = 0.18% latency, 159.86 TFLOPS, in=2048, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                      (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=2048, out_features=4096, bias=False)
+                    )
+                  )
+                )
+                (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 676.16 us = 0.04% latency, 0 FLOPS)
+                (coeffs): MHCCoeffs(
+                  0 = 0% Params, 12.88 GMACs = 0% MACs, 11.69 ms = 0.61% latency, 2.2 TFLOPS
+                  (phi_pre): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 1 ms = 0.05% latency, 4.29 TFLOPS, in_features=16384, out_features=4, bias=False)
+                  (phi_post): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 953.2 us = 0.05% latency, 4.5 TFLOPS, in_features=16384, out_features=4, bias=False)
+                  (phi_res): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 810.62 us = 0.04% latency, 21.18 TFLOPS, in_features=16384, out_features=16, bias=False)
+                  (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 4.73 ms = 0.25% latency, 0 FLOPS)
+                )
+              )
+            )
+            (wrapper): _ForceWrapper(
+              0 = 0% Params, 849.45 GMACs = 0.28% MACs, 72.86 ms = 3.81% latency, 23.32 TFLOPS
+              (layer): _ReversibleStreamSublayer(
+                0 = 0% Params, 849.45 GMACs = 0.28% MACs, 66.46 ms = 3.48% latency, 25.57 TFLOPS
+                (block): MHCSublayer(
+                  0 = 0% Params, 849.45 GMACs = 0.28% MACs, 66.46 ms = 3.48% latency, 25.57 TFLOPS
+                  (sublayer): LightningMLP(
+                    0 = 0% Params, 836.57 GMACs = 0.28% MACs, 48.72 ms = 2.55% latency, 34.35 TFLOPS
+                    (moe): MoEFFN(
+                      0 = 0% Params, 836.57 GMACs = 0.28% MACs, 40.43 ms = 2.11% latency, 41.39 TFLOPS
+                      (gate): MoEGate(
+                        0 = 0% Params, 2.68 GMACs = 0% MACs, 4.38 ms = 0.23% latency, 1.23 TFLOPS
+                        (gate): Linear(0 = 0% Params, 2.68 GMACs = 0% MACs, 631.81 us = 0.03% latency, 8.49 TFLOPS, in_features=4096, out_features=20, bias=False)
+                      )
+                      (shared_gate): FusedLoRALinear(
+                        0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.08 ms = 0.16% latency, 180.53 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                        (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                      )
+                      (shared_up): FusedLoRALinear(
+                        0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.06 ms = 0.16% latency, 181.74 TFLOPS, in=4096, out=2048, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                        (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=2048, bias=False)
+                      )
+                      (shared_down): FusedLoRALinear(
+                        0 = 0% Params, 277.96 GMACs = 0.09% MACs, 3.48 ms = 0.18% latency, 159.86 TFLOPS, in=2048, out=4096, rank=16, alpha=32.0, scaling=2.0000, fused=True
+                        (linear): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=2048, out_features=4096, bias=False)
+                      )
+                    )
+                  )
+                  (norm): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 676.16 us = 0.04% latency, 0 FLOPS)
+                  (coeffs): MHCCoeffs(
+                    0 = 0% Params, 12.88 GMACs = 0% MACs, 11.69 ms = 0.61% latency, 2.2 TFLOPS
+                    (phi_pre): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 1 ms = 0.05% latency, 4.29 TFLOPS, in_features=16384, out_features=4, bias=False)
+                    (phi_post): Linear(0 = 0% Params, 2.15 GMACs = 0% MACs, 953.2 us = 0.05% latency, 4.5 TFLOPS, in_features=16384, out_features=4, bias=False)
+                    (phi_res): Linear(0 = 0% Params, 8.59 GMACs = 0% MACs, 810.62 us = 0.04% latency, 21.18 TFLOPS, in_features=16384, out_features=16, bias=False)
+                    (rms): RMSNorm(0 = 0% Params, 0 MACs = 0% MACs, 4.73 ms = 0.25% latency, 0 FLOPS)
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+    (memory_ln): LayerNorm(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, (4096,), eps=1e-05, elementwise_affine=True)
+    (memory_gate_proj): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=1, bias=True)
+    (lm_head): Linear(0 = 0% Params, 0 MACs = 0% MACs, 0 s = 0% latency, 0 FLOPS, in_features=4096, out_features=131072, bias=False)
+  )
+)
+
+
+
+
+
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+Step: 11 | dt:  7.73s/it | loss=12.6033 | toks/s=16959.1 | loss2=12.5275 | r_loss=0.3367 | vram_alloc=2.3G | peak=29.2
+Epoch 0 - Training Average Loss: 12.6034
+Epoch 0 - Wall clock: 140.1s, Steps: 11, Avg tok/s: 10288
+
+Skipping validation (no eval loader configured).
+
+================================================================================
+Training Complete!
+================================================================================
+---
+loss:             12.603412
+training_seconds: 140.1
+total_seconds:    339.0
+tokens/s:         10288
+num_steps:        11
+peak_vram_mb:     29156
+LR:               4.0e-05
+---
+================================================================================
+============================================================================
+  PIPELINE PROFILER REPORT  (total wall time: 5m 39.0s)
+============================================================================
+  Stage                                      Time   %total   Cumulative
+  -----------------------------------  ----------  -------  -----------
+  deepspeed_config_read                     0.1ms     0.0%        0.1ms
+  tokenizer_load                            1.52s     0.4%        1.52s
+  data_load                                41.0ms     0.0%        1.56s
+  kronecker_vocab_build                   340.8ms     0.1%        1.91s
+  model_build                            2m 16.8s    40.4%     2m 18.8s
+  model_to_bf16                            15.63s     4.6%     2m 34.4s
+  deepspeed_init                           41.35s    12.2%     3m 15.7s
+  epoch_0_train                          2m 20.2s    41.3%     5m 35.9s
+  (unaccounted / gaps)                      3.12s     0.9%
+  -----------------------------------  ----------  -------  -----------
+  TOTAL                                  5m 39.0s   100.0%
+============================================================================
+
+P12 TrainingOps — shutting down...
+✓ JSONLogger closed. Logs saved to /tmp/training_logs/1b_nonrev_1773343838_rank_5.jsonl
+[2026-03-12 19:33:02,426] [INFO] [launch.py:367:main] Process 128321 exits successfully.
+[2026-03-12 19:33:02,426] [INFO] [launch.py:367:main] Process 128320 exits successfully.
+[2026-03-12 19:33:02,427] [INFO] [launch.py:367:main] Process 128322 exits successfully.
+[2026-03-12 19:33:02,427] [INFO] [launch.py:367:main] Process 128319 exits successfully.
+[rank5]:[W312 19:33:02.114803850 TCPStore.cpp:125] [c10d] recvValue failed on SocketImpl(fd=82, addr=[localhost]:44070, remote=[localhost]:29500): failed to recv, got 0 bytes
+Exception raised from recvBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:678 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x98 (0x7f046cf785e8 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x5ba8bfe (0x7f045d7a8bfe in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x5baaf40 (0x7f045d7aaf40 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: <unknown function> + 0x5bab84a (0x7f045d7ab84a in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x2a9 (0x7f045d7a52a9 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: c10d::ProcessGroupNCCL::heartbeatMonitor() + 0x379 (0x7f040ecf3ad9 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: <unknown function> + 0xe77e4 (0x7f0479ee77e4 in /lib64/libstdc++.so.6)
+frame #7: <unknown function> + 0x8b2ea (0x7f048f88b2ea in /lib64/libc.so.6)
+frame #8: <unknown function> + 0x110b40 (0x7f048f910b40 in /lib64/libc.so.6)
+
+[rank5]:[W312 19:33:02.118236743 ProcessGroupNCCL.cpp:1662] [PG ID 0 PG GUID 0(default_pg) Rank 5] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: failed to recv, got 0 bytes
+[2026-03-12 19:33:03,427] [INFO] [launch.py:367:main] Process 128318 exits successfully.
+[2026-03-12 19:33:03,428] [INFO] [launch.py:367:main] Process 128325 exits successfully.
+[2026-03-12 19:33:03,428] [INFO] [launch.py:367:main] Process 128324 exits successfully.
+[rank5]:[W312 19:33:03.118386918 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=82, addr=[localhost]:44070, remote=[localhost]:29500): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x98 (0x7f046cf785e8 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x5ba8bfe (0x7f045d7a8bfe in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x5baa458 (0x7f045d7aa458 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: <unknown function> + 0x5babc3e (0x7f045d7abc3e in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x298 (0x7f045d7a5298 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: c10d::ProcessGroupNCCL::heartbeatMonitor() + 0x379 (0x7f040ecf3ad9 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: <unknown function> + 0xe77e4 (0x7f0479ee77e4 in /lib64/libstdc++.so.6)
+frame #7: <unknown function> + 0x8b2ea (0x7f048f88b2ea in /lib64/libc.so.6)
+frame #8: <unknown function> + 0x110b40 (0x7f048f910b40 in /lib64/libc.so.6)
+
+[rank5]:[W312 19:33:03.121858324 ProcessGroupNCCL.cpp:1662] [PG ID 0 PG GUID 0(default_pg) Rank 5] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank5]:[W312 19:33:04.121965793 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=82, addr=[localhost]:44070, remote=[localhost]:29500): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x98 (0x7f046cf785e8 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x5ba8bfe (0x7f045d7a8bfe in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x5baa458 (0x7f045d7aa458 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: <unknown function> + 0x5babc3e (0x7f045d7abc3e in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x298 (0x7f045d7a5298 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: c10d::ProcessGroupNCCL::heartbeatMonitor() + 0x379 (0x7f040ecf3ad9 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: <unknown function> + 0xe77e4 (0x7f0479ee77e4 in /lib64/libstdc++.so.6)
+frame #7: <unknown function> + 0x8b2ea (0x7f048f88b2ea in /lib64/libc.so.6)
+frame #8: <unknown function> + 0x110b40 (0x7f048f910b40 in /lib64/libc.so.6)
+
+[rank5]:[W312 19:33:04.125217706 ProcessGroupNCCL.cpp:1662] [PG ID 0 PG GUID 0(default_pg) Rank 5] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+✓ SystemMetricsCollector stopped
+✓ Metrics server stopped
+P12 TrainingOps — shutdown complete.
+[rank5]:[W312 19:33:05.125345873 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=82, addr=[localhost]:44070, remote=[localhost]:29500): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x98 (0x7f046cf785e8 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x5ba8bfe (0x7f045d7a8bfe in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x5baa458 (0x7f045d7aa458 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: <unknown function> + 0x5babc3e (0x7f045d7abc3e in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x298 (0x7f045d7a5298 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: c10d::ProcessGroupNCCL::heartbeatMonitor() + 0x379 (0x7f040ecf3ad9 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: <unknown function> + 0xe77e4 (0x7f0479ee77e4 in /lib64/libstdc++.so.6)
+frame #7: <unknown function> + 0x8b2ea (0x7f048f88b2ea in /lib64/libc.so.6)
+frame #8: <unknown function> + 0x110b40 (0x7f048f910b40 in /lib64/libc.so.6)
+
+[rank5]:[W312 19:33:05.128678255 ProcessGroupNCCL.cpp:1662] [PG ID 0 PG GUID 0(default_pg) Rank 5] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank5]:[W312 19:33:06.128790929 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=82, addr=[localhost]:44070, remote=[localhost]:29500): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x98 (0x7f046cf785e8 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x5ba8bfe (0x7f045d7a8bfe in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x5baa458 (0x7f045d7aa458 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: <unknown function> + 0x5babc3e (0x7f045d7abc3e in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x298 (0x7f045d7a5298 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: c10d::ProcessGroupNCCL::heartbeatMonitor() + 0x379 (0x7f040ecf3ad9 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: <unknown function> + 0xe77e4 (0x7f0479ee77e4 in /lib64/libstdc++.so.6)
+frame #7: <unknown function> + 0x8b2ea (0x7f048f88b2ea in /lib64/libc.so.6)
+frame #8: <unknown function> + 0x110b40 (0x7f048f910b40 in /lib64/libc.so.6)
+
+[rank5]:[W312 19:33:06.132093198 ProcessGroupNCCL.cpp:1662] [PG ID 0 PG GUID 0(default_pg) Rank 5] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank5]:[W312 19:33:07.132202050 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=82, addr=[localhost]:44070, remote=[localhost]:29500): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x98 (0x7f046cf785e8 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x5ba8bfe (0x7f045d7a8bfe in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x5baa458 (0x7f045d7aa458 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: <unknown function> + 0x5babc3e (0x7f045d7abc3e in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x298 (0x7f045d7a5298 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: c10d::ProcessGroupNCCL::heartbeatMonitor() + 0x379 (0x7f040ecf3ad9 in /mnt/local-nvme/Test37_70BLoRA/.venv/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so)
+frame #6: <unknown function> + 0xe77e4 (0x7f0479ee77e4 in /lib64/libstdc++.so.6)
+frame #7: <unknown function> + 0x8b2ea (0x7f048f88b2ea in /lib64/libc.so.6)
+frame #8: <unknown function> + 0x110b40 (0x7f048f910b40 in /lib64/libc.so.6)
+
+[rank5]:[W312 19:33:07.135459745 ProcessGroupNCCL.cpp:1662] [PG ID 0 PG GUID 0(default_pg) Rank 5] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[2026-03-12 19:33:09,429] [INFO] [launch.py:367:main] Process 128323 exits successfully.
+[2026-03-12 19:33:13] Training completed
+  Init model:   /mnt/local-nvme/LLM/experiments/tests/Test36_70BLoRA/results/init/model_init.pt
+  Train log:    /mnt/local-nvme/LLM/experiments/tests/Test36_70BLoRA/results/run/train.log
+  Metrics:      /mnt/local-nvme/LLM/experiments/tests/Test36_70BLoRA/results/run/metrics.jsonl
+  Train shards: /mnt/local-nvme/data/d1_shards/
+(.venv) [ec2-user@ip-172-31-27-209 Test36_70BLoRA]$ cp "/home/ec2-user/.cursor/projects/mnt-local-nvme/terminals/1.txt" \
+   "/mnt/local-nvme/Test37_70BLoRA/exp1_.log"

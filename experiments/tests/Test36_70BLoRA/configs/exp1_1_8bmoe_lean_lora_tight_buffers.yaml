@@ -1,11 +1,15 @@
-# Experiment 1.1 (8B MoE proxy): Lean LoRA + Tight ZeRO-3 Buffers
+# Experiment 1.1 (8B MoE proxy): Expert Explosion LoRA + Tight ZeRO-3 Buffers
 # Proxy run for the 70B experiment — validates config changes on smaller model.
 # 8B MoE: 20 experts (vs 260), top-k=2 (vs 8), same backbone (4096 hidden, 20 layers)
 #
+# Strategy: Preserves ALL LoRA targets (including indexer + router) to match
+# the expert explosion approach. MoE expert rank=8 matches the collapsed rank
+# from well-trained 8B.
+#
 # Changes from baseline train_8b_moe_z3.yaml:
 #   - LoRA enabled (was not present in 8B config)
-#   - Lean LoRA targets (no indexer/router)
-#   - MoE LoRA rank=8
+#   - Full LoRA targets (including indexer + router)
+#   - MoE LoRA rank=8 (matches collapsed rank from 8B training)
 #   - Tighter ZeRO-3 buffer sizes
 #   - Enable fused DeltaNet entrance via env: T17_DN_USE_DELTA_ENTRANCE=1
 #
@@ -77,12 +81,17 @@ lora:
     # GSA sigmoid gates (5 layers)
     - W_gv
     - W_go
+    # GSA indexer projections (5 layers) — preserves 8B's learned sparse attention patterns
+    - W_Iq
+    - W_Ik
+    - W_Iw
     # Shared expert FFN (always active, every layer)
     - shared_gate
     - shared_up
     - shared_down
-    # REMOVED: W_Iq, W_Ik, W_Iw (indexer — low impact)
-    # REMOVED: gate (MoE router — risk of expert collapse)
+    # MoE router — must adapt from 8B's 20-expert routing to expanded distribution
+    - gate
+    # REMOVED: none — expert explosion strategy requires all targets
   moe_enabled: true
   moe_rank: 8
   moe_alpha: 16.0

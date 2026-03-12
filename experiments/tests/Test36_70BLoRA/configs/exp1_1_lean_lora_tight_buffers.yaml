@@ -1,8 +1,16 @@
-# Experiment 1.1: Lean LoRA + Tight ZeRO-3 Buffers + Fused DeltaNet Entrance
+# Experiment 1.1: Expert Explosion LoRA + Tight ZeRO-3 Buffers + Fused DeltaNet Entrance
 # Target: ≤72 GB peak, ≥13k tok/s on 8×A100-80GB
+#
+# Strategy: 70B is an "expert explosion" from a well-trained 8B (20 experts → 260).
+# The 8B has already collapsed weight matrices to their natural low-rank structure.
+# We preserve ALL LoRA targets from baseline (including indexer + router) because:
+#   - W_Iq/W_Ik/W_Iw: GSA sparse attention patterns learned in 8B must transfer
+#   - gate: router must adapt from 20→260 expert distribution
+# MoE expert rank=8 (vs 16 baseline) because experts are expanded copies of
+# 8B's already-converged experts — adaptation is inherently low-rank.
+#
 # Changes from baseline:
-#   - Removed W_Iq, W_Ik, W_Iw, gate from LoRA targets
-#   - Reduced MoE LoRA rank from 16 to 8
+#   - MoE expert LoRA rank 16→8 (matches collapsed rank from 8B training)
 #   - Tighter ZeRO-3 buffer sizes
 #   - Enable fused DeltaNet entrance via env: T17_DN_USE_DELTA_ENTRANCE=1
 data:
@@ -66,18 +74,22 @@ lora:
     - W_q
     - W_k
     - W_v
-    # GSA sigmoid gates (5 layers) — kept for quality
+    # GSA sigmoid gates (5 layers)
     - W_gv
     - W_go
+    # GSA indexer projections (5 layers) — preserves 8B's learned sparse attention patterns
+    - W_Iq
+    - W_Ik
+    - W_Iw
     # Shared expert FFN (always active, every layer)
     - shared_gate
     - shared_up
     - shared_down
-    # REMOVED: W_Iq, W_Ik, W_Iw (indexer — low impact, risk of destabilizing sparsity)
-    # REMOVED: gate (MoE router — risk of expert collapse during LoRA fine-tuning)
+    # MoE router — must adapt from 8B's 20-expert routing to 70B's 260-expert distribution
+    - gate
   moe_enabled: true
-  moe_rank: 8       # Reduced from 16 — halves lora_mid activation memory
-  moe_alpha: 16.0   # Keep scaling = alpha/rank = 2.0 (same as before)
+  moe_rank: 8       # 8B already collapsed expert subspaces; low-rank adaptation suffices
+  moe_alpha: 16.0   # scaling = alpha/rank = 2.0 (same effective scale as baseline)
   moe_target_params:
     - W_gate
     - W_up

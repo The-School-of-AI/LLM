@@ -1,5 +1,9 @@
-# Experiment 1.2: Lean LoRA + Micro-Batch=2 + Grad Accum=2
+# Experiment 1.2: Expert Explosion LoRA + Micro-Batch=2 + Grad Accum=2
 # Target: ≤60 GB peak, ≥12.5k tok/s on 8×A100-80GB
+#
+# Strategy: Same expert explosion LoRA targets as Exp 1.1 (all targets preserved).
+# Additional memory reduction via halved micro-batch with gradient accumulation.
+#
 # Changes from Exp 1.1:
 #   - micro_batch_size_per_gpu: 2 (from 4)
 #   - gradient_accumulation_steps: 2 (from 1)
@@ -65,9 +69,13 @@ lora:
     - W_v
     - W_gv
     - W_go
+    - W_Iq
+    - W_Ik
+    - W_Iw
     - shared_gate
     - shared_up
     - shared_down
+    - gate
   moe_enabled: true
   moe_rank: 8
   moe_alpha: 16.0
