@@ -1,0 +1,145 @@
+{
+  "version": "2.0",
+  "created": "2026-03-10 11:51:58 UTC",
+  "seed": 42,
+  "s3_base": "s3://t1-dataacquisition-datasets-2/shards_reordered",
+  "pools": {
+    "D1": {
+      "name": "Web Foundation",
+      "shard_count": 4894,
+      "s3_bands": [
+        "band_B0"
+      ],
+      "shard_list_file": "D1_shards.txt"
+    },
+    "D2": {
+      "name": "Web Diverse",
+      "shard_count": 18710,
+      "s3_bands": [
+        "band_B1"
+      ],
+      "excluded_count": 1996,
+      "shard_list_file": "D2_shards.txt"
+    },
+    "D3": {
+      "name": "Code",
+      "shard_count": 5933,
+      "s3_bands": [
+        "band_B3",
+        "band_code_tab",
+        "band_code_crlf"
+      ],
+      "shard_list_file": "D3_shards.txt"
+    },
+    "D4": {
+      "name": "STEM",
+      "shard_count": 1464,
+      "s3_bands": [
+        "band_B4",
+        "band_B5"
+      ],
+      "shard_list_file": "D4_shards.txt"
+    },
+    "AON": {
+      "name": "Always-ON",
+      "sub_pools": {
+        "bench_train": {
+          "shard_count": 356,
+          "s3_band": "band_B6",
+          "shard_list_file": "AON_bench_train_shards.txt"
+        },
+        "indic_guaranteed": {
+          "shard_count": 1996,
+          "s3_band": "band_indic_numerals",
+          "shard_list_file": "AON_indic_shards.txt"
+        }
+      },
+      "total_shards": 2352,
+      "injection_rate": 0.08,
+      "internal_split": {
+        "bench_train": 0.5,
+        "indic_guaranteed": 0.5
+      }
+    },
+    "GP": {
+      "name": "Golden Proxy",
+      "shard_count": 11,
+      "s3_path": "golden_proxy/band_golden_proxy",
+      "shard_list_file": "GP_shards.txt",
+      "trainable": false
+    }
+  },
+  "dropped": {
+    "B2": {
+      "reason": "18.7% cross-doc leakage, 9.14% garbage, 15.69% repetition",
+      "shard_count": 934,
+      "shard_list_file": "DROPPED_B2_shards.txt"
+    }
+  },
+  "stages": {
+    "1B": {
+      "budget": "50B",
+      "D1": 0.42,
+      "D2": 0.3,
+      "D3": 0.13,
+      "D4": 0.07,
+      "AON": 0.08
+    },
+    "WU_3B": {
+      "budget": "3B",
+      "D1": 0.34,
+      "D2": 0.3,
+      "D3": 0.17,
+      "D4": 0.11,
+      "AON": 0.08
+    },
+    "3B": {
+      "budget": "40B",
+      "D1": 0.22,
+      "D2": 0.28,
+      "D3": 0.25,
+      "D4": 0.17,
+      "AON": 0.08
+    },
+    "WU_8B": {
+      "budget": "3B",
+      "D1": 0.14,
+      "D2": 0.22,
+      "D3": 0.3,
+      "D4": 0.26,
+      "AON": 0.08
+    },
+    "8B": {
+      "budget": "80B",
+      "D1": 0.09,
+      "D2": 0.18,
+      "D3": 0.33,
+      "D4": 0.32,
+      "AON": 0.08
+    },
+    "WU_70B": {
+      "budget": "3B",
+      "D1": 0.06,
+      "D2": 0.12,
+      "D3": 0.35,
+      "D4": 0.39,
+      "AON": 0.08
+    },
+    "70B": {
+      "budget": "30B",
+      "D1": 0.06,
+      "D2": 0.12,
+      "D3": 0.35,
+      "D4": 0.39,
+      "AON": 0.08
+    }
+  },
+  "summary": {
+    "total_opus_eligible": 31001,
+    "total_always_on": 2352,
+    "total_golden_proxy": 11,
+    "total_dropped": 934,
+    "total_training": 33353,
+    "grand_total_incl_dropped": 34298
+  }
+}
