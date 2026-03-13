@@ -37,12 +37,17 @@ if HAS_TRITON:
          0.4407,  0.5626,  0.7230,  1.0000,
     ]
 
+    # Shared NF4 lookup constants
+    # 16 values from the normal distribution quantiles (used in kernel below)
+
     @triton.autotune(
         configs=[
             triton.Config({'BLOCK_M': 64, 'BLOCK_N': 64, 'BLOCK_K': 64}, num_warps=4),
             triton.Config({'BLOCK_M': 64, 'BLOCK_N': 32, 'BLOCK_K': 64}, num_warps=4),
             triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64, 'BLOCK_K': 64}, num_warps=4),
             triton.Config({'BLOCK_M': 32, 'BLOCK_N': 32, 'BLOCK_K': 64}, num_warps=2),
+            triton.Config({'BLOCK_M': 128, 'BLOCK_N': 64, 'BLOCK_K': 32}, num_warps=4),
+            triton.Config({'BLOCK_M': 64, 'BLOCK_N': 128, 'BLOCK_K': 32}, num_warps=4),
         ],
         key=['K', 'N'],
     )
@@ -72,7 +77,12 @@ if HAS_TRITON:
         Fused NF4 dequant + grouped GEMM forward kernel.
 
         For each expert e, computes: C[s:t] = A[s:t] @ dequant(W_nf4[e]).T
-        where dequantization happens tile-by-tile in SRAM.
+        where dequantization happens tile-by-tile in SRAM using tl.dot.
+
+        Weight layout: W_packed stores weights in row-major [K, N] order,
+        packed as uint8 with 2 values per byte along the N dimension.
+        For a [K, N] weight matrix, packed shape is [K, N//2].
+        Element [k, n] maps to byte [k, n//2], nibble (n % 2).
         """
         pid_e = tl.program_id(0)   # expert index
         pid_m = tl.program_id(1)   # M-tile index
@@ -88,93 +98,71 @@ if HAS_TRITON:
 
         offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
         offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
+        offs_k = tl.arange(0, BLOCK_K)
 
-        # Base pointers
+        # Base pointers for this expert
         a_base = A_ptr + start * stride_ak
         w_base = W_packed_ptr + pid_e * stride_wpe
         am_base = Absmax_ptr + pid_e * stride_ame
         c_base = C_ptr + start * stride_cm
 
-        # NF4 lookup table in registers
-        nf4_0 = -1.0000
-        nf4_1 = -0.6962
-        nf4_2 = -0.5251
-        nf4_3 = -0.3949
-        nf4_4 = -0.2844
-        nf4_5 = -0.1848
-        nf4_6 = -0.0911
-        nf4_7 =  0.0000
-        nf4_8 =  0.0796
-        nf4_9 =  0.1609
-        nf4_10 = 0.2461
-        nf4_11 = 0.3379
-        nf4_12 = 0.4407
-        nf4_13 = 0.5626
-        nf4_14 = 0.7230
-        nf4_15 = 1.0000
+        # Precompute N-dimension byte offsets and nibble selection
+        half_N = N // 2
+        byte_offs_n = offs_n // 2           # [BLOCK_N]
+        is_high_nibble = (offs_n % 2) == 0  # [BLOCK_N]
+        mask_n = offs_n < N
+        mask_m = offs_m < M_e
 
         acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-        # Weight layout: W_packed stores weights in row-major [K, N] order,
-        # packed as uint8 with 2 values per byte along the N dimension.
-        # For a [K, N] weight matrix, packed shape is [K, N//2].
-        # Element [k, n] maps to byte [k, n//2], nibble (n % 2).
-
-        half_N = N // 2
-        byte_offs_n = offs_n // 2  # [BLOCK_N]
-        is_high_nibble = (offs_n % 2) == 0  # [BLOCK_N]
-        mask_n = offs_n < N
-        mask_m = offs_m < M_e  # [BLOCK_M]
-
         for k_start in range(0, K, BLOCK_K):
-            # Dequantize W and accumulate one K-row at a time.
-            # We load A as 1D column vectors per ki iteration instead of
-            # a 2D tile, because Triton doesn't support indexing a 2D
-            # tensor with a constexpr from tl.static_range.
-            for ki in tl.static_range(BLOCK_K):
-                k_idx = k_start + ki
+            k_offs = k_start + offs_k  # [BLOCK_K]
+            mask_k = k_offs < K
 
-                # Load A column: a_col[m] = A[start + m, k_idx]  → [BLOCK_M]
-                a_ptrs = a_base + offs_m * stride_ak + k_idx
-                a_col = tl.load(a_ptrs, mask=(mask_m & (k_idx < K)), other=0.0)
+            # Load A tile: [BLOCK_M, BLOCK_K]
+            a_ptrs = a_base + offs_m[:, None] * stride_ak + k_offs[None, :]
+            a_tile = tl.load(a_ptrs, mask=mask_m[:, None] & mask_k[None, :], other=0.0)
 
-                # Load packed bytes for this K-row of W
-                byte_ptrs = w_base + k_idx * half_N + byte_offs_n
-                packed_bytes = tl.load(byte_ptrs, mask=(mask_n & (k_idx < K)), other=0).to(tl.uint8)
+            # Load packed W tile: [BLOCK_K, BLOCK_N//2] bytes
+            # Each byte at [k, n//2] contains two 4-bit values for columns n and n+1
+            w_byte_ptrs = w_base + k_offs[:, None] * half_N + byte_offs_n[None, :]
+            packed_tile = tl.load(w_byte_ptrs, mask=mask_k[:, None] & mask_n[None, :], other=0).to(tl.uint8)
 
-                # Extract 4-bit indices
-                high = (packed_bytes >> 4) & 0x0F
-                low = packed_bytes & 0x0F
-                nf4_idx = tl.where(is_high_nibble, high, low).to(tl.int32)
+            # Extract 4-bit indices: select high or low nibble per column
+            high = (packed_tile >> 4) & 0x0F
+            low = packed_tile & 0x0F
+            nf4_idx = tl.where(is_high_nibble[None, :], high, low).to(tl.int32)
 
-                # NF4 lookup via cascading selects
-                val = tl.where(nf4_idx == 0, nf4_0,
-                      tl.where(nf4_idx == 1, nf4_1,
-                      tl.where(nf4_idx == 2, nf4_2,
-                      tl.where(nf4_idx == 3, nf4_3,
-                      tl.where(nf4_idx == 4, nf4_4,
-                      tl.where(nf4_idx == 5, nf4_5,
-                      tl.where(nf4_idx == 6, nf4_6,
-                      tl.where(nf4_idx == 7, nf4_7,
-                      tl.where(nf4_idx == 8, nf4_8,
-                      tl.where(nf4_idx == 9, nf4_9,
-                      tl.where(nf4_idx == 10, nf4_10,
-                      tl.where(nf4_idx == 11, nf4_11,
-                      tl.where(nf4_idx == 12, nf4_12,
-                      tl.where(nf4_idx == 13, nf4_13,
-                      tl.where(nf4_idx == 14, nf4_14,
-                               nf4_15)))))))))))))))
+            # NF4 lookup via cascading selects → [BLOCK_K, BLOCK_N] float values
+            val = tl.where(nf4_idx == 0, -1.0,
+                  tl.where(nf4_idx == 1, -0.6962,
+                  tl.where(nf4_idx == 2, -0.5251,
+                  tl.where(nf4_idx == 3, -0.3949,
+                  tl.where(nf4_idx == 4, -0.2844,
+                  tl.where(nf4_idx == 5, -0.1848,
+                  tl.where(nf4_idx == 6, -0.0911,
+                  tl.where(nf4_idx == 7,  0.0,
+                  tl.where(nf4_idx == 8,  0.0796,
+                  tl.where(nf4_idx == 9,  0.1609,
+                  tl.where(nf4_idx == 10, 0.2461,
+                  tl.where(nf4_idx == 11, 0.3379,
+                  tl.where(nf4_idx == 12, 0.4407,
+                  tl.where(nf4_idx == 13, 0.5626,
+                  tl.where(nf4_idx == 14, 0.7230,
+                           1.0)))))))))))))))
 
-                # Load absmax for this element's block
-                linear_idx = k_idx * N + offs_n
-                block_idx = linear_idx // BLOCK_SIZE
-                absmax_vals = tl.load(am_base + block_idx, mask=(mask_n & (k_idx < K)), other=1.0)
+            # Load absmax scales for this tile: [BLOCK_K, BLOCK_N]
+            # linear_idx = k * N + n, block_idx = linear_idx // BLOCK_SIZE
+            linear_idx = k_offs[:, None] * N + offs_n[None, :]
+            block_idx = linear_idx // BLOCK_SIZE
+            absmax_vals = tl.load(am_base + block_idx,
+                                  mask=mask_k[:, None] & mask_n[None, :], other=1.0)
 
-                # Dequantize: value * absmax → w_row [BLOCK_N]
-                w_row = (val * absmax_vals).to(tl.float32)
+            # Dequantize: val * absmax → [BLOCK_K, BLOCK_N] float32 weight tile
+            w_tile = (val * absmax_vals).to(tl.float32)
 
-                # Outer product accumulation: a_col [BLOCK_M] × w_row [BLOCK_N]
-                acc += a_col[:, None] * w_row[None, :]
+            # Tiled matrix multiply: [BLOCK_M, BLOCK_K] @ [BLOCK_K, BLOCK_N]
+            acc += tl.dot(a_tile.to(tl.float32), w_tile)
 
         # Store result
         c_ptrs = c_base + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
@@ -329,14 +317,17 @@ class NF4GroupedGEMMFn(torch.autograd.Function):
         numel = K * N
 
         # Unpack all experts at once: w_packed is [E, K*N//2] uint8
-        high = (w_packed >> 4) & 0x0F          # [E, K*N//2]
-        low = w_packed & 0x0F                   # [E, K*N//2]
+        # Use int16 intermediates instead of int64 to save memory
+        high = ((w_packed >> 4) & 0x0F).to(torch.int16)  # [E, K*N//2]
+        low = (w_packed & 0x0F).to(torch.int16)           # [E, K*N//2]
         # Interleave high/low to get [E, K*N] indices
-        indices = torch.stack([high, low], dim=2).reshape(E, -1).long()  # [E, K*N]
+        indices = torch.stack([high, low], dim=2).reshape(E, -1)  # [E, K*N]
+        del high, low
         indices = indices[:, :numel]            # trim any padding
 
         # Lookup NF4 values for all experts at once
-        values = nf4_levels[indices].float()    # [E, K*N]
+        values = nf4_levels[indices.long()].float()    # [E, K*N]
+        del indices
 
         # Apply per-block absmax scaling
         pad = (block_size - numel % block_size) % block_size
@@ -349,7 +340,7 @@ class NF4GroupedGEMMFn(torch.autograd.Function):
         values = values.reshape(E, -1)[:, :numel]  # [E, K*N]
 
         W_full_t = values.view(E, K, N).transpose(-2, -1).contiguous().to(x.dtype)  # [E, N, K]
-        del values, indices, high, low  # free intermediates
+        del values  # free intermediates
 
         grad_x = _grouped_gemm_forward(grad_output, W_full_t, offsets, E, max_M)
 

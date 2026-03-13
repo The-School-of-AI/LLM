@@ -146,8 +146,10 @@ def _get_nf4_weight(module, param_name):
 
     Handles per-expert packed layout: packed is [E, K*N//2], absmax is [E, blocks_per_expert].
     Returns [E, K, N] dequantized weight tensor.
+
+    Uses batched vectorized dequantization — all experts at once, no Python loop.
     """
-    from .kernels.nf4_quantize import NF4_LEVELS, _dequantize_block_nf4
+    from .kernels.nf4_quantize import NF4_LEVELS
 
     packed = getattr(module, f'{param_name}_nf4_packed')     # [E, K*N//2]
     absmax = getattr(module, f'{param_name}_nf4_absmax')     # [E, blocks_per_expert]
@@ -156,16 +158,31 @@ def _get_nf4_weight(module, param_name):
     compute_dtype = module._nf4_compute_dtype
 
     E, K, N = shape
-    numel_per_expert = K * N
+    numel = K * N
     nf4_levels = NF4_LEVELS.to(packed.device)
 
-    experts = []
-    for e in range(E):
-        flat = _dequantize_block_nf4(
-            packed[e], absmax[e], numel_per_expert, block_size, nf4_levels, compute_dtype
-        )
-        experts.append(flat.view(K, N))
-    return torch.stack(experts, dim=0)  # [E, K, N]
+    # Unpack all experts at once: packed is [E, K*N//2] uint8
+    high = ((packed >> 4) & 0x0F).to(torch.int16)  # [E, K*N//2]
+    low = (packed & 0x0F).to(torch.int16)           # [E, K*N//2]
+    indices = torch.stack([high, low], dim=2).reshape(E, -1)  # [E, K*N]
+    del high, low
+    indices = indices[:, :numel]
+
+    # Lookup NF4 values
+    values = nf4_levels[indices.long()].float()  # [E, K*N]
+    del indices
+
+    # Apply per-block absmax scaling
+    pad = (block_size - numel % block_size) % block_size
+    padded_total = numel + pad
+    if pad > 0:
+        values = torch.nn.functional.pad(values, (0, pad))
+    num_blocks = padded_total // block_size
+    values = values.view(E, num_blocks, block_size)
+    values = values * absmax[:, :num_blocks].unsqueeze(2)
+    values = values.reshape(E, -1)[:, :numel]
+
+    return values.view(E, K, N).to(compute_dtype)
 
 
 def _moe_grouped_nf4(module, sorted_x, expert_counts):
@@ -173,29 +190,40 @@ def _moe_grouped_nf4(module, sorted_x, expert_counts):
     NF4-aware MoE grouped forward path.
 
     Replaces MoEFFN._moe_grouped when expert weights are NF4-quantized.
-    Uses fused NF4 dequant+GEMM kernel when available, falls back to
-    dequant-then-GEMM otherwise.
+
+    Strategy selection:
+    - For small expert counts (E <= NF4_FUSED_THRESHOLD), uses dequant-then-GEMM
+      with the existing optimized fused_lora_grouped_gemm kernel. This is faster
+      because the dequant cost is small and the fused LoRA kernel is highly optimized.
+    - For large expert counts (E > threshold), uses the fused NF4 Triton kernel
+      that dequantizes tile-by-tile to avoid materializing the full weight tensor.
     """
+    # Threshold: below this, dequant-then-GEMM is faster; above, fused NF4 saves memory
+    NF4_FUSED_THRESHOLD = getattr(module, '_nf4_fused_threshold', 64)
+
     x_in = sorted_x.to(dtype=module._nf4_compute_dtype)
     has_lora = getattr(module, "moe_lora_enabled", False)
     scaling = getattr(module, "moe_lora_scaling", 0.0)
 
-    # Try fused NF4+LoRA grouped GEMM kernel
-    try:
-        from .kernels.triton_nf4_grouped_gemm import nf4_lora_grouped_gemm
-        has_fused_nf4 = True
-    except ImportError:
-        has_fused_nf4 = False
-
     K = module.d_model
     N_hidden = module.d_hidden
+    E = expert_counts.shape[0] if hasattr(expert_counts, 'shape') else len(expert_counts)
 
     try:
         from .models.liger_ops import liger_silu_mul
     except ImportError:
         liger_silu_mul = lambda g, u: torch.nn.functional.silu(g) * u
 
-    if has_fused_nf4 and has_lora and not getattr(module, '_nf4_fused_failed', False):
+    # For large E (e.g. 260 experts in 70B), use fused NF4 kernel to avoid
+    # materializing the full [E, K, N] dequantized weight tensor
+    use_fused_nf4 = (E > NF4_FUSED_THRESHOLD) and has_lora
+    if use_fused_nf4 and not getattr(module, '_nf4_fused_failed', False):
+        try:
+            from .kernels.triton_nf4_grouped_gemm import nf4_lora_grouped_gemm
+        except ImportError:
+            use_fused_nf4 = False
+
+    if use_fused_nf4 and not getattr(module, '_nf4_fused_failed', False):
         try:
             # Gate + Up with fused NF4 dequant + LoRA
             gate_out = nf4_lora_grouped_gemm(
@@ -228,14 +256,15 @@ def _moe_grouped_nf4(module, sorted_x, expert_counts):
             )
             return out.to(dtype=sorted_x.dtype)
         except Exception as fused_exc:
-            # Log once per module, then permanently fall back
             module._nf4_fused_failed = True
             logger.warning(
                 f"Fused NF4 GEMM failed ({type(fused_exc).__name__}: {fused_exc}), "
                 f"permanently falling back to dequant-then-GEMM for this module"
             )
 
-    # Fallback: dequantize then use existing grouped GEMM path
+    # Dequant-then-GEMM path: dequantize weights, then use optimized fused LoRA kernels.
+    # For E<=64 this is faster than the fused NF4 kernel because the existing
+    # fused_lora_gate_up_silu kernel is highly optimized.
     W_gate = _get_nf4_weight(module, 'W_gate')
     W_up = _get_nf4_weight(module, 'W_up')
     W_down = _get_nf4_weight(module, 'W_down')
