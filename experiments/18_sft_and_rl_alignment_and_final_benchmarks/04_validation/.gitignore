@@ -1,0 +1,175 @@
+# =============================================================================
+# SFT Validation Framework — .gitignore
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Python environment
+# -----------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+.installed.cfg
+lib/
+lib64/
+MANIFEST
+
+# -----------------------------------------------------------------------------
+# Model weights — large binary files, downloaded via setup_experiment.py
+# -----------------------------------------------------------------------------
+models/
+# If you want to track model config files but not weights, comment the above
+# and use these instead:
+# models/**/*.bin
+# models/**/*.safetensors
+# models/**/*.pt
+# models/**/*.pth
+# models/**/*.gguf
+
+# -----------------------------------------------------------------------------
+# Generated inference outputs — populated at runtime, not source
+# Keep: model_outputs_template.csv (schema reference)
+# Ignore: all filled-in output CSVs and test CSVs
+# -----------------------------------------------------------------------------
+data/model_outputs.csv
+data/model_outputs_test.csv
+data/model_outputs_*.csv
+!data/model_outputs_template.csv
+
+# -----------------------------------------------------------------------------
+# Evaluation results — generated at runtime
+# Untrack if results should not travel with the repo.
+# Comment this section out if you DO want to version-control results.
+# -----------------------------------------------------------------------------
+results/evaluation_results_*.json
+results/summary_*.json
+results/report_*.md
+results/per_prompt_review_*.csv
+results/charts/
+
+# -----------------------------------------------------------------------------
+# Inference server runtime files (PIDs, logs)
+# -----------------------------------------------------------------------------
+scripts/.pids/
+*.pid
+*.log
+
+# -----------------------------------------------------------------------------
+# Secrets and environment files
+# API keys must NOT be committed — use environment variables instead:
+#   $env:BASE_MODEL_API_KEY = "sk-..."
+#   $env:SFT_MODEL_API_KEY  = "sk-..."
+# -----------------------------------------------------------------------------
+.env
+.env.*
+*.env
+secrets.yaml
+secrets.yml
+secrets.json
+*_secrets.*
+config/secrets.*
+# Flag if api_key is ever hardcoded in config — keep using env vars
+# config/config.yaml is tracked, but must never contain real keys
+
+# -----------------------------------------------------------------------------
+# Testing / coverage
+# -----------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+nosetests.xml
+pytest.xml
+*.cover
+
+# -----------------------------------------------------------------------------
+# Jupyter (if notebooks are used alongside scripts)
+# -----------------------------------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# -----------------------------------------------------------------------------
+# OS-generated files
+# -----------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
+
+# Linux
+*~
+.nfs*
+
+# -----------------------------------------------------------------------------
+# Editors and IDEs
+# -----------------------------------------------------------------------------
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+
+# JetBrains (PyCharm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
+.#*
+*.orig
+
+# -----------------------------------------------------------------------------
+# HuggingFace hub cache (if inside the repo directory)
+# -----------------------------------------------------------------------------
+.cache/
+huggingface/
+
+# -----------------------------------------------------------------------------
+# Miscellaneous
+# -----------------------------------------------------------------------------
+*.bak
+*.tmp
+*.temp
+tmp/
+temp/

@@ -1,0 +1,29 @@
+# SFT Validation Framework — Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core
+pyyaml>=6.0.1           # Config file parsing
+openai>=1.12.0          # OpenAI-compatible API client (also used with vLLM, Together AI, etc.)
+
+# Analysis & visualisation (optional but recommended)
+matplotlib>=3.8.0       # Charts (used by analyze_results.py --charts)
+numpy>=1.26.0           # Used by chart generation
+
+# Development / testing
+pytest>=8.0.0           # Unit tests
+pytest-cov>=4.1.0       # Coverage reporting
+
+# Optional: LLM-as-judge (for advanced hallucination detection)
+# anthropic>=0.23.0     # Claude API for LLM-judge step
+
+# ---------------------------------------------------------------------------
+# Local inference (--inference-mode local)  — uncomment to enable
+# ---------------------------------------------------------------------------
+# torch>=2.2.0                # PyTorch backend (install the CUDA build from pytorch.org)
+# transformers>=4.38.0        # HuggingFace model hub + AutoModel loading
+# accelerate>=0.27.0          # Device map, multi-GPU, and mixed-precision support
+# bitsandbytes>=0.43.0        # 4-bit / 8-bit quantization (Linux & Windows, CUDA only)
+#
+# Quick install (CUDA 12.x):
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   pip install transformers accelerate bitsandbytes

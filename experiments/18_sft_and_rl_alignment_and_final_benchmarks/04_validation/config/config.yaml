@@ -1,0 +1,39 @@
+models:
+  base:
+    model_name: HuggingFaceTB/SmolLM2-135M
+    endpoint: http://localhost:8001/v1
+    local:
+      model_path: C:\Users\sidhe\TSAIV4\capstone\SFT\models\base
+      device: cpu
+      load_in_4bit: false
+      load_in_8bit: false
+      trust_remote_code: false
+  sft:
+    model_name: HuggingFaceTB/SmolLM2-135M-Instruct
+    endpoint: http://localhost:8002/v1
+    local:
+      model_path: C:\Users\sidhe\TSAIV4\capstone\SFT\models\sft
+      device: cpu
+      load_in_4bit: false
+      load_in_8bit: false
+      trust_remote_code: false
+generation:
+  temperature: 0.0
+  max_tokens: 256
+  retries: 3
+  backoff_seconds: 2.0
+scoring:
+  threshold: 0.75
+  case_sensitive: false
+hallucination:
+  threshold: 0.5
+  penalise_missing_anchors: true
+  check_novel_proper_nouns: false
+validation:
+  require_if_improvement: true
+  require_no_new_hallucinations: true
+  min_sft_if_rate: 0.7
+paths:
+  prompts: prompts/evaluation_prompts.json
+  results_dir: results
+  data_dir: data

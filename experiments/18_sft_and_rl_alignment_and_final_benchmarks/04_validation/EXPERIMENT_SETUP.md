@@ -1,0 +1,735 @@
+# SFT Validation — Experiment Setup, Implementation & Results
+
+> **Scope:** This document covers the end-to-end experiment for Option B (API mode) —
+> downloading open-source models, spinning up local inference servers, running automated
+> inference over evaluation prompts, scoring outputs, and verifying all pipeline
+> components pass a 42-point checklist.
+
+---
+
+## Table of Contents
+
+1. [Architecture Overview](#1-architecture-overview)
+2. [Model Selection](#2-model-selection)
+3. [Project Structure](#3-project-structure)
+4. [Prerequisites](#4-prerequisites)
+5. [Setup](#5-setup)
+   - 5.1 [Install Dependencies](#51-install-dependencies)
+   - 5.2 [Download Models](#52-download-models)
+6. [Configuration](#6-configuration)
+7. [Running Inference Servers](#7-running-inference-servers)
+   - 7.1 [Manual (two terminals)](#71-manual-two-terminals)
+   - 7.2 [Automated (one command)](#72-automated-one-command)
+8. [Option B — API Mode Inference](#8-option-b--api-mode-inference)
+9. [Scoring & Report Generation](#9-scoring--report-generation)
+10. [End-to-End Validation Checklist](#10-end-to-end-validation-checklist)
+11. [Actual Results (March 9, 2026 Run)](#11-actual-results-march-9-2026-run)
+    - 11.1 [Validation Checklist Output](#111-validation-checklist-output-4242-passed)
+    - 11.2 [Instruction-Following Metrics](#112-instruction-following-metrics)
+    - 11.3 [Hallucination Metrics](#113-hallucination-metrics)
+    - 11.4 [Per-Prompt Breakdown](#114-per-prompt-breakdown)
+    - 11.5 [Verdict](#115-verdict)
+12. [Local Inference Mode (Option C)](#12-local-inference-mode-option-c)
+13. [Troubleshooting](#13-troubleshooting)
+
+---
+
+## 1. Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      SFT Evaluation Pipeline                        │
+│                                                                     │
+│  evaluation_prompts.json (62 prompts)                               │
+│           │                                                         │
+│           ▼                                                         │
+│  generate_outputs.py  ──── API ────►  inference_server.py :8001    │
+│    (Option B)          mode          (SmolLM2-135M  — BASE)         │
+│                        ────────────► inference_server.py :8002     │
+│                                      (SmolLM2-135M-Instruct — SFT) │
+│           │                                                         │
+│           ▼                                                         │
+│  model_outputs_test.csv  (base_output + sft_output per prompt)     │
+│           │                                                         │
+│           ▼                                                         │
+│  run_evaluation.py                                                  │
+│    ├─ instruction_following.py  (IF scorer)                         │
+│    └─ hallucination_detector.py (risk scorer)                       │
+│           │                                                         │
+│           ▼                                                         │
+│  evaluation_results_*.json                                          │
+│           │                                                         │
+│           ▼                                                         │
+│  analyze_results.py  ──►  report_*.md                              │
+│                           summary_*.json                            │
+│                           per_prompt_review_*.csv                   │
+│           │                                                         │
+│           ▼                                                         │
+│  validate_option_b.py  ──►  42-check validation report             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Model Selection
+
+| Role | Model | Download size | Why chosen |
+|------|-------|---------------|------------|
+| **Base** | [`HuggingFaceTB/SmolLM2-135M`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M) | ~270 MB | Pre-trained only — no RLHF/SFT. CPU-capable. |
+| **SFT** | [`HuggingFaceTB/SmolLM2-135M-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) | ~270 MB | Instruction-tuned version of the same architecture — clean base/SFT pair for controlled comparison. |
+
+**Why SmolLM2-135M?**
+
+- Runs on CPU (no GPU required for testing)
+- Same architecture family as used in production (Qwen2/Llama-3.1 lineage supported via same code path)
+- Clear behavioural delta between base and instruct variants
+- Fast to download and load — reduces iteration time
+- Swap-in compatible with any larger model (Llama-3.1-8B, Qwen2-7B) by changing `--base-model-id`
+
+---
+
+## 3. Project Structure
+
+```
+SFT/
+├── config/
+│   └── config.yaml                    # Model endpoints, thresholds, generation params
+├── data/
+│   ├── model_outputs_template.csv     # Template for manual filling
+│   └── model_outputs_test.csv         # ← generated by Option B run
+├── evaluation/
+│   ├── generate_outputs.py            # Inference script (API + local modes)
+│   ├── run_evaluation.py              # Scoring runner (CSV + API modes)
+│   ├── instruction_following.py       # IF scorer (26 checks)
+│   ├── hallucination_detector.py      # Hallucination risk scorer
+│   └── metrics.py                     # Metric aggregator
+├── analysis/
+│   └── analyze_results.py             # Report + charts generator
+├── models/
+│   ├── base/                          # ← SmolLM2-135M downloaded here
+│   └── sft/                           # ← SmolLM2-135M-Instruct downloaded here
+├── prompts/
+│   └── evaluation_prompts.json        # 62 diverse evaluation prompts
+├── results/
+│   ├── evaluation_results_*.json      # Raw per-prompt scores
+│   ├── summary_*.json                 # Aggregate metrics
+│   ├── report_*.md                    # Markdown validation report
+│   └── per_prompt_review_*.csv        # Per-prompt scores for spreadsheet review
+├── scripts/
+│   ├── setup_experiment.py            # Download models + update config
+│   ├── inference_server.py            # OpenAI-compatible FastAPI server
+│   ├── start_servers.py               # Launch both servers + health-poll
+│   └── validate_option_b.py           # 42-check end-to-end validation
+├── tests/
+│   └── test_evaluation.py             # 26 unit tests (pytest)
+├── README.md                          # Main project README
+├── EXPERIMENT_SETUP.md                # ← this document
+└── requirements.txt
+```
+
+---
+
+## 4. Prerequisites
+
+| Requirement | Version tested | Notes |
+|---|---|---|
+| Python | 3.13.7 | ≥ 3.10 required |
+| pip | any | included with Python |
+| Internet access | — | needed for HuggingFace model download |
+| GPU | optional | CPU works for SmolLM2-135M; GPU needed for larger models |
+| Disk space | ~1.5 GB | ~270 MB per model × 2, plus venv |
+
+---
+
+## 5. Setup
+
+### 5.1 Install Dependencies
+
+```powershell
+# Create and activate virtualenv (if not already done)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+# Core evaluation framework
+pip install -r requirements.txt
+
+# Inference server + local model support
+pip install fastapi "uvicorn[standard]" transformers accelerate huggingface_hub
+
+# Optional: GPU quantization (CUDA only)
+# pip install torch --index-url https://download.pytorch.org/whl/cu121
+# pip install bitsandbytes
+```
+
+**Installed package versions (verified):**
+
+| Package | Version |
+|---|---|
+| torch | 2.10.0 |
+| transformers | 5.3.0 |
+| fastapi | 0.135.1 |
+| uvicorn | 0.41.0 |
+| accelerate | 1.13.0 |
+| huggingface_hub | 1.6.0 |
+| openai | 2.24.0 |
+| pyyaml | ≥ 6.0.1 |
+
+### 5.2 Download Models
+
+Run the setup script from the project root. It downloads both models, validates packages, and writes API endpoints and local paths into `config/config.yaml`.
+
+```powershell
+# From SFT/ root
+python scripts/setup_experiment.py
+```
+
+**What it does:**
+
+1. Checks all required packages are importable
+2. Downloads `SmolLM2-135M` → `models/base/`
+3. Downloads `SmolLM2-135M-Instruct` → `models/sft/`
+4. Updates `config/config.yaml` with:
+   - `models.base.endpoint = http://localhost:8001/v1`
+   - `models.sft.endpoint  = http://localhost:8002/v1`
+   - `models.base.local.model_path = <absolute path to models/base>`
+   - `models.sft.local.model_path  = <absolute path to models/sft>`
+5. Sets `generation.max_tokens = 256` (appropriate for 135M model)
+
+**Custom model IDs** (e.g., for a larger model):
+
+```powershell
+python scripts/setup_experiment.py \
+    --base-model-id meta-llama/Llama-3.1-8B \
+    --sft-model-id  meta-llama/Llama-3.1-8B-Instruct \
+    --device cuda
+```
+
+**Skip download** (models already on disk):
+
+```powershell
+python scripts/setup_experiment.py --skip-download
+```
+
+---
+
+## 6. Configuration
+
+After running `setup_experiment.py`, `config/config.yaml` contains:
+
+```yaml
+models:
+  base:
+    model_name: HuggingFaceTB/SmolLM2-135M
+    endpoint: http://localhost:8001/v1     # API mode endpoint
+    local:
+      model_path: C:\...\SFT\models\base  # Local mode path
+      device: cpu
+      load_in_4bit: false
+      load_in_8bit: false
+      trust_remote_code: false
+  sft:
+    model_name: HuggingFaceTB/SmolLM2-135M-Instruct
+    endpoint: http://localhost:8002/v1
+    local:
+      model_path: C:\...\SFT\models\sft
+      device: cpu
+      load_in_4bit: false
+      load_in_8bit: false
+      trust_remote_code: false
+
+generation:
+  temperature: 0.0          # Deterministic (recommended for evaluation)
+  max_tokens: 256
+  retries: 3
+  backoff_seconds: 2.0
+
+scoring:
+  threshold: 0.75           # Minimum IF score fraction to count as "followed"
+  case_sensitive: false
+
+hallucination:
+  threshold: 0.5            # Risk score ≥ 0.5 → hallucination detected
+  penalise_missing_anchors: true
+```
+
+**Key tunable parameters:**
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `generation.temperature` | 0.0 | Higher = more creative but less consistent |
+| `generation.max_tokens` | 256 | Increase for long-form tasks |
+| `scoring.threshold` | 0.75 | Lower = more lenient IF scoring |
+| `hallucination.threshold` | 0.5 | Lower = more sensitive hallucination detection |
+
+---
+
+## 7. Running Inference Servers
+
+Each model runs in its own FastAPI server (`scripts/inference_server.py`) that exposes `POST /v1/chat/completions` and `GET /v1/models` — the OpenAI API subset used by `generate_outputs.py`.
+
+### 7.1 Manual (two terminals)
+
+```powershell
+# Terminal A — base model (port 8001)
+python scripts/inference_server.py \
+    --model-path models/base \
+    --port 8001 \
+    --device cpu
+
+# Terminal B — SFT model (port 8002)
+python scripts/inference_server.py \
+    --model-path models/sft \
+    --port 8002 \
+    --device cpu
+```
+
+Wait for the log line:
+```
+Server ready — listening on http://127.0.0.1:800X/v1
+```
+
+**Server options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--model-path` | required | HF hub ID or local directory |
+| `--port` | 8001 | Port to listen on |
+| `--device` | cpu | `cpu`, `cuda`, `mps`, `auto` |
+| `--load-in-4bit` | off | 4-bit NF4 quantization (CUDA only) |
+| `--load-in-8bit` | off | 8-bit LLM.int8 quantization (CUDA only) |
+
+**Health check:**
+```powershell
+Invoke-WebRequest http://127.0.0.1:8001/health | ConvertFrom-Json
+# → { status: "ok", model: "models/base", ready: true }
+```
+
+### 7.2 Automated (one command)
+
+```powershell
+# Launches both processes, polls health, prints when ready, restarts on crash
+python scripts/start_servers.py
+
+# With GPU and 4-bit quantization
+python scripts/start_servers.py --device cuda --load-in-4bit
+```
+
+Logs are written to `scripts/.pids/base_server.log` and `scripts/.pids/sft_server.log`.
+
+---
+
+## 8. Option B — API Mode Inference
+
+With both servers running, run `generate_outputs.py` to call both models for every prompt and write the results to CSV.
+
+```powershell
+cd evaluation
+
+# Full run — all 62 prompts
+python generate_outputs.py --config ../config/config.yaml
+
+# Test subset — 5 specific prompt IDs
+python generate_outputs.py \
+    --config ../config/config.yaml \
+    --prompt-ids IF_001 IF_002 FQ_001 RN_001 EC_001 \
+    --output ../data/model_outputs_test.csv
+
+# Preview without calling any model
+python generate_outputs.py --dry-run --prompt-ids IF_001 IF_002 FQ_001 RN_001 EC_001
+
+# Resume after interruption (already-done rows skipped automatically)
+python generate_outputs.py --config ../config/config.yaml
+
+# Force full re-run (backs up existing CSV first)
+python generate_outputs.py --force-rerun
+
+# Filter by category / difficulty
+python generate_outputs.py --categories instruction_following factual_qa --difficulties easy medium
+```
+
+**What it produces** — `data/model_outputs_test.csv` with columns:
+
+| Column | Description |
+|---|---|
+| `prompt_id` | e.g. `IF_001` |
+| `category` | e.g. `instruction_following` |
+| `sub_category` | e.g. `format_constraint` |
+| `difficulty` | `easy`, `medium`, `hard` |
+| `prompt_text` | The prompt sent to both models |
+| `base_output` | Response from base model |
+| `sft_output` | Response from SFT model |
+| `base_model` | Model name/ID (from config) |
+| `sft_model` | Model name/ID (from config) |
+| `timestamp` | ISO datetime of the call |
+| `base_error` | Empty on success; `[ERROR] …` on failure |
+| `sft_error` | Empty on success; `[ERROR] …` on failure |
+| `annotator_name` | Filled in during manual annotation |
+| `annotation_date` | Filled in during manual annotation |
+| `notes` | Free-text notes |
+
+**Expected console output (5 prompts):**
+
+```
+============================================================
+  SFT Inference Run — 2026-03-09 10:23
+  Mode       : API
+  Base model : HuggingFaceTB/SmolLM2-135M
+  SFT  model : HuggingFaceTB/SmolLM2-135M-Instruct
+  Prompts    : 5
+  Output     : ../data/model_outputs_test.csv
+  Resume     : no
+============================================================
+
+[1/5] IF_001   base=✓  sft=✓
+[2/5] IF_002   base=✓  sft=✓
+[3/5] FQ_001   base=✓  sft=✓
+[4/5] RN_001   base=✓  sft=✓
+[5/5] EC_001   base=✓  sft=✓
+
+============================================================
+  INFERENCE COMPLETE
+  Prompts written  : 5
+  Base errors      : 0
+  SFT  errors      : 0
+============================================================
+```
+
+---
+
+## 9. Scoring & Report Generation
+
+```powershell
+# Step 1 — Score outputs (CSV mode)
+cd evaluation
+python run_evaluation.py \
+    --mode csv \
+    --input ../data/model_outputs_test.csv \
+    --prompts ../prompts/evaluation_prompts.json \
+    --output-dir ../results
+
+# Step 2 — Generate markdown report + per-prompt CSV
+cd ../analysis
+python analyze_results.py \
+    --results ../results/evaluation_results_*.json \
+    --output-dir ../results
+
+# Optional: include bar charts (requires matplotlib)
+python analyze_results.py \
+    --results ../results/evaluation_results_*.json \
+    --output-dir ../results \
+    --charts
+```
+
+**Output files produced:**
+
+| File | Description |
+|---|---|
+| `results/evaluation_results_YYYYMMDD_HHMMSS.json` | Raw per-prompt IF scores and hallucination risk |
+| `results/summary_YYYYMMDD_HHMMSS.json` | Aggregate metrics (IF rates, hallucination rates, verdict) |
+| `results/report_YYYYMMDD_HHMMSS.md` | Human-readable Markdown validation report |
+| `results/per_prompt_review_YYYYMMDD_HHMMSS.csv` | Per-prompt scores for spreadsheet review |
+
+---
+
+## 10. End-to-End Validation Checklist
+
+Run `validate_option_b.py` to verify every component of the Option B pipeline in one command:
+
+```powershell
+# From project root (SFT/)
+python scripts/validate_option_b.py \
+    --csv data/model_outputs_test.csv \
+    --results-dir results \
+    --models-dir models \
+    --base-port 8001 \
+    --sft-port 8002
+```
+
+**Skip server checks** (validate artifacts only, no servers running):
+
+```powershell
+python scripts/validate_option_b.py \
+    --csv data/model_outputs_test.csv \
+    --results-dir results \
+    --skip-server-checks
+```
+
+The script runs **7 phases** covering **42 checks**:
+
+| Phase | Checks | What is verified |
+|---|---:|---|
+| 1 — Environment & Packages | 8 | Python ≥ 3.10, 5 required packages importable, config + prompts files exist |
+| 2 — Model Files on Disk | 4 | `models/base/` and `models/sft/` exist and contain weight files |
+| 3 — API Server Health | 6 | `/health` returns 200, `ready=True`, `/v1/models` 200 for both ports |
+| 4 — Live Inference | 2 | OpenAI Python client successfully calls each server and gets non-empty output |
+| 5 — CSV Output | 8 | File exists, 15 required columns, row count, non-empty outputs, 0 errors, all prompt IDs covered |
+| 6 — Evaluation Files | 6 | All 4 output file types produced, summary JSON is valid |
+| 7 — Metric Completeness | 8 | Required keys present, rates in [0,1], total_prompts > 0, verdict in report |
+| **Total** | **42** | |
+
+Exit code `0` = all checks passed. Exit code `1` = one or more failed.
+
+---
+
+## 11. Actual Results (March 9, 2026 Run)
+
+### 11.1 Validation Checklist Output — 42/42 PASSED
+
+```
+=================================================================
+  OPTION B — END-TO-END VALIDATION CHECKLIST
+  2026-03-09 10:52:05
+=================================================================
+
+Phase 1 — Environment & Packages
+  [PASS] Python ≥ 3.10            Found 3.13.7
+  [PASS] Package: yaml
+  [PASS] Package: openai
+  [PASS] Package: transformers
+  [PASS] Package: fastapi
+  [PASS] Package: uvicorn
+  [PASS] config/config.yaml exists
+  [PASS] evaluation_prompts.json exists
+
+Phase 2 — Model Files on Disk
+  [PASS] models/base/ exists and non-empty    7 weight/config files found
+  [PASS] models/sft/  exists and non-empty   12 weight/config files found
+  [PASS] Base model has weight files
+  [PASS] SFT model has weight files
+
+Phase 3 — API Server Health
+  [PASS] BASE server /health  (port 8001)
+  [PASS] BASE server reports ready=True      model=models/base
+  [PASS] BASE /v1/models endpoint
+  [PASS] SFT server /health  (port 8002)
+  [PASS] SFT server reports ready=True       model=models/sft
+  [PASS] SFT /v1/models endpoint
+
+Phase 4 — Live Inference via OpenAI Client
+  [PASS] OpenAI client → BASE model returns non-empty output
+  [PASS] OpenAI client → SFT model returns non-empty output
+
+Phase 5 — generate_outputs.py CSV Output
+  [PASS] model_outputs_test.csv exists
+  [PASS] CSV has all required columns        (15 columns present)
+  [PASS] CSV has 5 rows (one per test prompt)
+  [PASS] base_output non-empty for all rows
+  [PASS] sft_output non-empty for all rows
+  [PASS] No [ERROR] in base_error column
+  [PASS] No [ERROR] in sft_error column
+  [PASS] All test prompt IDs present in CSV  covered 5/5
+
+Phase 6 — run_evaluation.py Output Files
+  [PASS] evaluation_results JSON produced
+  [PASS] summary JSON produced
+  [PASS] Markdown report produced
+  [PASS] per-prompt review CSV produced
+  [PASS] results/ directory exists
+  [PASS] summary JSON is valid JSON
+
+Phase 7 — Metric Completeness & Correctness
+  [PASS] All required metric keys present in summary   (7 keys)
+  [PASS] base_if_rate in [0.0, 1.0]          value=0.2
+  [PASS] sft_if_rate in [0.0, 1.0]           value=0.4
+  [PASS] base_hallucination_rate in [0.0, 1.0]  value=0.0
+  [PASS] sft_hallucination_rate in [0.0, 1.0]   value=0.0
+  [PASS] total_prompts > 0                   total_prompts=5
+  [PASS] new_hallucination_count ≥ 0         value=0
+  [PASS] Verdict present in Markdown report
+
+=================================================================
+  VALIDATION SUMMARY — 2026-03-09 10:52:09
+=================================================================
+  Total  : 42
+  Passed : 42
+
+  ✓ ALL CHECKS PASSED — Option B pipeline is working correctly.
+=================================================================
+```
+
+---
+
+### 11.2 Instruction-Following Metrics
+
+| Metric | Base (SmolLM2-135M) | SFT (SmolLM2-135M-Instruct) | Delta |
+|---|---|---|---|
+| IF Rate (% prompts followed) | 20.0% | 40.0% | **+20.0 pp** ✅ |
+| Average IF Score | 0.5121 | 0.5871 | +0.075 |
+
+**By category (SFT IF rate):**
+
+| Category | SFT IF Rate | n |
+|---|---|---|
+| factual_qa | 100.0% | 1 |
+| instruction_following | 50.0% | 2 |
+| edge_cases | 0.0% | 1 |
+| reasoning | 0.0% | 1 |
+
+**By difficulty (SFT IF rate):**
+
+| Difficulty | SFT IF Rate | n |
+|---|---|---|
+| easy | 66.7% | 3 |
+| medium | 0.0% | 1 |
+| hard | 0.0% | 1 |
+
+---
+
+### 11.3 Hallucination Metrics
+
+| Metric | Base | SFT | Delta |
+|---|---|---|---|
+| Hallucination detection rate | 0.0% | 0.0% | 0.0% ✅ |
+| Avg hallucination risk delta | — | — | −0.040 |
+| New hallucination cases | — | — | **0** ✅ |
+| Regression prompts (SFT worse by > 10 pp) | — | — | **0** ✅ |
+
+---
+
+### 11.4 Per-Prompt Breakdown
+
+| Prompt ID | Category | Difficulty | Base IF | SFT IF | IF Δ | Base Hall | SFT Hall | New Hall |
+|---|---|---|---|---|---|---|---|---|
+| IF_001 | instruction_following | easy | 0.375 | 0.750 | **+0.375** | 🟢 | 🟢 | No |
+| IF_002 | instruction_following | easy | 0.400 | 0.400 | 0.000 | 🟢 | 🟢 | No |
+| FQ_001 | factual_qa | easy | 0.857 | 0.857 | 0.000 | 🟢 | 🟢 | No |
+| RN_001 | reasoning | medium | 0.500 | 0.500 | 0.000 | 🟢 | 🟢 | No |
+| EC_001 | edge_cases | hard | 0.429 | 0.429 | 0.000 | 🟢 | 🟢 | No |
+
+**Key observation:** The SFT model shows the largest gain on `IF_001` (a numbered-list format constraint), exactly the type of task instruction tuning targets. Performance on pure reasoning (`RN_001`) and edge-case handling (`EC_001`) is unchanged — expected given the small model size.
+
+---
+
+### 11.5 Verdict
+
+```
+Overall Verdict: PASS ✅
+
+  ✅ Instruction-following rate improved (SFT ≥ Base)   +20 pp
+  ✅ No new hallucination patterns introduced            0 cases
+  ✅ No significant regressions detected                 0 prompts
+```
+
+---
+
+## 12. Local Inference Mode (Option C)
+
+Once models are downloaded, you can skip the servers entirely and call models directly in-process using `--inference-mode local`.
+
+```powershell
+cd evaluation
+
+# CPU inference (no servers needed)
+python generate_outputs.py \
+    --inference-mode local \
+    --base-model-path ../models/base \
+    --sft-model-path  ../models/sft \
+    --device cpu \
+    --prompt-ids IF_001 IF_002 FQ_001
+
+# GPU with 4-bit quantization
+python generate_outputs.py \
+    --inference-mode local \
+    --base-model-path meta-llama/Llama-3.1-8B \
+    --sft-model-path  ./checkpoints/sft-v1 \
+    --device cuda --load-in-4bit
+
+# Dry-run preview
+python generate_outputs.py \
+    --inference-mode local \
+    --base-model-path ../models/base \
+    --sft-model-path  ../models/sft \
+    --dry-run
+```
+
+> **Note:** Local mode runs base then SFT **sequentially** (safe for single-GPU). Add `--parallel-local` for multi-GPU setups.
+
+| Flag | Description |
+|---|---|
+| `--inference-mode local` | Use HuggingFace Transformers in-process |
+| `--base-model-path` | HF hub ID or local directory for base model |
+| `--sft-model-path` | HF hub ID or local directory for SFT model |
+| `--device` | `cpu`, `cuda`, `mps`, `auto` |
+| `--load-in-4bit` | ~75% VRAM reduction (requires bitsandbytes + CUDA) |
+| `--load-in-8bit` | ~50% VRAM reduction (requires bitsandbytes + CUDA) |
+| `--trust-remote-code` | For models with custom code (Phi, Falcon, etc.) |
+| `--parallel-local` | Multi-GPU parallel loading |
+
+---
+
+## 13. Troubleshooting
+
+**Server fails to start**
+
+Check log files:
+```powershell
+Get-Content scripts/.pids/base_server_err.log
+Get-Content scripts/.pids/sft_server_err.log
+```
+
+Common causes:
+- Port already in use → `--base-port 8003 --sft-port 8004`
+- transformers not installed → `pip install transformers accelerate`
+- Model directory empty → re-run `setup_experiment.py`
+
+---
+
+**`generate_outputs.py` shows `[ERROR]` in base_error / sft_error**
+
+- Confirm servers are running: `Invoke-WebRequest http://127.0.0.1:8001/health`
+- Check the endpoint in `config.yaml` matches the port the server is listening on
+- Increase `generation.retries` in `config.yaml` for slow CPU servers
+
+---
+
+**`analyze_results.py` — ModuleNotFoundError: metrics**
+
+Fixed in the current codebase. If encountered with older copies:
+```python
+# At top of analyze_results.py, add:
+sys.path.insert(0, str(Path(__file__).parent.parent / "evaluation"))
+```
+
+---
+
+**Validation checklist partial failure**
+
+```powershell
+# Rerun with --skip-server-checks to isolate file/metric issues
+python scripts/validate_option_b.py --skip-server-checks
+```
+
+---
+
+**Running with a larger model (8B+)**
+
+```powershell
+# 1. Setup with new model IDs
+python scripts/setup_experiment.py \
+    --base-model-id meta-llama/Llama-3.1-8B \
+    --sft-model-id  meta-llama/Llama-3.1-8B-Instruct \
+    --device cuda
+
+# 2. Start servers
+python scripts/start_servers.py --device cuda --load-in-4bit
+
+# 3. Increase max_tokens in config/config.yaml:
+#    generation.max_tokens: 1024
+
+# 4. Run all 62 prompts
+cd evaluation
+python generate_outputs.py --config ../config/config.yaml
+```
+
+Memory requirements (approximate):
+
+| Model size | fp16 | 8-bit | 4-bit |
+|---|---|---|---|
+| 135M | < 1 GB | — | — |
+| 7–8B | ~16 GB | ~8 GB | ~5 GB |
+| 13B | ~26 GB | ~13 GB | ~8 GB |
+| 70B | ~140 GB | ~70 GB | ~40 GB |
+
+---
+
+*Last updated: March 9, 2026*
