@@ -124,21 +124,21 @@ if HAS_TRITON:
         byte_offs_n = offs_n // 2  # [BLOCK_N]
         is_high_nibble = (offs_n % 2) == 0  # [BLOCK_N]
         mask_n = offs_n < N
+        mask_m = offs_m < M_e  # [BLOCK_M]
 
         for k_start in range(0, K, BLOCK_K):
-            offs_k = k_start + tl.arange(0, BLOCK_K)
-
-            # Load A tile [BLOCK_M, BLOCK_K]
-            a_ptrs = a_base + offs_m[:, None] * stride_ak + offs_k[None, :]
-            mask_a = (offs_m[:, None] < M_e) & (offs_k[None, :] < K)
-            a_tile = tl.load(a_ptrs, mask=mask_a, other=0.0)
-
-            # Dequantize W tile [BLOCK_K, BLOCK_N] on-the-fly using
-            # vectorized loads per K-row. Triton doesn't support __setitem__
-            # on tensors, so we accumulate a_row * w_row into acc directly.
+            # Dequantize W and accumulate one K-row at a time.
+            # We load A as 1D column vectors per ki iteration instead of
+            # a 2D tile, because Triton doesn't support indexing a 2D
+            # tensor with a constexpr from tl.static_range.
             for ki in tl.static_range(BLOCK_K):
                 k_idx = k_start + ki
-                # Load packed bytes for this row
+
+                # Load A column: a_col[m] = A[start + m, k_idx]  → [BLOCK_M]
+                a_ptrs = a_base + offs_m * stride_ak + k_idx
+                a_col = tl.load(a_ptrs, mask=(mask_m & (k_idx < K)), other=0.0)
+
+                # Load packed bytes for this K-row of W
                 byte_ptrs = w_base + k_idx * half_N + byte_offs_n
                 packed_bytes = tl.load(byte_ptrs, mask=(mask_n & (k_idx < K)), other=0).to(tl.uint8)
 
@@ -171,10 +171,9 @@ if HAS_TRITON:
                 absmax_vals = tl.load(am_base + block_idx, mask=(mask_n & (k_idx < K)), other=1.0)
 
                 # Dequantize: value * absmax → w_row [BLOCK_N]
-                w_row = (val * absmax_vals).to(a_tile.dtype)
+                w_row = (val * absmax_vals).to(tl.float32)
 
                 # Outer product accumulation: a_col [BLOCK_M] × w_row [BLOCK_N]
-                a_col = a_tile[:, ki]  # [BLOCK_M]
                 acc += a_col[:, None] * w_row[None, :]
 
         # Store result

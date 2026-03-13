@@ -176,7 +176,7 @@ def _moe_grouped_nf4(module, sorted_x, expert_counts):
     except ImportError:
         liger_silu_mul = lambda g, u: torch.nn.functional.silu(g) * u
 
-    if has_fused_nf4 and has_lora:
+    if has_fused_nf4 and has_lora and not getattr(module, '_nf4_fused_failed', False):
         try:
             # Gate + Up with fused NF4 dequant + LoRA
             gate_out = nf4_lora_grouped_gemm(
@@ -209,9 +209,11 @@ def _moe_grouped_nf4(module, sorted_x, expert_counts):
             )
             return out.to(dtype=sorted_x.dtype)
         except Exception as fused_exc:
+            # Log once per module, then permanently fall back
+            module._nf4_fused_failed = True
             logger.warning(
                 f"Fused NF4 GEMM failed ({type(fused_exc).__name__}: {fused_exc}), "
-                f"falling back to dequant-then-GEMM"
+                f"permanently falling back to dequant-then-GEMM for this module"
             )
 
     # Fallback: dequantize then use existing grouped GEMM path

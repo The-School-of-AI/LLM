@@ -1355,17 +1355,68 @@ T17_DN_USE_DELTA_ENTRANCE=1 T19_NF4_MOE=1 deepspeed --num_gpus=8 code/main.py \
   --config configs/exp2_1_nf4_qlora_tight.yaml
 ```
 
-### 13.8 Updated Experiment Roadmap
+### 13.8 Experiment 2.1 — 8B NF4 QLoRA Proxy Results
+
+Run date: 2026-03-12. Config: `exp2_1_8bmoe_nf4_qlora_tight.yaml`, 8×A100-80GB, ZeRO-3.
+
+**NF4 Quantization Summary:**
+- 63 expert weight tensors quantized across 21 MoE modules
+- Original bf16: 10.57 GB → NF4: 2.97 GB (71.9% savings, 7.60 GB freed)
+
+**Fused Triton NF4 kernel status:** CompilationError on `a_tile[:, ki]` constexpr indexing.
+Fell back to dequant-then-GEMM every step. Fix applied (1D column loads instead of 2D tile indexing).
+
+| Step | dt (s/it) | loss | toks/s | loss2 | peak |
+|---|---|---|---|---|---|
+| 1 | 23.77 | 12.6107 | 5,515 | 12.5789 | 31.0 |
+| 2 | 8.95 | 12.6376 | 14,652 | 12.5779 | 31.0 |
+| 3 | 8.71 | 12.6305 | 15,051 | 12.5562 | 31.2 |
+| 4 | 8.69 | 12.6146 | 15,077 | 12.5427 | 31.2 |
+| 5 | 8.73 | 12.5970 | 15,008 | 12.5649 | 31.2 |
+| 6 | 8.75 | 12.5933 | 14,972 | 12.5548 | 31.2 |
+| 7 | 8.88 | 12.5996 | 14,763 | 12.5501 | 31.2 |
+| 8 | 8.83 | 12.6174 | 14,849 | 12.5668 | 31.2 |
+| 9 | 8.86 | 12.6160 | 14,799 | 12.5641 | 31.2 |
+| 10 | 8.87 | 12.5950 | 14,776 | 12.5462 | 31.2 |
+| 11 (profiler) | 9.67 | 12.6041 | 13,559 | 12.5679 | 31.2 |
+
+**Steady-state averages (steps 2–10):**
+- Avg tok/s: ~14,905
+- Avg dt: ~8.81 s/it
+- Peak VRAM: 31.0–31.2 GB
+- Avg loss: 12.6105 (epoch average)
+
+**Comparison vs 8B baseline (bf16, fused MoE kernels, no NF4):**
+
+| Metric | 8B Baseline (bf16) | Exp 1.1 (bf16 LoRA) | Exp 2.1 (NF4 QLoRA) |
+|---|---|---|---|
+| Peak VRAM | 49.2 GB | 25.9 GB | 31.2 GB |
+| Avg tok/s | ~12,800 | ~18,420 | ~14,905 |
+| dt (s/it) | ~10.2 | ~7.1 | ~8.8 |
+
+Throughput *increased* vs the 49.2 GB baseline despite the dequant-then-GEMM fallback.
+Root cause: NF4 converts expert base weights from ZeRO-3 partitioned `nn.Parameter` to
+local frozen buffers. This eliminates all-gather/reduce-scatter NCCL traffic for those
+weights every fwd/bwd pass. The communication savings outweigh the local dequant compute cost.
+
+Exp 1.1 is faster still because it keeps bf16 weights without dequant overhead and benefits
+from the same LoRA-only ZeRO-3 partitioning (only LoRA params are ZeRO-managed).
+
+VRAM is higher than Exp 1.1 (31.2 vs 25.9 GB) because the fallback path materializes full
+bf16 expert weights in HBM each forward pass. The fused kernel fix (1D column loads) should
+eliminate this — dequantization will happen tile-by-tile in SRAM, never materializing in HBM.
+
+### 13.9 Updated Experiment Roadmap
 
 | Experiment | Status | VRAM | Throughput | Notes |
 |---|---|---|---|---|
 | 1.1 Expert Explosion LoRA + tight buffers | ✅ 70B done | 74.7 GB | ~12,830 tok/s | 3 GB saved vs baseline 3 |
 | 1.2 Micro-batch=2 + grad_accum=2 | ✅ 8B done | (14.2 GB 8B) | (~13,510 8B) | Ready for 70B |
-| 2.1 NF4 QLoRA (expert weights) | 🔧 Code ready | Target ≤50 GB | Target ≥10k | Run 8B proxy first |
-| 2.2 Full NF4 (experts + attention) | Planned | Target ≤45 GB | Target ≥9k | After 2.1 validation |
+| 2.1 NF4 QLoRA (expert weights) | ✅ 8B done | 31.2 GB (8B) | ~14,905 (8B) | Fused kernel fix applied, re-run needed |
+| 2.2 Full NF4 (experts + attention) | Planned | Target ≤45 GB | Target ≥9k | After 2.1 fused kernel validation |
 | 3.1 Expert offloading (Colab) | Planned | Target ≤30 GB | Target ≥1k | Single GPU path |
 
-### 13.9 File Inventory — New/Modified
+### 13.10 File Inventory — New/Modified
 
 | File | Type | Description |
 |---|---|---|
