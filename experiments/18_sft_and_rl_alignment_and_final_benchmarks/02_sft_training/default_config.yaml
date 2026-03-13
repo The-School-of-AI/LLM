@@ -158,7 +158,43 @@ training:
   warmup_ratio: 0.1
   
   # Weight decay for AdamW
-  weight_decay: 0.01
+  weight_decay: 0.0
+
+# -----------------------------------------------------------------------------
+# Generation Comparison (on checkpoint save)
+# -----------------------------------------------------------------------------
+generation:
+  enabled: true
+  max_new_tokens: 128
+  temperature: 0.7
+  
+  # For standalone compare_generations.py
+  base_model_path: "microsoft/phi-2"
+  adapter_path: null  # Optional: specific checkpoint to compare
+
+  # Qualitative prompts
+  prompts:
+    - "How many days are in a week?"
+    - "What animal is known as the king of the jungle?"
+    - "Write a for loop that prints numbers 1 to 5."
+    - "Write a Python function to add two numbers."
+    - "What is 25 + 37?"
+    - "What is the square root of 144?"
+    - "भारत की राजधानी क्या है?"
+    - "இந்தியாவின் தேசிய விலங்கு என்ன?"
+    - "భారతదేశ ஜాతీయ పక్షి ఏమిటి?"
+    - "What comes next: Monday, Tuesday, Wednesday, ?"
+    - "Name 3 things you find in a kitchen."
+    - "What genre is Sherlock Holmes?"
+    - "Explain what rain is."
+    - "What is 10 + 5? Answer in Hindi."
+    - "List 3 Indian festivals and one sentence about each."
+    - "Count the vowels in the word \"EDUCATION\"."
+
+  # NEFTune noise alpha
+  # Adds uniform noise to embeddings during training (arXiv:2310.05914).
+  # Set to a float (e.g., 5.0) to enable, or null to disable.
+  neftune_noise_alpha: null
   
   # -----------------------------
   # Training Duration

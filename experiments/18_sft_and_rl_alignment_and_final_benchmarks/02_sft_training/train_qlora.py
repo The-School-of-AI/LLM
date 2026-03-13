@@ -31,7 +31,7 @@ from peft import get_peft_model, prepare_model_for_kbit_training
 
 # Local imports
 from qlora_config import QLoRAConfig, create_argument_parser, load_config
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback, TrainingArguments, TrainerState, TrainerControl
 
 # Setup logging
 logging.basicConfig(
@@ -355,6 +355,79 @@ def create_default_reward_function() -> Callable:
 
 
 # =============================================================================
+# Evaluation Callbacks
+# =============================================================================
+
+
+class GenerationComparisonCallback(TrainerCallback):
+    """
+    Callback that generates completions from a set of prompts every time
+    a checkpoint is saved, allowing for qualitative monitoring.
+    """
+
+    def __init__(
+        self,
+        prompts: List[str],
+        tokenizer: Any,
+        output_dir: str,
+        max_new_tokens: int = 128,
+        temperature: float = 0.7,
+    ):
+        self.prompts = prompts
+        self.tokenizer = tokenizer
+        self.output_dir = Path(output_dir)
+        self.max_new_tokens = max_new_tokens
+        self.temperature = temperature
+        self.log_file = self.output_dir / "generation_comparisons.log"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def on_save(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        """Runs generation when a checkpoint is saved."""
+        model = kwargs.get("model")
+        if model is None:
+            return control
+
+        model.eval()
+        step = state.global_step
+        logger.info(f"Running generation comparison for step {step}...")
+
+        with open(self.log_file, "a") as f:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"Step {step} Generation Comparison\n")
+            f.write(f"{'='*80}\n")
+
+            for i, prompt in enumerate(self.prompts):
+                inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
+                
+                with torch.no_grad():
+                    outputs = model.generate(
+                        **inputs,
+                        max_new_tokens=self.max_new_tokens,
+                        temperature=self.temperature,
+                        do_sample=self.temperature > 0,
+                        pad_token_id=self.tokenizer.pad_token_id,
+                    )
+                
+                completion = self.tokenizer.decode(
+                    outputs[0][inputs["input_ids"].shape[1]:], 
+                    skip_special_tokens=True
+                )
+                
+                log_entry = f"\nPROMPT {i+1}:\n{prompt}\n\nRESPONSE:\n{completion}\n{'-'*40}\n"
+                print(log_entry)
+                f.write(log_entry)
+
+        model.train()
+        return control
+
+
+# =============================================================================
 # Training Functions
 # =============================================================================
 
@@ -513,7 +586,27 @@ def train_sft(
         # SFT specific
         max_seq_length=config.model.max_seq_length,
         gradient_checkpointing=config.training.gradient_checkpointing,
+        # NEFTune
+        neftune_noise_alpha=config.training.neftune_noise_alpha,
     )
+
+    if config.training.neftune_noise_alpha is not None:
+        logger.info(f"NEFTune enabled with noise alpha: {config.training.neftune_noise_alpha}")
+    else:
+        logger.info("NEFTune is disabled.")
+
+    # Add generation comparison callback
+    callbacks = []
+    if config.generation.enabled:
+        callbacks.append(
+            GenerationComparisonCallback(
+                prompts=config.generation.prompts,
+                tokenizer=tokenizer,
+                output_dir=output_dir,
+                max_new_tokens=config.generation.max_new_tokens,
+                temperature=config.generation.temperature,
+            )
+        )
 
     # Create trainer
     trainer = SFTTrainer(
@@ -523,6 +616,7 @@ def train_sft(
         eval_dataset=eval_dataset,
         processing_class=tokenizer,
         data_collator=data_collator,
+        callbacks=callbacks,
     )
 
     # Train

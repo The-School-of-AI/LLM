@@ -150,6 +150,21 @@ class DPOSettings:
 
 
 @dataclass
+class GenerationConfig:
+    """Configuration for qualitative generation comparison."""
+
+    enabled: bool = True
+    max_new_tokens: int = 128
+    temperature: float = 0.7
+    # Path to base model (HF model id or local path)
+    base_model_path: Optional[str] = "microsoft/phi-2"
+    # Path to adapter/checkpoint (local path)
+    adapter_path: Optional[str] = None
+    # List of prompts for comparison
+    prompts: List[str] = field(default_factory=list)
+
+
+@dataclass
 class IDFTSettings:
     """IDFT-specific training settings."""
 
@@ -175,7 +190,7 @@ class TrainingConfig:
     learning_rate: float = 2e-5
     lr_scheduler_type: str = "cosine"
     warmup_ratio: float = 0.1
-    weight_decay: float = 0.01
+    weight_decay: float = 0.0
 
     # Duration
     num_train_epochs: int = 1
@@ -203,6 +218,10 @@ class TrainingConfig:
     grpo: GRPOSettings = field(default_factory=GRPOSettings)
     dpo: DPOSettings = field(default_factory=DPOSettings)
     idft: IDFTSettings = field(default_factory=IDFTSettings)
+    generation: GenerationConfig = field(default_factory=GenerationConfig)
+
+    # NEFTune
+    neftune_noise_alpha: Optional[float] = None
 
 
 @dataclass
@@ -272,6 +291,7 @@ class QLoRAConfig:
     data: DataConfig = field(default_factory=DataConfig)
     hardware: HardwareConfig = field(default_factory=HardwareConfig)
     hub: HubConfig = field(default_factory=HubConfig)
+    generation: GenerationConfig = field(default_factory=GenerationConfig)
 
     @classmethod
     def from_yaml(cls, path: str) -> "QLoRAConfig":
@@ -315,6 +335,8 @@ class QLoRAConfig:
             **training_dict, grpo=grpo_settings, dpo=dpo_settings, idft=idft_settings
         )
 
+        generation_config = GenerationConfig(**config_dict.get("generation", {}))
+
         # Data config with nested filters
         data_dict = dict(config_dict.get("data", {}))
         filters = DataFilters(**data_dict.pop("filters", {}))
@@ -334,6 +356,7 @@ class QLoRAConfig:
             data=data_config,
             hardware=hardware_config,
             hub=hub_config,
+            generation=generation_config,
         )
 
     @classmethod
@@ -413,6 +436,12 @@ class QLoRAConfig:
             config.training.idft.clip_B = args.idft_clip_B
             config.training.idft.enabled = True
 
+        if hasattr(args, "gen_base_model") and args.gen_base_model is not None:
+            config.generation.base_model_path = args.gen_base_model
+
+        if hasattr(args, "gen_adapter_path") and args.gen_adapter_path is not None:
+            config.generation.adapter_path = args.gen_adapter_path
+
         if hasattr(args, "use_idft") and args.use_idft:
             config.training.idft.enabled = True
             config.training.method = "idft"
@@ -425,6 +454,9 @@ class QLoRAConfig:
 
         if hasattr(args, "max_samples") and args.max_samples is not None:
             config.data.max_samples = args.max_samples
+
+        if hasattr(args, "neftune_noise_alpha") and args.neftune_noise_alpha is not None:
+            config.training.neftune_noise_alpha = args.neftune_noise_alpha
 
         return config
 
@@ -586,7 +618,14 @@ class QLoRAConfig:
         )
         print(f"  Learning rate: {self.training.learning_rate}")
         print(f"  Max steps: {self.training.max_steps}")
+        print(f"  NEFTune noise alpha: {self.training.neftune_noise_alpha}")
         print(f"  Output dir: {self.training.output_dir}")
+
+        print("\n[Generation Comparison]")
+        print(f"  Enabled: {self.generation.enabled}")
+        print(f"  Base Model: {self.generation.base_model_path}")
+        print(f"  Adapter Path: {self.generation.adapter_path or 'current training checkpoint'}")
+        print(f"  Prompts: {len(self.generation.prompts)} defined")
 
         if self.training.method == "idft" or self.training.idft.enabled:
             print("\n[IDFT]")
@@ -700,6 +739,22 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--idft_clip_B", type=float, help="IDFT phi clipping bound (default: 5.0)"
+    )
+
+    # NEFTune settings
+    parser.add_argument(
+        "--neftune_noise_alpha",
+        type=float,
+        default=None,
+        help="Alpha value for NEFTune noise injection. Recommended range: 5.0-15.0.",
+    )
+
+    # Generation Comparison settings
+    parser.add_argument(
+        "--gen_base_model", type=str, help="Base model for generation comparison"
+    )
+    parser.add_argument(
+        "--gen_adapter_path", type=str, help="Adapter path for generation comparison"
     )
 
     return parser
