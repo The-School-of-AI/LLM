@@ -6,24 +6,30 @@ Single reference for: **datasets to source** (and why), **relevant benchmarks**,
 
 ---
 
-## 1. Final datasets identified to be sourced
+## 1. Final datasets — confirmed list for this 70B MoE
 
-The following datasets are the **proposed set** to source for SFT. For each: **why** we use it, **relevant benchmarks** it supports, and **how to source** (script + IDs).
+**Design principle:** Tulu 3 is the backbone. It already covers general chat, safety, instruction following, code, and math QA. Everything added on top fills a specific gap Tulu 3 doesn't address. No dataset is added speculatively.
 
-| Dataset | Why source it | Relevant benchmarks | Tier |
-|---------|----------------|----------------------|------|
-| **Tulu 3 SFT Mixture** (subsample) | 19-source mixture: code (Evol CodeAlpaca, Persona Python), math (NuminaMath-TIR, Persona MATH/Algebra/GSM), instruction-following (Persona IF). Clear provenance; broad coverage. | MMLU, TriviaQA, MMLU-Pro, GPQA, ARC, GSM8K, BBH, MATH, DROP, IFEval, SimpleQA, TruthfulQA, APPS, MT-Bench, WildBench, L-Eval, RULER | 1 + 3 |
-| **OpenMathInstruct-2** (subsample) | Competition-style math with ground-truth answers; directly targets MATH and harder math. | MATH, AIME 2025, GSM8K | 1 |
-| **Magicoder OSS-Instruct + CodeFeedback-Filtered** | Code with test suites; mechanically verifiable. | HumanEval, MBPP, APPS, DS1000 | 1 |
-| **Tulu 3 instruction-following subset (Persona IF)** | IFEval-style format/length constraints. | IFEval | 1 |
-| **NuminaMath-TIR** (subsample) | AIME-level competition math; ground-truth. | AIME 2025, MATH | 1 |
-| **Spider + BIRD-SQL filtered** | SQL with expected results; mechanically verifiable. | Spider, BIRD (SQL) | 1 |
-| **SWE-smith** (subsample) | SWE-style tasks with testability. | SWE-bench Verified | 1 |
-| **PKU-SafeRLHF** (chosen, subsample) | Structured preference/chosen responses; safety and alignment. | TruthfulQA, safety evals | 2 |
-| **IndicAlign** (subsample, if Indic in scope) | Indic-language instruction data; structured. | IndicGLUE, IndicQA, Indic-Bias, MMLU-Indic | 2 |
-| **General instruction (Tulu 3: FLAN, WildChat, Aya, OpenAssistant)** | Dialogue and general helpfulness; avoid overfitting to only math/code. | MT-Bench, WildBench, broad | 3 |
+### IN — the four datasets we are using
 
-**Budget note:** For a 50–100K SFT budget, subsample from the above (e.g. Tulu 3 subsample + OpenMathInstruct-2 + Magicoder/CodeFeedback + Tulu 3 IF as core). Document exact mix and sizes.
+| Dataset | Count | What gap it fills | Benchmarks | Status |
+|---------|-------|-------------------|------------|--------|
+| **Tulu 3 SFT Mixture** | **939K (full)** | The validated 70B SFT base. Covers: general chat (WildChat, No Robots, OASST, UltraChat), safety (WildGuardMix 50K + WildJailbreak 50K + CoCoNot 11K), instruction following (Persona IF), code (Evol CodeAlpaca, Persona Python), math QA (NuminaMath-TIR 64K), FLAN, StackExchange. Don't subsample — it's already curated for 70B. | MMLU, GSM8K, MATH, IFEval, TruthfulQA, HumanEval, MT-Bench, WildBench, ARC, BBH | Decontaminated ✓ |
+| **OpenThoughts3-1.2M** | **150K subsample** | The one critical gap in Tulu 3: **reasoning behavior**. R1-style long-form reasoning traces — teaches the model to reason step-by-step. 850K math + 250K code + 100K science; already includes AIME/AMC/Olympiad-level problems. Subsample proportionally: ~106K math + ~31K code + ~13K science. ⚠️ Must be mixed with Tulu 3 — SFT on reasoning traces alone degrades instruction following (arXiv:2507.00432). | MATH, AIME 2025, GSM8K, HumanEval, GPQA | Pending sourcing |
+| **IndicAlign** | **50K subsample** | The model-specific gap: **Indic chat behavior**. The model understands Indic languages (from sangraha + ai-bharath pretraining) but hasn't learned to respond in them. All 14 IndicAlign languages exist in pretraining — no wasted data. Mostly machine-translated via IndicTrans2; quality is strong for major languages (Hindi, Bengali, Tamil, Telugu). | IndicGLUE, IndicQA, MMLU-Indic | Pending decontamination |
+| **SWE-smith** | **25K subsample** | Real-world software engineering tasks — the one code type Tulu 3 doesn't cover. Given 22% code pretraining (StarCoder), the model has strong code foundations; SWE-style tasks will have high ROI. | SWE-bench Verified | Pending decontamination |
+
+**Total: ~1.16M examples, 2 epochs.**
+
+### OUT — dropped and why
+
+| Dataset | Reason dropped |
+|---------|---------------|
+| **OpenMathInstruct-2** | Math over-allocation. Tulu 3 already has NuminaMath-TIR 64K; OpenThoughts3 adds 106K math reasoning traces. Total math is already ~170K on a model with 5.4% math pretraining. Adding 80K more standard math QA biases the model's behavior without proportional pretraining support. Hold for a targeted second-round SFT if post-eval shows math is weak. |
+| **NuminaMath-TIR (standalone)** | Already inside Tulu 3 (64K). Pure duplication. |
+| **Magicoder OSS-Instruct + CodeFeedback-Filtered** | Tulu 3 already has code (Evol CodeAlpaca, Persona Python). Add back only if post-SFT HumanEval/MBPP eval shows code is specifically weak. Both are decontaminated and ready if needed. |
+| **Spider + BIRD-SQL** | No SQL in pretraining. SFT cannot teach knowledge the model doesn't have. Drop unless explicit product requirement. |
+| **PKU-SafeRLHF** | DPO/preference dataset, not SFT. Hold for DPO stage. Safety already covered by Tulu 3. |
 
 ---
 
@@ -48,15 +54,17 @@ python source_datasets.py --output-dir /path/to/raw_data --datasets tulu3 openma
 | Dataset | Hugging Face ID / source |
 |---------|---------------------------|
 | Tulu 3 SFT Mixture | `allenai/tulu-3-sft-mixture` |
-| OpenMathInstruct-2 | `nvidia/OpenMathInstruct-2` |
-| Magicoder OSS-Instruct | `ise-uiuc/Magicoder-OSS-Instruct-75K` |
-| CodeFeedback-Filtered | (check HF for CodeFeedback / Magicoder filtered variants) |
-| NuminaMath-TIR | `AI-MO/NuminaMath-TIR` |
-| Spider (filtered) | `xlangai/spider` (use train split) |
-| BIRD-SQL filtered | `birdsql/bird23-train-filtered` or `PipableAI/pip-txt-to-sql-spider-bird-dataset` |
-| SWE-smith | (check HF: SWE-GYM / SWE-smith) |
-| PKU-SafeRLHF | `PKU-Alignment/PKU-SafeRLHF` (use chosen responses) |
-| IndicAlign | (check HF: IndicAlign instruction data) |
+| OpenThoughts3-1.2M | `open-thoughts/OpenThoughts3-1.2M` (subsample ~150K: ~106K math + ~31K code + ~13K science) |
+| IndicAlign | `ai4bharat/indic-align` (subsample 50K across 14 languages) |
+| SWE-smith | `SWE-bench/SWE-smith` (subsample 25K) |
+
+**On-deck (add only if post-SFT eval shows specific weakness):**
+
+| Dataset | HF path | Add if... |
+|---------|---------|-----------|
+| Magicoder OSS-Instruct | `ise-uiuc/Magicoder-OSS-Instruct-75K` | HumanEval/MBPP weak post-eval |
+| CodeFeedback-Filtered | `m-a-p/CodeFeedback-Filtered-Instruction` | HumanEval/MBPP weak post-eval |
+| OpenMathInstruct-2 | `nvidia/OpenMathInstruct-2` | MATH/AIME weak after first SFT round |
 
 If a dataset is not on HF or has a different ID, edit `source_datasets.py` or the config it uses. Sourcing can also be done manually via `datasets.load_dataset("org/name")` and export to JSONL.
 
@@ -64,7 +72,30 @@ If a dataset is not on HF or has a different ID, edit `source_datasets.py` or th
 
 ## 3. Decontamination (no benchmark contamination)
 
-We must ensure **no benchmark test-set content** appears in SFT data. Use the following scripts.
+We must ensure **no benchmark test-set content** appears in SFT data. **Decontamination is a blocker, not a nice-to-have** — without it, eval numbers are meaningless.
+
+### Decontamination status
+
+| Dataset | Status |
+|---------|--------|
+| Tulu 3 SFT Mixture | ✓ Done |
+| OpenThoughts3-1.2M (subsample ~150K) | ❌ Pending |
+| IndicAlign (50K) | ❌ Pending |
+| SWE-smith (25K) | ❌ Pending |
+| Magicoder OSS-Instruct *(on-deck)* | ✓ Done (ready if needed) |
+| CodeFeedback-Filtered *(on-deck)* | ✓ Done (ready if needed) |
+| OpenMathInstruct-2 *(on-deck)* | ❌ Not started (decontaminate before use) |
+
+**Priority:** OpenThoughts3 contains NuminaMath-derived math problems — run 13-gram overlap check against MATH + GSM8K test sets before training.
+
+### Decontamination method
+
+Two complementary checks are required:
+
+1. **Exact hash match** (current scripts) — SHA256 of normalized text. Catches verbatim copies.
+2. **13-gram overlap** — Remove any SFT example where >10% of 13-grams overlap with any test-set example. Required for math datasets where problems are paraphrased but structurally identical. Run against: GSM8K, MATH, MMLU, HumanEval, IFEval, TruthfulQA, ARC, HellaSwag, WinoGrande, AlpacaEval, MT-Bench.
+
+The existing scripts cover (1). Add an n-gram overlap pass for (2) on all math datasets before training.
 
 ### 3.1 Build benchmark test-set hashes
 
@@ -182,7 +213,37 @@ Use `decontaminated.jsonl` (or `standardized.jsonl` if you skip decontamination)
 
 ---
 
-## 8. Quick reference — script summary
+## 8. Target data mix — 70B MoE (4 datasets, ~1.16M, 2 epochs)
+
+This is the actual mix for this model.
+
+| Dataset | Count | % of total | What it provides |
+|---------|-------|-----------|-----------------|
+| **Tulu 3 SFT Mixture** | 939K | 81% | General chat, safety, IF, code, math QA, FLAN — the complete base |
+| **OpenThoughts3-1.2M subsample** | 150K | 13% | Reasoning behavior (R1-style traces): ~106K math + ~31K code + ~13K science |
+| **IndicAlign** | 50K | 4% | Indic chat behavior across 14 languages |
+| **SWE-smith** | 25K | 2% | Real-world software engineering tasks |
+| **Total** | **~1.16M** | **100%** | |
+
+**2 epochs. Hard limit — MoE models overfit faster than dense models.**
+
+**Why this allocation makes sense for this specific model:**
+
+| Pretraining domain | % of pretraining | SFT allocation | Reasoning |
+|---|---|---|---|
+| General web (B1) | 75% | ~81% via Tulu 3 | Tulu 3's general chat activates the broad web knowledge |
+| Code (B3) | 22% | ~15% (Tulu 3 code + SWE-smith + OpenThoughts3 code traces) | High ROI — deep code foundation already exists |
+| Indic (B0+B1+B2) | significant | ~4% IndicAlign | Differentiator; model understands, needs to learn to respond |
+| Math (B4+B5) | 5.4% | ~13% OpenThoughts3 + Tulu 3 NuminaMath | Reasoning behavior, not raw math QA — proportional to pretraining |
+
+**What's deliberately excluded:**
+- OpenMathInstruct-2, NuminaMath-TIR standalone: math is already ~170K examples in this mix (Tulu 3's 64K + OpenThoughts3's 106K). That's proportional to 5.4% math pretraining. More would over-index.
+- Magicoder + CodeFeedback: Tulu 3 has code. Add only if HumanEval/MBPP show specific weakness post-eval.
+- All preference/DPO data: held for DPO stage.
+
+---
+
+## 9. Quick reference — script summary
 
 | Purpose | Script | Key args |
 |---------|--------|----------|
