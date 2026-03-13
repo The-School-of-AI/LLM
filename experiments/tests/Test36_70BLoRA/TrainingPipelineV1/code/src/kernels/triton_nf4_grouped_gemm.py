@@ -322,23 +322,35 @@ class NF4GroupedGEMMFn(torch.autograd.Function):
 
         # --- Input gradient: dx = go @ dequant(W_nf4)^T + grad_lora_mid @ A ---
         # For dx_base, we need W^T. We dequant W and transpose.
-        # This is the one place we materialize the full weight — but only
-        # for the backward pass, and only the experts that have tokens.
-        # Alternative: write a transposed NF4 kernel. For now, dequant per-expert.
-        from .nf4_quantize import NF4_LEVELS, _dequantize_block_nf4
+        # Batched vectorized dequantization — all experts at once, no Python loop.
+        from .nf4_quantize import NF4_LEVELS
 
-        # Dequantize all expert weights for backward (needed for dx)
-        # TODO: Replace with fused NF4 transposed GEMM kernel to avoid materialization
         nf4_levels = NF4_LEVELS.to(x.device)
-        W_full = torch.empty(E, K, N, device=x.device, dtype=x.dtype)
-        for e in range(E):
-            numel = K * N
-            flat = _dequantize_block_nf4(
-                w_packed[e], absmax[e], numel, block_size, nf4_levels, x.dtype
-            )
-            W_full[e] = flat.view(K, N)
+        numel = K * N
 
-        W_full_t = W_full.transpose(-2, -1).contiguous()  # [E, N, K]
+        # Unpack all experts at once: w_packed is [E, K*N//2] uint8
+        high = (w_packed >> 4) & 0x0F          # [E, K*N//2]
+        low = w_packed & 0x0F                   # [E, K*N//2]
+        # Interleave high/low to get [E, K*N] indices
+        indices = torch.stack([high, low], dim=2).reshape(E, -1).long()  # [E, K*N]
+        indices = indices[:, :numel]            # trim any padding
+
+        # Lookup NF4 values for all experts at once
+        values = nf4_levels[indices].float()    # [E, K*N]
+
+        # Apply per-block absmax scaling
+        pad = (block_size - numel % block_size) % block_size
+        padded_N_total = numel + pad
+        if pad > 0:
+            values = F.pad(values, (0, pad))    # [E, padded_N_total]
+        num_blocks = padded_N_total // block_size
+        values = values.view(E, num_blocks, block_size)
+        values = values * absmax[:, :num_blocks].unsqueeze(2)  # [E, num_blocks, block_size]
+        values = values.reshape(E, -1)[:, :numel]  # [E, K*N]
+
+        W_full_t = values.view(E, K, N).transpose(-2, -1).contiguous().to(x.dtype)  # [E, N, K]
+        del values, indices, high, low  # free intermediates
+
         grad_x = _grouped_gemm_forward(grad_output, W_full_t, offsets, E, max_M)
 
         # Add LoRA contribution to dx

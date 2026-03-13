@@ -85,6 +85,7 @@ def quantize_moe_experts(
             for pname in expert_params:
                 param = getattr(module, pname)
                 original_shape = shapes[pname]
+                E, K, N = original_shape
 
                 # For ZeRO-3: need to gather the full parameter first
                 if hasattr(param, 'ds_id'):
@@ -95,28 +96,37 @@ def quantize_moe_experts(
                 else:
                     full_data = param.data
 
-                # Quantize to NF4
-                nf4_param = quantize_tensor_nf4(full_data, config)
+                # Quantize each expert separately so packed/absmax are [E, ...]
+                # This ensures the Triton kernel can index by expert dimension.
+                packed_list = []
+                absmax_list = []
+                for e in range(E):
+                    nf4_e = quantize_tensor_nf4(full_data[e], config)
+                    packed_list.append(nf4_e.packed)
+                    absmax_list.append(nf4_e.absmax)
+
+                # Stack into [E, packed_per_expert] and [E, blocks_per_expert]
+                packed_stacked = torch.stack(packed_list, dim=0)   # [E, K*N//2]
+                absmax_stacked = torch.stack(absmax_list, dim=0)   # [E, blocks_per_expert]
 
                 # Store NF4 data as buffers on the module
                 module.register_buffer(
-                    f'{pname}_nf4_packed', nf4_param.packed
+                    f'{pname}_nf4_packed', packed_stacked
                 )
                 module.register_buffer(
-                    f'{pname}_nf4_absmax', nf4_param.absmax
+                    f'{pname}_nf4_absmax', absmax_stacked
                 )
                 # Store metadata
-                setattr(module, f'{pname}_nf4_shape', nf4_param.original_shape)
-                setattr(module, f'{pname}_nf4_numel', nf4_param.original_numel)
-                setattr(module, f'{pname}_nf4_block_size', nf4_param.block_size)
+                setattr(module, f'{pname}_nf4_shape', original_shape)
+                setattr(module, f'{pname}_nf4_numel', E * K * N)
+                setattr(module, f'{pname}_nf4_block_size', config.block_size)
 
                 # Delete original bf16 parameter to free memory
                 delattr(module, pname)
 
                 count += 1
-                E, K, N = original_shape
                 bf16_mb = E * K * N * 2 / 1e6
-                nf4_mb = nf4_param.nbytes() / 1e6
+                nf4_mb = (packed_stacked.nbytes + absmax_stacked.nbytes) / 1e6
                 logger.info(
                     f"  NF4: {mod_name}.{pname} [{E}×{K}×{N}] "
                     f"bf16={bf16_mb:.1f}MB → nf4={nf4_mb:.1f}MB "
@@ -132,21 +142,30 @@ def quantize_moe_experts(
 
 
 def _get_nf4_weight(module, param_name):
-    """Dequantize an NF4 expert weight back to compute dtype."""
+    """Dequantize an NF4 expert weight back to compute dtype.
+
+    Handles per-expert packed layout: packed is [E, K*N//2], absmax is [E, blocks_per_expert].
+    Returns [E, K, N] dequantized weight tensor.
+    """
     from .kernels.nf4_quantize import NF4_LEVELS, _dequantize_block_nf4
 
-    packed = getattr(module, f'{param_name}_nf4_packed')
-    absmax = getattr(module, f'{param_name}_nf4_absmax')
-    shape = getattr(module, f'{param_name}_nf4_shape')
-    numel = getattr(module, f'{param_name}_nf4_numel')
+    packed = getattr(module, f'{param_name}_nf4_packed')     # [E, K*N//2]
+    absmax = getattr(module, f'{param_name}_nf4_absmax')     # [E, blocks_per_expert]
+    shape = getattr(module, f'{param_name}_nf4_shape')       # (E, K, N)
     block_size = getattr(module, f'{param_name}_nf4_block_size')
     compute_dtype = module._nf4_compute_dtype
 
+    E, K, N = shape
+    numel_per_expert = K * N
     nf4_levels = NF4_LEVELS.to(packed.device)
-    flat = _dequantize_block_nf4(
-        packed, absmax, numel, block_size, nf4_levels, compute_dtype
-    )
-    return flat.view(shape)
+
+    experts = []
+    for e in range(E):
+        flat = _dequantize_block_nf4(
+            packed[e], absmax[e], numel_per_expert, block_size, nf4_levels, compute_dtype
+        )
+        experts.append(flat.view(K, N))
+    return torch.stack(experts, dim=0)  # [E, K, N]
 
 
 def _moe_grouped_nf4(module, sorted_x, expert_counts):
