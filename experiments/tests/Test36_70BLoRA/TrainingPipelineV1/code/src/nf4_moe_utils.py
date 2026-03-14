@@ -208,8 +208,14 @@ def _moe_grouped_nf4(module, sorted_x, expert_counts):
     if getattr(module, '_nf4_use_cache', False):
         original_fn = getattr(module, '_nf4_original_moe_grouped', None)
         if original_fn is not None:
+            if not getattr(module, '_nf4_cache_logged', False):
+                logger.info("[NF4-V3] Using CACHED bf16 + original _moe_grouped (zero-overhead path)")
+                module._nf4_cache_logged = True
             return original_fn(sorted_x, expert_counts)
         # Fallback if original wasn't saved (shouldn't happen)
+        if not getattr(module, '_nf4_cache_logged', False):
+            logger.info("[NF4-V3] Using CACHED bf16 + _run_baseline_grouped fallback")
+            module._nf4_cache_logged = True
         return _run_baseline_grouped(
             module, sorted_x, expert_counts, liger_silu_mul
         )
@@ -498,7 +504,7 @@ def patch_moe_nf4_forward(model: nn.Module) -> int:
         module._moe_vectorized = _make_nf4_vectorized(module)
         count += 1
         cache_status = "cached bf16" if getattr(module, '_nf4_use_cache', False) else "on-the-fly dequant"
-        logger.info(f"  NF4 forward patched: {mod_name} [{cache_status}]")
+        logger.info(f"  [NF4-V3] forward patched: {mod_name} [{cache_status}]")
 
     return count
 
