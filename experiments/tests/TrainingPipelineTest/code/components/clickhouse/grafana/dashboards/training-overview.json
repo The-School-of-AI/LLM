@@ -1,0 +1,782 @@
+{
+  "uid": "p12-training-overview",
+  "title": "Training Overview",
+  "description": "P12 Training Observability — loss, throughput, GPU, checkpoints",
+  "tags": ["training", "p12"],
+  "timezone": "utc",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "type": "query",
+        "label": "Run",
+        "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+        "query": "SELECT DISTINCT run_id FROM training_observability.metric_points ORDER BY run_id DESC LIMIT 50",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "current": {},
+        "sort": 0
+      },
+      {
+        "name": "rank",
+        "type": "query",
+        "label": "Rank",
+        "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+        "query": "SELECT DISTINCT rank FROM training_observability.metric_points WHERE run_id = '${run_id}' ORDER BY rank",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 0
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Training Loss",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS loss, concat('rank-', toString(rank)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'loss' AND ($__conditionalAll(rank IN (${rank:csv}), $rank)) AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 3,
+            "showPoints": "auto",
+            "spanNulls": true
+          },
+          "unit": "none",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["min", "max", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Learning Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS lr FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'lr' AND rank = 0 AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "orange", "mode": "fixed" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "none",
+          "decimals": 6
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["max", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Tokens / Second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS tok_sec, concat('rank-', toString(rank)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric IN ('tokens_per_second', 'tok_sec') AND ($__conditionalAll(rank IN (${rank:csv}), $rank)) AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "locale",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Step Time (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS dt_ms, concat('rank-', toString(rank)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'dt_ms' AND ($__conditionalAll(rank IN (${rank:csv}), $rank)) AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "ms",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "min", "max"] }
+      }
+    },
+    {
+      "id": 5,
+      "title": "GPU Utilization (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS util, concat('gpu-', toString(device)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'sys.gpu.util_percent' AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineWidth": 1,
+            "spanNulls": true
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 6,
+      "title": "GPU Memory Used (GB)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value / 1073741824 AS mem_gb, concat('gpu-', toString(device)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'sys.gpu.mem_used_bytes' AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 1,
+            "spanNulls": true
+          },
+          "unit": "decgbytes",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "id": 7,
+      "title": "GPU Temperature (C)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS temp_c, concat('gpu-', toString(device)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'sys.gpu.temperature_c' AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "spanNulls": true
+          },
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          },
+          "custom.thresholdsStyle": { "mode": "line" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "id": 8,
+      "title": "GPU Power (W)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS power_w, concat('gpu-', toString(device)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'sys.gpu.power_w' AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "spanNulls": true
+          },
+          "unit": "watt",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "id": 9,
+      "title": "CPU / RAM",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value, metric AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric IN ('sys.cpu_percent', 'sys.mem_percent') AND rank = 0 AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 1,
+            "spanNulls": true
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "id": 10,
+      "title": "GPU Alloc / Peak Reserved (GB) — per rank",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS gb, concat(metric, ' r', toString(rank)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric IN ('gpu_alloc_gb', 'gpu_peak_reserved_gb') AND ($__conditionalAll(rank IN (${rank:csv}), $rank)) AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "decgbytes",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["max", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Gradient Norm",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value AS grad_norm FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric IN ('gradient_norm', 'grad_norm') AND rank = 0 AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "none",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 20,
+      "title": "Checkpoints",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 40 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time, step, s3_key, loss, tag, if(is_protected, 'YES', '') AS protected, status, duration_s, formatReadableSize(size_bytes) AS size FROM training_observability.checkpoints FINAL WHERE run_id = '${run_id}' ORDER BY step DESC LIMIT 50",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "loss" },
+            "properties": [{ "id": "decimals", "value": 4 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "duration_s" },
+            "properties": [{ "id": "decimals", "value": 1 }, { "id": "unit", "value": "s" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "protected" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "step", "desc": true }]
+      }
+    },
+    {
+      "id": 21,
+      "title": "Events",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time, step, event_type, severity, message, host, rank FROM training_observability.events WHERE run_id = '${run_id}' AND $__timeFilter(event_time) ORDER BY event_time DESC LIMIT 100",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "severity" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              {
+                "id": "mappings",
+                "value": [
+                  { "options": { "info": { "color": "blue", "text": "INFO" } }, "type": "value" },
+                  { "options": { "warn": { "color": "yellow", "text": "WARN" } }, "type": "value" },
+                  { "options": { "error": { "color": "red", "text": "ERROR" } }, "type": "value" },
+                  { "options": { "fatal": { "color": "dark-red", "text": "FATAL" } }, "type": "value" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "event_time", "desc": true }]
+      }
+    },
+    {
+      "id": 30,
+      "title": "Current Loss",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 56 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT value FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'loss' AND rank = 0 ORDER BY event_time DESC LIMIT 1",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "decimals": 4,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "value" }
+    },
+    {
+      "id": 31,
+      "title": "Current Step",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 56 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT max(step) AS step FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'loss'",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "unit": "locale",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "value" }
+    },
+    {
+      "id": 32,
+      "title": "Current Tok/s",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 56 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT value FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric IN ('tokens_per_second', 'tok_sec') AND rank = 0 ORDER BY event_time DESC LIMIT 1",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "unit": "locale",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "value" }
+    },
+    {
+      "id": 33,
+      "title": "Checkpoints Saved",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 56 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT count() FROM training_observability.checkpoints FINAL WHERE run_id = '${run_id}'",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "unit": "locale",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "value" }
+    },
+    {
+      "id": 34,
+      "title": "Total Log Entries",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 56 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT count() FROM training_observability.metric_points WHERE run_id = '${run_id}'",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "super-light-blue", "mode": "fixed" },
+          "unit": "locale",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "value" }
+    },
+    {
+      "id": 35,
+      "title": "Max GPU Temp",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 56 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT max(value) FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'sys.gpu.temperature_c' AND $__timeFilter(event_time)",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          },
+          "unit": "celsius",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "value" }
+    },
+    {
+      "id": 40,
+      "title": "OPUS Alignment Score",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 60 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value, concat('rank-', toString(rank)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'opus_alignment' AND ($__conditionalAll(rank IN (${rank:csv}), $rank)) AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true },
+          "unit": "none",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 41,
+      "title": "OPUS Redundancy",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 60 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value, concat('rank-', toString(rank)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'opus_redundancy' AND ($__conditionalAll(rank IN (${rank:csv}), $rank)) AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true },
+          "unit": "none",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 42,
+      "title": "OPUS Entropy",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 60 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value, concat('rank-', toString(rank)) AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'opus_entropy' AND ($__conditionalAll(rank IN (${rank:csv}), $rank)) AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true },
+          "unit": "none",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+      }
+    },
+    {
+      "id": 43,
+      "title": "OPUS Phase Timings (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 68 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT event_time AS time, value, metric AS series FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric IN ('opus_selector_ms', 'opus_forward_ms', 'opus_backward_ms') AND rank = 0 AND $__timeFilter(event_time) ORDER BY event_time",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 50,
+            "lineWidth": 0,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "ms",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "id": 44,
+      "title": "Loss by Step (scatter)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 68 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-p12" },
+      "targets": [
+        {
+          "rawSql": "SELECT toFloat64(step) AS time, value AS loss FROM training_observability.metric_points WHERE run_id = '${run_id}' AND metric = 'loss' AND rank = 0 ORDER BY step",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "dark-blue", "mode": "fixed" },
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 4,
+            "spanNulls": false
+          },
+          "unit": "none",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "hidden" }
+      }
+    }
+  ]
+}
