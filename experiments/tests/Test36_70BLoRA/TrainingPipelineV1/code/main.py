@@ -215,6 +215,14 @@ class Config:
         self.nf4_double_quant = _nf4.get("double_quant", True)
         self.nf4_quantize_experts = _nf4.get("quantize_experts", True)
 
+        # SVD Expert Compression configuration (optional)
+        _svd = config_dict.get("svd", {})
+        self.svd_enabled = _svd.get("enabled", False)
+        self.svd_target_rank = _svd.get("target_rank", 64)
+        self.svd_analyze_only = _svd.get("analyze_only", False)
+        self.svd_analyze_ranks = _svd.get("analyze_ranks", [8, 16, 32, 64, 128, 256])
+        self.svd_max_experts_analyze = _svd.get("max_experts_analyze", 0)
+
 
 def load_config(config_path: str = "config.yaml") -> Config:
     if not os.path.exists(config_path):
@@ -593,6 +601,33 @@ def main():
         print_rank_0(f"  NF4: {n_quantized} expert weight tensors quantized")
         print_rank_0(f"  NF4: {n_patched} MoE modules patched for NF4 forward")
         print_nf4_summary(model)
+
+    # ========================================
+    # Step 2.8: SVD Expert Compression (optional)
+    # ========================================
+    if args.svd_enabled:
+        from src.svd_moe_utils import (
+            analyze_svd_spectrum, decompose_moe_experts_svd,
+            patch_moe_svd_forward, print_svd_summary,
+        )
+        if args.svd_analyze_only:
+            print_rank_0("\n[2.8/5] Analyzing SVD spectrum of MoE expert weights...")
+            analyze_svd_spectrum(
+                model,
+                ranks=args.svd_analyze_ranks,
+                max_experts_per_layer=args.svd_max_experts_analyze,
+                verbose=True,
+            )
+            print_rank_0("  SVD analysis complete (analyze_only=true, skipping decomposition)")
+        else:
+            print_rank_0(f"\n[2.8/5] SVD-compressing MoE expert weights (rank={args.svd_target_rank})...")
+            n_decomposed = decompose_moe_experts_svd(
+                model, target_rank=args.svd_target_rank, verbose=True,
+            )
+            n_patched_svd = patch_moe_svd_forward(model)
+            print_rank_0(f"  SVD: {n_decomposed} expert weight tensors decomposed")
+            print_rank_0(f"  SVD: {n_patched_svd} MoE modules patched for SVD forward")
+            print_svd_summary(model)
 
     # ========================================
     # Step 3: Initialize DeepSpeed
