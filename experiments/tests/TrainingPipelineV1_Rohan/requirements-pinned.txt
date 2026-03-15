@@ -1,0 +1,29 @@
+# PINNED versions — verified leak-free on GCP L4 + AWS P4de (2026-03-03)
+# DO NOT upgrade without re-running the 20-step d_alloc=+0.00G leak test.
+#
+# ISOLATION TEST RESULTS (2026-03-03):
+#   torch 2.10.0 causes +14.96G/step leak (OOM by step 4) — DO NOT USE
+#   torch 2.9.0 + triton 3.6.0 + FLA d792da6 = leak-free, ~20k tok/s
+#   torch 2.7.1 + triton 3.6.0 + FLA d792da6 = leak-free, ~20.7k tok/s (chosen)
+#
+# Install with:
+#   pip install -r requirements-pinned.txt --index-url https://download.pytorch.org/whl/cu128
+
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
+triton==3.3.1
+deepspeed==0.18.6
+flash-linear-attention @ git+https://github.com/sustcsonglin/flash-linear-attention@d792da6dd544d28980205817b20535500c3f243e
+grouped-gemm==0.3.0
+einops==0.8.2
+transformers>=4.35.0
+datasets>=2.14.0
+accelerate>=0.24.0
+safetensors>=0.7.0
+tqdm>=4.65.0
+boto3
+pyyaml
+huggingface_hub
+numpy>=1.24.0
+pandas>=2.0.0
+ninja

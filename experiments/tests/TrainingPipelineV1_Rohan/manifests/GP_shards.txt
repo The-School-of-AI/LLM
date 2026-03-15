@@ -1,0 +1,11 @@
+golden_proxy/band_golden_proxy/shard_000000
+golden_proxy/band_golden_proxy/shard_000001
+golden_proxy/band_golden_proxy/shard_000002
+golden_proxy/band_golden_proxy/shard_000003
+golden_proxy/band_golden_proxy/shard_000004
+golden_proxy/band_golden_proxy/shard_000005
+golden_proxy/band_golden_proxy/shard_000006
+golden_proxy/band_golden_proxy/shard_000007
+golden_proxy/band_golden_proxy/shard_000008
+golden_proxy/band_golden_proxy/shard_000009
+golden_proxy/band_golden_proxy/shard_000010
