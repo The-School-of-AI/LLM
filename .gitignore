@@ -6,3 +6,5 @@ LLM/experiments/tests/*/results/
 **/__pycache__/
 **/*.pyc
 **/*.pyo
+*.env
+*.crt
