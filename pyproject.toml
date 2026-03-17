@@ -4,7 +4,15 @@ version = "0.1.0"
 description = "TSAI 70B LLM Training"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "click>=8.3.1",
+    "pyarrow>=23.0.1",
+    "pyyaml>=6.0.3",
+    "rich>=14.3.3",
+]
 
 [tool.uv]
-workspace = { members = ["experiments/3_coreset_engineering"] }
+workspace = { members = [
+    "experiments/3_coreset_engineering",
+    "experiments/18_sft_and_rl_alignment_and_final_benchmarks/sft_training_new",
+] }
