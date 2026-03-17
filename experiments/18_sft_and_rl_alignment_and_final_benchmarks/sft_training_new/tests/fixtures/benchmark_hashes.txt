@@ -1,0 +1,5 @@
+# Tiny benchmark hash file for testing decontamination.
+# Contains the SHA-256 hash of the prompt "BENCHMARK_TEST_PROMPT_DO_NOT_TRAIN"
+# (normalized: strip + collapse whitespace).
+# SHA-256("BENCHMARK_TEST_PROMPT_DO_NOT_TRAIN"):
+b10a8db164e0754105b7a99be72e3fe5b8a8ef8a30e4f2c1baa4d0d9b7b1c23a
