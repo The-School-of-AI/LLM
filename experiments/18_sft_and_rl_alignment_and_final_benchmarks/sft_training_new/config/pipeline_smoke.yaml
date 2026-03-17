@@ -1,0 +1,157 @@
+# ==============================================================================
+# Smoke-test config — 100 synthetic examples, no HuggingFace downloads.
+# Uses GPT-2 tokenizer (public, fast) for Stage 4.
+# Run: python cli.py --config config/pipeline_smoke.yaml run-all
+# ==============================================================================
+
+global:
+  seed: 42
+  log_level: "DEBUG"
+  work_dir: "./smoke_run"
+  output_dir: "./smoke_output"
+  shard_size_mb: 1
+  num_proc: 1
+  arrow_compression: "lz4"
+  save_intermediates: true
+  resume_from_stage: 0
+
+stage0:
+  enabled: false                   # Smoke test provides its own fixture file
+  output_file: "stage0_mixed.jsonl"
+  total_target: 100
+  sources: []
+
+stage1:
+  enabled: true
+  input_file: "smoke_input.jsonl"  # Caller must copy tests/fixtures/smoke_100.jsonl here
+  output_file: "stage1_validated.jsonl"
+  rejected_file: "stage1_rejected.jsonl"
+  accepted_formats: ["jsonl"]
+  required_roles: ["user", "assistant"]
+  allow_system_turn: true
+  allow_multi_turn: true
+  require_last_turn_is_assistant: true
+  min_turns: 2
+  max_turns: 64
+  min_content_chars: 1
+
+stage2:
+  enabled: true
+  input_file: "stage1_validated.jsonl"
+  output_file: "stage2_cleaned.jsonl"
+  rejected_file: "stage2_rejected.jsonl"
+
+  length_filter:
+    enabled: true
+    min_chars: 10
+    max_chars: 100000
+    min_tokens: 2
+    max_tokens: 99999
+    tokenizer_name_or_path: null
+
+  lang_filter:
+    enabled: false                 # Off: synthetic data is always "en"
+
+  exact_dedup:
+    enabled: true
+    hash_mode: "prompt"
+
+  near_dedup:
+    enabled: true
+    num_perm: 64                   # Fewer perms for speed in smoke test
+    threshold: 0.85
+    hash_field: "user_content"
+    ngram_size: 3
+
+  toxicity_filter:
+    enabled: false                 # Off: synthetic data is clean
+
+  pii_filter:
+    enabled: true
+    backend: "regex"
+    regex_patterns:
+      email: '[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}'
+      phone: '\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'
+      ssn: '\b\d{3}-\d{2}-\d{4}\b'
+    action: "drop"
+    check_roles: ["user", "assistant"]
+
+  repetition_filter:
+    enabled: true
+    max_repetition_ratio: 0.60    # Relaxed for smoke test
+    ngram_size: 4
+    check_roles: ["assistant"]
+
+  slop_filter:
+    enabled: false                 # Off: no slop patterns needed for smoke
+
+  benchmark_decontam:
+    enabled: true
+    benchmark_hashes_dir: "config/benchmark_hashes/"
+    benchmark_hash_files: []
+    removed_out: "stage2_decontam_removed.jsonl"
+
+stage3:
+  enabled: true
+  input_file: "stage2_cleaned.jsonl"
+  output_file: "stage3_templated.jsonl"
+  template: "chatml"
+  tokenizer_name_or_path: null
+  custom_template_path: null
+  add_generation_prompt: false
+  add_eos_token: true
+  eos_token: "<|im_end|>"
+  system_prompts:
+    variation_strategy: "random"
+    prompts:
+      - "You are a helpful assistant."
+
+stage4:
+  enabled: true
+  input_file: "stage3_templated.jsonl"
+  output_file: "stage4_tokenized.arrow"
+  tokenizer_name_or_path: "gpt2"  # Public; no auth required
+  trust_remote_code: false
+  max_length: 512
+  overflow_strategy: "drop"
+  truncate_side: "right"
+  split_overlap: 32
+
+stage5:
+  enabled: true
+  input_file: "stage4_tokenized.arrow"
+  output_file: "stage5_masked.arrow"
+  ignore_index: -100
+  train_on_roles: ["assistant"]
+  min_unmasked_tokens: 1
+  mask_eos: false
+
+stage6:
+  enabled: true
+  input_file: "stage5_masked.arrow"
+  output_dir_sharded: "final_shards/"
+  review_sample_size: 10
+  review_sample_seed: 42
+  review_output: "quality_review_sample.jsonl"
+  train_val_split_ratio: 0.10
+  gate:
+    enabled: true
+    min_unmasked_ratio: 0.01
+    max_zero_unmasked_fraction: 0.00
+    min_p5_length: 2
+    max_p95_length: 512
+    min_total_examples: 5
+  report:
+    compute_length_stats: true
+    compute_unmasked_ratio_stats: true
+    compute_per_source_counts: true
+    compute_per_language_counts: true
+    output_json: "quality_report.json"
+
+s3:
+  enabled: false
+  bucket: "test-bucket"
+  prefix: "smoke_test/"
+  aws_profile: null
+  checksum_verify: false
+  multipart_threshold_mb: 100

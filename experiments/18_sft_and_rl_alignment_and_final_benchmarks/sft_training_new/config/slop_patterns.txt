@@ -1,0 +1,23 @@
+# Slop / verbosity patterns — one phrase per line, case-insensitive.
+# Add patterns that indicate low-quality "AI slop" responses.
+# Lines starting with # are comments.
+
+certainly, I'd be happy to help
+I'm happy to help
+of course, I'd be glad to
+as an AI language model
+as an AI assistant
+I'm just an AI
+I cannot and will not
+I must emphasize that
+it's important to note that
+it's worth noting that
+I hope this helps
+please let me know if you need
+feel free to ask
+I hope that answers your question
+I want to clarify that
+I'd like to point out that
+needless to say
+in conclusion, it's important to
+at the end of the day

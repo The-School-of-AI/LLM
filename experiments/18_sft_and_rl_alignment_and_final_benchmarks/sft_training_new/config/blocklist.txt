@@ -1,0 +1,5 @@
+# Toxicity keyword blocklist — one keyword/phrase per line, case-insensitive.
+# Used when toxicity_filter.backend=keyword.
+# Lines starting with # are comments.
+# Populate with project-appropriate blocklist terms.
+# This file ships with a minimal placeholder — replace with a comprehensive list.

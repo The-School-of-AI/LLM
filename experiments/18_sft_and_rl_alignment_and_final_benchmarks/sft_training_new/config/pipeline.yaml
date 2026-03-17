@@ -1,0 +1,313 @@
+# ==============================================================================
+# SFT Preprocessing Pipeline — Master Config
+# Team 18 / sft_training_new
+#
+# All parameters are externalized here. Zero hardcoded values in pipeline code.
+# Override any value on the CLI:
+#   python cli.py --config config/pipeline.yaml --work-dir /tmp/run1 run-all
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Global
+# ------------------------------------------------------------------------------
+global:
+  seed: 42
+  log_level: "INFO"                  # DEBUG | INFO | WARNING | ERROR
+  work_dir: "./run_outputs"          # Intermediate stage files land here
+  output_dir: "./outputs"            # Final shards + reports land here
+  shard_size_mb: 512                 # Target size per Arrow shard
+  num_proc: 4                        # Parallel workers (reserved for future use)
+  arrow_compression: "lz4"           # none | lz4 | zstd
+  save_intermediates: true           # Write stage output before proceeding (enables resume)
+  resume_from_stage: 0              # Skip stages before this index
+
+# ------------------------------------------------------------------------------
+# Stage 0 — Data Mixing
+# ------------------------------------------------------------------------------
+stage0:
+  enabled: true
+  output_file: "stage0_mixed.jsonl"
+
+  # Proportional total. Set null to use all available data at configured weights.
+  total_target: 200000
+
+  sources:
+    - name: "tulu3"
+      path: null
+      hf_id: "allenai/tulu-3-sft-mixture"
+      hf_split: "train"
+      format: "already_conversation"   # alpaca | sharegpt | already_conversation
+      weight: 0.35
+      max_samples: 100000
+      subsample_seed: 42
+
+    - name: "openmath"
+      path: null
+      hf_id: "nvidia/OpenMathInstruct-2"
+      hf_split: "train"
+      format: "alpaca"
+      weight: 0.20
+      max_samples: 50000
+      subsample_seed: 43
+
+    - name: "magicoder"
+      path: null
+      hf_id: "ise-uiuc/Magicoder-OSS-Instruct-75K"
+      hf_split: "train"
+      format: "alpaca"
+      weight: 0.20
+      max_samples: 50000
+      subsample_seed: 44
+
+    - name: "numinamath"
+      path: null
+      hf_id: "AI-MO/NuminaMath-TIR"
+      hf_split: "train"
+      format: "alpaca"
+      weight: 0.10
+      max_samples: null
+      subsample_seed: 45
+
+    - name: "pku_saferlhf"
+      path: null
+      hf_id: "PKU-Alignment/PKU-SafeRLHF"
+      hf_split: "train"
+      format: "sharegpt"
+      weight: 0.08
+      max_samples: 20000
+      subsample_seed: 46
+
+    - name: "indicalign"
+      path: null
+      hf_id: null                     # Fill in when dataset is available
+      hf_split: "train"
+      format: "already_conversation"
+      weight: 0.07
+      max_samples: null
+      subsample_seed: 47
+
+# ------------------------------------------------------------------------------
+# Stage 1 — Schema Validation
+# ------------------------------------------------------------------------------
+stage1:
+  enabled: true
+  input_file: "stage0_mixed.jsonl"
+  output_file: "stage1_validated.jsonl"
+  rejected_file: "stage1_rejected.jsonl"
+  accepted_formats:
+    - "jsonl"
+    - "json"
+    - "parquet"
+    - "csv"
+  required_roles:
+    - "user"
+    - "assistant"
+  allow_system_turn: true
+  allow_multi_turn: true
+  require_last_turn_is_assistant: true
+  min_turns: 2
+  max_turns: 64
+  min_content_chars: 1
+
+# ------------------------------------------------------------------------------
+# Stage 2 — Cleaning & Filtering
+# ------------------------------------------------------------------------------
+stage2:
+  enabled: true
+  input_file: "stage1_validated.jsonl"
+  output_file: "stage2_cleaned.jsonl"
+  rejected_file: "stage2_rejected.jsonl"
+
+  # --- Length filter ---
+  length_filter:
+    enabled: true
+    min_chars: 40
+    max_chars: 65536
+    min_tokens: 10
+    max_tokens: 16384
+    tokenizer_name_or_path: null    # null = char counts only (faster)
+
+  # --- Language detection ---
+  lang_filter:
+    enabled: true
+    backend: "langdetect"           # langdetect | fasttext
+    fasttext_model_path: null       # required when backend=fasttext
+    allowed_languages:
+      - "en"
+      - "hi"
+      - "ta"
+      - "te"
+      - "bn"
+      - "mr"
+      - "gu"
+      - "kn"
+      - "ml"
+      - "pa"
+    sample_from: "user"             # user | assistant | all
+    min_confidence: 0.80
+    on_error: "keep"                # keep | drop
+
+  # --- Exact deduplication ---
+  exact_dedup:
+    enabled: true
+    hash_mode: "prompt"             # prompt | full
+
+  # --- Near-deduplication (MinHash LSH) ---
+  near_dedup:
+    enabled: true
+    num_perm: 128
+    threshold: 0.85
+    hash_field: "user_content"      # user_content | full_text | assistant_content
+    ngram_size: 5
+
+  # --- Toxicity filter ---
+  toxicity_filter:
+    enabled: true
+    backend: "keyword"              # keyword | detoxify
+    keyword_blocklist_path: "config/blocklist.txt"
+    detoxify_model: "unbiased"
+    max_score: 0.80
+    check_roles:
+      - "user"
+      - "assistant"
+    action: "drop"
+
+  # --- PII filter ---
+  pii_filter:
+    enabled: true
+    backend: "regex"                # regex | presidio
+    regex_patterns:
+      email: '[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}'
+      phone: '\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'
+      ssn: '\b\d{3}-\d{2}-\d{4}\b'
+    action: "drop"                  # drop | redact
+    check_roles:
+      - "user"
+      - "assistant"
+
+  # --- Repetition filter ---
+  repetition_filter:
+    enabled: true
+    max_repetition_ratio: 0.40
+    ngram_size: 10
+    check_roles:
+      - "assistant"
+
+  # --- Slop / verbosity filter ---
+  slop_filter:
+    enabled: true
+    slop_patterns_path: "config/slop_patterns.txt"
+    max_slop_ratio: 0.30
+    check_roles:
+      - "assistant"
+
+  # --- Benchmark decontamination ---
+  benchmark_decontam:
+    enabled: true
+    benchmark_hashes_dir: "config/benchmark_hashes/"
+    benchmark_hash_files: []
+    removed_out: "stage2_decontam_removed.jsonl"
+
+# ------------------------------------------------------------------------------
+# Stage 3 — Chat Template Application
+# ------------------------------------------------------------------------------
+stage3:
+  enabled: true
+  input_file: "stage2_cleaned.jsonl"
+  output_file: "stage3_templated.jsonl"
+
+  # Template to use: chatml | llama3 | custom | tokenizer_native
+  template: "chatml"
+
+  # Required when template=tokenizer_native
+  tokenizer_name_or_path: null
+
+  # Required when template=custom (path to Jinja2 template file)
+  custom_template_path: null
+
+  add_generation_prompt: false
+  add_eos_token: true
+  eos_token: "<|im_end|>"
+
+  system_prompts:
+    variation_strategy: "random"    # fixed | random | per_source
+    prompts:
+      - "You are a helpful assistant."
+      - "You are an expert AI assistant. Answer questions accurately and concisely."
+      - "You are a knowledgeable assistant fluent in multiple languages including Hindi, Tamil, Telugu, and English."
+
+# ------------------------------------------------------------------------------
+# Stage 4 — Tokenization
+# ------------------------------------------------------------------------------
+stage4:
+  enabled: true
+  input_file: "stage3_templated.jsonl"
+  output_file: "stage4_tokenized.arrow"
+
+  # Fill in with actual base model tokenizer path / HuggingFace ID
+  tokenizer_name_or_path: "meta-llama/Llama-3.1-70B"
+  trust_remote_code: false
+
+  max_length: 8192
+
+  # Strategy for sequences exceeding max_length:
+  #   drop:     discard entirely (cleanest; recommended for most cases)
+  #   truncate: cut to max_length (may cut assistant response mid-sentence)
+  #   split:    create overlapping windows (increases dataset size)
+  overflow_strategy: "drop"
+  truncate_side: "right"
+  split_overlap: 64
+
+# ------------------------------------------------------------------------------
+# Stage 5 — Loss Masking
+# ------------------------------------------------------------------------------
+stage5:
+  enabled: true
+  input_file: "stage4_tokenized.arrow"
+  output_file: "stage5_masked.arrow"
+
+  ignore_index: -100               # PyTorch CrossEntropyLoss ignore_index
+  train_on_roles:                  # Only these roles have non-(-100) labels
+    - "assistant"
+  min_unmasked_tokens: 4           # Drop record if fewer than this many tokens are unmasked
+  mask_eos: false                  # false = EOS included in loss (model learns to terminate)
+
+# ------------------------------------------------------------------------------
+# Stage 6 — Quality Validation
+# ------------------------------------------------------------------------------
+stage6:
+  enabled: true
+  input_file: "stage5_masked.arrow"
+  output_dir_sharded: "final_shards/"
+
+  review_sample_size: 200
+  review_sample_seed: 42
+  review_output: "quality_review_sample.jsonl"
+
+  train_val_split_ratio: 0.05     # 5% held out as validation set
+
+  gate:
+    enabled: true
+    min_unmasked_ratio: 0.05      # At least 5% of tokens must be unmasked across dataset
+    max_zero_unmasked_fraction: 0.00   # Zero tolerance for all-masked examples after stage5 gate
+    min_p5_length: 10
+    max_p95_length: 8192
+    min_total_examples: 1000
+
+  report:
+    compute_length_stats: true
+    compute_unmasked_ratio_stats: true
+    compute_per_source_counts: true
+    compute_per_language_counts: true   # Requires _lang metadata from lang_filter
+    output_json: "quality_report.json"
+
+# ------------------------------------------------------------------------------
+# S3 Upload
+# ------------------------------------------------------------------------------
+s3:
+  enabled: false                   # Set true to upload after stage6 gate passes
+  bucket: "your-bucket"
+  prefix: "sft_data/v1/"
+  aws_profile: null                # null = use default credential chain
+  checksum_verify: true
+  multipart_threshold_mb: 100
