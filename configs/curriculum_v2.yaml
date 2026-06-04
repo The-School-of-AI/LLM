@@ -1,0 +1,244 @@
+# curriculum_v2.yaml — Redesigned curriculum for pretraining data mixing
+# Supersedes: curriculum.yaml (frozen 2026-02-02)
+# Created: 2026-03-10
+#
+# KEY CHANGES from v1:
+#   - Dropped B0-B5 naming; replaced with D1-D4 functional pools
+#   - B2 DROPPED entirely (18.7% leakage, 9.14% garbage)
+#   - Always-ON (AON) tier: 8 of 32 per batch (25%), bypasses OPUS scoring
+#   - Warmup profiles at each growth transition (3B tokens each)
+#   - Hindi enabled from 1B stage (overrides v1 "earliest_stage: 3B")
+#   - Golden Proxy (GP): OPUS reference, never trained on
+#
+# POOL → PHYSICAL S3 MAPPING:
+#   D1  → shards_reordered/band_B0/                    (4,894 shards)
+#   D2  → shards_reordered/band_B1/ minus indic overlap (~18,710 shards)
+#   D3  → shards_reordered/band_B3/ +
+#          shards_reordered/band_code_tab/ +
+#          shards_reordered/band_code_crlf/             (5,933 shards)
+#   D4  → shards_reordered/band_B4/ +
+#          shards_reordered/band_B5/                    (1,464 shards)
+#   AON → shards_reordered/band_B6/ +
+#          shards_reordered/band_indic_numerals/        (2,352 shards)
+#   GP  → shards_reordered/golden_proxy/band_golden_proxy/ (11 shards)
+#
+# ERAV4 data: mixed into B0 (3 shards) and B1 (1,102 shards).
+#   Cannot be separated without re-sharding.
+#   Guaranteed exposure via D1/D2 + AON (indic_numerals overlaps ERAV4 shards).
+
+version: "2.0"
+block_size: 4096
+
+# ─────────────────────────────────────────────────────────────────────
+# POOL DEFINITIONS
+# ─────────────────────────────────────────────────────────────────────
+pools:
+  D1:
+    name: "Web Foundation"
+    description: "Clean English web (cc_head, reddit). Simplest vocab, short docs."
+    difficulty: 1
+    s3_bands: ["band_B0"]
+    shard_count: 4894
+    tokens_approx: "163.6B"
+
+  D2:
+    name: "Web Diverse"
+    description: "Broad web + Indic (cc_tail, cc_middle, refinedweb, ai-bharath, IndicCorpV2). Richer vocab."
+    difficulty: 2
+    s3_bands: ["band_B1"]
+    exclude_shards_file: "manifests/indic_numerals_exclude.txt"
+    shard_count_approx: 18710
+    tokens_approx: "625.6B"
+
+  D3:
+    name: "Code"
+    description: "All programming — StarCoder + firmware/CUDA/kernel/embedded (code_tab) + CRLF (code_crlf)."
+    difficulty: 3
+    s3_bands: ["band_B3", "band_code_tab", "band_code_crlf"]
+    shard_count: 5933
+    tokens_approx: "198.8B"
+
+  D4:
+    name: "STEM"
+    description: "LaTeX, math, proofs, science (B4 + B5 merged). Formulaic but conceptually hardest."
+    difficulty: 4
+    s3_bands: ["band_B4", "band_B5"]
+    shard_count: 1464
+    tokens_approx: "49.0B"
+
+  AON:
+    name: "Always-ON"
+    description: "Injected directly, bypasses OPUS. Benchmark train + Indic guaranteed."
+    s3_bands: ["band_B6", "band_indic_numerals"]
+    shard_count: 2352
+    tokens_approx: "78.1B"
+    injection_rate: 0.25       # 8 of 32 sequences per batch
+    internal_split:
+      bench_train: 0.50    # B6: finephrases, math, code, reasoning, agentic train splits
+      indic_guaranteed: 0.50  # indic_numerals: Indic-heavy B1 shards with native numerals
+
+  GP:
+    name: "Golden Proxy"
+    description: "OPUS scoring reference. NEVER trained on."
+    s3_path: "golden_proxy/band_golden_proxy"
+    shard_count: 11
+    tokens_approx: "6.8M"
+    trainable: false
+
+  DROPPED:
+    name: "B2 — DROPPED"
+    reason: "18.7% cross-doc leakage, 9.14% garbage tokens, 15.69% repetition."
+    s3_bands: ["band_B2"]
+    shard_count: 934
+    tokens_approx: "31.2B"
+
+# ─────────────────────────────────────────────────────────────────────
+# STAGE PROFILES
+# ─────────────────────────────────────────────────────────────────────
+# OPUS-eligible weights (D1-D4) + AON = 1.0 per stage.
+# OPUS samples candidate batches from D1-D4 at these proportions.
+# AON is injected at fixed 25% (8 of 32) regardless of OPUS decisions.
+# Warmup profiles (WU_*) bridge growth transitions: 3B tokens each.
+
+stages:
+  "1B":
+    token_budget: "50B"
+    focus: "Language fundamentals, basic knowledge, Hindi from day 1"
+    band_weights:
+      D1: 0.34    # Clean web heavy — learn language patterns
+      D2: 0.24    # Diverse web + Indic exposure
+      D3: 0.11    # Code introduction
+      D4: 0.06    # Light STEM
+      AON: 0.25   # 8 of 32: benchmark train + guaranteed Indic
+    modality_weights:
+      general_text: 0.80
+      code: 0.13
+      indic: 0.05
+      cot_reasoning: 0.02
+
+  "WU_3B":
+    token_budget: "3B"
+    focus: "Stabilize new parameters after 1B→3B growth"
+    band_weights:
+      D1: 0.28
+      D2: 0.24
+      D3: 0.14
+      D4: 0.09
+      AON: 0.25
+
+  "3B":
+    token_budget: "40B"
+    focus: "Knowledge expansion, code growth, Indic ramp-up"
+    band_weights:
+      D1: 0.18    # Web reduces
+      D2: 0.23    # Still strong knowledge base
+      D3: 0.20    # Code ramps up
+      D4: 0.14    # STEM grows
+      AON: 0.25
+    modality_weights:
+      general_text: 0.58
+      code: 0.25
+      indic: 0.08
+      cot_reasoning: 0.06
+      agentic_traces: 0.03
+
+  "WU_8B":
+    token_budget: "3B"
+    focus: "Stabilize new parameters after 3B→8B growth"
+    band_weights:
+      D1: 0.11
+      D2: 0.18
+      D3: 0.24
+      D4: 0.22
+      AON: 0.25
+
+  "8B":
+    token_budget: "80B"
+    focus: "Reasoning emergence, advanced code, math"
+    band_weights:
+      D1: 0.07    # Minimal web
+      D2: 0.15    # Diverse knowledge maintained
+      D3: 0.27    # Peak code
+      D4: 0.26    # Strong STEM
+      AON: 0.25
+    modality_weights:
+      general_text: 0.35
+      code: 0.33
+      indic: 0.08
+      cot_reasoning: 0.12
+      agentic_traces: 0.07
+      stem_math: 0.05
+
+  "WU_70B":
+    token_budget: "3B"
+    focus: "Stabilize new parameters after 8B→70B MoE growth"
+    band_weights:
+      D1: 0.05
+      D2: 0.10
+      D3: 0.29
+      D4: 0.31
+      AON: 0.25
+
+  "70B":
+    token_budget: "30B"
+    focus: "Expert specialization, hardest benchmarks, agentic"
+    band_weights:
+      D1: 0.05    # Minimal web
+      D2: 0.10    # Some diversity
+      D3: 0.29    # Strong code for SWE-Bench
+      D4: 0.31    # Peak STEM for AIME/GPQA
+      AON: 0.25
+    modality_weights:
+      general_text: 0.26
+      code: 0.35
+      indic: 0.08
+      cot_reasoning: 0.14
+      agentic_traces: 0.10
+      stem_math: 0.07
+
+# ─────────────────────────────────────────────────────────────────────
+# GUARDRAILS
+# ─────────────────────────────────────────────────────────────────────
+guardrails:
+  anti_domain_spike:
+    rolling_window_tokens: 2000000
+    max_domain_share_in_window: 0.25
+    smoothing: "EMA"
+    max_weight_delta_per_update: 0.02
+
+  cot_caps:
+    max_share_global: 0.06
+    max_share_in_pool:
+      D3: 0.05
+      D4: 0.10
+      AON: 0.15   # AON contains benchmark reasoning traces
+
+  agentic_caps:
+    max_share_global: 0.03
+    earliest_pool: "D3"   # Allow from code pool onwards
+
+  indic_caps:
+    max_share_global: 0.10   # Increased from v1's 0.08
+    earliest_stage: "1B"     # Changed from v1's "3B" — Hindi from day 1
+
+# ─────────────────────────────────────────────────────────────────────
+# AON (Always-ON) BEHAVIOR
+# ─────────────────────────────────────────────────────────────────────
+aon_config:
+  injection_rate: 0.25          # 8 of 32 sequences per batch
+  injection_period_steps: 1     # AON present in every training step
+  opus_bypass: true             # AON batches are NOT scored by OPUS
+  internal_split:
+    bench_train: 0.50           # Math/code/reasoning/agentic train + finephrases
+    indic_guaranteed: 0.50      # Indic-heavy shards with native numerals
+
+# ─────────────────────────────────────────────────────────────────────
+# DETERMINISTIC LOADING
+# ─────────────────────────────────────────────────────────────────────
+deterministic:
+  seed: 42
+  shard_ordering: "seed_shuffled"   # np.random.RandomState(seed).shuffle(shard_list)
+  manifest_file: "manifests/curriculum_v2_manifest.json"
+  shard_striping: "rank_modulo"     # shards[rank::world_size]
+  # What's deterministic: shard order, batch composition, AON injection pattern
+  # What adapts: OPUS selection (depends on live model state)

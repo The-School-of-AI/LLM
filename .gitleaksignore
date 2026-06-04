@@ -1,0 +1,7 @@
+# gitleaks false positives — these are not secrets.
+
+# tokenizer/fertility_analysis.json contains "delta_tokens_pct" numeric statistics
+# (percentage strings with high digit entropy) flagged as generic-api-key.
+# These are tokenizer fertility analysis values, public statistics.
+tokenizer/fertility_analysis.json:generic-api-key:52
+tokenizer/fertility_analysis.json:generic-api-key:208

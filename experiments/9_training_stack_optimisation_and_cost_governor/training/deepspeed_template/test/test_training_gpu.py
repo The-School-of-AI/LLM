@@ -31,13 +31,14 @@ import tempfile
 # Add parent directory to path to import src modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import deepspeed
 import pytest
 import torch
 from src.data import get_tokenizer
 from src.train import evaluate, save_checkpoint, train_epoch
 from src.utils import set_seed
 from transformers import AutoModelForCausalLM
+
+import deepspeed
 
 # Get project root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

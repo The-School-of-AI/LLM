@@ -1,0 +1,71 @@
+data:
+  loader_type: bin_idx
+  shard_dir: ../data/d1_shards
+  eval_shard_dir: null
+  tokenizer_dir: ../tokenizer
+  validate_tokenizer: true
+  dataset_name: wikitext
+  dataset_config: wikitext-103-raw-v1
+  tokenize_num_proc: 8
+  max_length: 4096
+  num_workers: 16
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes:
+  - 4096
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+
+training:
+  num_epochs: 1
+  max_train_steps: 50
+  max_train_seconds: null
+  max_eval_steps: null
+  log_interval: 1
+  seed: 42
+  init_model_path: ../results/init/model_init.pt
+  require_gsa_triton: true
+  require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 8
+  metrics_jsonl_path: ../results/run/metrics.jsonl
+  profile_steps: []
+  enable_system_metrics: false
+
+deepspeed:
+  config_path: ../deepspeed/zero-1-1b.json
+  local_rank: -1
+
+model:
+  embedding_type: kronecker
+
+checkpoint:
+  output_dir: ../results/run/checkpoints
+  save_checkpoint: false
+  checkpoint_interval: 500
+  keep_last_n_checkpoints: 3
+  resume_from_checkpoint: null
+  resume_step: null
+
+s3:
+  enabled: false
+  bucket: null
+  prefix: training/checkpoints
+  region: us-east-1
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: The history of artificial intelligence begins with
+
+observability:
+  enabled: false
+  log_dir: /tmp/training_logs
+  metrics_port: 8000
+  skip_vector_check: true
+  system_metrics_interval: 5.0

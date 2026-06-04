@@ -1,0 +1,88 @@
+# Test config: curriculum_v2 + spot checkpoint end-to-end
+# Uses 900 real shards downloaded from S3 (proportional to 1B stage weights).
+#
+# Setup:
+#   bash scripts/download_test_shards.sh [../data/curriculum_test_shards]
+#
+# Usage:
+#   CFG=configs/test_curriculum_checkpoint.yaml bash run.sh
+
+data:
+  loader_type: curriculum_v2
+  shard_dir: ../data/curriculum_test_shards
+  eval_shard_dir: null
+  tokenizer_dir: ../tokenizer
+  validate_tokenizer: false        # Test subset — skip metadata validation
+  curriculum_config_path: ../configs/curriculum_v2.yaml
+  curriculum_stage: "1B"
+  curriculum_mode: combined
+  manifest_dir: ../manifests
+  dataset_name: wikitext
+  dataset_config: wikitext-103-raw-v1
+  tokenize_num_proc: 1
+  max_length: 4096
+  num_workers: 16                  # Match production config
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: false
+  block_sizes: null
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+
+training:
+  num_epochs: 1
+  max_train_steps: 50              # Enough steps to train + break mid-run
+  max_train_seconds: 600
+  max_eval_steps: null
+  log_interval: 1
+  seed: 42
+  init_model_path: ../results/init/model_init.pt
+  require_gsa_triton: false
+  require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 4
+  metrics_jsonl_path: ../results/curriculum_test/metrics.jsonl
+  profile_steps: []
+  enable_system_metrics: false
+
+deepspeed:
+  config_path: ../deepspeed/zero-1-1b.json
+  local_rank: -1
+
+model:
+  model_name: 1b_nonrev
+  embedding_type: kronecker
+
+checkpoint:
+  output_dir: ../results/curriculum_test/checkpoints
+  save_checkpoint: true
+  checkpoint_interval: null          # Disabled — spot orchestrator handles periodic checkpoints
+  keep_last_n_checkpoints: 3
+  resume_from_checkpoint: null
+  resume_step: null
+
+spot_checkpoint:
+  enabled: true
+  checkpoint_interval_seconds: 30  # Periodic spot checkpoint every 30s
+  spot_poll_interval: 2.0
+  keep_last_n_local: 2
+  log_max_bytes: 5242880           # 5MB rotation for testing
+  spot_metadata_url: http://localhost:8111/latest/meta-data/spot/instance-action
+
+s3:
+  enabled: false
+  bucket: null
+  prefix: training/curriculum_test
+  region: us-east-1
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: The history of artificial intelligence begins with
+
+observability:
+  enabled: false

@@ -3,6 +3,7 @@
 import math
 
 import pytest  # noqa: F401
+
 from scripts.calculate_proportions import (
     alignment_weight,
     apply_floors_and_caps,

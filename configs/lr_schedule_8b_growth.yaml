@@ -1,0 +1,67 @@
+# ============================================================================
+# LR Schedule — 8B Growth Training (WSD + DRoPE in last 20%)
+# ============================================================================
+# Source: 8B_GROWTH_TRAINING_PLAN.md + DRoPE confirmed at 20%
+#
+# 4 phases, 39.5B tokens total, ~84,945 steps
+# Phase 4 = DRoPE recalibration + moderate LR decay + CDMA
+#
+# Run 1 (4K): WU_8B + RECOVERY_4K  → cleaned 4K shards, D5 included
+# Run 2 (8K): TRAIN_8K_STABLE      → cleaned 8K shards, RoPE ON
+#             TRAIN_8K_DROPE_DECAY  → cleaned 8K shards, RoPE OFF (DRoPE)
+#
+# Phase layout:
+#   WU_8B              1.0B   4K+RoPE   GBS=120  warmup 2e-6 → 5e-5
+#   RECOVERY_4K        7.0B   4K+RoPE   GBS=120  flat 5e-5
+#   TRAIN_8K_STABLE   23.6B   8K+RoPE   GBS=56   flat 5e-5
+#   TRAIN_8K_DROPE     7.9B   8K+DRoPE  GBS=56   decay 5e-5 → 1.7e-5 (3x)
+#                     ─────
+#                     39.5B total (DRoPE = last 20%)
+
+stages:
+  - name: "WU_8B"
+    token_budget: 1.0e9
+    peak_lr: 5.0e-5
+    decay_ratio: 1               # flat after warmup
+    warmup_steps: 2000
+    warmup_from: 2.0e-6
+    weight_decay: 0.0
+    schedule_type: "wsd"
+    stable_fraction: 1.0         # all post-warmup is stable
+
+  - name: "RECOVERY_4K"
+    token_budget: 7.0e9
+    peak_lr: 5.0e-5
+    decay_ratio: 1               # flat hold
+    warmup_steps: 0
+    warmup_from: auto            # = 5e-5 from WU_8B
+    weight_decay: 0.0
+    schedule_type: "wsd"
+    stable_fraction: 1.0
+
+  - name: "TRAIN_8K_STABLE"
+    token_budget: 23.6e9          # reduced from 26.5B to make room for DRoPE
+    peak_lr: 5.0e-5
+    decay_ratio: 1               # flat hold after re-warm
+    warmup_steps: 300
+    warmup_from: 4.0e-5          # shallow dip at 4K->8K context switch
+    weight_decay: 0.0
+    schedule_type: "wsd"
+    stable_fraction: 1.0
+
+  - name: "TRAIN_8K_DROPE_DECAY"
+    token_budget: 7.9e9           # 20% of 39.5B — DRoPE recalibration + decay
+    peak_lr: 5.0e-5
+    decay_ratio: 3               # moderate: end_lr = 1.7e-5 (CDMA paper)
+    warmup_steps: 0
+    warmup_from: auto            # = 5e-5 from TRAIN_8K_STABLE
+    weight_decay: 0.0
+    schedule_type: "wsd"
+    stable_fraction: 0.0         # all decay, no stable phase
+    decay_type: "cosine"
+    # NOTE: RoPE is DISABLED for this phase (DRoPE)
+    # Set apply_rotary_emb=False in model config before starting this phase
+
+# Post-training: EMA over last 6 checkpoints (saved every 500 steps)
+# EMA alpha=0.2, covers last ~3,000 steps of TRAIN_8K_DROPE_DECAY
+# Final model = EMA average, not raw last checkpoint

@@ -5,6 +5,11 @@ rules:
     max: 120
     level: warning
 
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+    check-multi-line-strings: false
+
   document-start: disable
 
   truthy:
