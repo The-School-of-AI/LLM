@@ -58,9 +58,7 @@ tqp:
   enabled: true
   weight_bits: 8
   rank: 16
-  # 0 = flushless (production). Set >0 to enable periodic merge-and-reset
-  # (attempted in bring-up; diverged at 120B — see paper Section 9.4, 10.3).
-  flush_every: 0
+  flush_every: 0  # 0 = flushless (production setting). Set to a positive integer (e.g., 10) to enable periodic merge-and-reset; this was attempted in bring-up but diverged at 120B (see paper Section 9.4 and 10.3).
   adapter_lr_mult: 3.0
   router_rest_lr_ratio: 0.01
 opus:

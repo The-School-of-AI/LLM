@@ -120,14 +120,27 @@ NUM_GPUS=8 bash scripts/run_9b_stage.sh
 
 Config: `configs/train_120b_tqp.yaml`
 
-Prepare the initialization checkpoint at the path configured by
-`training.init_model_path`, then launch:
+Build the 120B initialization checkpoint from the 9B checkpoint:
+
+```bash
+python3 scripts/build_120b_init.py \
+  --src results/9b/checkpoint.pt \
+  --dst results/120b_tqp/init/120b_init_proper_v2.pt \
+  --config configs/train_120b_tqp.yaml \
+  --ratio 0.5 \
+  --router_sigma 0.05 \
+  --seed 1337
+```
+
+Then launch TQP training:
 
 ```bash
 NUM_GPUS=8 bash scripts/run_120b_tqp.sh
 ```
 
 The TQP implementation lives in `lightninglm/tqp/`.
+Runtime hot-configuration knobs are described in
+[runtime_hotconfig.md](runtime_hotconfig.md).
 
 ## 8. Save Tensor Hashes
 

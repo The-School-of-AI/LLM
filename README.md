@@ -1,109 +1,173 @@
-# LightningLM
+# LightningLM Training
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![Python ≥3.11](https://img.shields.io/badge/python-≥3.11-blue.svg)](https://www.python.org/downloads/)
-[![Paper](https://img.shields.io/badge/arXiv-TBD-b31b1b.svg)](#paper)
-[![Model on HF](https://img.shields.io/badge/%F0%9F%A4%97-LightningLM--0.1V--120B--MoE-yellow.svg)](https://huggingface.co/theschoolofai/LightningLM-0.1V-120B-MoE)
+LightningLM Training is a complete pretraining pipeline for building
+LightningLM-style language models from a 2B dense seed stage through 5B, 9B, and
+120B TurboQuantPretraining (TQP).
 
-**Reference training pipeline for the LightningLM 0.1V model family.** One architecture, four growth stages: a 2B dense seed grown to 5B MoE, 9B MoE, and a 120B sparse mixture-of-experts trained through TurboQuant-PreTraining (TQP) on a single eight-GPU node.
+The repository includes the model code, tokenizer assets, data/shard pipeline,
+curriculum manifests, growth utilities, DeepSpeed launch configs, checkpointing,
+OPUS data-selection support, TQP modules, and reproducibility utilities.
 
-The 120B model is publicly released on Hugging Face: [**LightningLM-0.1V-120B-MoE**](https://huggingface.co/theschoolofai/LightningLM-0.1V-120B-MoE).
+## What You Can Do
 
----
+- Use the included 131K tokenizer artifacts.
+- Build your own tokenizer from text/parquet samples.
+- Clean and tokenize raw datasets into `tokens.bin` shard directories.
+- Generate and validate curriculum manifests.
+- Train the 2B seed stage.
+- Grow a checkpoint from 2B to 5B, then 5B to 9B.
+- Launch the 120B TQP stage.
+- Hash checkpoints tensor-by-tensor for transfer and reproducibility checks.
 
-## Paper
+## Repository Layout
 
-> **Reversible Foundations: Training a 120B Sparse MoE through State-Preserving Scaling**
-> Rohan Shravan. *arXiv preprint arXiv:TBD*, 2026.
+```text
+lightninglm/              model, training, data loading, OPUS, TQP, kernels
+configs/                  stage and curriculum configs
+deepspeed/                DeepSpeed ZeRO configs
+scripts/                  setup, launch, shard, growth, and validation commands
+scripts/data/             dataset cleaning, tokenization, sharding, verification
+scripts/tokenizer/        tokenizer build and analysis tools
+tokenizer/                included tokenizer artifacts
+manifests/                curriculum shard manifests
+data/                     local shard/checkpoint mount points
+docs/                     user guides
+```
 
-The paper is a systems and experience report describing the full training pipeline this repository implements. It documents the three disciplines the work is organized around — reversibility, state-preserving growth, and single-node economics — and the failure modes the recipe is shaped to avoid.
+## Requirements
 
-## Released model
+For setup and data preparation:
 
-| Stage | Parameters (stored / active) | Checkpoint |
-|---|---|---|
-| 120B sparse MoE | 118.67B / 5.93B (top-12 of 460 routed experts) | [`LightningLM-0.1V-120B-MoE`](https://huggingface.co/theschoolofai/LightningLM-0.1V-120B-MoE) |
+- Python 3.11+
+- `pip`
+- `pyarrow`, `datasets`, `tokenizers`, `transformers`, `numpy`, `pandas`
 
-The 5B-MoE, 9B-MoE, and 2B-dense intermediate checkpoints from the same training lineage are also planned for public release.
+For training:
 
-## Quickstart
+- CUDA-capable multi-GPU machine
+- PyTorch and DeepSpeed matching your CUDA stack
+- Large local NVMe or a fast mounted data volume
+- AWS B200/B300-class hardware for the 120B TQP stage
 
-Install dependencies, run the health check, and launch the 2B seed stage:
+The setup helpers are:
 
 ```bash
 bash scripts/setup_stable.sh
+bash scripts/setup_aws_b300.sh
+```
+
+## Quickstart
+
+Run the repository health check:
+
+```bash
 python3 scripts/doctor.py
+```
+
+Create a tiny synthetic curriculum dataset:
+
+```bash
+python3 scripts/create_curriculum_test_shards.py \
+  --output-dir data/curriculum_test_shards \
+  --manifest-dir manifests \
+  --shards-per-pool 2
+```
+
+Use the included tokenizer:
+
+```bash
+python3 tokenizer/byte_analysis/analyze.py --tokenizer-dir tokenizer
+```
+
+Train the 2B stage:
+
+```bash
 NUM_GPUS=8 bash scripts/run_2b_stage.sh
 ```
 
-Grow through 5B, 9B, and launch the 120B TQP stage:
+Grow and train the next stages:
 
 ```bash
 python3 -m lightninglm.growth.dense_to_moe \
   --src results/2b/checkpoint.pt \
   --dst results/5b/init_from_2b.pt \
   --strategy partition
+
 NUM_GPUS=8 bash scripts/run_5b_stage.sh
 
 python3 -m lightninglm.growth.depth_map \
   --src results/5b/checkpoint.pt \
   --dst results/9b/init_from_5b.pt \
   --mapping lightninglm_5b_to_9b
+
 NUM_GPUS=8 bash scripts/run_9b_stage.sh
+```
+
+Launch the 120B TQP stage:
+
+```bash
+python3 scripts/build_120b_init.py \
+  --src results/9b/checkpoint.pt \
+  --dst results/120b_tqp/init/120b_init_proper_v2.pt \
+  --config configs/train_120b_tqp.yaml \
+  --ratio 0.5 \
+  --router_sigma 0.05 \
+  --seed 1337
 
 NUM_GPUS=8 bash scripts/run_120b_tqp.sh
 ```
 
-The full stage-by-stage workflow lives in [docs/cookbook.md](./docs/cookbook.md).
+## Data
 
-## Documentation
+For real training data, process raw datasets into shard directories:
 
-- [Training cookbook](./docs/cookbook.md) — end-to-end stage-by-stage walkthrough
-- [Data pipeline](./docs/data_pipeline.md) — shard preparation, tokenization, manifest generation
-- [Tokenizer pipeline](./docs/tokenizer_pipeline.md) — building or adapting the included tokenizer
-- [Apache 2.0 license](./LICENSE)
-
-## Repository layout
-
-```text
-lightninglm/      model code, training loop, data loading, OPUS, TQP, kernels, growth utilities
-configs/          per-stage training and curriculum YAML configs
-deepspeed/        DeepSpeed ZeRO configs (zero-1 for 120B TQP, zero-3 for smaller stages)
-scripts/          launch scripts, setup, doctor, data and tokenizer tooling, tensor hashing
-manifests/        curriculum shard manifests (D1-D4 bulk pools, AON guaranteed pools)
-tokenizer/        BrahmicTokenizer-131K artifacts and byte-level analysis tools
-docs/             training cookbook, data pipeline, tokenizer pipeline
-data/             local mount points for shard directories (.gitkept placeholders only)
-requirements/     pinned dependency manifests
-aws/              AWS-specific helpers
-experiments/      per-team experiment history (preserved from the project's development)
-tests/            test suite for the release pipeline and per-experiment tests
+```bash
+python3 scripts/data/process.py \
+  --input-dir /path/to/raw_inputs \
+  --output-dir data/d1_shards \
+  --tokenizer-dir tokenizer \
+  --band-map configs/curriculum_v2.yaml \
+  --verify-after
 ```
 
-## Companion papers
+Then verify the shards:
 
-The LightningLM 0.1V family relies on two companion papers, both implemented in this repository:
-
-- **BrahmicTokenizer-131K** (`./tokenizer/`) - the 131K tokenizer covering English and the major Brahmic scripts. [arXiv:2605.29379](https://arxiv.org/abs/2605.29379).
-- **Kronecker Embeddings** (`./lightninglm/models/`) - byte-level structured embeddings that replace the standard 537M-parameter embedding table with a 33.6M Kronecker construction. [arXiv:2605.29459](https://arxiv.org/abs/2605.29459).
-
-## Citation
-
-```bibtex
-@article{shravan2026reversible,
-  title  = {Reversible Foundations: Training a 120B Sparse MoE through State-Preserving Scaling},
-  author = {Shravan, Rohan},
-  journal = {arXiv preprint arXiv:TBD},
-  year   = {2026},
-  url    = {https://github.com/The-School-of-AI/LLM}
-}
+```bash
+python3 scripts/data/verify.py \
+  --shard-dir data/d1_shards \
+  --tokenizer-dir tokenizer
 ```
 
-## License
+See [docs/data_pipeline.md](docs/data_pipeline.md) for the full data workflow.
 
-Apache 2.0 - see [LICENSE](./LICENSE). Copyright 2026 Rohan Shravan and The School of AI.
+## Tokenizer
 
-## Contact
+The default configs use the included tokenizer in `tokenizer/`. To rebuild or
+adapt a tokenizer:
 
-- Issues and pull requests: [github.com/The-School-of-AI/LLM/issues](https://github.com/The-School-of-AI/LLM/issues)
-- Email: `rshravan@theschoolofai.in`
+```bash
+python3 scripts/tokenizer/build_tokenizer.py \
+  --data-dir /path/to/tokenizer_samples \
+  --output-dir tokenizer_out \
+  --work-dir tokenizer_work
+```
+
+See [docs/tokenizer_pipeline.md](docs/tokenizer_pipeline.md).
+
+## Training Cookbook
+
+The full stage-by-stage workflow lives in [docs/cookbook.md](docs/cookbook.md).
+For runtime hot-configuration knobs used by the MoE stages, see
+[docs/runtime_hotconfig.md](docs/runtime_hotconfig.md).
+
+## Checkpoint Hashing
+
+Create tensor hashes for checkpoints before upload, transfer, or comparison:
+
+```bash
+python3 scripts/hash_tensors.py \
+  --checkpoint results/2b/checkpoint.pt \
+  --out results/2b/tensor_hashes.json
+```
+
+The hash manifest records tensor name, dtype, shape, and SHA-256 digest.
