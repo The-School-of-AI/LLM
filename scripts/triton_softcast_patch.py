@@ -7,7 +7,7 @@ Unpatched Triton asserts that both operands have identical dtype and can crash
 on the first backward path that reaches those kernels.
 
 Usage:
-    python patches/triton_softcast_patch.py \
+    python scripts/triton_softcast_patch.py \
       /path/to/site-packages/triton/language/semantic.py
 
 After patching, clear the Triton cache before launching training.

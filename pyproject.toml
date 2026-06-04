@@ -36,6 +36,7 @@ line-length = 100
 # E402: imports after path/env setup are intentional in launch scripts and kernel modules.
 # E741: single-letter variables (l, M, E, D) are tensor/matrix notation common in the codebase.
 # E731: lambda assignments used as inline configuration adapters.
+# F401: try/except availability detection (e.g. HAS_TRITON) and bundle imports.
 # F841: unused locals retained as debugging anchors or future-use placeholders.
 "lightninglm/**" = ["E402", "E741", "E731", "F841", "F401"]
 "scripts/**"     = ["E402", "E741", "E731", "F841", "F401"]
