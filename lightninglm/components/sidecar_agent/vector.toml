@@ -1,0 +1,289 @@
+
+# ------------------------------------------------------------------------------
+# Vector Configuration for 70B Training Sidecar
+# Role: Reads local JSONL logs and ships them to ClickHouse
+# Requires: Vector >= 0.30
+# ------------------------------------------------------------------------------
+
+# Global data directory for Vector
+data_dir = "/var/lib/vector"
+
+# Health API (for training-side health checks)
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
+# SOURCES
+
+[sources.training_logs]
+type = "file"
+include = ["/tmp/training_logs/**/*.jsonl"]
+exclude = ["/tmp/training_logs/**/system_metrics_*.jsonl"]
+ignore_older_secs = 600
+read_from = "beginning"
+
+[sources.system_metrics_logs]
+type = "file"
+include = ["/tmp/training_logs/**/system_metrics_*.jsonl"]
+ignore_older_secs = 600
+read_from = "beginning"
+
+# TRANSFORMS
+
+# Step 1: Parse raw JSONL line into structured object
+[transforms.parse_json]
+type = "remap"
+inputs = ["training_logs", "system_metrics_logs"]
+source = '''
+  . = parse_json!(.message)
+  .host = get_hostname!()
+'''
+
+# Step 2: Prepare the raw-logs copy (metrics/context encoded as JSON strings)
+[transforms.to_raw_logs]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  m = if exists(.metrics) { encode_json(.metrics) } else { "{}" }
+  c = if exists(.context) { encode_json(.context) } else { "{}" }
+  . = {
+    "timestamp": string!(.timestamp),
+    "step":      to_int(.step) ?? 0,
+    "metrics":   m,
+    "context":   c,
+    "host":      string!(.host),
+    "run_id":    string!(.run_id),
+    "rank":      to_int(.rank) ?? 0
+  }
+'''
+
+# Step 5: Extract typed events (context.event == "event")
+[transforms.to_events]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  ctx = {}
+  if is_object(.context) {
+    ctx = .context
+  } else {
+    ctx_raw = string(.context) ?? "{}"
+    ctx = parse_json(ctx_raw) ?? {}
+  }
+  evt = string(ctx.event) ?? ""
+  if evt != "event" { abort }
+
+  payload_json = if exists(ctx.payload) { encode_json(ctx.payload) } else { "{}" }
+
+  . = {
+    "run_id":      string!(.run_id),
+    "host":        string!(.host),
+    "rank":        to_int(.rank) ?? 0,
+    "device":      to_int(ctx.device) ?? 65535,
+    "step":        to_int(.step) ?? 0,
+    "event_type":  string(ctx.event_type) ?? "unknown",
+    "severity":    string(ctx.severity) ?? "info",
+    "message":     string(ctx.message) ?? "",
+    "payload_json": payload_json
+  }
+'''
+
+# Step 6: Extract array metrics (context.event == "metric_array")
+[transforms.to_metric_arrays]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  ctx = {}
+  if is_object(.context) {
+    ctx = .context
+  } else {
+    ctx_raw = string(.context) ?? "{}"
+    ctx = parse_json(ctx_raw) ?? {}
+  }
+  evt = string(ctx.event) ?? ""
+  if evt != "metric_array" { abort }
+
+  arr = {}
+  if is_object(ctx.metric_array) {
+    arr = ctx.metric_array
+  } else {
+    arr_raw = string(ctx.metric_array) ?? "{}"
+    arr = parse_json(arr_raw) ?? {}
+  }
+  arr_keys = array(arr.keys) ?? []
+  arr_vals_any = array(arr.values) ?? []
+  arr_vals = []
+
+  for_each(arr_vals_any) -> |_i, v| {
+    f = to_float(v) ?? null
+    if f != null { arr_vals = push(arr_vals, f) }
+  }
+
+  if length(arr_keys) == 0 || length(arr_vals) == 0 { abort }
+
+  tags_json = if exists(arr.tags) { encode_json(arr.tags) } else { "{}" }
+
+  . = {
+    "run_id":    string!(.run_id),
+    "host":      string!(.host),
+    "rank":      to_int(.rank) ?? 0,
+    "device":    to_int(ctx.device) ?? 65535,
+    "step":      to_int(.step) ?? 0,
+    "metric":    string(arr.metric) ?? "",
+    "keys":      arr_keys,
+    "values":    arr_vals,
+    "unit":      string(arr.unit) ?? "",
+    "tags_json": tags_json
+  }
+'''
+
+# Step 3: Explode metrics object into one event per metric key (fan-out)
+#   Assigning an array of objects to . emits multiple events (Vector >= 0.15)
+[transforms.to_metric_points]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  base_rid  = string!(.run_id)
+  base_host = string!(.host)
+  base_rank = to_int(.rank) ?? 0
+  base_step = to_int(.step) ?? 0
+  ctx_json  = if exists(.context) { encode_json(.context) } else { "{}" }
+
+  metrics = object!(.metrics)
+  metric_keys = keys(metrics)
+
+  points = []
+  for_each(metric_keys) -> |_i, k| {
+    raw_val = get!(metrics, [k])
+    v = to_float(raw_val) ?? null
+    if v != null {
+      points = push(points, {
+        "run_id":     base_rid,
+        "host":       base_host,
+        "rank":       base_rank,
+        "step":       base_step,
+        "metric":     k,
+        "value":      v,
+        "unit":       "",
+        "tags_json":  ctx_json
+      })
+    }
+  }
+
+  if length(points) == 0 { abort }
+  . = points
+'''
+
+# Step 4: Extract checkpoint events and map to the checkpoints table schema.
+#   Only events with context.event == "checkpoint_saved" pass through.
+#   This is the durable path: JSONL → Vector → ClickHouse checkpoints table.
+[transforms.to_checkpoints]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+  ctx = {}
+  if is_object(.context) {
+    ctx = .context
+  } else {
+    ctx_raw = string(.context) ?? "{}"
+    ctx = parse_json(ctx_raw) ?? {}
+  }
+  evt = string(ctx.event) ?? ""
+  if evt != "checkpoint_saved" { abort }
+
+  tag = string(ctx.tag) ?? "temporary"
+  is_protected = if includes(["growth", "tqp", "release_candidate"], tag) { 1 } else { 0 }
+
+  metrics = object(.metrics) ?? {}
+
+  . = {
+    "run_id":        string!(.run_id),
+    "step":          to_int(.step) ?? 0,
+    "s3_key":        string(ctx.canonical_path) ?? "",
+    "loss":          to_float(metrics.checkpoint_loss) ?? 0.0,
+    "tag":           tag,
+    "is_protected":  is_protected,
+    "status":        "registered",
+    "host":          string!(.host),
+    "duration_s":    to_float(metrics.checkpoint_duration_s) ?? 0.0,
+    "size_bytes":    to_int(metrics.checkpoint_size_bytes) ?? 0,
+    "metadata_json": encode_json(ctx)
+  }
+'''
+
+# SINKS
+
+# 1. Debug Sink
+[sinks.console_debug]
+type = "console"
+inputs = ["to_raw_logs"]
+encoding.codec = "json"
+
+# 2. Raw logs (audit trail, full JSON blobs)
+[sinks.clickhouse_logs]
+type = "clickhouse"
+inputs = ["to_raw_logs"]
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+database = "training_observability"
+table = "logs"
+compression = "gzip"
+batch.max_bytes = 10485760
+auth.strategy = "basic"
+auth.user = "${CLICKHOUSE_USER}"
+auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
+
+# 5. Typed events (stage transitions, sample generation, checkpoint lifecycle)
+[sinks.clickhouse_events]
+type = "clickhouse"
+inputs = ["to_events"]
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+database = "training_observability"
+table = "events"
+compression = "gzip"
+batch.max_bytes = 10485760
+auth.strategy = "basic"
+auth.user = "${CLICKHOUSE_USER}"
+auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
+
+# 6. Structured array metrics (histograms/distributions/top-k summaries)
+[sinks.clickhouse_metric_arrays]
+type = "clickhouse"
+inputs = ["to_metric_arrays"]
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+database = "training_observability"
+table = "metric_arrays"
+compression = "gzip"
+batch.max_bytes = 10485760
+auth.strategy = "basic"
+auth.user = "${CLICKHOUSE_USER}"
+auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
+
+# 3. Typed scalar metrics (one row per metric per step — dashboard-friendly)
+[sinks.clickhouse_metric_points]
+type = "clickhouse"
+inputs = ["to_metric_points"]
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+database = "training_observability"
+table = "metric_points"
+compression = "gzip"
+batch.max_bytes = 10485760
+auth.strategy = "basic"
+auth.user = "${CLICKHOUSE_USER}"
+auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"
+
+# 4. Checkpoint registry (governance — durable path via Vector)
+[sinks.clickhouse_checkpoints]
+type = "clickhouse"
+inputs = ["to_checkpoints"]
+endpoint = "${CLICKHOUSE_HTTPS_ENDPOINT}"
+database = "training_observability"
+table = "checkpoints"
+compression = "gzip"
+batch.max_bytes = 10485760
+auth.strategy = "basic"
+auth.user = "${CLICKHOUSE_USER}"
+auth.password = "${CLICKHOUSE_PASSWORD}"
+tls.ca_file = "${CLICKHOUSE_CA_CERT}"

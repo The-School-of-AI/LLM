@@ -1,0 +1,119 @@
+# ============================================================================
+# 70B TQP Training — Phase 1 Validation
+# ============================================================================
+# 70B MoE (260 experts, top-k=8+1 shared), TQP rank 16, flush every 25
+# ZeRO-1, GBS=40 (5 per GPU x 8 GPUs), seqlen: 8192
+# Adapter LR: 10x base LR
+
+data:
+  loader_type: curriculum_v2_map
+  shard_dir: ../data/training_shards_8k
+  eval_shard_dir: null
+  tokenizer_dir: ../tokenizer
+  validate_tokenizer: false
+  curriculum_config_path: ../configs/curriculum_v2.yaml
+  curriculum_stage: "TRAIN_8K_STABLE"
+  curriculum_mode: combined
+  manifest_dir: ../manifests
+  dataset_name: wikitext
+  dataset_config: wikitext-103-raw-v1
+  tokenize_num_proc: 8
+  max_length: 8192
+  num_workers: 4
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: false
+  block_sizes: null
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+  exclusion_file: null
+
+training:
+  num_epochs: 1
+  max_train_steps: 500
+  max_train_seconds: null
+  max_eval_steps: null
+  log_interval: 1
+  seed: 1337
+  lr_schedule_path: ../configs/lr_schedule_8b_growth.yaml
+  lr_stage: "TRAIN_8K_STABLE"
+  init_model_path: null
+  require_gsa_triton: true
+  require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 8
+  metrics_jsonl_path: ../results/70b_tqp/metrics.jsonl
+  profile_steps: []
+  enable_system_metrics: true
+
+deepspeed:
+  config_path: ../deepspeed/zero-1-70b-tqp.json
+  local_rank: -1
+
+model:
+  embedding_type: kronecker
+  model_name: 70bmoe
+  model_variant: reversible
+  moe_t4_enabled: false
+  moe_t4_dispatcher: deepep
+  moe_expert_parallel_size: 1
+  num_null_experts: 0
+
+tqp:
+  enabled: true
+  weight_bits: 4
+  rank: 16
+  flush_every: 5
+  adapter_lr_mult: 10.0
+
+opus:
+  enabled: false
+  active_fraction: 0.0
+  score_seq_len: 512
+  sketch_dim: 8192
+  selection_ratio: 0.5
+  temperature: 1.0
+  n_proxy: 4
+  score_layer_stride: 2
+  proxy_type: bench
+  proxy_token_path: ../data/golden_proxy.pt
+  aon_per_step: 0
+  candidates_per_step: 0
+
+checkpoint:
+  output_dir: ../results/70b_tqp/checkpoints
+  save_checkpoint: true
+  checkpoint_interval: 100
+  keep_last_n_checkpoints: 3
+  resume_from_checkpoint: null
+  resume_step: null
+
+spot_checkpoint:
+  enabled: true
+  checkpoint_interval_seconds: 1800
+  checkpoint_interval_steps: 100
+  spot_poll_interval: 5.0
+  keep_last_n_local: 3
+  log_max_bytes: 52428800
+  spot_metadata_url: null
+
+s3:
+  enabled: false
+  bucket: t1-dataacquisition-checkpoints-2
+  prefix: training/70b_tqp
+  region: us-west-2
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: The history of artificial intelligence begins with
+
+observability:
+  enabled: true
+  log_dir: /tmp/training_logs_70b_tqp
+  metrics_port: 8000
+  system_metrics_interval: 5.0

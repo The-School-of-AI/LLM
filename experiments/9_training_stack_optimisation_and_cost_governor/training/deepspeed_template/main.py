@@ -27,12 +27,13 @@ Usage:
 
 import argparse
 
-import deepspeed
 import torch
 from src.data import get_dataloaders, get_tokenizer
 from src.train import evaluate, generate_text, save_checkpoint, train_epoch
 from src.utils import set_seed
 from transformers import AutoModelForCausalLM
+
+import deepspeed
 
 
 def parse_args():

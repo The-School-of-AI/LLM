@@ -1,0 +1,102 @@
+# OPUS Integration Test — 3B MoE Reversible (ZeRO-3)
+# 1:10 ratio, MTP off during scoring
+# 60 cand/GPU → 30 selected (ρ=0.5) → drain 3/step → 10 steps
+# Data: curriculum_test_shards subset (~900 shards, 113GB)
+
+data:
+  loader_type: curriculum_v2
+  shard_dir: ../data/curriculum_test_shards
+  eval_shard_dir: null
+  tokenizer_dir: ../tokenizer
+  validate_tokenizer: true
+  curriculum_config_path: ../configs/curriculum_v2.yaml
+  curriculum_stage: "1B"
+  curriculum_mode: combined
+  manifest_dir: ../manifests
+  dataset_name: wikitext
+  dataset_config: wikitext-103-raw-v1
+  tokenize_num_proc: 8
+  max_length: 4096
+  num_workers: 4
+  tokenized_dataset_path: null
+  dataset_cache_dir: null
+  local_nvme_cache_dir: null
+  require_local_nvme: false
+  pack_into_blocks: true
+  block_sizes:
+  - 4096
+  block_size_counts: null
+  domain_column: null
+  concat_across_domains: false
+  drop_remainder: true
+
+training:
+  num_epochs: 1
+  max_train_steps: 200
+  max_train_seconds: null
+  max_eval_steps: null
+  log_interval: 1
+  seed: 42
+  lr_schedule_path: ../configs/lr_schedule.yaml
+  lr_stage: "1B"
+  init_model_path: ../results/init/model_init.pt
+  require_gsa_triton: true
+  require_fused_kernels: false
+  use_fused_ce: true
+  max_chunk_gb: 8
+  metrics_jsonl_path: ../results/run/metrics.jsonl
+  profile_steps: []
+  enable_system_metrics: false
+
+deepspeed:
+  config_path: ../deepspeed/zero-3-moe-bf16.json
+  local_rank: -1
+
+model:
+  embedding_type: kronecker
+  model_name: 3bmoe
+  model_variant: reversible
+  moe_t4_enabled: false
+  moe_t4_dispatcher: deepep
+  moe_expert_parallel_size: 1
+
+opus:
+  enabled: true
+  score_seq_len: 512
+  sketch_dim: 8192
+  selection_ratio: 0.5
+  temperature: 1.0
+  n_proxy: 4
+  score_layer_stride: 1
+  proxy_type: random_in_distribution
+  aon_per_step: 1
+  candidates_per_step: 3
+
+checkpoint:
+  output_dir: ../results/run/checkpoints
+  save_checkpoint: false
+  checkpoint_interval: null
+  keep_last_n_checkpoints: 3
+  resume_from_checkpoint: null
+  resume_step: null
+
+spot_checkpoint:
+  enabled: false
+
+s3:
+  enabled: false
+  bucket: null
+  prefix: training/checkpoints
+  region: us-east-1
+  cleanup_after_upload: false
+
+generation:
+  test_generation: false
+  generation_prompt: The history of artificial intelligence begins with
+
+observability:
+  enabled: false
+  log_dir: /tmp/training_logs
+  metrics_port: 8000
+  skip_vector_check: true
+  system_metrics_interval: 5.0

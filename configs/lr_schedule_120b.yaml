@@ -1,0 +1,56 @@
+# ============================================================================
+# LR Schedule — 120B MoE Training (Stage 1 Router Calibration + Stage 2 SFT)
+# ============================================================================
+#
+# Constraint: Stage 1 peak LR must not exceed 8B WSD peak (7.56e-5).
+#
+# Stage 1: Router calibration — gate.weight + logit_bias learn fast,
+#           everything else at 1/100 to preserve 8B backbone quality.
+#           Uses WSD shape: warmup → stable → cosine decay.
+#
+# Stage 2: SFT — all params unfrozen, cosine with 5% warmup.
+#           Peak at 2e-5 (step-up from Stage 1 end LR of 7.56e-6).
+#
+# Pipeline:
+#   Stage 1:  router  7.56e-5 → 7.56e-6  (WSD, 2B tokens, 300-step warmup)
+#             rest    7.56e-7 → 7.56e-8  (1/100 of router)
+#                          ↓
+#   SFT:      all     2e-5 → 1e-6        (cosine, 5.1B tokens)
+#
+# These two stages are the released 120B lineage. The released checkpoint
+# `step_5161_periodic` was taken from the SFT stage.
+
+stages:
+  # ── Stage 1: Router Calibration ──────────────────────────────────────
+  # Gate weights learn the 120B routing landscape.
+  # Backbone stays near 8B quality (1/100 LR).
+  # 2B tokens ≈ ~3815 steps at GBS=64 (8×micro=8), seq_len=8192.
+  # WSD: 500 warmup → ~2815 stable → ~500 cosine decay to 1/10.
+  #
+  # The staged_lr.py scheduler uses this for the ROUTER param group.
+  # A separate param group config in the training YAML sets the 1/100
+  # multiplier for non-router params.
+  - name: "120B_STAGE1_ROUTER"
+    token_budget: 2.0e9
+    peak_lr: 3.5e-5              # = 8B WSD peak (router needs strong signal to break symmetry)
+    decay_ratio: 10               # end_lr = 7.56e-6
+    warmup_steps: 300             # fast ramp — router must move quickly from random init
+    warmup_from: 1.0e-5           # higher floor for faster start
+    weight_decay: 0.0
+    schedule_type: "wsd"
+    stable_fraction: 0.85         # 85% stable, 15% cosine decay
+    # Non-router params: multiply by router_rest_lr_ratio in training config
+    # router_rest_lr_ratio: 0.01  (set in train_120b_tqp.yaml)
+
+  # ── Stage 2: SFT ────────────────────────────────────────────────────
+  # All params unfrozen. Cosine schedule with 5% warmup.
+  # Peak 2e-5 is a ~2.6× step-up from Stage 1 end (7.56e-6) — smooth.
+  # 5.1B tokens ≈ ~9700 steps at GBS=128 (8×micro=16), seq_len=4096.
+  - name: "120B_SFT"
+    token_budget: 5.1e9
+    peak_lr: 2.0e-5
+    decay_ratio: 20               # end_lr = 1e-6
+    warmup_steps: 485             # 5% of ~9700 steps
+    warmup_from: auto             # = 7.56e-6 (end of Stage 1)
+    weight_decay: 0.0
+    schedule_type: "cosine"

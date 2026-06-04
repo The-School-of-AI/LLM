@@ -3,3 +3,23 @@
 ## Global owners for the entire repository
 
 *       @pankaj1311 @firekind @aiplaybookin @nsr9 @sidrocks @smitasasindran
+
+## LightningLM 0.1V release artifact — paper companion code
+
+/README.md            @theschoolofai
+/LICENSE              @theschoolofai
+/Dockerfile           @theschoolofai
+/pyproject.toml       @theschoolofai
+/configs/             @theschoolofai
+/lightninglm/         @theschoolofai
+/scripts/             @theschoolofai
+/deepspeed/           @theschoolofai
+/manifests/           @theschoolofai
+/tokenizer/           @theschoolofai
+/data/                @theschoolofai
+/requirements/        @theschoolofai
+/aws/                 @theschoolofai
+/docs/cookbook.md           @theschoolofai
+/docs/data_pipeline.md      @theschoolofai
+/docs/tokenizer_pipeline.md @theschoolofai
+/tests/test_release_structure.py @theschoolofai

@@ -34,13 +34,6 @@ import torch.nn as nn
 
 # Import our modular components
 from config import Config
-from data import (
-    SYNTHPromptSampler,
-    SYNTHStream,
-    create_bpe_token_strings,
-    discover_chars_from_bpe_tokenizer,
-    pad_char_vocab_128,
-)
 from fourier_se_decoder import PFCodec, PFConfig
 
 # MODEL SELECTION: Uncomment ONE of the following imports
@@ -66,6 +59,14 @@ from utils import (
     set_runtime_optimizations,
     setup_logging,
     sync_device,
+)
+
+from data import (
+    SYNTHPromptSampler,
+    SYNTHStream,
+    create_bpe_token_strings,
+    discover_chars_from_bpe_tokenizer,
+    pad_char_vocab_128,
 )
 
 

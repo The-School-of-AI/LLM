@@ -136,7 +136,13 @@ Thumbs.db
 # ==============================================================================
 
 # Directories
-/data/
+/data/*
+!/data/README.md
+!/data/curriculum_test_shards/
+!/data/d1_shards/
+!/data/training_shards_8k/
+/data/*/*
+!/data/*/.gitkeep
 /outputs/
 /logs/
 logs/

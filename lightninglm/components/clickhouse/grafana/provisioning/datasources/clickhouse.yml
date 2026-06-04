@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: ClickHouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: true
+    uid: clickhouse-p12
+    jsonData:
+      host: clickhouse
+      port: 8123
+      protocol: http
+      defaultDatabase: training_observability
+      username: ${CLICKHOUSE_GRAFANA_USER:-default}
+    secureJsonData:
+      password: ${CLICKHOUSE_GRAFANA_PASSWORD:-}

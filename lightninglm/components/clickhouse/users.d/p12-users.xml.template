@@ -1,0 +1,37 @@
+<clickhouse>
+  <users>
+    <!-- default: admin access, localhost only (docker exec / healthcheck) -->
+    <default>
+      <networks>
+        <ip>127.0.0.1</ip>
+        <ip>::1</ip>
+      </networks>
+    </default>
+
+    <!-- p12_writer: used by Vector + CheckpointRegistry on the training instance -->
+    <p12_writer>
+      <password_sha256_hex>__WRITER_HASH__</password_sha256_hex>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <allow_databases>
+        <database>training_observability</database>
+      </allow_databases>
+    </p12_writer>
+
+    <!-- p12_reader: used by dashboards / query tools -->
+    <p12_reader>
+      <password_sha256_hex>__READER_HASH__</password_sha256_hex>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+      <profile>readonly</profile>
+      <quota>default</quota>
+      <allow_databases>
+        <database>training_observability</database>
+      </allow_databases>
+    </p12_reader>
+  </users>
+</clickhouse>
