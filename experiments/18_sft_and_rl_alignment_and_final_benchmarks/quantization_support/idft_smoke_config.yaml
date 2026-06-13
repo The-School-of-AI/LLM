@@ -1,0 +1,119 @@
+# =============================================================================
+# IDFT Smoke Test Configuration
+# Team 18: SFT, RL-Style Alignment & Final Post-Training Benchmarks
+# =============================================================================
+# A/B comparison: Standard SFT vs IDFT loss
+# Based on "Towards On-Policy SFT" (arXiv:2602.12222)
+# =============================================================================
+
+model:
+  # Primary: 70B MoE checkpoint after pre-training
+  # Fallback 1: 8B MoE checkpoint from Stage 3
+  # Fallback 2: Public MoE (Qwen/Qwen2.5-7B for code validation)
+  name: "Qwen/Qwen2.5-7B"
+  trust_remote_code: true
+  torch_dtype: "auto"
+  device_map: "auto"
+  attn_implementation: "flash_attention_2"
+  max_seq_length: 4096
+  max_prompt_length: 2048
+  max_completion_length: 2048
+
+quantization:
+  enabled: true
+  bits: 4
+  quant_type: "nf4"
+  compute_dtype: "bfloat16"
+  double_quant: true
+  exclude_modules:
+    - "lm_head"
+    - "embed_tokens"
+    - "embed_out"
+    - "wte"
+    - "wpe"
+    - "word_embeddings"
+    - "embed_in"
+    - "output_layer"
+
+lora:
+  r: 64
+  alpha: 128
+  dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  # "all-linear" targets every nn.Linear layer, including all MoE expert FFNs.
+  target_modules: "all-linear"
+
+training:
+  output_dir: "./outputs/idft_smoke_test"
+  method: "sft"  # Overridden per condition by orchestrator
+
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 4  # effective batch = 32
+
+  learning_rate: 2.0e-5  # Overridden per LR grid point
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+
+  num_train_epochs: 2
+  max_steps: -1
+
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  max_grad_norm: 1.0
+
+  logging_steps: 10
+  save_steps: 500
+  save_total_limit: 2
+  eval_strategy: "steps"
+  eval_steps: 500
+
+  report_to: "wandb"
+  seed: 42
+  dataloader_num_workers: 4
+
+  grpo:
+    num_generations: 4
+    beta: 0.0
+    temperature: 0.7
+    top_p: 0.9
+    epsilon: 0.2
+
+  dpo:
+    beta: 0.1
+    label_smoothing: 0.0
+
+  idft:
+    enabled: true
+    clip_B: 5.0
+    learning_rates:
+      - 5.0e-5
+      - 2.0e-5
+      - 1.0e-5
+    log_diagnostics_every: 10
+
+data:
+  # 50K stratified subset — prepared by orchestrator
+  dataset_name: "OpenAssistant/oasst1"
+  dataset_split: "train"
+  max_samples: 50000
+  val_split_ratio: 0.05
+  text_column: "text"
+  prompt_template: ""
+  filters:
+    language: "en"
+    min_quality: 0.5
+
+hardware:
+  auto_detect: true
+  fallback_to_cpu: false
+  mps_fallback_to_bf16: true
+  force_device: null
+
+hub:
+  push_to_hub: false
+  hub_model_id: null
+  private: false
