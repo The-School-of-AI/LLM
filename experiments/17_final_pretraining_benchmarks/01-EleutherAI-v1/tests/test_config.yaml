@@ -1,0 +1,33 @@
+stage: "test"
+description: "Isolated MMLU test configuration"
+benchmarks:
+  - name: "MMLU-Pro"
+    enabled: true
+    harness_task: "mmlu_pro"  # Unified group name (English only)
+    shots: 5
+    limit: 100
+    subjects: 
+      - "biology"
+      - "business"
+      - "chemistry"
+      - "computer_science"
+      - "economics"
+      - "engineering"
+      - "health"
+      - "history"
+      - "law"
+      - "math"
+      - "other"
+      - "philosophy"
+      - "physics"
+      - "psychology"
+    phases: ["pretraining", "sft"]
+  - name: "MMLU"
+    enabled: true
+    harness_task: "mmlu"
+    subjects:
+      - "anatomy"
+      - "college_biology"
+    shots: 5
+    limit: 5
+    phases: ["pretraining", "sft"]

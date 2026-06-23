@@ -1,0 +1,13 @@
+lm-eval
+torch
+transformers
+accelerate
+datasets
+evaluate
+scikit-learn
+pyyaml
+langdetect
+immutabledict
+human-eval
+sentencepiece
+protobuf

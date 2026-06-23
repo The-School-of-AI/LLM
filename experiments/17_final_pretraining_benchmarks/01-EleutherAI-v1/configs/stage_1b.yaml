@@ -1,0 +1,8 @@
+stage: "1b"
+description: "Pre-training benchmarks for 1B model (Knowledge Acquisition Validation)"
+base_config: "base_benchmarks.yaml"
+benchmarks:
+  # All core benchmarks inherited from base_benchmarks.yaml
+  # Only add overrides or new benchmarks here.
+  - name: "TriviaQA"
+    cot: false  # 1B/3B Diagnostic: No CoT for cleaner signal

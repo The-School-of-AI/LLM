@@ -1,0 +1,89 @@
+stage: "sft_70b"
+description: "SFT benchmarks for 70B model (Frontier Phase Diagnostics)"
+base_config: "base_benchmarks.yaml"
+benchmarks:
+  - name: "MMLU"
+    subjects: null
+    limit: 250
+    phases: ["sft"]
+
+  - name: "MMLU-Pro"
+    limit: 250
+    phases: ["sft"]
+
+  - name: "TriviaQA"
+    limit: 250
+    phases: ["sft"]
+
+  - name: "GPQA Diamond"
+    enabled: true
+    harness_task: "gpqa_diamond_n_shot"
+    shots: 0
+    limit: 100
+    phases: ["sft"]
+
+  - name: "GSM8K"
+    limit: 250
+    phases: ["sft"]
+
+  - name: "BBH (Big Bench Hard)"
+    limit: 100
+    phases: ["sft"]
+
+  - name: "ARC-Challenge"
+    limit: 250
+    phases: ["sft"]
+
+  - name: "MATH"
+    limit: 100
+    phases: ["sft"]
+
+  - name: "IFEval"
+    limit: 250
+    phases: ["sft"]
+
+  - name: "HumanEval"
+    limit: 100
+    phases: ["sft"]
+
+  - name: "SimpleQA_Verified"
+    limit: 100
+    phases: ["sft"]
+
+  - name: "AIME 2025"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
+    paradigm: "8-shot CoT"
+    limit: 100
+    phases: ["sft"]
+
+  - name: "IndicGLUE"
+    phases: ["sft"]
+
+  - name: "IndicQA"
+    phases: ["sft"]
+
+  - name: "L-Eval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
+    limit: 50
+    phases: ["sft"]
+
+  - name: "RULER"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
+    tasks: ["longchat_qa"]
+    limit: 50
+    phases: ["sft"]
+
+  - name: "Indic-Bias (FairITales)"
+    phases: ["sft"]
+
+  - name: "HELM Safety"
+    phases: ["sft"]
+
+  - name: "SWE-bench Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
+    limit: 50
+    phases: ["sft"]

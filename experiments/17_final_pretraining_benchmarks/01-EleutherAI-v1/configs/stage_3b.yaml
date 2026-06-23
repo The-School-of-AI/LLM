@@ -1,0 +1,48 @@
+stage: "3b"
+description: "Pre-training benchmarks for 3B model (Reasoning & Code Diagnostics)"
+base_config: "base_benchmarks.yaml"
+benchmarks:
+  - name: "MMLU"
+    subjects: 
+      - "elementary_mathematics"
+      - "high_school_biology"
+      - "high_school_chemistry"
+      - "high_school_physics"
+      - "high_school_computer_science"
+      - "high_school_us_history"
+      - "high_school_geography"
+      - "high_school_psychology"
+      - "high_school_mathematics"
+      - "high_school_government_and_politics"
+      - "astronomy"
+      - "world_religions"
+      - "philosophy"
+      - "logical_fallacies"
+      - "moral_disputes"
+      - "anatomy"
+      - "business_ethics"
+      - "clinical_knowledge"
+      - "conceptual_physics"
+      - "econometrics"
+    limit: 100
+
+  - name: "TriviaQA"
+
+  - name: "HumanEval"
+    limit: 75
+
+  - name: "SimpleQA_Verified"
+    limit: 75
+
+  - name: "BBH (Big Bench Hard)"
+    limit: 100
+
+  - name: "ARC-Challenge"
+    limit: 150
+    shots: 5
+
+  - name: "L-Eval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
+    limit: 30
+    phases: ["pretraining"]

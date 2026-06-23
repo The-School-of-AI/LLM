@@ -1,0 +1,2 @@
+benchmark,dataset_name,split,test_set_size,total_tokens,avg_tokens_per_sample,min_tokens,max_tokens,metric,metric_description,paper,status,notes,timestamp
+IndicGLUE,ai4bharat/indic_glue,test,,,,,,"accuracy, f1","Varies by task (classification, NER, QA)",IndicGLUE: A Natural Language Understanding Benchmark for Indic Languages,error,unhashable type: 'list',2026-02-04T00:18:01.036361

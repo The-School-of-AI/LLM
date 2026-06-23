@@ -1,0 +1,68 @@
+stage: "70b"
+description: "Pre-training benchmarks for 70B model (Frontier Phase Diagnostics)"
+base_config: "base_benchmarks.yaml"
+benchmarks:
+  - name: "MMLU"
+    # Remove subjects list to run full 57 subjects (default harness behavior)
+    subjects: null 
+    limit: 250
+
+  - name: "MMLU-Pro"
+    limit: 250
+    shots: 8  # Scale few-shot reasoning for frontier models
+
+  - name: "TriviaQA"
+    limit: 250
+
+  - name: "GSM8K"
+    limit: 250
+
+  - name: "ARC-Challenge"
+    limit: null
+    shots: 25
+
+  - name: "BBH (Big Bench Hard)"
+    limit: 250
+    shots: 8
+
+  - name: "IFEval"
+    limit: 250
+
+  - name: "HumanEval"
+    limit: 100
+
+  - name: "SimpleQA_Verified"
+    limit: 100
+
+  - name: "GPQA Diamond"
+    enabled: true
+    harness_task: "gpqa_diamond_n_shot"
+    shots: 0
+    limit: 100
+    phases: ["pretraining"]
+
+  - name: "AIME 2025"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/aime2025.py"
+    paradigm: "8-shot CoT"
+    limit: 100
+    phases: ["pretraining"]
+
+  - name: "L-Eval"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/leval.py"
+    limit: 50
+    phases: ["pretraining"]
+
+  - name: "RULER"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/ruler.py"
+    tasks: ["longchat_qa"]
+    limit: 50
+    phases: ["pretraining"]
+
+  - name: "SWE-bench Verified"
+    enabled: true
+    custom_script: "01-EleutherAI-v1/src/custom-scripts/swebench.py"
+    limit: 50
+    phases: ["pretraining"]

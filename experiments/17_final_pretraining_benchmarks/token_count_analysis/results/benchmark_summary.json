@@ -1,0 +1,18 @@
+[
+  {
+    "benchmark": "IndicGLUE",
+    "dataset_name": "ai4bharat/indic_glue",
+    "split": "test",
+    "test_set_size": null,
+    "total_tokens": null,
+    "avg_tokens_per_sample": null,
+    "min_tokens": null,
+    "max_tokens": null,
+    "metric": "accuracy, f1",
+    "metric_description": "Varies by task (classification, NER, QA)",
+    "paper": "IndicGLUE: A Natural Language Understanding Benchmark for Indic Languages",
+    "status": "error",
+    "notes": "unhashable type: 'list'",
+    "timestamp": "2026-02-04T00:18:01.036361"
+  }
+]
