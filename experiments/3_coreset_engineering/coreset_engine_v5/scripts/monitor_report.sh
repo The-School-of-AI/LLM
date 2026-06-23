@@ -22,9 +22,9 @@ NC='\033[0m'
 
 PASS=0; FAIL=0; WARN=0
 
-pass() { echo -e "  ${GREEN}✅${NC} $1"; ((PASS++)); }
-fail() { echo -e "  ${RED}❌${NC} $1"; ((FAIL++)); }
-warn() { echo -e "  ${YELLOW}⚠️${NC}  $1"; ((WARN++)); }
+pass() { echo -e "  ${GREEN}✅${NC} $1"; ((PASS++)) || true; }
+fail() { echo -e "  ${RED}❌${NC} $1"; ((FAIL++)) || true; }
+warn() { echo -e "  ${YELLOW}⚠️${NC}  $1"; ((WARN++)) || true; }
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
@@ -38,16 +38,16 @@ echo ""
 # ── CPU Summary ──────────────────────────────────────────────
 echo -e "${CYAN}── CPU Summary ──${NC}"
 if [[ -f "$LOG_DIR/cpu.log" ]]; then
-  AVG_USR=$(awk '/^Average.*all/{print $3}' \
-    "$LOG_DIR/cpu.log" | tail -1)
-  AVG_SYS=$(awk '/^Average.*all/{print $5}' \
-    "$LOG_DIR/cpu.log" | tail -1)
-  AVG_STEAL=$(awk '/^Average.*all/{print $6}' \
-    "$LOG_DIR/cpu.log" | tail -1)
-  AVG_IOWAIT=$(awk '/^Average.*all/{print $4}' \
-    "$LOG_DIR/cpu.log" | tail -1)
-  AVG_IDLE=$(awk '/^Average.*all/{print $NF}' \
-    "$LOG_DIR/cpu.log" | tail -1)
+  AVG_USR=$(awk '/^Average.*all/ || /all/{u=$3} END{print u}' \
+    "$LOG_DIR/cpu.log")
+  AVG_SYS=$(awk '/^Average.*all/ || /all/{s=$5} END{print s}' \
+    "$LOG_DIR/cpu.log")
+  AVG_STEAL=$(awk '/^Average.*all/ || /all/{st=$6} END{print st}' \
+    "$LOG_DIR/cpu.log")
+  AVG_IOWAIT=$(awk '/^Average.*all/ || /all/{io=$4} END{print io}' \
+    "$LOG_DIR/cpu.log")
+  AVG_IDLE=$(awk '/^Average.*all/ || /all/{id=$NF} END{print id}' \
+    "$LOG_DIR/cpu.log")
 
   # Peak steal across all snapshots
   PEAK_STEAL=$(awk '/^ .*all/{print $6}' \
@@ -101,9 +101,11 @@ if [[ -f "$LOG_DIR/mem.log" ]]; then
   echo "  Total swap-out : ${TOTAL_SO} KB"
   echo "  Avg free mem   : ${AVG_FREE} KB"
 
-  (( TOTAL_SI + TOTAL_SO == 0 )) \
-    && pass "No swap activity" \
-    || fail "Swap activity detected (si=${TOTAL_SI}, so=${TOTAL_SO})"
+  if (( TOTAL_SI + TOTAL_SO == 0 )); then
+    pass "No swap activity"
+  else
+    fail "Swap activity detected (si=${TOTAL_SI}, so=${TOTAL_SO})"
+  fi
 
   # Check current RAM usage
   if [[ -f /proc/meminfo ]]; then
@@ -124,23 +126,34 @@ echo ""
 # ── Disk I/O Summary ────────────────────────────────────────
 echo -e "${CYAN}── Disk I/O Summary ──${NC}"
 if [[ -f "$LOG_DIR/disk.log" ]]; then
-  # NVMe (ephemeral) — typically nvme1n1
-  NVME_AWAIT=$(awk '/nvme1n1/{sum+=$10; n++} END{
-    if(n>0) printf "%.2f", sum/n; else print "N/A"
-  }' "$LOG_DIR/disk.log")
+  # Auto-detect devices for I/O summary
+  # NVMe (ephemeral) — try to find the one with the most activity, named nvme[1-9]n1, or from mount point
+  NVME_DEV=$(awk '/nvme[1-9]n1/{print $3}' "$LOG_DIR/disk.log" | sort | uniq | head -1)
+  if [ -z "$NVME_DEV" ]; then
+    # Fallback: check if /mnt/nvme is a device
+    NVME_DEV_PATH=$(df /mnt/nvme 2>/dev/null | awk 'NR==2{print $1}')
+    NVME_DEV=$(basename "$NVME_DEV_PATH" 2>/dev/null || echo "nvme1n1")
+  fi
 
   # EBS (root) — typically nvme0n1
-  EBS_AWAIT=$(awk '/nvme0n1/{sum+=$10; n++} END{
+  EBS_DEV_PATH=$(df / 2>/dev/null | awk 'NR==2{print $1}')
+  EBS_DEV=$(basename "$EBS_DEV_PATH" 2>/dev/null || echo "nvme0n1")
+
+  NVME_AWAIT=$(awk -v dev="$NVME_DEV" '$0 ~ dev {sum+=$10; n++} END{
     if(n>0) printf "%.2f", sum/n; else print "N/A"
   }' "$LOG_DIR/disk.log")
 
-  EBS_UTIL=$(awk '/nvme0n1/{sum+=$NF; n++} END{
+  EBS_AWAIT=$(awk -v dev="$EBS_DEV" '$0 ~ dev {sum+=$10; n++} END{
+    if(n>0) printf "%.2f", sum/n; else print "N/A"
+  }' "$LOG_DIR/disk.log")
+
+  EBS_UTIL=$(awk -v dev="$EBS_DEV" '$0 ~ dev {sum+=$NF; n++} END{
     if(n>0) printf "%.1f", sum/n; else print "N/A"
   }' "$LOG_DIR/disk.log")
 
-  echo "  NVMe avg await : ${NVME_AWAIT} ms"
-  echo "  EBS avg await  : ${EBS_AWAIT} ms"
-  echo "  EBS avg %util  : ${EBS_UTIL}%"
+  echo "  NVMe ($NVME_DEV) avg await : ${NVME_AWAIT} ms"
+  echo "  EBS ($EBS_DEV) avg await  : ${EBS_AWAIT} ms"
+  echo "  EBS ($EBS_DEV) avg %util  : ${EBS_UTIL}%"
 
   if [[ "$NVME_AWAIT" != "N/A" ]]; then
     NVME_INT=${NVME_AWAIT%%.*}

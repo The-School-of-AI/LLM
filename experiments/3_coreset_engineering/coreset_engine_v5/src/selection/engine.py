@@ -234,22 +234,42 @@ class SelectionEngine:
         if not bucket.chunks or bucket.target_tokens <= 0:
             return []
 
-        # Sort by band_score when present (descending). Fall back to composite score.
-        # Tie-break deterministically by chunk_id.
+        # Sort by band_score when present (descending).
+        # If band_score is present, do NOT use the composite diversity score as a tie-breaker;
+        # instead tie-break deterministically by chunk_id (ascending). This prevents silent
+        # degradation to diversity scoring when an upstream quality score (e.g., OPUS) exists.
+        # If band_score is absent, fall back to composite score.
         def _sort_key(cid: str):
             meta = all_chunks.get(cid)
             band_score = None
             if meta is not None:
                 band_score = getattr(meta, "band_score", None)
-            has_band_score = 1 if band_score is not None else 0
-            try:
-                bs = float(band_score) if band_score is not None else 0.0
-            except Exception:
-                bs = 0.0
-            score = float(bucket.scores.get(cid, 0.0) or 0.0)
-            return (has_band_score, bs, score, str(cid))
 
-        sorted_chunks = sorted(bucket.chunks, key=_sort_key, reverse=True)
+            has_band_score = band_score is not None
+            try:
+                bs = float(band_score) if band_score is not None else None
+            except Exception:
+                bs = None
+
+            # Only consult the diversity/composite score when band_score is absent.
+            score_if_no_band_score = 0.0
+            if not has_band_score:
+                score_if_no_band_score = float(bucket.scores.get(cid, 0.0) or 0.0)
+
+            # Ascending sort with negative values to get "highest first".
+            # - has_band_score: True before False
+            # - bs: higher before lower
+            # - score_if_no_band_score: higher before lower
+            # - chunk_id: ascending deterministic tie-break
+            bs_key = bs if bs is not None else float("-inf")
+            return (
+                -int(has_band_score),
+                -float(bs_key),
+                -float(score_if_no_band_score),
+                str(cid),
+            )
+
+        sorted_chunks = sorted(bucket.chunks, key=_sort_key)
 
         # Greedily select until target or all chunks exhausted
         selected = []
@@ -311,13 +331,19 @@ class SelectionEngine:
 
         # Enforce protected slices
         if protected_slices and self.config.selection.include_protected_slices:
+            before = set(selected)
             selected = self._enforce_protected_slices(
                 selected, all_chunks, protected_slices, stage_name
             )
 
-            # Re-enforce language policy after protected slices may have added chunks
-            # that violate language constraints
-            selected = self._enforce_language_policy(selected, all_chunks, stage_name)
+            # Re-enforce language policy only if protected-slice enforcement changed
+            # the selection. `_enforce_language_policy()` is not idempotent for
+            # monolingual pools (it uses current total tokens as the denominator),
+            # so calling it redundantly can compound trimming.
+            if selected != before:
+                selected = self._enforce_language_policy(
+                    selected, all_chunks, stage_name
+                )
 
         self.selected_chunks.update(selected)
 

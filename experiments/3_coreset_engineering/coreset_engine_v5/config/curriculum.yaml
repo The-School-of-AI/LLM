@@ -40,7 +40,30 @@ language_and_context:
       - lang: "en"
         max_share: 0.92
     secondary_languages:
-      - lang: ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"]
+      - lang:
+          [
+            "as",
+            "bn",
+            "gu",
+            "hi",
+            "kn",
+            "ml",
+            "mr",
+            "or",
+            "pa",
+            "ta",
+            "te",
+            "bn_roman",
+            "gu_roman",
+            "hi_roman",
+            "ml_roman",
+            "mr_roman",
+            "or_roman",
+            "pa_roman",
+            "ta_roman",
+            "te_roman",
+            "kn_roman",
+          ]
         max_share: 0.08
         earliest_stage: "1B"
     excluded_languages: ["zh", "ja", "ko", "fr", "de", "es"]
@@ -108,7 +131,16 @@ difficulty_system:
       name: "Nursery"
       intent: "Surface language acquisition"
       allowed_modalities: ["general_text"]
-      allowed_domains: ["web", "social", "qa"]
+      allowed_domains:
+        [
+          "web",
+          "social",
+          "qa",
+          "education",
+          "language_literacy",
+          "conversation",
+          "translation",
+        ]
       constraints:
         tokenizer:
           avg_max: 5000
@@ -123,7 +155,18 @@ difficulty_system:
       name: "Primary"
       intent: "Fluent everyday language"
       allowed_modalities: ["general_text", "clean_exposition"]
-      allowed_domains: ["web", "encyclopedia", "news", "social", "qa"]
+      allowed_domains:
+        [
+          "web",
+          "encyclopedia",
+          "news",
+          "social",
+          "qa",
+          "education",
+          "language_literacy",
+          "conversation",
+          "translation",
+        ]
       constraints:
         tokenizer:
           avg_max: 10000
@@ -139,7 +182,16 @@ difficulty_system:
       intent: "Structured knowledge without explicit reasoning"
       allowed_modalities: ["general_text", "structured_knowledge"]
       allowed_domains:
-        ["encyclopedia", "news", "education", "literature", "web", "qa"]
+        [
+          "encyclopedia",
+          "news",
+          "education",
+          "literature",
+          "web",
+          "qa",
+          "conversation",
+          "translation",
+        ]
       constraints:
         tokenizer:
           avg_max: 20000
@@ -154,7 +206,16 @@ difficulty_system:
       name: "Undergraduate"
       intent: "Reasoning emergence"
       allowed_modalities: ["structured_knowledge", "technical_text", "code"]
-      allowed_domains: ["science", "math", "education", "code", "literature"]
+      allowed_domains:
+        [
+          "science",
+          "math",
+          "education",
+          "code",
+          "literature",
+          "conversation",
+          "translation",
+        ]
       constraints:
         tokenizer:
           avg_max: 40000
@@ -391,7 +452,15 @@ domains:
 
   band_domain_policy:
     B0:
-      ["web", "social", "qa", "education", "language_literacy", "conversation"]
+      [
+        "web",
+        "social",
+        "qa",
+        "education",
+        "language_literacy",
+        "conversation",
+        "translation",
+      ]
     B1:
       [
         "web",
@@ -402,6 +471,7 @@ domains:
         "education",
         "language_literacy",
         "conversation",
+        "translation",
       ]
     B2:
       [
@@ -412,8 +482,18 @@ domains:
         "web",
         "qa",
         "conversation",
+        "translation",
       ]
-    B3: ["science", "math", "education", "code", "literature", "conversation"]
+    B3:
+      [
+        "science",
+        "math",
+        "education",
+        "code",
+        "literature",
+        "conversation",
+        "translation",
+      ]
     B4: ["science", "math", "code", "instruction"]
     B5: ["instruction", "science", "math", "code"]
 

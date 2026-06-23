@@ -448,10 +448,14 @@ class BatchedSelectionEngine(SelectionEngine):
                 stage_name,
             )
 
-            # Re-enforce language policy after potential additions.
-            selected_in_batch = self._enforce_language_policy(
-                selected_in_batch, batch_chunks, stage_name
-            )
+            # Re-enforce language policy only if protected-slice enforcement changed
+            # the selection. `_enforce_language_policy()` is not idempotent for
+            # monolingual pools (it uses current total tokens as the denominator),
+            # so calling it redundantly can compound trimming.
+            if selected_in_batch != before:
+                selected_in_batch = self._enforce_language_policy(
+                    selected_in_batch, batch_chunks, stage_name
+                )
 
             # Ensure protected additions also respect rolling-window constraints.
             added = list(selected_in_batch - before)

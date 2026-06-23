@@ -87,6 +87,7 @@ class TestTypes:
             language="en",
             band=DifficultyBand.B3,
             source_doc_id="doc_001",
+            t1_file_path="doc_2.parquet",
         )
         assert metadata.chunk_id == "chunk_001"
         assert metadata.band == DifficultyBand.B3
@@ -332,6 +333,7 @@ class TestIntegration:
                     band=DifficultyBand(data.get("band", "B0")),
                     source_doc_id=data.get("source_doc_id", ""),
                     source_url=data.get("source_url", None),
+                    t1_file_path="doc_2.parquet",
                 )
                 all_chunks[chunk_id] = meta
 
@@ -417,6 +419,7 @@ stages:
                 band=DifficultyBand(data.get("band", "B0")),
                 source_doc_id=data.get("source_doc_id", ""),
                 source_url=data.get("source_url", None),
+                t1_file_path="doc_2.parquet",
             )
             if "token_ids" in data:
                 setattr(meta, "token_ids", list(data["token_ids"]))

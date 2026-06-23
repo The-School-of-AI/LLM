@@ -58,6 +58,7 @@ class ChunkMetadata:
     band: DifficultyBand
     source_doc_id: str
     source_url: Optional[str] = None
+    t1_file_path: Optional[str] = None
     quality_flags: List[str] = field(default_factory=list)
     sensitive_markers: List[str] = field(default_factory=list)
     start_offset: int = 0
@@ -74,6 +75,7 @@ class ChunkMetadata:
             "band": self.band.value,
             "source_doc_id": self.source_doc_id,
             "source_url": self.source_url,
+            "t1_file_path": self.t1_file_path,
             "quality_flags": self.quality_flags,
             "sensitive_markers": self.sensitive_markers,
             "start_offset": self.start_offset,

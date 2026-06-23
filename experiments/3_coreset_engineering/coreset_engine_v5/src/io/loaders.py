@@ -103,6 +103,8 @@ class ChunkLoader:
                         or meta_dict.get("source_doc_id"),
                         source_url=data.get("source_url", None)
                         or meta_dict.get("source_url"),
+                        t1_file_path=data.get("t1_file_path", None)
+                        or meta_dict.get("t1_file_path"),
                         quality_flags=data.get("quality_flags", []),
                         sensitive_markers=data.get("sensitive_markers", []),
                         start_offset=data.get("start_offset", 0),
@@ -155,7 +157,8 @@ class ChunkLoader:
 
                 metadata = ChunkMetadata(
                     chunk_id=row["chunk_id"],
-                    dataset_id=row["dataset_id"],
+                    dataset_id=row["source"],
+                    source=row["source"],
                     token_count=int(token_val or 0),
                     byte_length=int(row["byte_length"]),
                     domain=row["domain"],
@@ -163,6 +166,7 @@ class ChunkLoader:
                     band=DifficultyBand(row["band"]),
                     source_doc_id=row["source_doc_id"],
                     source_url=row.get("source_url"),
+                    t1_file_path=row.get("t1_file_path"),
                     quality_flags=row.get("quality_flags", []),
                     sensitive_markers=row.get("sensitive_markers", []),
                     start_offset=int(row.get("start_offset", 0)),

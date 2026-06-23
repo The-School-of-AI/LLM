@@ -1,4 +1,5 @@
 # T3 Coreset Engineering — Production Approval Summary  
+
 **Decision: GO**
 
 ---
@@ -28,14 +29,15 @@
 Stage-wise token accounting reconciles exactly (cumulative exposure: 458.7B).  
 No arithmetic inconsistencies detected.
 
-**Note**: C4 tests (~23GB curriculum metadata, no raw text) done on Macbook-Pro M4   
-Shards: 14, Batch size: 80K, Runtime: 95 mins   
+**Note**: C4 tests (~23GB curriculum metadata, no raw text) done on Macbook-Pro M4
+Shards: 14, Batch size: 80K, Runtime: 95 mins
 
 ---
 
 ## 3. Engineering Validation Results
 
 ### Determinism
+
 - Seed fixed (42)
 - Config + curriculum hashes embedded in manifest
 - RNG state serialized in checkpoints
@@ -46,6 +48,7 @@ Shards: 14, Batch size: 80K, Runtime: 95 mins
 ---
 
 ### Non-Overlap Guarantees
+
 - Persistent SQLite used-chunk store per shard
 - Cross-stage exclusion enforced
 - Stage overlap verification tool available
@@ -55,6 +58,7 @@ Shards: 14, Batch size: 80K, Runtime: 95 mins
 ---
 
 ### Fault Tolerance
+
 - ~20 Spot interruptions during test runs
 - All restarts resumed correctly from checkpoints
 - No token leakage or duplication observed
@@ -129,7 +133,7 @@ Overall risk: **Controlled / Acceptable for production.**
 
 ---
 
-# Final Recommendation
+## Final Recommendation
 
 The T3 Coreset Engineering pipeline:
 

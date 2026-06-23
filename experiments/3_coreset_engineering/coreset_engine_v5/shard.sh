@@ -207,10 +207,14 @@ fi
 
 echo "  Python       : ${PYTHON_CMD[*]}"
 
+# Resolve output paths from pipeline config for cleanup and reporting
+CORESET_PATH=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('io',{}).get('output_coreset_path','output/coresets'))" 2>/dev/null || echo "output/coresets")
+MANIFEST_PATH=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('io',{}).get('output_manifest_path','output/manifests'))" 2>/dev/null || echo "output/manifests")
+
 # Clean old outputs
 if [[ "$RESUME" != "true" ]]; then
   echo "[*] Cleaning previous outputs..."
-  rm -rf "$CHECKPOINT_BASE" output/coresets output/manifests 2>/dev/null || true
+  rm -rf "$CHECKPOINT_BASE" "$CORESET_PATH" "$MANIFEST_PATH" 2>/dev/null || true
 else
   echo "[*] Resuming: keeping previous outputs..."
 fi
@@ -266,8 +270,10 @@ if [[ $FAILED -eq 0 ]]; then
 else
   echo "  WARNING: $FAILED / $NUM_SHARDS shards failed!"
 fi
-echo "  Manifests: output/coresets/*/manifest_shard*.json"
-echo "  Reports:   output/manifests/ablation_validation_report_shard*.md"
+echo "  Coreset Output: ${CORESET_PATH}"
+echo "  Manifests:      ${CORESET_PATH}/*/manifest_shard*.json"
+echo "  Reports:        ${MANIFEST_PATH}/ablation_validation_report_shard*.md"
+echo "  Checkpoints:    ${CHECKPOINT_BASE}"
 echo "============================================================"
 
 exit $FAILED

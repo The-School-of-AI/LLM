@@ -36,6 +36,7 @@ def generate(out_path: Path, n: int, seed: int = 42):
                 "sensitive_markers": [],
                 "start_offset": 0,
                 "token_ids": token_ids,
+                "t1_file_path": "doc_2.parquet",
             }
             f.write(json.dumps(chunk) + "\n")
 

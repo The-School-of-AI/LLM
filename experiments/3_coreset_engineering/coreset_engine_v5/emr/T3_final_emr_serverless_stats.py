@@ -39,14 +39,13 @@ DEFAULT_CONFIG = {
         "default_bands": ["B0", "B1", "B2", "B3", "B4", "B5"],
     },
     "schema": {
-        "rename_columns": {"id": "chunk_id"},
+        "rename_columns": {"id": "chunk_id", "file_path": "t1_file_path"},
         "drop_columns": [
             "uuid",
             "text",
             "hash",
             "metadata",
             "assigned_band",
-            "file_path",
         ],
     },
 }

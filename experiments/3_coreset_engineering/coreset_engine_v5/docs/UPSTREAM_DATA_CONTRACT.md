@@ -13,7 +13,7 @@ Defines the **expected upstream chunk schema** consumed by the coreset pipeline 
 > 1) **Metadata-only chunk pool** (like `data/outputv2/b0_shard_0.jsonl`): IDs + band/domain/language + counts + band probabilities/scores.
 > 2) **Text/tokens present**: includes `chunk_text` and/or `token_ids` to enable real dedup and richer diversity scoring.
 >
-> Band inference is controlled by the streaming entrypoint flags `--band-inference` and `--band-score-source` (sometimes described informally as “band inference” / “band source score”).
+> Band inference is controll/ed by the streaming entrypoint flags `--band-inference` and `--band-score-source` (sometimes described informally as “band inference” / “band source score”).
 
 ### Required fields
 
@@ -37,6 +37,7 @@ Defines the **expected upstream chunk schema** consumed by the coreset pipeline 
 | `dataset_id` (or `source`) | string | Traceability/output | JSONL defaults to `"ds"` (aliases: `dataset_id` or `source` or `metadata.source`) |
 | `byte_length` | int | Traceability/output | Defaults to `0` |
 | `source_doc_id` | string | Traceability/output | Should be provided; otherwise empty/missing propagates |
+| `t1_file_path` | string | Traceability/output | Optional. When provided by the T1 dataset team, points to the original raw source file containing the record (distinct from `source_doc_id`, which is typically the processed Parquet part filename). |
 | `source_url` | string | Traceability/output | Optional |
 | `quality_flags` | list[str] | Output metadata | Defaults to `[]` |
 | `sensitive_markers` | list[str] | Output metadata | Defaults to `[]` |
@@ -48,7 +49,7 @@ This file is a **metadata-only** chunk pool: it does **not** include `chunk_text
 
 ### Columns present (verbatim)
 
-`agentic_score`, `band`, `band_p_B0`, `band_p_B1`, `band_p_B2`, `band_p_B3`, `band_p_B4`, `band_p_B5`, `band_score`, `byte_length`, `chunk_id`, `code_score`, `compression_ratio`, `cot_score`, `difficulty_score`, `domain`, `fertility_estimate`, `has_agentic`, `has_code`, `has_cot`, `has_reasoning`, `language`, `math_score`, `reasoning_score`, `source`, `source_doc_id`, `source_url`, `token_count_estimate`, `unique_token_ratio`, `word_count`.
+`agentic_score`, `band`, `band_p_B0`, `band_p_B1`, `band_p_B2`, `band_p_B3`, `band_p_B4`, `band_p_B5`, `band_score`, `byte_length`, `chunk_id`, `code_score`, `compression_ratio`, `cot_score`, `difficulty_score`, `domain`, `fertility_estimate`, `has_agentic`, `has_code`, `has_cot`, `has_reasoning`, `language`, `math_score`, `reasoning_score`, `source`, `source_doc_id`, `source_url`, `t1_file_path`, `token_count_estimate`, `unique_token_ratio`, `word_count`.
 
 ### What the pipeline consumes from these columns
 
@@ -63,7 +64,8 @@ This file is a **metadata-only** chunk pool: it does **not** include `chunk_text
 - `band` → `ChunkMetadata.band`
 - `source_doc_id` → `ChunkMetadata.source_doc_id`
 - `source_url` → `ChunkMetadata.source_url`
-- `band_score` → attached dynamically as `metadata.band_score` (used for ranking when present)
+- `t1_file_path` → attached dynamically as `ChunkMetadata.t1_file_path` (propagates to selected-indices output when present)
+- `band_score` → attached dynamically as `ChunkMetadata.band_score` (used for ranking when present)
 
 When running the streaming entrypoint `coreset_builder.py` with `--band-inference` enabled (anything other than `none`), the builder may also read `difficulty_score` and/or `band_p_B0..band_p_B6` (per `--band-score-source`) to:
 
@@ -76,12 +78,12 @@ Other fields in this file (e.g., `has_code`, `*_score`, `word_count`, `unique_to
 
 Flat record (recommended):
 ```json
-{"chunk_id":"ch_001","dataset_id":"books","token_count_estimate":2048,"byte_length":9876,"domain":"clean_web","language":"en","band":"B2","source_doc_id":"part-00000","source_url":"s3://...","token_ids":[1,2,3]}
+{"chunk_id":"ch_001","dataset_id":"books","token_count_estimate":2048,"byte_length":9876,"domain":"clean_web","language":"en","band":"B2","source_doc_id":"part-00000","source_url":"s3://...","t1_file_path":"s3://t1-raw/.../file.parquet","token_ids":[1,2,3]}
 ```
 
 Nested metadata (accepted):
 ```json
-{"uid":"ch_001","token_count":2048,"metadata":{"source":"books","domain":"clean_web","language":"en","band":"B2","source_doc_id":"part-00000"}}
+{"uid":"ch_001","token_count":2048,"metadata":{"source":"books","domain":"clean_web","language":"en","band":"B2","source_doc_id":"part-00000","t1_file_path":"s3://t1-raw/.../file.parquet"}}
 ```
 
 ## Parquet: minimum viable columns
@@ -90,4 +92,4 @@ Required columns:
 - `chunk_id`, `dataset_id`, `domain`, `language`, `band`, `byte_length`, `source_doc_id`, and one of `token_count`/`token_count_estimate`
 
 Optional columns:
-- `source_url`, `quality_flags`, `sensitive_markers`, `start_offset`, `token_ids`
+- `source_url`, `t1_file_path`, `quality_flags`, `sensitive_markers`, `start_offset`, `token_ids`

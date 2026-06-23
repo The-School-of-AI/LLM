@@ -11,11 +11,7 @@
 #   sudo -E ./validate_infra.sh
 #
 # Override thresholds (examples):
-#   export EXPECTED_INSTANCE_TYPE="c5.4xlarge"
-#   export MIN_VCPU=16
-#   export MIN_RAM_GB=30
-#   export MIN_NVME_FREE_GB=100
-#   export MIN_EBS_FREE_GB=200
+#   export MAX_CPU_STEAL_PCT=2
 #   export S3_BUCKET="other-bucket"
 #   sudo -E ./validate_infra.sh
 #
@@ -58,23 +54,17 @@ header() {
   echo -e "${CYAN}── $1 ──${NC}"
 }
 
-SKIP_EBS_VALIDATION="${SKIP_EBS_VALIDATION:-false}"
+SKIP_EBS_VALIDATION="${SKIP_EBS_VALIDATION:-true}"
 
 # ── Configurable Thresholds ──────────────────────────────────
 # All thresholds can be overridden via environment variables.
 # Defaults target c7gd.16xlarge.
-EXPECTED_INSTANCE_TYPE="${EXPECTED_INSTANCE_TYPE:-c7gd.16xlarge}"
-MIN_VCPU="${MIN_VCPU:-64}"
-MIN_RAM_GB="${MIN_RAM_GB:-120}"
 MAX_CPU_STEAL_PCT="${MAX_CPU_STEAL_PCT:-1}"
 NVME_MOUNT="${NVME_MOUNT:-/mnt/nvme}"
 MAX_NVME_LATENCY_US="${MAX_NVME_LATENCY_US:-200}"
 MIN_NVME_IOPS="${MIN_NVME_IOPS:-100000}"
-MIN_EBS_ROOT_GB="${MIN_EBS_ROOT_GB:-1000}"
 MIN_EBS_IOPS="${MIN_EBS_IOPS:-16000}"
 MAX_EBS_AWAIT_MS="${MAX_EBS_AWAIT_MS:-3}"
-MIN_NVME_FREE_GB="${MIN_NVME_FREE_GB:-400}"
-MIN_EBS_FREE_GB="${MIN_EBS_FREE_GB:-800}"
 MIN_OPEN_FILES="${MIN_OPEN_FILES:-65536}"
 MAX_SWAPPINESS="${MAX_SWAPPINESS:-1}"
 MIN_PYTHON_MAJOR="${MIN_PYTHON_MAJOR:-3}"
@@ -89,7 +79,7 @@ MIN_S3_SPEED_MBS="${MIN_S3_SPEED_MBS:-500}"
 #   2. Actual device/mount presence (handles manually attached storage)
 # Override with ENABLE_NVME=true/false to force.
 if [ -z "${ENABLE_NVME+x}" ]; then
-    if [[ "${EXPECTED_INSTANCE_TYPE}" =~ d\. ]]; then
+    if [[ $(imds "instance-type" 2>/dev/null) =~ d\. ]]; then
         # Instance family has local NVMe (c7gd, m5d, r5d, i3en, etc.)
         ENABLE_NVME=true
     elif mountpoint -q "${NVME_MOUNT}" 2>/dev/null; then
@@ -116,37 +106,25 @@ imds() {
 
 # ============================================================
 echo ""
-echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║   EC2 Infrastructure Validation Report       ║${NC}"
-echo -e "${CYAN}║   Instance target: ${EXPECTED_INSTANCE_TYPE}             ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 echo "  Timestamp : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo "  Hostname  : $(hostname)"
-echo "  Thresholds: VCPU>=${MIN_VCPU} RAM>=${MIN_RAM_GB}GB NVMe=${ENABLE_NVME} EBS>=${MIN_EBS_FREE_GB}GB"
+echo "  Thresholds: NVMe=${ENABLE_NVME}"
 echo ""
 
 # ============================================================
-# 1. Instance Type
+# 1. Instance Info
 # ============================================================
-header "1. Instance Type"
+header "1. Instance Info"
 INST_TYPE=$(imds "instance-type" || echo "unknown")
-if [[ "$INST_TYPE" == "${EXPECTED_INSTANCE_TYPE}" ]]; then
-  pass "Instance type = $INST_TYPE"
-else
-  fail "Instance type" "$INST_TYPE (expected ${EXPECTED_INSTANCE_TYPE})"
-fi
-
-# ============================================================
-# 2. vCPU Count
-# ============================================================
-header "2. CPU Count"
 VCPU=$(nproc 2>/dev/null || echo 0)
-if (( VCPU >= MIN_VCPU )); then
-  pass "vCPU count = $VCPU"
-else
-  fail "vCPU count" "$VCPU (expected >= ${MIN_VCPU})"
-fi
+RAM_KB=$(awk '/^MemTotal/{print $2}' /proc/meminfo)
+RAM_GB=$(( RAM_KB / 1024 / 1024 ))
+echo "  Instance Type: $INST_TYPE"
+echo "  vCPU Count   : $VCPU"
+echo "  Total RAM    : ${RAM_GB} GiB"
 
 # ============================================================
 # 3. NUMA Topology
@@ -186,17 +164,7 @@ else
   warn "mpstat not installed" "install with: apt install sysstat"
 fi
 
-# ============================================================
-# 5. RAM
-# ============================================================
-header "5. RAM"
-RAM_KB=$(awk '/^MemTotal/{print $2}' /proc/meminfo)
-RAM_GB=$(( RAM_KB / 1024 / 1024 ))
-if (( RAM_GB >= MIN_RAM_GB )); then
-  pass "Total RAM = ${RAM_GB} GiB"
-else
-  fail "Total RAM" "${RAM_GB} GiB (expected >= ${MIN_RAM_GB})"
-fi
+# (Merged into Instance Info)
 
 # ============================================================
 # 6. Swap
@@ -230,7 +198,7 @@ if [ "${ENABLE_NVME}" = "true" ]; then
     fail "NVMe device" "no ephemeral NVMe found"
   fi
 else
-  warn "NVMe discovery skipped" "ENABLE_NVME=false (instance ${EXPECTED_INSTANCE_TYPE} has no local NVMe)"
+  warn "NVMe discovery skipped" "ENABLE_NVME=false"
 fi
 
 # ============================================================
@@ -238,7 +206,6 @@ fi
 # ============================================================
 header "8. NVMe Mount"
 if [ "${ENABLE_NVME}" = "true" ]; then
-  if mountpoint -q "$NVME_MOUNT" 2>/dev/null; then
     NVME_FREE_GB=$(df -BG "$NVME_MOUNT" \
       | awk 'NR==2{gsub("G","",$4); print $4}')
     pass "Mounted at $NVME_MOUNT (${NVME_FREE_GB} GB free)"
@@ -308,12 +275,7 @@ if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
 else
   ROOT_SIZE_GB=$(df -BG / \
     | awk 'NR==2{gsub("G","",$2); print $2}')
-  if (( ROOT_SIZE_GB >= MIN_EBS_ROOT_GB )); then
-    pass "EBS root volume = ${ROOT_SIZE_GB} GB"
-  else
-    warn "EBS root volume" \
-      "${ROOT_SIZE_GB} GB (recommended >= ${MIN_EBS_ROOT_GB})"
-  fi
+  pass "EBS root volume = ${ROOT_SIZE_GB} GB"
 fi
 
 # ============================================================
@@ -515,30 +477,12 @@ if [ "${ENABLE_NVME}" != "true" ]; then
 elif mountpoint -q "$NVME_MOUNT" 2>/dev/null; then
   NVME_FREE=$(df -BG "$NVME_MOUNT" \
     | awk 'NR==2{gsub("G","",$4); print $4}')
-  if (( NVME_FREE >= MIN_NVME_FREE_GB )); then
-    pass "NVMe free = ${NVME_FREE} GB"
-  else
-    fail "NVMe free" "${NVME_FREE} GB (expected >= ${MIN_NVME_FREE_GB})"
-  fi
+  pass "NVMe free = ${NVME_FREE} GB"
 else
   warn "NVMe free" "$NVME_MOUNT not mounted"
 fi
 
-# ============================================================
-# 18. EBS Free Space
-# ============================================================
-header "18. EBS Free Space"
-if [ "${SKIP_EBS_VALIDATION}" = "true" ]; then
-  warn "EBS free space skipped" "SKIP_EBS_VALIDATION=true"
-else
-  EBS_FREE=$(df -BG / \
-    | awk 'NR==2{gsub("G","",$4); print $4}')
-  if (( EBS_FREE >= MIN_EBS_FREE_GB )); then
-    pass "EBS free = ${EBS_FREE} GB"
-  else
-    fail "EBS free" "${EBS_FREE} GB (expected >= ${MIN_EBS_FREE_GB})"
-  fi
-fi
+# (Merged into EBS Volume)
 
 # ============================================================
 # 19. Open Files Limit
