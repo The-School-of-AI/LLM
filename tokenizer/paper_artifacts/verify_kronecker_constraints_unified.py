@@ -9,7 +9,7 @@ tokenizer's OWN decoder — no per-pre-tokenizer byte-mapping assumed.
 Metrics per tokenizer:
   - vocab size, normal/special/bytefallback split
   - pre-tokenizer type (auto-detected from tokenizer.json or class name)
-  - max UTF-8 byte length of any normal token (after decode → utf-8)
+  - max UTF-8 byte length of any normal token (from its raw bytes)
   - count of normal tokens with byte length > 32 (the KE POS_DIM ceiling)
   - count of normal tokens spanning ≥2 disjoint non-Common scripts
 
@@ -32,6 +32,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 
@@ -123,6 +124,8 @@ def detect_pre_tokenizer(token_json_path_or_dir):
 # --- HF backend ---
 def measure_hf(tok, max_ids=None):
     """Measure max byte / >32 / cross-script using tokenizer's own decoder."""
+    from lightninglm.data.token_bytes import token_bytes
+
     vocab = tok.get_vocab()
     special_ids = set(getattr(tok, "all_special_ids", []) or [])
     n_normal = 0
@@ -163,7 +166,9 @@ def measure_hf(tok, max_ids=None):
             n_skipped += 1
             continue
         n_normal += 1
-        bl = len(text.encode("utf-8"))
+        # Byte length from the token's raw bytes: decode() renders a partial
+        # UTF-8 character as U+FFFD (3 bytes), which misstates fragment tokens.
+        bl = len(token_bytes(tok, tid))
         if bl > max_byte:
             max_byte = bl
             max_byte_token = tok_str
@@ -413,7 +418,7 @@ def main(args):
 
     # Final table with PASS/FAIL per tokenizer
     print(
-        "\n=== Kronecker constraint summary (decode-based byte length, POS_DIM=32) ==="
+        "\n=== Kronecker constraint summary (raw-byte length, POS_DIM=32) ==="
     )
     print(
         f'{"tokenizer":<32} {"pre":<14} {"vocab":>8} {"max":>5} {">32":>6} {"cross":>6}   KE'

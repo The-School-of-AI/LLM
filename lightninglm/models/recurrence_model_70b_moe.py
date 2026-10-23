@@ -440,11 +440,11 @@ class KroneckerEmbeddings:
             >>> encoder.encode_word("hello世界")
             # Encodes all 11 UTF-8 bytes: h,e,l,l,o,世(3 bytes),界(3 bytes)
         """
-        if word is None or word == "":
+        if not word:
             return np.zeros((self.D,), dtype=np.float32)
 
         # Convert to UTF-8 bytes
-        byte_seq = word.encode("utf-8")
+        byte_seq = word if isinstance(word, (bytes, bytearray)) else word.encode("utf-8")
 
         # Truncate if needed (UTF-8 safe)
         if len(byte_seq) > self.POS_DIM:
@@ -647,7 +647,7 @@ class PureHybridEmbeddingTorch(nn.Module):
         for i, word in enumerate(vocab_words):
             if not word:
                 continue
-            byte_seq = word.encode("utf-8")
+            byte_seq = word if isinstance(word, (bytes, bytearray)) else word.encode("utf-8")
             if len(byte_seq) > self._pos_dim:
                 if pf_codec.cfg.truncate_long_words:
                     byte_seq = pf_codec._utf8_safe_truncate(byte_seq, self._pos_dim)

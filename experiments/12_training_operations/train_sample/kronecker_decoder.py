@@ -173,11 +173,11 @@ class KroneckerEmbeddings:
             >>> print(np.linalg.norm(embedding))  # Should be ~1.0
             1.0
         """
-        if word is None or word == "":
+        if not word:
             return np.zeros((self.D,), dtype=np.float32)
 
         # Convert to UTF-8 bytes
-        byte_seq = word.encode("utf-8")
+        byte_seq = word if isinstance(word, (bytes, bytearray)) else word.encode("utf-8")
 
         # Truncate if needed (UTF-8 safe)
         if len(byte_seq) > self.POS_DIM:

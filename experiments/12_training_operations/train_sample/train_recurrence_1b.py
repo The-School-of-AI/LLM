@@ -43,13 +43,16 @@ def load_tokenizer_from_json(tokenizer_path):
     print(f"   ✓ Loaded tokenizer with {vocab_size:,} tokens")
 
     # Create BPE vocab list (token strings for each ID)
-    bpe_vocab = []
-    for token_id in range(vocab_size):
-        try:
-            token_text = tokenizer.decode([token_id], skip_special_tokens=False)
-            bpe_vocab.append(token_text)
-        except Exception:
-            bpe_vocab.append(f"<TOKEN_{token_id}>")
+    # Raw token bytes, not decode([id]): decode() turns partial UTF-8
+    # characters into U+FFFD, giving many tokens the same embedding.
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
+    from lightninglm.data.token_bytes import check_no_collisions, vocab_token_bytes
+
+    bpe_vocab = vocab_token_bytes(tokenizer, vocab_size)
+    check_no_collisions(bpe_vocab)
 
     print(f"   ✓ Created vocabulary with {len(bpe_vocab)} tokens")
     print(f"   Sample tokens: {bpe_vocab[:10]}")

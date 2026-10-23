@@ -405,13 +405,11 @@ def main():
     mc.vocab_size = vocab_size
     print(f"  vocab_size: {vocab_size}")
     print(f"  Building bpe_vocab list (decoding {vocab_size} tokens)...")
-    bpe_vocab = []
-    for i in range(vocab_size):
-        try:
-            token = tokenizer.decode([i])
-            bpe_vocab.append(token if token else f"<unk_{i}>")
-        except Exception:
-            bpe_vocab.append(f"<unk_{i}>")
+    from lightninglm.data.token_bytes import check_no_collisions, vocab_token_bytes
+    # Raw token bytes, not decode([id]): decode() turns partial UTF-8
+    # characters into U+FFFD, giving many tokens the same embedding.
+    bpe_vocab = vocab_token_bytes(tokenizer, vocab_size)
+    check_no_collisions(bpe_vocab)
 
     print("  Building Kronecker pf_codec (CHAR_DIM=256 POS_DIM=32 D=8192)...")
     pf_config = KroneckerConfig(

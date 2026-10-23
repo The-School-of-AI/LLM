@@ -227,10 +227,16 @@ def build_kronecker_artifacts(tokenizer, pf_dim: int):
         f"[Kronecker] Building PF table for vocab_size={vocab_size}, D={pf_dim}. "
         f"Approx bf16 buffer size: ~{approx_pf_gb:.2f} GB"
     )
-    bpe_vocab = [
-        tokenizer.decode([token_id], clean_up_tokenization_spaces=False)
-        for token_id in range(vocab_size)
-    ]
+    # Raw token bytes, not decode([id]): decode() turns partial UTF-8
+    # characters into U+FFFD, giving many tokens the same embedding.
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
+    from lightninglm.data.token_bytes import check_no_collisions, vocab_token_bytes
+
+    bpe_vocab = vocab_token_bytes(tokenizer, vocab_size)
+    check_no_collisions(bpe_vocab)
     pf_cfg = KroneckerConfig(D=pf_dim)
     pf_codec = KroneckerEmbeddings(pf_cfg)
     return bpe_vocab, pf_codec

@@ -591,13 +591,11 @@ def main():
     with pipe.stage("kronecker_vocab_build"):
         if args.embedding_type == "kronecker":
             print_rank_0("  Setting up Kronecker Product Embeddings (byte-level)...")
-            bpe_vocab = []
-            for i in range(vocab_size):
-                try:
-                    token = tokenizer.decode([i])
-                    bpe_vocab.append(token if token else f"<unk_{i}>")
-                except Exception:
-                    bpe_vocab.append(f"<unk_{i}>")
+            from lightninglm.data.token_bytes import check_no_collisions, vocab_token_bytes
+            # Raw token bytes, not decode([id]): decode() turns partial UTF-8
+            # characters into U+FFFD, giving many tokens the same embedding.
+            bpe_vocab = vocab_token_bytes(tokenizer, vocab_size)
+            check_no_collisions(bpe_vocab)
 
             pf_config = _KroneckerConfig(
                 CHAR_DIM=256,

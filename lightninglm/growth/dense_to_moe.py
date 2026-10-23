@@ -29,6 +29,7 @@ from lightninglm.models.recurrence_model_1b_non_rev import Model1B
 from lightninglm.models.recurrence_model_1b_non_rev import ModelConfig as DenseConfig
 from lightninglm.models.recurrence_model_3b_moe import Model3B
 from lightninglm.models.recurrence_model_3b_moe import ModelConfig as MoEConfig
+from lightninglm.data.token_bytes import check_no_collisions, vocab_token_bytes
 
 log = logging.getLogger("dense_to_moe")
 
@@ -65,13 +66,10 @@ def load_state_dict(path: Path) -> dict:
 
 def build_vocab_and_codec(tokenizer_dir: Path):
     tokenizer = get_tokenizer(str(tokenizer_dir))
-    bpe_vocab = []
-    for idx in range(len(tokenizer)):
-        try:
-            token = tokenizer.decode([idx])
-            bpe_vocab.append(token if token else f"<unk_{idx}>")
-        except Exception:
-            bpe_vocab.append(f"<unk_{idx}>")
+    # Raw token bytes, not decode([id]): decode() turns partial UTF-8
+    # characters into U+FFFD, giving many tokens the same embedding.
+    bpe_vocab = vocab_token_bytes(tokenizer, len(tokenizer))
+    check_no_collisions(bpe_vocab)
 
     pf_config = DenseKroneckerConfig(
         CHAR_DIM=256,
