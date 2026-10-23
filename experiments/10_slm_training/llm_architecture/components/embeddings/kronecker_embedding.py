@@ -94,10 +94,10 @@ class KroneckerEmbeddings:
         Returns:
             Embedding vector of shape (D,) = (8192,)
         """
-        if word is None or word == "":
+        if not word:
             return np.zeros((self.D,), dtype=np.float32)
 
-        byte_seq = word.encode("utf-8")
+        byte_seq = word if isinstance(word, (bytes, bytearray)) else word.encode("utf-8")
 
         if len(byte_seq) > self.POS_DIM:
             if self.cfg.truncate_long_words:
